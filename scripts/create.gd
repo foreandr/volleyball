@@ -31,6 +31,7 @@ func _ready() -> void:
 	var header := HBoxContainer.new()
 	column.add_child(header)
 	var title := label(screen_title(),32)
+	title.name = "ScreenTitle"
 	title.add_theme_color_override("font_color",Color("ffce70"))
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(title)

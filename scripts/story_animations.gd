@@ -1,10 +1,21 @@
 extends "res://scripts/create.gd"
+const MOVE_TYPES := {
+	"Passing":["Straight","Left","Right","Dive Left","Dive Right"],
+	"Spiking":["Line Hit","Cross Hit"],
+	"Serving":["Float","Spin"],
+	"Blocking":["Straight","Left","Right"],
+	"Setting":["Forward","Back","Left","Right"],
+	"Digging":["Straight","Left","Right","Dive Left","Dive Right"],
+	"Chasing":["Forward","Back","Left","Right"]
+}
 const CATEGORIES := ["Passing","Spiking","Serving","Blocking","Setting","Digging","Chasing"]
-var animation_list: ItemList
-var category_panels: Dictionary = {}
-var animation_lists: Dictionary = {}
+var content: VBoxContainer
 var category_buttons: Dictionary = {}
-var selected_category := "Passing"
+var selected_category := ""
+var type_indices: Dictionary = {}
+var type_label: Label
+var animation_list: ItemList
+var trigger_held := {}
 
 func screen_title() -> String:
 	return "ANIMATIONS"
@@ -13,46 +24,100 @@ func initial_profile() -> Dictionary:
 	return StorySession.active.get("profile",Profile.load_profile()).duplicate(true)
 
 func build_controls(controls: VBoxContainer) -> void:
-	var scroll := ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	controls.add_child(scroll)
-	var sections := VBoxContainer.new()
-	sections.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	sections.add_theme_constant_override("separation",8)
-	scroll.add_child(sections)
-	var group := ButtonGroup.new()
+	content = controls
+	show_categories()
+
+func clear_content() -> void:
+	for child in content.get_children():
+		content.remove_child(child)
+		child.queue_free()
+	animation_list = null
+	type_label = null
+
+func set_title(text: String) -> void:
+	var heading := find_child("ScreenTitle",true,false) as Label
+	if heading: heading.text = text
+
+func show_categories() -> void:
+	selected_category = ""
+	clear_content()
+	set_title("ANIMATIONS")
+	category_buttons.clear()
 	for category in CATEGORIES:
-		var section := panel()
-		section.name = category+"Panel"
-		sections.add_child(section)
-		category_panels[category] = section
-		var content := VBoxContainer.new()
-		content.add_theme_constant_override("separation",4)
-		section.add_child(content)
-		var heading := Button.new()
-		heading.text = category
-		heading.name = category
-		heading.custom_minimum_size.y = 44
-		heading.toggle_mode = true
-		heading.button_group = group
-		heading.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		heading.pressed.connect(select_category.bind(category))
-		content.add_child(heading)
-		category_buttons[category] = heading
-		var list := ItemList.new()
-		list.name = category+"Animations"
-		list.custom_minimum_size.y = 100
-		content.add_child(list)
-		animation_lists[category] = list
-	animation_list = animation_lists.Passing
-	select_category(selected_category)
+		var entry := button(category,select_category.bind(category))
+		entry.name = category
+		entry.custom_minimum_size.y = 52
+		entry.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		content.add_child(entry)
+		category_buttons[category] = entry
 
 func select_category(category: String) -> void:
+	if not MOVE_TYPES.has(category): return
 	selected_category = category
-	for key in animation_lists:
-		animation_lists[key].visible = key == category
-		category_buttons[key].set_pressed_no_signal(key == category)
+	clear_content()
+	set_title(category.to_upper())
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation",8)
+	content.add_child(row)
+	var previous := button("L2 <",cycle_type.bind(-1))
+	previous.name = "PreviousType"
+	previous.custom_minimum_size = Vector2(52,44)
+	previous.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	row.add_child(previous)
+	type_label = label("",19)
+	type_label.name = "MoveType"
+	type_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	type_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	type_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	type_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	row.add_child(type_label)
+	var next := button("> R2",cycle_type.bind(1))
+	next.name = "NextType"
+	next.custom_minimum_size = Vector2(52,44)
+	next.size_flags_horizontal = Control.SIZE_SHRINK_END
+	row.add_child(next)
+	animation_list = ItemList.new()
+	animation_list.name = "AnimationList"
+	animation_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	content.add_child(animation_list)
+	refresh_type()
+	animation_list.grab_focus()
+
+func current_type() -> String:
+	if selected_category.is_empty(): return ""
+	return MOVE_TYPES[selected_category][type_indices.get(selected_category,0)]
+
+func refresh_type() -> void:
+	type_label.text = current_type()
+	# Each move gets its own future library. No imported or placeholder clips.
+	animation_list.clear()
+
+func cycle_type(direction: int) -> void:
+	if selected_category.is_empty(): return
+	type_indices[selected_category] = posmod(int(type_indices.get(selected_category,0))+direction,MOVE_TYPES[selected_category].size())
+	refresh_type()
 
 func open_menu() -> void:
-	get_tree().change_scene_to_file("res://scenes/story.tscn")
+	if not selected_category.is_empty():
+		var previous := selected_category
+		show_categories()
+		category_buttons[previous].grab_focus()
+	else: get_tree().change_scene_to_file("res://scenes/story.tscn")
+
+func _input(event: InputEvent) -> void:
+	if event is InputEventJoypadButton and event.pressed and event.button_index == JOY_BUTTON_B:
+		open_menu()
+		get_viewport().set_input_as_handled()
+		return
+	if selected_category.is_empty(): return
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode in [KEY_Q,KEY_E]:
+			cycle_type(-1 if event.keycode == KEY_Q else 1)
+			get_viewport().set_input_as_handled()
+	if event is InputEventJoypadMotion and event.axis in [JOY_AXIS_TRIGGER_LEFT,JOY_AXIS_TRIGGER_RIGHT]:
+		var key := str(event.device)+":"+str(event.axis)
+		if event.axis_value <= 0.25: trigger_held[key] = false
+		elif event.axis_value >= 0.6 and not trigger_held.get(key,false):
+			trigger_held[key] = true
+			cycle_type(-1 if event.axis == JOY_AXIS_TRIGGER_LEFT else 1)
+			get_viewport().set_input_as_handled()
