@@ -22,6 +22,12 @@ func _ready() -> void:
 	play.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/court.tscn"))
 	column.add_child(play)
 	play.grab_focus()
+	var create := Button.new()
+	create.name = "Create"
+	create.text = "Create"
+	create.custom_minimum_size.y = 56
+	create.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/create.tscn"))
+	column.add_child(create)
 	var quit := Button.new()
 	quit.text = "Quit"
 	quit.custom_minimum_size.y = 48

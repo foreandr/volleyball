@@ -81,9 +81,6 @@ func _ready() -> void:
 	back.custom_minimum_size = Vector2(95,40)
 	back.pressed.connect(open_menu)
 	hud.add_child(back)
-	var animations := preload("res://scripts/player_animations.gd").new()
-	animations.players = players
-	hud.add_child(animations)
 
 func material(color: Color) -> StandardMaterial3D:
 	var result := StandardMaterial3D.new()
