@@ -1,26 +1,225 @@
 extends Control
+var preview: SubViewportContainer
+var preview_camera: Camera3D
+var preview_player: Node3D
+var orbit_yaw := 0.0
+var orbit_pitch := 0.12
+var view_distance := 3.8
+var view_focus := Vector3(0,0.98,0)
+var dragging := false
+var panning := false
 
 func _ready() -> void:
 	var background := ColorRect.new()
-	background.color = Color("102b40")
+	background.color = Color("0f1a25")
 	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(background)
-	var title := Label.new()
-	title.text = "CREATE"
-	title.position = Vector2(32,28)
-	title.add_theme_font_size_override("font_size",36)
+	var margin := MarginContainer.new()
+	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	for edge in ["left","right","top","bottom"]: margin.add_theme_constant_override("margin_"+edge,24)
+	add_child(margin)
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation",18)
+	margin.add_child(column)
+	var header := HBoxContainer.new()
+	column.add_child(header)
+	var title := label("CREATE",32)
 	title.add_theme_color_override("font_color",Color("ffce70"))
-	add_child(title)
-	var back := Button.new()
-	back.text = "Back to menu"
-	back.position = Vector2(1050,28)
-	back.custom_minimum_size = Vector2(198,48)
-	back.pressed.connect(open_menu)
-	add_child(back)
-	back.grab_focus()
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(title)
+	var back := button("Back to menu",open_menu)
+	back.custom_minimum_size = Vector2(180,44)
+	back.size_flags_horizontal = Control.SIZE_SHRINK_END
+	header.add_child(back)
+	var split := HSplitContainer.new()
+	split.name = "Workspace"
+	split.split_offset = 320
+	split.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	column.add_child(split)
+	var tools := panel()
+	tools.name = "LeftPanel"
+	tools.custom_minimum_size.x = 300
+	split.add_child(tools)
+	var tool_margin := MarginContainer.new()
+	for edge in ["left","right","top","bottom"]: tool_margin.add_theme_constant_override("margin_"+edge,20)
+	tools.add_child(tool_margin)
+	var controls := VBoxContainer.new()
+	controls.add_theme_constant_override("separation",16)
+	tool_margin.add_child(controls)
+	controls.add_child(label("Character",24))
+	controls.add_child(label("View",17))
+	var views := HBoxContainer.new()
+	views.add_theme_constant_override("separation",6)
+	controls.add_child(views)
+	views.add_child(button("Front",func(): set_view(0.0)))
+	views.add_child(button("Back",func(): set_view(PI)))
+	views.add_child(button("Reset",reset_view))
+	var space := Control.new()
+	space.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	controls.add_child(space)
+	var help := label("Drag: rotate\nRight drag: pan\nScroll: zoom\n\nArrows: rotate\nShift + arrows: pan\n+ / -: zoom   R: reset",15)
+	help.modulate = Color("9eafbe")
+	controls.add_child(help)
+	var stage := panel()
+	stage.name = "RightPreview"
+	stage.custom_minimum_size.x = 400
+	split.add_child(stage)
+	preview = SubViewportContainer.new()
+	preview.name = "CharacterPreview"
+	preview.stretch = true
+	preview.focus_mode = Control.FOCUS_ALL
+	preview.mouse_default_cursor_shape = Control.CURSOR_DRAG
+	preview.gui_input.connect(handle_preview_input)
+	stage.add_child(preview)
+	var viewport := SubViewport.new()
+	viewport.name = "CharacterViewport"
+	viewport.own_world_3d = true
+	viewport.size = Vector2i(880,600)
+	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	preview.add_child(viewport)
+	build_preview(viewport)
+	preview.grab_focus()
+
+func build_preview(viewport: SubViewport) -> void:
+	var world := Node3D.new()
+	viewport.add_child(world)
+	var environment := WorldEnvironment.new()
+	var settings := Environment.new()
+	settings.background_mode = Environment.BG_COLOR
+	settings.background_color = Color("1b2a38")
+	settings.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	settings.ambient_light_color = Color("dce9f2")
+	settings.ambient_light_energy = 0.4
+	environment.environment = settings
+	world.add_child(environment)
+	var key := DirectionalLight3D.new()
+	key.rotation_degrees = Vector3(-35,-35,0)
+	key.light_energy = 0.65
+	key.shadow_enabled = true
+	world.add_child(key)
+	var fill := DirectionalLight3D.new()
+	fill.rotation_degrees = Vector3(-20,145,0)
+	fill.light_color = Color("91bfe6")
+	fill.light_energy = 0.3
+	world.add_child(fill)
+	var platform := MeshInstance3D.new()
+	var cylinder := CylinderMesh.new()
+	cylinder.top_radius = 0.8
+	cylinder.bottom_radius = 0.8
+	cylinder.height = 0.08
+	platform.mesh = cylinder
+	var material := StandardMaterial3D.new()
+	material.albedo_color = Color("304654")
+	material.roughness = 0.9
+	platform.material_override = material
+	world.add_child(platform)
+	preview_player = preload("res://scripts/volleyball_player.gd").new()
+	preview_player.name = "PreviewPlayer"
+	preview_player.position.y = 0.04
+	world.add_child(preview_player)
+	preview_camera = Camera3D.new()
+	preview_camera.name = "PreviewCamera"
+	preview_camera.fov = 38.0
+	preview_camera.near = 0.05
+	preview_camera.far = 50
+	preview_camera.current = true
+	world.add_child(preview_camera)
+	update_camera()
+
+func handle_preview_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed:
+		handle_keyboard(event)
+		return
+	if event is InputEventMouseButton:
+		if event.button_index in [MOUSE_BUTTON_LEFT,MOUSE_BUTTON_MIDDLE]: dragging = event.pressed
+		if event.button_index == MOUSE_BUTTON_RIGHT: panning = event.pressed
+		if event.pressed:
+			preview.grab_focus()
+			if event.button_index == MOUSE_BUTTON_WHEEL_UP: zoom_view(0.9)
+			elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN: zoom_view(1.1)
+		preview.accept_event()
+	if event is InputEventMouseMotion:
+		if panning:
+			pan_view(event.relative)
+		elif dragging:
+			orbit_yaw -= event.relative.x*0.008
+			orbit_pitch = clampf(orbit_pitch+event.relative.y*0.006,-0.15,1.35)
+			update_camera()
+		if panning or dragging: preview.accept_event()
+
+func pan_view(pixels: Vector2) -> void:
+	view_focus += (-preview_camera.global_basis.x*pixels.x+preview_camera.global_basis.y*pixels.y)*view_distance*0.0015
+	view_focus.x = clampf(view_focus.x,-1.5,1.5)
+	view_focus.y = clampf(view_focus.y,-0.2,2.4)
+	view_focus.z = clampf(view_focus.z,-1.5,1.5)
+	update_camera()
+
+func zoom_view(factor: float) -> void:
+	view_distance = clampf(view_distance*factor,1.4,8.0)
+	update_camera()
+
+func set_view(yaw: float) -> void:
+	reset_view()
+	orbit_yaw = yaw
+	update_camera()
+
+func reset_view() -> void:
+	orbit_yaw = 0
+	orbit_pitch = 0.12
+	view_distance = 3.8
+	view_focus = Vector3(0,0.98,0)
+	update_camera()
+
+func update_camera() -> void:
+	preview_camera.position = view_focus+Vector3(sin(orbit_yaw)*cos(orbit_pitch),sin(orbit_pitch),cos(orbit_yaw)*cos(orbit_pitch))*view_distance
+	preview_camera.look_at(view_focus)
+
+func panel() -> PanelContainer:
+	var result := PanelContainer.new()
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color("192938")
+	style.border_color = Color("304657")
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(8)
+	result.add_theme_stylebox_override("panel",style)
+	return result
+
+func label(text: String, size: int) -> Label:
+	var result := Label.new()
+	result.text = text
+	result.add_theme_font_size_override("font_size",size)
+	return result
+
+func button(text: String, action: Callable) -> Button:
+	var result := Button.new()
+	result.text = text
+	result.custom_minimum_size = Vector2(80,38)
+	result.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	result.pressed.connect(action)
+	return result
 
 func open_menu() -> void:
 	get_tree().change_scene_to_file("res://scenes/main.tscn")
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE: open_menu()
+	if event is InputEventKey and event.pressed: handle_keyboard(event)
+
+func handle_keyboard(event: InputEventKey) -> void:
+	match event.keycode:
+		KEY_ESCAPE: open_menu()
+		KEY_R,KEY_F: reset_view()
+		KEY_PLUS,KEY_EQUAL,KEY_KP_ADD: zoom_view(0.9)
+		KEY_MINUS,KEY_KP_SUBTRACT: zoom_view(1.1)
+		KEY_LEFT,KEY_RIGHT,KEY_UP,KEY_DOWN:
+			var direction := Vector2.ZERO
+			if event.keycode == KEY_LEFT: direction.x = -1
+			if event.keycode == KEY_RIGHT: direction.x = 1
+			if event.keycode == KEY_UP: direction.y = -1
+			if event.keycode == KEY_DOWN: direction.y = 1
+			if event.shift_pressed: pan_view(direction*20)
+			else:
+				orbit_yaw -= direction.x*0.12
+				orbit_pitch = clampf(orbit_pitch+direction.y*0.08,-0.15,1.35)
+				update_camera()
+		_: return
+	get_viewport().set_input_as_handled()
