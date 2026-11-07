@@ -16,6 +16,12 @@ func _ready() -> void:
 	title.add_theme_font_size_override("font_size",72)
 	title.add_theme_color_override("font_color",Color("ffce70"))
 	column.add_child(title)
+	var play := Button.new()
+	play.text = "Play"
+	play.custom_minimum_size.y = 56
+	play.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/court.tscn"))
+	column.add_child(play)
+	play.grab_focus()
 	var quit := Button.new()
 	quit.text = "Quit"
 	quit.custom_minimum_size.y = 48
