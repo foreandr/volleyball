@@ -46,20 +46,6 @@ func _ready() -> void:
 	var controls := VBoxContainer.new()
 	controls.add_theme_constant_override("separation",16)
 	tool_margin.add_child(controls)
-	controls.add_child(label("Character",24))
-	controls.add_child(label("View",17))
-	var views := HBoxContainer.new()
-	views.add_theme_constant_override("separation",6)
-	controls.add_child(views)
-	views.add_child(button("Front",func(): set_view(0.0)))
-	views.add_child(button("Back",func(): set_view(PI)))
-	views.add_child(button("Reset",reset_view))
-	var space := Control.new()
-	space.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	controls.add_child(space)
-	var help := label("Drag: rotate\nRight drag: pan\nScroll: zoom\n\nArrows: rotate\nShift + arrows: pan\n+ / -: zoom   R: reset",15)
-	help.modulate = Color("9eafbe")
-	controls.add_child(help)
 	var stage := panel()
 	stage.name = "RightPreview"
 	stage.custom_minimum_size.x = 400
