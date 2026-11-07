@@ -1,0 +1,9 @@
+Models and Universal Animation Library: Quaternius, CC0 1.0.
+https://quaternius.itch.io/universal-base-characters
+https://quaternius.itch.io/universal-animation-library
+https://creativecommons.org/publicdomain/zero/1.0/
+
+3D Fighter clothing and trimmed body meshes by Clint Christopher Canada, CC BY 4.0.
+https://github.com/clintcan/3d-fighter
+https://creativecommons.org/licenses/by/4.0/
+Reused from the local FightLab project. Volleyball changes team colors and animation setup.

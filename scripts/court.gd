@@ -1,6 +1,7 @@
 extends Node3D
 var camera: Camera3D
 var ball: MeshInstance3D
+var players: Array[Node3D] = []
 
 func _ready() -> void:
 	var environment := WorldEnvironment.new()
@@ -59,6 +60,15 @@ func _ready() -> void:
 	ball.material_override = material(Color("ffd95c"))
 	ball.position = Vector3(-1.6,1.0,4.3)
 	add_child(ball)
+	for index in range(4):
+		var athlete := preload("res://scripts/volleyball_player.gd").new()
+		athlete.name = ["Blue1","Blue2","Red1","Red2"][index]
+		athlete.team_color = Color("2c8fe5") if index < 2 else Color("dc5653")
+		athlete.player_number = index%2+1
+		athlete.position = [Vector3(-1.9,0.025,4.6),Vector3(1.7,0.025,2.4),Vector3(-1.7,0.025,-2.4),Vector3(1.9,0.025,-4.6)][index]
+		athlete.rotation.y = PI if index < 2 else 0.0
+		add_child(athlete)
+		players.append(athlete)
 	camera = preload("res://scripts/court_camera.gd").new()
 	camera.name = "CourtCamera"
 	camera.ball_target = ball
@@ -71,6 +81,9 @@ func _ready() -> void:
 	back.custom_minimum_size = Vector2(95,40)
 	back.pressed.connect(open_menu)
 	hud.add_child(back)
+	var animations := preload("res://scripts/player_animations.gd").new()
+	animations.players = players
+	hud.add_child(animations)
 
 func material(color: Color) -> StandardMaterial3D:
 	var result := StandardMaterial3D.new()
