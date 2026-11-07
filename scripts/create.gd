@@ -1,4 +1,9 @@
 extends Control
+const Profile = preload("res://scripts/player_profile.gd")
+var profile: Dictionary = Profile.load_profile()
+var name_field: LineEdit
+var height_field: SpinBox
+var hand_field: OptionButton
 var preview: SubViewportContainer
 var preview_camera: Camera3D
 var preview_player: Node3D
@@ -23,7 +28,7 @@ func _ready() -> void:
 	margin.add_child(column)
 	var header := HBoxContainer.new()
 	column.add_child(header)
-	var title := label("CREATE",32)
+	var title := label("CREATE PLAYER",32)
 	title.add_theme_color_override("font_color",Color("ffce70"))
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(title)
@@ -46,6 +51,34 @@ func _ready() -> void:
 	var controls := VBoxContainer.new()
 	controls.add_theme_constant_override("separation",16)
 	tool_margin.add_child(controls)
+	controls.add_child(label("Name",18))
+	name_field = LineEdit.new()
+	name_field.name = "PlayerName"
+	name_field.max_length = 32
+	name_field.text = profile.name
+	name_field.custom_minimum_size.y = 42
+	name_field.text_changed.connect(func(value): profile.name = value; update_profile())
+	controls.add_child(name_field)
+	controls.add_child(label("Height",18))
+	height_field = SpinBox.new()
+	height_field.name = "PlayerHeight"
+	height_field.min_value = 120
+	height_field.max_value = 240
+	height_field.step = 1
+	height_field.suffix = "cm"
+	height_field.value = profile.height_cm
+	height_field.custom_minimum_size.y = 42
+	height_field.value_changed.connect(func(value): profile.height_cm = value; update_profile())
+	controls.add_child(height_field)
+	controls.add_child(label("Handedness",18))
+	hand_field = OptionButton.new()
+	hand_field.name = "PlayerHandedness"
+	hand_field.add_item("Right")
+	hand_field.add_item("Left")
+	hand_field.select(1 if profile.handedness == "Left" else 0)
+	hand_field.custom_minimum_size.y = 42
+	hand_field.item_selected.connect(func(index): profile.handedness = "Left" if index == 1 else "Right"; update_profile())
+	controls.add_child(hand_field)
 	var stage := panel()
 	stage.name = "RightPreview"
 	stage.custom_minimum_size.x = 400
@@ -102,6 +135,7 @@ func build_preview(viewport: SubViewport) -> void:
 	preview_player = preload("res://scripts/volleyball_player.gd").new()
 	preview_player.name = "PreviewPlayer"
 	preview_player.position.y = 0.04
+	preview_player.apply_profile(profile)
 	world.add_child(preview_player)
 	preview_camera = Camera3D.new()
 	preview_camera.name = "PreviewCamera"
@@ -183,6 +217,10 @@ func button(text: String, action: Callable) -> Button:
 	result.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	result.pressed.connect(action)
 	return result
+
+func update_profile() -> void:
+	Profile.save_profile(profile)
+	if is_instance_valid(preview_player): preview_player.apply_profile(profile)
 
 func open_menu() -> void:
 	get_tree().change_scene_to_file("res://scenes/main.tscn")

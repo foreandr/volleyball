@@ -1,6 +1,9 @@
 extends Node3D
 @export var team_color := Color("2c8fe5")
 @export var player_number := 1
+var display_name := "Player"
+var height_cm := 180.0
+var handedness := "Right"
 var model: Node3D
 var skeleton: Skeleton3D
 var animator: AnimationPlayer
@@ -67,3 +70,10 @@ func install_custom(resource: Resource, slot := "idle", save := true) -> bool:
 		ResourceSaver.save(library,"user://animations/%s_%s.tres" % [name,slot])
 	play_action(slot)
 	return true
+
+func apply_profile(profile: Dictionary) -> void:
+	var values := preload("res://scripts/player_profile.gd").clean(profile)
+	display_name = values.name
+	height_cm = values.height_cm
+	handedness = values.handedness
+	scale = Vector3.ONE*(height_cm/180.0)

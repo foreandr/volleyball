@@ -67,6 +67,7 @@ func _ready() -> void:
 		athlete.player_number = index%2+1
 		athlete.position = [Vector3(-1.9,0.025,4.6),Vector3(1.7,0.025,2.4),Vector3(-1.7,0.025,-2.4),Vector3(1.9,0.025,-4.6)][index]
 		athlete.rotation.y = PI if index < 2 else 0.0
+		if index == 0: athlete.apply_profile(preload("res://scripts/player_profile.gd").load_profile())
 		add_child(athlete)
 		players.append(athlete)
 	camera = preload("res://scripts/court_camera.gd").new()
