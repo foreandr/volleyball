@@ -26,7 +26,7 @@ func _ready() -> void:
 	create.name = "Create"
 	create.text = "Create Player"
 	create.custom_minimum_size.y = 56
-	create.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/create.tscn"))
+	create.pressed.connect(func(): StorySession.cancel_creation(); get_tree().change_scene_to_file("res://scenes/create.tscn"))
 	column.add_child(create)
 	var story := Button.new()
 	story.name = "Story"

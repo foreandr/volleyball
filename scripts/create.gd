@@ -4,6 +4,7 @@ var profile: Dictionary = Profile.load_profile()
 var name_field: LineEdit
 var height_field: SpinBox
 var hand_field: OptionButton
+var save_button: Button
 var preview: SubViewportContainer
 var preview_camera: Camera3D
 var preview_player: Node3D
@@ -15,6 +16,7 @@ var dragging := false
 var panning := false
 
 func _ready() -> void:
+	profile = initial_profile()
 	var background := ColorRect.new()
 	background.color = Color("0f1a25")
 	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -28,11 +30,11 @@ func _ready() -> void:
 	margin.add_child(column)
 	var header := HBoxContainer.new()
 	column.add_child(header)
-	var title := label("CREATE PLAYER",32)
+	var title := label(screen_title(),32)
 	title.add_theme_color_override("font_color",Color("ffce70"))
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(title)
-	var back := button("Back to menu",open_menu)
+	var back := button("Back",open_menu)
 	back.custom_minimum_size = Vector2(180,44)
 	back.size_flags_horizontal = Control.SIZE_SHRINK_END
 	header.add_child(back)
@@ -51,6 +53,34 @@ func _ready() -> void:
 	var controls := VBoxContainer.new()
 	controls.add_theme_constant_override("separation",16)
 	tool_margin.add_child(controls)
+	build_controls(controls)
+	var stage := panel()
+	stage.name = "RightPreview"
+	stage.custom_minimum_size.x = 400
+	split.add_child(stage)
+	preview = SubViewportContainer.new()
+	preview.name = "CharacterPreview"
+	preview.stretch = true
+	preview.focus_mode = Control.FOCUS_ALL
+	preview.mouse_default_cursor_shape = Control.CURSOR_DRAG
+	preview.gui_input.connect(handle_preview_input)
+	stage.add_child(preview)
+	var viewport := SubViewport.new()
+	viewport.name = "CharacterViewport"
+	viewport.own_world_3d = true
+	viewport.size = Vector2i(880,600)
+	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	preview.add_child(viewport)
+	build_preview(viewport)
+	preview.grab_focus()
+
+func screen_title() -> String:
+	return "CREATE PLAYER"
+
+func initial_profile() -> Dictionary:
+	return StorySession.draft.duplicate(true) if StorySession.creating_story else Profile.load_profile()
+
+func build_controls(controls: VBoxContainer) -> void:
 	controls.add_child(label("Name",18))
 	name_field = LineEdit.new()
 	name_field.name = "PlayerName"
@@ -79,25 +109,32 @@ func _ready() -> void:
 	hand_field.custom_minimum_size.y = 42
 	hand_field.item_selected.connect(func(index): profile.handedness = "Left" if index == 1 else "Right"; update_profile())
 	controls.add_child(hand_field)
-	var stage := panel()
-	stage.name = "RightPreview"
-	stage.custom_minimum_size.x = 400
-	split.add_child(stage)
-	preview = SubViewportContainer.new()
-	preview.name = "CharacterPreview"
-	preview.stretch = true
-	preview.focus_mode = Control.FOCUS_ALL
-	preview.mouse_default_cursor_shape = Control.CURSOR_DRAG
-	preview.gui_input.connect(handle_preview_input)
-	stage.add_child(preview)
-	var viewport := SubViewport.new()
-	viewport.name = "CharacterViewport"
-	viewport.own_world_3d = true
-	viewport.size = Vector2i(880,600)
-	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
-	preview.add_child(viewport)
-	build_preview(viewport)
-	preview.grab_focus()
+	var space := Control.new()
+	space.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	controls.add_child(space)
+	save_button = button("Save",save_player)
+	save_button.name = "SavePlayer"
+	save_button.disabled = profile.name.strip_edges().is_empty()
+	controls.add_child(save_button)
+
+func save_player() -> void:
+	if height_field.get_line_edit().has_focus(): height_field.apply()
+	profile.name = name_field.text
+	profile.height_cm = height_field.value
+	profile.handedness = "Left" if hand_field.selected == 1 else "Right"
+	if StorySession.creating_story:
+		if StorySession.save_new(profile) == OK:
+			get_tree().change_scene_to_file("res://scenes/story_animations.tscn")
+		else: show_save_error()
+	else:
+		if Profile.save_profile(profile) == OK: open_menu()
+		else: show_save_error()
+
+func show_save_error() -> void:
+	var dialog := AcceptDialog.new()
+	dialog.dialog_text = "Unable to save player."
+	add_child(dialog)
+	dialog.popup_centered()
 
 func build_preview(viewport: SubViewport) -> void:
 	var world := Node3D.new()
@@ -219,11 +256,16 @@ func button(text: String, action: Callable) -> Button:
 	return result
 
 func update_profile() -> void:
-	Profile.save_profile(profile)
+	if StorySession.creating_story: StorySession.draft = Profile.clean(profile)
+	else: Profile.save_profile(profile)
+	if is_instance_valid(save_button): save_button.disabled = profile.name.strip_edges().is_empty()
 	if is_instance_valid(preview_player): preview_player.apply_profile(profile)
 
 func open_menu() -> void:
-	get_tree().change_scene_to_file("res://scenes/main.tscn")
+	if StorySession.creating_story:
+		StorySession.cancel_creation()
+		get_tree().change_scene_to_file("res://scenes/story.tscn")
+	else: get_tree().change_scene_to_file("res://scenes/main.tscn")
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed: handle_keyboard(event)
