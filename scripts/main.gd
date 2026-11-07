@@ -17,14 +17,16 @@ func _ready() -> void:
 	title.add_theme_color_override("font_color",Color("ffce70"))
 	column.add_child(title)
 	var play := Button.new()
+	play.name = "Play"
 	play.text = "Play"
+	play.disabled = true
 	play.custom_minimum_size.y = 56
 	play.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/court.tscn"))
 	column.add_child(play)
-	play.grab_focus()
 	var create := Button.new()
 	create.name = "Create"
 	create.text = "Create Player"
+	create.disabled = true
 	create.custom_minimum_size.y = 56
 	create.pressed.connect(func(): StorySession.cancel_creation(); get_tree().change_scene_to_file("res://scenes/create.tscn"))
 	column.add_child(create)
@@ -34,6 +36,8 @@ func _ready() -> void:
 	story.custom_minimum_size.y = 56
 	story.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/story.tscn"))
 	column.add_child(story)
+	column.move_child(story,1)
+	story.grab_focus()
 	var quit := Button.new()
 	quit.text = "Quit"
 	quit.custom_minimum_size.y = 48
