@@ -4,6 +4,9 @@ var save_directory := "user://stories"
 var creating_story := false
 var draft: Dictionary = {}
 var active: Dictionary = {}
+var edit_entry: Dictionary = {}
+var animation_draft: Dictionary = {}
+var animation_return: Dictionary = {}
 
 func begin_new() -> void:
 	creating_story = true

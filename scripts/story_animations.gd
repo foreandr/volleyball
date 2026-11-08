@@ -17,6 +17,22 @@ var type_indices: Dictionary = {}
 var type_label: Label
 var animation_list: ItemList
 var trigger_held := {}
+var edit_button: Button
+var selected_entry: Dictionary = {}
+
+func _ready() -> void:
+	super._ready()
+	if not StorySession.animation_return.is_empty():
+		var destination: Dictionary = StorySession.animation_return.duplicate()
+		StorySession.animation_return.clear()
+		if MOVE_TYPES.has(destination.category):
+			type_indices[destination.category] = MOVE_TYPES[destination.category].find(destination.type)
+			select_category(destination.category)
+			for index in animation_list.item_count:
+				if animation_list.get_item_metadata(index).id == destination.get("id",""):
+					animation_list.select(index)
+					preview_animation(index)
+					break
 
 func screen_title() -> String:
 	return "ANIMATIONS"
@@ -33,6 +49,8 @@ func clear_content() -> void:
 		content.remove_child(child)
 		child.queue_free()
 	animation_list = null
+	edit_button = null
+	selected_entry.clear()
 	type_label = null
 
 func set_title(text: String) -> void:
@@ -83,9 +101,12 @@ func select_category(category: String) -> void:
 	animation_list.allow_reselect = true
 	animation_list.add_theme_font_size_override("font_size",18)
 	animation_list.item_selected.connect(preview_animation)
-	animation_list.item_activated.connect(preview_animation)
+	animation_list.item_activated.connect(open_editor)
 	animation_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	content.add_child(animation_list)
+	edit_button = button("Edit",open_editor)
+	edit_button.name = "EditAnimation"
+	content.add_child(edit_button)
 	refresh_type()
 	animation_list.grab_focus()
 
@@ -96,6 +117,8 @@ func current_type() -> String:
 func refresh_type() -> void:
 	type_label.text = current_type()
 	animation_list.clear()
+	selected_entry.clear()
+	if is_instance_valid(edit_button): edit_button.disabled = true
 	for entry in Catalog.entries(selected_category,current_type()):
 		var index := animation_list.add_item(entry.name)
 		animation_list.set_item_metadata(index,entry)
@@ -107,8 +130,17 @@ func refresh_type() -> void:
 func preview_animation(index: int) -> void:
 	if not is_instance_valid(preview_player): return
 	var entry: Dictionary = animation_list.get_item_metadata(index)
+	selected_entry = entry.duplicate(true)
+	if is_instance_valid(edit_button): edit_button.disabled = false
 	var clip: Animation = load(entry.path)
 	preview_player.install_custom(clip,"preview",false)
+
+func open_editor(index := -1) -> void:
+	if index >= 0: preview_animation(index)
+	if selected_entry.is_empty(): return
+	StorySession.edit_entry = selected_entry.duplicate(true)
+	StorySession.animation_return = {"category":selected_category,"type":current_type(),"id":selected_entry.id}
+	get_tree().change_scene_to_file("res://scenes/animation_editor.tscn")
 
 func cycle_type(direction: int) -> void:
 	if selected_category.is_empty(): return
