@@ -1,4 +1,5 @@
 extends Node3D
+const Contact = preload("res://scripts/forearm_contact.gd")
 signal contacted
 const RADIUS := 0.105
 var actor: Node3D
@@ -19,6 +20,7 @@ var active := false
 var cached_revision := -1
 var positions := {}
 var rotations := {}
+var guide: MeshInstance3D
 
 func _ready() -> void:
 	ball = MeshInstance3D.new()
@@ -33,6 +35,11 @@ func _ready() -> void:
 	audio.stream = AudioStreamWAV.load_from_file("res://assets/audio/pass_contact.wav")
 	audio.volume_db = -7
 	add_child(audio)
+	guide = MeshInstance3D.new()
+	guide.top_level = true
+	add_child(guide)
+	guide.global_transform = Transform3D.IDENTITY
+	guide.hide()
 	hide()
 
 func make_ball() -> ArrayMesh:
@@ -76,6 +83,7 @@ func stop() -> void:
 	active = false
 	last_time = -1
 	hide()
+	if is_instance_valid(guide): guide.hide()
 	if is_instance_valid(audio): audio.stop()
 
 func pose(bone: int, time: float, cache: Dictionary) -> Transform3D:
@@ -106,19 +114,7 @@ func platform(time: float) -> Dictionary:
 		elbows.append(elbow)
 		wrists.append(wrist)
 		points.append(elbow.lerp(wrist,0.65))
-	var axis: Vector3 = ((wrists[0]-elbows[0])+(wrists[1]-elbows[1])).normalized()
-	var normal: Vector3 = (points[1]-points[0]).cross(axis).normalized()
-	if normal.dot(Vector3.UP) < 0: normal = -normal
-	if normal.length_squared() < 0.5: normal = Vector3.UP
-	var center: Vector3 = (points[0]+points[1])*0.5
-	var padding := 0.032*rig.global_basis.get_scale().y
-	var half_gap: float = points[0].distance_to(points[1])*0.5
-	var clearance := RADIUS+padding
-	if half_gap >= clearance:
-		center = points[0]
-		half_gap = 0
-	var separation := sqrt(maxf(0,clearance*clearance-half_gap*half_gap))
-	return {"surface":center,"normal":normal,"ball":center+normal*separation}
+	return Contact.surface(elbows,wrists,0.032*rig.global_basis.get_scale().y)
 
 func recalculate() -> void:
 	var hit := platform(contact_time)
@@ -128,12 +124,33 @@ func recalculate() -> void:
 	var before := platform(maxf(0,contact_time-1.0/60))
 	var after := platform(minf(clip.length,contact_time+1.0/60))
 	surface_velocity = (after.surface-before.surface)/(2.0/60)
-	var relative := incoming-surface_velocity
-	outgoing = relative-1.85*minf(0,relative.dot(surface_normal))*surface_normal+surface_velocity
+	outgoing = Contact.rebound(incoming,surface_velocity,surface_normal)
+	update_guide()
 	if edit_session != null: cached_revision = edit_session.revision
 
+func output_angle() -> float:
+	return Contact.elevation(outgoing)
+
+func update_guide() -> void:
+	if not is_instance_valid(guide): return
+	var path := ImmediateMesh.new()
+	path.surface_begin(Mesh.PRIMITIVE_LINE_STRIP)
+	for index in range(41):
+		var time := float(index)/40.0*1.1
+		path.surface_add_vertex(impact_point+outgoing*time+Vector3.DOWN*4.905*time*time)
+	path.surface_end()
+	guide.mesh = path
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.albedo_color = Color("70b4c5")
+	guide.material_override = material
+	guide.visible = active
+
 func tick(time: float, audible: bool) -> void:
-	if not active: hide(); return
+	if not active:
+		hide()
+		if is_instance_valid(guide): guide.hide()
+		return
 	if edit_session != null and cached_revision != edit_session.revision: recalculate()
 	var elapsed := time-contact_time
 	global_position = impact_point+(incoming if elapsed < 0 else outgoing)*elapsed+Vector3.DOWN*4.905*elapsed*elapsed

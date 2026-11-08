@@ -20,6 +20,9 @@ var trigger_held := {}
 var edit_button: Button
 var selected_entry: Dictionary = {}
 var ball_preview: Node3D
+var angle_control: VBoxContainer
+var source_clip: Animation
+var render_clip: Animation
 
 func _ready() -> void:
 	process_priority = 10
@@ -50,6 +53,7 @@ func clear_content() -> void:
 	for child in content.get_children():
 		content.remove_child(child)
 		child.queue_free()
+	angle_control = null
 	animation_list = null
 	edit_button = null
 	selected_entry.clear()
@@ -99,6 +103,9 @@ func select_category(category: String) -> void:
 	next.custom_minimum_size = Vector2(52,44)
 	next.size_flags_horizontal = Control.SIZE_SHRINK_END
 	row.add_child(next)
+	angle_control = preload("res://scripts/pass_angle_control.gd").new()
+	content.add_child(angle_control)
+	angle_control.angle_requested.connect(apply_output_angle)
 	animation_list = ItemList.new()
 	animation_list.name = "AnimationList"
 	animation_list.allow_reselect = true
@@ -118,6 +125,7 @@ func current_type() -> String:
 	return MOVE_TYPES[selected_category][type_indices.get(selected_category,0)]
 
 func refresh_type() -> void:
+	angle_control.hide()
 	type_label.text = current_type()
 	animation_list.clear()
 	selected_entry.clear()
@@ -137,12 +145,26 @@ func preview_animation(index: int) -> void:
 	var entry: Dictionary = animation_list.get_item_metadata(index)
 	selected_entry = entry.duplicate(true)
 	if is_instance_valid(edit_button): edit_button.disabled = false
-	var clip: Animation = load(entry.path)
-	preview_player.install_custom(clip,"preview",false)
+	source_clip = load(entry.path)
+	render_clip = source_clip
+	if source_clip.has_meta("contact_time") and StorySession.pass_output_angle >= 0:
+		render_clip = preload("res://scripts/pass_trajectory_solver.gd").new(preview_player,source_clip).solve(StorySession.pass_output_angle).clip
+	preview_player.install_custom(render_clip,"preview",false)
 	if not is_instance_valid(ball_preview):
 		ball_preview = preload("res://scripts/animation_ball_preview.gd").new()
 		preview_player.get_parent().add_child(ball_preview)
-	ball_preview.configure(preview_player,clip)
+	ball_preview.configure(preview_player,render_clip)
+	angle_control.visible = ball_preview.active
+	if ball_preview.active: angle_control.display_result(float(render_clip.get_meta("desired_output_angle",ball_preview.output_angle())),ball_preview.output_angle())
+
+func apply_output_angle(value: float) -> void:
+	if source_clip == null or not source_clip.has_meta("contact_time"): return
+	StorySession.pass_output_angle = value
+	var result: Dictionary = preload("res://scripts/pass_trajectory_solver.gd").new(preview_player,source_clip).solve(value)
+	render_clip = result.clip
+	preview_player.install_custom(render_clip,"preview",false)
+	ball_preview.configure(preview_player,render_clip)
+	angle_control.display_result(value,ball_preview.output_angle())
 
 func _process(_delta: float) -> void:
 	if is_instance_valid(ball_preview) and ball_preview.active:
@@ -152,6 +174,7 @@ func open_editor(index := -1) -> void:
 	if index >= 0: preview_animation(index)
 	if selected_entry.is_empty(): return
 	StorySession.edit_entry = selected_entry.duplicate(true)
+	StorySession.edit_animation = render_clip
 	StorySession.animation_return = {"category":selected_category,"type":current_type(),"id":selected_entry.id}
 	get_tree().change_scene_to_file("res://scenes/animation_editor.tscn")
 

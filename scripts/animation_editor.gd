@@ -3,6 +3,9 @@ const EditSession = preload("res://scripts/animation_edit_session.gd")
 const Groups = preload("res://scripts/animation_body_groups.gd")
 const Catalog = preload("res://scripts/volleyball_animations.gd")
 var ball_preview: Node3D
+var angle_control: VBoxContainer
+var trajectory_base: Animation
+var trajectory_revision := -1
 var session: RefCounted
 var entry: Dictionary
 var frame := 0
@@ -35,7 +38,7 @@ func _ready() -> void:
 	super._ready()
 	preview_player.animator.stop()
 	preview_player.animator.active = false
-	session = EditSession.new(load(entry.path),preview_player.skeleton)
+	session = EditSession.new(StorySession.edit_animation if StorySession.edit_animation != null else load(entry.path),preview_player.skeleton)
 	ball_preview = preload("res://scripts/animation_ball_preview.gd").new()
 	preview_player.get_parent().add_child(ball_preview)
 	ball_preview.configure(preview_player,session.source,session)
@@ -48,12 +51,17 @@ func _ready() -> void:
 		bone_picker.add_item(bone_label(name_))
 	var draft: Dictionary = StorySession.animation_draft
 	if draft.get("source","") == entry.id:
+		if draft.has("animation"): session.replace_source(draft.animation)
 		session.edits = draft.edits.duplicate(true)
 		session.position_edits = draft.get("position_edits",{}).duplicate(true)
 		copy_name.text = draft.name
 		frame = draft.frame
+	refresh_ball_angle()
 	select_group(draft.get("group","Both Arms"))
 	set_frame(frame)
+	if draft.get("source","") == entry.id and StorySession.edit_animation != null:
+		var requested := float(StorySession.edit_animation.get_meta("desired_output_angle",-1))
+		if requested >= 0 and not is_equal_approx(requested,float(session.source.get_meta("desired_output_angle",-1))): apply_output_angle(requested)
 	overlay = preload("res://scripts/animation_editor_handles.gd").new()
 	overlay.editor = self
 	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -114,6 +122,9 @@ func build_controls(host: VBoxContainer) -> void:
 	transport.add_child(undo_button)
 	redo_button = button("Redo",redo)
 	transport.add_child(redo_button)
+	angle_control = preload("res://scripts/pass_angle_control.gd").new()
+	controls.add_child(angle_control)
+	angle_control.angle_requested.connect(apply_output_angle)
 	group_picker = OptionButton.new()
 	group_picker.name = "BodyGroup"
 	group_picker.custom_minimum_size.y = 38
@@ -158,6 +169,23 @@ func build_controls(host: VBoxContainer) -> void:
 	copy_button.custom_minimum_size.y = 44
 	controls.add_child(copy_button)
 
+func refresh_ball_angle() -> void:
+	ball_preview.configure(preview_player,session.source,session)
+	angle_control.visible = ball_preview.active
+	if ball_preview.active: angle_control.display_result(float(session.source.get_meta("desired_output_angle",ball_preview.output_angle())),ball_preview.output_angle())
+
+func apply_output_angle(value: float) -> void:
+	if session == null or not session.source.has_meta("contact_time"): return
+	if trajectory_base == null or trajectory_revision != session.revision: trajectory_base = session.bake()
+	remember_undo()
+	var result: Dictionary = preload("res://scripts/pass_trajectory_solver.gd").new(preview_player,trajectory_base).solve(value)
+	session.replace_source(result.clip)
+	trajectory_revision = session.revision
+	StorySession.pass_output_angle = value
+	refresh_ball_angle()
+	set_frame(frame)
+	set_playing(true)
+
 func bone_label(name_: String) -> String:
 	var side := ""
 	if name_.ends_with("_l"): side = "Left "; name_ = name_.trim_suffix("_l")
@@ -192,6 +220,7 @@ func _process(delta: float) -> void:
 		playhead = fposmod(playhead+delta*EditSession.FPS,maxi(1,session.last_frame))
 		set_frame(floori(playhead))
 	if is_instance_valid(ball_preview): ball_preview.tick(session.time_at(playhead if playing else float(frame)),playing)
+	if is_instance_valid(angle_control) and ball_preview.active: angle_control.set_actual(ball_preview.output_angle())
 	if is_instance_valid(overlay): overlay.queue_redraw()
 
 func select_group(group: String) -> void:
@@ -279,6 +308,7 @@ func undo() -> void:
 	set_playing(false)
 	redo_history.append(session.state())
 	session.restore(undo_history.pop_back())
+	refresh_ball_angle()
 	set_frame(frame)
 	refresh_history()
 
@@ -287,6 +317,7 @@ func redo() -> void:
 	set_playing(false)
 	undo_history.append(session.state())
 	session.restore(redo_history.pop_back())
+	refresh_ball_angle()
 	set_frame(frame)
 	refresh_history()
 
@@ -425,13 +456,14 @@ func save_copy() -> void:
 		add_child(dialog)
 		dialog.popup_centered()
 		return
+	StorySession.edit_animation = null
 	StorySession.animation_draft.clear()
 	StorySession.animation_return = {"category":saved.category,"type":saved.type,"id":saved.id}
 	get_tree().change_scene_to_file("res://scenes/story_animations.tscn")
 
 func open_menu() -> void:
 	if session != null:
-		StorySession.animation_draft = {"source":entry.id,"edits":session.edits.duplicate(true),"position_edits":session.position_edits.duplicate(true),"name":copy_name.text,"frame":frame,"group":selected_group}
+		StorySession.animation_draft = {"source":entry.id,"animation":session.source,"edits":session.edits.duplicate(true),"position_edits":session.position_edits.duplicate(true),"name":copy_name.text,"frame":frame,"group":selected_group}
 	StorySession.animation_return = {"category":entry.category,"type":entry.type,"id":entry.id}
 	get_tree().change_scene_to_file("res://scenes/story_animations.tscn")
 

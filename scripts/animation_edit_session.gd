@@ -11,8 +11,14 @@ var position_tracks: Dictionary = {}
 var last_frame := 0
 
 func _init(clip: Animation, skeleton: Skeleton3D) -> void:
-	source = clip
 	rig = skeleton
+	replace_source(clip)
+
+func replace_source(clip: Animation) -> void:
+	source = clip
+	revision += 1
+	edits.clear()
+	position_edits.clear()
 	last_frame = ceili(source.length*FPS)
 	for bone in rig.get_bone_count():
 		var path := NodePath(PREFIX+rig.get_bone_name(bone))
@@ -69,9 +75,10 @@ func position_offset_at(bone: int, frame: float) -> Vector3:
 	return a if before == after else a.lerp(b,smoothstep(float(before),float(after),frame))
 
 func state() -> Dictionary:
-	return {"rotations":edits.duplicate(true),"positions":position_edits.duplicate(true)}
+	return {"source":source,"rotations":edits.duplicate(true),"positions":position_edits.duplicate(true)}
 
 func restore(value: Dictionary) -> void:
+	if value.has("source"): replace_source(value.source)
 	revision += 1
 	edits = value.rotations.duplicate(true)
 	position_edits = value.positions.duplicate(true)

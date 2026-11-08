@@ -77,3 +77,6 @@ func load_story(id: String) -> bool:
 	remember(id)
 	get_tree().change_scene_to_file("res://scenes/story_animations.tscn")
 	return true
+
+var edit_animation: Animation
+var pass_output_angle := -1.0

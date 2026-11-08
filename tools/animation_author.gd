@@ -18,7 +18,7 @@ func _init(skeleton: Skeleton3D, starting_pose: Animation) -> void:
 		baseline.append(local)
 	for side in ["l","r"]: feet[side] = world_pose(baseline,rig.find_bone("foot_"+side))
 
-func bake(description: Dictionary) -> Animation:
+func bake(description: Dictionary, pose_provider := Callable()) -> Animation:
 	recipe = description
 	var clip := Animation.new()
 	clip.resource_name = recipe.name
@@ -36,7 +36,7 @@ func bake(description: Dictionary) -> Animation:
 		rotation_tracks.append(rotation)
 	for frame in range(ceili(clip.length*60)+1):
 		var time := minf(clip.length,float(frame)/60)
-		var pose := pose_at(time)
+		var pose: Array = pose_provider.call(time) if pose_provider.is_valid() else pose_at(time)
 		for bone in rig.get_bone_count():
 			clip.position_track_insert_key(position_tracks[bone],time,pose[bone].origin)
 			clip.rotation_track_insert_key(rotation_tracks[bone],time,pose[bone].basis.get_rotation_quaternion().normalized())
