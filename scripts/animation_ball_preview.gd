@@ -189,7 +189,7 @@ func recalculate() -> void:
 	source_ball.show()
 	source_ground.global_position = Vector3(feed.start.x,0.065,feed.start.z)
 	source_ground.show()
-	outgoing = Contact.rebound(incoming,surface_velocity,surface_normal)
+	outgoing = Contact.rebound(incoming,surface_velocity,surface_normal,float(clip.get_meta("reception_restitution",0.55)))
 	flight_duration = Flight.landing_time(impact_point,outgoing)
 	incoming_net = Net.first_hit(func(time): return Flight.position(feed_info,impact_point,time),-feed_duration,0)
 	outgoing_net = {}

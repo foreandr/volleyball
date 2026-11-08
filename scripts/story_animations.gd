@@ -2,15 +2,14 @@ extends "res://scripts/create.gd"
 const Flight = preload("res://scripts/pass_flight.gd")
 const Catalog = preload("res://scripts/volleyball_animations.gd")
 const MOVE_TYPES := {
-	"Passing":["Straight","Left","Right","Dive Left","Dive Right"],
+	"Forearm reception":["Forearm"],
 	"Spiking":["Line Hit","Cross Hit"],
 	"Serving":["Float","Spin","Hybrid","Skyball","Underhand","Standing Float","Standing Spin"],
 	"Blocking":["Straight","Left","Right"],
 	"Setting":["Forward","Back","Left","Right"],
-	"Digging":["Straight","Left","Right","Dive Left","Dive Right"],
 	"Chasing":["Forward","Back","Left","Right"]
 }
-const CATEGORIES := ["Passing","Spiking","Serving","Blocking","Setting","Digging","Chasing"]
+const CATEGORIES := ["Forearm reception","Spiking","Serving","Blocking","Setting","Chasing"]
 var content: VBoxContainer
 var category_buttons: Dictionary = {}
 var selected_category := ""
@@ -27,6 +26,8 @@ var source_clip: Animation
 var trajectory_solver: RefCounted
 var render_clip: Animation
 var preview_clock := 0.0
+var reception_controls: VBoxContainer
+var replace_body_layer := false
 
 func _ready() -> void:
 	process_priority = 10
@@ -37,6 +38,8 @@ func _ready() -> void:
 	if not StorySession.animation_return.is_empty():
 		var destination: Dictionary = StorySession.animation_return.duplicate()
 		StorySession.animation_return.clear()
+		destination.category = Catalog.category_name(destination.category)
+		destination.type = Catalog.type_name(destination.category,destination.type)
 		if MOVE_TYPES.has(destination.category):
 			type_indices[destination.category] = MOVE_TYPES[destination.category].find(destination.type)
 			select_category(destination.category)
@@ -77,6 +80,7 @@ func clear_content() -> void:
 	for child in content.get_children():
 		content.remove_child(child)
 		child.queue_free()
+	reception_controls = null
 	animation_list = null
 	edit_button = null
 	selected_entry.clear()
@@ -103,11 +107,13 @@ func show_categories() -> void:
 		category_buttons[category] = entry
 
 func select_category(category: String) -> void:
+	category = Catalog.category_name(category)
 	if not MOVE_TYPES.has(category): return
 	selected_category = category
 	clear_content()
 	set_title(category.to_upper())
 	var row := HBoxContainer.new()
+	row.visible = MOVE_TYPES[category].size()>1
 	row.add_theme_constant_override("separation",8)
 	content.add_child(row)
 	var previous := button("L2 <",cycle_type.bind(-1))
@@ -127,6 +133,13 @@ func select_category(category: String) -> void:
 	next.custom_minimum_size = Vector2(52,44)
 	next.size_flags_horizontal = Control.SIZE_SHRINK_END
 	row.add_child(next)
+	if category=="Forearm reception":
+		reception_controls = preload("res://scripts/reception_controls.gd").new()
+		content.add_child(reception_controls)
+		reception_controls.changed.connect(func(part):
+			if part=="body": replace_body_layer = true
+			apply_output_angle(angle_control.requested))
+		content.add_child(label("Forearms / platform",18))
 	animation_list = ItemList.new()
 	animation_list.name = "AnimationList"
 	animation_list.allow_reselect = true
@@ -164,10 +177,12 @@ func refresh_type() -> void:
 
 func preview_animation(index: int) -> void:
 	if not is_instance_valid(preview_player): return
+	replace_body_layer = false
 	var entry: Dictionary = animation_list.get_item_metadata(index)
 	selected_entry = entry.duplicate(true)
 	if is_instance_valid(edit_button): edit_button.disabled = false
 	angle_control.apply_setup(preview_player)
+	if is_instance_valid(reception_controls): reception_controls.apply(preview_player)
 	source_clip = load(entry.path)
 	trajectory_solver = preload("res://scripts/pass_trajectory_solver.gd").new(preview_player,source_clip)
 	render_clip = source_clip
@@ -178,6 +193,7 @@ func preview_animation(index: int) -> void:
 		ball_preview = preload("res://scripts/animation_ball_preview.gd").new()
 		preview_player.get_parent().add_child(ball_preview)
 	ball_preview.configure(preview_player,render_clip)
+	if is_instance_valid(reception_controls): reception_controls.show_result(render_clip)
 	preview_clock = minf(0,ball_preview.contact_time-ball_preview.feed_duration)
 	preview_player.animator.play("custom_preview/clip",0)
 	preview_player.animator.advance(0)
@@ -191,6 +207,7 @@ func preview_animation(index: int) -> void:
 func apply_output_angle(value: float) -> void:
 	if source_clip == null or not source_clip.has_meta("contact_time"): return
 	angle_control.apply_setup(preview_player)
+	if is_instance_valid(reception_controls): reception_controls.apply(preview_player,replace_body_layer)
 	StorySession.pass_output_angle = value
 	var result: Dictionary = trajectory_solver.solve(value,StorySession.pass_distance)
 	var last_contact_clock: float = ball_preview.last_time
@@ -201,6 +218,7 @@ func apply_output_angle(value: float) -> void:
 	preview_player.animator.advance(0)
 	preview_player.animator.pause()
 	ball_preview.configure(preview_player,render_clip)
+	if is_instance_valid(reception_controls): reception_controls.show_result(render_clip)
 	ball_preview.tick(preview_clock,false)
 	ball_preview.last_time = last_contact_clock
 	angle_control.sync_feed(ball_preview.feed_info)

@@ -15,9 +15,9 @@ static func surface(elbows: Array, wrists: Array, arm_radius: float) -> Dictiona
 		half_gap = 0
 	return {"surface":center,"normal":normal,"ball":center+normal*sqrt(maxf(0,clearance*clearance-half_gap*half_gap))}
 
-static func rebound(incoming: Vector3, velocity: Vector3, normal: Vector3) -> Vector3:
+static func rebound(incoming: Vector3, velocity: Vector3, normal: Vector3, restitution := 0.55) -> Vector3:
 	var relative := incoming-velocity
-	return relative-1.55*minf(0,relative.dot(normal))*normal+velocity
+	return relative-(1.0+clampf(restitution,0.02,0.65))*minf(0,relative.dot(normal))*normal+velocity
 
 static func elevation(velocity: Vector3) -> float:
 	return rad_to_deg(atan2(velocity.y,Vector2(velocity.x,velocity.z).length()))

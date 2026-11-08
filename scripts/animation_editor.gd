@@ -5,6 +5,8 @@ const Flight = preload("res://scripts/pass_flight.gd")
 const Catalog = preload("res://scripts/volleyball_animations.gd")
 var ball_preview: Node3D
 var setup_drag: RefCounted
+var reception_controls: VBoxContainer
+var replace_body_layer := false
 var angle_control: VBoxContainer
 var trajectory_base: Animation
 var trajectory_solver: RefCounted
@@ -45,10 +47,12 @@ func _ready() -> void:
 	preview_player.animator.stop()
 	preview_player.animator.active = false
 	angle_control.apply_setup(preview_player)
+	if is_instance_valid(reception_controls): reception_controls.apply(preview_player,replace_body_layer)
 	session = EditSession.new(StorySession.edit_animation if StorySession.edit_animation != null else load(entry.path),preview_player.skeleton)
 	ball_preview = preload("res://scripts/animation_ball_preview.gd").new()
 	preview_player.get_parent().add_child(ball_preview)
 	ball_preview.configure(preview_player,session.source,session)
+	if is_instance_valid(reception_controls): reception_controls.show_result(session.source)
 	frame_field.max_value = session.last_frame
 	timeline.max_value = session.last_frame
 	for index in preview_player.skeleton.get_bone_count():
@@ -146,6 +150,9 @@ func build_controls(host: VBoxContainer) -> void:
 	transport.add_child(undo_button)
 	redo_button = button("Redo",redo)
 	transport.add_child(redo_button)
+	reception_controls = preload("res://scripts/reception_controls.gd").new()
+	controls.add_child(reception_controls)
+	reception_controls.changed.connect(func(part): replace_body_layer = part=="body"; trajectory_base = null; apply_output_angle(angle_control.requested))
 	group_picker = OptionButton.new()
 	group_picker.name = "BodyGroup"
 	group_picker.custom_minimum_size.y = 38
@@ -192,6 +199,7 @@ func build_controls(host: VBoxContainer) -> void:
 
 func refresh_ball_angle() -> void:
 	ball_preview.configure(preview_player,session.source,session)
+	if is_instance_valid(reception_controls): reception_controls.show_result(session.source)
 	right_panel.visible = ball_preview.active
 	angle_control.sync_feed(ball_preview.feed_info)
 	angle_control.sync_output(ball_preview)
@@ -204,10 +212,12 @@ func apply_output_angle(value: float) -> void:
 		trajectory_base = session.bake()
 		trajectory_solver = preload("res://scripts/pass_trajectory_solver.gd").new(preview_player,trajectory_base)
 	angle_control.apply_setup(preview_player)
+	if is_instance_valid(reception_controls): reception_controls.apply(preview_player,replace_body_layer)
 	remember_undo()
 	var result: Dictionary = trajectory_solver.solve(value,StorySession.pass_distance)
 	session.replace_source(result.clip)
 	trajectory_revision = session.revision
+	replace_body_layer = false
 	StorySession.pass_output_angle = value
 	refresh_ball_angle()
 	set_frame(frame)

@@ -41,8 +41,19 @@ static func save_copy(clip: Animation, original: Dictionary, title: String) -> D
 	cache_ready = true
 	return entry
 
+static func category_name(value: String) -> String:
+	return "Forearm reception" if value in ["Passing","Digging","Reception","Forearm reception"] else value
+
+static func type_name(category: String, value: String) -> String:
+	return "Forearm" if category_name(category)=="Forearm reception" else value
+
 static func entries(category: String, move_type: String) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
 	for entry in ENTRIES+custom_entries():
-		if entry.category == category and entry.type == move_type: result.append(entry)
+		if category_name(entry.category)==category_name(category) and type_name(entry.category,entry.type)==type_name(category,move_type):
+			var copy: Dictionary = entry.duplicate(true)
+			copy.category = category_name(entry.category)
+			copy.type = type_name(entry.category,entry.type)
+			if str(copy.id).begins_with("straight_pass_"): copy.name = str(copy.name).replace("Straight Pass","Platform")
+			result.append(copy)
 	return result
