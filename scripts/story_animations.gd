@@ -19,8 +19,10 @@ var animation_list: ItemList
 var trigger_held := {}
 var edit_button: Button
 var selected_entry: Dictionary = {}
+var ball_preview: Node3D
 
 func _ready() -> void:
+	process_priority = 10
 	super._ready()
 	if not StorySession.animation_return.is_empty():
 		var destination: Dictionary = StorySession.animation_return.duplicate()
@@ -58,6 +60,7 @@ func set_title(text: String) -> void:
 	if heading: heading.text = text
 
 func show_categories() -> void:
+	if is_instance_valid(ball_preview): ball_preview.stop()
 	if is_instance_valid(preview_player): preview_player.play_action("idle")
 	selected_category = ""
 	clear_content()
@@ -125,7 +128,9 @@ func refresh_type() -> void:
 	if animation_list.item_count > 0:
 		animation_list.select(0)
 		preview_animation(0)
-	elif is_instance_valid(preview_player): preview_player.play_action("idle")
+	elif is_instance_valid(preview_player):
+		preview_player.play_action("idle")
+		if is_instance_valid(ball_preview): ball_preview.stop()
 
 func preview_animation(index: int) -> void:
 	if not is_instance_valid(preview_player): return
@@ -134,6 +139,14 @@ func preview_animation(index: int) -> void:
 	if is_instance_valid(edit_button): edit_button.disabled = false
 	var clip: Animation = load(entry.path)
 	preview_player.install_custom(clip,"preview",false)
+	if not is_instance_valid(ball_preview):
+		ball_preview = preload("res://scripts/animation_ball_preview.gd").new()
+		preview_player.get_parent().add_child(ball_preview)
+	ball_preview.configure(preview_player,clip)
+
+func _process(_delta: float) -> void:
+	if is_instance_valid(ball_preview) and ball_preview.active:
+		ball_preview.tick(preview_player.animator.current_animation_position,preview_player.animator.is_playing())
 
 func open_editor(index := -1) -> void:
 	if index >= 0: preview_animation(index)

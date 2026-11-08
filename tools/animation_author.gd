@@ -87,7 +87,7 @@ func pose_at(time: float) -> Array:
 			var current_pole := (point(pose,"lowerarm_"+side)-point(pose,"upperarm_"+side)).normalized()
 			var pole_rotation := Quaternion(current_pole,values["elbow_"+side].normalized())
 			var elbow_pole: Vector3 = Quaternion.IDENTITY.slerp(pole_rotation,values.platform)*current_pole
-			limb(pose,"upperarm_"+side,"lowerarm_"+side,"hand_"+side,target,elbow_pole,values.platform)
+			limb(pose,"upperarm_"+side,"lowerarm_"+side,"hand_"+side,target,elbow_pole,values.platform,float(values.get("elbow_extension",180)))
 		if values.grip > 0.0001:
 			var hand: String = "hand_"+side
 			var fingers: String = "index_01_"+side
@@ -102,7 +102,7 @@ func pose_at(time: float) -> Array:
 			var roll: float = projected.signed_angle_to(down,arm_axis)*values.grip
 			var upper_axis := (point(pose,"lowerarm_"+side)-point(pose,"upperarm_"+side)).normalized()
 			var forearm_basis := world_pose(pose,rig.find_bone("lowerarm_"+side)).basis
-			rotate_world(pose,"upperarm_"+side,upper_axis,roll*0.35)
+			rotate_world(pose,"upperarm_"+side,upper_axis,roll*float(values.get("upperarm_roll_share",0.35)))
 			set_world_basis(pose,"lowerarm_"+side,Basis(arm_axis,roll)*forearm_basis)
 			var direction := (Basis(Vector3.RIGHT,deg_to_rad(values.wrist_flex))*Vector3(0,arm_axis.y,arm_axis.z)).normalized()
 			aim_joint(pose,hand,fingers,point(pose,hand)+direction)
@@ -159,7 +159,7 @@ func aim_joint(pose: Array, joint: String, end: String, target: Vector3) -> void
 	var rotation := Quaternion(from,to)
 	set_world_basis(pose,joint,Basis(rotation)*world_pose(pose,rig.find_bone(joint)).basis)
 
-func limb(pose: Array, start: String, middle: String, end: String, target: Vector3, pole: Vector3, blend := 1.0) -> void:
+func limb(pose: Array, start: String, middle: String, end: String, target: Vector3, pole: Vector3, blend := 1.0, extension_limit := 180.0) -> void:
 	var origin := point(pose,start)
 	var old_middle := point(pose,middle)
 	var old_end := point(pose,end)
@@ -174,7 +174,8 @@ func limb(pose: Array, start: String, middle: String, end: String, target: Vecto
 	var from_axis := (old_end-origin).normalized()
 	var to_axis := (target-origin).normalized()
 	var axis: Vector3 = Quaternion.IDENTITY.slerp(Quaternion(from_axis,to_axis),blend)*from_axis
-	var target_distance := clampf(origin.distance_to(target),absf(upper-lower)+0.001,upper+lower-0.001)
+	var maximum := minf(upper+lower-0.001,sqrt(maxf(0.00001,upper*upper+lower*lower-2*upper*lower*cos(deg_to_rad(extension_limit)))))
+	var target_distance := clampf(origin.distance_to(target),absf(upper-lower)+0.001,maximum)
 	var start_angle := acos(clampf((upper*upper+lower*lower-origin.distance_squared_to(old_end))/(2.0*upper*lower),-1,1))
 	var target_angle := acos(clampf((upper*upper+lower*lower-target_distance*target_distance)/(2.0*upper*lower),-1,1))
 	var elbow_angle := lerpf(start_angle,target_angle,blend)

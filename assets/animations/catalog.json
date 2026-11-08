@@ -1,0 +1,79 @@
+[
+  {
+    "id": "straight_pass_01",
+    "name": "Straight Pass 1",
+    "category": "Passing",
+    "type": "Straight",
+    "path": "res://assets/animations/straight_pass_01.tres"
+  },
+  {
+    "id": "straight_pass_02",
+    "name": "Straight Pass 2",
+    "category": "Passing",
+    "type": "Straight",
+    "path": "res://assets/animations/straight_pass_02.res"
+  },
+  {
+    "id": "straight_pass_03",
+    "name": "Straight Pass 3",
+    "category": "Passing",
+    "type": "Straight",
+    "path": "res://assets/animations/straight_pass_03.res"
+  },
+  {
+    "id": "straight_pass_04",
+    "name": "Straight Pass 4",
+    "category": "Passing",
+    "type": "Straight",
+    "path": "res://assets/animations/straight_pass_04.res"
+  },
+  {
+    "id": "straight_pass_05",
+    "name": "Straight Pass 5",
+    "category": "Passing",
+    "type": "Straight",
+    "path": "res://assets/animations/straight_pass_05.res"
+  },
+  {
+    "id": "straight_pass_06",
+    "name": "Straight Pass 6",
+    "category": "Passing",
+    "type": "Straight",
+    "path": "res://assets/animations/straight_pass_06.res"
+  },
+  {
+    "id": "straight_pass_07",
+    "name": "Straight Pass 7",
+    "category": "Passing",
+    "type": "Straight",
+    "path": "res://assets/animations/straight_pass_07.res"
+  },
+  {
+    "id": "straight_pass_08",
+    "name": "Straight Pass 8",
+    "category": "Passing",
+    "type": "Straight",
+    "path": "res://assets/animations/straight_pass_08.res"
+  },
+  {
+    "id": "straight_pass_09",
+    "name": "Straight Pass 9",
+    "category": "Passing",
+    "type": "Straight",
+    "path": "res://assets/animations/straight_pass_09.res"
+  },
+  {
+    "id": "straight_pass_10",
+    "name": "Straight Pass 10",
+    "category": "Passing",
+    "type": "Straight",
+    "path": "res://assets/animations/straight_pass_10.res"
+  },
+  {
+    "id": "straight_pass_11",
+    "name": "Straight Pass 11",
+    "category": "Passing",
+    "type": "Straight",
+    "path": "res://assets/animations/straight_pass_11.res"
+  }
+]

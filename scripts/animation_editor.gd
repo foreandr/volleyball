@@ -2,6 +2,7 @@ extends "res://scripts/create.gd"
 const EditSession = preload("res://scripts/animation_edit_session.gd")
 const Groups = preload("res://scripts/animation_body_groups.gd")
 const Catalog = preload("res://scripts/volleyball_animations.gd")
+var ball_preview: Node3D
 var session: RefCounted
 var entry: Dictionary
 var frame := 0
@@ -35,6 +36,9 @@ func _ready() -> void:
 	preview_player.animator.stop()
 	preview_player.animator.active = false
 	session = EditSession.new(load(entry.path),preview_player.skeleton)
+	ball_preview = preload("res://scripts/animation_ball_preview.gd").new()
+	preview_player.get_parent().add_child(ball_preview)
+	ball_preview.configure(preview_player,session.source,session)
 	frame_field.max_value = session.last_frame
 	timeline.max_value = session.last_frame
 	for index in preview_player.skeleton.get_bone_count():
@@ -167,6 +171,7 @@ func set_frame(value: int) -> void:
 	frame_field.set_value_no_signal(frame)
 	timeline.set_value_no_signal(frame)
 	session.sample(frame)
+	if is_instance_valid(ball_preview) and not playing: ball_preview.tick(session.time_at(frame),false)
 	refresh_rotation()
 	if is_instance_valid(next_pose_button): next_pose_button.disabled = frame >= session.last_frame
 	if is_instance_valid(later_pose_button): later_pose_button.disabled = frame >= session.last_frame
@@ -178,6 +183,7 @@ func step_frame(direction: int) -> void:
 func set_playing(value: bool) -> void:
 	playing = value
 	playhead = float(frame)
+	if is_instance_valid(ball_preview): ball_preview.last_time = session.time_at(frame)
 	if is_instance_valid(play_button): play_button.text = "Pause" if playing else "Play"
 
 func _process(delta: float) -> void:
@@ -185,6 +191,7 @@ func _process(delta: float) -> void:
 	if playing:
 		playhead = fposmod(playhead+delta*EditSession.FPS,maxi(1,session.last_frame))
 		set_frame(floori(playhead))
+	if is_instance_valid(ball_preview): ball_preview.tick(session.time_at(playhead if playing else float(frame)),playing)
 	if is_instance_valid(overlay): overlay.queue_redraw()
 
 func select_group(group: String) -> void:

@@ -1,5 +1,5 @@
 extends RefCounted
-const ENTRIES := [{"id":"straight_pass_01","name":"Straight Pass 1","category":"Passing","type":"Straight","path":"res://assets/animations/straight_pass_01.tres"}]
+static var ENTRIES: Array = JSON.parse_string(FileAccess.get_file_as_string("res://assets/animations/catalog.json"))
 
 static var custom_directory := "user://animations/custom"
 static var custom_cache: Array[Dictionary] = []

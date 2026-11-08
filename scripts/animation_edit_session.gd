@@ -1,6 +1,7 @@
 extends RefCounted
 const FPS := 60.0
 const PREFIX := "Armature/Skeleton3D:"
+var revision := 0
 var source: Animation
 var rig: Skeleton3D
 var edits: Dictionary = {}
@@ -71,10 +72,12 @@ func state() -> Dictionary:
 	return {"rotations":edits.duplicate(true),"positions":position_edits.duplicate(true)}
 
 func restore(value: Dictionary) -> void:
+	revision += 1
 	edits = value.rotations.duplicate(true)
 	position_edits = value.positions.duplicate(true)
 
 func propagate(bones: Array[int], source_frame: int, first: int, last: int) -> void:
+	revision += 1
 	for bone in bones:
 		var name_ := str(rig.get_bone_name(bone))
 		var rotation := source_rotation(bone,source_frame)*offset_at(bone,source_frame)
@@ -102,6 +105,7 @@ func sample(frame: float) -> void:
 	rig.force_update_all_bone_transforms()
 
 func set_offset(bone: int, frame: int, value: Quaternion) -> void:
+	revision += 1
 	var name_ := str(rig.get_bone_name(bone))
 	if not edits.has(name_): edits[name_] = {}
 	edits[name_][clampi(frame,0,last_frame)] = value.normalized()

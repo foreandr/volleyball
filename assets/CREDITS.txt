@@ -11,3 +11,5 @@ Reused from the local FightLab project. Volleyball changes team colors and anima
 Goalkeeper Idle.fbx: supplied by the user; animation retargeted for the existing character rig.
 
 Volleyball body/outfit adaptation: slimmer upper-arm and forearm mesh cross-sections; original rig and skin weights retained.
+
+Pass contact sound: original synthesized impact. Preview volleyball mesh and color panels generated in Godot.
