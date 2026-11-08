@@ -10,6 +10,7 @@ var animator: AnimationPlayer
 var animation_slots := {"idle":"volleyball/goalkeeper_idle","run":"base/Jog_Fwd","jump":"base/Jump_Start","land":"base/Jump_Land"}
 
 func _ready() -> void:
+	add_child(preload("res://scripts/player_direction_arrows.gd").new())
 	model = preload("res://assets/characters/base/Superhero_Male_FullBody.gltf").instantiate()
 	add_child(model)
 	skeleton = model.find_child("Skeleton3D",true,false)

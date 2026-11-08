@@ -100,5 +100,5 @@ var pass_destination := Vector2.INF
 var pass_apex := 3.0
 var destination_fit := "angle"
 
-var reception_body := "Auto"
+var reception_body := "Balanced"
 var reception_hands := "From platform"

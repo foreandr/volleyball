@@ -1,5 +1,4 @@
 extends RefCounted
-const Flight = preload("res://scripts/pass_flight.gd")
 static var BODIES: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://assets/animation_recipes/reception_bodies.json"))
 var actor: Node3D
 var rig: Skeleton3D
@@ -10,8 +9,6 @@ var body_tracks := {}
 var body_name := "Balanced"
 var hand_name := "From platform"
 var recipe := {}
-var speed := 0.0
-var angle := 0.0
 var contact := 0.6
 var preserve_body := false
 
@@ -31,31 +28,12 @@ func _init(player: Node3D, clip: Animation, builder: RefCounted) -> void:
 func body_bone(name_: String) -> bool:
 	return name_=="pelvis" or name_.begins_with("spine_") or name_.begins_with("neck_") or name_=="Head" or name_.begins_with("thigh_") or name_.begins_with("calf_") or name_.begins_with("foot_") or name_.begins_with("ball_")
 
-func configure(pose: Array) -> void:
+func configure(_pose: Array) -> void:
 	var options: Dictionary = actor.get_meta("reception_options",{})
-	body_name = str(options.get("body","Auto"))
+	body_name = "Balanced"
 	hand_name = str(options.get("hands","From platform"))
-	var wrists := []
-	var elbows := []
-	for side in ["l","r"]:
-		elbows.append(rig.global_transform*author.point(pose,"lowerarm_"+side))
-		wrists.append(rig.global_transform*author.point(pose,"hand_"+side))
-	var hit: Dictionary = preload("res://scripts/forearm_contact.gd").surface(elbows,wrists,0.032*rig.global_basis.get_scale().y)
-	var feed := Flight.feed(hit.ball,actor.get_meta("feed_settings",{}))
-	speed = feed.incoming.length()
-	angle = rad_to_deg(atan2(-feed.incoming.y,Vector2(feed.incoming.x,feed.incoming.z).length()))
-	if body_name=="Auto":
-		var local: Vector3 = actor.global_basis.inverse()*feed.incoming.normalized()
-		if speed>=24 and angle>=52: body_name = "Hip drop"
-		elif speed>=18 and angle>=40: body_name = "Knee drop"
-		elif absf(local.x)>0.35: body_name = "Split stance"
-		elif speed>=12: body_name = "Low base"
-		else: body_name = "Balanced"
-	preserve_body = body_name=="From clip" or (source.has_meta("reception_body") and not options.get("replace_body",false))
-	if preserve_body:
-		body_name = str(source.get_meta("reception_body","From clip"))
-		recipe = {}
-	else: recipe = BODIES.get(body_name,BODIES.Balanced).duplicate()
+	preserve_body = source.get_meta("reception_body","")=="Balanced" and not options.get("replace_body",false)
+	recipe = {} if preserve_body else BODIES.Balanced.duplicate()
 
 func apply(pose: Array, time: float) -> Array:
 	var result := pose.duplicate()
@@ -72,9 +50,7 @@ func body(pose: Array, time: float) -> void:
 	var prepare := smoothstep(0,maxf(0.1,contact-0.22),time)
 	var recover := 1.0-smoothstep(contact+0.58,minf(source.length,contact+1.5),time)
 	var brace := smoothstep(contact-0.13,contact+0.20,time)
-	var settle := smoothstep(contact-0.02,contact+0.32,time)
-	var floor_move := body_name in ["Knee drop","Hip drop"]
-	var give := settle if floor_move else brace
+	var give := brace
 	var lower := (float(recipe.lower)*prepare+float(recipe.give)*give)*recover
 	var backward := float(recipe.retreat)*give*recover
 	var feet := {}
@@ -98,14 +74,6 @@ func body(pose: Array, time: float) -> void:
 		target.y += stepping*(0.035 if body_name!="Balanced" else 0.0)
 		var pole: Vector3 = poles[side]
 		var foot_basis: Basis = feet[side].basis
-		if body_name=="Knee drop" and side=="r":
-			target.z -= 0.34*settle*recover
-			target.y += 0.11*settle*recover
-			pole = pole.lerp(Vector3(0,-1,0.25),settle*recover)
-			foot_basis = Basis(Vector3.RIGHT,deg_to_rad(40)*settle*recover)*foot_basis
-		elif body_name=="Hip drop":
-			target.z += 0.22*settle*recover
-			pole = pole.lerp(Vector3(sign_*0.15,1,0.4),settle*recover)
 		author.limb(pose,"thigh_"+side,"calf_"+side,"foot_"+side,target,pole)
 		author.set_world_basis(pose,"foot_"+side,foot_basis)
 

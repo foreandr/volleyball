@@ -1,7 +1,3 @@
 {
-  "Balanced": {"lower":0.02,"give":0.02,"retreat":0.01,"lean":0,"wide":0.0,"stagger":0.0},
-  "Low base": {"lower":0.22,"give":0.08,"retreat":0.07,"lean":5,"wide":0.045,"stagger":0.035},
-  "Split stance": {"lower":0.18,"give":0.08,"retreat":0.08,"lean":7,"wide":0.05,"stagger":0.13},
-  "Knee drop": {"lower":0.22,"give":0.17,"retreat":0.05,"lean":10,"wide":0.04,"stagger":0.10},
-  "Hip drop": {"lower":0.19,"give":0.55,"retreat":0.24,"lean":-8,"wide":0.03,"stagger":0.03}
+  "Balanced": {"lower":0.02,"give":0.02,"retreat":0.01,"lean":0,"wide":0.0,"stagger":0.0}
 }
