@@ -99,7 +99,7 @@ func move_distance(value: float) -> void:
 func update_spin_controls() -> void:
 	var type: String = SPINS[spin_picker.selected]
 	for control in [spin_rate_field,float_field]:
-		var show_: bool = type == "Dead float" if control == float_field else not type in ["Dead float","No spin"]
+		var show_: bool = type == "Dead float" if control == float_field else true
 		control.get_parent().visible = show_
 		control.get_meta("slider").visible = show_
 
@@ -156,6 +156,8 @@ func _process(_delta: float) -> void:
 	back_field.set_value_no_signal(StorySession.feed_spot.y-4.0)
 	back_field.get_meta("slider").set_value_no_signal(back_field.value)
 	if pending:
+		var page := get_tree().current_scene
+		if page.get("player_controls")!=null and page.player_controls.active: return
 		pending = false
 		angle_requested.emit(requested)
 

@@ -19,6 +19,7 @@ func handle(event: InputEvent) -> bool:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if not event.pressed:
 			if mode.is_empty(): return false
+			if mode=="player" and moved: StorySession.save_preview_setup()
 			if mode == "player" and not moved and click_point.is_finite(): page.angle_control.place_point(click_point,click_mode)
 			mode = ""
 			return true

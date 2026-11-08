@@ -254,6 +254,7 @@ func set_playing(value: bool) -> void:
 
 func _process(delta: float) -> void:
 	super._process(delta)
+	if player_controls!=null and player_controls.active: return
 	if session == null: return
 	if playing and setup_drag.mode.is_empty():
 		var first: float = minf(0,ball_preview.contact_time-ball_preview.feed_duration)*EditSession.FPS
@@ -408,6 +409,9 @@ func pick_handle(position: Vector2) -> int:
 	return selected
 
 func handle_preview_input(event: InputEvent) -> void:
+	if player_controls!=null and player_controls.active:
+		super.handle_preview_input(event)
+		return
 	if setup_drag != null and not gizmo_drag:
 		var joint_click: bool = event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT and pick_handle(event.position)>=0
 		if (not joint_click or not setup_drag.mode.is_empty()) and setup_drag.handle(event):

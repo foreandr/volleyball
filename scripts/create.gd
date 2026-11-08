@@ -19,6 +19,7 @@ var dragging := false
 var panning := false
 var ball_controls_host: VBoxContainer
 var right_panel: PanelContainer
+var player_controls: RefCounted
 
 func _ready() -> void:
 	profile = initial_profile()
@@ -100,6 +101,7 @@ func _ready() -> void:
 		scroll.add_child(ball_controls_host)
 		build_ball_controls(ball_controls_host)
 	build_controls(controls)
+	if has_ball_controls(): player_controls = preload("res://scripts/preview_player_control.gd").new(self)
 	preview.grab_focus()
 
 func has_ball_controls() -> bool:
@@ -222,6 +224,7 @@ func build_preview_stage(world: Node3D) -> void:
 	world.add_child(platform)
 
 func handle_preview_input(event: InputEvent) -> void:
+	if player_controls!=null and player_controls.active and not event is InputEventKey: return
 	if event is InputEventKey and event.pressed:
 		handle_keyboard(event)
 		return
@@ -243,6 +246,9 @@ func handle_preview_input(event: InputEvent) -> void:
 		if panning or dragging: preview.accept_event()
 
 func _process(delta: float) -> void:
+	if player_controls!=null:
+		player_controls.step(delta)
+		if player_controls.active: return
 	var focus := get_viewport().gui_get_focus_owner()
 	if focus is LineEdit or focus is TextEdit: return
 	if Input.is_key_pressed(KEY_CTRL) or Input.is_key_pressed(KEY_ALT) or Input.is_key_pressed(KEY_META): return
@@ -327,6 +333,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed: handle_keyboard(event)
 
 func handle_keyboard(event: InputEventKey) -> void:
+	if player_controls!=null and player_controls.handle_key(event):
+		get_viewport().set_input_as_handled()
+		return
 	match event.keycode:
 		KEY_ESCAPE: open_menu()
 		KEY_R,KEY_F: reset_view()
@@ -345,3 +354,7 @@ func handle_keyboard(event: InputEventKey) -> void:
 				update_camera()
 		_: return
 	get_viewport().set_input_as_handled()
+
+func _input(event: InputEvent) -> void:
+	if event is InputEventKey and event.keycode in [KEY_F1,KEY_F2] and player_controls!=null:
+		handle_keyboard(event)

@@ -82,7 +82,7 @@ var edit_animation: Animation
 var pass_output_angle := -1.0
 
 var pass_distance := 6.0
-var pass_start := Vector2.ZERO
+var pass_start := Vector2(0,-3.2)
 
 var incoming_speed := 14.0
 var incoming_angle := 40.0
@@ -102,3 +102,22 @@ var destination_fit := "angle"
 
 var reception_body := "Balanced"
 var reception_hands := "From platform"
+var preview_camera := {}
+var preview_hash := 0
+var preview_path := "user://preview_setup.cfg"
+const PREVIEW_FIELDS := ["pass_start","pass_distance","pass_output_angle","incoming_speed","incoming_angle","feed_spot","incoming_spin","spin_rate","float_strength","source_height","feed_fit","ball_tab","pass_destination","pass_apex","destination_fit","preview_camera"]
+
+func _ready() -> void:
+	var config := ConfigFile.new()
+	if config.load(preview_path)==OK:
+		for field in PREVIEW_FIELDS:
+			if config.has_section_key("preview",field): set(field,config.get_value("preview",field))
+
+func save_preview_setup() -> void:
+	var values := {}
+	for field in PREVIEW_FIELDS: values[field] = get(field)
+	var signature := hash(values)
+	if signature==preview_hash: return
+	var config := ConfigFile.new()
+	for field in values: config.set_value("preview",field,values[field])
+	if config.save(preview_path)==OK: preview_hash = signature

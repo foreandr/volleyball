@@ -234,6 +234,7 @@ func apply_output_angle(value: float) -> void:
 
 func _process(delta: float) -> void:
 	super._process(delta)
+	if player_controls!=null and player_controls.active: return
 	recipe_poll += delta
 	if recipe_poll>=0.4:
 		recipe_poll = 0
@@ -278,6 +279,9 @@ func refresh_recipes() -> void:
 	apply_output_angle(angle_control.requested)
 
 func handle_preview_input(event: InputEvent) -> void:
+	if player_controls!=null and player_controls.active:
+		super.handle_preview_input(event)
+		return
 	if setup_drag != null and setup_drag.handle(event):
 		preview.accept_event()
 		return
@@ -304,6 +308,8 @@ func open_menu() -> void:
 	else: get_tree().change_scene_to_file("res://scenes/story.tscn")
 
 func _input(event: InputEvent) -> void:
+	super._input(event)
+	if event is InputEventKey and event.keycode in [KEY_F1,KEY_F2]: return
 	if event is InputEventJoypadButton and event.pressed and event.button_index == JOY_BUTTON_B:
 		open_menu()
 		get_viewport().set_input_as_handled()
