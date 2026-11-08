@@ -4,6 +4,7 @@ const Groups = preload("res://scripts/animation_body_groups.gd")
 const Flight = preload("res://scripts/pass_flight.gd")
 const Catalog = preload("res://scripts/volleyball_animations.gd")
 var ball_preview: Node3D
+var setup_drag: RefCounted
 var angle_control: VBoxContainer
 var trajectory_base: Animation
 var trajectory_solver: RefCounted
@@ -38,6 +39,8 @@ var drag_plane: Plane
 func _ready() -> void:
 	entry = (StorySession.edit_entry if not StorySession.edit_entry.is_empty() else Catalog.ENTRIES[0]).duplicate(true)
 	super._ready()
+	setup_drag = preload("res://scripts/court_setup_drag.gd").new(self)
+	preview_camera.fov = 42.0
 	preview_player.animator.stop()
 	preview_player.animator.active = false
 	angle_control.apply_setup(preview_player)
@@ -78,8 +81,8 @@ func build_preview_stage(world: Node3D) -> void:
 	orbit_pitch = 0.26
 	max_view_distance = 24.0
 	pan_limits = Vector3(9,5,17)
-	view_distance = 9.5
-	view_focus = Vector3(0,1.0,1.8)
+	view_distance = 16.0
+	view_focus = Vector3(0,2.0,4.0)
 
 func screen_title() -> String:
 	return "EDIT ANIMATION"
@@ -232,7 +235,7 @@ func set_playing(value: bool) -> void:
 
 func _process(delta: float) -> void:
 	if session == null: return
-	if playing:
+	if playing and setup_drag.mode.is_empty():
 		var first: float = minf(0,ball_preview.contact_time-ball_preview.feed_duration)*EditSession.FPS
 		var last: float = maxf(session.source.length,ball_preview.contact_time+ball_preview.flight_duration+0.4)*EditSession.FPS
 		playhead = first+fposmod(playhead-first+delta*EditSession.FPS,last-first)
@@ -385,6 +388,11 @@ func pick_handle(position: Vector2) -> int:
 	return selected
 
 func handle_preview_input(event: InputEvent) -> void:
+	if setup_drag != null and not gizmo_drag:
+		var joint_click: bool = event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT and pick_handle(event.position)>=0
+		if (not joint_click or not setup_drag.mode.is_empty()) and setup_drag.handle(event):
+			preview.accept_event()
+			return
 	if session != null and event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if event.pressed:
 			var index := pick_handle(event.position)

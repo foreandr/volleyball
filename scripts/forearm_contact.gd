@@ -17,7 +17,7 @@ static func surface(elbows: Array, wrists: Array, arm_radius: float) -> Dictiona
 
 static func rebound(incoming: Vector3, velocity: Vector3, normal: Vector3) -> Vector3:
 	var relative := incoming-velocity
-	return relative-1.85*minf(0,relative.dot(normal))*normal+velocity
+	return relative-1.55*minf(0,relative.dot(normal))*normal+velocity
 
 static func elevation(velocity: Vector3) -> float:
 	return rad_to_deg(atan2(velocity.y,Vector2(velocity.x,velocity.z).length()))

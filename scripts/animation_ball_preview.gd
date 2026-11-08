@@ -24,6 +24,9 @@ var cached_revision := -1
 var positions := {}
 var rotations := {}
 var guide: MeshInstance3D
+var source_ball: MeshInstance3D
+var feed_valid := true
+var feed_info := {}
 
 func _ready() -> void:
 	ball = MeshInstance3D.new()
@@ -43,6 +46,17 @@ func _ready() -> void:
 	add_child(guide)
 	guide.global_transform = Transform3D.IDENTITY
 	guide.hide()
+	source_ball = MeshInstance3D.new()
+	source_ball.name = "IncomingBall"
+	source_ball.mesh = ball.mesh
+	var ghost: StandardMaterial3D = style.duplicate()
+	ghost.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	ghost.albedo_color = Color(1,1,1,0.65)
+	source_ball.material_override = ghost
+	source_ball.scale = Vector3.ONE*2.0
+	source_ball.top_level = true
+	add_child(source_ball)
+	source_ball.hide()
 	hide()
 
 func make_ball() -> ArrayMesh:
@@ -86,6 +100,7 @@ func stop() -> void:
 	active = false
 	last_time = -1
 	hide()
+	if is_instance_valid(source_ball): source_ball.hide()
 	if is_instance_valid(guide): guide.hide()
 	if is_instance_valid(audio): audio.stop()
 
@@ -127,9 +142,13 @@ func recalculate() -> void:
 	var before := platform(maxf(0,contact_time-1.0/60))
 	var after := platform(minf(clip.length,contact_time+1.0/60))
 	surface_velocity = (after.surface-before.surface)/(2.0/60)
-	var feed := Flight.feed(impact_point)
+	var feed := Flight.feed(impact_point,actor.get_meta("feed_settings",{}))
+	feed_info = feed
 	incoming = feed.incoming
 	feed_duration = feed.duration
+	feed_valid = feed.valid
+	source_ball.global_position = Vector3(feed.start.x,maxf(0.35,feed.start.y),feed.start.z)
+	source_ball.show()
 	outgoing = Contact.rebound(incoming,surface_velocity,surface_normal)
 	flight_duration = Flight.landing_time(impact_point,outgoing)
 	update_guide()
@@ -143,10 +162,10 @@ func update_guide() -> void:
 	var path := ImmediateMesh.new()
 	for incoming_path in [true,false]:
 		path.surface_begin(Mesh.PRIMITIVE_LINE_STRIP)
-		path.surface_set_color(Color("e5bd72") if incoming_path else Color("70d5e5"))
+		path.surface_set_color((Color("e5bd72") if feed_valid else Color("df776d")) if incoming_path else Color("70d5e5"))
 		for index in range(81):
 			var time := -feed_duration*(1.0-float(index)/80.0) if incoming_path else float(index)/80.0*flight_duration
-			path.surface_add_vertex(impact_point+(incoming if incoming_path else outgoing)*time+Vector3.DOWN*4.905*time*time)
+			path.surface_add_vertex(Flight.position(feed_info,impact_point,time) if incoming_path else impact_point+outgoing*time+Vector3.DOWN*4.905*time*time)
 		path.surface_end()
 	var landing := impact_point+outgoing*flight_duration+Vector3.DOWN*4.905*flight_duration*flight_duration
 	path.surface_begin(Mesh.PRIMITIVE_LINE_STRIP)
@@ -169,12 +188,14 @@ func tick(time: float, audible: bool) -> void:
 		return
 	if edit_session != null and cached_revision != edit_session.revision: recalculate()
 	var elapsed := time-contact_time
-	global_position = impact_point+(incoming if elapsed < 0 else outgoing)*elapsed+Vector3.DOWN*4.905*elapsed*elapsed
+	global_position = Flight.position(feed_info,impact_point,elapsed) if elapsed < 0 else impact_point+outgoing*elapsed+Vector3.DOWN*4.905*elapsed*elapsed
 	show()
 	ball.visible = elapsed >= -feed_duration and elapsed <= flight_duration
 	var squeeze := maxf(0,1.0-absf(elapsed)/0.035)
+	var axis: Vector3 = feed_info.get("spin_axis",Vector3.ZERO)
+	var rotation_time := clampf(elapsed+feed_duration,0,feed_duration)
+	ball.global_basis = Basis(Quaternion(axis,rotation_time*float(feed_info.get("spin_rate",0)))) if axis.length_squared()>0.1 else Basis.IDENTITY
 	ball.scale = Vector3(1.0+0.04*squeeze,1.0-0.07*squeeze,1.0+0.04*squeeze)
-	ball.rotation = Vector3(time*1.7,time*2.3,0.2)
 	var crossed := last_time >= 0 and ((last_time < contact_time and time >= contact_time) if time >= last_time else (last_time < contact_time or time >= contact_time))
 	if audible and crossed:
 		audio.play()

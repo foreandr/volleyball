@@ -21,6 +21,7 @@ var trigger_held := {}
 var edit_button: Button
 var selected_entry: Dictionary = {}
 var ball_preview: Node3D
+var setup_drag: RefCounted
 var angle_control: VBoxContainer
 var source_clip: Animation
 var trajectory_solver: RefCounted
@@ -30,6 +31,8 @@ var preview_clock := 0.0
 func _ready() -> void:
 	process_priority = 10
 	super._ready()
+	setup_drag = preload("res://scripts/court_setup_drag.gd").new(self)
+	preview_camera.fov = 42.0
 	if not StorySession.animation_return.is_empty():
 		var destination: Dictionary = StorySession.animation_return.duplicate()
 		StorySession.animation_return.clear()
@@ -48,8 +51,8 @@ func build_preview_stage(world: Node3D) -> void:
 	orbit_pitch = 0.26
 	max_view_distance = 24.0
 	pan_limits = Vector3(9,5,17)
-	view_distance = 9.5
-	view_focus = Vector3(0,1.0,1.8)
+	view_distance = 16.0
+	view_focus = Vector3(0,2.0,4.0)
 
 func screen_title() -> String:
 	return "ANIMATIONS"
@@ -196,9 +199,15 @@ func _process(delta: float) -> void:
 	if is_instance_valid(ball_preview) and ball_preview.active:
 		var first := minf(0,ball_preview.contact_time-ball_preview.feed_duration)
 		var last := maxf(render_clip.length,ball_preview.contact_time+ball_preview.flight_duration+0.4)
-		preview_clock = first+fposmod(preview_clock-first+delta,last-first)
+		if setup_drag.mode.is_empty(): preview_clock = first+fposmod(preview_clock-first+delta,last-first)
 		preview_player.animator.seek(clampf(preview_clock,0,render_clip.length),true)
 		ball_preview.tick(preview_clock,true)
+
+func handle_preview_input(event: InputEvent) -> void:
+	if setup_drag != null and setup_drag.handle(event):
+		preview.accept_event()
+		return
+	super.handle_preview_input(event)
 
 func open_editor(index := -1) -> void:
 	if index >= 0: preview_animation(index)

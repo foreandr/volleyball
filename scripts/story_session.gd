@@ -83,3 +83,11 @@ var pass_output_angle := -1.0
 
 var pass_distance := 6.0
 var pass_start := Vector2.ZERO
+
+var incoming_speed := 14.0
+var incoming_angle := 40.0
+var feed_spot := Vector2(0,12.5)
+
+var incoming_spin := "No spin"
+var spin_rate := 3.0
+var float_strength := 0.6

@@ -79,11 +79,11 @@ func response(pitch: float, lift: float, drive := 0.0) -> Vector3:
 	var before := surface(maxf(0,contact_time-1.0/60),pitch,lift,drive)
 	var after := surface(minf(source.length,contact_time+1.0/60),pitch,lift,drive)
 	var velocity: Vector3 = (after.surface-before.surface)/(2.0/60)
-	return Contact.rebound(Flight.feed(hit.ball).incoming,velocity,hit.normal)
+	return Contact.rebound(Flight.feed(hit.ball,actor.get_meta("feed_settings",{})).incoming,velocity,hit.normal)
 
 func solve(requested: float, distance_ := 6.0) -> Dictionary:
 	var goal := clampf(requested,10,80)
-	var key := "%d/%s/%s/%.2f/%.2f" % [source.get_instance_id(),actor.scale,actor.position,goal,distance_]
+	var key := "%d/%s/%s/%.2f/%.2f/%s" % [source.get_instance_id(),actor.scale,actor.position,goal,distance_,actor.get_meta("feed_settings",{})]
 	if cache.has(key): return cache[key]
 	var lift := clampf((distance_-4.0)*0.003,0,0.025)
 	var pitch := 0.0
