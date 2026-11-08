@@ -1,6 +1,7 @@
 extends "res://scripts/create.gd"
 const EditSession = preload("res://scripts/animation_edit_session.gd")
 const Groups = preload("res://scripts/animation_body_groups.gd")
+const Flight = preload("res://scripts/pass_flight.gd")
 const Catalog = preload("res://scripts/volleyball_animations.gd")
 var ball_preview: Node3D
 var angle_control: VBoxContainer
@@ -39,6 +40,7 @@ func _ready() -> void:
 	super._ready()
 	preview_player.animator.stop()
 	preview_player.animator.active = false
+	angle_control.apply_setup(preview_player)
 	session = EditSession.new(StorySession.edit_animation if StorySession.edit_animation != null else load(entry.path),preview_player.skeleton)
 	ball_preview = preload("res://scripts/animation_ball_preview.gd").new()
 	preview_player.get_parent().add_child(ball_preview)
@@ -182,21 +184,22 @@ func build_controls(host: VBoxContainer) -> void:
 func refresh_ball_angle() -> void:
 	ball_preview.configure(preview_player,session.source,session)
 	angle_control.visible = ball_preview.active
-	if ball_preview.active: angle_control.display_result(float(session.source.get_meta("desired_output_angle",ball_preview.output_angle())),ball_preview.output_angle())
+	if ball_preview.active: angle_control.display_result(float(session.source.get_meta("desired_output_angle",ball_preview.output_angle())),ball_preview.output_angle(),Flight.distance(ball_preview.impact_point,ball_preview.outgoing))
 
 func apply_output_angle(value: float) -> void:
 	if session == null or not session.source.has_meta("contact_time"): return
 	if trajectory_base == null or trajectory_revision != session.revision:
 		trajectory_base = session.bake()
 		trajectory_solver = preload("res://scripts/pass_trajectory_solver.gd").new(preview_player,trajectory_base)
+	angle_control.apply_setup(preview_player)
 	remember_undo()
-	var result: Dictionary = trajectory_solver.solve(value)
+	var result: Dictionary = trajectory_solver.solve(value,StorySession.pass_distance)
 	session.replace_source(result.clip)
 	trajectory_revision = session.revision
 	StorySession.pass_output_angle = value
 	refresh_ball_angle()
 	set_frame(frame)
-	ball_preview.tick(session.time_at(playhead if playing else float(frame)),false)
+	ball_preview.tick((playhead if playing else float(frame))/EditSession.FPS,false)
 
 func bone_label(name_: String) -> String:
 	var side := ""
@@ -223,16 +226,19 @@ func step_frame(direction: int) -> void:
 func set_playing(value: bool) -> void:
 	playing = value
 	playhead = float(frame)
+	if playing and frame == 0: playhead = minf(0,ball_preview.contact_time-ball_preview.feed_duration)*EditSession.FPS
 	if is_instance_valid(ball_preview): ball_preview.last_time = session.time_at(frame)
 	if is_instance_valid(play_button): play_button.text = "Pause" if playing else "Play"
 
 func _process(delta: float) -> void:
 	if session == null: return
 	if playing:
-		playhead = fposmod(playhead+delta*EditSession.FPS,maxi(1,session.last_frame))
+		var first: float = minf(0,ball_preview.contact_time-ball_preview.feed_duration)*EditSession.FPS
+		var last: float = maxf(session.source.length,ball_preview.contact_time+ball_preview.flight_duration+0.4)*EditSession.FPS
+		playhead = first+fposmod(playhead-first+delta*EditSession.FPS,last-first)
 		set_frame(floori(playhead))
-	if is_instance_valid(ball_preview): ball_preview.tick(session.time_at(playhead if playing else float(frame)),playing)
-	if is_instance_valid(angle_control) and ball_preview.active: angle_control.set_actual(ball_preview.output_angle())
+	if is_instance_valid(ball_preview): ball_preview.tick((playhead if playing else float(frame))/EditSession.FPS,playing)
+	if is_instance_valid(angle_control) and ball_preview.active: angle_control.set_actual(ball_preview.output_angle(),Flight.distance(ball_preview.impact_point,ball_preview.outgoing))
 	if is_instance_valid(overlay): overlay.queue_redraw()
 
 func select_group(group: String) -> void:

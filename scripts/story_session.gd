@@ -80,3 +80,6 @@ func load_story(id: String) -> bool:
 
 var edit_animation: Animation
 var pass_output_angle := -1.0
+
+var pass_distance := 6.0
+var pass_start := Vector2.ZERO

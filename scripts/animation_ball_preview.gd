@@ -1,4 +1,5 @@
 extends Node3D
+const Flight = preload("res://scripts/pass_flight.gd")
 const Contact = preload("res://scripts/forearm_contact.gd")
 signal contacted
 const RADIUS := 0.105
@@ -12,6 +13,8 @@ var surface_normal := Vector3.UP
 var surface_velocity := Vector3.ZERO
 var incoming := Vector3(0,-5.5,-4.5)
 var outgoing := Vector3.ZERO
+var feed_duration := 1.3
+var flight_duration := 1.0
 var ball: MeshInstance3D
 var audio: AudioStreamPlayer
 var last_time := -1.0
@@ -124,7 +127,11 @@ func recalculate() -> void:
 	var before := platform(maxf(0,contact_time-1.0/60))
 	var after := platform(minf(clip.length,contact_time+1.0/60))
 	surface_velocity = (after.surface-before.surface)/(2.0/60)
+	var feed := Flight.feed(impact_point)
+	incoming = feed.incoming
+	feed_duration = feed.duration
 	outgoing = Contact.rebound(incoming,surface_velocity,surface_normal)
+	flight_duration = Flight.landing_time(impact_point,outgoing)
 	update_guide()
 	if edit_session != null: cached_revision = edit_session.revision
 
@@ -134,15 +141,24 @@ func output_angle() -> float:
 func update_guide() -> void:
 	if not is_instance_valid(guide): return
 	var path := ImmediateMesh.new()
+	for incoming_path in [true,false]:
+		path.surface_begin(Mesh.PRIMITIVE_LINE_STRIP)
+		path.surface_set_color(Color("e5bd72") if incoming_path else Color("70d5e5"))
+		for index in range(81):
+			var time := -feed_duration*(1.0-float(index)/80.0) if incoming_path else float(index)/80.0*flight_duration
+			path.surface_add_vertex(impact_point+(incoming if incoming_path else outgoing)*time+Vector3.DOWN*4.905*time*time)
+		path.surface_end()
+	var landing := impact_point+outgoing*flight_duration+Vector3.DOWN*4.905*flight_duration*flight_duration
 	path.surface_begin(Mesh.PRIMITIVE_LINE_STRIP)
-	for index in range(41):
-		var time := float(index)/40.0*1.1
-		path.surface_add_vertex(impact_point+outgoing*time+Vector3.DOWN*4.905*time*time)
+	path.surface_set_color(Color("70d5e5"))
+	for index in range(33):
+		var angle := TAU*index/32.0
+		path.surface_add_vertex(Vector3(landing.x+cos(angle)*0.2,0.055,landing.z+sin(angle)*0.2))
 	path.surface_end()
 	guide.mesh = path
 	var material := StandardMaterial3D.new()
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.albedo_color = Color("70b4c5")
+	material.vertex_color_use_as_albedo = true
 	guide.material_override = material
 	guide.visible = active
 
@@ -155,7 +171,7 @@ func tick(time: float, audible: bool) -> void:
 	var elapsed := time-contact_time
 	global_position = impact_point+(incoming if elapsed < 0 else outgoing)*elapsed+Vector3.DOWN*4.905*elapsed*elapsed
 	show()
-	ball.visible = time <= minf(clip.length,contact_time+0.85)
+	ball.visible = elapsed >= -feed_duration and elapsed <= flight_duration
 	var squeeze := maxf(0,1.0-absf(elapsed)/0.035)
 	ball.scale = Vector3(1.0+0.04*squeeze,1.0-0.07*squeeze,1.0+0.04*squeeze)
 	ball.rotation = Vector3(time*1.7,time*2.3,0.2)

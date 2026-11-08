@@ -1,4 +1,5 @@
 extends "res://scripts/create.gd"
+const Flight = preload("res://scripts/pass_flight.gd")
 const Catalog = preload("res://scripts/volleyball_animations.gd")
 const MOVE_TYPES := {
 	"Passing":["Straight","Left","Right","Dive Left","Dive Right"],
@@ -24,6 +25,7 @@ var angle_control: VBoxContainer
 var source_clip: Animation
 var trajectory_solver: RefCounted
 var render_clip: Animation
+var preview_clock := 0.0
 
 func _ready() -> void:
 	process_priority = 10
@@ -155,40 +157,48 @@ func preview_animation(index: int) -> void:
 	var entry: Dictionary = animation_list.get_item_metadata(index)
 	selected_entry = entry.duplicate(true)
 	if is_instance_valid(edit_button): edit_button.disabled = false
+	angle_control.apply_setup(preview_player)
 	source_clip = load(entry.path)
 	trajectory_solver = preload("res://scripts/pass_trajectory_solver.gd").new(preview_player,source_clip)
 	render_clip = source_clip
-	if source_clip.has_meta("contact_time") and StorySession.pass_output_angle >= 0:
-		render_clip = trajectory_solver.solve(StorySession.pass_output_angle).clip
+	if source_clip.has_meta("contact_time"):
+		render_clip = trajectory_solver.solve(StorySession.pass_output_angle if StorySession.pass_output_angle >= 0 else 45.0,StorySession.pass_distance).clip
 	preview_player.install_custom(render_clip,"preview",false)
 	if not is_instance_valid(ball_preview):
 		ball_preview = preload("res://scripts/animation_ball_preview.gd").new()
 		preview_player.get_parent().add_child(ball_preview)
 	ball_preview.configure(preview_player,render_clip)
+	preview_clock = minf(0,ball_preview.contact_time-ball_preview.feed_duration)
+	preview_player.animator.play("custom_preview/clip",0)
+	preview_player.animator.advance(0)
+	preview_player.animator.pause()
 	angle_control.visible = ball_preview.active
-	if ball_preview.active: angle_control.display_result(float(render_clip.get_meta("desired_output_angle",ball_preview.output_angle())),ball_preview.output_angle())
+	if ball_preview.active: angle_control.display_result(float(render_clip.get_meta("desired_output_angle",ball_preview.output_angle())),ball_preview.output_angle(),Flight.distance(ball_preview.impact_point,ball_preview.outgoing))
 
 func apply_output_angle(value: float) -> void:
 	if source_clip == null or not source_clip.has_meta("contact_time"): return
+	angle_control.apply_setup(preview_player)
 	StorySession.pass_output_angle = value
-	var result: Dictionary = trajectory_solver.solve(value)
-	var clock: float = preview_player.animator.current_animation_position
-	var running: bool = preview_player.animator.is_playing()
+	var result: Dictionary = trajectory_solver.solve(value,StorySession.pass_distance)
 	var last_contact_clock: float = ball_preview.last_time
 	render_clip = result.clip
 	preview_player.install_custom(render_clip,"preview",false)
 	preview_player.animator.play("custom_preview/clip",0)
-	preview_player.animator.seek(clock,true)
+	preview_player.animator.seek(clampf(preview_clock,0,render_clip.length),true)
 	preview_player.animator.advance(0)
-	if not running: preview_player.animator.pause()
+	preview_player.animator.pause()
 	ball_preview.configure(preview_player,render_clip)
-	ball_preview.tick(clock,false)
+	ball_preview.tick(preview_clock,false)
 	ball_preview.last_time = last_contact_clock
-	angle_control.display_result(value,ball_preview.output_angle())
+	angle_control.display_result(value,ball_preview.output_angle(),Flight.distance(ball_preview.impact_point,ball_preview.outgoing))
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if is_instance_valid(ball_preview) and ball_preview.active:
-		ball_preview.tick(preview_player.animator.current_animation_position,preview_player.animator.is_playing())
+		var first := minf(0,ball_preview.contact_time-ball_preview.feed_duration)
+		var last := maxf(render_clip.length,ball_preview.contact_time+ball_preview.flight_duration+0.4)
+		preview_clock = first+fposmod(preview_clock-first+delta,last-first)
+		preview_player.animator.seek(clampf(preview_clock,0,render_clip.length),true)
+		ball_preview.tick(preview_clock,true)
 
 func open_editor(index := -1) -> void:
 	if index >= 0: preview_animation(index)
