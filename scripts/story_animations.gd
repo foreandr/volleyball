@@ -208,6 +208,7 @@ func apply_output_angle(value: float) -> void:
 	angle_control.display_result(value,ball_preview.output_angle(),Flight.distance(ball_preview.impact_point,ball_preview.outgoing))
 
 func _process(delta: float) -> void:
+	super._process(delta)
 	if is_instance_valid(ball_preview) and ball_preview.active:
 		var first := minf(0,ball_preview.contact_time-ball_preview.feed_duration)
 		var last := maxf(render_clip.length,ball_preview.contact_time+ball_preview.flight_duration+0.4)

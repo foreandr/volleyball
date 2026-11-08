@@ -243,6 +243,7 @@ func set_playing(value: bool) -> void:
 	if is_instance_valid(play_button): play_button.text = "Pause" if playing else "Play"
 
 func _process(delta: float) -> void:
+	super._process(delta)
 	if session == null: return
 	if playing and setup_drag.mode.is_empty():
 		var first: float = minf(0,ball_preview.contact_time-ball_preview.feed_duration)*EditSession.FPS

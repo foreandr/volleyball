@@ -242,6 +242,24 @@ func handle_preview_input(event: InputEvent) -> void:
 			update_camera()
 		if panning or dragging: preview.accept_event()
 
+func _process(delta: float) -> void:
+	var focus := get_viewport().gui_get_focus_owner()
+	if focus is LineEdit or focus is TextEdit: return
+	if Input.is_key_pressed(KEY_CTRL) or Input.is_key_pressed(KEY_ALT) or Input.is_key_pressed(KEY_META): return
+	var direction := Vector2(
+		float(Input.is_physical_key_pressed(KEY_D))-float(Input.is_physical_key_pressed(KEY_A)),
+		float(Input.is_physical_key_pressed(KEY_W))-float(Input.is_physical_key_pressed(KEY_S)))
+	if direction.length_squared()<0.001: return
+	var right := preview_camera.global_basis.x
+	var forward := -preview_camera.global_basis.z
+	right.y = 0
+	forward.y = 0
+	var speed := clampf(view_distance*0.45,1.0,30.0)
+	view_focus += (right.normalized()*direction.normalized().x+forward.normalized()*direction.normalized().y)*speed*delta
+	view_focus.x = clampf(view_focus.x,-pan_limits.x,pan_limits.x)
+	view_focus.z = clampf(view_focus.z,-pan_limits.z,pan_limits.z)
+	update_camera()
+
 func pan_view(pixels: Vector2) -> void:
 	view_focus += (-preview_camera.global_basis.x*pixels.x+preview_camera.global_basis.y*pixels.y)*view_distance*0.0015
 	view_focus.x = clampf(view_focus.x,-pan_limits.x,pan_limits.x)
