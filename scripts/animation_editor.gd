@@ -48,7 +48,7 @@ func _ready() -> void:
 	preview_player.animator.active = false
 	angle_control.apply_setup(preview_player)
 	if is_instance_valid(reception_controls): reception_controls.apply(preview_player,replace_body_layer)
-	session = EditSession.new(StorySession.edit_animation if StorySession.edit_animation != null else load(entry.path),preview_player.skeleton)
+	session = EditSession.new(StorySession.edit_animation if StorySession.edit_animation != null else Catalog.load_clip(entry,preview_player),preview_player.skeleton)
 	ball_preview = preload("res://scripts/animation_ball_preview.gd").new()
 	preview_player.get_parent().add_child(ball_preview)
 	ball_preview.configure(preview_player,session.source,session)

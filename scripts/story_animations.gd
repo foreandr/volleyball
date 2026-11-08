@@ -28,6 +28,10 @@ var render_clip: Animation
 var preview_clock := 0.0
 var reception_controls: VBoxContainer
 var replace_body_layer := false
+var recipe_poll := 0.0
+var recipe_signature := 0
+var recipe_revision := -1
+var body_recipe_text := FileAccess.get_file_as_string("res://assets/animation_recipes/reception_bodies.json")
 
 func _ready() -> void:
 	process_priority = 10
@@ -183,7 +187,10 @@ func preview_animation(index: int) -> void:
 	if is_instance_valid(edit_button): edit_button.disabled = false
 	angle_control.apply_setup(preview_player)
 	if is_instance_valid(reception_controls): reception_controls.apply(preview_player)
-	source_clip = load(entry.path)
+	source_clip = Catalog.load_clip(entry,preview_player)
+	if source_clip==null: return
+	recipe_signature = Catalog.Recipes.signature(str(entry.get("recipe","")))
+	recipe_revision = Catalog.Recipes.revision
 	trajectory_solver = preload("res://scripts/pass_trajectory_solver.gd").new(preview_player,source_clip)
 	render_clip = source_clip
 	if source_clip.has_meta("contact_time"):
@@ -227,12 +234,48 @@ func apply_output_angle(value: float) -> void:
 
 func _process(delta: float) -> void:
 	super._process(delta)
+	recipe_poll += delta
+	if recipe_poll>=0.4:
+		recipe_poll = 0
+		refresh_recipes()
 	if is_instance_valid(ball_preview) and ball_preview.active:
 		var first := minf(0,ball_preview.contact_time-ball_preview.feed_duration)
 		var last: float = ball_preview.cycle_end()
 		if setup_drag.mode.is_empty(): preview_clock = first+fposmod(preview_clock-first+delta,last-first)
 		preview_player.animator.seek(ball_preview.animation_time(preview_clock),true)
 		ball_preview.tick(preview_clock,true)
+
+func refresh_recipes() -> void:
+	if selected_category!="Forearm reception" or selected_entry.is_empty(): return
+	Catalog.Recipes.refresh()
+	var body_path := "res://assets/animation_recipes/reception_bodies.json"
+	var text := FileAccess.get_file_as_string(body_path)
+	var body_changed := false
+	if text!=body_recipe_text:
+		var parser := JSON.new()
+		if parser.parse(text)==OK and parser.data is Dictionary:
+			preload("res://scripts/reception_layers.gd").BODIES = parser.data
+			body_recipe_text = text
+			body_changed = true
+	var id: String = selected_entry.id
+	if recipe_revision!=Catalog.Recipes.revision:
+		recipe_revision = Catalog.Recipes.revision
+		animation_list.clear()
+		for entry in Catalog.entries(selected_category,current_type()):
+			var index := animation_list.add_item(entry.name)
+			animation_list.set_item_metadata(index,entry)
+			if entry.id==id:
+				animation_list.select(index)
+				selected_entry = entry.duplicate(true)
+	var signature := Catalog.Recipes.signature(str(selected_entry.get("recipe","")))
+	if signature==recipe_signature and not body_changed: return
+	var replacement := Catalog.load_clip(selected_entry,preview_player)
+	if replacement==null: return
+	source_clip = replacement
+	recipe_signature = signature
+	preload("res://scripts/pass_trajectory_solver.gd").cache.clear()
+	trajectory_solver = preload("res://scripts/pass_trajectory_solver.gd").new(preview_player,source_clip)
+	apply_output_angle(angle_control.requested)
 
 func handle_preview_input(event: InputEvent) -> void:
 	if setup_drag != null and setup_drag.handle(event):

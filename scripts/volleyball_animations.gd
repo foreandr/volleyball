@@ -1,4 +1,5 @@
 extends RefCounted
+const Recipes = preload("res://scripts/pass_recipe_library.gd")
 static var ENTRIES: Array = JSON.parse_string(FileAccess.get_file_as_string("res://assets/animations/catalog.json"))
 
 static var custom_directory := "user://animations/custom"
@@ -49,7 +50,19 @@ static func type_name(category: String, value: String) -> String:
 
 static func entries(category: String, move_type: String) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
-	for entry in ENTRIES+custom_entries():
+	Recipes.refresh()
+	var available: Array = ENTRIES.duplicate(true)
+	for id in Recipes.records:
+		var recipe := Recipes.resolve(id)
+		if recipe.is_empty(): continue
+		var found := false
+		for entry in available:
+			if entry.id==id:
+				entry.recipe = id
+				entry.name = recipe.name
+				found = true
+		if not found: available.append({"id":id,"name":recipe.name,"category":"Forearm reception","type":"Forearm","recipe":id,"path":Recipes.records[id].file})
+	for entry in available+custom_entries():
 		if category_name(entry.category)==category_name(category) and type_name(entry.category,entry.type)==type_name(category,move_type):
 			var copy: Dictionary = entry.duplicate(true)
 			copy.category = category_name(entry.category)
@@ -57,3 +70,9 @@ static func entries(category: String, move_type: String) -> Array[Dictionary]:
 			if str(copy.id).begins_with("straight_pass_"): copy.name = str(copy.name).replace("Straight Pass","Platform")
 			result.append(copy)
 	return result
+
+static func load_clip(entry: Dictionary, actor: Node3D) -> Animation:
+	if entry.has("recipe"):
+		var animation := Recipes.clip(actor,str(entry.recipe))
+		if animation!=null: return animation
+	return load(entry.path) if not str(entry.path).ends_with(".json") else null
