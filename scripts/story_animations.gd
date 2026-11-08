@@ -184,6 +184,7 @@ func preview_animation(index: int) -> void:
 	preview_player.animator.pause()
 	right_panel.visible = ball_preview.active
 	angle_control.sync_feed(ball_preview.feed_info)
+	angle_control.sync_output(ball_preview)
 	angle_control.visible = ball_preview.active
 	if ball_preview.active: angle_control.display_result(float(render_clip.get_meta("desired_output_angle",ball_preview.output_angle())),ball_preview.output_angle(),Flight.distance(ball_preview.impact_point,ball_preview.outgoing))
 
@@ -203,6 +204,7 @@ func apply_output_angle(value: float) -> void:
 	ball_preview.tick(preview_clock,false)
 	ball_preview.last_time = last_contact_clock
 	angle_control.sync_feed(ball_preview.feed_info)
+	angle_control.sync_output(ball_preview)
 	angle_control.display_result(value,ball_preview.output_angle(),Flight.distance(ball_preview.impact_point,ball_preview.outgoing))
 
 func _process(delta: float) -> void:

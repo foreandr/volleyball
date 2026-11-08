@@ -33,7 +33,7 @@ func raw_pose(time: float) -> Array:
 	raw_cache[time] = pose
 	return pose.duplicate()
 
-func adapted_pose(time: float, pitch: float, lift: float, drive := 0.0) -> Array:
+func adapted_pose(time: float, pitch: float, lift: float, drive := 0.0, yaw := 0.0) -> Array:
 	var pose := raw_pose(time)
 	var rig: Skeleton3D = actor.skeleton
 	var recovery := 1.0-smoothstep(contact_time+0.2,minf(source.length,contact_time+0.68),time)
@@ -58,14 +58,16 @@ func adapted_pose(time: float, pitch: float, lift: float, drive := 0.0) -> Array
 		for side in ["l","r"]:
 			author.limb(pose,"thigh_"+side,"calf_"+side,"foot_"+side,feet[side].origin,poles[side])
 			author.set_world_basis(pose,"foot_"+side,feet[side].basis)
+	author.rotate_world(pose,"spine_03",Vector3.UP,yaw*platform_weight)
 	var offset := time-contact_time
 	# One continuous contact stroke; a decaying impulse creates a second arm swing.
 	var push := drive*0.10*tanh(offset/0.10)*platform_weight
-	for side in ["l","r"]: author.rotate_world(pose,"upperarm_"+side,Vector3.RIGHT,pitch*platform_weight+push)
+	var pitch_axis := Basis(Vector3.UP,yaw*platform_weight)*Vector3.RIGHT
+	for side in ["l","r"]: author.rotate_world(pose,"upperarm_"+side,pitch_axis,pitch*platform_weight+push)
 	return pose
 
-func surface(time: float, pitch: float, lift: float, drive := 0.0) -> Dictionary:
-	var pose := adapted_pose(time,pitch,lift,drive)
+func surface(time: float, pitch: float, lift: float, drive := 0.0, yaw := 0.0) -> Dictionary:
+	var pose := adapted_pose(time,pitch,lift,drive,yaw)
 	var rig: Skeleton3D = actor.skeleton
 	var elbows := []
 	var wrists := []
@@ -74,56 +76,59 @@ func surface(time: float, pitch: float, lift: float, drive := 0.0) -> Dictionary
 		wrists.append(rig.global_transform*author.point(pose,"hand_"+side))
 	return Contact.surface(elbows,wrists,0.032*rig.global_basis.get_scale().y)
 
-func response(pitch: float, lift: float, drive := 0.0) -> Vector3:
-	var hit := surface(contact_time,pitch,lift,drive)
-	var before := surface(maxf(0,contact_time-1.0/60),pitch,lift,drive)
-	var after := surface(minf(source.length,contact_time+1.0/60),pitch,lift,drive)
+func response(pitch: float, lift: float, drive := 0.0, yaw := 0.0) -> Vector3:
+	var hit := surface(contact_time,pitch,lift,drive,yaw)
+	var before := surface(maxf(0,contact_time-1.0/60),pitch,lift,drive,yaw)
+	var after := surface(minf(source.length,contact_time+1.0/60),pitch,lift,drive,yaw)
 	var velocity: Vector3 = (after.surface-before.surface)/(2.0/60)
 	return Contact.rebound(Flight.feed(hit.ball,actor.get_meta("feed_settings",{})).incoming,velocity,hit.normal)
 
-func forward_speed(velocity: Vector3) -> float:
-	var horizontal := Vector2(velocity.x,velocity.z).length()
-	return horizontal if velocity.dot(actor.global_basis.z)>=0 else -horizontal
-
 func solve(requested: float, distance_ := 6.0) -> Dictionary:
-	var goal := clampf(requested,10,80)
-	var key := "%d/%s/%s/%.2f/%.2f/%s" % [source.get_instance_id(),actor.scale,actor.position,goal,distance_,actor.get_meta("feed_settings",{})]
+	var goal := clampf(requested,10,85)
+	var target_info: Dictionary = actor.get_meta("pass_target",{})
+	if target_info.is_empty():
+		var point := actor.global_position+actor.global_basis.z*distance_
+		target_info = {"position":Vector2(point.x,point.z),"fit":"angle"}
+	var key := "%d/%s/%s/%.2f/%s/%s" % [source.get_instance_id(),actor.scale,actor.position,goal,target_info,actor.get_meta("feed_settings",{})]
 	if cache.has(key): return cache[key]
-	var lift := clampf((distance_-4.0)*0.003,0,0.025)
+	var target_position: Vector2 = target_info.position
+	var range_ := target_position.distance_to(Vector2(actor.global_position.x,actor.global_position.z))
+	var lift := clampf((range_-4.0)*0.003,0,0.025)
 	var pitch := 0.0
 	var drive := 0.0
+	var yaw := 0.0
 	var smallest := INF
-	var best := Vector2.ZERO
-	# Fit platform pitch and contact-time arm speed to the requested launch velocity.
-	for iteration in range(14):
-		var hit := surface(contact_time,pitch,lift,drive)
-		var target := Flight.desired_velocity(hit.ball,goal,distance_)
-		var velocity := response(pitch,lift,drive)
-		var horizontal := forward_speed(velocity)
-		var error := Vector2(velocity.y-target.y,horizontal-target.z)
-		if error.length_squared() < smallest:
+	var best := Vector3.ZERO
+	# Fit all three launch-velocity components using platform pitch, twist and contact speed.
+	for iteration in range(20):
+		var hit := surface(contact_time,pitch,lift,drive,yaw)
+		var target := Flight.target_velocity(hit.ball,target_info,goal)
+		var velocity := response(pitch,lift,drive,yaw)
+		var error := velocity-target
+		if error.length_squared()<smallest:
 			smallest = error.length_squared()
-			best = Vector2(pitch,drive)
-		if smallest < 0.000001: break
-		var dp := response(pitch+0.001,lift,drive)-velocity
-		var dd := response(pitch,lift,drive+0.01)-velocity
-		var a := dp.y/0.001
-		var b := dd.y/0.01
-		var c := (forward_speed(velocity+dp)-horizontal)/0.001
-		var d := (forward_speed(velocity+dd)-horizontal)/0.01
-		var determinant := a*d-b*c
-		if absf(determinant)<0.00001: break
-		pitch = clampf(pitch-clampf((d*error.x-b*error.y)/determinant,-0.2,0.2),-0.75,0.75)
-		drive = clampf(drive-clampf((-c*error.x+a*error.y)/determinant,-3,3),-18,18)
-	var affected: Array[String] = ["pelvis","upperarm_l","upperarm_r","thigh_l","thigh_r","calf_l","calf_r","foot_l","foot_r"]
-	var clip: Animation = author.bake_overrides(source,func(time): return adapted_pose(time,best.x,lift,best.y),affected)
-	var hit := surface(contact_time,best.x,lift,best.y)
-	var outgoing := response(best.x,lift,best.y)
+			best = Vector3(pitch,drive,yaw)
+		if smallest<0.000001: break
+		var dp := (response(pitch+0.001,lift,drive,yaw)-velocity)/0.001
+		var dd := (response(pitch,lift,drive+0.01,yaw)-velocity)/0.01
+		var dy := (response(pitch,lift,drive,yaw+0.001)-velocity)/0.001
+		var jacobian := Basis(dp,dd,dy)
+		if absf(jacobian.determinant())<0.00001: break
+		var change := jacobian.inverse()*error
+		pitch = clampf(pitch-clampf(change.x,-0.2,0.2),-1.1,1.1)
+		drive = clampf(drive-clampf(change.y,-3,3),-18,18)
+		yaw = clampf(yaw-clampf(change.z,-0.2,0.2),-1.4,1.4)
+	var affected: Array[String] = ["pelvis","spine_03","upperarm_l","upperarm_r","thigh_l","thigh_r","calf_l","calf_r","foot_l","foot_r"]
+	var clip: Animation = author.bake_overrides(source,func(time): return adapted_pose(time,best.x,lift,best.y,best.z),affected)
+	var hit := surface(contact_time,best.x,lift,best.y,best.z)
+	var outgoing := response(best.x,lift,best.y,best.z)
 	var actual := Contact.elevation(outgoing)
 	clip.set_meta("desired_output_angle",goal)
-	clip.set_meta("desired_distance",distance_)
+	clip.set_meta("desired_distance",range_)
+	clip.set_meta("destination",target_position)
 	clip.set_meta("solved_output_angle",actual)
-	var result := {"clip":clip,"requested":goal,"actual":actual,"pitch":rad_to_deg(best.x),"drive":best.y,"lift":lift,"distance":Flight.distance(hit.ball,outgoing),"error":absf(actual-goal)}
-	if cache.size() >= 64: cache.erase(cache.keys()[0])
+	var landing: Vector3 = hit.ball+outgoing*Flight.landing_time(hit.ball,outgoing)+Vector3.DOWN*4.905*pow(Flight.landing_time(hit.ball,outgoing),2)
+	var result := {"clip":clip,"requested":goal,"actual":actual,"pitch":rad_to_deg(best.x),"drive":best.y,"yaw":rad_to_deg(best.z),"lift":lift,"distance":Flight.distance(hit.ball,outgoing),"error":Vector2(landing.x,landing.z).distance_to(target_position)}
+	if cache.size()>=64: cache.erase(cache.keys()[0])
 	cache[key] = result
 	return result

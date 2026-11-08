@@ -94,3 +94,8 @@ var float_strength := 0.6
 
 var source_height := 3.0
 var feed_fit := "angle"
+
+var ball_tab := 0
+var pass_destination := Vector2.INF
+var pass_apex := 3.0
+var destination_fit := "angle"

@@ -3,6 +3,8 @@ signal source_moved(position: Vector2)
 var source_position := Vector2(0,12.5)
 var player_position := Vector2.ZERO
 var dragging := false
+var mode := "source"
+var destination_position := Vector2.INF
 
 func _ready() -> void:
 	custom_minimum_size = Vector2(240,94)
@@ -15,10 +17,11 @@ func point(position: Vector2) -> Vector2:
 	var area := court_rect()
 	return area.position+Vector2((position.x+9.0)/18.0,(44.0-position.y)/52.0)*area.size
 
-func set_positions(source: Vector2, player: Vector2) -> void:
-	if source_position == source and player_position == player: return
+func set_positions(source: Vector2, player: Vector2, destination := Vector2.INF) -> void:
+	if source_position == source and player_position == player and destination_position == destination: return
 	source_position = source
 	player_position = player
+	destination_position = destination
 	queue_redraw()
 
 func _draw() -> void:
@@ -30,10 +33,12 @@ func _draw() -> void:
 	draw_rect(court,Color("91a7b2"),false,1)
 	var net := point(Vector2(0,4)).y
 	draw_line(Vector2(area.position.x,net),Vector2(area.end.x,net),Color("e9e3d5"),2)
-	draw_line(point(player_position),point(source_position),Color("657f88"),1,true)
-	draw_circle(point(player_position),5,Color("41c3f4"))
-	draw_circle(point(source_position),8,Color("efc66f"))
-	draw_arc(point(source_position),11,0,TAU,24,Color("f5e5b7"),1.5,true)
+	var selected := source_position if mode == "source" else destination_position
+	if selected.is_finite(): draw_line(point(player_position),point(selected),Color("657f88"),1,true)
+	draw_circle(point(player_position),5,Color("e6e6dd"))
+	draw_circle(point(source_position),6,Color("efc66f"))
+	if destination_position.is_finite(): draw_circle(point(destination_position),6,Color("41c3f4"))
+	if selected.is_finite(): draw_arc(point(selected),10,0,TAU,24,Color("efc66f") if mode == "source" else Color("41c3f4"),1.5,true)
 
 func style() -> StyleBoxFlat:
 	var result := StyleBoxFlat.new()
@@ -53,6 +58,8 @@ func _gui_input(event: InputEvent) -> void:
 func move_source(position: Vector2) -> void:
 	var area := court_rect()
 	var uv := ((position-area.position)/area.size).clamp(Vector2.ZERO,Vector2.ONE)
-	source_position = Vector2(uv.x*18.0-9.0,44.0-uv.y*52.0)
-	source_moved.emit(source_position)
+	var position_ := Vector2(uv.x*18.0-9.0,44.0-uv.y*52.0)
+	if mode == "source": source_position = position_
+	else: destination_position = position_
+	source_moved.emit(position_)
 	queue_redraw()

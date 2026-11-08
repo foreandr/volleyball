@@ -3,6 +3,10 @@ var page: Control
 var mode := ""
 var drag_plane: Plane
 var grab_offset := Vector3.ZERO
+var press_position := Vector2.ZERO
+var click_point := Vector2.INF
+var click_mode := "ball"
+var moved := false
 
 func _init(host: Control) -> void:
 	page = host
@@ -15,47 +19,56 @@ func handle(event: InputEvent) -> bool:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if not event.pressed:
 			if mode.is_empty(): return false
+			if mode == "player" and not moved and click_point.is_finite(): page.angle_control.place_point(click_point,click_mode)
 			mode = ""
 			return true
 		var camera: Camera3D = page.preview_camera
 		var point := screen_position(event.position)
 		var source: Vector3 = page.ball_preview.source_ball.global_position
-		var plane_height := source.y
-		var live_ball: Vector3 = page.ball_preview.global_position
-		var picked_source := not camera.is_position_behind(source) and camera.unproject_position(source).distance_to(point)<22
-		var picked_live: bool = page.ball_preview.ball.visible and not camera.is_position_behind(live_ball) and camera.unproject_position(live_ball).distance_to(point)<16
-		var ground: Vector3 = page.ball_preview.source_ground.global_position
-		var picked_ground := not camera.is_position_behind(ground) and camera.unproject_position(ground).distance_to(point)<20
-		if picked_source or picked_live or picked_ground:
-			if picked_ground:
-				source = ground
-				plane_height = ground.y
-			elif picked_live and not picked_source: plane_height = live_ball.y
-			mode = "ball"
-		else:
-			var foot: Vector3 = page.preview_player.global_position
-			var head: Vector3 = foot+Vector3.UP*page.preview_player.scale.y*1.8
-			if camera.is_position_behind(foot): return false
+		var plane_height := 0.065
+		press_position = event.position
+		moved = false
+		var floor_hit: Variant = Plane(Vector3.UP,0.065).intersects_ray(camera.project_ray_origin(point),camera.project_ray_normal(point))
+		click_point = Vector2(floor_hit.x,floor_hit.z) if floor_hit is Vector3 else Vector2.INF
+		var chosen := "ball" if page.angle_control.tabs.current_tab == 0 else "destination"
+		click_mode = chosen
+		var origin := source if chosen == "ball" else Vector3(StorySession.pass_destination.x,0.065,StorySession.pass_destination.y)
+		var handle_point: Vector3 = origin if chosen == "destination" else page.ball_preview.source_ground.global_position
+		var picked_handle := not camera.is_position_behind(handle_point) and camera.unproject_position(handle_point).distance_to(point)<20
+		var picked_source := chosen == "ball" and not camera.is_position_behind(source) and camera.unproject_position(source).distance_to(point)<22
+		var foot: Vector3 = page.preview_player.global_position
+		var head: Vector3 = foot+Vector3.UP*page.preview_player.scale.y*1.8
+		var player_hit := false
+		if not camera.is_position_behind(foot):
 			var bottom := camera.unproject_position(foot)
 			var top := camera.unproject_position(head)
-			var closest := Geometry2D.get_closest_point_to_segment(point,top,bottom)
-			if point.distance_to(closest)>maxf(16,bottom.distance_to(top)*0.24): return false
-			mode = "player"
-			source = foot
+			player_hit = point.distance_to(Geometry2D.get_closest_point_to_segment(point,top,bottom))<maxf(16,bottom.distance_to(top)*0.24)
+		mode = "player" if player_hit and not picked_handle and not picked_source else chosen
+		if mode == "player":
+			origin = foot
 			plane_height = foot.y
+		elif picked_source: plane_height = source.y
 		drag_plane = Plane(Vector3.UP,plane_height)
 		var hit: Variant = drag_plane.intersects_ray(camera.project_ray_origin(point),camera.project_ray_normal(point))
-		grab_offset = source-hit if hit is Vector3 else Vector3.ZERO
+		if not hit is Vector3:
+			mode = ""
+			return false
+		if mode == "player" or picked_handle or picked_source: grab_offset = origin-hit
+		else:
+			grab_offset = Vector3.ZERO
+			page.angle_control.place_point(Vector2(clampf(hit.x,-9,9),clampf(hit.z,-8,44)),chosen)
 		page.preview.grab_focus()
 		return true
 	if event is InputEventMouseMotion and not mode.is_empty():
+		if event.position.distance_to(press_position)>3: moved = true
+		if mode == "player" and not moved: return true
 		var camera: Camera3D = page.preview_camera
 		var point := screen_position(event.position)
 		var hit: Variant = drag_plane.intersects_ray(camera.project_ray_origin(point),camera.project_ray_normal(point))
 		if hit is Vector3:
 			var target: Vector3 = hit+grab_offset
 			if mode == "player": StorySession.pass_start = Vector2(clampf(target.x,-4,4),clampf(target.z,-4.5,2.5))
-			else: StorySession.feed_spot = Vector2(clampf(target.x,-9,9),clampf(target.z,-8,44))
+			else: page.angle_control.place_point(Vector2(clampf(target.x,-9,9),clampf(target.z,-8,44)),mode)
 			page.angle_control.pending = true
 		return true
 	return false

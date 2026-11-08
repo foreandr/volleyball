@@ -190,6 +190,10 @@ func update_guide() -> void:
 	path.surface_add_vertex(source_ball.global_position)
 	path.surface_end()
 	var landing := impact_point+outgoing*flight_duration+Vector3.DOWN*4.905*flight_duration*flight_duration
+	var target_info: Dictionary = actor.get_meta("pass_target",{})
+	if target_info.has("position"):
+		landing.x = target_info.position.x
+		landing.z = target_info.position.y
 	path.surface_begin(Mesh.PRIMITIVE_LINE_STRIP)
 	path.surface_set_color(Color("70d5e5"))
 	for index in range(33):

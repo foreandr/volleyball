@@ -121,3 +121,15 @@ static func desired_velocity(hit: Vector3, angle: float, distance_: float) -> Ve
 	var speed_squared := GRAVITY*distance_*distance_/(2.0*cos(radians)*cos(radians)*(hit.y-FLOOR+distance_*tan(radians)))
 	var speed := sqrt(maxf(0,speed_squared))
 	return Vector3(0,sin(radians),cos(radians))*speed
+
+static func target_velocity(hit: Vector3, target: Dictionary, angle: float) -> Vector3:
+	var position_: Vector2 = target.position
+	var delta := Vector3(position_.x-hit.x,0,position_.y-hit.z)
+	var span := maxf(0.05,delta.length())
+	if target.get("fit","angle") == "height":
+		var peak := maxf(float(target.get("height",3.0)),hit.y+0.05)
+		var vertical := sqrt(2*GRAVITY*(peak-hit.y))
+		var duration := (vertical+sqrt(vertical*vertical+2*GRAVITY*(hit.y-FLOOR)))/GRAVITY
+		return delta/maxf(0.05,duration)+Vector3.UP*vertical
+	var speed := desired_velocity(hit,angle,span)
+	return delta.normalized()*speed.z+Vector3.UP*speed.y

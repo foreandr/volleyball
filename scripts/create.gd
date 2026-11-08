@@ -98,7 +98,6 @@ func _ready() -> void:
 		ball_controls_host.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		ball_controls_host.add_theme_constant_override("separation",12)
 		scroll.add_child(ball_controls_host)
-		ball_controls_host.add_child(label("BALL",22))
 		build_ball_controls(ball_controls_host)
 	build_controls(controls)
 	preview.grab_focus()

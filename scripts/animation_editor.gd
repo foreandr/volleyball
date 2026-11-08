@@ -194,6 +194,7 @@ func refresh_ball_angle() -> void:
 	ball_preview.configure(preview_player,session.source,session)
 	right_panel.visible = ball_preview.active
 	angle_control.sync_feed(ball_preview.feed_info)
+	angle_control.sync_output(ball_preview)
 	angle_control.visible = ball_preview.active
 	if ball_preview.active: angle_control.display_result(float(session.source.get_meta("desired_output_angle",ball_preview.output_angle())),ball_preview.output_angle(),Flight.distance(ball_preview.impact_point,ball_preview.outgoing))
 
