@@ -1,7 +1,9 @@
 extends Node3D
 const Flight = preload("res://scripts/pass_flight.gd")
+const Net = preload("res://scripts/net_collision.gd")
 const Contact = preload("res://scripts/forearm_contact.gd")
 signal contacted
+signal net_contacted
 const RADIUS := 0.105
 var actor: Node3D
 var clip: Animation
@@ -28,6 +30,11 @@ var source_ball: MeshInstance3D
 var source_ground: MeshInstance3D
 var feed_valid := true
 var feed_info := {}
+var incoming_net := {}
+var outgoing_net := {}
+var net_audio: AudioStreamPlayer
+var net_contact_count := 0
+var has_last_time := false
 
 func _ready() -> void:
 	ball = MeshInstance3D.new()
@@ -42,6 +49,11 @@ func _ready() -> void:
 	audio.stream = AudioStreamWAV.load_from_file("res://assets/audio/pass_contact.wav")
 	audio.volume_db = -7
 	add_child(audio)
+	net_audio = AudioStreamPlayer.new()
+	net_audio.stream = audio.stream
+	net_audio.volume_db = -12
+	net_audio.pitch_scale = 0.65
+	add_child(net_audio)
 	guide = MeshInstance3D.new()
 	guide.top_level = true
 	add_child(guide)
@@ -93,12 +105,14 @@ func make_ball() -> ArrayMesh:
 
 func configure(player: Node3D, animation: Animation, edits: RefCounted = null) -> void:
 	if is_instance_valid(audio): audio.stop()
+	if is_instance_valid(net_audio): net_audio.stop()
 	actor = player
 	clip = animation
 	edit_session = edits
 	active = clip.has_meta("contact_time")
 	contact_time = float(clip.get_meta("contact_time",0.6))
 	last_time = -1
+	has_last_time = false
 	cached_revision = -1
 	positions.clear()
 	rotations.clear()
@@ -113,11 +127,13 @@ func configure(player: Node3D, animation: Animation, edits: RefCounted = null) -
 func stop() -> void:
 	active = false
 	last_time = -1
+	has_last_time = false
 	hide()
 	if is_instance_valid(source_ball): source_ball.hide()
 	if is_instance_valid(source_ground): source_ground.hide()
 	if is_instance_valid(guide): guide.hide()
 	if is_instance_valid(audio): audio.stop()
+	if is_instance_valid(net_audio): net_audio.stop()
 
 func pose(bone: int, time: float, cache: Dictionary) -> Transform3D:
 	if cache.has(bone): return cache[bone]
@@ -168,8 +184,32 @@ func recalculate() -> void:
 	source_ground.show()
 	outgoing = Contact.rebound(incoming,surface_velocity,surface_normal)
 	flight_duration = Flight.landing_time(impact_point,outgoing)
+	incoming_net = Net.first_hit(func(time): return Flight.position(feed_info,impact_point,time),-feed_duration,0)
+	outgoing_net = {}
+	if incoming_net.is_empty(): outgoing_net = Net.first_hit(func(time): return impact_point+outgoing*time+Vector3.DOWN*4.905*time*time,0,flight_duration)
+	feed_valid = feed.start.y>=Flight.FLOOR and incoming_net.is_empty()
+	feed_info.valid = feed_valid
 	update_guide()
 	if edit_session != null: cached_revision = edit_session.revision
+
+func animation_time(time: float) -> float:
+	return clampf(time,0,clip.length) if incoming_net.is_empty() else 0.0
+
+func cycle_end() -> float:
+	var end := contact_time+flight_duration
+	if not incoming_net.is_empty(): return maxf(contact_time+float(incoming_net.end_time)+0.5,contact_time+0.5)
+	if not outgoing_net.is_empty(): end = contact_time+float(outgoing_net.end_time)
+	return maxf(clip.length,end+0.4)
+
+func position_at(elapsed: float) -> Vector3:
+	if not incoming_net.is_empty() and elapsed>=incoming_net.time: return Net.after_hit(incoming_net,elapsed)
+	if elapsed<0: return Flight.position(feed_info,impact_point,elapsed)
+	if not outgoing_net.is_empty() and elapsed>=outgoing_net.time: return Net.after_hit(outgoing_net,elapsed)
+	return impact_point+outgoing*elapsed+Vector3.DOWN*4.905*elapsed*elapsed
+
+func crossed(time: float, at: float) -> bool:
+	if not has_last_time: return false
+	return (last_time<at and time>=at) if time>=last_time else (last_time<at or time>=at)
 
 func output_angle() -> float:
 	return Contact.elevation(outgoing)
@@ -178,11 +218,17 @@ func update_guide() -> void:
 	if not is_instance_valid(guide): return
 	var path := ImmediateMesh.new()
 	for incoming_path in [true,false]:
+		if not incoming_path and not incoming_net.is_empty(): continue
+		var first := -feed_duration if incoming_path else 0.0
+		var last := 0.0 if incoming_path else flight_duration
+		if incoming_path and not incoming_net.is_empty(): last = incoming_net.end_time
+		if not incoming_path and not outgoing_net.is_empty(): last = outgoing_net.end_time
 		path.surface_begin(Mesh.PRIMITIVE_LINE_STRIP)
-		path.surface_set_color((Color("e5bd72") if feed_valid else Color("df776d")) if incoming_path else Color("70d5e5"))
-		for index in range(81):
-			var time := -feed_duration*(1.0-float(index)/80.0) if incoming_path else float(index)/80.0*flight_duration
-			path.surface_add_vertex(Flight.position(feed_info,impact_point,time) if incoming_path else impact_point+outgoing*time+Vector3.DOWN*4.905*time*time)
+		var blocked: bool = not incoming_net.is_empty() if incoming_path else not outgoing_net.is_empty()
+		path.surface_set_color(Color("df776d") if blocked else (Color("e5bd72") if incoming_path else Color("70d5e5")))
+		for index in range(121):
+			var time := lerpf(first,last,float(index)/120)
+			path.surface_add_vertex(position_at(time))
 		path.surface_end()
 	path.surface_begin(Mesh.PRIMITIVE_LINES)
 	path.surface_set_color(Color("a7a485"))
@@ -214,17 +260,23 @@ func tick(time: float, audible: bool) -> void:
 		return
 	if edit_session != null and cached_revision != edit_session.revision: recalculate()
 	var elapsed := time-contact_time
-	global_position = Flight.position(feed_info,impact_point,elapsed) if elapsed < 0 else impact_point+outgoing*elapsed+Vector3.DOWN*4.905*elapsed*elapsed
+	global_position = position_at(elapsed)
 	show()
-	ball.visible = elapsed >= -feed_duration and elapsed <= flight_duration
-	var squeeze := maxf(0,1.0-absf(elapsed)/0.035)
+	ball.visible = elapsed>=-feed_duration and time<=cycle_end()
+	var squeeze := maxf(0,1.0-absf(elapsed)/0.035) if incoming_net.is_empty() else 0.0
+	var net_hit: Dictionary = incoming_net if not incoming_net.is_empty() else outgoing_net
+	var net_squeeze := maxf(0,1.0-absf(elapsed-float(net_hit.time))/0.06) if not net_hit.is_empty() else 0.0
 	var axis: Vector3 = feed_info.get("spin_axis",Vector3.ZERO)
 	var rotation_time := clampf(elapsed+feed_duration,0,feed_duration)
 	ball.global_basis = Basis(Quaternion(axis,rotation_time*float(feed_info.get("spin_rate",0)))) if axis.length_squared()>0.1 else Basis.IDENTITY
-	ball.scale = Vector3(1.0+0.04*squeeze,1.0-0.07*squeeze,1.0+0.04*squeeze)
-	var crossed := last_time >= 0 and ((last_time < contact_time and time >= contact_time) if time >= last_time else (last_time < contact_time or time >= contact_time))
-	if audible and crossed:
+	ball.scale = Vector3(1.0+0.04*squeeze+0.04*net_squeeze,1.0-0.07*squeeze,1.0+0.04*squeeze-0.12*net_squeeze)
+	if audible and incoming_net.is_empty() and crossed(time,contact_time):
 		audio.play()
 		contact_count += 1
 		contacted.emit()
+	if audible and not net_hit.is_empty() and crossed(time,contact_time+float(net_hit.time)):
+		net_audio.play()
+		net_contact_count += 1
+		net_contacted.emit()
 	last_time = time
+	has_last_time = true

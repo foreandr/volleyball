@@ -197,7 +197,7 @@ func apply_output_angle(value: float) -> void:
 	render_clip = result.clip
 	preview_player.install_custom(render_clip,"preview",false)
 	preview_player.animator.play("custom_preview/clip",0)
-	preview_player.animator.seek(clampf(preview_clock,0,render_clip.length),true)
+	preview_player.animator.seek(ball_preview.animation_time(preview_clock),true)
 	preview_player.animator.advance(0)
 	preview_player.animator.pause()
 	ball_preview.configure(preview_player,render_clip)
@@ -211,9 +211,9 @@ func _process(delta: float) -> void:
 	super._process(delta)
 	if is_instance_valid(ball_preview) and ball_preview.active:
 		var first := minf(0,ball_preview.contact_time-ball_preview.feed_duration)
-		var last := maxf(render_clip.length,ball_preview.contact_time+ball_preview.flight_duration+0.4)
+		var last: float = ball_preview.cycle_end()
 		if setup_drag.mode.is_empty(): preview_clock = first+fposmod(preview_clock-first+delta,last-first)
-		preview_player.animator.seek(clampf(preview_clock,0,render_clip.length),true)
+		preview_player.animator.seek(ball_preview.animation_time(preview_clock),true)
 		ball_preview.tick(preview_clock,true)
 
 func handle_preview_input(event: InputEvent) -> void:

@@ -247,9 +247,9 @@ func _process(delta: float) -> void:
 	if session == null: return
 	if playing and setup_drag.mode.is_empty():
 		var first: float = minf(0,ball_preview.contact_time-ball_preview.feed_duration)*EditSession.FPS
-		var last: float = maxf(session.source.length,ball_preview.contact_time+ball_preview.flight_duration+0.4)*EditSession.FPS
+		var last: float = ball_preview.cycle_end()*EditSession.FPS
 		playhead = first+fposmod(playhead-first+delta*EditSession.FPS,last-first)
-		set_frame(floori(playhead))
+		set_frame(floori(ball_preview.animation_time(playhead/EditSession.FPS)*EditSession.FPS))
 	if is_instance_valid(ball_preview): ball_preview.tick((playhead if playing else float(frame))/EditSession.FPS,playing)
 	if is_instance_valid(angle_control) and ball_preview.active: angle_control.set_actual(ball_preview.output_angle(),Flight.distance(ball_preview.impact_point,ball_preview.outgoing))
 	if is_instance_valid(overlay): overlay.queue_redraw()
