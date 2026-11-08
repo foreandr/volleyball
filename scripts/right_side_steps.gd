@@ -10,6 +10,11 @@ var phase := 0.0
 var hold := 0.0
 var strength := 0.0
 var previous_root := 0.0
+var side_sign := 1.0
+var travel_direction := Vector2.RIGHT
+var last_pose: Array = []
+var last_weight := 0.0
+const PLAYBACK_RATE := 2.0
 
 func _init(player: Node3D) -> void:
 	actor = player
@@ -25,23 +30,28 @@ func _init(player: Node3D) -> void:
 
 func advance(direction: Vector2, delta: float) -> float:
 	sampled = false
-	var requested := direction.x>0.35 and absf(direction.y)<0.3
+	var requested := absf(direction.x)>0.3
+	if requested and signf(direction.x)!=side_sign:
+		active = false
+		hold = 0
+		side_sign = signf(direction.x)
+	if requested: travel_direction = direction.normalized()
 	if not active:
 		if not requested:
 			hold = 0
 			return 0
 		active = true
 		phase = 0
-		strength = smoothstep(0.08,0.5,hold)*2
+		strength = smoothstep(0.04,0.28,hold)*2
 		previous_root = 0
 	if requested:
 		hold += delta
-		strength = smoothstep(0.08,0.5,hold)*2
+		strength = smoothstep(0.04,0.28,hold)*2
 	var a := mini(1,int(strength))
 	var b := a+1
 	var blend := strength-a
 	var duration := lerpf(clips[a].length,clips[b].length,blend)
-	phase = minf(1,phase+delta/duration)
+	phase = minf(1,phase+delta*PLAYBACK_RATE/duration)
 	var root := lerpf(root_at(a),root_at(b),blend)
 	var displacement := root-previous_root
 	previous_root = root
@@ -55,13 +65,16 @@ func root_at(index: int) -> float:
 	var frame := mini(curve.size()-2,int(point))
 	return lerpf(curve[frame],curve[frame+1],point-frame)
 
-func apply_pose() -> void:
-	if not sampled: return
+func apply_pose(amount := 1.0) -> void:
+	if not sampled:
+		if not last_pose.is_empty(): install(last_pose,last_weight*amount)
+		return
 	var a := mini(1,int(strength))
 	var b := a+1
 	var blend := strength-a
 	var weight := smoothstep(0,0.10,phase)*(1-smoothstep(0.90,1,phase))
 	var rig: Skeleton3D = actor.skeleton
+	var pose: Array = []
 	for bone in rig.get_bone_count():
 		var pa: int = tracks[a][bone][0]
 		var pb: int = tracks[b][bone][0]
@@ -69,5 +82,44 @@ func apply_pose() -> void:
 		var qb: int = tracks[b][bone][1]
 		var position := clips[a].position_track_interpolate(pa,phase*clips[a].length).lerp(clips[b].position_track_interpolate(pb,phase*clips[b].length),blend)
 		var rotation := clips[a].rotation_track_interpolate(qa,phase*clips[a].length).slerp(clips[b].rotation_track_interpolate(qb,phase*clips[b].length),blend)
-		rig.set_bone_pose_position(bone,rig.get_bone_pose_position(bone).lerp(position,weight))
-		rig.set_bone_pose_rotation(bone,rig.get_bone_pose_rotation(bone).slerp(rotation,weight))
+		pose.append(Transform3D(Basis(rotation),position))
+	if side_sign<0: pose = mirrored(pose)
+	# Turn the captured foot paths into diagonal paths while retaining the ready torso.
+	var from := Vector3(-side_sign,0,0)
+	var to := Vector3(-travel_direction.x,0,travel_direction.y).normalized()
+	var turn := Basis(Quaternion(from,to))
+	if absf(travel_direction.y)>0.01:
+		for side in ["l","r"]:
+			var foot: Transform3D = author.world_pose(pose,rig.find_bone("foot_"+side))
+			var target: Vector3 = author.feet[side].origin+turn*(foot.origin-author.feet[side].origin)
+			var pole: Vector3 = author.point(pose,"calf_"+side)-author.point(pose,"thigh_"+side)
+			author.limb(pose,"thigh_"+side,"calf_"+side,"foot_"+side,target,pole)
+			author.set_world_basis(pose,"foot_"+side,foot.basis)
+	last_pose = pose
+	last_weight = weight
+	install(pose,weight*amount)
+
+func mirrored(input: Array) -> Array:
+	var result: Array = author.baseline.duplicate()
+	var rig: Skeleton3D = actor.skeleton
+	var reflection := Basis.from_scale(Vector3(-1,1,1))
+	for bone in rig.get_bone_count():
+		var name_ := str(rig.get_bone_name(bone))
+		if not (name_=="pelvis" or name_.begins_with("thigh_") or name_.begins_with("calf_") or name_.begins_with("foot_") or name_.begins_with("ball_")): continue
+		var other := name_.trim_suffix("_l")+"_r" if name_.ends_with("_l") else (name_.trim_suffix("_r")+"_l" if name_.ends_with("_r") else name_)
+		var source_bone := rig.find_bone(other)
+		var world: Transform3D = author.world_pose(input,source_bone)
+		var rotation: Basis = reflection*world.basis*rig.get_bone_global_rest(source_bone).basis.inverse()*reflection*rig.get_bone_global_rest(bone).basis
+		author.set_world_basis(result,name_,rotation)
+		if name_=="pelvis":
+			var parent := rig.get_bone_parent(bone)
+			var location: Vector3 = reflection*world.origin
+			result[bone].origin = author.world_pose(result,parent).affine_inverse()*location
+	author.set_world_basis(result,"spine_01",author.world_pose(author.baseline,rig.find_bone("spine_01")).basis)
+	return result
+
+func install(pose: Array, weight: float) -> void:
+	var rig: Skeleton3D = actor.skeleton
+	for bone in rig.get_bone_count():
+		rig.set_bone_pose_position(bone,rig.get_bone_pose_position(bone).lerp(pose[bone].origin,weight))
+		rig.set_bone_pose_rotation(bone,rig.get_bone_pose_rotation(bone).slerp(pose[bone].basis.get_rotation_quaternion(),weight))

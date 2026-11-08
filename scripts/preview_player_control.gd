@@ -16,6 +16,7 @@ var sprint_requested := false
 var locomotion := ""
 var stamina_bar: ProgressBar
 var side_steps: RefCounted
+var side_weight := 0.0
 
 func _init(host: Control) -> void:
 	page = host
@@ -67,6 +68,7 @@ func set_active(value: bool) -> void:
 	var actor: Node3D = page.preview_player
 	active = value
 	side_steps.active = false
+	side_weight = 0
 	stamina_bar.visible = active
 	locomotion = ""
 	sprinting = false
@@ -132,9 +134,12 @@ func move_player(direction: Vector2, delta: float) -> void:
 	var velocity := (right*direction.x+forward*direction.y)*speed
 	var before := actor.position
 	var movement := velocity*delta
-	var right_step: bool = not sprinting and (side_steps.active or (direction.x>0.35 and absf(direction.y)<0.3))
+	var right_step: bool = not sprinting and (side_steps.active or absf(direction.x)>0.3)
 	side_steps.sampled = false
-	if right_step: movement = right*side_steps.advance(direction,delta)*actor.scale.y
+	if right_step:
+		var distance_: float = side_steps.advance(direction,delta)*actor.scale.y
+		movement = (right*side_steps.travel_direction.x+forward*side_steps.travel_direction.y)*distance_
+	else: side_steps.active = false
 	actor.position.x = clampf(actor.position.x+movement.x,-4,4)
 	actor.position.z = clampf(actor.position.z+movement.z,-4.5,2.5)
 	actor.rotation.y = atan2(forward.x,forward.z)
@@ -159,13 +164,12 @@ func move_player(direction: Vector2, delta: float) -> void:
 	var local_velocity: Vector3 = actor.basis.inverse()*velocity
 	var model_yaw := atan2(local_velocity.x,local_velocity.z) if sprinting else 0.0
 	actor.model.rotation.y = lerp_angle(actor.model.rotation.y,model_yaw,1-exp(-delta*16))
-	if right_step:
-		footwork.weight = 0
-		side_steps.apply_pose()
-	elif sprinting:
+	side_weight = move_toward(side_weight,1.0 if right_step else 0.0,delta*9)
+	if right_step or sprinting:
 		footwork.weight = 0
 	else:
 		footwork.step(local_velocity/1.65 if moving else Vector3.ZERO,delta)
+	if side_weight>0: side_steps.apply_pose(side_weight)
 	follow_camera()
 
 func follow_camera() -> void:
