@@ -34,7 +34,7 @@ func _ready() -> void:
 	name = "VolleyballCourt"
 	var white := material("f4eee1")
 	var boundary := material("f7f3e5")
-	box("Runoff",Vector3(19,0.12,28),Vector3(0,-0.08,4),material("275469"))
+	box("Runoff",Vector3(24,0.12,68),Vector3(0,-0.08,16),material("275469"))
 	# Nine by eighteen metres; passer is five metres inside the near baseline.
 	for index in range(30):
 		var color := "c69158" if index%3 == 0 else ("d1a269" if index%3 == 1 else "cca067")
@@ -66,7 +66,7 @@ func _ready() -> void:
 	for x in [-4.5,4.5]:
 		for stripe in range(8): box("Antenna",Vector3(0.018,0.1,0.018),Vector3(x,2.52+stripe*0.1,4),white if stripe%2 == 0 else material("cf493d"))
 	var wall := material("243a4b")
-	box("FarWall",Vector3(19,3.5,0.2),Vector3(0,1.65,18),wall)
-	box("LeftWall",Vector3(0.2,3.5,28),Vector3(-9.5,1.65,4),wall)
-	box("RightWall",Vector3(0.2,3.5,28),Vector3(9.5,1.65,4),wall)
-	box("FarWallStripe",Vector3(19,0.18,0.03),Vector3(0,1.1,17.88),material("4f7c8b"))
+	box("FarWall",Vector3(24,3.5,0.2),Vector3(0,1.65,49),wall)
+	box("LeftWall",Vector3(0.2,3.5,68),Vector3(-12,1.65,16),wall)
+	box("RightWall",Vector3(0.2,3.5,68),Vector3(12,1.65,16),wall)
+	box("FarWallStripe",Vector3(24,0.18,0.03),Vector3(0,1.1,48.88),material("4f7c8b"))

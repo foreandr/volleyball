@@ -91,3 +91,6 @@ var feed_spot := Vector2(0,12.5)
 var incoming_spin := "No spin"
 var spin_rate := 3.0
 var float_strength := 0.6
+
+var source_height := 3.0
+var feed_fit := "angle"

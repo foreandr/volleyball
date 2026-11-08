@@ -55,7 +55,7 @@ func handle(event: InputEvent) -> bool:
 		if hit is Vector3:
 			var target: Vector3 = hit+grab_offset
 			if mode == "player": StorySession.pass_start = Vector2(clampf(target.x,-4,4),clampf(target.z,-4.5,2.5))
-			else: StorySession.feed_spot = Vector2(clampf(target.x,-4.5,4.5),clampf(target.z,-5,13))
+			else: StorySession.feed_spot = Vector2(clampf(target.x,-9,9),clampf(target.z,-8,44))
 			page.angle_control.pending = true
 		return true
 	return false

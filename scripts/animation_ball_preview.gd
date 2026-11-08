@@ -162,7 +162,7 @@ func recalculate() -> void:
 	incoming = feed.incoming
 	feed_duration = feed.duration
 	feed_valid = feed.valid
-	source_ball.global_position = Vector3(feed.start.x,maxf(0.35,feed.start.y),feed.start.z)
+	source_ball.global_position = feed.start
 	source_ball.show()
 	source_ground.global_position = Vector3(feed.start.x,0.065,feed.start.z)
 	source_ground.show()

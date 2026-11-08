@@ -33,6 +33,7 @@ func _ready() -> void:
 	super._ready()
 	setup_drag = preload("res://scripts/court_setup_drag.gd").new(self)
 	preview_camera.fov = 42.0
+	preview_camera.far = 150.0
 	if not StorySession.animation_return.is_empty():
 		var destination: Dictionary = StorySession.animation_return.duplicate()
 		StorySession.animation_return.clear()
@@ -49,8 +50,8 @@ func build_preview_stage(world: Node3D) -> void:
 	world.add_child(preload("res://scripts/preview_court.gd").new())
 	orbit_yaw = -2.2
 	orbit_pitch = 0.26
-	max_view_distance = 24.0
-	pan_limits = Vector3(9,5,17)
+	max_view_distance = 60.0
+	pan_limits = Vector3(12,15,48)
 	view_distance = 16.0
 	view_focus = Vector3(0,2.0,4.0)
 
@@ -182,6 +183,7 @@ func preview_animation(index: int) -> void:
 	preview_player.animator.advance(0)
 	preview_player.animator.pause()
 	right_panel.visible = ball_preview.active
+	angle_control.sync_feed(ball_preview.feed_info)
 	angle_control.visible = ball_preview.active
 	if ball_preview.active: angle_control.display_result(float(render_clip.get_meta("desired_output_angle",ball_preview.output_angle())),ball_preview.output_angle(),Flight.distance(ball_preview.impact_point,ball_preview.outgoing))
 
@@ -200,6 +202,7 @@ func apply_output_angle(value: float) -> void:
 	ball_preview.configure(preview_player,render_clip)
 	ball_preview.tick(preview_clock,false)
 	ball_preview.last_time = last_contact_clock
+	angle_control.sync_feed(ball_preview.feed_info)
 	angle_control.display_result(value,ball_preview.output_angle(),Flight.distance(ball_preview.impact_point,ball_preview.outgoing))
 
 func _process(delta: float) -> void:

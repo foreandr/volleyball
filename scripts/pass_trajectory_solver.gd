@@ -81,6 +81,10 @@ func response(pitch: float, lift: float, drive := 0.0) -> Vector3:
 	var velocity: Vector3 = (after.surface-before.surface)/(2.0/60)
 	return Contact.rebound(Flight.feed(hit.ball,actor.get_meta("feed_settings",{})).incoming,velocity,hit.normal)
 
+func forward_speed(velocity: Vector3) -> float:
+	var horizontal := Vector2(velocity.x,velocity.z).length()
+	return horizontal if velocity.dot(actor.global_basis.z)>=0 else -horizontal
+
 func solve(requested: float, distance_ := 6.0) -> Dictionary:
 	var goal := clampf(requested,10,80)
 	var key := "%d/%s/%s/%.2f/%.2f/%s" % [source.get_instance_id(),actor.scale,actor.position,goal,distance_,actor.get_meta("feed_settings",{})]
@@ -95,7 +99,7 @@ func solve(requested: float, distance_ := 6.0) -> Dictionary:
 		var hit := surface(contact_time,pitch,lift,drive)
 		var target := Flight.desired_velocity(hit.ball,goal,distance_)
 		var velocity := response(pitch,lift,drive)
-		var horizontal := Vector2(velocity.x,velocity.z).length()
+		var horizontal := forward_speed(velocity)
 		var error := Vector2(velocity.y-target.y,horizontal-target.z)
 		if error.length_squared() < smallest:
 			smallest = error.length_squared()
@@ -105,8 +109,8 @@ func solve(requested: float, distance_ := 6.0) -> Dictionary:
 		var dd := response(pitch,lift,drive+0.01)-velocity
 		var a := dp.y/0.001
 		var b := dd.y/0.01
-		var c := (Vector2(velocity.x+dp.x,velocity.z+dp.z).length()-horizontal)/0.001
-		var d := (Vector2(velocity.x+dd.x,velocity.z+dd.z).length()-horizontal)/0.01
+		var c := (forward_speed(velocity+dp)-horizontal)/0.001
+		var d := (forward_speed(velocity+dd)-horizontal)/0.01
 		var determinant := a*d-b*c
 		if absf(determinant)<0.00001: break
 		pitch = clampf(pitch-clampf((d*error.x-b*error.y)/determinant,-0.2,0.2),-0.75,0.75)

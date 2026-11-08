@@ -18,10 +18,55 @@ static func air(forward: Vector3, settings: Dictionary) -> Dictionary:
 	var rate := float(settings.get("spin_rate",3.0))*TAU
 	# Lightweight Magnus approximation; keep lift bounded at extreme slider values.
 	var magnus := (axis*rate).cross(incoming)*0.012
+	magnus -= forward*magnus.dot(forward)
 	magnus = magnus.limit_length(8.0)
 	return {"incoming":incoming,"acceleration":Vector3.DOWN*GRAVITY+magnus,"spin_axis":axis,"spin_rate":rate}
 
 static func feed(hit: Vector3, settings: Dictionary = {}) -> Dictionary:
+	if not settings.has("source_height"): return raw_feed(hit,settings)
+	var fitted := settings.duplicate()
+	var source: Vector2 = fitted.get("source",Vector2(0,12.5))
+	var distance_ := maxf(0.1,source.distance_to(Vector2(hit.x,hit.z)))
+	var height := float(fitted.source_height)
+	var difference := height-hit.y
+	var heading := Vector3(hit.x-source.x,0,hit.z-source.y).normalized()
+	if fitted.get("fit","angle") == "angle":
+		# Hold chosen speed when possible, deriving the physically compatible arrival angle.
+		for pass_ in range(3):
+			var gravity := maxf(1.0,-air(heading,fitted).acceleration.y)
+			var minimum := sqrt(gravity*(difference+sqrt(distance_*distance_+difference*difference)))
+			fitted.speed = maxf(float(fitted.get("speed",14.0)),minimum*1.01)
+			var square := float(fitted.speed)*float(fitted.speed)
+			var discriminant := maxf(0,square*square-gravity*(gravity*distance_*distance_+2*difference*square))
+			fitted.angle = clampf(rad_to_deg(atan((square-sqrt(discriminant))/(gravity*distance_))),1,85)
+		for iteration in range(6):
+			var trial := raw_feed(hit,fitted,false)
+			var error: float = trial.start.y-height
+			if absf(error)<0.0005: break
+			var perturbed := fitted.duplicate()
+			perturbed.angle = float(fitted.angle)+0.1
+			var derivative: float = (raw_feed(hit,perturbed,false).start.y-trial.start.y)/0.1
+			if absf(derivative)<0.0001: break
+			fitted.angle = clampf(float(fitted.angle)-clampf(error/derivative,-5,5),1,85)
+	# Fit speed as well if spin or an unreachable speed prevented the angle-only solution.
+	if fitted.get("fit","angle") == "speed" or absf(raw_feed(hit,fitted,false).start.y-height)>0.01:
+		var minimum_angle := rad_to_deg(atan2(difference,distance_))+1.0
+		fitted.angle = clampf(maxf(float(fitted.get("angle",40.0)),minimum_angle),1,85)
+		var radians := deg_to_rad(float(fitted.angle))
+		var gravity := maxf(1.0,-air(heading,fitted).acceleration.y)
+		fitted.speed = sqrt(gravity*distance_*distance_/(2*cos(radians)*cos(radians)*maxf(0.01,distance_*tan(radians)-difference)))
+		for iteration in range(8):
+			var trial := raw_feed(hit,fitted,false)
+			var error: float = trial.start.y-height
+			if absf(error)<0.0005: break
+			var perturbed := fitted.duplicate()
+			perturbed.speed = float(fitted.speed)+0.1
+			var derivative: float = (raw_feed(hit,perturbed,false).start.y-trial.start.y)/0.1
+			if absf(derivative)<0.0001: break
+			fitted.speed = clampf(float(fitted.speed)-clampf(error/derivative,-10,10),0.5,120)
+	return raw_feed(hit,fitted)
+
+static func raw_feed(hit: Vector3, settings: Dictionary, check_net := true) -> Dictionary:
 	var start_xz: Vector2 = settings.get("source",Vector2(0,12.5))
 	var span := Vector2(hit.x,hit.z)-start_xz
 	var heading := atan2(span.x,span.y)
@@ -47,7 +92,7 @@ static func feed(hit: Vector3, settings: Dictionary = {}) -> Dictionary:
 	result.float_strength = float(settings.get("float_strength",0.6)) if settings.get("spin","") == "Dead float" else 0.0
 	result.side = Vector3.UP.cross(Vector3(sin(heading),0,cos(heading)))
 	result.net_height = INF
-	if (result.start.z-4)*(hit.z-4)<0:
+	if check_net and (result.start.z-4)*(hit.z-4)<0:
 		var low := -duration
 		var high := 0.0
 		for iteration in range(16):

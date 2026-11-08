@@ -41,6 +41,7 @@ func _ready() -> void:
 	super._ready()
 	setup_drag = preload("res://scripts/court_setup_drag.gd").new(self)
 	preview_camera.fov = 42.0
+	preview_camera.far = 150.0
 	preview_player.animator.stop()
 	preview_player.animator.active = false
 	angle_control.apply_setup(preview_player)
@@ -79,8 +80,8 @@ func build_preview_stage(world: Node3D) -> void:
 	world.add_child(preload("res://scripts/preview_court.gd").new())
 	orbit_yaw = -2.2
 	orbit_pitch = 0.26
-	max_view_distance = 24.0
-	pan_limits = Vector3(9,5,17)
+	max_view_distance = 60.0
+	pan_limits = Vector3(12,15,48)
 	view_distance = 16.0
 	view_focus = Vector3(0,2.0,4.0)
 
@@ -192,6 +193,7 @@ func build_controls(host: VBoxContainer) -> void:
 func refresh_ball_angle() -> void:
 	ball_preview.configure(preview_player,session.source,session)
 	right_panel.visible = ball_preview.active
+	angle_control.sync_feed(ball_preview.feed_info)
 	angle_control.visible = ball_preview.active
 	if ball_preview.active: angle_control.display_result(float(session.source.get_meta("desired_output_angle",ball_preview.output_angle())),ball_preview.output_angle(),Flight.distance(ball_preview.impact_point,ball_preview.outgoing))
 

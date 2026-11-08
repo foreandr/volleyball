@@ -12,6 +12,8 @@ var spin_picker: OptionButton
 var spin_rate_field: SpinBox
 var float_field: SpinBox
 var source_pad: Control
+var height_field: SpinBox
+var back_field: SpinBox
 const SPINS := ["No spin","Topspin","Backspin","Sidespin left","Sidespin right","Dead float"]
 
 func _ready() -> void:
@@ -23,6 +25,10 @@ func _ready() -> void:
 	source_pad.set_positions(StorySession.feed_spot,StorySession.pass_start)
 	source_pad.source_moved.connect(func(position): StorySession.feed_spot = position; pending = true)
 	add_child(source_pad)
+	height_field = parameter("Source height",0.2,12.0,StorySession.source_height)
+	back_field = parameter("Back from net",-12.0,40.0,StorySession.feed_spot.y-4.0)
+	back_field.value_changed.connect(func(value): StorySession.feed_spot.y = 4.0+value)
+	back_field.get_meta("slider").value_changed.connect(func(value): StorySession.feed_spot.y = 4.0+value)
 	var row := HBoxContainer.new()
 	add_child(row)
 	var title := Label.new()
@@ -48,8 +54,12 @@ func _ready() -> void:
 	actual_label.hide()
 	add_child(actual_label)
 	distance_field = parameter("Distance",0.5,18.0,StorySession.pass_distance)
-	incoming_speed_field = parameter("Incoming speed",6.0,30.0,StorySession.incoming_speed,"m/s")
-	incoming_angle_field = parameter("Incoming angle",5.0,80.0,StorySession.incoming_angle,"°")
+	incoming_speed_field = parameter("Incoming speed",1.0,120.0,StorySession.incoming_speed,"m/s")
+	incoming_speed_field.value_changed.connect(func(_value): StorySession.feed_fit = "angle")
+	incoming_speed_field.get_meta("slider").value_changed.connect(func(_value): StorySession.feed_fit = "angle")
+	incoming_angle_field = parameter("Incoming angle",1.0,85.0,StorySession.incoming_angle,"°")
+	incoming_angle_field.value_changed.connect(func(_value): StorySession.feed_fit = "speed")
+	incoming_angle_field.get_meta("slider").value_changed.connect(func(_value): StorySession.feed_fit = "speed")
 	spin_picker = OptionButton.new()
 	for type in SPINS: spin_picker.add_item(type)
 	spin_picker.select(maxi(0,SPINS.find(StorySession.incoming_spin)))
@@ -94,6 +104,7 @@ func parameter(title_: String, low: float, high: float, value: float, unit := "m
 	return number
 
 func apply_setup(player: Node3D) -> void:
+	StorySession.source_height = height_field.value
 	StorySession.pass_distance = distance_field.value
 	StorySession.incoming_speed = incoming_speed_field.value
 	StorySession.incoming_angle = incoming_angle_field.value
@@ -101,15 +112,30 @@ func apply_setup(player: Node3D) -> void:
 	StorySession.spin_rate = spin_rate_field.value
 	StorySession.float_strength = float_field.value
 	player.position = Vector3(StorySession.pass_start.x,0.04,StorySession.pass_start.y)
-	player.set_meta("feed_settings",{"speed":StorySession.incoming_speed,"angle":StorySession.incoming_angle,"source":StorySession.feed_spot,"spin":SPINS[spin_picker.selected],"spin_rate":spin_rate_field.value,"float_strength":float_field.value})
+	player.set_meta("feed_settings",{"speed":StorySession.incoming_speed,"angle":StorySession.incoming_angle,"source":StorySession.feed_spot,"source_height":StorySession.source_height,"fit":StorySession.feed_fit,"spin":SPINS[spin_picker.selected],"spin_rate":spin_rate_field.value,"float_strength":float_field.value})
 	player.rotation.y = atan2(StorySession.feed_spot.x-StorySession.pass_start.x,StorySession.feed_spot.y-StorySession.pass_start.y)
 
 
 func _process(_delta: float) -> void:
 	source_pad.set_positions(StorySession.feed_spot,StorySession.pass_start)
+	back_field.set_value_no_signal(StorySession.feed_spot.y-4.0)
+	back_field.get_meta("slider").set_value_no_signal(back_field.value)
 	if pending:
 		pending = false
 		angle_requested.emit(requested)
+
+func sync_feed(feed: Dictionary) -> void:
+	var velocity: Vector3 = feed.incoming
+	var speed := velocity.length()
+	var angle := rad_to_deg(atan2(-velocity.y,Vector2(velocity.x,velocity.z).length()))
+	incoming_speed_field.set_value_no_signal(speed)
+	incoming_speed_field.get_meta("slider").set_value_no_signal(speed)
+	incoming_angle_field.set_value_no_signal(angle)
+	incoming_angle_field.get_meta("slider").set_value_no_signal(angle)
+	StorySession.incoming_speed = speed
+	StorySession.incoming_angle = angle
+	back_field.set_value_no_signal(StorySession.feed_spot.y-4.0)
+	back_field.get_meta("slider").set_value_no_signal(back_field.value)
 
 func request(value: float) -> void:
 	requested = value
