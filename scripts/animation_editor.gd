@@ -1,5 +1,6 @@
 extends "res://scripts/create.gd"
 const EditSession = preload("res://scripts/animation_edit_session.gd")
+const Groups = preload("res://scripts/animation_body_groups.gd")
 const Catalog = preload("res://scripts/volleyball_animations.gd")
 var session: RefCounted
 var entry: Dictionary
@@ -7,6 +8,10 @@ var frame := 0
 var playhead := 0.0
 var playing := false
 var selected_bone := -1
+var group_picker: OptionButton
+var selected_group := "Both Arms"
+var next_pose_button: Button
+var later_pose_button: Button
 var bone_picker: OptionButton
 var bone_indices: Array[int] = []
 var frame_field: SpinBox
@@ -40,9 +45,10 @@ func _ready() -> void:
 	var draft: Dictionary = StorySession.animation_draft
 	if draft.get("source","") == entry.id:
 		session.edits = draft.edits.duplicate(true)
+		session.position_edits = draft.get("position_edits",{}).duplicate(true)
 		copy_name.text = draft.name
 		frame = draft.frame
-	select_bone(preview_player.skeleton.find_bone("lowerarm_l"))
+	select_group(draft.get("group","Both Arms"))
 	set_frame(frame)
 	overlay = preload("res://scripts/animation_editor_handles.gd").new()
 	overlay.editor = self
@@ -57,8 +63,16 @@ func screen_title() -> String:
 func initial_profile() -> Dictionary:
 	return StorySession.active.get("profile",Profile.load_profile()).duplicate(true)
 
-func build_controls(controls: VBoxContainer) -> void:
-	controls.add_theme_constant_override("separation",10)
+func build_controls(host: VBoxContainer) -> void:
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	host.add_child(scroll)
+	var controls := VBoxContainer.new()
+	controls.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	controls.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	controls.add_theme_constant_override("separation",8)
+	scroll.add_child(controls)
 	copy_name = LineEdit.new()
 	copy_name.name = "CopyName"
 	copy_name.text = entry.name+" Copy"
@@ -96,11 +110,18 @@ func build_controls(controls: VBoxContainer) -> void:
 	transport.add_child(undo_button)
 	redo_button = button("Redo",redo)
 	transport.add_child(redo_button)
+	group_picker = OptionButton.new()
+	group_picker.name = "BodyGroup"
+	group_picker.custom_minimum_size.y = 38
+	for group in Groups.NAMES: group_picker.add_item(group)
+	group_picker.item_selected.connect(func(index): select_group(Groups.NAMES[index]))
+	controls.add_child(group_picker)
 	bone_picker = OptionButton.new()
 	bone_picker.name = "Joint"
 	bone_picker.custom_minimum_size.y = 38
 	bone_picker.item_selected.connect(func(index): select_bone(bone_indices[index]))
 	controls.add_child(bone_picker)
+	bone_picker.hide()
 	controls.add_child(label("Rotation",17))
 	for axis in range(3):
 		var value := SpinBox.new()
@@ -116,7 +137,15 @@ func build_controls(controls: VBoxContainer) -> void:
 	var keys := HBoxContainer.new()
 	controls.add_child(keys)
 	keys.add_child(button("Key",key_joint))
-	keys.add_child(button("Reset joint",reset_joint))
+	keys.add_child(button("Reset",reset_joint))
+	var propagation := HBoxContainer.new()
+	controls.add_child(propagation)
+	next_pose_button = button("Copy next",propagate_pose.bind(false))
+	next_pose_button.name = "CopyNext"
+	propagation.add_child(next_pose_button)
+	later_pose_button = button("All later",propagate_pose.bind(true))
+	later_pose_button.name = "AllLater"
+	propagation.add_child(later_pose_button)
 	var space := Control.new()
 	space.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	controls.add_child(space)
@@ -139,6 +168,8 @@ func set_frame(value: int) -> void:
 	timeline.set_value_no_signal(frame)
 	session.sample(frame)
 	refresh_rotation()
+	if is_instance_valid(next_pose_button): next_pose_button.disabled = frame >= session.last_frame
+	if is_instance_valid(later_pose_button): later_pose_button.disabled = frame >= session.last_frame
 
 func step_frame(direction: int) -> void:
 	set_playing(false)
@@ -156,8 +187,32 @@ func _process(delta: float) -> void:
 		set_frame(floori(playhead))
 	if is_instance_valid(overlay): overlay.queue_redraw()
 
+func select_group(group: String) -> void:
+	if not group in Groups.NAMES: group = "Both Arms"
+	selected_group = group
+	group_picker.select(Groups.NAMES.find(group))
+	bone_picker.visible = group == "Individual Joint"
+	if selected_bone < 0: selected_bone = preview_player.skeleton.find_bone("lowerarm_l")
+	var roots := selected_roots()
+	if not roots.is_empty(): selected_bone = roots[0]
+	var option := bone_indices.find(selected_bone)
+	if option >= 0: bone_picker.select(option)
+	refresh_rotation()
+
+func selected_roots() -> Array[int]:
+	return Groups.roots(preview_player.skeleton,selected_group,selected_bone)
+
+func scope_bones() -> Array[int]:
+	return Groups.members(preview_player.skeleton,selected_group,selected_bone)
+
+func is_selected_bone(bone: int) -> bool:
+	return bone in selected_roots()
+
 func select_bone(index: int) -> void:
 	if index < 0: return
+	selected_group = "Individual Joint"
+	group_picker.select(Groups.NAMES.find(selected_group))
+	bone_picker.show()
 	selected_bone = index
 	var option := bone_indices.find(index)
 	if option >= 0: bone_picker.select(option)
@@ -173,8 +228,11 @@ func refresh_rotation() -> void:
 
 func refresh_keys() -> void:
 	if session == null or selected_bone < 0: return
-	var name_ := str(preview_player.skeleton.get_bone_name(selected_bone))
-	timeline.set_meta("keyframes",session.edits.get(name_,{}).keys())
+	var keys := {}
+	for bone in scope_bones():
+		var name_ := str(preview_player.skeleton.get_bone_name(bone))
+		for frame in session.edits.get(name_,{}): keys[frame] = true
+	timeline.set_meta("keyframes",keys.keys())
 	timeline.queue_redraw()
 
 func rotation_changed(_value: float) -> void:
@@ -182,7 +240,7 @@ func rotation_changed(_value: float) -> void:
 	set_playing(false)
 	remember_undo()
 	var angles := Vector3(rotation_fields[0].value,rotation_fields[1].value,rotation_fields[2].value)*PI/180.0
-	session.set_offset(selected_bone,frame,Quaternion.from_euler(angles))
+	apply_rotation_group(Quaternion.from_euler(angles))
 	session.sample(frame)
 	refresh_keys()
 
@@ -190,18 +248,21 @@ func key_joint() -> void:
 	if session == null or selected_bone < 0: return
 	set_playing(false)
 	remember_undo()
-	session.set_offset(selected_bone,frame,session.offset_at(selected_bone,frame))
+	for bone in scope_bones(): session.set_offset(bone,frame,session.offset_at(bone,frame))
 	refresh_keys()
 
 func reset_joint() -> void:
 	if session == null or selected_bone < 0: return
 	set_playing(false)
 	remember_undo()
-	session.set_offset(selected_bone,frame,Quaternion.IDENTITY)
+	for bone in scope_bones():
+		session.set_offset(bone,frame,Quaternion.IDENTITY)
+		var name_ := str(preview_player.skeleton.get_bone_name(bone))
+		if session.position_edits.has(name_): session.position_edits[name_][frame] = Vector3.ZERO
 	set_frame(frame)
 
 func remember_undo() -> void:
-	undo_history.append(session.edits.duplicate(true))
+	undo_history.append(session.state())
 	if undo_history.size() > 100: undo_history.pop_front()
 	redo_history.clear()
 	refresh_history()
@@ -209,16 +270,16 @@ func remember_undo() -> void:
 func undo() -> void:
 	if undo_history.is_empty(): return
 	set_playing(false)
-	redo_history.append(session.edits.duplicate(true))
-	session.edits = undo_history.pop_back()
+	redo_history.append(session.state())
+	session.restore(undo_history.pop_back())
 	set_frame(frame)
 	refresh_history()
 
 func redo() -> void:
 	if redo_history.is_empty(): return
 	set_playing(false)
-	undo_history.append(session.edits.duplicate(true))
-	session.edits = redo_history.pop_back()
+	undo_history.append(session.state())
+	session.restore(redo_history.pop_back())
 	set_frame(frame)
 	refresh_history()
 
@@ -246,7 +307,7 @@ func endpoint_world(bone: int) -> Vector3:
 func handle_points() -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
 	if session == null: return result
-	var bones := [selected_bone]
+	var bones := selected_roots()
 	for name_ in ["pelvis","spine_02","spine_03","Head","upperarm_l","lowerarm_l","hand_l","upperarm_r","lowerarm_r","hand_r","thigh_l","calf_l","foot_l","thigh_r","calf_r","foot_r"]:
 		var index: int = preview_player.skeleton.find_bone(name_)
 		if index >= 0 and not index in bones: bones.append(index)
@@ -264,7 +325,7 @@ func pick_handle(position: Vector2) -> int:
 		if distance < closest:
 			closest = distance
 			selected = handle.bone
-			if selected == selected_bone: return selected
+			if is_selected_bone(selected): return selected
 	return selected
 
 func handle_preview_input(event: InputEvent) -> void:
@@ -273,7 +334,8 @@ func handle_preview_input(event: InputEvent) -> void:
 			var index := pick_handle(event.position)
 			if index >= 0:
 				set_playing(false)
-				select_bone(index)
+				if index in selected_roots(): selected_bone = index; refresh_rotation()
+				else: select_bone(index)
 				remember_undo()
 				gizmo_drag = true
 				drag_plane = Plane(preview_camera.global_basis.z,endpoint_world(index))
@@ -303,13 +365,42 @@ func drag_joint(target: Vector3) -> void:
 	var to := target-pivot
 	if from.length_squared() < 0.00001 or to.length_squared() < 0.00001: return
 	var turn := Quaternion(from.normalized(),to.normalized())
-	var parent := rig.get_bone_parent(selected_bone)
-	var parent_basis := rig.global_basis if parent < 0 else rig.global_basis*rig.get_bone_global_pose(parent).basis
-	var current_basis := rig.global_basis*rig.get_bone_global_pose(selected_bone).basis
-	var local := (parent_basis.inverse()*Basis(turn)*current_basis).orthonormalized().get_rotation_quaternion()
-	session.set_rotation(selected_bone,frame,local)
+	apply_world_turn(turn)
 	session.sample(frame)
 	refresh_rotation()
+
+func apply_rotation_group(offset: Quaternion) -> void:
+	var rig: Skeleton3D = preview_player.skeleton
+	var parent := rig.get_bone_parent(selected_bone)
+	var parent_basis := rig.global_basis if parent < 0 else rig.global_basis*rig.get_bone_global_pose(parent).basis
+	var old_basis := rig.global_basis*rig.get_bone_global_pose(selected_bone).basis
+	var desired := parent_basis*Basis(session.source_rotation(selected_bone,frame)*offset)
+	apply_world_turn((desired*old_basis.inverse()).orthonormalized().get_rotation_quaternion())
+
+func apply_world_turn(turn: Quaternion) -> void:
+	var rig: Skeleton3D = preview_player.skeleton
+	var anchor := str(rig.get_bone_name(selected_bone))
+	var mirror := Basis(Vector3(-1,0,0),Vector3.UP,Vector3.BACK)
+	var rig_basis := rig.global_basis.orthonormalized()
+	var mirrored := rig_basis*mirror*rig_basis.inverse()*Basis(turn)*rig_basis*mirror*rig_basis.inverse()
+	for bone in selected_roots():
+		var name_ := str(rig.get_bone_name(bone))
+		var opposite := (anchor.ends_with("_l") and name_.ends_with("_r")) or (anchor.ends_with("_r") and name_.ends_with("_l"))
+		var change := mirrored if opposite else Basis(turn)
+		var parent := rig.get_bone_parent(bone)
+		var parent_basis := rig.global_basis if parent < 0 else rig.global_basis*rig.get_bone_global_pose(parent).basis
+		var current_basis := rig.global_basis*rig.get_bone_global_pose(bone).basis
+		var local := (parent_basis.inverse()*change*current_basis).orthonormalized().get_rotation_quaternion()
+		session.set_rotation(bone,frame,local)
+
+func propagate_pose(all_later: bool) -> void:
+	if session == null or frame >= session.last_frame: return
+	set_playing(false)
+	remember_undo()
+	var source_frame := frame
+	session.propagate(scope_bones(),source_frame,source_frame+1,session.last_frame if all_later else source_frame+1)
+	set_frame(source_frame if all_later else source_frame+1)
+
 
 func zoom_view(factor: float) -> void:
 	view_distance = clampf(view_distance*factor,0.3,8.0)
@@ -333,7 +424,7 @@ func save_copy() -> void:
 
 func open_menu() -> void:
 	if session != null:
-		StorySession.animation_draft = {"source":entry.id,"edits":session.edits.duplicate(true),"name":copy_name.text,"frame":frame}
+		StorySession.animation_draft = {"source":entry.id,"edits":session.edits.duplicate(true),"position_edits":session.position_edits.duplicate(true),"name":copy_name.text,"frame":frame,"group":selected_group}
 	StorySession.animation_return = {"category":entry.category,"type":entry.type,"id":entry.id}
 	get_tree().change_scene_to_file("res://scenes/story_animations.tscn")
 
@@ -345,6 +436,7 @@ func handle_keyboard(event: InputEventKey) -> void:
 	elif event.ctrl_pressed and event.keycode == KEY_S: save_copy()
 	elif event.keycode == KEY_SPACE: set_playing(not playing)
 	elif event.keycode == KEY_K: key_joint()
+	elif event.keycode == KEY_P: propagate_pose(event.shift_pressed)
 	elif event.keycode == KEY_LEFT and not event.shift_pressed: step_frame(-1)
 	elif event.keycode == KEY_RIGHT and not event.shift_pressed: step_frame(1)
 	elif event.keycode == KEY_F and selected_bone >= 0:

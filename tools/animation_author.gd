@@ -92,13 +92,24 @@ func pose_at(time: float) -> Array:
 			var hand: String = "hand_"+side
 			var fingers: String = "index_01_"+side
 			var before := world_pose(pose,rig.find_bone(hand)).basis
-			var direction := Vector3(-sign_*0.35,-0.1,1).normalized()
-			aim_joint(pose,hand,fingers,point(pose,hand)+direction)
+			var arm_axis := (point(pose,hand)-point(pose,"lowerarm_"+side)).normalized()
 			var index_vector := point(pose,fingers)-point(pose,hand)
 			var pinky_vector := point(pose,"pinky_01_"+side)-point(pose,hand)
+			var palm_normal := index_vector.cross(pinky_vector).normalized()*(-1.0 if side == "l" else 1.0)
+			var projected := (palm_normal-arm_axis*palm_normal.dot(arm_axis)).normalized()
+			var palm_direction: Vector3 = values["palm_"+side]
+			var down := (palm_direction-arm_axis*palm_direction.dot(arm_axis)).normalized()
+			var roll: float = projected.signed_angle_to(down,arm_axis)*values.grip
+			var upper_axis := (point(pose,"lowerarm_"+side)-point(pose,"upperarm_"+side)).normalized()
+			var forearm_basis := world_pose(pose,rig.find_bone("lowerarm_"+side)).basis
+			rotate_world(pose,"upperarm_"+side,upper_axis,roll*0.35)
+			set_world_basis(pose,"lowerarm_"+side,Basis(arm_axis,roll)*forearm_basis)
+			var direction := (Basis(Vector3.RIGHT,deg_to_rad(values.wrist_flex))*Vector3(0,arm_axis.y,arm_axis.z)).normalized()
+			aim_joint(pose,hand,fingers,point(pose,hand)+direction)
+			index_vector = point(pose,fingers)-point(pose,hand)
+			pinky_vector = point(pose,"pinky_01_"+side)-point(pose,hand)
 			var normal := index_vector.cross(pinky_vector).normalized()*(-1.0 if side == "l" else 1.0)
-			var palm := Vector3(-sign_,0.2,0)
-			palm = (palm-direction*palm.dot(direction)).normalized()
+			var palm := (palm_direction-direction*palm_direction.dot(direction)).normalized()
 			rotate_world(pose,hand,direction,normal.signed_angle_to(palm,direction))
 			var desired := world_pose(pose,rig.find_bone(hand)).basis
 			set_world_basis(pose,hand,Basis(before.get_rotation_quaternion().slerp(desired.get_rotation_quaternion(),values.grip)))
@@ -107,7 +118,23 @@ func pose_at(time: float) -> Array:
 					var bone := rig.find_bone("%s_%02d_%s" % [finger,segment,side])
 					var bent := rig.get_bone_rest(bone).basis*Basis(Vector3.RIGHT,deg_to_rad(values["curl_"+side]))
 					pose[bone].basis = Basis(baseline[bone].basis.get_rotation_quaternion().slerp(bent.get_rotation_quaternion(),values.grip))
+	if values.grip > 0.0001: pose_thumbs(pose,values.grip,values.wrist_flex)
 	return pose
+
+func pose_thumbs(pose: Array, strength: float, flex: float) -> void:
+	var axis := ((point(pose,"hand_l")-point(pose,"lowerarm_l"))+(point(pose,"hand_r")-point(pose,"lowerarm_r"))).normalized()
+	axis = (Basis(Vector3.RIGHT,deg_to_rad(flex))*Vector3(0,axis.y,axis.z)).normalized()
+	for side in ["l","r"]:
+		for segment in [1,2]:
+			var name_: String = "thumb_0"+str(segment)+"_"+side
+			var bone := rig.find_bone(name_)
+			var children := rig.get_bone_children(bone)
+			if children.is_empty(): continue
+			var child := str(rig.get_bone_name(children[0]))
+			var before := world_pose(pose,bone).basis
+			aim_joint(pose,name_,child,point(pose,name_)+axis)
+			var desired := world_pose(pose,bone).basis
+			set_world_basis(pose,name_,Basis(before.get_rotation_quaternion().slerp(desired.get_rotation_quaternion(),strength)))
 
 func world_pose(pose: Array, bone: int) -> Transform3D:
 	var parent := rig.get_bone_parent(bone)

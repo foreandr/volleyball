@@ -21,10 +21,10 @@ func _ready() -> void:
 			skin.roughness = 0.85
 			skin.metallic_specular = 0.2
 			if skin.resource_name.begins_with("MI_Superhero"):
-				mesh.mesh = preload("res://assets/outfits/brutus_body.res")
+				mesh.mesh = preload("res://assets/characters/volleyball/body.res")
 				skin.albedo_texture = preload("res://assets/characters/base/T_Superhero_Male_Light.png")
 				var outfit := MeshInstance3D.new()
-				outfit.mesh = preload("res://assets/outfits/brutus_outfit.res")
+				outfit.mesh = preload("res://assets/characters/volleyball/outfit.res")
 				outfit.skin = mesh.skin
 				skeleton.add_child(outfit)
 				outfit.skeleton = outfit.get_path_to(skeleton)
