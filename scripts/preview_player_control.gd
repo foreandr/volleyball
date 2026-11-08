@@ -6,9 +6,11 @@ var animator_active := true
 var moving := false
 var indicator: Label
 var save_clock := 0.0
+var footwork: RefCounted
 
 func _init(host: Control) -> void:
 	page = host
+	footwork = preload("res://scripts/directional_footwork.gd").new(page.preview_player)
 	indicator = Label.new()
 	indicator.text = "Camera"
 	indicator.add_theme_font_size_override("font_size",13)
@@ -85,7 +87,8 @@ func move_player(direction: Vector2, delta: float) -> void:
 	forward.y = 0
 	forward = forward.normalized()
 	var right := forward.cross(Vector3.UP)
-	var movement := (right*direction.x+forward*direction.y)*4.5*delta
+	var velocity := (right*direction.x+forward*direction.y)*2.8
+	var movement := velocity*delta
 	actor.position.x = clampf(actor.position.x+movement.x,-4,4)
 	actor.position.z = clampf(actor.position.z+movement.z,-4.5,2.5)
 	actor.rotation.y = atan2(forward.x,forward.z)
@@ -93,7 +96,9 @@ func move_player(direction: Vector2, delta: float) -> void:
 	var now_moving := direction.length()>0.05
 	if now_moving!=moving:
 		moving = now_moving
-		actor.play_action("run" if moving else "idle")
+		actor.play_action("idle")
+	actor.animator.advance(delta)
+	footwork.step(actor.basis.inverse()*velocity/2.8,delta)
 	follow_camera()
 
 func follow_camera() -> void:
