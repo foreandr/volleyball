@@ -3,7 +3,7 @@ signal angle_requested(value: float)
 var field: SpinBox
 var slider: HSlider
 var actual_label: Label
-var timer: Timer
+var pending := false
 var requested := 45.0
 
 func _ready() -> void:
@@ -18,7 +18,7 @@ func _ready() -> void:
 	field.name = "OutputAngle"
 	field.min_value = 10
 	field.max_value = 80
-	field.step = 1
+	field.step = 0.1
 	field.suffix = "°"
 	field.custom_minimum_size = Vector2(110,36)
 	field.value_changed.connect(request)
@@ -26,26 +26,26 @@ func _ready() -> void:
 	slider = HSlider.new()
 	slider.min_value = 10
 	slider.max_value = 80
-	slider.step = 1
+	slider.step = 0.1
 	slider.value_changed.connect(request)
 	add_child(slider)
 	actual_label = Label.new()
 	actual_label.hide()
 	add_child(actual_label)
-	timer = Timer.new()
-	timer.one_shot = true
-	timer.wait_time = 0.15
-	timer.timeout.connect(func(): angle_requested.emit(requested))
-	add_child(timer)
+
+func _process(_delta: float) -> void:
+	if pending:
+		pending = false
+		angle_requested.emit(requested)
 
 func request(value: float) -> void:
 	requested = value
 	field.set_value_no_signal(value)
 	slider.set_value_no_signal(value)
-	timer.start()
+	pending = true
 
 func display_result(value: float, actual: float) -> void:
-	timer.stop()
+	pending = false
 	requested = value
 	field.set_value_no_signal(value)
 	slider.set_value_no_signal(value)

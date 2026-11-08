@@ -154,7 +154,8 @@ func tick(time: float, audible: bool) -> void:
 	if edit_session != null and cached_revision != edit_session.revision: recalculate()
 	var elapsed := time-contact_time
 	global_position = impact_point+(incoming if elapsed < 0 else outgoing)*elapsed+Vector3.DOWN*4.905*elapsed*elapsed
-	visible = time <= minf(clip.length,contact_time+0.85)
+	show()
+	ball.visible = time <= minf(clip.length,contact_time+0.85)
 	var squeeze := maxf(0,1.0-absf(elapsed)/0.035)
 	ball.scale = Vector3(1.0+0.04*squeeze,1.0-0.07*squeeze,1.0+0.04*squeeze)
 	ball.rotation = Vector3(time*1.7,time*2.3,0.2)

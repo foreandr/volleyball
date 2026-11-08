@@ -5,6 +5,7 @@ const Catalog = preload("res://scripts/volleyball_animations.gd")
 var ball_preview: Node3D
 var angle_control: VBoxContainer
 var trajectory_base: Animation
+var trajectory_solver: RefCounted
 var trajectory_revision := -1
 var session: RefCounted
 var entry: Dictionary
@@ -68,6 +69,15 @@ func _ready() -> void:
 	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	preview.add_child(overlay)
 	refresh_history()
+
+func build_preview_stage(world: Node3D) -> void:
+	world.add_child(preload("res://scripts/preview_court.gd").new())
+	orbit_yaw = -2.2
+	orbit_pitch = 0.26
+	max_view_distance = 24.0
+	pan_limits = Vector3(9,5,17)
+	view_distance = 9.5
+	view_focus = Vector3(0,1.0,1.8)
 
 func screen_title() -> String:
 	return "EDIT ANIMATION"
@@ -176,15 +186,17 @@ func refresh_ball_angle() -> void:
 
 func apply_output_angle(value: float) -> void:
 	if session == null or not session.source.has_meta("contact_time"): return
-	if trajectory_base == null or trajectory_revision != session.revision: trajectory_base = session.bake()
+	if trajectory_base == null or trajectory_revision != session.revision:
+		trajectory_base = session.bake()
+		trajectory_solver = preload("res://scripts/pass_trajectory_solver.gd").new(preview_player,trajectory_base)
 	remember_undo()
-	var result: Dictionary = preload("res://scripts/pass_trajectory_solver.gd").new(preview_player,trajectory_base).solve(value)
+	var result: Dictionary = trajectory_solver.solve(value)
 	session.replace_source(result.clip)
 	trajectory_revision = session.revision
 	StorySession.pass_output_angle = value
 	refresh_ball_angle()
 	set_frame(frame)
-	set_playing(true)
+	ball_preview.tick(session.time_at(playhead if playing else float(frame)),false)
 
 func bone_label(name_: String) -> String:
 	var side := ""
@@ -441,7 +453,7 @@ func propagate_pose(all_later: bool) -> void:
 
 
 func zoom_view(factor: float) -> void:
-	view_distance = clampf(view_distance*factor,0.3,8.0)
+	view_distance = clampf(view_distance*factor,0.3,max_view_distance)
 	update_camera()
 
 func save_copy() -> void:

@@ -22,6 +22,7 @@ var selected_entry: Dictionary = {}
 var ball_preview: Node3D
 var angle_control: VBoxContainer
 var source_clip: Animation
+var trajectory_solver: RefCounted
 var render_clip: Animation
 
 func _ready() -> void:
@@ -38,6 +39,15 @@ func _ready() -> void:
 					animation_list.select(index)
 					preview_animation(index)
 					break
+
+func build_preview_stage(world: Node3D) -> void:
+	world.add_child(preload("res://scripts/preview_court.gd").new())
+	orbit_yaw = -2.2
+	orbit_pitch = 0.26
+	max_view_distance = 24.0
+	pan_limits = Vector3(9,5,17)
+	view_distance = 9.5
+	view_focus = Vector3(0,1.0,1.8)
 
 func screen_title() -> String:
 	return "ANIMATIONS"
@@ -146,9 +156,10 @@ func preview_animation(index: int) -> void:
 	selected_entry = entry.duplicate(true)
 	if is_instance_valid(edit_button): edit_button.disabled = false
 	source_clip = load(entry.path)
+	trajectory_solver = preload("res://scripts/pass_trajectory_solver.gd").new(preview_player,source_clip)
 	render_clip = source_clip
 	if source_clip.has_meta("contact_time") and StorySession.pass_output_angle >= 0:
-		render_clip = preload("res://scripts/pass_trajectory_solver.gd").new(preview_player,source_clip).solve(StorySession.pass_output_angle).clip
+		render_clip = trajectory_solver.solve(StorySession.pass_output_angle).clip
 	preview_player.install_custom(render_clip,"preview",false)
 	if not is_instance_valid(ball_preview):
 		ball_preview = preload("res://scripts/animation_ball_preview.gd").new()
@@ -160,10 +171,19 @@ func preview_animation(index: int) -> void:
 func apply_output_angle(value: float) -> void:
 	if source_clip == null or not source_clip.has_meta("contact_time"): return
 	StorySession.pass_output_angle = value
-	var result: Dictionary = preload("res://scripts/pass_trajectory_solver.gd").new(preview_player,source_clip).solve(value)
+	var result: Dictionary = trajectory_solver.solve(value)
+	var clock: float = preview_player.animator.current_animation_position
+	var running: bool = preview_player.animator.is_playing()
+	var last_contact_clock: float = ball_preview.last_time
 	render_clip = result.clip
 	preview_player.install_custom(render_clip,"preview",false)
+	preview_player.animator.play("custom_preview/clip",0)
+	preview_player.animator.seek(clock,true)
+	preview_player.animator.advance(0)
+	if not running: preview_player.animator.pause()
 	ball_preview.configure(preview_player,render_clip)
+	ball_preview.tick(clock,false)
+	ball_preview.last_time = last_contact_clock
 	angle_control.display_result(value,ball_preview.output_angle())
 
 func _process(_delta: float) -> void:

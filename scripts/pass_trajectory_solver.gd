@@ -97,8 +97,8 @@ func solve(requested: float) -> Dictionary:
 		if error < smallest: smallest = error; best = pitch
 		if angle > goal: low = pitch
 		else: high = pitch
-	var description := {"name":source.resource_name,"duration":source.length,"contact_time":contact_time}
-	var clip: Animation = author.bake(description,func(time): return adapted_pose(time,best,lift))
+	var affected: Array[String] = ["pelvis","upperarm_l","upperarm_r","thigh_l","thigh_r","calf_l","calf_r","foot_l","foot_r"]
+	var clip: Animation = author.bake_overrides(source,func(time): return adapted_pose(time,best,lift),affected)
 	for meta in source.get_meta_list(): clip.set_meta(meta,source.get_meta(meta))
 	var outgoing := response(best,lift)
 	var actual := Contact.elevation(outgoing)

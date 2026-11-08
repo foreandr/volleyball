@@ -12,6 +12,9 @@ var orbit_yaw := 0.0
 var orbit_pitch := 0.12
 var view_distance := 3.8
 var view_focus := Vector3(0,0.98,0)
+var max_view_distance := 8.0
+var pan_limits := Vector3(1.5,2.4,1.5)
+var stage_camera := {}
 var dragging := false
 var panning := false
 
@@ -159,6 +162,23 @@ func build_preview(viewport: SubViewport) -> void:
 	fill.light_color = Color("91bfe6")
 	fill.light_energy = 0.3
 	world.add_child(fill)
+	build_preview_stage(world)
+	preview_player = preload("res://scripts/volleyball_player.gd").new()
+	preview_player.name = "PreviewPlayer"
+	preview_player.position.y = 0.04
+	preview_player.apply_profile(profile)
+	world.add_child(preview_player)
+	preview_camera = Camera3D.new()
+	preview_camera.name = "PreviewCamera"
+	preview_camera.fov = 38.0
+	preview_camera.near = 0.05
+	preview_camera.far = 50
+	stage_camera = {"yaw":orbit_yaw,"pitch":orbit_pitch,"distance":view_distance,"focus":view_focus}
+	preview_camera.current = true
+	world.add_child(preview_camera)
+	update_camera()
+
+func build_preview_stage(world: Node3D) -> void:
 	var platform := MeshInstance3D.new()
 	var cylinder := CylinderMesh.new()
 	cylinder.top_radius = 0.8
@@ -170,19 +190,6 @@ func build_preview(viewport: SubViewport) -> void:
 	material.roughness = 0.9
 	platform.material_override = material
 	world.add_child(platform)
-	preview_player = preload("res://scripts/volleyball_player.gd").new()
-	preview_player.name = "PreviewPlayer"
-	preview_player.position.y = 0.04
-	preview_player.apply_profile(profile)
-	world.add_child(preview_player)
-	preview_camera = Camera3D.new()
-	preview_camera.name = "PreviewCamera"
-	preview_camera.fov = 38.0
-	preview_camera.near = 0.05
-	preview_camera.far = 50
-	preview_camera.current = true
-	world.add_child(preview_camera)
-	update_camera()
 
 func handle_preview_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed:
@@ -207,13 +214,13 @@ func handle_preview_input(event: InputEvent) -> void:
 
 func pan_view(pixels: Vector2) -> void:
 	view_focus += (-preview_camera.global_basis.x*pixels.x+preview_camera.global_basis.y*pixels.y)*view_distance*0.0015
-	view_focus.x = clampf(view_focus.x,-1.5,1.5)
-	view_focus.y = clampf(view_focus.y,-0.2,2.4)
-	view_focus.z = clampf(view_focus.z,-1.5,1.5)
+	view_focus.x = clampf(view_focus.x,-pan_limits.x,pan_limits.x)
+	view_focus.y = clampf(view_focus.y,-0.2,pan_limits.y)
+	view_focus.z = clampf(view_focus.z,-pan_limits.z,pan_limits.z)
 	update_camera()
 
 func zoom_view(factor: float) -> void:
-	view_distance = clampf(view_distance*factor,1.4,8.0)
+	view_distance = clampf(view_distance*factor,1.4,max_view_distance)
 	update_camera()
 
 func set_view(yaw: float) -> void:
@@ -222,10 +229,10 @@ func set_view(yaw: float) -> void:
 	update_camera()
 
 func reset_view() -> void:
-	orbit_yaw = 0
-	orbit_pitch = 0.12
-	view_distance = 3.8
-	view_focus = Vector3(0,0.98,0)
+	orbit_yaw = stage_camera.get("yaw",0.0)
+	orbit_pitch = stage_camera.get("pitch",0.12)
+	view_distance = stage_camera.get("distance",3.8)
+	view_focus = stage_camera.get("focus",Vector3(0,0.98,0))
 	update_camera()
 
 func update_camera() -> void:

@@ -44,6 +44,30 @@ func bake(description: Dictionary, pose_provider := Callable()) -> Animation:
 	clip.set_meta("baseline","Goalkeeper Idle.fbx")
 	return clip
 
+func bake_overrides(source: Animation, pose_provider: Callable, bones: Array[String]) -> Animation:
+	var clip: Animation = source.duplicate(true)
+	var tracks := {}
+	for name_ in bones:
+		var path := NodePath(PREFIX+name_)
+		for type in [Animation.TYPE_POSITION_3D,Animation.TYPE_ROTATION_3D]:
+			var track := clip.find_track(path,type)
+			if track >= 0: clip.remove_track(track)
+	for name_ in bones:
+		var bone := rig.find_bone(name_)
+		var path := NodePath(PREFIX+name_)
+		var position := clip.add_track(Animation.TYPE_POSITION_3D)
+		clip.track_set_path(position,path)
+		var rotation := clip.add_track(Animation.TYPE_ROTATION_3D)
+		clip.track_set_path(rotation,path)
+		tracks[bone] = [position,rotation]
+	for frame in range(ceili(clip.length*60)+1):
+		var time := minf(clip.length,float(frame)/60)
+		var pose: Array = pose_provider.call(time)
+		for bone in tracks:
+			clip.position_track_insert_key(tracks[bone][0],time,pose[bone].origin)
+			clip.rotation_track_insert_key(tracks[bone][1],time,pose[bone].basis.get_rotation_quaternion().normalized())
+	return clip
+
 func parameters(time: float) -> Dictionary:
 	var phases: Array = recipe.phases
 	var a: Dictionary = phases[0]
