@@ -1,7 +1,7 @@
 {
-  "cadence": 2.8,
-  "stride": 0.58,
-  "foot_lift": 0.1,
-  "crouch": 0.1,
-  "bob": 0.025
+  "cadence": 1.65,
+  "stride": 0.5,
+  "foot_lift": 0.045,
+  "crouch": 0.05,
+  "bob": 0.012
 }
