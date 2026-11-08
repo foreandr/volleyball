@@ -59,7 +59,8 @@ func adapted_pose(time: float, pitch: float, lift: float, drive := 0.0) -> Array
 			author.limb(pose,"thigh_"+side,"calf_"+side,"foot_"+side,feet[side].origin,poles[side])
 			author.set_world_basis(pose,"foot_"+side,feet[side].basis)
 	var offset := time-contact_time
-	var push := drive*offset*exp(-pow(offset/0.14,2))*platform_weight
+	# One continuous contact stroke; a decaying impulse creates a second arm swing.
+	var push := drive*0.10*tanh(offset/0.10)*platform_weight
 	for side in ["l","r"]: author.rotate_world(pose,"upperarm_"+side,Vector3.RIGHT,pitch*platform_weight+push)
 	return pose
 
