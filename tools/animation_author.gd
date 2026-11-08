@@ -16,7 +16,9 @@ func _init(skeleton: Skeleton3D, starting_pose: Animation) -> void:
 		if position >= 0: local.origin = starting_pose.position_track_interpolate(position,0)
 		if rotation >= 0: local.basis = Basis(starting_pose.rotation_track_interpolate(rotation,0))
 		baseline.append(local)
-	for side in ["l","r"]: feet[side] = world_pose(baseline,rig.find_bone("foot_"+side))
+	for side in ["l","r"]:
+		var foot := rig.find_bone("foot_"+side)
+		if foot>=0: feet[side] = world_pose(baseline,foot)
 
 func bake(description: Dictionary, pose_provider := Callable()) -> Animation:
 	recipe = description
