@@ -49,10 +49,15 @@ static func impact(time: float, point: Vector3, incoming: Vector3, side: float) 
 	if point.y<NET_BOTTOM-RADIUS: kind = "under"
 	elif point.y>NET_TOP-0.12: kind = "tape"
 	var rigidity := 0.35+0.65*pow(clampf(absf(point.x)/NET_HALF_WIDTH,0,1),2)
+	var softness := (1.0-smoothstep(1.47,2.05,point.y))*(1.0-0.6*rigidity) if kind == "cloth" else 0.0
 	var duration := 0.075 if kind == "cloth" else 0.045
-	var stretch := clampf(absf(incoming.z)*duration/PI,0.025,0.23)*(1.15-rigidity*0.4)
+	duration += 0.065*softness
+	var stretch := clampf(absf(incoming.z)*duration/PI,0.025,0.23+0.13*softness)*(1.15-rigidity*0.4)
 	var rebound := Vector3(incoming.x*0.55,incoming.y*0.5,side*absf(incoming.z)*(0.24+0.16*rigidity))
-	var release := point+Vector3(incoming.x,incoming.y,0)*duration*0.35
+	# The looser lower mesh holds the ball briefly and damps the downward slide.
+	rebound.z *= 1.0-0.25*softness
+	if incoming.y<0: rebound.y = incoming.y*lerpf(0.5,0.15,softness)
+	var release := point+Vector3(incoming.x*duration*0.35,incoming.y*duration*lerpf(0.35,0.08,softness),0)
 	release.z = NET_Z+side*(RADIUS+0.014)
 	var rollover := kind == "tape" and point.y>NET_TOP+0.025 and incoming.y<1
 	if kind == "tape":
@@ -70,7 +75,7 @@ static func impact(time: float, point: Vector3, incoming: Vector3, side: float) 
 		release.z = NET_Z+side*(RADIUS+0.014)
 	release.y = maxf(Flight.FLOOR,release.y)
 	var airborne := Flight.landing_time(release,rebound)
-	return {"time":time,"point":point,"incoming":incoming,"side":side,"kind":kind,"rollover":rollover,"stretch":stretch,"contact_duration":duration,"release_time":time+duration,"release_point":release,"velocity":rebound,"drop_time":airborne,"end_time":time+duration+airborne}
+	return {"time":time,"point":point,"incoming":incoming,"side":side,"kind":kind,"rollover":rollover,"softness":softness,"stretch":stretch,"contact_duration":duration,"release_time":time+duration,"release_point":release,"velocity":rebound,"drop_time":airborne,"end_time":time+duration+airborne}
 
 static func after_hit(hit: Dictionary, time: float) -> Vector3:
 	if time<float(hit.release_time) and float(hit.contact_duration)>0:
@@ -98,13 +103,14 @@ static func surface_offset(hit: Dictionary, time: float, point: Vector3) -> Vect
 	var age := time-float(hit.time)-absf(dx)*0.018-absf(dy)*0.03
 	if age<0: return Vector3.ZERO
 	var duration: float = hit.contact_duration
+	var softness := float(hit.get("softness",0))
 	var displacement := 0.0
 	if age<=duration: displacement = -float(hit.side)*float(hit.stretch)*sin(PI*age/duration)
 	else:
 		var after := age-duration
-		displacement = float(hit.side)*float(hit.stretch)*0.35*exp(-8*after)*sin(26*after)
-	var width := 1.2 if hit.kind=="tape" else 0.75
-	var shape := exp(-dx*dx/(2*width*width)-dy*dy/0.25)
+		displacement = float(hit.side)*float(hit.stretch)*0.35*(1.0-0.3*softness)*exp(-8*after)*sin(26*(1.0-0.25*softness)*after)
+	var width := 1.2 if hit.kind=="tape" else 0.75+0.15*softness
+	var shape := exp(-dx*dx/(2*width*width)-dy*dy/(0.25+0.1*softness))
 	var anchor := clampf((NET_HALF_WIDTH-absf(point.x))/0.5,0,1)
 	var center_anchor := maxf(0.1,clampf((NET_HALF_WIDTH-absf(center.x))/0.5,0,1))
 	displacement *= shape*minf(1,anchor/center_anchor)
