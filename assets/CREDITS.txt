@@ -7,3 +7,5 @@ https://creativecommons.org/publicdomain/zero/1.0/
 https://github.com/clintcan/3d-fighter
 https://creativecommons.org/licenses/by/4.0/
 Reused from the local FightLab project. Volleyball changes team colors and animation setup.
+
+Goalkeeper Idle.fbx: supplied by the user; animation retargeted for the existing character rig.

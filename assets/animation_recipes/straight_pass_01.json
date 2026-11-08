@@ -1,0 +1,248 @@
+{
+  "id": "straight_pass_01",
+  "name": "Straight Pass 1",
+  "duration": 2.1,
+  "contact_time": 0.6,
+  "baseline": "goalkeeper_idle.tres",
+  "joint_offsets": {},
+  "phases": [
+    {
+      "time": 0,
+      "hips": [
+        0,
+        0,
+        0
+      ],
+      "torso_lean": 0,
+      "platform": 0,
+      "grip": 0,
+      "wrist_l": [
+        0.035,
+        -0.32,
+        0.35
+      ],
+      "wrist_r": [
+        -0.035,
+        -0.308,
+        0.35
+      ],
+      "elbow_l": [
+        0.15,
+        -0.1,
+        -1
+      ],
+      "elbow_r": [
+        -0.15,
+        -0.1,
+        -1
+      ],
+      "curl_l": 60,
+      "curl_r": 75,
+      "head_pitch": 0
+    },
+    {
+      "time": 0.26,
+      "hips": [
+        0,
+        -0.08,
+        0
+      ],
+      "torso_lean": 5,
+      "platform": 1,
+      "grip": 1,
+      "wrist_l": [
+        0.035,
+        -0.32,
+        0.35
+      ],
+      "wrist_r": [
+        -0.035,
+        -0.308,
+        0.35
+      ],
+      "elbow_l": [
+        0.15,
+        -0.1,
+        -1
+      ],
+      "elbow_r": [
+        -0.15,
+        -0.1,
+        -1
+      ],
+      "curl_l": 60,
+      "curl_r": 75,
+      "head_pitch": -5
+    },
+    {
+      "time": 0.46,
+      "hips": [
+        0,
+        -0.055,
+        0
+      ],
+      "torso_lean": 4,
+      "platform": 1,
+      "grip": 1,
+      "wrist_l": [
+        0.035,
+        -0.32,
+        0.35
+      ],
+      "wrist_r": [
+        -0.035,
+        -0.308,
+        0.35
+      ],
+      "elbow_l": [
+        0.15,
+        -0.1,
+        -1
+      ],
+      "elbow_r": [
+        -0.15,
+        -0.1,
+        -1
+      ],
+      "curl_l": 60,
+      "curl_r": 75,
+      "head_pitch": -5
+    },
+    {
+      "time": 0.6,
+      "hips": [
+        0,
+        -0.015,
+        0
+      ],
+      "torso_lean": 1,
+      "platform": 1,
+      "grip": 1,
+      "wrist_l": [
+        0.035,
+        -0.28,
+        0.39
+      ],
+      "wrist_r": [
+        -0.035,
+        -0.268,
+        0.39
+      ],
+      "elbow_l": [
+        0.15,
+        -0.1,
+        -1
+      ],
+      "elbow_r": [
+        -0.15,
+        -0.1,
+        -1
+      ],
+      "curl_l": 60,
+      "curl_r": 75,
+      "head_pitch": -10
+    },
+    {
+      "time": 0.82,
+      "hips": [
+        0,
+        0.01,
+        0
+      ],
+      "torso_lean": -2,
+      "platform": 1,
+      "grip": 1,
+      "wrist_l": [
+        0.035,
+        -0.23,
+        0.42
+      ],
+      "wrist_r": [
+        -0.035,
+        -0.218,
+        0.42
+      ],
+      "elbow_l": [
+        0.15,
+        -0.1,
+        -1
+      ],
+      "elbow_r": [
+        -0.15,
+        -0.1,
+        -1
+      ],
+      "curl_l": 60,
+      "curl_r": 75,
+      "head_pitch": -8
+    },
+    {
+      "time": 1.22,
+      "hips": [
+        0,
+        0,
+        0
+      ],
+      "torso_lean": 0,
+      "platform": 0,
+      "grip": 0,
+      "wrist_l": [
+        0.035,
+        -0.32,
+        0.35
+      ],
+      "wrist_r": [
+        -0.035,
+        -0.308,
+        0.35
+      ],
+      "elbow_l": [
+        0.15,
+        -0.1,
+        -1
+      ],
+      "elbow_r": [
+        -0.15,
+        -0.1,
+        -1
+      ],
+      "curl_l": 60,
+      "curl_r": 75,
+      "head_pitch": 0
+    },
+    {
+      "time": 2.1,
+      "hips": [
+        0,
+        0,
+        0
+      ],
+      "torso_lean": 0,
+      "platform": 0,
+      "grip": 0,
+      "wrist_l": [
+        0.035,
+        -0.32,
+        0.35
+      ],
+      "wrist_r": [
+        -0.035,
+        -0.308,
+        0.35
+      ],
+      "elbow_l": [
+        0.15,
+        -0.1,
+        -1
+      ],
+      "elbow_r": [
+        -0.15,
+        -0.1,
+        -1
+      ],
+      "curl_l": 60,
+      "curl_r": 75,
+      "head_pitch": 0
+    }
+  ]
+}

@@ -1,4 +1,5 @@
 extends "res://scripts/create.gd"
+const Catalog = preload("res://scripts/volleyball_animations.gd")
 const MOVE_TYPES := {
 	"Passing":["Straight","Left","Right","Dive Left","Dive Right"],
 	"Spiking":["Line Hit","Cross Hit"],
@@ -39,6 +40,7 @@ func set_title(text: String) -> void:
 	if heading: heading.text = text
 
 func show_categories() -> void:
+	if is_instance_valid(preview_player): preview_player.play_action("idle")
 	selected_category = ""
 	clear_content()
 	set_title("ANIMATIONS")
@@ -78,6 +80,10 @@ func select_category(category: String) -> void:
 	row.add_child(next)
 	animation_list = ItemList.new()
 	animation_list.name = "AnimationList"
+	animation_list.allow_reselect = true
+	animation_list.add_theme_font_size_override("font_size",18)
+	animation_list.item_selected.connect(preview_animation)
+	animation_list.item_activated.connect(preview_animation)
 	animation_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	content.add_child(animation_list)
 	refresh_type()
@@ -89,8 +95,20 @@ func current_type() -> String:
 
 func refresh_type() -> void:
 	type_label.text = current_type()
-	# Each move gets its own future library. No imported or placeholder clips.
 	animation_list.clear()
+	for entry in Catalog.entries(selected_category,current_type()):
+		var index := animation_list.add_item(entry.name)
+		animation_list.set_item_metadata(index,entry)
+	if animation_list.item_count > 0:
+		animation_list.select(0)
+		preview_animation(0)
+	elif is_instance_valid(preview_player): preview_player.play_action("idle")
+
+func preview_animation(index: int) -> void:
+	if not is_instance_valid(preview_player): return
+	var entry: Dictionary = animation_list.get_item_metadata(index)
+	var clip: Animation = load(entry.path)
+	preview_player.install_custom(clip,"preview",false)
 
 func cycle_type(direction: int) -> void:
 	if selected_category.is_empty(): return

@@ -7,7 +7,7 @@ var handedness := "Right"
 var model: Node3D
 var skeleton: Skeleton3D
 var animator: AnimationPlayer
-var animation_slots := {"idle":"base/Idle","run":"base/Jog_Fwd","jump":"base/Jump_Start","land":"base/Jump_Land"}
+var animation_slots := {"idle":"volleyball/goalkeeper_idle","run":"base/Jog_Fwd","jump":"base/Jump_Start","land":"base/Jump_Land"}
 
 func _ready() -> void:
 	model = preload("res://assets/characters/base/Superhero_Male_FullBody.gltf").instantiate()
@@ -42,12 +42,11 @@ func _ready() -> void:
 	# Each player owns editable copies; custom poses never alter the source library.
 	var library: AnimationLibrary = preload("res://assets/animations/UAL1_Standard.glb").duplicate(true)
 	animator.add_animation_library("base",library)
+	var volleyball := AnimationLibrary.new()
+	volleyball.add_animation("goalkeeper_idle",preload("res://assets/animations/goalkeeper_idle.tres").duplicate(true))
+	animator.add_animation_library("volleyball",volleyball)
 	play_action("idle")
 	animator.advance(float(player_number)*0.31)
-	for slot in ["idle","run","jump","land","serve","pass","set","spike","block"]:
-		var path := "user://animations/%s_%s.tres" % [name,slot]
-		if ResourceLoader.exists(path): install_custom(load(path),slot,false)
-	play_action("idle")
 
 func play_action(action: String) -> void:
 	var clip: String = animation_slots.get(action,action)
