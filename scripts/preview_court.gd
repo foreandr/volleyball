@@ -44,24 +44,7 @@ func _ready() -> void:
 	box("CenterLine",Vector3(9,0.008,0.05),Vector3(0,0.045,4),boundary)
 	pole("LeftPost",-5.05,white)
 	pole("RightPost",5.05,white)
-	var net := ImmediateMesh.new()
-	net.surface_begin(Mesh.PRIMITIVE_LINES)
-	for column in range(97):
-		var x := -4.8+column*0.1
-		net.surface_add_vertex(Vector3(x,1.47,4))
-		net.surface_add_vertex(Vector3(x,2.47,4))
-	for row in range(11):
-		var y := 1.47+row*0.1
-		net.surface_add_vertex(Vector3(-4.8,y,4))
-		net.surface_add_vertex(Vector3(4.8,y,4))
-	net.surface_end()
-	var mesh_instance := MeshInstance3D.new()
-	mesh_instance.name = "NetMesh"
-	mesh_instance.mesh = net
-	mesh_instance.material_override = material("25363a")
-	add_child(mesh_instance)
-	box("TopTape",Vector3(9.6,0.07,0.025),Vector3(0,2.47,4),white)
-	box("BottomTape",Vector3(9.6,0.04,0.025),Vector3(0,1.47,4),white)
+	add_child(preload("res://scripts/dynamic_net.gd").new())
 	for x in [-4.8,4.8]: box("SideTape",Vector3(0.05,1.0,0.025),Vector3(x,1.97,4),white)
 	for x in [-4.5,4.5]:
 		for stripe in range(8): box("Antenna",Vector3(0.018,0.1,0.018),Vector3(x,2.52+stripe*0.1,4),white if stripe%2 == 0 else material("cf493d"))
