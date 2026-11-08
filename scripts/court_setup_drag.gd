@@ -24,8 +24,13 @@ func handle(event: InputEvent) -> bool:
 		var live_ball: Vector3 = page.ball_preview.global_position
 		var picked_source := not camera.is_position_behind(source) and camera.unproject_position(source).distance_to(point)<22
 		var picked_live: bool = page.ball_preview.ball.visible and not camera.is_position_behind(live_ball) and camera.unproject_position(live_ball).distance_to(point)<16
-		if picked_source or picked_live:
-			if picked_live and not picked_source: plane_height = live_ball.y
+		var ground: Vector3 = page.ball_preview.source_ground.global_position
+		var picked_ground := not camera.is_position_behind(ground) and camera.unproject_position(ground).distance_to(point)<20
+		if picked_source or picked_live or picked_ground:
+			if picked_ground:
+				source = ground
+				plane_height = ground.y
+			elif picked_live and not picked_source: plane_height = live_ball.y
 			mode = "ball"
 		else:
 			var foot: Vector3 = page.preview_player.global_position
@@ -50,7 +55,7 @@ func handle(event: InputEvent) -> bool:
 		if hit is Vector3:
 			var target: Vector3 = hit+grab_offset
 			if mode == "player": StorySession.pass_start = Vector2(clampf(target.x,-4,4),clampf(target.z,-4.5,2.5))
-			else: StorySession.feed_spot = Vector2(clampf(target.x,-4.2,4.2),clampf(target.z,5.5,13))
+			else: StorySession.feed_spot = Vector2(clampf(target.x,-4.5,4.5),clampf(target.z,-5,13))
 			page.angle_control.pending = true
 		return true
 	return false

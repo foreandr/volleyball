@@ -54,6 +54,14 @@ func build_preview_stage(world: Node3D) -> void:
 	view_distance = 16.0
 	view_focus = Vector3(0,2.0,4.0)
 
+func has_ball_controls() -> bool:
+	return true
+
+func build_ball_controls(host: VBoxContainer) -> void:
+	angle_control = preload("res://scripts/pass_angle_control.gd").new()
+	host.add_child(angle_control)
+	angle_control.angle_requested.connect(apply_output_angle)
+
 func screen_title() -> String:
 	return "ANIMATIONS"
 
@@ -68,7 +76,6 @@ func clear_content() -> void:
 	for child in content.get_children():
 		content.remove_child(child)
 		child.queue_free()
-	angle_control = null
 	animation_list = null
 	edit_button = null
 	selected_entry.clear()
@@ -79,6 +86,7 @@ func set_title(text: String) -> void:
 	if heading: heading.text = text
 
 func show_categories() -> void:
+	if is_instance_valid(right_panel): right_panel.hide()
 	if is_instance_valid(ball_preview): ball_preview.stop()
 	if is_instance_valid(preview_player): preview_player.play_action("idle")
 	selected_category = ""
@@ -118,9 +126,6 @@ func select_category(category: String) -> void:
 	next.custom_minimum_size = Vector2(52,44)
 	next.size_flags_horizontal = Control.SIZE_SHRINK_END
 	row.add_child(next)
-	angle_control = preload("res://scripts/pass_angle_control.gd").new()
-	content.add_child(angle_control)
-	angle_control.angle_requested.connect(apply_output_angle)
 	animation_list = ItemList.new()
 	animation_list.name = "AnimationList"
 	animation_list.allow_reselect = true
@@ -140,6 +145,7 @@ func current_type() -> String:
 	return MOVE_TYPES[selected_category][type_indices.get(selected_category,0)]
 
 func refresh_type() -> void:
+	right_panel.hide()
 	angle_control.hide()
 	type_label.text = current_type()
 	animation_list.clear()
@@ -175,6 +181,7 @@ func preview_animation(index: int) -> void:
 	preview_player.animator.play("custom_preview/clip",0)
 	preview_player.animator.advance(0)
 	preview_player.animator.pause()
+	right_panel.visible = ball_preview.active
 	angle_control.visible = ball_preview.active
 	if ball_preview.active: angle_control.display_result(float(render_clip.get_meta("desired_output_angle",ball_preview.output_angle())),ball_preview.output_angle(),Flight.distance(ball_preview.impact_point,ball_preview.outgoing))
 

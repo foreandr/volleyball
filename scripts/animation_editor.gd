@@ -84,6 +84,14 @@ func build_preview_stage(world: Node3D) -> void:
 	view_distance = 16.0
 	view_focus = Vector3(0,2.0,4.0)
 
+func has_ball_controls() -> bool:
+	return true
+
+func build_ball_controls(host: VBoxContainer) -> void:
+	angle_control = preload("res://scripts/pass_angle_control.gd").new()
+	host.add_child(angle_control)
+	angle_control.angle_requested.connect(apply_output_angle)
+
 func screen_title() -> String:
 	return "EDIT ANIMATION"
 
@@ -137,9 +145,6 @@ func build_controls(host: VBoxContainer) -> void:
 	transport.add_child(undo_button)
 	redo_button = button("Redo",redo)
 	transport.add_child(redo_button)
-	angle_control = preload("res://scripts/pass_angle_control.gd").new()
-	controls.add_child(angle_control)
-	angle_control.angle_requested.connect(apply_output_angle)
 	group_picker = OptionButton.new()
 	group_picker.name = "BodyGroup"
 	group_picker.custom_minimum_size.y = 38
@@ -186,6 +191,7 @@ func build_controls(host: VBoxContainer) -> void:
 
 func refresh_ball_angle() -> void:
 	ball_preview.configure(preview_player,session.source,session)
+	right_panel.visible = ball_preview.active
 	angle_control.visible = ball_preview.active
 	if ball_preview.active: angle_control.display_result(float(session.source.get_meta("desired_output_angle",ball_preview.output_angle())),ball_preview.output_angle(),Flight.distance(ball_preview.impact_point,ball_preview.outgoing))
 

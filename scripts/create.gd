@@ -17,6 +17,8 @@ var pan_limits := Vector3(1.5,2.4,1.5)
 var stage_camera := {}
 var dragging := false
 var panning := false
+var ball_controls_host: VBoxContainer
+var right_panel: PanelContainer
 
 func _ready() -> void:
 	profile = initial_profile()
@@ -42,11 +44,16 @@ func _ready() -> void:
 	back.custom_minimum_size = Vector2(180,44)
 	back.size_flags_horizontal = Control.SIZE_SHRINK_END
 	header.add_child(back)
+	var workspace_row := HBoxContainer.new()
+	workspace_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	workspace_row.add_theme_constant_override("separation",12)
+	column.add_child(workspace_row)
 	var split := HSplitContainer.new()
 	split.name = "Workspace"
 	split.split_offset = 320
 	split.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	column.add_child(split)
+	split.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	workspace_row.add_child(split)
 	var tools := panel()
 	tools.name = "LeftPanel"
 	tools.custom_minimum_size.x = 300
@@ -57,7 +64,6 @@ func _ready() -> void:
 	var controls := VBoxContainer.new()
 	controls.add_theme_constant_override("separation",16)
 	tool_margin.add_child(controls)
-	build_controls(controls)
 	var stage := panel()
 	stage.name = "RightPreview"
 	stage.custom_minimum_size.x = 400
@@ -76,7 +82,32 @@ func _ready() -> void:
 	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	preview.add_child(viewport)
 	build_preview(viewport)
+	if has_ball_controls():
+		right_panel = panel()
+		right_panel.name = "BallPanel"
+		right_panel.custom_minimum_size.x = 300
+		workspace_row.add_child(right_panel)
+		var inset := MarginContainer.new()
+		for edge in ["left","right","top","bottom"]: inset.add_theme_constant_override("margin_"+edge,16)
+		right_panel.add_child(inset)
+		var scroll := ScrollContainer.new()
+		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		inset.add_child(scroll)
+		ball_controls_host = VBoxContainer.new()
+		ball_controls_host.name = "BallControls"
+		ball_controls_host.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		ball_controls_host.add_theme_constant_override("separation",12)
+		scroll.add_child(ball_controls_host)
+		ball_controls_host.add_child(label("BALL",22))
+		build_ball_controls(ball_controls_host)
+	build_controls(controls)
 	preview.grab_focus()
+
+func has_ball_controls() -> bool:
+	return false
+
+func build_ball_controls(_host: VBoxContainer) -> void:
+	pass
 
 func screen_title() -> String:
 	return "CREATE PLAYER"

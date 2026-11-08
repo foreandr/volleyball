@@ -25,6 +25,7 @@ var positions := {}
 var rotations := {}
 var guide: MeshInstance3D
 var source_ball: MeshInstance3D
+var source_ground: MeshInstance3D
 var feed_valid := true
 var feed_info := {}
 
@@ -57,6 +58,19 @@ func _ready() -> void:
 	source_ball.top_level = true
 	add_child(source_ball)
 	source_ball.hide()
+	source_ground = MeshInstance3D.new()
+	source_ground.name = "SourceHandle"
+	var ring := TorusMesh.new()
+	ring.inner_radius = 0.30
+	ring.outer_radius = 0.42
+	source_ground.mesh = ring
+	var ring_material := StandardMaterial3D.new()
+	ring_material.albedo_color = Color("fff1ad")
+	ring_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	source_ground.material_override = ring_material
+	source_ground.top_level = true
+	add_child(source_ground)
+	source_ground.hide()
 	hide()
 
 func make_ball() -> ArrayMesh:
@@ -101,6 +115,7 @@ func stop() -> void:
 	last_time = -1
 	hide()
 	if is_instance_valid(source_ball): source_ball.hide()
+	if is_instance_valid(source_ground): source_ground.hide()
 	if is_instance_valid(guide): guide.hide()
 	if is_instance_valid(audio): audio.stop()
 
@@ -149,6 +164,8 @@ func recalculate() -> void:
 	feed_valid = feed.valid
 	source_ball.global_position = Vector3(feed.start.x,maxf(0.35,feed.start.y),feed.start.z)
 	source_ball.show()
+	source_ground.global_position = Vector3(feed.start.x,0.065,feed.start.z)
+	source_ground.show()
 	outgoing = Contact.rebound(incoming,surface_velocity,surface_normal)
 	flight_duration = Flight.landing_time(impact_point,outgoing)
 	update_guide()
@@ -167,6 +184,11 @@ func update_guide() -> void:
 			var time := -feed_duration*(1.0-float(index)/80.0) if incoming_path else float(index)/80.0*flight_duration
 			path.surface_add_vertex(Flight.position(feed_info,impact_point,time) if incoming_path else impact_point+outgoing*time+Vector3.DOWN*4.905*time*time)
 		path.surface_end()
+	path.surface_begin(Mesh.PRIMITIVE_LINES)
+	path.surface_set_color(Color("a7a485"))
+	path.surface_add_vertex(source_ground.global_position)
+	path.surface_add_vertex(source_ball.global_position)
+	path.surface_end()
 	var landing := impact_point+outgoing*flight_duration+Vector3.DOWN*4.905*flight_duration*flight_duration
 	path.surface_begin(Mesh.PRIMITIVE_LINE_STRIP)
 	path.surface_set_color(Color("70d5e5"))

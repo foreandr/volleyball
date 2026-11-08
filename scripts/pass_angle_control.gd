@@ -11,10 +11,18 @@ var incoming_angle_field: SpinBox
 var spin_picker: OptionButton
 var spin_rate_field: SpinBox
 var float_field: SpinBox
+var source_pad: Control
 const SPINS := ["No spin","Topspin","Backspin","Sidespin left","Sidespin right","Dead float"]
 
 func _ready() -> void:
 	add_theme_constant_override("separation",6)
+	var source_label := Label.new()
+	source_label.text = "Source"
+	add_child(source_label)
+	source_pad = preload("res://scripts/ball_source_pad.gd").new()
+	source_pad.set_positions(StorySession.feed_spot,StorySession.pass_start)
+	source_pad.source_moved.connect(func(position): StorySession.feed_spot = position; pending = true)
+	add_child(source_pad)
 	var row := HBoxContainer.new()
 	add_child(row)
 	var title := Label.new()
@@ -98,6 +106,7 @@ func apply_setup(player: Node3D) -> void:
 
 
 func _process(_delta: float) -> void:
+	source_pad.set_positions(StorySession.feed_spot,StorySession.pass_start)
 	if pending:
 		pending = false
 		angle_requested.emit(requested)

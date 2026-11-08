@@ -46,15 +46,16 @@ static func feed(hit: Vector3, settings: Dictionary = {}) -> Dictionary:
 	result.start = hit-result.incoming*duration+result.acceleration*0.5*duration*duration
 	result.float_strength = float(settings.get("float_strength",0.6)) if settings.get("spin","") == "Dead float" else 0.0
 	result.side = Vector3.UP.cross(Vector3(sin(heading),0,cos(heading)))
-	var low := -duration
-	var high := 0.0
-	for iteration in range(16):
-		var middle := (low+high)*0.5
-		if position(result,hit,middle).z>4: low = middle
-		else: high = middle
-	var net := position(result,hit,(low+high)*0.5)
-	result.net_height = net.y
-	result.valid = result.start.y>=FLOOR and net.y>2.575
+	result.net_height = INF
+	if (result.start.z-4)*(hit.z-4)<0:
+		var low := -duration
+		var high := 0.0
+		for iteration in range(16):
+			var middle := (low+high)*0.5
+			if (position(result,hit,middle).z>4)==(result.start.z>4): low = middle
+			else: high = middle
+		result.net_height = position(result,hit,(low+high)*0.5).y
+	result.valid = result.start.y>=FLOOR and result.net_height>2.575
 	return result
 
 static func position(feed_: Dictionary, hit: Vector3, time: float) -> Vector3:
