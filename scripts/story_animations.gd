@@ -2,7 +2,7 @@ extends "res://scripts/create.gd"
 const MOVE_TYPES := {
 	"Passing":["Straight","Left","Right","Dive Left","Dive Right"],
 	"Spiking":["Line Hit","Cross Hit"],
-	"Serving":["Float","Spin"],
+	"Serving":["Float","Spin","Hybrid","Skyball","Underhand","Standing Float","Standing Spin"],
 	"Blocking":["Straight","Left","Right"],
 	"Setting":["Forward","Back","Left","Right"],
 	"Digging":["Straight","Left","Right","Dive Left","Dive Right"],
