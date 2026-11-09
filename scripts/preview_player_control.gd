@@ -356,7 +356,7 @@ func step_into_receive(delta: float, review_offset: Vector3) -> void:
 			reach_step = (horizontal-actor.basis.x*rear_twist_side*0.55).limit_length(0.25)
 			rear_overhead = cpu_overhead_rear(review_offset)
 			if rear_overhead:
-				reach_step = Vector3.ZERO
+				reach_step = (horizontal.normalized()*0.14-court_forward*0.15).limit_length(0.27)
 		reach_lead = "l" if local.x >= 0.0 else "r"
 	var before := smoothstep(0.0,1.0,reach_progress)
 	reach_progress = minf(1.0,reach_progress+delta/(0.19 if reach_tier == 2 else 0.15))
@@ -405,7 +405,7 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 		author.rotate_world(pose,"spine_02",Vector3.UP,side_lean*0.08*weight)
 		author.rotate_world(pose,"spine_03",Vector3.UP,side_lean*0.19*weight)
 	if rear_overhead:
-		pose_overhead_rear(actor,pose,author)
+		pose_overhead_rear(actor,pose,author,step,travel,weight)
 		return
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,-back*0.14*weight)
 	author.rotate_world(pose,"spine_03",Vector3.UP,shoulder_side*back*(0.18 if reach_tier == 2 else 0.31)*weight)
@@ -512,22 +512,45 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 
 
 
-func pose_overhead_rear(actor: Node3D, pose: Array, author: RefCounted) -> void:
+func pose_overhead_rear(actor: Node3D, pose: Array, author: RefCounted, step: Vector3, travel: Vector3, weight: float) -> void:
 	var rig: Skeleton3D = actor.skeleton
+	var scale_: float = rig.global_basis.get_scale().y
+	var pelvis := rig.find_bone("pelvis")
+	var pelvis_parent := rig.get_bone_parent(pelvis)
+	var ready_pose := pose.duplicate()
+	pose[pelvis].origin -= author.world_pose(pose,pelvis_parent).basis.inverse()*Vector3.UP*0.08*weight
+	for side in ["l","r"]:
+		var foot_name: String = "foot_"+side
+		var foot: Transform3D = author.world_pose(ready_pose,rig.find_bone(foot_name))
+		var ankle := foot.origin-travel/scale_
+		if side == reach_lead:
+			ankle += step/scale_*weight*1.25+Vector3.UP*sin(PI*reach_progress)*0.045
+		var pole: Vector3 = author.point(ready_pose,"calf_"+side)-author.point(ready_pose,"thigh_"+side)
+		author.limb(pose,"thigh_"+side,"calf_"+side,foot_name,ankle,pole)
+		author.set_world_basis(pose,foot_name,foot.basis)
 	var turn := rear_twist_side*deg_to_rad(80.0)*smoothstep(0.20,0.61,reach_progress)
 	author.rotate_world(pose,"spine_01",Vector3.UP,turn*0.24)
 	author.rotate_world(pose,"spine_02",Vector3.UP,turn*0.34)
 	author.rotate_world(pose,"spine_03",Vector3.UP,turn*0.42)
+	var lift := smoothstep(0.53,0.94,reach_progress)
+	author.rotate_world(pose,"spine_01",Vector3.RIGHT,0.34*lift)
 	var forward := Basis(Vector3.UP,turn)*Vector3.BACK
 	var shoulder_center: Vector3 = (author.point(pose,"upperarm_l")+author.point(pose,"upperarm_r"))*0.5
 	var head: Vector3 = author.point(pose,"Head")
-	var contact := rig.global_transform.affine_inverse()*rear_twist_target
-	var toward := (contact-shoulder_center).slide(Vector3.UP).limit_length(0.22)
-	var grip := shoulder_center+toward+forward*0.24
-	var lift := smoothstep(0.59,0.97,reach_progress)
-	grip.y = lerpf(shoulder_center.y-0.22,head.y+0.70,lift)
+	var ball = page.ball_preview
+	var elapsed: float = page.preview_clock-ball.contact_time
+	var near_head := rig.global_transform*(head+Vector3.UP*0.18+forward*0.14)
+	var from: Vector3 = ball.practice_position(elapsed)
+	var to: Vector3 = ball.practice_position(elapsed+0.09)
+	var intercept := Geometry3D.get_closest_point_to_segment(near_head,from,to)
+	if not ball.recovery.is_empty(): intercept = ball.recovery.point
+	var contact := rig.global_transform.affine_inverse()*intercept
+	var grip := shoulder_center+forward*0.38-Vector3.UP*0.22
+	var raised_grip := contact+forward*0.10+Vector3(0,-0.05,0.26)
+	raised_grip.y = clampf(raised_grip.y,head.y-0.06,head.y+0.70)
 	var join := smoothstep(0.0,0.20,reach_progress)
-	PlatformPose.connect_arms(pose,author,grip,join,0.0,forward)
+	PlatformPose.connect_arms(pose,author,grip.lerp(raised_grip,lift),join,0.0,forward)
+	rig.set_bone_pose_position(pelvis,pose[pelvis].origin)
 	for bone in rig.get_bone_count():
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
 
