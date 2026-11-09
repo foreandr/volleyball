@@ -15,6 +15,7 @@ var receive_entry_pose: Array[Transform3D] = []
 var receive_entry_elapsed := 0.0
 var receive_exit_pose: Array[Transform3D] = []
 var receive_exit_elapsed := 0.0
+var neutral_hold := 0.0
 var reach_step := Vector3.ZERO
 var reach_progress := 0.0
 var high_adjustment := Vector3.ZERO
@@ -251,6 +252,36 @@ func blend_receive_recovery(delta: float) -> void:
 func clear_receive_transition() -> void:
 	receive_entry_pose.clear()
 	receive_exit_pose.clear()
+	neutral_hold = 0.0
+
+func settle_for_next_feed(start: Vector3, yaw: float, delta: float) -> bool:
+	var actor: Node3D = page.preview_player
+	end_receive_pose()
+	reset_reach()
+	var return_path := start-actor.position
+	if return_path.length_squared() > 0.0025:
+		move_cpu_toward(return_path,delta)
+		blend_receive_recovery(delta)
+		return false
+	actor.position = start
+	actor.rotation.y = yaw
+	actor.model.rotation.y = 0.0
+	side_steps.active = false
+	side_steps.sampled = false
+	side_weight = 0.0
+	footwork.weight = 0.0
+	locomotion = ""
+	sprinting = false
+	sprint_requested = false
+	moving = false
+	actor.animator.speed_scale = 1.0
+	actor.animator.play("custom_preview/clip",0)
+	actor.animator.seek(0.0,true)
+	actor.animator.pause()
+	blend_receive_recovery(delta)
+	if not receive_exit_pose.is_empty(): return false
+	neutral_hold += delta
+	return neutral_hold >= 0.16
 
 func reset_reach() -> void:
 	if reach_step.is_zero_approx() and reach_height == 0.0: return

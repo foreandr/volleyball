@@ -31,6 +31,7 @@ var build_label := ""
 var cpu_receive_clock := -INF
 var cpu_reach_offset := Vector3.INF
 var cpu_start := Vector3.INF
+var cpu_start_yaw := 0.0
 var middle_arrow := Vector2i(-1,1)
 var middle_press := Vector2.ZERO
 var middle_dragged := false
@@ -352,15 +353,11 @@ func _process(delta: float) -> void:
 	var first := minf(0,ball_preview.contact_time-ball_preview.feed_duration)
 	var last: float = ball_preview.cycle_end()
 	if drill and not in_control and cpu_start.is_finite() and preview_clock+delta >= last:
-		var return_path: Vector3 = cpu_start-preview_player.position
-		if return_path.length_squared()>0.0025:
+		if not player_controls.settle_for_next_feed(cpu_start,cpu_start_yaw,delta):
 			preview_clock = last
-			player_controls.end_receive_pose()
-			player_controls.reset_reach()
-			player_controls.move_cpu_toward(return_path,delta)
-			player_controls.blend_receive_recovery(delta)
-			drill_status.text = "CPU returning  |  F1 to take control"
+			drill_status.text = "CPU resetting  |  F1 to take control"
 			ball_preview.tick(preview_clock,false)
+			ball_preview.ball.hide()
 			ball_preview.update_practice_aim(true)
 			return
 	var previous := preview_clock
@@ -425,7 +422,9 @@ func step_cpu_receive(previous: float, delta: float) -> void:
 				preview_player.animator.seek(0.0,true)
 				preview_player.animator.pause()
 				return
-		if not cpu_start.is_finite(): cpu_start = preview_player.position
+		if not cpu_start.is_finite():
+			cpu_start = preview_player.position
+			cpu_start_yaw = preview_player.rotation.y
 		cpu_receive_clock = preview_clock
 		drill_status.text = "CPU receiving  |  F1 to take control"
 	var elapsed := preview_clock-cpu_receive_clock

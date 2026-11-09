@@ -20,6 +20,7 @@ const CASES := [
 	[2,"Forward-left reach",Vector3(0.59,0,0.59),Vector3(0,-5,-3)],
 ]
 const FEED_TIME := 0.70
+const READY_POSITION := Vector3(0,0.04,-3.4)
 const SLOW_RATE := 0.35
 var page
 var active := false
@@ -178,7 +179,7 @@ func prepare_review_clip() -> void:
 	var actor: Node3D = page.preview_player
 	original_feed = actor.get_meta("feed_settings",{})
 	original_target = actor.get_meta("pass_target",{})
-	actor.position = Vector3(0,0.04,-3.4)
+	actor.position = READY_POSITION
 	actor.rotation.y = 0.0
 	actor.set_meta("feed_settings",{"speed":18.6,"source":Vector2(0,14.2),"source_height":3.3,"fit":"angle","spin":"No spin"})
 	actor.set_meta("pass_target",{"position":Vector2(0,1.6),"height":4.9,"fit":"height"})
@@ -197,7 +198,7 @@ func load_case(next_index: int) -> void:
 	page.player_controls.reset_reach()
 	page.timing_meter.reset_serve()
 	actor.transform = original_transform
-	actor.position = Vector3(0,0.04,-3.4)
+	actor.position = READY_POSITION
 	actor.rotation.y = 0.0
 	actor.get_node("DirectionArrows").select_direction(0)
 	actor.animator.play("custom_preview/clip",0)
@@ -248,6 +249,10 @@ func step(delta: float) -> void:
 	ball.tick(minf(page.preview_clock,end),true)
 	ball.update_practice_aim(true)
 	if page.preview_clock < end: return
+	page.preview_clock = end
+	if not page.player_controls.settle_for_next_feed(READY_POSITION,0.0,delta):
+		ball.ball.hide()
+		return
 	if loop_current:
 		load_case(index)
 	elif index+1 < CASES.size():
