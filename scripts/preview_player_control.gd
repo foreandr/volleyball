@@ -179,7 +179,7 @@ func step_into_receive(delta: float, review_offset: Vector3) -> void:
 		var tier: int = ball.practice_reach_tier(offset)
 		if tier == 3: return
 		var local := actor.basis.inverse()*offset
-		if tier == 1 and absf(local.x)<0.12 and local.z> -0.12: return
+		if tier == 1 and absf(local.x)<0.12 and absf(local.z)<0.12: return
 		reach_tier = tier
 		reach_height = offset.y if tier == 2 else 0.0
 		reach_side_lunge = tier == 2 and reach_height < 0.20 and absf(local.x) > absf(local.z)*1.4

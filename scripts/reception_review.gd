@@ -2,15 +2,22 @@ extends HBoxContainer
 
 const Flight = preload("res://scripts/pass_flight.gd")
 const CASES := [
-	[1,"Planted pass",Vector3.ZERO,Vector3(0,-5,-3)],
-	[1,"Left step",Vector3(0.40,0,0),Vector3(0,-5,-3)],
-	[1,"Right step",Vector3(-0.40,0,0),Vector3(0,-5,-3)],
-	[1,"Back step",Vector3(0,0,-0.40),Vector3(0,-5,-2)],
-	[2,"Left lunge",Vector3(0.85,0,0),Vector3(0,-5,-4)],
-	[2,"Right lunge",Vector3(-0.85,0,0),Vector3(0,-5,-4)],
+	[1,"Forward step",Vector3(0,0,0.42),Vector3(0,-5,-2)],
+	[1,"Forward-right step",Vector3(-0.30,0,0.30),Vector3(0,-5,-3)],
+	[1,"Right step",Vector3(-0.42,0,0),Vector3(0,-5,-3)],
+	[1,"Back-right step",Vector3(-0.30,0,-0.30),Vector3(0,-5,-2)],
+	[1,"Back step",Vector3(0,0,-0.42),Vector3(0,-5,-2)],
+	[1,"Back-left step",Vector3(0.30,0,-0.30),Vector3(0,-5,-2)],
+	[1,"Left step",Vector3(0.42,0,0),Vector3(0,-5,-3)],
+	[1,"Forward-left step",Vector3(0.30,0,0.30),Vector3(0,-5,-3)],
 	[2,"Forward lunge",Vector3(0,0,0.84),Vector3(0,-5,-2)],
+	[2,"Forward-right reach",Vector3(-0.59,0,0.59),Vector3(0,-5,-3)],
+	[2,"Right lunge",Vector3(-0.85,0,0),Vector3(0,-5,-4)],
+	[2,"Back-right reach",Vector3(-0.54,0,-0.52),Vector3(0,-7,-2)],
 	[2,"Back reach",Vector3(0,0,-0.78),Vector3(0,-5,-2)],
-	[2,"High shoulder reach",Vector3(0,0.42,-0.20),Vector3(0,-3,-6.3)],
+	[2,"Back-left reach",Vector3(0.54,0,-0.52),Vector3(0,-7,-2)],
+	[2,"Left lunge",Vector3(0.85,0,0),Vector3(0,-5,-4)],
+	[2,"Forward-left reach",Vector3(0.59,0,0.59),Vector3(0,-5,-3)],
 ]
 const FEED_TIME := 0.70
 var page
