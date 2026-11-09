@@ -188,7 +188,7 @@ Scroll to set pass height",16)
 		arrow_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		content.add_child(arrow_hint)
 		var arrow_labels := ["Distance 1  |  Short reach","Distance 2  |  Lunge","Distance 3  |  Dive target"]
-		var arrow_colors := [Color("67e8ff"),Color("c291ff"),Color("ffca72")]
+		var arrow_colors := [Color("67e8ff"),Color("c291ff"),Color("82a8ff")]
 		for index in arrow_labels.size():
 			var legend := label(arrow_labels[index],16)
 			legend.add_theme_color_override("font_color",arrow_colors[index])

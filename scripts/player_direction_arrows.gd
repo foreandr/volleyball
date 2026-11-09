@@ -62,7 +62,7 @@ func rebuild() -> void:
 	surface.surface_begin(Mesh.PRIMITIVE_TRIANGLES,material)
 	for distance in range(1,4 if show_dive_ring else 3):
 		for index in range(1,9):
-			var color: Color = [Color("67e8ff"),Color("c291ff"),Color("ffca72")][distance-1]
+			var color: Color = [Color("67e8ff"),Color("c291ff"),Color("2859d4")][distance-1]
 			if index == selected and distance == selected_distance: color = Color("ff4848")
 			surface.surface_set_color(color)
 			var forward := direction(index)
