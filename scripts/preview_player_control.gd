@@ -13,6 +13,7 @@ var reach_travel := Vector3.ZERO
 var reach_lead := "l"
 var reach_tier := 1
 var reach_height := 0.0
+var reach_side_lunge := false
 var indicator: Label
 var save_clock := 0.0
 var footwork: RefCounted
@@ -158,6 +159,7 @@ func reset_reach() -> void:
 	if reach_step.is_zero_approx() and reach_height == 0.0: return
 	reach_step = Vector3.ZERO
 	reach_height = 0.0
+	reach_side_lunge = false
 	reach_tier = 1
 	reach_travel = Vector3.ZERO
 	reach_progress = 0.0
@@ -175,8 +177,10 @@ func step_into_receive(delta: float) -> void:
 		if tier == 1 and absf(local.x)<0.12 and local.z> -0.12: return
 		reach_tier = tier
 		reach_height = offset.y if tier == 2 else 0.0
+		reach_side_lunge = tier == 2 and reach_height < 0.20 and absf(local.x) > absf(local.z)*1.4
 		var horizontal := Vector3(offset.x,0.0,offset.z)
-		reach_step = horizontal.limit_length(0.75 if tier == 2 else 0.46)*0.78
+		var step_limit := 0.68 if reach_side_lunge else (0.75 if tier == 2 else 0.46)
+		reach_step = horizontal.limit_length(step_limit)*0.78
 		reach_lead = "l" if local.x >= 0.0 else "r"
 	var before := smoothstep(0.0,1.0,reach_progress)
 	reach_progress = minf(1.0,reach_progress+delta/(0.19 if reach_tier == 2 else 0.15))
@@ -216,7 +220,19 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 		author.rotate_world(pose,"spine_02",Vector3.BACK,-side_lean*0.12*weight)
 		author.rotate_world(pose,"spine_02",Vector3.RIGHT,0.14*weight)
 		var parent := rig.get_bone_parent(pelvis)
-		pose[pelvis].origin -= author.world_pose(pose,parent).basis.inverse()*Vector3.UP*0.36*weight
+		var drop := 0.36*weight
+		if reach_side_lunge:
+			var trail := "r" if reach_lead == "l" else "l"
+			var hip: Vector3 = author.point(pose,"thigh_"+trail)
+			var knee: Vector3 = author.point(pose,"calf_"+trail)
+			var foot: Vector3 = author.point(pose,"foot_"+trail)
+			var leg_length := hip.distance_to(knee)+knee.distance_to(foot)
+			var ground_offset := hip-(foot-travel/scale_)
+			var horizontal := Vector2(ground_offset.x,ground_offset.z).length()
+			var extension := leg_length*lerpf(0.84,0.985,weight)
+			var hip_height := sqrt(maxf(0.0,extension*extension-horizontal*horizontal))
+			drop = clampf(ground_offset.y-hip_height,0.0,0.43*weight)
+		pose[pelvis].origin -= author.world_pose(pose,parent).basis.inverse()*Vector3.UP*drop
 	var leg_pose := pose.duplicate()
 	leg_pose[pelvis] = hips
 	for side in ["l","r"]:
@@ -224,13 +240,19 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 		var foot: Transform3D = author.world_pose(leg_pose,rig.find_bone(foot_name))
 		var target := foot.origin-travel/scale_
 		if side == reach_lead:
-			var extension := 1.18 if deep else 1.32
+			var extension := 0.98 if reach_side_lunge else (1.18 if deep else 1.32)
 			target += step/scale_*weight*extension+Vector3.UP*sin(PI*reach_progress)*0.08
+			if reach_side_lunge: target.z += 0.28*weight
 		var pole: Vector3 = author.point(leg_pose,"calf_"+side)-author.point(leg_pose,"thigh_"+side)
+		if reach_side_lunge and side == reach_lead:
+			# Load the knee over the lead foot as the other leg extends.
+			var hip: Vector3 = author.point(pose,"thigh_"+side)
+			var knee_over_foot := target+Vector3(shoulder_side*0.08,0.28,0.32)-hip
+			pole = pole.normalized().lerp(knee_over_foot.normalized(),weight)
 		author.limb(pose,"thigh_"+side,"calf_"+side,foot_name,target,pole)
 		author.set_world_basis(pose,foot_name,foot.basis)
 	if reach_tier == 2:
-		var arms := Vector3(step.x,0.0,step.z).normalized()*0.14*weight
+		var arms := Vector3(step.x,0.0,step.z).normalized()*(0.19 if reach_side_lunge else 0.14)*weight
 		if high: arms.y = clampf(reach_height/scale_,0.18,0.53)*weight
 		for side in ["l","r"]:
 			var hand_name: String = "hand_"+side
