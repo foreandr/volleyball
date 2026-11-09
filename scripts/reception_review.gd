@@ -15,7 +15,7 @@ const CASES := [
 	[2,"Right lunge",Vector3(-0.85,0,0),Vector3(0,-7,-3)],
 	[2,"Back-right lunge",Vector3(-0.54,0,-0.52),Vector3(0,-7,-2)],
 	[2,"Backward lunge",Vector3(0,0,-0.70),Vector3(0,-5,-3)],
-	[2,"Back-left lunge",Vector3(0.54,0,-0.52),Vector3(0,-7,-2)],
+	[2,"Back-left lunge",Vector3(0.54,-0.12,-0.52),Vector3(0,-7,-2)],
 	[2,"Left lunge",Vector3(0.85,0,0),Vector3(0,-7,-3)],
 	[2,"Forward-left reach",Vector3(0.59,0,0.59),Vector3(0,-5,-3)],
 ]
