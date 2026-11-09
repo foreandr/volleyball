@@ -19,6 +19,7 @@ var locomotion := ""
 var stamina_bar: ProgressBar
 var side_steps: RefCounted
 var side_weight := 0.0
+var shuffle_heading := Vector3.ZERO
 
 func _init(host: Control) -> void:
 	page = host
@@ -83,6 +84,7 @@ func set_active(value: bool) -> void:
 		actor.animator.active = true
 		moving = false
 		actor.play_action("idle")
+		face_ball()
 		follow_camera()
 	else:
 		actor.model.rotation.y = 0
@@ -136,6 +138,7 @@ func step(delta: float) -> void:
 		sprinting = false
 		moving = false
 		actor.model.rotation.y = 0.0
+		face_ball()
 		actor.animator.play("custom_preview/clip",0)
 		actor.animator.seek(page.ball_preview.contact_time,true)
 		actor.animator.pause()
@@ -149,24 +152,36 @@ func move_player(direction: Vector2, delta: float) -> void:
 	forward.y = 0
 	forward = forward.normalized()
 	var right := forward.cross(Vector3.UP)
+	var drill := reception_drill_active()
+	var travel := right*direction.x+forward*direction.y
+	var step_direction := direction
+	if drill:
+		face_ball()
+		var facing := actor.basis.z.normalized()
+		step_direction = Vector2(travel.dot(facing.cross(Vector3.UP)),travel.dot(facing))
 	if exhausted and stamina>=25: exhausted = false
 	var quick_pace := sprint_requested and direction.length()>0.1 and not exhausted and stamina>0
-	sprinting = quick_pace and direction.y>0.3
+	sprinting = quick_pace and step_direction.y>0.3
 	var step_rate := QUICK_STEP_RATE if quick_pace else 1.0
 	var speed := 4.5 if sprinting else 1.65*step_rate
-	var velocity := (right*direction.x+forward*direction.y)*speed
+	var velocity := travel*speed
 	var before := actor.position
 	var movement := velocity*delta
-	var shuffle_step: bool = not sprinting and (side_steps.active or absf(direction.x)>0.3)
+	var lateral := absf(step_direction.x)>0.3
+	var shuffle_step: bool = not sprinting and (side_steps.active or lateral)
 	side_steps.sampled = false
 	if shuffle_step:
-		var distance_: float = side_steps.advance(direction,delta*step_rate)*actor.scale.y
-		movement = (right*side_steps.travel_direction.x+forward*side_steps.travel_direction.y)*distance_
+		if lateral: shuffle_heading = travel.normalized()
+		var distance_: float = side_steps.advance(step_direction,delta*step_rate)*actor.scale.y
+		movement = shuffle_heading*distance_
 	else: side_steps.active = false
 	actor.position.x = clampf(actor.position.x+movement.x,-4,4)
 	actor.position.z = clampf(actor.position.z+movement.z,-4.5,2.5)
-	actor.rotation.y = atan2(forward.x,forward.z)
-	if not reception_drill_active(): session.pass_start = Vector2(actor.position.x,actor.position.z)
+	if drill:
+		face_ball()
+	else:
+		actor.rotation.y = atan2(forward.x,forward.z)
+		session.pass_start = Vector2(actor.position.x,actor.position.z)
 	var now_moving := actor.position.distance_to(before)>0.00001
 	sprinting = sprinting and now_moving
 	if quick_pace and now_moving:
@@ -185,7 +200,7 @@ func move_player(direction: Vector2, delta: float) -> void:
 	actor.animator.speed_scale = 1.35 if sprinting else 1.0
 	actor.animator.advance(delta)
 	var local_velocity: Vector3 = actor.basis.inverse()*velocity
-	var model_yaw := atan2(local_velocity.x,local_velocity.z) if sprinting else 0.0
+	var model_yaw := atan2(local_velocity.x,local_velocity.z) if sprinting and not drill else 0.0
 	actor.model.rotation.y = lerp_angle(actor.model.rotation.y,model_yaw,1-exp(-delta*16))
 	side_weight = move_toward(side_weight,1.0 if shuffle_step else 0.0,delta*9)
 	if shuffle_step or sprinting:
@@ -195,11 +210,19 @@ func move_player(direction: Vector2, delta: float) -> void:
 	if side_weight>0: side_steps.apply_pose(side_weight)
 	follow_camera()
 
+func face_ball() -> void:
+	if not reception_drill_active(): return
+	var actor: Node3D = page.preview_player
+	var ball: Node3D = page.ball_preview
+	var target: Vector3 = ball.global_position if ball.ball.visible else ball.source_ball.global_position
+	var toward := target-actor.global_position
+	if Vector2(toward.x,toward.z).length_squared()>0.01:
+		actor.rotation.y = atan2(toward.x,toward.z)
+
 func follow_camera() -> void:
 	var actor: Node3D = page.preview_player
 	var forward := (Vector3(0,0,4)-actor.position).normalized()
 	forward.y = 0
 	forward = forward.normalized()
-	actor.rotation.y = atan2(forward.x,forward.z)
 	page.preview_camera.position = actor.position-forward*7.5+Vector3.UP*4.2
 	page.preview_camera.look_at(actor.position+forward*2+Vector3.UP*1.1)
