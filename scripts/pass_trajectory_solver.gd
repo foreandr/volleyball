@@ -12,7 +12,6 @@ var rotations := {}
 var contact_time := 0.6
 var layers: RefCounted
 var restitution := 0.55
-var receive_reach := Vector2.ZERO
 
 func _init(player: Node3D, clip: Animation) -> void:
 	actor = player
@@ -68,23 +67,7 @@ func adapted_pose(time: float, pitch: float, lift: float, drive := 0.0, yaw := 0
 	var push := drive*0.10*tanh(offset/0.10)*platform_weight
 	var pitch_axis := Basis(Vector3.UP,yaw*platform_weight)*Vector3.RIGHT
 	for side in ["l","r"]: author.rotate_world(pose,"upperarm_"+side,pitch_axis,pitch*platform_weight+push)
-	if not receive_reach.is_zero_approx():
-		apply_receive_reach(pose,receive_reach*platform_weight)
 	return pose
-
-func apply_receive_reach(pose: Array, offset: Vector2) -> void:
-	var rig: Skeleton3D = actor.skeleton
-	var wanted := Vector3(offset.x,0,offset.y)/rig.global_basis.get_scale().y
-	var platform_center: Vector3 = (author.point(pose,"hand_l")+author.point(pose,"hand_r"))*0.5
-	# Tilt the shoulders into the reach. Add only the travel the tilt cannot supply.
-	author.rotate_world(pose,"spine_02",Vector3.RIGHT,wanted.z*1.2)
-	author.rotate_world(pose,"spine_02",Vector3.BACK,-wanted.x*1.2)
-	var moved_center: Vector3 = (author.point(pose,"hand_l")+author.point(pose,"hand_r"))*0.5
-	var correction := wanted+platform_center-moved_center
-	correction.y = 0.0
-	var shoulder_base := rig.find_bone("spine_03")
-	var parent := rig.get_bone_parent(shoulder_base)
-	pose[shoulder_base].origin += author.world_pose(pose,parent).basis.inverse()*correction
 
 func surface(time: float, pitch: float, lift: float, drive := 0.0, yaw := 0.0) -> Dictionary:
 	var pose := adapted_pose(time,pitch,lift,drive,yaw)
@@ -117,14 +100,12 @@ func contact_softness(pitch: float, lift: float, yaw: float, target_info: Dictio
 
 func solve(requested: float, distance_ := 6.0) -> Dictionary:
 	layers.configure(raw_pose(contact_time))
-	receive_reach = actor.get_meta("receive_reach",Vector2.ZERO)
 	var goal := clampf(requested,10,85)
 	var target_info: Dictionary = actor.get_meta("pass_target",{})
 	if target_info.is_empty():
 		var point := actor.global_position+actor.global_basis.z*distance_
 		target_info = {"position":Vector2(point.x,point.z),"fit":"angle"}
 	var key := "%d/%s/%s/%.2f/%s/%s/%s" % [source.get_instance_id(),actor.scale,actor.position,goal,target_info,actor.get_meta("feed_settings",{}),actor.get_meta("reception_options",{})]
-	key += "/"+str(receive_reach)
 	if cache.has(key): return cache[key]
 	var target_position: Vector2 = target_info.position
 	var range_ := target_position.distance_to(Vector2(actor.global_position.x,actor.global_position.z))

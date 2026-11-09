@@ -1,5 +1,6 @@
 extends VBoxContainer
 signal angle_requested(value: float)
+signal feed_aim_changed
 const PLACEMENT_FIELDS := ["feed_spot","pass_destination","pass_start"]
 const PLACEMENT_HISTORY_LIMIT := 50
 var placement_start := {}
@@ -75,7 +76,7 @@ func _ready() -> void:
 	var reach_row := HBoxContainer.new()
 	build_host.add_child(reach_row)
 	var reach_label := Label.new()
-	reach_label.text = "Receive aim"
+	reach_label.text = "Feed aim"
 	reach_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	reach_row.add_child(reach_label)
 	reach_picker = OptionButton.new()
@@ -84,17 +85,15 @@ func _ready() -> void:
 	reach_row.add_child(reach_picker)
 	reach_distance = SpinBox.new()
 	reach_distance.min_value = 0.05
-	reach_distance.max_value = 0.40
+	reach_distance.max_value = 1.50
 	reach_distance.step = 0.05
 	reach_distance.suffix = "m"
 	reach_distance.value = StorySession.receive_distance
-	reach_distance.tooltip_text = "Distance from the centered forearm platform"
+	reach_distance.tooltip_text = "Offset from the centered ball path"
 	reach_distance.editable = reach_picker.selected != 0
 	reach_row.add_child(reach_distance)
-	reach_picker.item_selected.connect(func(index):
-		reach_distance.editable = index != 0
-		pending = true)
-	reach_distance.value_changed.connect(func(_value): pending = true)
+	reach_picker.item_selected.connect(select_feed_aim)
+	reach_distance.value_changed.connect(func(_value): feed_aim_changed.emit())
 	build_host = destination_panel
 	destination_pad = preload("res://scripts/ball_source_pad.gd").new()
 	destination_pad.mode = "destination"
@@ -118,6 +117,11 @@ func _ready() -> void:
 	actual_label = Label.new()
 	actual_label.hide()
 	build_host.add_child(actual_label)
+
+func select_feed_aim(index: int) -> void:
+	reach_picker.select(index)
+	reach_distance.editable = index != 0
+	feed_aim_changed.emit()
 
 func begin_placement() -> void:
 	for field_name in PLACEMENT_FIELDS:
@@ -209,17 +213,21 @@ func apply_setup(player: Node3D) -> void:
 	StorySession.spin_rate = spin_rate_field.value
 	StorySession.float_strength = float_field.value
 	player.position = Vector3(StorySession.pass_start.x,0.04,StorySession.pass_start.y)
-	StorySession.receive_direction = reach_picker.selected
-	StorySession.receive_distance = reach_distance.value
-	var heading := (reach_picker.selected-1)*TAU/8.0
-	var reach := Vector2(-sin(heading),cos(heading))*reach_distance.value if reach_picker.selected > 0 else Vector2.ZERO
-	player.set_meta("receive_reach",reach)
+	apply_feed_aim(player)
 	player.set_meta("feed_settings",{"speed":StorySession.incoming_speed,"angle":StorySession.incoming_angle,"source":StorySession.feed_spot,"source_height":StorySession.source_height,"fit":StorySession.feed_fit,"spin":SPINS[spin_picker.selected],"spin_rate":spin_rate_field.value,"float_strength":float_field.value})
 	var facing := (StorySession.feed_spot-StorySession.pass_start).normalized()+(StorySession.pass_destination-StorySession.pass_start).normalized()
 	if facing.length()<0.01: facing = (StorySession.feed_spot-StorySession.pass_start).normalized()
 	player.rotation.y = atan2(facing.x,facing.y)
 	player.set_meta("pass_target",{"position":StorySession.pass_destination,"height":StorySession.pass_apex,"fit":StorySession.destination_fit})
 
+
+func apply_feed_aim(player: Node3D) -> void:
+	StorySession.receive_direction = reach_picker.selected
+	StorySession.receive_distance = reach_distance.value
+	var heading := (reach_picker.selected-1)*TAU/8.0
+	var reach := Vector2(-sin(heading),cos(heading))*reach_distance.value if reach_picker.selected > 0 else Vector2.ZERO
+	player.set_meta("feed_offset",reach)
+	player.get_node("DirectionArrows").select_direction(reach_picker.selected)
 
 func _process(_delta: float) -> void:
 	source_pad.set_positions(StorySession.feed_spot,StorySession.pass_start,StorySession.pass_destination)

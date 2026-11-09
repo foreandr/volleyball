@@ -69,6 +69,7 @@ func build_ball_controls(host: VBoxContainer) -> void:
 	angle_control = preload("res://scripts/pass_angle_control.gd").new()
 	host.add_child(angle_control)
 	angle_control.angle_requested.connect(apply_output_angle)
+	angle_control.feed_aim_changed.connect(update_feed_aim)
 
 func screen_title() -> String:
 	return "ANIMATIONS"
@@ -212,10 +213,8 @@ func preview_animation(index: int) -> void:
 	preview_player.animator.advance(0)
 	preview_player.animator.pause()
 	right_panel.visible = ball_preview.active
-	angle_control.sync_feed(ball_preview.feed_info)
-	angle_control.sync_output(ball_preview)
 	angle_control.visible = ball_preview.active
-	if ball_preview.active: angle_control.display_result(float(render_clip.get_meta("desired_output_angle",ball_preview.output_angle())),ball_preview.output_angle(),Flight.distance(ball_preview.impact_point,ball_preview.outgoing))
+	if ball_preview.active: sync_ball_results(float(render_clip.get_meta("desired_output_angle",ball_preview.output_angle())))
 
 func apply_output_angle(value: float) -> void:
 	if source_clip == null or not source_clip.has_meta("contact_time"): return
@@ -234,6 +233,21 @@ func apply_output_angle(value: float) -> void:
 	if is_instance_valid(reception_controls): reception_controls.show_result(render_clip)
 	ball_preview.tick(preview_clock,false)
 	ball_preview.last_time = last_contact_clock
+	angle_control.pending = false
+	sync_ball_results(value)
+
+func update_feed_aim() -> void:
+	if not is_instance_valid(ball_preview) or not ball_preview.active: return
+	angle_control.apply_feed_aim(preview_player)
+	ball_preview.recalculate()
+	ball_preview.tick(preview_clock,false)
+	sync_ball_results(angle_control.requested)
+
+func sync_ball_results(value: float) -> void:
+	if not Vector2(preview_player.get_meta("feed_offset",Vector2.ZERO)).is_zero_approx():
+		angle_control.actual_label.visible = true
+		angle_control.actual_label.text = "Off-center feed missed" if ball_preview.missed else "Off-center feed reached the platform"
+		return
 	angle_control.sync_feed(ball_preview.feed_info)
 	angle_control.sync_output(ball_preview)
 	angle_control.display_result(value,ball_preview.output_angle(),Flight.distance(ball_preview.impact_point,ball_preview.outgoing))

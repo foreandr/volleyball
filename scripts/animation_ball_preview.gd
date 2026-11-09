@@ -32,6 +32,10 @@ var feed_valid := true
 var feed_info := {}
 var incoming_net := {}
 var outgoing_net := {}
+var missed := false
+var touch_elapsed := 0.0
+var aim_point := Vector3.ZERO
+var flight_origin := Vector3.ZERO
 var net_audio: AudioStreamPlayer
 var net_contact_count := 0
 var has_last_time := false
@@ -161,14 +165,17 @@ func platform(time: float) -> Dictionary:
 	var cache := {}
 	var elbows := []
 	var wrists := []
-	var points := []
 	for side in ["l","r"]:
 		var elbow: Vector3 = rig.global_transform*pose(rig.find_bone("lowerarm_"+side),time,cache).origin
 		var wrist: Vector3 = rig.global_transform*pose(rig.find_bone("hand_"+side),time,cache).origin
 		elbows.append(elbow)
 		wrists.append(wrist)
-		points.append(elbow.lerp(wrist,0.65))
-	return Contact.surface(elbows,wrists,0.032*rig.global_basis.get_scale().y)
+	var arm_radius := 0.032*rig.global_basis.get_scale().y
+	var hit := Contact.surface(elbows,wrists,arm_radius)
+	hit.elbows = elbows
+	hit.wrists = wrists
+	hit.clearance = RADIUS+arm_radius
+	return hit
 
 func recalculate() -> void:
 	recovery.clear()
@@ -181,6 +188,31 @@ func recalculate() -> void:
 	var after := platform(minf(clip.length,contact_time+1.0/60))
 	surface_velocity = (after.surface-before.surface)/(2.0/60)
 	var feed := Flight.feed(impact_point,actor.get_meta("feed_settings",{}))
+	var offset: Vector2 = actor.get_meta("feed_offset",Vector2.ZERO)
+	var shift := actor.global_basis.orthonormalized()*Vector3(offset.x,0,offset.y)
+	aim_point = impact_point+shift
+	feed.start += shift
+	touch_elapsed = 0.0
+	flight_origin = aim_point
+	missed = false
+	if not offset.is_zero_approx():
+		missed = true
+		for sample in range(-24,25):
+			var elapsed := sample/240.0
+			var time := contact_time+elapsed
+			if time < 0.0 or time > clip.length: continue
+			var point := Flight.position(feed,aim_point,elapsed)
+			var platform_hit := platform(time)
+			for side in range(2):
+				var nearest := Geometry3D.get_closest_point_to_segment(point,platform_hit.elbows[side],platform_hit.wrists[side])
+				if point.distance_to(nearest) <= float(platform_hit.clearance)+0.004 and point.y > nearest.y:
+					missed = false
+					break
+			if not missed:
+				touch_elapsed = elapsed
+				flight_origin = point
+				hit = platform_hit
+				break
 	feed_info = feed
 	incoming = feed.incoming
 	feed_duration = feed.duration
@@ -189,11 +221,12 @@ func recalculate() -> void:
 	source_ball.show()
 	source_ground.global_position = Vector3(feed.start.x,0.065,feed.start.z)
 	source_ground.show()
-	outgoing = Contact.rebound(incoming,surface_velocity,surface_normal,float(clip.get_meta("reception_restitution",0.55)))
-	flight_duration = Flight.landing_time(impact_point,outgoing)
-	incoming_net = Net.first_hit(func(time): return Flight.position(feed_info,impact_point,time),-feed_duration,0)
+	var arrival: Vector3 = incoming+feed.acceleration*touch_elapsed
+	outgoing = arrival if missed else Contact.rebound(arrival,surface_velocity,hit.normal,float(clip.get_meta("reception_restitution",0.55)))
+	flight_duration = touch_elapsed+Flight.landing_time(flight_origin,outgoing)
+	incoming_net = Net.first_hit(func(time): return Flight.position(feed_info,aim_point,time),-feed_duration,touch_elapsed)
 	outgoing_net = {}
-	if incoming_net.is_empty(): outgoing_net = Net.first_hit(func(time): return impact_point+outgoing*time+Vector3.DOWN*4.905*time*time,0,flight_duration)
+	if incoming_net.is_empty(): outgoing_net = Net.first_hit(flight_position,touch_elapsed,flight_duration)
 	feed_valid = feed.start.y>=Flight.FLOOR and incoming_net.is_empty()
 	feed_info.valid = feed_valid
 	update_guide()
@@ -217,9 +250,13 @@ func position_at(elapsed: float) -> Vector3:
 		var age := clampf(elapsed-float(recovery.time),0,float(recovery.end_time)-float(recovery.time))
 		return recovery.point+recovery.velocity*age+Vector3.DOWN*4.905*age*age
 	if not incoming_net.is_empty() and elapsed>=incoming_net.time: return Net.after_hit(incoming_net,elapsed)
-	if elapsed<0: return Flight.position(feed_info,impact_point,elapsed)
+	if elapsed<touch_elapsed: return Flight.position(feed_info,aim_point,elapsed)
 	if not outgoing_net.is_empty() and elapsed>=outgoing_net.time: return Net.after_hit(outgoing_net,elapsed)
-	return impact_point+outgoing*elapsed+Vector3.DOWN*4.905*elapsed*elapsed
+	return flight_position(elapsed)
+
+func flight_position(elapsed: float) -> Vector3:
+	var age := clampf(elapsed-touch_elapsed,0,flight_duration-touch_elapsed)
+	return flight_origin+outgoing*age+Vector3.DOWN*4.905*age*age
 
 func recovery_state(time: float) -> Dictionary:
 	var elapsed := time-contact_time
@@ -252,15 +289,15 @@ func update_guide() -> void:
 	var path := ImmediateMesh.new()
 	for incoming_path in [true,false]:
 		if not incoming_path and not incoming_net.is_empty(): continue
-		var first := -feed_duration if incoming_path else 0.0
-		var last := 0.0 if incoming_path else flight_duration
+		var first := -feed_duration if incoming_path else touch_elapsed
+		var last := touch_elapsed if incoming_path else flight_duration
 		if incoming_path and not incoming_net.is_empty(): last = incoming_net.end_time
 		if not incoming_path and not outgoing_net.is_empty(): last = outgoing_net.end_time
 		if not recovery.is_empty():
 			if not incoming_path or not incoming_net.is_empty(): last = recovery_net.end_time if not recovery_net.is_empty() else recovery.end_time
 		path.surface_begin(Mesh.PRIMITIVE_LINE_STRIP)
 		var blocked: bool = not incoming_net.is_empty() if incoming_path else not outgoing_net.is_empty()
-		path.surface_set_color(Color("df776d") if blocked else (Color("e5bd72") if incoming_path else Color("70d5e5")))
+		path.surface_set_color(Color("df776d") if blocked else (Color("e5bd72") if incoming_path or missed else Color("70d5e5")))
 		for index in range(121):
 			var time := lerpf(first,last,float(index)/120)
 			path.surface_add_vertex(position_at(time))
@@ -270,7 +307,7 @@ func update_guide() -> void:
 	path.surface_add_vertex(source_ground.global_position)
 	path.surface_add_vertex(source_ball.global_position)
 	path.surface_end()
-	var landing := impact_point+outgoing*flight_duration+Vector3.DOWN*4.905*flight_duration*flight_duration
+	var landing := flight_position(flight_duration)
 	var target_info: Dictionary = actor.get_meta("pass_target",{})
 	if target_info.has("position"):
 		landing.x = target_info.position.x
@@ -281,13 +318,13 @@ func update_guide() -> void:
 		var angle := TAU*index/32.0
 		path.surface_add_vertex(Vector3(landing.x+cos(angle)*0.2,0.055,landing.z+sin(angle)*0.2))
 	path.surface_end()
-	var reach: Vector2 = actor.get_meta("receive_reach",Vector2.ZERO)
+	var reach: Vector2 = actor.get_meta("feed_offset",Vector2.ZERO)
 	if not reach.is_zero_approx():
 		path.surface_begin(Mesh.PRIMITIVE_LINE_STRIP)
-		path.surface_set_color(Color("e5bd72"))
+		path.surface_set_color(Color("ff4848"))
 		for index in range(33):
 			var angle := TAU*index/32.0
-			path.surface_add_vertex(Vector3(impact_point.x+cos(angle)*0.14,0.06,impact_point.z+sin(angle)*0.14))
+			path.surface_add_vertex(Vector3(aim_point.x+cos(angle)*0.17,0.06,aim_point.z+sin(angle)*0.17))
 		path.surface_end()
 	guide.mesh = path
 	var material := StandardMaterial3D.new()
@@ -306,7 +343,7 @@ func tick(time: float, audible: bool) -> void:
 	global_position = position_at(elapsed)
 	show()
 	ball.visible = elapsed>=-feed_duration and time<=cycle_end()
-	var squeeze := maxf(0,1.0-absf(elapsed)/0.035) if incoming_net.is_empty() else 0.0
+	var squeeze := maxf(0,1.0-absf(elapsed-touch_elapsed)/0.035) if incoming_net.is_empty() and not missed else 0.0
 	var net_hit: Dictionary = incoming_net if not incoming_net.is_empty() else outgoing_net
 	if not recovery_net.is_empty() and elapsed>=recovery_net.time: net_hit = recovery_net
 	if is_instance_valid(dynamic_net): dynamic_net.sample(net_hit,elapsed)
@@ -320,7 +357,7 @@ func tick(time: float, audible: bool) -> void:
 		rotation_time = minf(feed_duration,float(net_hit.time)+feed_duration)+maxf(0,minf(elapsed,float(net_hit.end_time))-float(net_hit.time))*0.25
 	ball.global_basis = Basis(Quaternion(axis,rotation_time*float(feed_info.get("spin_rate",0)))) if axis.length_squared()>0.1 else Basis.IDENTITY
 	ball.scale = Vector3(1.0+0.04*squeeze+0.04*net_squeeze,1.0-0.07*squeeze,1.0+0.04*squeeze-0.12*net_squeeze)
-	if audible and incoming_net.is_empty() and crossed(time,contact_time):
+	if audible and incoming_net.is_empty() and not missed and crossed(time,contact_time+touch_elapsed):
 		audio.play()
 		contact_count += 1
 		contacted.emit()

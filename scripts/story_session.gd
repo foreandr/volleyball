@@ -115,6 +115,7 @@ var preview_path := "user://preview_setup.cfg"
 const PREVIEW_FIELDS := ["pass_start","pass_distance","pass_output_angle","incoming_speed","incoming_angle","feed_spot","incoming_spin","spin_rate","float_strength","source_height","feed_fit","receive_direction","receive_distance","ball_tab","pass_destination","pass_apex","destination_fit","preview_camera"]
 
 func _ready() -> void:
+	AudioServer.set_bus_mute(AudioServer.get_bus_index("Master"),true)
 	var config := ConfigFile.new()
 	if config.load(preview_path)==OK:
 		for field in PREVIEW_FIELDS:
