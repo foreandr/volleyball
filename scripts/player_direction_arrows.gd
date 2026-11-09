@@ -1,6 +1,6 @@
 extends MeshInstance3D
 
-const LANDING_RADIUS := 1.18
+const LANDING_RADIUS := 1.00
 var selected := 0
 
 func _ready() -> void:
@@ -39,9 +39,9 @@ func rebuild() -> void:
 		surface.surface_set_color(Color("ff4848") if index == selected else Color("67e8ff"))
 		var forward := direction(index)
 		var side := Vector3(forward.z,0,-forward.x)
-		var tail := forward*0.86+Vector3.UP*0.025
+		var tail := forward*(LANDING_RADIUS-0.32)+Vector3.UP*0.025
 		var neck := forward*LANDING_RADIUS+Vector3.UP*0.025
-		var tip := forward*1.52+Vector3.UP*0.025
+		var tip := forward*(LANDING_RADIUS+0.34)+Vector3.UP*0.025
 		for point in [tail-side*0.055,tail+side*0.055,neck+side*0.055,tail-side*0.055,neck+side*0.055,neck-side*0.055,neck-side*0.18,neck+side*0.18,tip]:
 			surface.surface_add_vertex(point)
 	surface.surface_end()
