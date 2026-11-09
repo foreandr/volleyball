@@ -255,7 +255,7 @@ func step(delta: float) -> void:
 		if dive_time >= 0.0 and not released:
 			var heading: Vector3 = (ball.aim_point-READY_POSITION).slide(Vector3.UP).normalized()
 			ForwardDive.sample(page.preview_player,page.player_controls.footwork.author,dive_ready,READY_POSITION,heading,dive_time,ball.aim_point)
-			if dive_time >= 0.26 and dive_time <= 0.47:
+			if dive_time >= ForwardDive.WINDUP-0.12 and dive_time <= ForwardDive.WINDUP+0.07:
 				ball.update_practice_platform()
 				ball.try_practice_pass(previous,page.preview_clock,0.16)
 			else:

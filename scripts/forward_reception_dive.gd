@@ -1,8 +1,10 @@
 extends RefCounted
 
 const PlatformPose = preload("res://scripts/reception_platform_pose.gd")
-const WINDUP := 0.40
-const DURATION := 1.28
+const WINDUP := 0.34
+const CONTACT_POSE_TIME := 0.40
+const POSE_DURATION := 1.28
+const DURATION := POSE_DURATION-CONTACT_POSE_TIME+WINDUP
 
 # Time from load, hip drop and body pitch, from the side-view reference.
 const KEYS := [
@@ -18,6 +20,8 @@ const KEYS := [
 ]
 
 static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D], start: Vector3, heading: Vector3, time: float, ball_point: Vector3) -> void:
+	# Start later while preserving the reach at the intended ball contact.
+	time = time*CONTACT_POSE_TIME/WINDUP if time < WINDUP else time-WINDUP+CONTACT_POSE_TIME
 	var rig: Skeleton3D = actor.skeleton
 	var travel := 1.58*smoothstep(0.08,0.60,time)
 	var drop := 0.0
@@ -40,7 +44,7 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 	author.rotate_world(pose,"pelvis",Vector3.RIGHT,pitch)
 	author.rotate_world(pose,"Head",Vector3.RIGHT,-pitch*0.32)
 	var launch := smoothstep(0.12,0.42,time)
-	var get_up := smoothstep(0.73,DURATION,time)
+	var get_up := smoothstep(0.73,POSE_DURATION,time)
 	var brace := smoothstep(0.40,0.55,time)*(1.0-smoothstep(0.86,1.18,time))
 	for side in ["l","r"]:
 		var foot_name: String = "foot_"+side

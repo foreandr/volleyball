@@ -482,7 +482,7 @@ func step_cpu_forward_dive(previous: float) -> void:
 	var heading: Vector3 = (ball_preview.aim_point-cpu_start).slide(Vector3.UP).normalized()
 	ForwardDive.sample(preview_player,player_controls.footwork.author,cpu_dive_ready,cpu_start,heading,time,ball_preview.aim_point)
 	drill_status.text = "CPU forward dive  |  F1 to take control"
-	if time >= 0.26 and time <= 0.47:
+	if time >= ForwardDive.WINDUP-0.12 and time <= ForwardDive.WINDUP+0.07:
 		ball_preview.update_practice_platform()
 		ball_preview.try_practice_pass(previous,preview_clock,0.16)
 	else:
