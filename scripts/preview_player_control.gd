@@ -28,6 +28,7 @@ var reach_forward_lunge := false
 var reach_back := false
 var rear_twist_target := Vector3.INF
 var rear_twist_side := 1.0
+var rear_overhead := false
 var indicator: Label
 var save_clock := 0.0
 var footwork: RefCounted
@@ -209,7 +210,8 @@ func play_receive_pose(delta: float, review_offset := Vector3.INF, pose_offset :
 	var ball = page.ball_preview
 	if ball.recovery.is_empty(): face_ball()
 	actor.animator.play("custom_preview/clip",0)
-	actor.animator.seek(maxf(0.0,page.ball_preview.contact_time+pose_offset),true)
+	var ready_legs := cpu_overhead_rear(review_offset)
+	actor.animator.seek(0.0 if ready_legs else maxf(0.0,page.ball_preview.contact_time+pose_offset),true)
 	actor.animator.pause()
 	step_into_receive(delta,review_offset)
 	if not rear_twist_target.is_finite():
@@ -287,23 +289,28 @@ func settle_for_next_feed(start: Vector3, yaw: float, delta: float) -> bool:
 	return neutral_hold >= 0.16
 
 func reset_reach() -> void:
-	if reach_step.is_zero_approx() and reach_height == 0.0: return
+	if reach_step.is_zero_approx() and reach_height == 0.0 and not rear_overhead: return
 	reach_step = Vector3.ZERO
 	reach_height = 0.0
 	reach_side_lunge = false
 	reach_forward_lunge = false
 	reach_back = false
 	rear_twist_target = Vector3.INF
+	rear_overhead = false
 	reach_tier = 1
 	reach_travel = Vector3.ZERO
 	reach_progress = 0.0
 	high_adjustment = Vector3.ZERO
 	if reception_drill_active(): page.ball_preview.practice_reach_center = Vector3.INF
 
+func cpu_overhead_rear(offset: Vector3) -> bool:
+	var arrows = page.preview_player.get_node("DirectionArrows")
+	return not active and offset.is_finite() and not page.reception_review.active and arrows.selected_distance == 2 and arrows.selected in [4,6]
+
 func step_into_receive(delta: float, review_offset: Vector3) -> void:
 	var actor: Node3D = page.preview_player
 	var ball = page.ball_preview
-	if reach_step.is_zero_approx() and reach_height == 0.0:
+	if reach_step.is_zero_approx() and reach_height == 0.0 and not rear_overhead:
 		var offset: Vector3 = review_offset if review_offset.is_finite() else ball.practice_step_offset(page.preview_clock)
 		if not review_offset.is_finite() and active:
 			var high: Dictionary = ball.practice_shoulder_intercept()
@@ -347,6 +354,9 @@ func step_into_receive(delta: float, review_offset: Vector3) -> void:
 			rear_twist_target = ball.platform(ball.contact_time).ball+offset
 			rear_twist_side = -1.0 if local.x < -0.08 else 1.0
 			reach_step = (horizontal-actor.basis.x*rear_twist_side*0.55).limit_length(0.25)
+			rear_overhead = cpu_overhead_rear(review_offset)
+			if rear_overhead:
+				reach_step = Vector3.ZERO
 		reach_lead = "l" if local.x >= 0.0 else "r"
 	var before := smoothstep(0.0,1.0,reach_progress)
 	reach_progress = minf(1.0,reach_progress+delta/(0.19 if reach_tier == 2 else 0.15))
@@ -394,6 +404,9 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 		author.rotate_world(pose,"spine_03",Vector3.BACK,side_lean*roll*weight)
 		author.rotate_world(pose,"spine_02",Vector3.UP,side_lean*0.08*weight)
 		author.rotate_world(pose,"spine_03",Vector3.UP,side_lean*0.19*weight)
+	if rear_overhead:
+		pose_overhead_rear(actor,pose,author)
+		return
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,-back*0.14*weight)
 	author.rotate_world(pose,"spine_03",Vector3.UP,shoulder_side*back*(0.18 if reach_tier == 2 else 0.31)*weight)
 	var deep := reach_tier == 2 and reach_height < 0.20
@@ -495,6 +508,24 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
 
 
+
+func pose_overhead_rear(actor: Node3D, pose: Array, author: RefCounted) -> void:
+	var rig: Skeleton3D = actor.skeleton
+	var turn := rear_twist_side*deg_to_rad(80.0)*smoothstep(0.0,0.55,reach_progress)
+	author.rotate_world(pose,"spine_01",Vector3.UP,turn*0.24)
+	author.rotate_world(pose,"spine_02",Vector3.UP,turn*0.34)
+	author.rotate_world(pose,"spine_03",Vector3.UP,turn*0.42)
+	var forward := Basis(Vector3.UP,turn)*Vector3.BACK
+	var shoulder_center: Vector3 = (author.point(pose,"upperarm_l")+author.point(pose,"upperarm_r"))*0.5
+	var head: Vector3 = author.point(pose,"Head")
+	var contact := rig.global_transform.affine_inverse()*rear_twist_target
+	var toward := (contact-shoulder_center).slide(Vector3.UP).limit_length(0.22)
+	var grip := shoulder_center+toward+forward*0.24
+	grip.y = head.y+0.70
+	var lift := smoothstep(0.48,0.96,reach_progress)
+	PlatformPose.connect_arms(pose,author,grip,lift,0.0,forward)
+	for bone in rig.get_bone_count():
+		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
 
 func move_cpu_toward(travel: Vector3, delta: float) -> void:
 	var actor: Node3D = page.preview_player
