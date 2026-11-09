@@ -445,6 +445,17 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 			if reach_side_lunge: target.z += 0.28*weight
 			if short_lunge and side_receive: target.z += 0.09*weight
 			if reach_forward_lunge: target.z += (0.12 if reach_tier == 2 else 0.07)*weight
+		elif reach_back and reach_tier == 2:
+			# Slide the trailing shoe along the court once the planted ankle is out of reach.
+			var hip: Vector3 = author.point(pose,"thigh_"+side)
+			var knee: Vector3 = author.point(pose,"calf_"+side)
+			var ankle: Vector3 = author.point(pose,foot_name)
+			var leg_length := hip.distance_to(knee)+knee.distance_to(ankle)-0.003
+			var vertical := target.y-hip.y
+			var ground_range := sqrt(maxf(0.0,leg_length*leg_length-vertical*vertical))
+			var ground_offset := Vector3(target.x-hip.x,0.0,target.z-hip.z).limit_length(ground_range)
+			target.x = hip.x+ground_offset.x
+			target.z = hip.z+ground_offset.z
 		var pole: Vector3 = author.point(leg_pose,"calf_"+side)-author.point(leg_pose,"thigh_"+side)
 		if (reach_side_lunge or short_lunge) and side == reach_lead:
 			# Load the knee over the lead foot as the other leg extends.
