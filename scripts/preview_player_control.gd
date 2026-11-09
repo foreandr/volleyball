@@ -529,8 +529,9 @@ func track_setting_ball(actor: Node3D, target: Vector3, delta: float) -> void:
 	# At overhead contact, tiny changes in position should not spin the setter around.
 	var turn_rate := 8.0*smoothstep(0.25,0.95,toward.length())
 	if turn_rate > 0.0:
-		var yaw := atan2(toward.x,toward.z)
-		actor.rotation.y = rotate_toward(actor.rotation.y,yaw,delta*turn_rate)
+		var ball_yaw := atan2(toward.x,toward.z)
+		var net_bias := clampf(angle_difference(ball_yaw,0.0)*0.15,-deg_to_rad(8.0),deg_to_rad(8.0))
+		actor.rotation.y = rotate_toward(actor.rotation.y,ball_yaw+net_bias,delta*turn_rate)
 
 func face_ball() -> void:
 	if not reception_drill_active(): return
