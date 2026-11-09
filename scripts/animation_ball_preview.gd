@@ -229,9 +229,11 @@ func recalculate() -> void:
 		if practice_mode:
 			var direction: Vector3 = aim_point-actor.global_position
 			direction.y = 0.0
-			var reach: float = [0.42,0.85,1.42][arrows.selected_distance-1]
+			var reach: float = [0.42,0.85,1.42,1.82][arrows.selected_distance-1]
 			aim_point = impact_point+direction.normalized()*reach
-			if arrows.selected_distance == 3 and arrows.selected in [1,2,8]:
+			if arrows.selected_distance == 4:
+				aim_point.y = Flight.FLOOR+0.045
+			elif arrows.selected_distance == 3 and arrows.selected in [1,2,8]:
 				aim_point.y = 0.46
 			elif float(actor.get_meta("feed_settings",{}).get("source_height",0.0)) >= 4.6:
 				aim_point.y += 0.36
@@ -239,7 +241,7 @@ func recalculate() -> void:
 	if review_feed.is_empty():
 		var settings: Dictionary = actor.get_meta("feed_settings",{})
 		feed = Flight.feed(aim_point,settings)
-		if practice_mode and missed and arrows.selected_distance == 3 and arrows.selected in [1,2,8]:
+		if practice_mode and missed and (arrows.selected_distance == 4 or (arrows.selected_distance == 3 and arrows.selected in [1,2,8])):
 			# Keep the low dive target reachable across the net without moving the source.
 			var fitted := settings.duplicate()
 			fitted.fit = "speed"
@@ -398,6 +400,26 @@ func try_practice_pass(previous_time: float, time: float, receive_elapsed: float
 	update_guide()
 	return true
 
+func try_pancake(previous_time: float, time: float) -> bool:
+	if practice_grade != Grade.WAITING or not incoming_net.is_empty(): return false
+	var first := maxf(previous_time-contact_time,-feed_duration)
+	var last := minf(time-contact_time,practice_floor_time)
+	if last < first: return false
+	var rig: Skeleton3D = actor.skeleton
+	var wrist := rig.global_transform*rig.get_bone_global_pose(rig.find_bone("hand_r")).origin
+	if wrist.y > 0.17: return false
+	var palm := wrist+actor.global_basis.z.normalized()*0.095
+	var touch := Geometry3D.get_closest_point_to_segment(palm+Vector3.UP*RADIUS,practice_position(first),practice_position(last))
+	if touch.distance_to(palm+Vector3.UP*RADIUS) > 0.13: return false
+	var velocity: Vector3 = incoming+feed_info.acceleration*last
+	if velocity.y >= 0.0: return false
+	var pop := velocity.slide(Vector3.UP).limit_length(1.1)*0.65+Vector3.UP*clampf(-velocity.y*0.48,2.2,4.2)
+	practice_grade = Grade.PERFECT
+	recovery = {"time":last,"point":touch,"velocity":pop,"pancake":true,"end_time":last+Flight.landing_time(touch,pop)}
+	recovery_net.clear()
+	update_guide()
+	return true
+
 func try_body_dig(previous_time: float, time: float) -> bool:
 	if not recovery.is_empty() or not incoming_net.is_empty(): return false
 	var first := maxf(previous_time-contact_time,-feed_duration)
@@ -482,7 +504,9 @@ func update_practice_cone(show_timing: bool, receive_elapsed: float) -> void:
 
 func update_practice_aim(show_aim: bool) -> void:
 	var target: Dictionary = actor.get_meta("pass_target",{})
-	practice_aim_arc.visible = show_aim and target.has("position")
+	var arrows = actor.get_node_or_null("DirectionArrows")
+	var pancake: bool = practice_mode and arrows != null and arrows.selected_distance == 4
+	practice_aim_arc.visible = show_aim and target.has("position") and not pancake
 	if not practice_aim_arc.visible: return
 	var origin := practice_platform_center()
 	var angle := float(clip.get_meta("desired_output_angle",45.0))

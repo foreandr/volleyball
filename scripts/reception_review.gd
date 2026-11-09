@@ -24,6 +24,7 @@ const CASES := [
 	[3,"Forward-left dive",Vector3(1.0,0,1.0),Vector3(1,-9.2,-18)],
 	[3,"Right knee slide",Vector3(-1.42,0,0),Vector3(0,-7,-3)],
 	[3,"Left knee slide",Vector3(1.42,0,0),Vector3(0,-7,-3)],
+	[4,"Forward pancake",Vector3(0,0,1.82),Vector3(0,-11,-17)],
 ]
 const SHORT_BACK := 4
 const RIGHT_LUNGE := 10
@@ -220,6 +221,8 @@ func load_case(next_index: int) -> void:
 	var arrows = actor.get_node("DirectionArrows")
 	if is_knee_slide():
 		arrows.select_direction(3 if CASES[index][2].x < 0 else 7,3)
+	elif CASES[index][0] == 4:
+		arrows.select_direction(1,4)
 	else:
 		arrows.select_direction(0)
 	actor.animator.play("custom_preview/clip",0)
@@ -230,8 +233,8 @@ func load_case(next_index: int) -> void:
 	var velocity: Vector3 = actor.global_basis.orthonormalized()*CASES[index][3]
 	var aim: Vector3 = ball.platform(ball.contact_time).ball+offset
 	dive_ready.clear()
-	if CASES[index][0] == 3 and not is_knee_slide():
-		aim.y = 0.46
+	if CASES[index][0] >= 3 and not is_knee_slide():
+		aim.y = Flight.FLOOR+0.045 if CASES[index][0] == 4 else 0.46
 		dive_kick_offset = page.dive_kick_offset()
 		dive_lower_duration = page.dive_lower_duration()
 		dive_ready = page.player_controls.snapshot_receive_pose()
@@ -277,8 +280,11 @@ func step(delta: float) -> void:
 		if dive_time >= ForwardDive.DURATION or not ball.incoming_net.is_empty(): released = true
 		if dive_time >= 0.0 and not released:
 			var heading: Vector3 = (ball.aim_point-READY_POSITION).slide(Vector3.UP).normalized()
-			ForwardDive.sample(page.preview_player,page.player_controls.footwork.author,dive_ready,dive_clasp,READY_POSITION,heading,dive_time,ball.aim_point,float(ball.recovery.get("time",0.07))+ForwardDive.WINDUP,dive_kick_offset,dive_lower_duration)
-			if dive_time >= ForwardDive.WINDUP-0.12 and dive_time <= ForwardDive.WINDUP+0.07:
+			var pancake: bool = CASES[index][0] == 4
+			ForwardDive.sample(page.preview_player,page.player_controls.footwork.author,dive_ready,dive_clasp,READY_POSITION,heading,dive_time,ball.aim_point,float(ball.recovery.get("time",0.07))+ForwardDive.WINDUP,dive_kick_offset,dive_lower_duration,pancake)
+			if pancake:
+				if ball.try_pancake(previous,page.preview_clock): page.drill_status.text = "Pancake save"
+			elif dive_time >= ForwardDive.WINDUP-0.12 and dive_time <= ForwardDive.WINDUP+0.07:
 				ball.update_practice_platform()
 				ball.try_practice_pass(previous,page.preview_clock,0.16)
 			else:

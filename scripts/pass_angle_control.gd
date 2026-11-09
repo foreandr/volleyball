@@ -19,6 +19,7 @@ var float_field: SpinBox
 var reach_picker: OptionButton
 var arrow_set_picker: OptionButton
 var allow_dive := false
+const DirectionArrows = preload("res://scripts/player_direction_arrows.gd")
 var source_pad: Control
 var height_field: SpinBox
 var back_field: SpinBox
@@ -94,11 +95,14 @@ func _ready() -> void:
 	arrow_set_picker = OptionButton.new()
 	arrow_set_picker.add_item("Distance 1 - Shift")
 	arrow_set_picker.add_item("Distance 2 - Lunge")
-	if allow_dive: arrow_set_picker.add_item("Distance 3 - Dive")
+	if allow_dive:
+		arrow_set_picker.add_item("Distance 3 - Dive")
+		arrow_set_picker.add_item("Distance 4 - Pancake")
 	arrow_set_picker.select(clampi(StorySession.receive_distance_tier-1,0,arrow_set_picker.item_count-1))
 	arrow_set_picker.tooltip_text = "Middle-click an arrow on the court"
 	arrow_row.add_child(arrow_set_picker)
-	arrow_set_picker.item_selected.connect(func(_index): feed_aim_changed.emit())
+	arrow_set_picker.item_selected.connect(func(_index): update_feed_directions(); feed_aim_changed.emit())
+	update_feed_directions()
 	build_host = destination_panel
 	destination_pad = preload("res://scripts/ball_source_pad.gd").new()
 	destination_pad.mode = "destination"
@@ -126,7 +130,15 @@ func _ready() -> void:
 func select_feed_aim(index: int, distance := 0) -> void:
 	reach_picker.select(index)
 	if distance > 0: arrow_set_picker.select(distance-1)
+	update_feed_directions()
 	feed_aim_changed.emit()
+
+func update_feed_directions() -> void:
+	var distance := arrow_set_picker.selected+1
+	for index in reach_picker.item_count:
+		reach_picker.set_item_disabled(index,not DirectionArrows.supports(index,distance))
+	if not DirectionArrows.supports(reach_picker.selected,distance):
+		reach_picker.select(1)
 
 func begin_placement() -> void:
 	for field_name in PLACEMENT_FIELDS:

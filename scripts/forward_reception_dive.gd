@@ -19,7 +19,7 @@ const KEYS := [
 	[1.28,0.00,0.0],
 ]
 
-static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D], clasp: Array[Transform3D], start: Vector3, heading: Vector3, time: float, ball_point: Vector3, release_time: float, kick_offset: float, lower_duration: float) -> void:
+static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D], clasp: Array[Transform3D], start: Vector3, heading: Vector3, time: float, ball_point: Vector3, release_time: float, kick_offset: float, lower_duration: float, pancake := false) -> void:
 	var kick_time := time-WINDUP-kick_offset
 	var kick := smoothstep(0.0,0.13,kick_time)*(1.0-smoothstep(0.22,0.22+lower_duration,kick_time))
 	# Start later while preserving the reach at the intended ball contact.
@@ -39,6 +39,7 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 		drop = lerpf(a[1],b[1],weight)
 		pitch = deg_to_rad(lerpf(a[2],b[2],weight))
 		break
+	if pancake: travel += 0.70*smoothstep(0.13,0.39,time)
 	actor.position = start+heading*travel
 	actor.rotation.y = atan2(heading.x,heading.z)
 	var pose := ready.duplicate()
@@ -49,6 +50,10 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 	author.rotate_world(pose,"pelvis",Vector3.RIGHT,pitch)
 	var extension := smoothstep(0.19,0.39,time)
 	var landing := smoothstep(0.0,0.14,since_brace)
+	if pancake:
+		var low := smoothstep(0.23,0.40,time)*(1.0-smoothstep(0.82,POSE_DURATION,time))
+		author.rotate_world(pose,"spine_02",Vector3.RIGHT,0.18*low)
+		author.rotate_world(pose,"neck_01",Vector3.RIGHT,-0.38*low)
 	var chest_settle := landing*(1.0-smoothstep(0.38,0.55,since_brace))
 	pose[pelvis].origin -= author.world_pose(pose,parent).basis.inverse()*Vector3.UP*0.07*chest_settle/scale_
 	var get_up := smoothstep(0.82,POSE_DURATION,time)
@@ -70,10 +75,11 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 			ankle.z += 0.42*plant
 			ankle.y += 0.09*sin(PI*plant)
 		var trail := foot.origin-Vector3.BACK*(0.69 if side == "l" else 0.81)
+		trail.x = foot.origin.x*0.48
 		trail.y += kick*(0.60 if side == "l" else 0.52)
 		trail.z += kick*0.20
 		ankle = ankle.lerp(trail,extension).lerp(foot.origin,get_up)
-		var lateral := 0.20 if side == "l" else -0.20
+		var lateral := 0.09 if side == "l" else -0.09
 		var calf: String = "calf_"+side
 		var pole := Vector3(lateral,0.18,1.0).lerp(Vector3(lateral,-0.75,0.10),kick)
 		author.limb(pose,"thigh_"+side,calf,foot_name,ankle,pole)
@@ -85,7 +91,11 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 	var grip: Vector3 = (author.point(pose,"hand_l")+author.point(pose,"hand_r"))*0.5
 	var reach := smoothstep(0.11,0.31,time)
 	reach *= 1.0-smoothstep(0.0,0.13,since_brace)
-	if reach > 0.0:
+	if pancake and reach > 0.0:
+		var target := rig.global_transform.affine_inverse()*Vector3(ball_point.x,0.06,ball_point.z)-Vector3.BACK*0.095
+		author.limb(pose,"upperarm_r","lowerarm_r","hand_r",target,Vector3(-0.30,-0.55,0.10),reach,174.0)
+		flatten_palm(pose,author,rig,reach)
+	elif reach > 0.0:
 		var target := rig.global_transform.affine_inverse()*ball_point+Vector3(0,-0.14,0.18)
 		var head_height: float = author.point(pose,"Head").y
 		target.y = clampf(target.y,0.13,maxf(0.13,head_height))
@@ -108,6 +118,26 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 			# The palms travel back relative to the shoulders as the body slides past them.
 			var palm := Vector3(shoulder.x+(0.13 if side == "l" else -0.13),0.10+0.09*release_hands,shoulder.z+lerpf(0.19,-0.38,push))
 			author.limb(pose,"upperarm_"+side,"lowerarm_"+side,hand,palm,Vector3(0.8 if side == "l" else -0.8,0.4,-0.25),brace)
+	if pancake:
+		for side in ["l","r"]:
+			var hand: String = "hand_"+side
+			var wrist: Vector3 = author.point(pose,hand)
+			var height: float = (rig.global_transform*wrist).y
+			if height < 0.055:
+				wrist.y += (0.055-height)/scale_
+				author.limb(pose,"upperarm_"+side,"lowerarm_"+side,hand,wrist,Vector3(0.65 if side == "l" else -0.65,0.4,-0.25))
 	for bone in rig.get_bone_count():
 		rig.set_bone_pose_position(bone,pose[bone].origin)
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
+
+static func flatten_palm(pose: Array, author: RefCounted, rig: Skeleton3D, weight: float) -> void:
+	var wrist := rig.find_bone("hand_r")
+	var fingers := rig.find_bone("middle_01_r")
+	var index := rig.find_bone("index_01_r")
+	var pinky := rig.find_bone("pinky_01_r")
+	if mini(fingers,mini(index,pinky)) < 0: return
+	var hand: Transform3D = author.world_pose(pose,wrist)
+	var forward: Vector3 = (author.point(pose,"middle_01_r")-hand.origin).normalized()
+	var across: Vector3 = (author.point(pose,"index_01_r")-author.point(pose,"pinky_01_r")).slide(forward).normalized()
+	var palm := Basis(across,forward.cross(across),forward)
+	author.set_world_basis(pose,"hand_r",hand.basis.slerp(palm.inverse()*hand.basis,weight))

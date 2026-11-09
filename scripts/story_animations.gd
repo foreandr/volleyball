@@ -199,8 +199,8 @@ Scroll to set pass height",16)
 		var path_hint := label("Dotted line shows aim. Solid line shows the actual pass.",16)
 		path_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		content.add_child(path_hint)
-		var arrow_labels := ["Distance 1  |  Short reach","Distance 2  |  Lunge","Distance 3  |  Dive target"]
-		var arrow_colors := [Color("67e8ff"),Color("c291ff"),Color("82a8ff")]
+		var arrow_labels := ["Distance 1  |  Short reach","Distance 2  |  Lunge","Distance 3  |  Dive","Distance 4  |  Pancake"]
+		var arrow_colors := [Color("67e8ff"),Color("c291ff"),Color("82a8ff"),Color("57dfbc")]
 		for index in arrow_labels.size():
 			var legend := label(arrow_labels[index],16)
 			legend.add_theme_color_override("font_color",arrow_colors[index])
@@ -463,6 +463,9 @@ func reset_cpu_receive(restore_position: bool) -> void:
 
 func step_cpu_receive(previous: float, delta: float) -> void:
 	var arrows = preview_player.get_node("DirectionArrows")
+	if arrows.selected_distance == 4:
+		step_cpu_forward_dive(previous,true)
+		return
 	var knee_slide: bool = arrows.selected_distance == 3 and arrows.selected in [3,7]
 	if arrows.selected != 0 and arrows.selected_distance == 3 and not knee_slide:
 		if arrows.selected in [1,2,8]: step_cpu_forward_dive(previous)
@@ -541,7 +544,7 @@ func body_dig_status() -> String:
 	if part == "Head": return "Body dig  |  Head deflection"
 	return "Body dig  |  Deflected off the player"
 
-func step_cpu_forward_dive(previous: float) -> void:
+func step_cpu_forward_dive(previous: float, pancake := false) -> void:
 	var time: float = preview_clock-ball_preview.contact_time+ForwardDive.WINDUP
 	if time < 0.0 or not ball_preview.incoming_net.is_empty(): return
 	if cpu_dive_ready.is_empty():
@@ -557,7 +560,11 @@ func step_cpu_forward_dive(previous: float) -> void:
 		cpu_dive_clasp = player_controls.snapshot_receive_pose()
 		preview_player.animator.seek(0.0,true)
 	var heading: Vector3 = (ball_preview.aim_point-cpu_start).slide(Vector3.UP).normalized()
-	ForwardDive.sample(preview_player,player_controls.footwork.author,cpu_dive_ready,cpu_dive_clasp,cpu_start,heading,time,ball_preview.aim_point,float(ball_preview.recovery.get("time",0.07))+ForwardDive.WINDUP,cpu_dive_kick_offset,cpu_dive_lower_duration)
+	ForwardDive.sample(preview_player,player_controls.footwork.author,cpu_dive_ready,cpu_dive_clasp,cpu_start,heading,time,ball_preview.aim_point,float(ball_preview.recovery.get("time",0.07))+ForwardDive.WINDUP,cpu_dive_kick_offset,cpu_dive_lower_duration,pancake)
+	if pancake:
+		ball_preview.try_pancake(previous,preview_clock)
+		drill_status.text = "Pancake save" if ball_preview.recovery.has("pancake") else "CPU pancake reach"
+		return
 	drill_status.text = "CPU forward dive  |  F1 to take control"
 	if time >= ForwardDive.WINDUP-0.12 and time <= ForwardDive.WINDUP+0.07:
 		ball_preview.update_practice_platform()
@@ -575,7 +582,7 @@ func update_distance_status(in_control: bool) -> void:
 		var offset: Vector3 = ball_preview.practice_step_offset(preview_clock)
 		tier = ball_preview.practice_reach_tier(offset)
 		high = offset.y >= 0.20
-	var names := ["Short reach","High shoulder reach" if high else "Low lunge","Dive target (animation pending)"]
+	var names := ["Short reach","High shoulder reach" if high else "Low lunge","Dive","Pancake"]
 	if tier == 3:
 		if arrows.selected in [1,2,8]: names[2] = "Forward dive"
 		if arrows.selected in [3,7]: names[2] = "Side knee slide"
