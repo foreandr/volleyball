@@ -34,6 +34,7 @@ var cpu_reach_offset := Vector3.INF
 var cpu_start := Vector3.INF
 var cpu_start_yaw := 0.0
 var cpu_dive_ready: Array[Transform3D] = []
+var cpu_dive_windup := ForwardDive.WINDUP
 var middle_arrow := Vector2i(-1,1)
 var middle_press := Vector2.ZERO
 var middle_dragged := false
@@ -195,6 +196,7 @@ Scroll to set pass height",16)
 			var legend := label(arrow_labels[index],16)
 			legend.add_theme_color_override("font_color",arrow_colors[index])
 			content.add_child(legend)
+		add_dive_start_control()
 		distance_status = label("",16)
 		distance_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		content.add_child(distance_status)
@@ -215,6 +217,29 @@ Scroll to set pass height",16)
 	content.add_child(edit_button)
 	refresh_type()
 	animation_list.grab_focus()
+
+func add_dive_start_control() -> void:
+	var readout := label("",16)
+	readout.name = "DiveStartReadout"
+	content.add_child(readout)
+	var slider := HSlider.new()
+	slider.name = "DiveStartSlider"
+	slider.min_value = 100
+	slider.max_value = 520
+	slider.step = 10
+	slider.value = StorySession.dive_start_ms
+	slider.tooltip_text = "Lower values start the dive later. Applies to the next dive."
+	content.add_child(slider)
+	var show_value := func(value: float):
+		readout.text = "Dive start  |  %d ms before contact" % int(value)
+	show_value.call(slider.value)
+	slider.value_changed.connect(func(value: float):
+		show_value.call(value)
+		StorySession.dive_start_ms = int(value)
+		StorySession.save_preview_setup())
+
+func dive_windup() -> float:
+	return clampi(StorySession.dive_start_ms,100,520)/1000.0
 
 func current_type() -> String:
 	if selected_category.is_empty(): return ""
@@ -352,7 +377,7 @@ func _process(delta: float) -> void:
 	var first := minf(0,ball_preview.contact_time-ball_preview.feed_duration)
 	var last: float = ball_preview.cycle_end()
 	if not cpu_dive_ready.is_empty():
-		last = maxf(last,ball_preview.contact_time+ForwardDive.DURATION-ForwardDive.WINDUP)
+		last = maxf(last,ball_preview.contact_time+ForwardDive.DURATION-cpu_dive_windup)
 	if drill and not in_control and cpu_start.is_finite() and preview_clock+delta >= last:
 		if not player_controls.settle_for_next_feed(cpu_start,cpu_start_yaw,delta):
 			preview_clock = last
@@ -470,9 +495,11 @@ func step_cpu_receive(previous: float, delta: float) -> void:
 		player_controls.blend_receive_recovery(delta)
 
 func step_cpu_forward_dive(previous: float) -> void:
-	var time: float = preview_clock-ball_preview.contact_time+ForwardDive.WINDUP
+	var windup := dive_windup() if cpu_dive_ready.is_empty() else cpu_dive_windup
+	var time: float = preview_clock-ball_preview.contact_time+windup
 	if time < 0.0 or not ball_preview.incoming_net.is_empty(): return
 	if cpu_dive_ready.is_empty():
+		cpu_dive_windup = windup
 		cpu_start = preview_player.position
 		cpu_start_yaw = preview_player.rotation.y
 		preview_player.animator.play("custom_preview/clip",0)

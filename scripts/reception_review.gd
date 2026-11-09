@@ -49,6 +49,7 @@ var review_clip: Animation
 var offset := Vector3.ZERO
 var released := false
 var dive_ready: Array[Transform3D] = []
+var dive_windup := ForwardDive.WINDUP
 var counter: Label
 var play_button: Button
 var previous_button: Button
@@ -222,6 +223,7 @@ func load_case(next_index: int) -> void:
 	dive_ready.clear()
 	if CASES[index][0] == 3:
 		aim.y = 0.46
+		dive_windup = page.dive_windup()
 		dive_ready = page.player_controls.snapshot_receive_pose()
 	var acceleration := Vector3.DOWN*Flight.GRAVITY
 	ball.review_feed = {"aim":aim,"incoming":velocity,"acceleration":acceleration,"duration":FEED_TIME,
@@ -250,7 +252,7 @@ func step(delta: float) -> void:
 	var short_back := index == SHORT_BACK
 	var receive_start := -0.12 if short_back else -0.25
 	if not dive_ready.is_empty():
-		var dive_time := elapsed+ForwardDive.WINDUP
+		var dive_time := elapsed+dive_windup
 		if dive_time >= ForwardDive.DURATION or not ball.incoming_net.is_empty(): released = true
 		if dive_time >= 0.0 and not released:
 			var heading: Vector3 = (ball.aim_point-READY_POSITION).slide(Vector3.UP).normalized()
@@ -282,7 +284,7 @@ func step(delta: float) -> void:
 	if released:
 		page.preview_player.animator.seek(0.0,true)
 		page.player_controls.blend_receive_recovery(delta)
-	var recovery_time := ForwardDive.DURATION-ForwardDive.WINDUP if not dive_ready.is_empty() else 0.65
+	var recovery_time := ForwardDive.DURATION-dive_windup if not dive_ready.is_empty() else 0.65
 	var end: float = maxf(ball.cycle_end(),ball.contact_time+recovery_time)
 	ball.tick(minf(page.preview_clock,end),true)
 	ball.update_practice_aim(true)
