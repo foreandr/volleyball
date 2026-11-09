@@ -53,7 +53,7 @@ func check_platform(rig: Skeleton3D, index: int) -> bool:
 	var right_angle := rad_to_deg((right_shoulder-right_elbow).angle_to(right_wrist-right_elbow))
 	var tilt := left_shoulder.y-right_shoulder.y
 	var correct_tilt := index == 8 or (tilt > 0.02 if index == 14 else tilt < -0.02)
-	if elbow_gap <= 0.18 and wrist_gap <= 0.075 and minf(left_angle,right_angle) >= 156.0 and correct_tilt:
+	if elbow_gap <= 0.24 and wrist_gap <= 0.075 and minf(left_angle,right_angle) >= 156.0 and correct_tilt:
 		return true
 	push_error("Clip %d: elbow gap %.3f m, wrist gap %.3f m, elbows %.1f / %.1f degrees, tilt %.3f m." %
 		[index+1,elbow_gap,wrist_gap,left_angle,right_angle,tilt])

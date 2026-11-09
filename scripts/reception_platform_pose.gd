@@ -1,7 +1,7 @@
 extends RefCounted
 
 const HAND_GAP := 0.065
-const ELBOW_ANGLE := 158.0
+const ELBOW_ANGLE := 161.0
 
 static func connect_arms(pose: Array, author: RefCounted, desired: Vector3, weight: float) -> void:
 	if weight <= 0.001: return
@@ -10,8 +10,7 @@ static func connect_arms(pose: Array, author: RefCounted, desired: Vector3, weig
 	for side in ["l","r"]:
 		var arm: String = "upperarm_"+side
 		var shoulder: Vector3 = author.point(pose,arm)
-		var inward := -0.045 if side == "l" else 0.045
-		author.aim_joint(pose,"clavicle_"+side,arm,shoulder+Vector3(inward,0.0,0.071)*weight)
+		author.aim_joint(pose,"clavicle_"+side,arm,shoulder+Vector3.BACK*0.022*weight)
 	var left: Vector3 = author.point(pose,"upperarm_l")
 	var right: Vector3 = author.point(pose,"upperarm_r")
 	var left_hand := Vector3.RIGHT*HAND_GAP*0.5
@@ -36,8 +35,18 @@ static func connect_arms(pose: Array, author: RefCounted, desired: Vector3, weig
 		var hand: String = "hand_"+side
 		var old_hand: Transform3D = author.world_pose(original,rig.find_bone(hand))
 		var target := grip+(left_hand if side == "l" else right_hand)
-		var pole := Vector3(-0.82 if side == "l" else 0.82,-0.18,0.45)
+		var pole := Vector3(-0.62 if side == "l" else 0.62,-0.24,0.46)
+		var upper_before: Transform3D = author.world_pose(pose,rig.find_bone(arm))
+		var lower_before: Transform3D = author.world_pose(pose,rig.find_bone(elbow))
+		var wrist_before: Vector3 = author.point(pose,hand)
 		author.limb(pose,arm,elbow,hand,old_hand.origin.lerp(target,weight),pole,1.0,174.0)
+		var elbow_after: Vector3 = author.point(pose,elbow)
+		var wrist_after: Vector3 = author.point(pose,hand)
+		# Retain the rig's authored axial twist. The IK bend plane can flip it through the shirt.
+		var upper_swing := Quaternion((lower_before.origin-upper_before.origin).normalized(),(elbow_after-upper_before.origin).normalized())
+		var lower_swing := Quaternion((wrist_before-lower_before.origin).normalized(),(wrist_after-elbow_after).normalized())
+		author.set_world_basis(pose,arm,Basis(upper_swing)*upper_before.basis)
+		author.set_world_basis(pose,elbow,Basis(lower_swing)*lower_before.basis)
 	# Carry the authored clasp through a shared rotation instead of twisting each hand.
 	var turn := Quaternion(platform_axis(original,author),platform_axis(pose,author))
 	for side in ["l","r"]:
