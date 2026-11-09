@@ -304,6 +304,15 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 
 
 
+func move_cpu_toward(travel: Vector3, delta: float) -> void:
+	var actor: Node3D = page.preview_player
+	var forward := Vector3(0,0,4)-actor.position
+	forward.y = 0.0
+	forward = forward.normalized()
+	var direction := travel.normalized()
+	sprint_requested = travel.length()>0.85
+	move_player(Vector2(direction.dot(forward.cross(Vector3.UP)),direction.dot(forward)),delta)
+
 func move_player(direction: Vector2, delta: float) -> void:
 	var actor: Node3D = page.preview_player
 	var session = page.get_node("/root/StorySession")
@@ -367,7 +376,7 @@ func move_player(direction: Vector2, delta: float) -> void:
 	else:
 		footwork.step(local_velocity/(1.65*step_rate) if moving else Vector3.ZERO,delta,step_rate)
 	if side_weight>0: side_steps.apply_pose(side_weight)
-	follow_camera()
+	if active: follow_camera()
 
 func face_ball() -> void:
 	if not reception_drill_active(): return

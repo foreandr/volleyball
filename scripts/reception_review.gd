@@ -116,7 +116,6 @@ func toggle_play() -> void:
 		original_transform = page.preview_player.transform
 		original_control = page.player_controls.active
 		page.player_controls.set_active(false)
-		page.ball_preview.update_practice_aim(false)
 		prepare_review_clip()
 		active = true
 		load_case(0)
@@ -179,6 +178,7 @@ func load_case(next_index: int) -> void:
 	page.distance_status.text = "Distance %d  |  %s
 Distance 3  |  Dive planned" % [CASES[index][0],CASES[index][1]]
 	ball.tick(page.preview_clock,false)
+	ball.update_practice_aim(true)
 	update_controls()
 
 func step(delta: float) -> void:
@@ -200,6 +200,7 @@ func step(delta: float) -> void:
 		page.preview_player.play_action("idle")
 	var end: float = maxf(ball.cycle_end(),ball.contact_time+0.65)
 	ball.tick(minf(page.preview_clock,end),true)
+	ball.update_practice_aim(true)
 	if page.preview_clock < end: return
 	if loop_current:
 		load_case(index)

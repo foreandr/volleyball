@@ -270,6 +270,20 @@ func reset_practice_serve() -> void:
 func practice_platform_center() -> Vector3:
 	return practice_reach_center if practice_reach_center.is_finite() else platform(contact_time).ball
 
+func practice_intercept() -> Dictionary:
+	if not incoming_net.is_empty(): return {}
+	var height: float = platform(contact_time).ball.y
+	if feed_info.start.y <= height: return {}
+	var first := -feed_duration
+	var last := practice_floor_time
+	for sample in range(14):
+		var time := (first+last)*0.5
+		if practice_position(time).y > height:
+			first = time
+		else:
+			last = time
+	return {"point":practice_position(last),"time":contact_time+last}
+
 func practice_step_offset(time: float) -> Vector3:
 	if practice_grade != Grade.WAITING or not incoming_net.is_empty(): return Vector3.ZERO
 	var elapsed := time-contact_time
