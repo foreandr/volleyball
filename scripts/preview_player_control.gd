@@ -42,6 +42,7 @@ var stamina_bar: ProgressBar
 var side_steps: RefCounted
 var side_weight := 0.0
 var shuffle_heading := Vector3.ZERO
+var setter_travel := Vector3.ZERO
 
 func _init(host: Control) -> void:
 	page = host
@@ -463,8 +464,11 @@ func move_player(direction: Vector2, delta: float, track_ball := true, setting_t
 	var right := forward.cross(Vector3.UP)
 	var drill := reception_drill_active()
 	var travel := right*direction.x+forward*direction.y
+	if setting:
+		setter_travel = setter_travel.move_toward(travel,delta*8.0)
+		travel = setter_travel
 	var step_direction := direction
-	if setting: face_target(setting_target,false)
+	if setting: track_setting_ball(actor,setting_target,delta)
 	elif drill and track_ball: face_ball()
 	if drill or setting:
 		var facing := actor.basis.z.normalized()
@@ -478,7 +482,7 @@ func move_player(direction: Vector2, delta: float, track_ball := true, setting_t
 	var before := actor.position
 	var movement := velocity*delta
 	var lateral := absf(step_direction.x)>0.3
-	var shuffle_step: bool = not sprinting and (side_steps.active or lateral)
+	var shuffle_step: bool = not setting and not sprinting and (side_steps.active or lateral)
 	side_steps.sampled = false
 	if shuffle_step:
 		if lateral: shuffle_heading = travel.normalized()
@@ -487,13 +491,12 @@ func move_player(direction: Vector2, delta: float, track_ball := true, setting_t
 	else: side_steps.active = false
 	actor.position.x = clampf(actor.position.x+movement.x,-4,4)
 	actor.position.z = clampf(actor.position.z+movement.z,-4.5,2.5)
-	if setting:
-		face_target(setting_target,false)
-	elif drill:
-		if track_ball: face_ball()
-	else:
-		actor.rotation.y = atan2(forward.x,forward.z)
-		session.pass_start = Vector2(actor.position.x,actor.position.z)
+	if not setting:
+		if drill:
+			if track_ball: face_ball()
+		else:
+			actor.rotation.y = atan2(forward.x,forward.z)
+			session.pass_start = Vector2(actor.position.x,actor.position.z)
 	var now_moving := actor.position.distance_to(before)>0.00001
 	sprinting = sprinting and now_moving
 	if quick_pace and now_moving:
@@ -518,9 +521,17 @@ func move_player(direction: Vector2, delta: float, track_ball := true, setting_t
 	if shuffle_step or sprinting:
 		footwork.weight = 0
 	else:
-		footwork.step(local_velocity/(1.65*step_rate) if moving else Vector3.ZERO,delta,step_rate)
+		footwork.step(local_velocity/(1.65*step_rate) if moving else Vector3.ZERO,delta,step_rate,setting)
 	if side_weight>0: side_steps.apply_pose(side_weight)
 	if active: follow_camera()
+
+func track_setting_ball(actor: Node3D, target: Vector3, delta: float) -> void:
+	var toward := (target-actor.global_position).slide(Vector3.UP)
+	# At overhead contact, tiny changes in position should not spin the setter around.
+	var turn_rate := 8.0*smoothstep(0.25,0.95,toward.length())
+	if turn_rate > 0.0:
+		var yaw := atan2(toward.x,toward.z)
+		actor.rotation.y = rotate_toward(actor.rotation.y,yaw,delta*turn_rate)
 
 func face_ball() -> void:
 	if not reception_drill_active(): return
@@ -529,16 +540,12 @@ func face_ball() -> void:
 	var target: Vector3 = ball.global_position if ball.ball.visible else ball.source_ball.global_position
 	if cpu_knee_slide() and not page.reception_review.active:
 		target = ball.practice_position(page.preview_clock-ball.contact_time)
-	face_target(target,true)
-
-func face_target(target: Vector3, bias_forward: bool) -> void:
-	var actor: Node3D = page.preview_player
 	var toward := target-actor.global_position
 	if Vector2(toward.x,toward.z).length_squared()>0.01:
 		var ball_yaw := atan2(toward.x,toward.z)
 		var court_forward := Vector3(0,0,4)-actor.position
 		var court_yaw := atan2(court_forward.x,court_forward.z)
-		var forward_bias := clampf(angle_difference(ball_yaw,court_yaw)*0.24,-deg_to_rad(12.0),deg_to_rad(12.0)) if bias_forward else 0.0
+		var forward_bias := clampf(angle_difference(ball_yaw,court_yaw)*0.24,-deg_to_rad(12.0),deg_to_rad(12.0))
 		actor.rotation.y = ball_yaw+forward_bias
 
 func follow_camera() -> void:

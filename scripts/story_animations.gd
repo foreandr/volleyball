@@ -260,6 +260,9 @@ func start_setting_drill() -> void:
 	preview_player.rotation.y = 0.0
 	preview_player.get_node("DirectionArrows").hide()
 	player_controls.locomotion = ""
+	player_controls.setter_travel = Vector3.ZERO
+	player_controls.footwork.weight = 0.0
+	player_controls.footwork.travel = Vector3.ZERO
 	player_controls.side_weight = 0.0
 	player_controls.side_steps.active = false
 	player_controls.indicator.text = "Setter"

@@ -10,7 +10,7 @@ func _init(player: Node3D) -> void:
 	actor = player
 	author = actor.get_pose_author()
 
-func step(direction: Vector3, delta: float, step_rate: float) -> void:
+func step(direction: Vector3, delta: float, step_rate: float, continuous := false) -> void:
 	weight = move_toward(weight,1.0 if direction.length()>0.05 else 0.0,delta*7)
 	if weight<0.001: return
 	travel = travel.lerp(direction,1-exp(-delta*16))
@@ -23,6 +23,9 @@ func step(direction: Vector3, delta: float, step_rate: float) -> void:
 	pose[pelvis].origin += author.world_pose(pose,parent).basis.inverse()*Vector3(0,(-float(recipe.crouch)+float(recipe.bob)*cos(phase*TAU*2))*weight,0)
 	# Shift weight onto the supporting leg while keeping the ready stance.
 	var weight_shift := 0.03*sin(phase*TAU)*weight
+	if continuous:
+		weight_shift += travel.x*0.035*weight
+		author.rotate_world(pose,"spine_02",Vector3.BACK,-0.12*travel.x*weight)
 	pose[pelvis].origin += author.world_pose(pose,parent).basis.inverse()*Vector3(weight_shift,0,0)
 	author.rotate_world(pose,"spine_01",Vector3.RIGHT,deg_to_rad(7.0)*travel.z*weight)
 	for side in ["l","r"]:
@@ -30,9 +33,18 @@ func step(direction: Vector3, delta: float, step_rate: float) -> void:
 		# Half the cycle supports the body; the returning foot clears the floor.
 		var stride := (0.5-offset*2) if offset<0.5 else (-0.5+smoothstep(0.5,1.0,offset))
 		var lift := 0.0 if offset<0.5 else sin((offset-0.5)*TAU)*float(recipe.foot_lift)
+		if continuous and offset >= 0.5:
+			# Match the planted foot's velocity at toe-off and landing.
+			var swing_progress := 2.0*offset-1.0
+			stride = -0.5-swing_progress+swing_progress*swing_progress*(6.0-4.0*swing_progress)
+			lift = pow(sin(PI*swing_progress),2.0)*0.075
 		var ready_foot: Transform3D = author.feet[side]
 		var target := ready_foot.origin+travel*stride*float(recipe.stride)*weight+Vector3.UP*lift*weight
-		target.x -= ready_foot.origin.x*0.30*absf(travel.z)*weight
+		if not continuous:
+			target.x -= ready_foot.origin.x*0.30*absf(travel.z)*weight
+		else:
+			var lateral_stride := minf(float(recipe.stride),absf(ready_foot.origin.x)*0.90)
+			target.x = ready_foot.origin.x+travel.x*stride*lateral_stride*weight
 		var pole: Vector3 = author.point(author.baseline,"calf_"+side)-author.point(author.baseline,"thigh_"+side)
 		author.limb(pose,"thigh_"+side,"calf_"+side,"foot_"+side,target,pole)
 		# Roll through the swing and return to a flat shoe at contact.
