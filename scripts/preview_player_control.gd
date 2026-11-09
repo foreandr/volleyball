@@ -1,5 +1,6 @@
 extends RefCounted
 const QUICK_STEP_RATE := 1.5
+const PlatformPose = preload("res://scripts/reception_platform_pose.gd")
 const PassDrive = preload("res://scripts/reception_pass_drive.gd")
 var page: Control
 var active := false
@@ -18,6 +19,7 @@ var reach_tier := 1
 var reach_height := 0.0
 var reach_side_lunge := false
 var reach_forward_lunge := false
+var reach_back := false
 var indicator: Label
 var save_clock := 0.0
 var footwork: RefCounted
@@ -201,6 +203,7 @@ func reset_reach() -> void:
 	reach_height = 0.0
 	reach_side_lunge = false
 	reach_forward_lunge = false
+	reach_back = false
 	reach_tier = 1
 	reach_travel = Vector3.ZERO
 	reach_progress = 0.0
@@ -217,6 +220,11 @@ func step_into_receive(delta: float, review_offset: Vector3) -> void:
 		var local := actor.basis.inverse()*offset
 		if tier == 1 and absf(local.x)<0.12 and absf(local.z)<0.12: return
 		reach_tier = tier
+		var court_forward := Vector3(0,actor.position.y,4)-actor.position
+		court_forward = court_forward.normalized()
+		var forward_offset := offset.dot(court_forward)
+		var side_offset := offset.dot(court_forward.cross(Vector3.UP))
+		reach_back = forward_offset < -absf(side_offset)*0.65
 		reach_height = offset.y if tier == 2 else 0.0
 		reach_side_lunge = tier == 2 and reach_height < 0.20 and absf(local.x) > absf(local.z)*1.4
 		reach_forward_lunge = tier == 2 and reach_height < 0.20 and local.z > absf(local.x)*1.4
@@ -248,9 +256,12 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 	var side_lean := clampf(step.x/0.32,-1.0,1.0)
 	var shoulder_side := 1.0 if reach_lead == "l" else -1.0
 	author.rotate_world(pose,"spine_02",Vector3.BACK,-side_lean*0.27*weight)
-	if reach_tier == 1 and absf(step.x) > absf(step.z)*1.2:
-		# Counter-tilt the platform: left reach lowers the right shoulder.
-		author.rotate_world(pose,"spine_03",Vector3.BACK,side_lean*0.43*weight)
+	var side_receive := not reach_back and absf(step.x)>0.10 and absf(step.x)>absf(step.z)*0.55
+	if side_receive:
+		# Open the shoulders toward the ball and lower the opposite shoulder.
+		var roll := 0.56 if reach_tier == 2 else 0.43
+		author.rotate_world(pose,"spine_03",Vector3.BACK,side_lean*roll*weight)
+		author.rotate_world(pose,"spine_03",Vector3.UP,side_lean*0.18*weight)
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,-back*0.14*weight)
 	author.rotate_world(pose,"spine_03",Vector3.UP,shoulder_side*back*0.31*weight)
 	var deep := reach_tier == 2 and reach_height < 0.20
@@ -296,17 +307,21 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 			pole = pole.normalized().lerp(knee_over_foot.normalized(),weight)
 		author.limb(pose,"thigh_"+side,"calf_"+side,foot_name,target,pole)
 		author.set_world_basis(pose,foot_name,foot.basis)
-	if reach_tier == 2:
-		var extension := 0.23 if reach_forward_lunge else (0.19 if reach_side_lunge else 0.14)
+	if reach_tier == 2 or side_receive:
+		var extension := 0.20 if reach_forward_lunge else (0.18 if reach_side_lunge else 0.12)
 		var arms := Vector3(step.x,0.0,step.z).normalized()*extension*weight
-		if reach_forward_lunge: arms.y = 0.10*weight
+		if reach_forward_lunge: arms.y = 0.07*weight
 		if high: arms.y = clampf(reach_height/scale_,0.18,0.53)*weight
-		for side in ["l","r"]:
-			var hand_name: String = "hand_"+side
-			var hand: Transform3D = author.world_pose(pose,rig.find_bone(hand_name))
-			var pole: Vector3 = author.point(pose,"lowerarm_"+side)-author.point(pose,"upperarm_"+side)
-			author.limb(pose,"upperarm_"+side,"lowerarm_"+side,hand_name,hand.origin+arms,pole)
-			author.set_world_basis(pose,hand_name,hand.basis)
+		var center: Vector3 = (author.point(pose,"hand_l")+author.point(pose,"hand_r"))*0.5
+		if not reach_back or high:
+			PlatformPose.connect_arms(pose,author,center+arms,smoothstep(0.0,0.82,weight))
+		else:
+			for side in ["l","r"]:
+				var hand_name: String = "hand_"+side
+				var hand: Transform3D = author.world_pose(pose,rig.find_bone(hand_name))
+				var pole: Vector3 = author.point(pose,"lowerarm_"+side)-author.point(pose,"upperarm_"+side)
+				author.limb(pose,"upperarm_"+side,"lowerarm_"+side,hand_name,hand.origin+arms,pole)
+				author.set_world_basis(pose,hand_name,hand.basis)
 	rig.set_bone_pose_position(pelvis,pose[pelvis].origin)
 	for bone in rig.get_bone_count():
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())

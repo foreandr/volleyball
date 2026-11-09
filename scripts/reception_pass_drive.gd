@@ -1,5 +1,7 @@
 extends RefCounted
 
+const PlatformPose = preload("res://scripts/reception_platform_pose.gd")
+
 static func effort(incoming: Vector3, outgoing: Vector3) -> float:
 	var demand := outgoing.length()+0.30*maxf(0.0,(outgoing-incoming).length()-20.0)
 	return smoothstep(9.0,28.0,demand)
@@ -43,21 +45,11 @@ static func apply(rig: Skeleton3D, author: RefCounted, outgoing: Vector3, power:
 			var knee_pole: Vector3 = author.point(original,"calf_"+side)-author.point(original,"thigh_"+side)
 			author.limb(pose,"thigh_"+side,"calf_"+side,foot_name,foot.origin,knee_pole)
 			author.set_world_basis(pose,foot_name,foot.basis)
-		var hand_name: String = "hand_"+side
-		var arm_name: String = "upperarm_"+side
-		var elbow_name: String = "lowerarm_"+side
-		var hand: Transform3D = author.world_pose(original,rig.find_bone(hand_name))
-		var target := hand.origin+sweep
-		var shoulder: Vector3 = author.point(pose,arm_name)
-		# Keep the platform in front of the sternum as the torso and hips drive.
-		target.z = maxf(target.z,maxf(chest.z,shoulder.z)+0.23)
-		target.y = minf(target.y,maxf(hand.origin.y,chest.y+0.16))
-		var sign_ := 1.0 if side == "l" else -1.0
-		var original_pole: Vector3 = author.point(original,elbow_name)-author.point(original,arm_name)
-		var clear_pole := Vector3(sign_*0.54,-0.28,0.80)
-		var pole := original_pole.normalized().lerp(clear_pole,clampf(0.60+drive*0.40,0.0,1.0))
-		author.limb(pose,arm_name,elbow_name,hand_name,target,pole,1.0,174.0)
-		author.set_world_basis(pose,hand_name,hand.basis)
+	var hand_center: Vector3 = (author.point(original,"hand_l")+author.point(original,"hand_r"))*0.5
+	var target := hand_center+sweep
+	target.z = maxf(target.z,chest.z+0.25)
+	target.y = minf(target.y,maxf(hand_center.y,chest.y+0.16))
+	PlatformPose.connect_arms(pose,author,target,clampf((load+drive)*1.7,0.0,1.0))
 	rig.set_bone_pose_position(pelvis,pose[pelvis].origin)
 	for bone in rig.get_bone_count():
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())

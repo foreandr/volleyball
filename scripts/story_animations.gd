@@ -366,15 +366,17 @@ func step_cpu_receive(previous: float, delta: float) -> void:
 			var travel: Vector3 = intercept.point-center
 			travel.y = 0.0
 			var arrows = preview_player.get_node("DirectionArrows")
-			if arrows.selected != 0 and arrows.selected_distance == 2:
+			var side_feed: bool = arrows.selected in [2,3,4,6,7,8]
+			if arrows.selected != 0 and (arrows.selected_distance == 2 or side_feed):
 				var start: Vector3 = cpu_start if cpu_start.is_finite() else preview_player.position
 				var arrow_heading: Vector3 = ball_preview.aim_point-start
 				arrow_heading.y = 0.0
 				arrow_heading = arrow_heading.normalized()
 				var incoming: Vector3 = ball_preview.incoming.normalized()
 				var transverse := arrow_heading.slide(incoming).length()
-				travel -= arrow_heading*minf(1.8,0.77/maxf(0.25,transverse))
-			if travel.length() > 0.24:
+				var gap := 0.77 if arrows.selected_distance == 2 else 0.39
+				travel -= arrow_heading*minf(1.8,gap/maxf(0.25,transverse))
+			if travel.length() > (0.14 if side_feed else 0.24):
 				if not cpu_start.is_finite(): cpu_start = preview_player.position
 				player_controls.move_cpu_toward(travel,delta)
 				drill_status.text = "CPU lining up  |  F1 to take control"
