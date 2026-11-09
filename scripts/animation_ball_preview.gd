@@ -231,11 +231,22 @@ func recalculate() -> void:
 			direction.y = 0.0
 			var reach: float = [0.42,0.85,1.42][arrows.selected_distance-1]
 			aim_point = impact_point+direction.normalized()*reach
-			if float(actor.get_meta("feed_settings",{}).get("source_height",0.0)) >= 4.6:
+			if arrows.selected_distance == 3 and arrows.selected in [1,2,8]:
+				aim_point.y = 0.46
+			elif float(actor.get_meta("feed_settings",{}).get("source_height",0.0)) >= 4.6:
 				aim_point.y += 0.36
 	var feed: Dictionary
 	if review_feed.is_empty():
-		feed = Flight.feed(aim_point,actor.get_meta("feed_settings",{}))
+		var settings: Dictionary = actor.get_meta("feed_settings",{})
+		feed = Flight.feed(aim_point,settings)
+		if practice_mode and missed and arrows.selected_distance == 3 and arrows.selected in [1,2,8]:
+			# Keep the low dive target reachable across the net without moving the source.
+			var fitted := settings.duplicate()
+			fitted.fit = "speed"
+			for attempt in range(6):
+				if Net.first_hit(func(time): return Flight.position(feed,aim_point,time),-float(feed.duration),0.0).is_empty(): break
+				fitted.angle = float(settings.get("angle",27.4))+2.0*(attempt+1)
+				feed = Flight.feed(aim_point,fitted)
 	else:
 		missed = false
 		aim_point = review_feed.aim

@@ -1,6 +1,7 @@
 extends HBoxContainer
 
 const Flight = preload("res://scripts/pass_flight.gd")
+const ForwardDive = preload("res://scripts/forward_reception_dive.gd")
 const CASES := [
 	[1,"Forward step",Vector3(0,0,0.42),Vector3(0,-5,-2)],
 	[1,"Forward-right step",Vector3(-0.30,0,0.30),Vector3(0,-5,-3)],
@@ -18,6 +19,9 @@ const CASES := [
 	[2,"Back-left lunge",Vector3(0.54,-0.12,-0.52),Vector3(0,-7,-2)],
 	[2,"Left lunge",Vector3(0.85,0,0),Vector3(0,-7,-3)],
 	[2,"Forward-left reach",Vector3(0.59,0,0.59),Vector3(0,-5,-3)],
+	[3,"Forward dive",Vector3(0,0,1.42),Vector3(0,-9.2,-18)],
+	[3,"Forward-right dive",Vector3(-1.0,0,1.0),Vector3(-1,-9.2,-18)],
+	[3,"Forward-left dive",Vector3(1.0,0,1.0),Vector3(1,-9.2,-18)],
 ]
 const SHORT_BACK := 4
 const RIGHT_LUNGE := 10
@@ -44,6 +48,7 @@ var original_target: Dictionary
 var review_clip: Animation
 var offset := Vector3.ZERO
 var released := false
+var dive_ready: Array[Transform3D] = []
 var counter: Label
 var play_button: Button
 var previous_button: Button
@@ -214,6 +219,10 @@ func load_case(next_index: int) -> void:
 	offset = actor.global_basis.orthonormalized()*relative
 	var velocity: Vector3 = actor.global_basis.orthonormalized()*CASES[index][3]
 	var aim: Vector3 = ball.platform(ball.contact_time).ball+offset
+	dive_ready.clear()
+	if CASES[index][0] == 3:
+		aim.y = 0.46
+		dive_ready = page.player_controls.snapshot_receive_pose()
 	var acceleration := Vector3.DOWN*Flight.GRAVITY
 	ball.review_feed = {"aim":aim,"incoming":velocity,"acceleration":acceleration,"duration":FEED_TIME,
 		"start":aim-velocity*FEED_TIME+acceleration*0.5*FEED_TIME*FEED_TIME,"side":Vector3.RIGHT,"valid":true}
@@ -223,8 +232,7 @@ func load_case(next_index: int) -> void:
 	title_move.text = "Distance %d  |  %s" % [CASES[index][0],CASES[index][1]]
 	update_title_card(-FEED_TIME)
 	page.drill_status.text = "CPU review  |  Automatic receive"
-	page.distance_status.text = "Distance %d  |  %s
-Distance 3  |  Dive planned" % [CASES[index][0],CASES[index][1]]
+	page.distance_status.text = "Distance %d  |  %s" % [CASES[index][0],CASES[index][1]]
 	ball.tick(page.preview_clock,false)
 	ball.update_practice_aim(true)
 	update_controls()
@@ -241,7 +249,18 @@ func step(delta: float) -> void:
 	var rear_side_lunge := index in [BACK_RIGHT_LUNGE,BACK_LEFT_LUNGE]
 	var short_back := index == SHORT_BACK
 	var receive_start := -0.12 if short_back else -0.25
-	if short_back and elapsed >= -0.50 and elapsed < receive_start:
+	if not dive_ready.is_empty():
+		var dive_time := elapsed+ForwardDive.WINDUP
+		if dive_time >= ForwardDive.DURATION or not ball.incoming_net.is_empty(): released = true
+		if dive_time >= 0.0 and not released:
+			var heading: Vector3 = (ball.aim_point-READY_POSITION).slide(Vector3.UP).normalized()
+			ForwardDive.sample(page.preview_player,page.player_controls.footwork.author,dive_ready,READY_POSITION,heading,dive_time,ball.aim_point)
+			if dive_time >= 0.26 and dive_time <= 0.47:
+				ball.update_practice_platform()
+				ball.try_practice_pass(previous,page.preview_clock,0.16)
+			else:
+				ball.practice_reach_center = Vector3.INF
+	elif short_back and elapsed >= -0.50 and elapsed < receive_start:
 		page.player_controls.step_back_for_lunge(READY_POSITION,Vector3.BACK,delta,0.48)
 	elif rear_side_lunge and elapsed >= -0.66 and elapsed < -0.25:
 		page.player_controls.step_back_for_lunge(READY_POSITION,Vector3.BACK,delta,0.64)
@@ -263,7 +282,8 @@ func step(delta: float) -> void:
 	if released:
 		page.preview_player.animator.seek(0.0,true)
 		page.player_controls.blend_receive_recovery(delta)
-	var end: float = maxf(ball.cycle_end(),ball.contact_time+0.65)
+	var recovery_time := ForwardDive.DURATION-ForwardDive.WINDUP if not dive_ready.is_empty() else 0.65
+	var end: float = maxf(ball.cycle_end(),ball.contact_time+recovery_time)
 	ball.tick(minf(page.preview_clock,end),true)
 	ball.update_practice_aim(true)
 	if page.preview_clock < end: return

@@ -1,6 +1,7 @@
 extends "res://scripts/create.gd"
 const BallPreview = preload("res://scripts/animation_ball_preview.gd")
 const Flight = preload("res://scripts/pass_flight.gd")
+const ForwardDive = preload("res://scripts/forward_reception_dive.gd")
 const Catalog = preload("res://scripts/volleyball_animations.gd")
 const MOVE_TYPES := {
 	"Forearm reception":["Forearm"],
@@ -32,6 +33,7 @@ var cpu_receive_clock := -INF
 var cpu_reach_offset := Vector3.INF
 var cpu_start := Vector3.INF
 var cpu_start_yaw := 0.0
+var cpu_dive_ready: Array[Transform3D] = []
 var middle_arrow := Vector2i(-1,1)
 var middle_press := Vector2.ZERO
 var middle_dragged := false
@@ -349,6 +351,8 @@ func _process(delta: float) -> void:
 	set_cpu_arrows_pinned(drill and not in_control)
 	var first := minf(0,ball_preview.contact_time-ball_preview.feed_duration)
 	var last: float = ball_preview.cycle_end()
+	if not cpu_dive_ready.is_empty():
+		last = maxf(last,ball_preview.contact_time+ForwardDive.DURATION-ForwardDive.WINDUP)
 	if drill and not in_control and cpu_start.is_finite() and preview_clock+delta >= last:
 		if not player_controls.settle_for_next_feed(cpu_start,cpu_start_yaw,delta):
 			preview_clock = last
@@ -407,10 +411,13 @@ func reset_cpu_receive(restore_position: bool) -> void:
 	cpu_start = Vector3.INF
 	cpu_receive_clock = -INF
 	cpu_reach_offset = Vector3.INF
+	cpu_dive_ready.clear()
 
 func step_cpu_receive(previous: float, delta: float) -> void:
 	var arrows = preview_player.get_node("DirectionArrows")
-	if arrows.selected != 0 and arrows.selected_distance == 3: return
+	if arrows.selected != 0 and arrows.selected_distance == 3:
+		if arrows.selected in [1,2,8]: step_cpu_forward_dive(previous)
+		return
 	var short_back: bool = arrows.selected_distance == 1 and arrows.selected == 5
 	if not is_finite(cpu_receive_clock):
 		if arrows.selected != 0:
@@ -462,6 +469,25 @@ func step_cpu_receive(previous: float, delta: float) -> void:
 		preview_player.animator.seek(0.0,true)
 		player_controls.blend_receive_recovery(delta)
 
+func step_cpu_forward_dive(previous: float) -> void:
+	var time: float = preview_clock-ball_preview.contact_time+ForwardDive.WINDUP
+	if time < 0.0 or not ball_preview.incoming_net.is_empty(): return
+	if cpu_dive_ready.is_empty():
+		cpu_start = preview_player.position
+		cpu_start_yaw = preview_player.rotation.y
+		preview_player.animator.play("custom_preview/clip",0)
+		preview_player.animator.seek(0.0,true)
+		preview_player.animator.pause()
+		cpu_dive_ready = player_controls.snapshot_receive_pose()
+	var heading: Vector3 = (ball_preview.aim_point-cpu_start).slide(Vector3.UP).normalized()
+	ForwardDive.sample(preview_player,player_controls.footwork.author,cpu_dive_ready,cpu_start,heading,time,ball_preview.aim_point)
+	drill_status.text = "CPU forward dive  |  F1 to take control"
+	if time >= 0.26 and time <= 0.47:
+		ball_preview.update_practice_platform()
+		ball_preview.try_practice_pass(previous,preview_clock,0.16)
+	else:
+		ball_preview.practice_reach_center = Vector3.INF
+
 func update_distance_status(in_control: bool) -> void:
 	var tier: int = player_controls.reach_tier if in_control else 1
 	var arrows = preview_player.get_node("DirectionArrows")
@@ -473,6 +499,7 @@ func update_distance_status(in_control: bool) -> void:
 		tier = ball_preview.practice_reach_tier(offset)
 		high = offset.y >= 0.20
 	var names := ["Short reach","High shoulder reach" if high else "Low lunge","Dive target (animation pending)"]
+	if tier == 3 and arrows.selected in [1,2,8]: names[2] = "Forward dive"
 	distance_status.text = "Distance %d  |  %s" % [tier,names[tier-1]]
 
 func aim_pass_at_mouse(screen_point: Vector2) -> void:
