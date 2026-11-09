@@ -1,5 +1,6 @@
 extends RefCounted
 const QUICK_STEP_RATE := 1.5
+const PassDrive = preload("res://scripts/reception_pass_drive.gd")
 var page: Control
 var active := false
 var free_view := {}
@@ -188,6 +189,11 @@ func play_receive_pose(delta: float, review_offset := Vector3.INF, pose_offset :
 	actor.animator.seek(maxf(0.0,page.ball_preview.contact_time+pose_offset),true)
 	actor.animator.pause()
 	step_into_receive(delta,review_offset)
+	var ball = page.ball_preview
+	var struck: bool = ball.recovery.has("spread")
+	var outgoing: Vector3 = ball.recovery.velocity if struck else ball.practice_pass_velocity(ball.practice_platform_center(),0.0)
+	var power := PassDrive.effort(ball.incoming,outgoing)
+	PassDrive.apply(actor.skeleton,footwork.author,outgoing,power,pose_offset,struck)
 
 func reset_reach() -> void:
 	if reach_step.is_zero_approx() and reach_height == 0.0: return
@@ -242,6 +248,9 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 	var side_lean := clampf(step.x/0.32,-1.0,1.0)
 	var shoulder_side := 1.0 if reach_lead == "l" else -1.0
 	author.rotate_world(pose,"spine_02",Vector3.BACK,-side_lean*0.27*weight)
+	if reach_tier == 1 and absf(step.x) > absf(step.z)*1.2:
+		# Counter-tilt the platform: left reach lowers the right shoulder.
+		author.rotate_world(pose,"spine_03",Vector3.BACK,side_lean*0.43*weight)
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,-back*0.14*weight)
 	author.rotate_world(pose,"spine_03",Vector3.UP,shoulder_side*back*0.31*weight)
 	var deep := reach_tier == 2 and reach_height < 0.20
