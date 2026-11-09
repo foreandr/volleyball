@@ -1,6 +1,6 @@
 extends RefCounted
 const SIZES := ["short","medium","long"]
-const LEFT_SHUFFLE_YAW := deg_to_rad(-26.0)
+const SHUFFLE_YAW := deg_to_rad(26.0)
 var actor: Node3D
 var author: RefCounted
 var clips: Array[Animation] = []
@@ -88,38 +88,36 @@ func apply_pose(amount := 1.0) -> void:
 	# Turn the captured foot paths into diagonal paths.
 	var from := Vector3(-side_sign,0,0)
 	var to := Vector3(-travel_direction.x,0,travel_direction.y).normalized()
-	var turn := Basis(Quaternion(from,to))
-	if side_sign<0 or absf(travel_direction.y)>0.01:
-		var feet := {}
-		var poles := {}
-		for side in ["l","r"]:
-			feet[side] = author.world_pose(pose,rig.find_bone("foot_"+side))
-			poles[side] = author.point(pose,"calf_"+side)-author.point(pose,"thigh_"+side)
-		var left_shuffle := side_sign < 0
-		var pelvis_z: float = author.point(pose, "pelvis").z
-		if left_shuffle:
-			# The spine inherits the pelvis turn so the shoulders follow the hips.
-			author.rotate_world(pose, "pelvis", Vector3.UP, LEFT_SHUFFLE_YAW)
-		for side in ["l","r"]:
-			var foot: Transform3D = feet[side]
-			var target: Vector3 = author.feet[side].origin+turn*(foot.origin-author.feet[side].origin)
-			var knee_pole: Vector3 = poles[side]
-			if left_shuffle:
-				# Stagger the stance while retaining the captured lift and lateral travel.
-				knee_pole = Vector3.BACK if side == "l" else Vector3(-1.0, 0.0, 0.65)
-				var stagger := 0.39 if side == "l" else -0.09
-				target.z = lerpf(pelvis_z + stagger, target.z, 0.15)
-			author.limb(pose,"thigh_"+side,"calf_"+side,"foot_"+side,target,knee_pole)
-			var foot_name: String = "foot_"+side
-			author.set_world_basis(pose,foot_name,foot.basis)
-			if left_shuffle:
-				# Turn the shoe with the stance while retaining the clip's ankle pitch and toe flex.
-				var toe_direction: Vector3 = author.point(pose,"ball_"+side)-author.point(pose,foot_name)
-				toe_direction.y = 0.0
-				var toe_out := deg_to_rad(8.0 if side == "l" else -8.0)
-				var heading := Vector3.BACK.rotated(Vector3.UP,LEFT_SHUFFLE_YAW+toe_out)
-				var correction := toe_direction.signed_angle_to(heading,Vector3.UP)
-				author.rotate_world(pose,foot_name,Vector3.UP,correction)
+	# A full forward diagonal turn spreads the feet too far for the low stance.
+	var path_turn := Quaternion(from,to)
+	if travel_direction.y > 0.0:
+		path_turn = Quaternion.IDENTITY.slerp(path_turn,0.6)
+	var turn := Basis(path_turn)
+	var feet := {}
+	for side in ["l","r"]:
+		feet[side] = author.world_pose(pose,rig.find_bone("foot_"+side))
+	var pelvis_z: float = author.point(pose,"pelvis").z
+	var yaw := SHUFFLE_YAW*side_sign
+	# Let the spine and shoulders inherit the pelvis turn.
+	author.rotate_world(pose,"pelvis",Vector3.UP,yaw)
+	for side in ["l","r"]:
+		var foot_name: String = "foot_"+side
+		var foot: Transform3D = feet[side]
+		var ready_foot: Transform3D = author.feet[side]
+		var target := ready_foot.origin+turn*(foot.origin-ready_foot.origin)
+		var is_lead: bool = (side == "l") == (side_sign < 0)
+		var knee_pole := Vector3.BACK if is_lead else Vector3(side_sign,0.0,0.65)
+		# Stagger the stance around the lead foot while keeping the captured lift.
+		var stagger := 0.39 if is_lead else -0.09
+		target.z = lerpf(pelvis_z+stagger,target.z,0.15)
+		author.limb(pose,"thigh_"+side,"calf_"+side,foot_name,target,knee_pole)
+		author.set_world_basis(pose,foot_name,foot.basis)
+		# Align shoe heading without changing the captured ankle pitch or toe flex.
+		var toe_direction: Vector3 = author.point(pose,"ball_"+side)-author.point(pose,foot_name)
+		toe_direction.y = 0.0
+		var toe_out := deg_to_rad(8.0 if side == "l" else -8.0)
+		var heading := Vector3.BACK.rotated(Vector3.UP,yaw+toe_out)
+		author.rotate_world(pose,foot_name,Vector3.UP,toe_direction.signed_angle_to(heading,Vector3.UP))
 	last_pose = pose
 	last_weight = weight
 	install(pose,weight*amount)
