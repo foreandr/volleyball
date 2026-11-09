@@ -6,6 +6,7 @@ var free_view := {}
 var animator_active := true
 var animation_process := 0
 var moving := false
+var receive_hold := 0.0
 var indicator: Label
 var save_clock := 0.0
 var footwork: RefCounted
@@ -68,6 +69,7 @@ func set_active(value: bool) -> void:
 	if active==value: return
 	var actor: Node3D = page.preview_player
 	active = value
+	receive_hold = 0.0
 	side_steps.active = false
 	side_weight = 0
 	stamina_bar.visible = active
@@ -95,9 +97,12 @@ func set_active(value: bool) -> void:
 			actor.animator.play("custom_preview/clip",0)
 			actor.animator.pause()
 		page.update_camera()
-		page.angle_control.pending = true
+		if not reception_drill_active(): page.angle_control.pending = true
 	indicator.text = "Player" if active else "Camera"
 	page.get_node("/root/StorySession").save_preview_setup()
+
+func reception_drill_active() -> bool:
+	return page.has_method("reception_drill_active") and page.reception_drill_active()
 
 func step(delta: float) -> void:
 	var session = page.get_node("/root/StorySession")
@@ -120,7 +125,22 @@ func step(delta: float) -> void:
 	sprint_requested = Input.is_physical_key_pressed(KEY_SHIFT)
 	var connected := Input.get_connected_joypads()
 	if not connected.is_empty(): sprint_requested = sprint_requested or Input.is_joy_button_pressed(connected[0],JOY_BUTTON_RIGHT_SHOULDER)
-	move_player(direction.limit_length(),delta)
+	var holding := reception_drill_active() and not (focus is LineEdit or focus is TextEdit) and Input.is_physical_key_pressed(KEY_SPACE)
+	receive_hold = receive_hold+delta if holding else 0.0
+	if holding and receive_hold <= 0.40:
+		var actor: Node3D = page.preview_player
+		side_steps.active = false
+		side_steps.hold = 0.0
+		side_weight = 0.0
+		locomotion = ""
+		sprinting = false
+		moving = false
+		actor.model.rotation.y = 0.0
+		actor.animator.play("custom_preview/clip",0)
+		actor.animator.seek(page.ball_preview.contact_time,true)
+		actor.animator.pause()
+	else:
+		move_player(direction.limit_length(),delta)
 
 func move_player(direction: Vector2, delta: float) -> void:
 	var actor: Node3D = page.preview_player
@@ -146,7 +166,7 @@ func move_player(direction: Vector2, delta: float) -> void:
 	actor.position.x = clampf(actor.position.x+movement.x,-4,4)
 	actor.position.z = clampf(actor.position.z+movement.z,-4.5,2.5)
 	actor.rotation.y = atan2(forward.x,forward.z)
-	session.pass_start = Vector2(actor.position.x,actor.position.z)
+	if not reception_drill_active(): session.pass_start = Vector2(actor.position.x,actor.position.z)
 	var now_moving := actor.position.distance_to(before)>0.00001
 	sprinting = sprinting and now_moving
 	if quick_pace and now_moving:

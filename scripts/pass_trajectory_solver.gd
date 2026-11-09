@@ -12,12 +12,10 @@ var rotations := {}
 var contact_time := 0.6
 var layers: RefCounted
 var restitution := 0.55
-var directional := false
 
 func _init(player: Node3D, clip: Animation) -> void:
 	actor = player
 	source = clip
-	directional = clip.has_meta("receive_arrow")
 	author = Author.new(actor.skeleton,source)
 	contact_time = float(source.get_meta("contact_time",0.6))
 	for bone in actor.skeleton.get_bone_count():
@@ -39,8 +37,7 @@ func raw_pose(time: float) -> Array:
 	return pose.duplicate()
 
 func adapted_pose(time: float, pitch: float, lift: float, drive := 0.0, yaw := 0.0) -> Array:
-	var pose: Array = raw_pose(time)
-	if not directional: pose = layers.apply(pose,time)
+	var pose: Array = layers.apply(raw_pose(time),time)
 	var rig: Skeleton3D = actor.skeleton
 	var recovery := 1.0-smoothstep(contact_time+0.2,minf(source.length,contact_time+0.68),time)
 	var platform_weight := smoothstep(0,contact_time-0.12,time)*recovery
@@ -64,35 +61,13 @@ func adapted_pose(time: float, pitch: float, lift: float, drive := 0.0, yaw := 0
 		for side in ["l","r"]:
 			author.limb(pose,"thigh_"+side,"calf_"+side,"foot_"+side,feet[side].origin,poles[side])
 			author.set_world_basis(pose,"foot_"+side,feet[side].basis)
+	author.rotate_world(pose,"spine_03",Vector3.UP,yaw*platform_weight)
 	var offset := time-contact_time
+	# One continuous contact stroke; a decaying impulse creates a second arm swing.
 	var push := drive*0.10*tanh(offset/0.10)*platform_weight
-	if directional:
-		steer_platform(pose,pitch*platform_weight+push,yaw*platform_weight)
-	else:
-		author.rotate_world(pose,"spine_03",Vector3.UP,yaw*platform_weight)
-		var pitch_axis := Basis(Vector3.UP,yaw*platform_weight)*Vector3.RIGHT
-		for side in ["l","r"]: author.rotate_world(pose,"upperarm_"+side,pitch_axis,pitch*platform_weight+push)
+	var pitch_axis := Basis(Vector3.UP,yaw*platform_weight)*Vector3.RIGHT
+	for side in ["l","r"]: author.rotate_world(pose,"upperarm_"+side,pitch_axis,pitch*platform_weight+push)
 	return pose
-
-func steer_platform(pose: Array, pitch: float, roll: float) -> void:
-	var turn := Basis(Vector3.BACK,roll)*Basis(Vector3.RIGHT,pitch)
-	# Re-aim the arms without rotating the authored torso or shoulder line.
-	var rig: Skeleton3D = actor.skeleton
-	for side in ["l","r"]:
-		var bone: String = "upperarm_"+side
-		var arm: Transform3D = author.world_pose(pose,rig.find_bone(bone))
-		author.set_world_basis(pose,bone,turn*arm.basis)
-	var left: Vector3 = author.point(pose,"hand_l")
-	var right: Vector3 = author.point(pose,"hand_r")
-	var gap := left.distance_to(right)
-	if gap <= 0.11: return
-	var center := (left+right)*0.5
-	var axis := (left-right).normalized()
-	for side in ["l","r"]:
-		var half_gap := lerpf(gap*0.5,0.055,0.45)
-		var target := center+axis*(half_gap if side == "l" else -half_gap)
-		var pole: Vector3 = author.point(pose,"lowerarm_"+side)-author.point(pose,"upperarm_"+side)
-		author.limb(pose,"upperarm_"+side,"lowerarm_"+side,"hand_"+side,target,pole)
 
 func surface(time: float, pitch: float, lift: float, drive := 0.0, yaw := 0.0) -> Dictionary:
 	var pose := adapted_pose(time,pitch,lift,drive,yaw)
@@ -134,7 +109,7 @@ func solve(requested: float, distance_ := 6.0) -> Dictionary:
 	if cache.has(key): return cache[key]
 	var target_position: Vector2 = target_info.position
 	var range_ := target_position.distance_to(Vector2(actor.global_position.x,actor.global_position.z))
-	var lift := 0.0 if directional else clampf((range_-4.0)*0.003,0,0.025)
+	var lift := clampf((range_-4.0)*0.003,0,0.025)
 	restitution = contact_softness(0,lift,0,target_info,goal)
 	var pitch := 0.0
 	var drive := 0.0

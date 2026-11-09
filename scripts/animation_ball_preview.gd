@@ -33,6 +33,8 @@ var feed_info := {}
 var incoming_net := {}
 var outgoing_net := {}
 var missed := false
+var practice_mode := false
+var practice_floor_time := 0.0
 var aim_point := Vector3.ZERO
 var net_audio: AudioStreamPlayer
 var net_contact_count := 0
@@ -182,7 +184,7 @@ func recalculate() -> void:
 	var after := platform(minf(clip.length,contact_time+1.0/60))
 	surface_velocity = (after.surface-before.surface)/(2.0/60)
 	var arrows = actor.get_node_or_null("DirectionArrows")
-	missed = arrows != null and arrows.selected != 0 and arrows.selected != int(clip.get_meta("receive_arrow",0))
+	missed = arrows != null and arrows.selected != 0
 	aim_point = impact_point
 	if missed:
 		aim_point = arrows.landing_target()
@@ -203,8 +205,46 @@ func recalculate() -> void:
 	if not missed and incoming_net.is_empty(): outgoing_net = Net.first_hit(flight_position,0.0,flight_duration)
 	feed_valid = feed.start.y>=Flight.FLOOR and incoming_net.is_empty()
 	feed_info.valid = feed_valid
+	if practice_mode:
+		var gravity := maxf(1.0,-float(feed.acceleration.y))
+		practice_floor_time = (incoming.y+sqrt(maxf(0,incoming.y*incoming.y+2*gravity*(aim_point.y-Flight.FLOOR))))/gravity
+		outgoing_net.clear()
 	update_guide()
 	if edit_session != null: cached_revision = edit_session.revision
+
+func practice_position(elapsed: float) -> Vector3:
+	var time := minf(elapsed,practice_floor_time)
+	if time < 0.0: return Flight.position(feed_info,aim_point,time)
+	return aim_point+incoming*time+feed_info.acceleration*0.5*time*time
+
+func reset_practice_serve() -> void:
+	if recovery.is_empty(): return
+	recovery.clear()
+	recovery_net.clear()
+	update_guide()
+
+func try_practice_pass(previous_time: float, time: float, held: float) -> bool:
+	if held < 0.055 or held > 0.40 or not recovery.is_empty() or not incoming_net.is_empty(): return false
+	var first := maxf(previous_time-contact_time,-feed_duration)
+	var last := minf(time-contact_time,practice_floor_time)
+	if last < first: return false
+	var rig: Skeleton3D = actor.skeleton
+	var elbows := []
+	var wrists := []
+	for side in ["l","r"]:
+		elbows.append(rig.global_transform*rig.get_bone_global_pose(rig.find_bone("lowerarm_"+side)).origin)
+		wrists.append(rig.global_transform*rig.get_bone_global_pose(rig.find_bone("hand_"+side)).origin)
+	var platform_center: Vector3 = Contact.surface(elbows,wrists,0.032*rig.global_basis.get_scale().y).ball
+	var previous := practice_position(first)
+	var current := practice_position(last)
+	var touch := Geometry3D.get_closest_point_to_segment(platform_center,previous,current)
+	if touch.distance_to(platform_center)>0.25: return false
+	var target: Dictionary = actor.get_meta("pass_target",{})
+	var velocity := Flight.target_velocity(touch,target,float(clip.get_meta("desired_output_angle",45.0)))
+	recovery = {"time":last,"point":touch,"velocity":velocity,"end_time":last+Flight.landing_time(touch,velocity)}
+	recovery_net = Net.first_hit(func(t): return touch+velocity*(t-last)+Vector3.DOWN*4.905*pow(t-last,2),last,recovery.end_time)
+	update_guide()
+	return true
 
 func animation_time(time: float) -> float:
 	return clampf(time,0,clip.length) if incoming_net.is_empty() else 0.0
@@ -213,7 +253,7 @@ func cycle_end() -> float:
 	if not recovery.is_empty():
 		var last: float = recovery_net.end_time if not recovery_net.is_empty() else recovery.end_time
 		return maxf(clip.length,contact_time+last+0.5)
-	var end := contact_time+flight_duration
+	var end := contact_time+(practice_floor_time if practice_mode else flight_duration)
 	if not incoming_net.is_empty(): return maxf(contact_time+float(incoming_net.end_time)+0.5,contact_time+0.5)
 	if not outgoing_net.is_empty(): end = contact_time+float(outgoing_net.end_time)
 	return maxf(clip.length,end+0.4)
@@ -224,6 +264,7 @@ func position_at(elapsed: float) -> Vector3:
 		var age := clampf(elapsed-float(recovery.time),0,float(recovery.end_time)-float(recovery.time))
 		return recovery.point+recovery.velocity*age+Vector3.DOWN*4.905*age*age
 	if not incoming_net.is_empty() and elapsed>=incoming_net.time: return Net.after_hit(incoming_net,elapsed)
+	if practice_mode: return practice_position(elapsed)
 	if elapsed<0.0: return Flight.position(feed_info,aim_point,elapsed)
 	if not outgoing_net.is_empty() and elapsed>=outgoing_net.time: return Net.after_hit(outgoing_net,elapsed)
 	return flight_position(elapsed)
@@ -262,12 +303,18 @@ func update_guide() -> void:
 	if not is_instance_valid(guide): return
 	var path := ImmediateMesh.new()
 	for incoming_path in [true,false]:
-		if not incoming_path and (missed or not incoming_net.is_empty()): continue
+		if not incoming_path and ((practice_mode and recovery.is_empty()) or (not practice_mode and missed) or not incoming_net.is_empty()): continue
 		var first := -feed_duration if incoming_path else 0.0
 		var last := 0.0 if incoming_path else flight_duration
 		if incoming_path and not incoming_net.is_empty(): last = incoming_net.end_time
 		if not incoming_path and not outgoing_net.is_empty(): last = outgoing_net.end_time
-		if not recovery.is_empty():
+		if practice_mode and incoming_net.is_empty():
+			if incoming_path:
+				last = practice_floor_time if recovery.is_empty() else float(recovery.time)
+			else:
+				first = recovery.time
+				last = recovery_net.end_time if not recovery_net.is_empty() else recovery.end_time
+		elif not recovery.is_empty():
 			if not incoming_path or not incoming_net.is_empty(): last = recovery_net.end_time if not recovery_net.is_empty() else recovery.end_time
 		path.surface_begin(Mesh.PRIMITIVE_LINE_STRIP)
 		var blocked: bool = not incoming_net.is_empty() if incoming_path else not outgoing_net.is_empty()
@@ -292,14 +339,12 @@ func update_guide() -> void:
 		var angle := TAU*index/32.0
 		path.surface_add_vertex(Vector3(landing.x+cos(angle)*0.2,0.055,landing.z+sin(angle)*0.2))
 	path.surface_end()
-	var arrows = actor.get_node_or_null("DirectionArrows")
-	if arrows != null and arrows.selected != 0:
-		var target: Vector3 = arrows.landing_target()
+	if missed:
 		path.surface_begin(Mesh.PRIMITIVE_LINE_STRIP)
 		path.surface_set_color(Color("ff4848"))
 		for index in range(33):
 			var angle := TAU*index/32.0
-			path.surface_add_vertex(Vector3(target.x+cos(angle)*0.17,0.06,target.z+sin(angle)*0.17))
+			path.surface_add_vertex(Vector3(aim_point.x+cos(angle)*0.17,0.06,aim_point.z+sin(angle)*0.17))
 		path.surface_end()
 	guide.mesh = path
 	var material := StandardMaterial3D.new()
@@ -318,7 +363,7 @@ func tick(time: float, audible: bool) -> void:
 	global_position = position_at(elapsed)
 	show()
 	ball.visible = elapsed>=-feed_duration and time<=cycle_end()
-	var squeeze := maxf(0,1.0-absf(elapsed)/0.035) if incoming_net.is_empty() and not missed else 0.0
+	var squeeze := maxf(0,1.0-absf(elapsed)/0.035) if incoming_net.is_empty() and not missed and not practice_mode else 0.0
 	var net_hit: Dictionary = incoming_net if not incoming_net.is_empty() else outgoing_net
 	if not recovery_net.is_empty() and elapsed>=recovery_net.time: net_hit = recovery_net
 	if is_instance_valid(dynamic_net): dynamic_net.sample(net_hit,elapsed)
@@ -332,7 +377,7 @@ func tick(time: float, audible: bool) -> void:
 		rotation_time = minf(feed_duration,float(net_hit.time)+feed_duration)+maxf(0,minf(elapsed,float(net_hit.end_time))-float(net_hit.time))*0.25
 	ball.global_basis = Basis(Quaternion(axis,rotation_time*float(feed_info.get("spin_rate",0)))) if axis.length_squared()>0.1 else Basis.IDENTITY
 	ball.scale = Vector3(1.0+0.04*squeeze+0.04*net_squeeze,1.0-0.07*squeeze,1.0+0.04*squeeze-0.12*net_squeeze)
-	if audible and incoming_net.is_empty() and not missed and crossed(time,contact_time):
+	if audible and not practice_mode and incoming_net.is_empty() and not missed and crossed(time,contact_time):
 		audio.play()
 		contact_count += 1
 		contacted.emit()
