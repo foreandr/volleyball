@@ -27,7 +27,7 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 	var rig: Skeleton3D = actor.skeleton
 	var brace_start := maxf(0.41,release_time-WINDUP+CONTACT_POSE_TIME)
 	var since_brace := time-brace_start
-	var slide := 0.38*smoothstep(0.11,0.47,since_brace)
+	var slide := 0.42*smoothstep(0.14,0.52,since_brace)
 	var travel := 0.23*smoothstep(0.02,0.20,time)+1.35*smoothstep(0.16,0.61,time)+slide
 	var drop := 0.0
 	var pitch := 0.0
@@ -49,15 +49,17 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 	author.rotate_world(pose,"pelvis",Vector3.RIGHT,pitch)
 	var extension := smoothstep(0.19,0.39,time)
 	var landing := smoothstep(0.0,0.14,since_brace)
+	var chest_settle := landing*(1.0-smoothstep(0.38,0.55,since_brace))
+	pose[pelvis].origin -= author.world_pose(pose,parent).basis.inverse()*Vector3.UP*0.07*chest_settle/scale_
 	var get_up := smoothstep(0.82,POSE_DURATION,time)
 	author.rotate_world(pose,"spine_03",Vector3.RIGHT,-0.22*extension*(1.0-get_up))
-	author.rotate_world(pose,"neck_01",Vector3.RIGHT,-0.24*extension*(1.0-get_up))
+	author.rotate_world(pose,"neck_01",Vector3.RIGHT,-0.24*extension*(1.0-get_up)-0.36*chest_settle)
 	author.rotate_world(pose,"Head",Vector3.RIGHT,-pitch*0.24)
 	var head: Vector3 = author.point(pose,"Head")
-	var head_lift := maxf(0.0,0.24-(rig.global_transform*head).y)
+	var head_lift := maxf(0.0,0.24-0.02*chest_settle-(rig.global_transform*head).y)
 	pose[pelvis].origin += author.world_pose(pose,parent).basis.inverse()*Vector3.UP*head_lift/scale_
 	var brace := landing*(1.0-smoothstep(0.49,0.77,since_brace))
-	var push := smoothstep(0.11,0.37,since_brace)
+	var push := smoothstep(0.14,0.40,since_brace)
 	var release_hands := smoothstep(0.34,0.47,since_brace)*(1.0-smoothstep(0.47,0.65,since_brace))
 	for side in ["l","r"]:
 		var foot_name: String = "foot_"+side
@@ -68,8 +70,8 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 			ankle.z += 0.42*plant
 			ankle.y += 0.09*sin(PI*plant)
 		var trail := foot.origin-Vector3.BACK*(0.69 if side == "l" else 0.81)
-		trail.y += kick*(0.46 if side == "l" else 0.37)
-		trail.z += kick*0.14
+		trail.y += kick*(0.60 if side == "l" else 0.52)
+		trail.z += kick*0.20
 		ankle = ankle.lerp(trail,extension).lerp(foot.origin,get_up)
 		var lateral := 0.20 if side == "l" else -0.20
 		var calf: String = "calf_"+side
