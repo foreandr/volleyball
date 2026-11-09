@@ -7,7 +7,10 @@ const PlatformPose = preload("res://scripts/reception_platform_pose.gd")
 const Net = preload("res://scripts/net_collision.gd")
 const Contact = preload("res://scripts/forearm_contact.gd")
 const PLATFORM_RADIUS := 0.31
-const ATTEMPT_TIME := 0.44
+const ATTEMPT_TIME := 0.66
+const GREEN_START := 0.035
+const GREEN_END := 0.37
+const APPROACH_TIME := 0.60
 
 var setter: Node3D
 var clip: Animation
@@ -114,25 +117,25 @@ func approach(path: Callable, time: float, end: float) -> float:
 	var nearest := 1.12
 	var delay := -1.0
 	for index in range(20):
-		var ahead := Timing.APPROACH_WINDOW*index/19.0
+		var ahead := APPROACH_TIME*index/19.0
 		if time+ahead > end: break
 		var point: Vector3 = path.call(time+ahead)
 		var distance := point.distance_to(center)
-		if distance <= PLATFORM_RADIUS: return 1.0-ahead/Timing.APPROACH_WINDOW
+		if distance <= PLATFORM_RADIUS: return 1.0-ahead/APPROACH_TIME
 		if distance < nearest:
 			nearest = distance
 			delay = ahead
-	return 1.0-delay/Timing.APPROACH_WINDOW if delay >= 0.0 else -1.0
+	return 1.0-delay/APPROACH_TIME if delay >= 0.0 else -1.0
 
 func update_attempt(time: float, previous: float, end: float, path: Callable, incoming: Vector3, delta: float) -> void:
 	var elapsed := time-pressed_at
 	if grade == Timing.Grade.WAITING:
 		var incoming_ball: Vector3 = path.call(time)
 		in_reach = in_reach or incoming_ball.distance_to(ready_contact()) <= PLATFORM_RADIUS
-	var striking := grade == Timing.Grade.WAITING and elapsed >= 0.0 and elapsed <= ATTEMPT_TIME
+	var striking := grade == Timing.Grade.WAITING and elapsed >= 0.0 and elapsed <= ATTEMPT_TIME and time < end
 	if striking:
-		var windup := lerpf(-0.14,0.0,smoothstep(0.0,Timing.GREEN_START,elapsed))
-		apply_pose(contact_frame+windup,smoothstep(0.0,0.055,elapsed))
+		var windup := lerpf(-0.14,0.0,smoothstep(0.0,GREEN_START,elapsed))
+		apply_pose(contact_frame+windup,smoothstep(0.0,0.026,elapsed))
 		var intercept := advance_reach(path,time,end,delta)
 		pose_reach(smoothstep(0.0,1.0,reach_progress),intercept)
 		var center := platform_center()
@@ -149,8 +152,8 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 				touch_time = lerpf(previous,time,first.distance_to(point)/first.distance_to(last))
 				touch = point
 				var timing := touch_time-pressed_at
-				grade = Timing.Grade.LATE if timing < Timing.GREEN_START else (Timing.Grade.EARLY if timing > Timing.GREEN_END else Timing.Grade.PERFECT)
-				outgoing = aim_velocity(touch,Timing.practice_timing_error(timing))
+				grade = Timing.Grade.LATE if timing < GREEN_START else (Timing.Grade.EARLY if timing > GREEN_END else Timing.Grade.PERFECT)
+				outgoing = aim_velocity(touch,timing_error(timing))
 				floor_time = Flight.landing_time(touch,outgoing)
 				net_hit = Net.first_hit(func(t): return flight_point(touch,outgoing,t),0.0,floor_time)
 				if not net_hit.is_empty(): floor_time = net_hit.end_time
@@ -167,7 +170,11 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 		var recovery := 1.0-smoothstep(ATTEMPT_TIME,ATTEMPT_TIME+0.12,elapsed)
 		apply_pose(contact_frame,recovery)
 		pose_reach(smoothstep(0.0,1.0,reach_progress)*recovery,Vector3.INF)
-	meter.update_timing(true,approach(path,time,end) if grade == Timing.Grade.WAITING else -1.0,striking,grade,delta)
+	meter.update_timing(true,approach(path,time,end) if grade == Timing.Grade.WAITING else -1.0,striking,grade,delta,1.0-GREEN_END/APPROACH_TIME)
+
+func timing_error(elapsed: float) -> float:
+	if elapsed < GREEN_START: return clampf((GREEN_START-elapsed)/GREEN_START,0.0,1.0)
+	return clampf((elapsed-GREEN_END)/(ATTEMPT_TIME-GREEN_END),0.0,1.0)
 
 func clear_reach() -> void:
 	reach.clear()

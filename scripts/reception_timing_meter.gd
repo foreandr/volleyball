@@ -10,6 +10,8 @@ var shown_this_serve := false
 var result_time := 0.0
 var grade := Timing.Grade.WAITING
 var flash := 0.0
+var green_zone_start := 0.78
+var cue_start := 1.0-Timing.GREEN_END/Timing.APPROACH_WINDOW
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -27,11 +29,13 @@ func reset_serve() -> void:
 	flash = 0.0
 	hide()
 
-func update_timing(active: bool, progress: float, receiving_now: bool, result: int, delta: float) -> void:
+func update_timing(active: bool, progress: float, receiving_now: bool, result: int, delta: float, green_start := -1.0) -> void:
 	if not active:
 		hide()
 		return
 	receiving = receiving_now
+	green_zone_start = green_start if green_start >= 0.0 else 0.78
+	cue_start = green_start if green_start >= 0.0 else 1.0-Timing.GREEN_END/Timing.APPROACH_WINDOW
 	if result != grade:
 		flash = 1.0 if result == Timing.Grade.PERFECT else 0.0
 		result_time = 0.85
@@ -50,7 +54,7 @@ func update_timing(active: bool, progress: float, receiving_now: bool, result: i
 
 func _draw() -> void:
 	var track := Rect2(19,49,size.x-38,16)
-	var zone_start := 0.78
+	var zone_start := green_zone_start
 	var style := StyleBoxFlat.new()
 	style.bg_color = INK
 	style.set_corner_radius_all(12)
@@ -73,7 +77,7 @@ func _draw() -> void:
 	var accent := GREEN if grade == Timing.Grade.PERFECT else Color.WHITE
 	var heading := "BALL INCOMING"
 	if receiving: heading = "RECEIVING"
-	elif progress >= 1.0-Timing.GREEN_END/Timing.APPROACH_WINDOW: heading = "TAP Q"
+	elif progress >= cue_start: heading = "TAP Q"
 	match grade:
 		Timing.Grade.PERFECT: heading = "PERFECT PASS"
 		Timing.Grade.EARLY: heading = "TOO EARLY"
