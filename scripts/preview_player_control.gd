@@ -127,7 +127,7 @@ func step(delta: float) -> void:
 	if not connected.is_empty(): sprint_requested = sprint_requested or Input.is_joy_button_pressed(connected[0],JOY_BUTTON_RIGHT_SHOULDER)
 	var holding := reception_drill_active() and not (focus is LineEdit or focus is TextEdit) and Input.is_physical_key_pressed(KEY_SPACE)
 	receive_hold = receive_hold+delta if holding else 0.0
-	if holding and receive_hold <= 0.40:
+	if holding:
 		var actor: Node3D = page.preview_player
 		side_steps.active = false
 		side_steps.hold = 0.0

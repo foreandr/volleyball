@@ -35,6 +35,12 @@ var outgoing_net := {}
 var missed := false
 var practice_mode := false
 var practice_floor_time := 0.0
+enum Grade { WAITING, PERFECT, EARLY, LATE, MISS }
+const GREEN_START := 0.10
+const GREEN_END := 0.22
+const METER_DURATION := 0.40
+var practice_grade := Grade.WAITING
+var practice_in_reach := false
 var aim_point := Vector3.ZERO
 var net_audio: AudioStreamPlayer
 var net_contact_count := 0
@@ -174,6 +180,8 @@ func platform(time: float) -> Dictionary:
 
 
 func recalculate() -> void:
+	practice_grade = Grade.WAITING
+	practice_in_reach = false
 	recovery.clear()
 	recovery_net.clear()
 	var hit := platform(contact_time)
@@ -218,13 +226,15 @@ func practice_position(elapsed: float) -> Vector3:
 	return aim_point+incoming*time+feed_info.acceleration*0.5*time*time
 
 func reset_practice_serve() -> void:
+	practice_grade = Grade.WAITING
+	practice_in_reach = false
 	if recovery.is_empty(): return
 	recovery.clear()
 	recovery_net.clear()
 	update_guide()
 
 func try_practice_pass(previous_time: float, time: float, held: float) -> bool:
-	if held < 0.055 or held > 0.40 or not recovery.is_empty() or not incoming_net.is_empty(): return false
+	if practice_grade != Grade.WAITING or not incoming_net.is_empty(): return false
 	var first := maxf(previous_time-contact_time,-feed_duration)
 	var last := minf(time-contact_time,practice_floor_time)
 	if last < first: return false
@@ -239,12 +249,25 @@ func try_practice_pass(previous_time: float, time: float, held: float) -> bool:
 	var current := practice_position(last)
 	var touch := Geometry3D.get_closest_point_to_segment(platform_center,previous,current)
 	if touch.distance_to(platform_center)>0.25: return false
+	practice_in_reach = true
+	if held <= 0.0: return false
+	if held < GREEN_START:
+		practice_grade = Grade.LATE
+		return false
+	if held > GREEN_END:
+		practice_grade = Grade.EARLY
+		return false
+	practice_grade = Grade.PERFECT
 	var target: Dictionary = actor.get_meta("pass_target",{})
 	var velocity := Flight.target_velocity(touch,target,float(clip.get_meta("desired_output_angle",45.0)))
 	recovery = {"time":last,"point":touch,"velocity":velocity,"end_time":last+Flight.landing_time(touch,velocity)}
 	recovery_net = Net.first_hit(func(t): return touch+velocity*(t-last)+Vector3.DOWN*4.905*pow(t-last,2),last,recovery.end_time)
 	update_guide()
 	return true
+
+func finish_practice_serve() -> void:
+	if practice_grade == Grade.WAITING:
+		practice_grade = Grade.LATE if practice_in_reach else Grade.MISS
 
 func animation_time(time: float) -> float:
 	return clampf(time,0,clip.length) if incoming_net.is_empty() else 0.0

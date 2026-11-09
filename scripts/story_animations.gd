@@ -1,4 +1,5 @@
 extends "res://scripts/create.gd"
+const BallPreview = preload("res://scripts/animation_ball_preview.gd")
 const Flight = preload("res://scripts/pass_flight.gd")
 const Catalog = preload("res://scripts/volleyball_animations.gd")
 const MOVE_TYPES := {
@@ -27,6 +28,7 @@ var trajectory_solver: RefCounted
 var render_clip: Animation
 var preview_clock := 0.0
 var drill_status: Label
+var timing_meter: Control
 var reception_controls: VBoxContainer
 var replace_body_layer := false
 var recipe_poll := 0.0
@@ -37,6 +39,11 @@ var body_recipe_text := FileAccess.get_file_as_string("res://assets/animation_re
 func _ready() -> void:
 	process_priority = 10
 	super._ready()
+	timing_meter = preload("res://scripts/reception_timing_meter.gd").new()
+	var overlay := Control.new()
+	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	preview.get_parent().add_child(overlay)
+	overlay.add_child(timing_meter)
 	setup_drag = preload("res://scripts/court_setup_drag.gd").new(self)
 	preview_camera.fov = 42.0
 	preview_camera.far = 150.0
@@ -218,7 +225,7 @@ func preview_animation(index: int) -> void:
 		render_clip = trajectory_solver.solve(StorySession.pass_output_angle if StorySession.pass_output_angle >= 0 else 45.0,StorySession.pass_distance).clip
 	preview_player.install_custom(render_clip,"preview",false)
 	if not is_instance_valid(ball_preview):
-		ball_preview = preload("res://scripts/animation_ball_preview.gd").new()
+		ball_preview = BallPreview.new()
 		preview_player.get_parent().add_child(ball_preview)
 	ball_preview.practice_mode = selected_category == "Forearm reception"
 	ball_preview.configure(preview_player,render_clip)
@@ -278,7 +285,9 @@ func _process(delta: float) -> void:
 		if recipe_poll>=0.4:
 			recipe_poll = 0
 			refresh_recipes()
-	if not is_instance_valid(ball_preview) or not ball_preview.active: return
+	if not is_instance_valid(ball_preview) or not ball_preview.active:
+		timing_meter.hide()
+		return
 	var first := minf(0,ball_preview.contact_time-ball_preview.feed_duration)
 	var last: float = ball_preview.cycle_end()
 	var previous := preview_clock
@@ -289,15 +298,16 @@ func _process(delta: float) -> void:
 			ball_preview.reset_practice_serve()
 			if in_control: drill_status.text = "Next serve  |  Hold Space just before contact"
 		elif in_control:
-			if ball_preview.try_practice_pass(previous,preview_clock,player_controls.receive_hold):
-				drill_status.text = "Good pass!"
-			elif ball_preview.recovery.is_empty() and ball_preview.crossed(preview_clock,ball_preview.contact_time+ball_preview.practice_floor_time):
-				drill_status.text = "Miss  |  Get behind the ball and time Space"
+			ball_preview.try_practice_pass(previous,preview_clock,player_controls.receive_hold)
+			var floor_time: float = ball_preview.contact_time+ball_preview.practice_floor_time
+			if ball_preview.crossed(preview_clock,floor_time): ball_preview.finish_practice_serve()
+		timing_meter.update_timing(in_control,player_controls.receive_hold,ball_preview.practice_grade,delta)
 		if not in_control:
 			preview_player.animator.seek(0.0,true)
 			drill_status.text = "F1 to play  |  WASD to move\nHold Space just before contact"
-	elif not in_control:
-		preview_player.animator.seek(ball_preview.animation_time(preview_clock),true)
+	else:
+		timing_meter.hide()
+		if not in_control: preview_player.animator.seek(ball_preview.animation_time(preview_clock),true)
 	ball_preview.tick(preview_clock,true)
 
 func refresh_recipes() -> void:
