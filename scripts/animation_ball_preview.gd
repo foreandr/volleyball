@@ -248,14 +248,20 @@ func practice_step_offset(time: float) -> Vector3:
 	if practice_grade != Grade.WAITING or not incoming_net.is_empty(): return Vector3.ZERO
 	var elapsed := time-contact_time
 	var first := maxf(elapsed,-feed_duration)
-	var last := minf(elapsed+0.23,practice_floor_time)
+	var last := minf(elapsed+0.30,practice_floor_time)
 	if last <= first: return Vector3.ZERO
 	var center: Vector3 = platform(contact_time).ball
-	var nearest := Geometry3D.get_closest_point_to_segment(center,practice_position(first),practice_position(last))
+	var end := practice_position(last)
+	var nearest := Geometry3D.get_closest_point_to_segment(center,practice_position(first),end)
+	if last < practice_floor_time and nearest.is_equal_approx(end): return Vector3.ZERO
 	var offset := nearest-center
-	if offset.length() <= RECEIVE_RADIUS or offset.length() > 0.67 or absf(offset.y) > 0.30:
-		return Vector3.ZERO
-	return Vector3(offset.x,0.0,offset.z)
+	if offset.length() <= RECEIVE_RADIUS or offset.length() > 1.65: return Vector3.ZERO
+	return offset
+
+func practice_reach_tier(offset: Vector3) -> int:
+	if offset.length() > 1.12 or offset.y > 0.62: return 3
+	if offset.length() > 0.67 or absf(offset.y) > 0.28: return 2
+	return 1
 
 func update_practice_platform() -> void:
 	var rig: Skeleton3D = actor.skeleton

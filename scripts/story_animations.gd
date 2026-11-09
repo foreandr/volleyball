@@ -28,6 +28,7 @@ var trajectory_solver: RefCounted
 var render_clip: Animation
 var preview_clock := 0.0
 var drill_status: Label
+var distance_status: Label
 var timing_meter: Control
 var reception_controls: VBoxContainer
 var replace_body_layer := false
@@ -95,6 +96,7 @@ func clear_content() -> void:
 		child.queue_free()
 	reception_controls = null
 	drill_status = null
+	distance_status = null
 	animation_list = null
 	edit_button = null
 	selected_entry.clear()
@@ -173,6 +175,9 @@ func select_category(category: String) -> void:
 		drill_status = label("F1 to play  |  WASD to move\nHold Q just before contact",16)
 		drill_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		content.add_child(drill_status)
+		distance_status = label("Distance 1  |  Short reach\nDistance 2  |  Lunge or high reach\nDistance 3  |  Dive planned",16)
+		distance_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		content.add_child(distance_status)
 	edit_button = button("Edit",open_editor)
 	edit_button.name = "EditAnimation"
 	content.add_child(edit_button)
@@ -309,6 +314,7 @@ func _process(delta: float) -> void:
 		var approach: float = ball_preview.practice_approach(preview_clock) if in_control and ball_preview.practice_grade == BallPreview.Grade.WAITING else -1.0
 		timing_meter.update_timing(in_control,approach,player_controls.receive_hold>0.0,ball_preview.practice_grade,delta)
 		ball_preview.update_practice_cone(timing_meter.visible,player_controls.receive_hold)
+		update_distance_status(in_control)
 		if not in_control:
 			preview_player.animator.seek(0.0,true)
 			drill_status.text = "F1 to play  |  WASD to move\nHold Q just before contact"
@@ -316,6 +322,17 @@ func _process(delta: float) -> void:
 		timing_meter.hide()
 		if not in_control: preview_player.animator.seek(ball_preview.animation_time(preview_clock),true)
 	ball_preview.tick(preview_clock,true)
+
+func update_distance_status(in_control: bool) -> void:
+	var tier: int = player_controls.reach_tier if in_control else 1
+	var high: bool = player_controls.reach_height >= 0.20
+	if in_control and tier == 1 and ball_preview.practice_grade == BallPreview.Grade.WAITING:
+		var offset: Vector3 = ball_preview.practice_step_offset(preview_clock)
+		tier = ball_preview.practice_reach_tier(offset)
+		high = offset.y >= 0.20
+	var names := ["Short reach","High shoulder reach" if high else "Low lunge","Dive planned"]
+	distance_status.text = "Distance %d  |  %s" % [tier,names[tier-1]]
+	if tier != 3: distance_status.text += "\nDistance 3  |  Dive planned"
 
 func refresh_recipes() -> void:
 	if selected_category!="Forearm reception" or selected_entry.is_empty(): return
