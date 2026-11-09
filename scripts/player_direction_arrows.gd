@@ -1,5 +1,6 @@
 extends MeshInstance3D
 
+const LANDING_RADIUS := 1.18
 var selected := 0
 
 func _ready() -> void:
@@ -17,8 +18,11 @@ func pick(local_point: Vector3) -> int:
 	if point.length() <= 0.32: return 0
 	for index in range(1,9):
 		var forward := direction(index)
-		if point.distance_to(Vector2(forward.x,forward.z)*1.18) <= 0.34: return index
+		if point.distance_to(Vector2(forward.x,forward.z)*LANDING_RADIUS) <= 0.34: return index
 	return -1
+
+func landing_target() -> Vector3:
+	return to_global(direction(selected)*LANDING_RADIUS)
 
 func direction(index: int) -> Vector3:
 	var angle := (index-1)*TAU/8.0
@@ -36,7 +40,7 @@ func rebuild() -> void:
 		var forward := direction(index)
 		var side := Vector3(forward.z,0,-forward.x)
 		var tail := forward*0.86+Vector3.UP*0.025
-		var neck := forward*1.18+Vector3.UP*0.025
+		var neck := forward*LANDING_RADIUS+Vector3.UP*0.025
 		var tip := forward*1.52+Vector3.UP*0.025
 		for point in [tail-side*0.055,tail+side*0.055,neck+side*0.055,tail-side*0.055,neck+side*0.055,neck-side*0.055,neck-side*0.18,neck+side*0.18,tip]:
 			surface.surface_add_vertex(point)

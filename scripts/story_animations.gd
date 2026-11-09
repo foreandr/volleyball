@@ -244,9 +244,9 @@ func update_feed_aim() -> void:
 	sync_ball_results(angle_control.requested)
 
 func sync_ball_results(value: float) -> void:
-	if not Vector2(preview_player.get_meta("feed_offset",Vector2.ZERO)).is_zero_approx():
+	if ball_preview.missed:
 		angle_control.actual_label.visible = true
-		angle_control.actual_label.text = "Off-center feed missed" if ball_preview.missed else "Off-center feed reached the platform"
+		angle_control.actual_label.text = "Feed aimed at the selected arrow"
 		return
 	angle_control.sync_feed(ball_preview.feed_info)
 	angle_control.sync_output(ball_preview)

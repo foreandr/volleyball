@@ -17,7 +17,6 @@ var spin_picker: OptionButton
 var spin_rate_field: SpinBox
 var float_field: SpinBox
 var reach_picker: OptionButton
-var reach_distance: SpinBox
 var source_pad: Control
 var height_field: SpinBox
 var back_field: SpinBox
@@ -83,17 +82,7 @@ func _ready() -> void:
 	for direction in RECEIVE_DIRECTIONS: reach_picker.add_item(direction)
 	reach_picker.select(clampi(StorySession.receive_direction,0,RECEIVE_DIRECTIONS.size()-1))
 	reach_row.add_child(reach_picker)
-	reach_distance = SpinBox.new()
-	reach_distance.min_value = 0.05
-	reach_distance.max_value = 1.50
-	reach_distance.step = 0.05
-	reach_distance.suffix = "m"
-	reach_distance.value = StorySession.receive_distance
-	reach_distance.tooltip_text = "Offset from the centered ball path"
-	reach_distance.editable = reach_picker.selected != 0
-	reach_row.add_child(reach_distance)
 	reach_picker.item_selected.connect(select_feed_aim)
-	reach_distance.value_changed.connect(func(_value): feed_aim_changed.emit())
 	build_host = destination_panel
 	destination_pad = preload("res://scripts/ball_source_pad.gd").new()
 	destination_pad.mode = "destination"
@@ -120,7 +109,6 @@ func _ready() -> void:
 
 func select_feed_aim(index: int) -> void:
 	reach_picker.select(index)
-	reach_distance.editable = index != 0
 	feed_aim_changed.emit()
 
 func begin_placement() -> void:
@@ -223,11 +211,8 @@ func apply_setup(player: Node3D) -> void:
 
 func apply_feed_aim(player: Node3D) -> void:
 	StorySession.receive_direction = reach_picker.selected
-	StorySession.receive_distance = reach_distance.value
-	var heading := (reach_picker.selected-1)*TAU/8.0
-	var reach := Vector2(-sin(heading),cos(heading))*reach_distance.value if reach_picker.selected > 0 else Vector2.ZERO
-	player.set_meta("feed_offset",reach)
 	player.get_node("DirectionArrows").select_direction(reach_picker.selected)
+
 
 func _process(_delta: float) -> void:
 	source_pad.set_positions(StorySession.feed_spot,StorySession.pass_start,StorySession.pass_destination)

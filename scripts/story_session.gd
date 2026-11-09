@@ -96,7 +96,6 @@ var source_height := 3.3
 var feed_fit := "angle"
 
 var receive_direction := 0
-var receive_distance := 0.25
 var ball_tab := 0
 var pass_destination := Vector2(0.026413498,1.5744464)
 var pass_apex := 4.9
@@ -112,7 +111,7 @@ var preview_camera := {
 }
 var preview_hash := 0
 var preview_path := "user://preview_setup.cfg"
-const PREVIEW_FIELDS := ["pass_start","pass_distance","pass_output_angle","incoming_speed","incoming_angle","feed_spot","incoming_spin","spin_rate","float_strength","source_height","feed_fit","receive_direction","receive_distance","ball_tab","pass_destination","pass_apex","destination_fit","preview_camera"]
+const PREVIEW_FIELDS := ["pass_start","pass_distance","pass_output_angle","incoming_speed","incoming_angle","feed_spot","incoming_spin","spin_rate","float_strength","source_height","feed_fit","receive_direction","ball_tab","pass_destination","pass_apex","destination_fit","preview_camera"]
 
 func _ready() -> void:
 	AudioServer.set_bus_mute(AudioServer.get_bus_index("Master"),true)
