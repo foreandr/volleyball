@@ -5,6 +5,8 @@ const Flight = preload("res://scripts/pass_flight.gd")
 const Contact = preload("res://scripts/forearm_contact.gd")
 const Dive = preload("res://scripts/forward_reception_dive.gd")
 const KneeSlide = preload("res://scripts/side_knee_slide.gd")
+const BumpSetting = preload("res://scripts/bump_setting.gd")
+const Net = preload("res://scripts/net_collision.gd")
 const BallPreview = preload("res://scripts/animation_ball_preview.gd")
 const RECEIVER_START := Vector3(-1.8,0.04,-2.85)
 # Distance and local offset of the serve from the ready platform.
@@ -53,8 +55,13 @@ var clock := 0.0
 var rep := 0
 var receiving := false
 var judged := false
+var bump: MeshInstance3D
+var bump_enabled := false
+var ready_range: MeshInstance3D
+var range_style := StandardMaterial3D.new()
+var arm_swing_weight := 0.0
 
-func configure(player: Node3D, readout: Label) -> void:
+func configure(player: Node3D, readout: Label, meter: Control, use_bump: bool) -> void:
 	setter = player
 	status = readout
 	receiver = Player.new()
@@ -92,12 +99,58 @@ func configure(player: Node3D, readout: Label) -> void:
 	region.material_override = region_style
 	region.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(region)
+	bump = BumpSetting.new()
+	add_child(bump)
+	bump.configure(setter,clip,meter)
+	bump_enabled = use_bump
+	bump.visible = use_bump
+	ready_range = MeshInstance3D.new()
+	var outline := TorusMesh.new()
+	outline.inner_radius = 1.965
+	outline.outer_radius = 2.0
+	ready_range.mesh = outline
+	range_style.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	ready_range.material_override = range_style
+	ready_range.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(ready_range)
 	reset_feed()
+
+func set_bump_mode(enabled: bool) -> void:
+	if bump_enabled == enabled: return
+	bump_enabled = enabled
+	bump.visible = enabled
+	reset_feed()
+
+func queue_bump() -> void:
+	if bump_enabled and clock >= 0.45+SERVE_TIME:
+		bump.queue_bump(clock-0.45-SERVE_TIME)
+
+func apply_setter_arms(phase: float, moving: bool, delta: float) -> void:
+	var distance := (ball.position-setter.position).slide(Vector3.UP).length()
+	ready_range.position = Vector3(ball.position.x,0.058,ball.position.z)
+	range_style.albedo_color = Color("6beeb3") if distance <= 2.0 else Color("657f9b")
+	var weight := smoothstep(1.85,2.15,distance) if moving else 0.0
+	arm_swing_weight = move_toward(arm_swing_weight,weight,delta*7.0)
+	if arm_swing_weight <= 0.0: return
+	var rig: Skeleton3D = setter.skeleton
+	for side in ["l","r"]:
+		var sign_ := 1.0 if side == "l" else -1.0
+		var shoulder := rig.find_bone("upperarm_"+side)
+		var elbow := rig.find_bone("lowerarm_"+side)
+		var upper: Quaternion = rig.get_bone_pose_rotation(shoulder)
+		var lower: Quaternion = rig.get_bone_pose_rotation(elbow)
+		var swing := (0.14+sin(TAU*phase)*0.43*sign_)*arm_swing_weight
+		var axis: Vector3 = rig.get_bone_global_pose(shoulder).basis.inverse()*Vector3.RIGHT
+		rig.set_bone_pose_rotation(shoulder,upper*Quaternion(axis.normalized(),swing))
+		axis = rig.get_bone_global_pose(elbow).basis.inverse()*Vector3.RIGHT
+		rig.set_bone_pose_rotation(elbow,lower*Quaternion(axis.normalized(),-0.18*arm_swing_weight))
+
 
 func reset_feed() -> void:
 	clock = 0.0
 	receiving = false
 	judged = false
+	bump.reset()
 	var reception: Array = RECEPTIONS[rep % RECEPTIONS.size()]
 	receive_tier = reception[0]
 	receive_offset = reception[1]
@@ -120,15 +173,22 @@ func reset_feed() -> void:
 	arrival = rise/Flight.GRAVITY+sqrt(2.0*(PASS_APEX-SET_HEIGHT)/Flight.GRAVITY)
 	pass_velocity = (target-contact).slide(Vector3.UP)/arrival+Vector3.UP*rise
 	landing = Flight.landing_time(contact,pass_velocity)
-	region.position = Vector3(target.x,0.065,target.z)
+	var stand := target
+	if bump_enabled:
+		var bump_height: float = bump.ready_contact().y
+		var bump_arrival := rise/Flight.GRAVITY+sqrt(2.0*(PASS_APEX-bump_height)/Flight.GRAVITY)
+		stand = flight_point(contact,pass_velocity,bump_arrival)+pass_velocity.slide(Vector3.UP).normalized()*0.62
+	region.position = Vector3(stand.x,0.065,stand.z)
 	region_style.albedo_color = Color("49d6ff")
-	region.hide()
+	region.visible = bump_enabled
 	ball.position = SOURCE
 	receiver.play_action("idle")
 	status.text = "Serve incoming"
 
 func step(delta: float) -> void:
+	var previous := clock-0.45-SERVE_TIME
 	clock += delta
+	if bump_enabled: bump.update_aim()
 	var elapsed := clock-0.45
 	if elapsed < 0.0: return
 	var after_pass := elapsed-SERVE_TIME
@@ -141,6 +201,7 @@ func step(delta: float) -> void:
 			receiver.play_action("forearm")
 			receiver.animator.pause()
 		pose_receive(after_pass)
+		if not is_forward_dive() and after_pass > 0.0: recover_receiver_arms(after_pass)
 	elif receiving:
 		receiving = false
 		receiver.position = RECEIVER_START
@@ -149,10 +210,13 @@ func step(delta: float) -> void:
 	if after_pass < 0.0:
 		ball.position = flight_point(SOURCE,serve_velocity,elapsed)
 		return
-	if not region.visible:
+	if not region.visible or status.text == "Serve incoming":
 		region.show()
-		status.text = "Move under the pass"
+		status.text = "Get your platform under the ball" if bump_enabled else "Move under the pass"
 	ball.position = flight_point(contact,pass_velocity,minf(after_pass,landing))
+	if bump_enabled:
+		step_bump(after_pass,maxf(0.0,previous),delta)
+		return
 	if not judged and after_pass >= arrival:
 		judged = true
 		var under := (setter.position-region.position).slide(Vector3.UP).length() <= REGION_RADIUS
@@ -161,6 +225,33 @@ func step(delta: float) -> void:
 	if after_pass >= landing+0.8:
 		rep += 1
 		reset_feed()
+
+func step_bump(time: float, previous: float, delta: float) -> void:
+	var path := func(t): return flight_point(contact,pass_velocity,minf(t,landing))
+	var incoming := pass_velocity+Vector3.DOWN*Flight.GRAVITY*time
+	bump.update_attempt(time,previous,landing,path,incoming,delta)
+	var reset_at := landing
+	if is_finite(bump.touch_time):
+		var after_touch: float = time-bump.touch_time
+		reset_at = bump.touch_time+bump.floor_time
+		if not bump.net_hit.is_empty() and after_touch >= bump.net_hit.time:
+			ball.position = Net.after_hit(bump.net_hit,after_touch)
+		else:
+			ball.position = flight_point(bump.touch,bump.outgoing,minf(after_touch,bump.floor_time))
+		status.text = "Bump set"
+	if time >= reset_at+0.85:
+		rep += 1
+		reset_feed()
+
+func recover_receiver_arms(time: float) -> void:
+	var weight := smoothstep(0.075,0.27,time)
+	var rig: Skeleton3D = receiver.skeleton
+	for side in ["l","r"]:
+		for part in ["clavicle_","upperarm_","lowerarm_","hand_"]:
+			var bone := rig.find_bone(part+side)
+			if bone >= 0:
+				var current := rig.get_bone_pose_rotation(bone)
+				rig.set_bone_pose_rotation(bone,current.slerp(ready_pose[bone].basis.get_rotation_quaternion(),weight))
 
 func is_forward_dive() -> bool:
 	return receive_tier == 3 and receive_offset.z > 0.0

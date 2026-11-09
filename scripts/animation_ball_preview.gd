@@ -484,11 +484,11 @@ func try_body_dig(previous_time: float, time: float) -> bool:
 	update_guide()
 	return true
 
-func practice_timing_error(receive_elapsed: float) -> float:
+static func practice_timing_error(receive_elapsed: float) -> float:
 	if receive_elapsed < GREEN_START: return (GREEN_START-receive_elapsed)/GREEN_START
 	return clampf((receive_elapsed-GREEN_END)/0.30,0.0,1.0)
 
-func practice_spread(timing_error: float) -> float:
+static func practice_spread(timing_error: float) -> float:
 	return lerpf(0.18,2.10,timing_error) if timing_error > 0.0 else 0.0
 
 func update_practice_cone(show_timing: bool, receive_elapsed: float) -> void:
@@ -528,6 +528,9 @@ func update_practice_aim(show_aim: bool) -> void:
 func practice_pass_velocity(touch: Vector3, timing_error: float) -> Vector3:
 	var target: Dictionary = actor.get_meta("pass_target",{})
 	var angle := float(clip.get_meta("desired_output_angle",45.0))
+	return aimed_pass_velocity(touch,target,angle,timing_error)
+
+static func aimed_pass_velocity(touch: Vector3, target: Dictionary, angle: float, timing_error: float) -> Vector3:
 	var ideal := Flight.target_velocity(touch,target,angle)
 	if timing_error <= 0.0: return ideal
 

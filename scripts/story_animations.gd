@@ -246,9 +246,17 @@ func start_setting_drill() -> void:
 	modes.name = "SettingType"
 	for mode in MOVE_TYPES["Setting"]: modes.add_item(mode)
 	modes.select(type_indices.get("Setting",0))
-	modes.item_selected.connect(func(index: int): type_indices["Setting"] = index)
 	content.add_child(modes)
-	content.add_child(label("WASD to get under the pass",16))
+	var controls_hint := label("",16)
+	controls_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	var show_mode := func(index: int):
+		controls_hint.text = "WASD to move  |  Tap Q to bump set\nMouse to aim  |  Scroll to change height" if index == 1 else "WASD to get under the pass"
+	show_mode.call(modes.selected)
+	modes.item_selected.connect(func(index: int):
+		type_indices["Setting"] = index
+		setting_drill.set_bump_mode(index == 1)
+		show_mode.call(index))
+	content.add_child(controls_hint)
 	drill_status = label("",16)
 	content.add_child(drill_status)
 	setter_original_transform = preview_player.transform
@@ -272,11 +280,12 @@ func start_setting_drill() -> void:
 	preview_camera.look_at(Vector3(0,1.45,2.6))
 	setting_drill = preload("res://scripts/setting_drill.gd").new()
 	preview_player.get_parent().add_child(setting_drill)
-	setting_drill.configure(preview_player,drill_status)
+	setting_drill.configure(preview_player,drill_status,timing_meter,modes.selected == 1)
 	preview.grab_focus()
 
 func stop_setting_drill() -> void:
 	if not is_instance_valid(setting_drill): return
+	timing_meter.reset_serve()
 	setting_drill.queue_free()
 	setting_drill = null
 	preview_player.transform = setter_original_transform
@@ -405,6 +414,7 @@ func _process(delta: float) -> void:
 	if is_instance_valid(setting_drill):
 		player_controls.read_pace_input()
 		player_controls.move_player(player_controls.movement_input(),delta,false,setting_drill.ball.global_position)
+		setting_drill.apply_setter_arms(player_controls.footwork.phase,player_controls.moving,delta)
 		setting_drill.step(delta)
 		return
 	if reception_review.frozen:
@@ -677,7 +687,19 @@ func handle_middle_arrow(event: InputEvent) -> bool:
 
 func handle_preview_input(event: InputEvent) -> void:
 	if is_instance_valid(setting_drill):
-		if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE: open_menu()
+		if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
+			open_menu()
+		elif setting_drill.bump_enabled:
+			if event is InputEventMouseMotion:
+				if event.button_mask & MOUSE_BUTTON_MASK_MIDDLE:
+					adjust_bump_height(-event.relative.y*0.018)
+				else:
+					var point: Vector2 = setup_drag.screen_position(event.position)
+					var hit: Variant = Plane(Vector3.UP,0.055).intersects_ray(preview_camera.project_ray_origin(point),preview_camera.project_ray_normal(point))
+					if hit is Vector3:
+						setting_drill.bump.destination = Vector2(clampf(hit.x,-4.5,4.5),clampf(hit.z,-5.0,13.0))
+			elif event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_WHEEL_UP,MOUSE_BUTTON_WHEEL_DOWN]:
+				adjust_bump_height((0.25 if event.button_index == MOUSE_BUTTON_WHEEL_UP else -0.25)*maxf(0.1,event.factor))
 		return
 	if reception_review.active:
 		super.handle_preview_input(event)
@@ -711,6 +733,9 @@ func handle_preview_input(event: InputEvent) -> void:
 		return
 	super.handle_preview_input(event)
 
+func adjust_bump_height(amount: float) -> void:
+	setting_drill.bump.height = clampf(setting_drill.bump.height+amount,1.25,20.0)
+
 func open_editor(index := -1) -> void:
 	if selected_category == "Forearm reception": return
 	reception_review.stop(false)
@@ -735,6 +760,7 @@ func open_menu() -> void:
 
 func _input(event: InputEvent) -> void:
 	if is_instance_valid(setting_drill) and event is InputEventKey and event.keycode in [KEY_F1,KEY_F2,KEY_Q,KEY_E]:
+		if event.keycode == KEY_Q and event.pressed and not event.echo: setting_drill.queue_bump()
 		get_viewport().set_input_as_handled()
 		return
 	if is_instance_valid(reception_review) and event is InputEventKey and event.pressed and not event.echo and event.keycode in [KEY_F1,KEY_F2]:
