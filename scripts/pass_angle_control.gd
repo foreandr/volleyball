@@ -15,9 +15,12 @@ var incoming_angle_field: SpinBox
 var spin_picker: OptionButton
 var spin_rate_field: SpinBox
 var float_field: SpinBox
+var reach_picker: OptionButton
+var reach_distance: SpinBox
 var source_pad: Control
 var height_field: SpinBox
 var back_field: SpinBox
+const RECEIVE_DIRECTIONS := ["Centered","Forward","Forward right","Right","Back right","Back","Back left","Left","Forward left"]
 const SPINS := ["No spin","Topspin","Backspin","Sidespin left","Sidespin right","Dead float"]
 
 var tabs: TabContainer
@@ -69,6 +72,29 @@ func _ready() -> void:
 	float_field = parameter("Float strength",0,1,StorySession.float_strength,"")
 	spin_picker.item_selected.connect(func(_index): update_spin_controls(); pending = true)
 	update_spin_controls()
+	var reach_row := HBoxContainer.new()
+	build_host.add_child(reach_row)
+	var reach_label := Label.new()
+	reach_label.text = "Receive aim"
+	reach_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	reach_row.add_child(reach_label)
+	reach_picker = OptionButton.new()
+	for direction in RECEIVE_DIRECTIONS: reach_picker.add_item(direction)
+	reach_picker.select(clampi(StorySession.receive_direction,0,RECEIVE_DIRECTIONS.size()-1))
+	reach_row.add_child(reach_picker)
+	reach_distance = SpinBox.new()
+	reach_distance.min_value = 0.05
+	reach_distance.max_value = 0.40
+	reach_distance.step = 0.05
+	reach_distance.suffix = "m"
+	reach_distance.value = StorySession.receive_distance
+	reach_distance.tooltip_text = "Distance from the centered forearm platform"
+	reach_distance.editable = reach_picker.selected != 0
+	reach_row.add_child(reach_distance)
+	reach_picker.item_selected.connect(func(index):
+		reach_distance.editable = index != 0
+		pending = true)
+	reach_distance.value_changed.connect(func(_value): pending = true)
 	build_host = destination_panel
 	destination_pad = preload("res://scripts/ball_source_pad.gd").new()
 	destination_pad.mode = "destination"
@@ -183,6 +209,11 @@ func apply_setup(player: Node3D) -> void:
 	StorySession.spin_rate = spin_rate_field.value
 	StorySession.float_strength = float_field.value
 	player.position = Vector3(StorySession.pass_start.x,0.04,StorySession.pass_start.y)
+	StorySession.receive_direction = reach_picker.selected
+	StorySession.receive_distance = reach_distance.value
+	var heading := (reach_picker.selected-1)*TAU/8.0
+	var reach := Vector2(-sin(heading),cos(heading))*reach_distance.value if reach_picker.selected > 0 else Vector2.ZERO
+	player.set_meta("receive_reach",reach)
 	player.set_meta("feed_settings",{"speed":StorySession.incoming_speed,"angle":StorySession.incoming_angle,"source":StorySession.feed_spot,"source_height":StorySession.source_height,"fit":StorySession.feed_fit,"spin":SPINS[spin_picker.selected],"spin_rate":spin_rate_field.value,"float_strength":float_field.value})
 	var facing := (StorySession.feed_spot-StorySession.pass_start).normalized()+(StorySession.pass_destination-StorySession.pass_start).normalized()
 	if facing.length()<0.01: facing = (StorySession.feed_spot-StorySession.pass_start).normalized()

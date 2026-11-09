@@ -281,6 +281,14 @@ func update_guide() -> void:
 		var angle := TAU*index/32.0
 		path.surface_add_vertex(Vector3(landing.x+cos(angle)*0.2,0.055,landing.z+sin(angle)*0.2))
 	path.surface_end()
+	var reach: Vector2 = actor.get_meta("receive_reach",Vector2.ZERO)
+	if not reach.is_zero_approx():
+		path.surface_begin(Mesh.PRIMITIVE_LINE_STRIP)
+		path.surface_set_color(Color("e5bd72"))
+		for index in range(33):
+			var angle := TAU*index/32.0
+			path.surface_add_vertex(Vector3(impact_point.x+cos(angle)*0.14,0.06,impact_point.z+sin(angle)*0.14))
+		path.surface_end()
 	guide.mesh = path
 	var material := StandardMaterial3D.new()
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
