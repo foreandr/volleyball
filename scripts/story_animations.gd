@@ -12,7 +12,7 @@ const MOVE_TYPES := {
 	"Setting":["Forward","Back","Left","Right"],
 	"Chasing":["Forward","Back","Left","Right"]
 }
-const CATEGORIES := ["Forearm reception","Spiking","Serving","Blocking","Setting","Chasing"]
+const CATEGORIES := ["Forearm reception","Setting","Serving","Blocking","Spiking","Chasing"]
 var content: VBoxContainer
 var category_buttons: Dictionary = {}
 var selected_category := ""
