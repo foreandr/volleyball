@@ -29,6 +29,9 @@ var render_clip: Animation
 var preview_clock := 0.0
 var cpu_receive_clock := -INF
 var cpu_start := Vector3.INF
+var middle_arrow := Vector2i(-1,1)
+var middle_press := Vector2.ZERO
+var middle_dragged := false
 var drill_status: Label
 var distance_status: Label
 var timing_meter: Control
@@ -184,7 +187,7 @@ func select_category(category: String) -> void:
 	animation_list.item_selected.connect(preview_animation)
 	content.add_child(animation_list)
 	if category == "Forearm reception":
-		drill_status = label("F1 to play  |  WASD to move\nMouse to aim  |  Tap Q to receive\nScroll to set pass height",16)
+		drill_status = label("F1 to play  |  WASD to move\nMouse to aim  |  Tap Q to receive\nMiddle-click an arrow for the feed\nScroll to set pass height",16)
 		drill_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		content.add_child(drill_status)
 		distance_status = label("Distance 1  |  Short reach\nDistance 2  |  Lunge or high reach\nDistance 3  |  Dive planned",16)
@@ -288,13 +291,14 @@ func update_feed_aim() -> void:
 	angle_control.apply_feed_aim(preview_player)
 	timing_meter.reset_serve()
 	ball_preview.recalculate()
+	preview_clock = minf(0.0,ball_preview.contact_time-ball_preview.feed_duration)
 	ball_preview.tick(preview_clock,false)
 	sync_ball_results(angle_control.requested)
 
 func sync_ball_results(value: float) -> void:
 	if ball_preview.missed:
 		angle_control.actual_label.visible = true
-		angle_control.actual_label.text = "Feed aimed at the selected arrow"
+		angle_control.actual_label.text = "Feed aimed at a Distance %d arrow" % StorySession.receive_distance_tier
 		return
 	angle_control.sync_feed(ball_preview.feed_info)
 	angle_control.sync_output(ball_preview)
@@ -361,6 +365,15 @@ func step_cpu_receive(previous: float, delta: float) -> void:
 			var center: Vector3 = ball_preview.platform(ball_preview.contact_time).ball
 			var travel: Vector3 = intercept.point-center
 			travel.y = 0.0
+			var arrows = preview_player.get_node("DirectionArrows")
+			if arrows.selected != 0 and arrows.selected_distance == 2:
+				var start: Vector3 = cpu_start if cpu_start.is_finite() else preview_player.position
+				var arrow_heading: Vector3 = ball_preview.aim_point-start
+				arrow_heading.y = 0.0
+				arrow_heading = arrow_heading.normalized()
+				var incoming: Vector3 = ball_preview.incoming.normalized()
+				var transverse := arrow_heading.slide(incoming).length()
+				travel -= arrow_heading*minf(1.8,0.77/maxf(0.25,transverse))
 			if travel.length() > 0.24:
 				if not cpu_start.is_finite(): cpu_start = preview_player.position
 				player_controls.move_cpu_toward(travel,delta)
@@ -464,9 +477,42 @@ func adjust_pass_height(height_delta: float) -> void:
 	drill_status.text = "Pass height  |  %.1f m" % height
 	ball_preview.update_practice_aim(true)
 
+func handle_middle_arrow(event: InputEvent) -> bool:
+	if not reception_drill_active(): return false
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_MIDDLE:
+		if event.pressed:
+			middle_arrow = Vector2i(-1,1)
+			var point: Vector2 = setup_drag.screen_position(event.position)
+			var hit: Variant = Plane(Vector3.UP,0.065).intersects_ray(preview_camera.project_ray_origin(point),preview_camera.project_ray_normal(point))
+			if not hit is Vector3: return false
+			var arrows: MeshInstance3D = preview_player.get_node("DirectionArrows")
+			middle_arrow = arrows.pick(arrows.to_local(hit))
+			middle_press = event.position
+			middle_dragged = false
+			return middle_arrow.x >= 0
+		if middle_arrow.x < 0: return false
+		if not middle_dragged and event.position.distance_to(middle_press) <= 5.0:
+			angle_control.select_feed_aim(middle_arrow.x,middle_arrow.y)
+			preview.grab_focus()
+		middle_arrow = Vector2i(-1,1)
+		return true
+	if event is InputEventMouseMotion and middle_arrow.x >= 0:
+		if not (event.button_mask & MOUSE_BUTTON_MASK_MIDDLE):
+			middle_arrow = Vector2i(-1,1)
+			return false
+		if event.position.distance_to(middle_press) > 5.0: middle_dragged = true
+		if middle_dragged:
+			if player_controls.active: adjust_pass_height(-event.relative.y*0.018)
+			else: pan_view(event.relative)
+		return true
+	return false
+
 func handle_preview_input(event: InputEvent) -> void:
 	if reception_review.active:
 		super.handle_preview_input(event)
+		return
+	if handle_middle_arrow(event):
+		preview.accept_event()
 		return
 	if player_controls!=null and player_controls.active:
 		if reception_drill_active():

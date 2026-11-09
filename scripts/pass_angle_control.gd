@@ -17,6 +17,7 @@ var spin_picker: OptionButton
 var spin_rate_field: SpinBox
 var float_field: SpinBox
 var reach_picker: OptionButton
+var arrow_set_picker: OptionButton
 var source_pad: Control
 var height_field: SpinBox
 var back_field: SpinBox
@@ -83,6 +84,19 @@ func _ready() -> void:
 	reach_picker.select(clampi(StorySession.receive_direction,0,RECEIVE_DIRECTIONS.size()-1))
 	reach_row.add_child(reach_picker)
 	reach_picker.item_selected.connect(select_feed_aim)
+	var arrow_row := HBoxContainer.new()
+	build_host.add_child(arrow_row)
+	var arrow_label := Label.new()
+	arrow_label.text = "Arrow set"
+	arrow_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	arrow_row.add_child(arrow_label)
+	arrow_set_picker = OptionButton.new()
+	arrow_set_picker.add_item("Distance 1 - Shift")
+	arrow_set_picker.add_item("Distance 2 - Lunge")
+	arrow_set_picker.select(clampi(StorySession.receive_distance_tier-1,0,1))
+	arrow_set_picker.tooltip_text = "Middle-click an inner or outer arrow on the court"
+	arrow_row.add_child(arrow_set_picker)
+	arrow_set_picker.item_selected.connect(func(_index): feed_aim_changed.emit())
 	build_host = destination_panel
 	destination_pad = preload("res://scripts/ball_source_pad.gd").new()
 	destination_pad.mode = "destination"
@@ -107,8 +121,9 @@ func _ready() -> void:
 	actual_label.hide()
 	build_host.add_child(actual_label)
 
-func select_feed_aim(index: int) -> void:
+func select_feed_aim(index: int, distance := 0) -> void:
 	reach_picker.select(index)
+	if distance > 0: arrow_set_picker.select(distance-1)
 	feed_aim_changed.emit()
 
 func begin_placement() -> void:
@@ -211,7 +226,8 @@ func apply_setup(player: Node3D) -> void:
 
 func apply_feed_aim(player: Node3D) -> void:
 	StorySession.receive_direction = reach_picker.selected
-	player.get_node("DirectionArrows").select_direction(reach_picker.selected)
+	StorySession.receive_distance_tier = arrow_set_picker.selected+1
+	player.get_node("DirectionArrows").select_direction(reach_picker.selected,StorySession.receive_distance_tier)
 
 
 func _process(_delta: float) -> void:

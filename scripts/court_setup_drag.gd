@@ -38,13 +38,6 @@ func handle(event: InputEvent) -> bool:
 		var handle_point: Vector3 = origin if chosen == "destination" else page.ball_preview.source_ground.global_position
 		var picked_handle := not camera.is_position_behind(handle_point) and camera.unproject_position(handle_point).distance_to(point)<20
 		var picked_source := chosen == "ball" and not camera.is_position_behind(source) and camera.unproject_position(source).distance_to(point)<22
-		if not picked_handle and not picked_source and floor_hit is Vector3 and page.selected_category == "Forearm reception":
-			var arrows: MeshInstance3D = page.preview_player.get_node("DirectionArrows")
-			var aim: int = arrows.pick(arrows.to_local(floor_hit))
-			if aim >= 0:
-				page.angle_control.select_feed_aim(aim)
-				page.preview.grab_focus()
-				return true
 		var foot: Vector3 = page.preview_player.global_position
 		var head: Vector3 = foot+Vector3.UP*page.preview_player.scale.y*1.8
 		var player_hit := false
