@@ -217,7 +217,11 @@ func face_ball() -> void:
 	var target: Vector3 = ball.global_position if ball.ball.visible else ball.source_ball.global_position
 	var toward := target-actor.global_position
 	if Vector2(toward.x,toward.z).length_squared()>0.01:
-		actor.rotation.y = atan2(toward.x,toward.z)
+		var ball_yaw := atan2(toward.x,toward.z)
+		var court_forward := Vector3(0,0,4)-actor.position
+		var court_yaw := atan2(court_forward.x,court_forward.z)
+		var forward_bias := clampf(angle_difference(ball_yaw,court_yaw)*0.24,-deg_to_rad(12.0),deg_to_rad(12.0))
+		actor.rotation.y = ball_yaw+forward_bias
 
 func follow_camera() -> void:
 	var actor: Node3D = page.preview_player
