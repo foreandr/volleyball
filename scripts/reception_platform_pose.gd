@@ -3,7 +3,7 @@ extends RefCounted
 const HAND_GAP := 0.065
 const ELBOW_ANGLE := 168.0
 
-static func connect_arms(pose: Array, author: RefCounted, desired: Vector3, weight: float, shoulder_advance := 0.022, forward := Vector3.BACK) -> void:
+static func connect_arms(pose: Array, author: RefCounted, desired: Vector3, weight: float, shoulder_advance := 0.022) -> void:
 	if weight <= 0.001: return
 	var rig: Skeleton3D = author.rig
 	var original := pose.duplicate()
@@ -14,7 +14,7 @@ static func connect_arms(pose: Array, author: RefCounted, desired: Vector3, weig
 			author.aim_joint(pose,"clavicle_"+side,arm,shoulder+Vector3.BACK*shoulder_advance*weight)
 	var left: Vector3 = author.point(pose,"upperarm_l")
 	var right: Vector3 = author.point(pose,"upperarm_r")
-	var left_hand := Vector3.UP.cross(forward)*HAND_GAP*0.5
+	var left_hand := Vector3.RIGHT*HAND_GAP*0.5
 	var right_hand := -left_hand
 	# Solve one wrist center that both arms can reach at the same extension.
 	var a := left-left_hand
@@ -27,7 +27,7 @@ static func connect_arms(pose: Array, author: RefCounted, desired: Vector3, weig
 	var along := (left_range*left_range-right_range*right_range+span*span)/(2.0*span)
 	var center := a+axis*along
 	var radius := sqrt(maxf(0.0,left_range*left_range-along*along))
-	desired += forward*maxf(0.0,0.24-(desired-center).dot(forward))
+	desired.z = maxf(desired.z,center.z+0.24)
 	var aim := (desired-center).slide(axis).normalized()
 	var grip := center+aim*radius
 	for side in ["l","r"]:
@@ -36,7 +36,7 @@ static func connect_arms(pose: Array, author: RefCounted, desired: Vector3, weig
 		var hand: String = "hand_"+side
 		var old_hand: Transform3D = author.world_pose(original,rig.find_bone(hand))
 		var target := grip+(left_hand if side == "l" else right_hand)
-		var pole := Vector3.UP.cross(forward)*(-0.62 if side == "l" else 0.62)+Vector3.DOWN*0.24+forward*0.46
+		var pole := Vector3(-0.62 if side == "l" else 0.62,-0.24,0.46)
 		var upper_before: Transform3D = author.world_pose(pose,rig.find_bone(arm))
 		var lower_before: Transform3D = author.world_pose(pose,rig.find_bone(elbow))
 		var wrist_before: Vector3 = author.point(pose,hand)

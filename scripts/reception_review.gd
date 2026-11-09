@@ -13,9 +13,9 @@ const CASES := [
 	[2,"Forward lunge",Vector3(0,0,0.84),Vector3(0,-5,-2)],
 	[2,"Forward-right reach",Vector3(-0.59,0,0.59),Vector3(0,-5,-3)],
 	[2,"Right lunge",Vector3(-0.85,0,0),Vector3(0,-7,-3)],
-	[2,"Back-right twist",Vector3(-0.54,0,-0.52),Vector3(0,-7,-12)],
-	[2,"Back twist",Vector3(0,0,-0.70),Vector3(0,-5,-3)],
-	[2,"Back-left twist",Vector3(0.54,0,-0.52),Vector3(0,-7,-12)],
+	[2,"Back-right lunge",Vector3(-0.54,0,-0.52),Vector3(0,-7,-2)],
+	[2,"Backward lunge",Vector3(0,0,-0.70),Vector3(0,-5,-3)],
+	[2,"Back-left lunge",Vector3(0.54,0,-0.52),Vector3(0,-7,-2)],
 	[2,"Left lunge",Vector3(0.85,0,0),Vector3(0,-7,-3)],
 	[2,"Forward-left reach",Vector3(0.59,0,0.59),Vector3(0,-5,-3)],
 ]
@@ -232,14 +232,12 @@ func step(delta: float) -> void:
 	page.preview_clock += delta
 	var elapsed: float = page.preview_clock-ball.contact_time
 	update_title_card(elapsed)
-	if elapsed >= -0.25 and elapsed < 0.28 and not ball.recovery.has("body_touch"):
+	if elapsed >= -0.25 and elapsed < 0.28:
 		var pose_offset := minf(0.0,elapsed+0.15)*1.4+maxf(0.0,elapsed)*1.4
 		page.player_controls.play_receive_pose(delta,offset,pose_offset)
 		if elapsed >= -0.03:
 			ball.try_practice_pass(previous,page.preview_clock,0.16)
-		if page.player_controls.rear_twist_target.is_finite() and ball.try_body_dig(previous,page.preview_clock):
-			page.drill_status.text = "CPU review  |  Body dig"
-	elif (elapsed >= 0.28 or ball.recovery.has("body_touch")) and not released:
+	elif elapsed >= 0.28 and not released:
 		released = true
 		page.player_controls.end_receive_pose()
 		page.player_controls.reset_reach()

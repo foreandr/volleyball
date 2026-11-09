@@ -421,8 +421,7 @@ func step_cpu_receive(previous: float, delta: float) -> void:
 		var arrows = preview_player.get_node("DirectionArrows")
 		if arrows.selected != 0:
 			var deep_rear: bool = arrows.selected_distance == 2 and arrows.selected in [4,5,6]
-			var overhead_rear: bool = deep_rear and arrows.selected != 5
-			var windup_time := 0.34 if overhead_rear else (0.26 if deep_rear else 0.18)
+			var windup_time := 0.26 if deep_rear else 0.18
 			if not ball_preview.incoming_net.is_empty() or preview_clock < ball_preview.contact_time-windup_time: return
 			cpu_reach_offset = ball_preview.aim_point-ball_preview.platform(ball_preview.contact_time).ball
 		else:
