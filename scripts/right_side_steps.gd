@@ -88,12 +88,21 @@ func apply_pose(amount := 1.0) -> void:
 	var from := Vector3(-side_sign,0,0)
 	var to := Vector3(-travel_direction.x,0,travel_direction.y).normalized()
 	var turn := Basis(Quaternion(from,to))
-	if absf(travel_direction.y)>0.01:
+	if side_sign<0 or absf(travel_direction.y)>0.01:
+		var feet := {}
+		var poles := {}
 		for side in ["l","r"]:
-			var foot: Transform3D = author.world_pose(pose,rig.find_bone("foot_"+side))
+			feet[side] = author.world_pose(pose,rig.find_bone("foot_"+side))
+			poles[side] = author.point(pose,"calf_"+side)-author.point(pose,"thigh_"+side)
+		if side_sign<0:
+			var pelvis: Transform3D = author.world_pose(pose,rig.find_bone("pelvis"))
+			var spine: Transform3D = author.world_pose(pose,rig.find_bone("spine_01"))
+			author.set_world_basis(pose,"pelvis",Basis(Vector3.UP,deg_to_rad(-12.0))*pelvis.basis)
+			author.set_world_basis(pose,"spine_01",spine.basis)
+		for side in ["l","r"]:
+			var foot: Transform3D = feet[side]
 			var target: Vector3 = author.feet[side].origin+turn*(foot.origin-author.feet[side].origin)
-			var pole: Vector3 = author.point(pose,"calf_"+side)-author.point(pose,"thigh_"+side)
-			author.limb(pose,"thigh_"+side,"calf_"+side,"foot_"+side,target,pole)
+			author.limb(pose,"thigh_"+side,"calf_"+side,"foot_"+side,target,poles[side])
 			author.set_world_basis(pose,"foot_"+side,foot.basis)
 	last_pose = pose
 	last_weight = weight
