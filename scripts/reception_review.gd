@@ -182,13 +182,13 @@ Distance 3  |  Dive planned" % [CASES[index][0],CASES[index][1]]
 	update_controls()
 
 func step(delta: float) -> void:
+	page.pan_camera(page.player_controls.movement_input(),delta)
 	if paused: return
 	var ball = page.ball_preview
 	var previous: float = page.preview_clock
 	page.preview_clock += delta
 	var elapsed: float = page.preview_clock-ball.contact_time
 	update_title_card(elapsed)
-	page.player_controls.move_during_receive(page.player_controls.movement_input(),delta)
 	if elapsed >= -0.25 and elapsed < 0.28:
 		var pose_offset := minf(0.0,elapsed+0.15)*1.4+maxf(0.0,elapsed)*1.4
 		page.player_controls.play_receive_pose(delta,offset,pose_offset)

@@ -8,6 +8,7 @@ var animation_process := 0
 var moving := false
 var receive_elapsed := 0.0
 var receive_queued := false
+var receive_camera_pan := Vector3.ZERO
 var reach_step := Vector3.ZERO
 var reach_progress := 0.0
 var reach_travel := Vector3.ZERO
@@ -81,6 +82,7 @@ func set_active(value: bool) -> void:
 	active = value
 	receive_elapsed = 0.0
 	receive_queued = false
+	receive_camera_pan = Vector3.ZERO
 	reset_reach()
 	side_steps.active = false
 	side_weight = 0
@@ -144,11 +146,13 @@ func step(delta: float) -> void:
 			after_touch = maxf(0.0,page.preview_clock-ball.contact_time-float(ball.recovery.time))
 		if receive_elapsed <= 0.44 and after_touch < 0.18:
 			var windup := 0.14*(1.0-smoothstep(0.0,0.085,receive_elapsed))
-			move_during_receive(direction,delta)
+			receive_camera_pan = (receive_camera_pan+page.camera_pan_delta(direction,delta,3.5)).limit_length(4.0)
 			play_receive_pose(delta,Vector3.INF,-windup+after_touch*1.4)
+			follow_camera()
 			return
 		if receive_elapsed > 0.44: ball.practice_early_attempt = true
 	receive_elapsed = 0.0
+	receive_camera_pan = Vector3.ZERO
 	reset_reach()
 	move_player(direction,delta)
 
@@ -162,17 +166,6 @@ func movement_input() -> Vector2:
 			var stick := Vector2(Input.get_joy_axis(pads[0],JOY_AXIS_LEFT_X),-Input.get_joy_axis(pads[0],JOY_AXIS_LEFT_Y))
 			if stick.length()>0.15: direction += stick*((stick.length()-0.15)/0.85)/stick.length()
 	return direction.limit_length()
-
-func move_during_receive(direction: Vector2, delta: float) -> void:
-	if direction.is_zero_approx(): return
-	var actor: Node3D = page.preview_player
-	var forward := Vector3(0,0,4)-actor.position
-	forward.y = 0.0
-	forward = forward.normalized()
-	var travel := (forward.cross(Vector3.UP)*direction.x+forward*direction.y)*1.65*delta
-	actor.position.x = clampf(actor.position.x+travel.x,-4.0,4.0)
-	actor.position.z = clampf(actor.position.z+travel.z,-4.5,2.5)
-	if active: follow_camera()
 
 func queue_receive() -> bool:
 	if not active or not reception_drill_active(): return false
@@ -238,7 +231,6 @@ func step_into_receive(delta: float, review_offset: Vector3) -> void:
 	var local_travel := actor.basis.inverse()*reach_travel
 	pose_receive_step(actor,local_step,local_travel,amount)
 	ball.update_practice_platform()
-	if active: follow_camera()
 
 func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: float) -> void:
 	var rig: Skeleton3D = actor.skeleton
@@ -395,5 +387,5 @@ func follow_camera() -> void:
 	var forward := (Vector3(0,0,4)-actor.position).normalized()
 	forward.y = 0
 	forward = forward.normalized()
-	page.preview_camera.position = actor.position-forward*7.5+Vector3.UP*4.2
-	page.preview_camera.look_at(actor.position+forward*2+Vector3.UP*1.1)
+	page.preview_camera.position = actor.position-forward*7.5+Vector3.UP*4.2+receive_camera_pan
+	page.preview_camera.look_at(actor.position+forward*2+Vector3.UP*1.1+receive_camera_pan)

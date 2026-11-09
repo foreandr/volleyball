@@ -255,13 +255,19 @@ func _process(delta: float) -> void:
 	var direction := Vector2(
 		float(Input.is_physical_key_pressed(KEY_D))-float(Input.is_physical_key_pressed(KEY_A)),
 		float(Input.is_physical_key_pressed(KEY_W))-float(Input.is_physical_key_pressed(KEY_S)))
-	if direction.length_squared()<0.001: return
+	pan_camera(direction,delta)
+
+func camera_pan_delta(direction: Vector2, delta: float, speed: float) -> Vector3:
 	var right := preview_camera.global_basis.x
 	var forward := -preview_camera.global_basis.z
 	right.y = 0
 	forward.y = 0
+	return (right.normalized()*direction.x+forward.normalized()*direction.y)*speed*delta
+
+func pan_camera(direction: Vector2, delta: float) -> void:
+	if direction.length_squared()<0.001: return
 	var speed := clampf(view_distance*0.45,1.0,30.0)
-	view_focus += (right.normalized()*direction.normalized().x+forward.normalized()*direction.normalized().y)*speed*delta
+	view_focus += camera_pan_delta(direction.normalized(),delta,speed)
 	view_focus.x = clampf(view_focus.x,-pan_limits.x,pan_limits.x)
 	view_focus.z = clampf(view_focus.z,-pan_limits.z,pan_limits.z)
 	update_camera()
