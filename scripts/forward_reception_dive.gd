@@ -23,7 +23,8 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 	# Start later while preserving the reach at the intended ball contact.
 	time = time*CONTACT_POSE_TIME/WINDUP if time < WINDUP else time-WINDUP+CONTACT_POSE_TIME
 	var rig: Skeleton3D = actor.skeleton
-	var travel := 0.23*smoothstep(0.02,0.20,time)+1.35*smoothstep(0.16,0.61,time)
+	var slide := 0.38*smoothstep(0.52,0.88,time) if release_platform else 0.0
+	var travel := 0.23*smoothstep(0.02,0.20,time)+1.35*smoothstep(0.16,0.61,time)+slide
 	var drop := 0.0
 	var pitch := 0.0
 	for index in range(1,KEYS.size()):
@@ -51,7 +52,9 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 	var head: Vector3 = author.point(pose,"Head")
 	var head_lift := maxf(0.0,0.24-(rig.global_transform*head).y)
 	pose[pelvis].origin += author.world_pose(pose,parent).basis.inverse()*Vector3.UP*head_lift/scale_
-	var brace := landing*(1.0-smoothstep(0.86,1.18,time)) if release_platform else 0.0
+	var brace := landing*(1.0-smoothstep(0.90,1.18,time)) if release_platform else 0.0
+	var push := smoothstep(0.52,0.72,time)
+	var release_hands := smoothstep(0.71,0.86,time)*(1.0-smoothstep(0.86,1.04,time))
 	for side in ["l","r"]:
 		var foot_name: String = "foot_"+side
 		var foot: Transform3D = author.world_pose(ready,rig.find_bone(foot_name))
@@ -77,7 +80,8 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 		for side in ["l","r"]:
 			var hand: String = "hand_"+side
 			var shoulder: Vector3 = author.point(pose,"upperarm_"+side)
-			var palm := Vector3(shoulder.x+(0.13 if side == "l" else -0.13),0.10,shoulder.z+0.19)
+			# The palms travel back relative to the shoulders as the body slides past them.
+			var palm := Vector3(shoulder.x+(0.13 if side == "l" else -0.13),0.10+0.09*release_hands,shoulder.z+lerpf(0.19,-0.38,push))
 			author.limb(pose,"upperarm_"+side,"lowerarm_"+side,hand,palm,Vector3(0.8 if side == "l" else -0.8,0.4,-0.25),brace)
 	for bone in rig.get_bone_count():
 		rig.set_bone_pose_position(bone,pose[bone].origin)
