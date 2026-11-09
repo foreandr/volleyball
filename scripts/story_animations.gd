@@ -252,7 +252,7 @@ func preview_animation(index: int) -> void:
 	selected_entry = entry.duplicate(true)
 	if is_instance_valid(edit_button): edit_button.disabled = false
 	set_cpu_arrows_pinned(false)
-	angle_control.apply_setup(preview_player)
+	angle_control.apply_setup(preview_player,selected_category == "Forearm reception")
 	if is_instance_valid(reception_controls): reception_controls.apply(preview_player)
 	source_clip = Catalog.load_clip(entry,preview_player)
 	if source_clip==null: return
@@ -284,7 +284,7 @@ func apply_output_angle(value: float) -> void:
 	reception_review.stop(false)
 	if source_clip == null or not source_clip.has_meta("contact_time"): return
 	set_cpu_arrows_pinned(false)
-	angle_control.apply_setup(preview_player)
+	angle_control.apply_setup(preview_player,selected_category == "Forearm reception")
 	if is_instance_valid(reception_controls): reception_controls.apply(preview_player,replace_body_layer)
 	StorySession.pass_output_angle = value
 	var result: Dictionary = trajectory_solver.solve(value,StorySession.pass_distance)
@@ -309,6 +309,11 @@ func update_feed_aim() -> void:
 	reception_review.stop(false)
 	if not is_instance_valid(ball_preview) or not ball_preview.active: return
 	reset_cpu_receive(not player_controls.active)
+	if not player_controls.active:
+		player_controls.clear_receive_transition()
+		preview_player.animator.play("custom_preview/clip",0)
+		preview_player.animator.seek(0.0,true)
+		preview_player.animator.pause()
 	angle_control.apply_feed_aim(preview_player)
 	timing_meter.reset_serve()
 	ball_preview.recalculate()
@@ -403,7 +408,9 @@ func set_cpu_arrows_pinned(pinned: bool) -> void:
 
 func reset_cpu_receive(restore_position: bool) -> void:
 	if cpu_start.is_finite():
-		if restore_position: preview_player.position = cpu_start
+		if restore_position:
+			preview_player.position = cpu_start
+			preview_player.rotation.y = cpu_start_yaw
 		player_controls.reset_reach()
 	cpu_start = Vector3.INF
 	cpu_receive_clock = -INF

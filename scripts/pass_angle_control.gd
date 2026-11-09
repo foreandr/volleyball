@@ -203,7 +203,7 @@ func parameter(title_: String, low: float, high: float, value: float, unit := "m
 	number.set_meta("slider",bar)
 	return number
 
-func apply_setup(player: Node3D) -> void:
+func apply_setup(player: Node3D, face_source := false) -> void:
 	if not StorySession.pass_destination.is_finite():
 		var direction := (StorySession.feed_spot-StorySession.pass_start).normalized()
 		StorySession.pass_destination = StorySession.pass_start+direction*StorySession.pass_distance
@@ -218,8 +218,11 @@ func apply_setup(player: Node3D) -> void:
 	player.position = Vector3(StorySession.pass_start.x,0.04,StorySession.pass_start.y)
 	apply_feed_aim(player)
 	player.set_meta("feed_settings",{"speed":StorySession.incoming_speed,"angle":StorySession.incoming_angle,"source":StorySession.feed_spot,"source_height":StorySession.source_height,"fit":StorySession.feed_fit,"spin":SPINS[spin_picker.selected],"spin_rate":spin_rate_field.value,"float_strength":float_field.value})
-	var facing := (StorySession.feed_spot-StorySession.pass_start).normalized()+(StorySession.pass_destination-StorySession.pass_start).normalized()
-	if facing.length()<0.01: facing = (StorySession.feed_spot-StorySession.pass_start).normalized()
+	var toward_source := (StorySession.feed_spot-StorySession.pass_start).normalized()
+	var facing := toward_source
+	if not face_source:
+		facing += (StorySession.pass_destination-StorySession.pass_start).normalized()
+		if facing.length_squared()<0.0001: facing = toward_source
 	player.rotation.y = atan2(facing.x,facing.y)
 	player.set_meta("pass_target",{"position":StorySession.pass_destination,"height":StorySession.pass_apex,"fit":StorySession.destination_fit})
 
