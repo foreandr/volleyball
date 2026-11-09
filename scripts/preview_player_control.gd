@@ -360,8 +360,8 @@ func step_into_receive(delta: float, review_offset: Vector3) -> void:
 		var step_limit := 0.68 if reach_side_lunge else (0.75 if tier == 2 else 0.46)
 		var stride := 1.0 if reach_back and tier == 2 else 0.78
 		reach_step = horizontal.limit_length(step_limit)*stride
-		if directional_cpu and reach_short_straight_back:
-			reach_step -= court_forward*0.16
+		if directional_cpu and tier == 1 and animation_direction in [1,5]:
+			reach_step = offset.slide(Vector3.UP).normalized()*0.48
 		if directional_cpu and ((tier == 1 and animation_direction == 6) or (tier == 2 and animation_direction == 3)):
 			# Keep the shoulder inside the ball's lane while the platform reaches across it.
 			reach_step -= actor.basis.x*reach_step.dot(actor.basis.x)*0.32
@@ -382,6 +382,7 @@ func step_into_receive(delta: float, review_offset: Vector3) -> void:
 		reach_rear_diagonal = tier == 2 and reach_back and absf(local.x)>0.20
 		if directional_cpu: reach_rear_diagonal = tier == 2 and animation_direction in [4,6]
 		reach_lead = "l" if local.x >= 0.0 else "r"
+		if tier == 1 and (reach_forward_lunge or reach_short_straight_back): reach_lead = "r"
 	var before := smoothstep(0.0,1.0,reach_progress)
 	reach_progress = minf(1.0,reach_progress+delta/(0.19 if reach_tier == 2 else 0.15))
 	var amount := smoothstep(0.0,1.0,reach_progress)
@@ -417,7 +418,8 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 			var bone := rig.find_bone(name_)
 			if bone >= 0: pose[bone] = receive_ready_pose[bone]
 	var scale_: float = rig.global_basis.get_scale().y
-	var back := clampf(-step.z/0.32,0.0,1.0)
+	var short_straight := reach_tier == 1 and (reach_forward_lunge or reach_short_straight_back)
+	var back := 0.0 if short_straight else clampf(-step.z/0.32,0.0,1.0)
 	var side_lean := clampf(step.x/0.32,-1.0,1.0)
 	var shoulder_side := 1.0 if reach_lead == "l" else -1.0
 	author.rotate_world(pose,"spine_02",Vector3.BACK,-side_lean*0.27*weight)
@@ -508,7 +510,7 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 			pole = pole.normalized().lerp(knee_over_foot.normalized(),weight)
 		elif straight_back and reach_tier == 2:
 			pole = Vector3(-0.46 if side == "r" else 0.46,0.42,1.0)
-		elif straight_back and side == "r":
+		elif short_straight and side == "r":
 			pole = pole.normalized()+Vector3.LEFT*0.09*weight
 		elif reach_forward_lunge and reach_tier == 2 and side == "r":
 			pole = pole.normalized()+Vector3.LEFT*0.09*weight
@@ -517,8 +519,9 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 	if high or reach_tier == 2 or side_receive or reach_forward_lunge or reach_back:
 		var extension := 0.17 if reach_forward_lunge else (0.10 if reach_side_lunge else 0.05)
 		var cpu_direction: int = receive_animation_direction() if not active and not page.reception_review.active else 0
-		if reach_back: extension = 0.10 if reach_tier == 1 and cpu_direction == 6 else 0.22
+		if reach_back and not short_straight: extension = 0.10 if reach_tier == 1 and cpu_direction == 6 else 0.22
 		var arms := Vector3(step.x,0.0,step.z).normalized()*extension*weight
+		if short_straight: arms = Vector3.BACK*0.17*weight
 		if reach_forward_lunge or short_lunge: arms.y = 0.07*weight
 		if reach_rear_diagonal: arms.y = 0.10*weight
 		if reach_side_lunge and cpu_direction == 3:
