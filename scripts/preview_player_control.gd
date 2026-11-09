@@ -373,6 +373,8 @@ func step_into_receive(delta: float, review_offset: Vector3) -> void:
 		if directional_cpu and ((tier == 1 and animation_direction == 6) or (tier == 2 and animation_direction == 3)):
 			# Keep the shoulder inside the ball's lane while the platform reaches across it.
 			reach_step -= actor.basis.x*reach_step.dot(actor.basis.x)*0.32
+		if directional_cpu and arrows.selected_distance == 3 and animation_direction in [3,7]:
+			reach_step += horizontal.normalized()*0.43
 		if directional_cpu and tier == 2 and animation_direction in [4,5,6]:
 			reach_back = true
 			reach_side_lunge = false
@@ -448,6 +450,7 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 	var deep := reach_tier == 2 and reach_height < 0.20
 	var high := reach_height >= 0.20
 	var short_lunge := reach_tier == 1 and not high and (side_receive or reach_back)
+	var knee_slide: bool = not active and reach_side_lunge and actor.get_node("DirectionArrows").selected_distance == 3
 	var straight_back := reach_short_straight_back or (reach_tier == 2 and reach_back and not reach_rear_diagonal)
 	var pelvis := rig.find_bone("pelvis")
 	var hips: Transform3D = pose[pelvis]
@@ -499,7 +502,7 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 			if short_lunge and side_receive: target.z += 0.09*weight
 			if reach_forward_lunge: target.z += (0.12 if reach_tier == 2 else 0.07)*weight
 			if straight_back: target.z -= (0.12 if reach_tier == 2 else 0.07)*weight
-		elif reach_back and reach_tier == 2:
+		elif (reach_back and reach_tier == 2) or knee_slide:
 			# Slide the trailing shoe along the court once the planted ankle is out of reach.
 			var hip: Vector3 = author.point(pose,"thigh_"+side)
 			var knee: Vector3 = author.point(pose,"calf_"+side)
@@ -532,6 +535,8 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 		if short_straight: arms = Vector3.BACK*0.17*weight
 		if reach_forward_lunge or short_lunge: arms.y = 0.07*weight
 		if reach_rear_diagonal: arms.y = 0.10*weight
+		if knee_slide and cpu_direction == 7:
+			arms += Vector3(0.0,0.15,0.07)*weight
 		if reach_side_lunge and cpu_direction == 3:
 			arms += Vector3(0.0,0.17,0.14)*weight
 		var center: Vector3 = (author.point(pose,"hand_l")+author.point(pose,"hand_r"))*0.5

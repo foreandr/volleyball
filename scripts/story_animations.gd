@@ -474,22 +474,18 @@ func step_cpu_receive(previous: float, delta: float) -> void:
 			var direction: int = player_controls.receive_animation_direction()
 			var deep_rear: bool = arrows.selected_distance == 2 and direction in [4,5,6]
 			var short_straight: bool = arrows.selected_distance == 1 and direction in [1,5]
-			var windup_time := 0.12 if short_back else (0.26 if deep_rear else (0.22 if short_straight else 0.18))
+			var windup_time := 0.12 if short_back else (0.26 if deep_rear else (0.22 if short_straight or knee_slide else 0.18))
 			var straight_back: bool = arrows.selected_distance == 2 and direction == 5
-			var setup_step: bool = direction != arrows.selected or straight_back or short_back or knee_slide
+			var setup_step: bool = direction != arrows.selected or straight_back or short_back
 			var until_contact: float = ball_preview.contact_time-preview_clock
 			if not ball_preview.incoming_net.is_empty(): return
-			var setup_time := 0.32 if knee_slide else (0.38 if short_back else (0.34 if direction == 7 else 0.24))
+			var setup_time := 0.38 if short_back else (0.34 if direction == 7 else 0.24)
 			if setup_step and until_contact <= windup_time+setup_time and until_contact > windup_time:
 				if not cpu_start.is_finite():
 					cpu_start = preview_player.position
 					cpu_start_yaw = preview_player.rotation.y
-				if knee_slide:
-					var sideways: Vector3 = arrows.global_basis.orthonormalized()*arrows.direction(direction)
-					player_controls.move_cpu_toward(cpu_start+sideways*0.50-preview_player.position,delta)
-				else:
-					var setup_distance := 0.48 if short_back else (0.28 if straight_back else (0.55 if direction == 7 else 0.42))
-					player_controls.step_back_for_lunge(cpu_start,arrows.global_basis.z,delta,setup_distance)
+				var setup_distance := 0.48 if short_back else (0.28 if straight_back else (0.55 if direction == 7 else 0.42))
+				player_controls.step_back_for_lunge(cpu_start,arrows.global_basis.z,delta,setup_distance)
 				return
 			if until_contact > windup_time: return
 			cpu_reach_offset = ball_preview.aim_point-ball_preview.platform(ball_preview.contact_time).ball
