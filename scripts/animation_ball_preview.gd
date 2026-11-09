@@ -328,7 +328,7 @@ func practice_step_offset(time: float) -> Vector3:
 	if offset.length() <= RECEIVE_RADIUS or offset.length() > 1.65: return Vector3.ZERO
 	return offset
 
-func practice_reach_tier(offset: Vector3) -> int:
+static func practice_reach_tier(offset: Vector3) -> int:
 	if offset.length() > 1.12 or offset.y > 0.62: return 3
 	if offset.length() > 0.67 or absf(offset.y) > 0.28: return 2
 	return 1

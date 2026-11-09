@@ -14,6 +14,11 @@ var clip: Animation
 var contact_frame: float
 var meter: Control
 var tracks: Array[Vector2i] = []
+var ready_pose: Array[Transform3D] = []
+var reach := {}
+var reach_step := Vector3.ZERO
+var reach_travel := Vector3.ZERO
+var reach_progress := 0.0
 var destination := Vector2(2.75,3.0)
 var height := 3.8
 var grade := Timing.Grade.WAITING
@@ -38,7 +43,12 @@ func configure(player: Node3D, animation: Animation, timing_meter: Control) -> v
 	var rig: Skeleton3D = setter.skeleton
 	for bone in rig.get_bone_count():
 		var path := NodePath("Armature/Skeleton3D:"+rig.get_bone_name(bone))
-		tracks.append(Vector2i(clip.find_track(path,Animation.TYPE_POSITION_3D),clip.find_track(path,Animation.TYPE_ROTATION_3D)))
+		var track := Vector2i(clip.find_track(path,Animation.TYPE_POSITION_3D),clip.find_track(path,Animation.TYPE_ROTATION_3D))
+		tracks.append(track)
+		var ready := rig.get_bone_pose(bone)
+		if track.x >= 0: ready.origin = clip.position_track_interpolate(track.x,0.0)
+		if track.y >= 0: ready.basis = Basis(clip.rotation_track_interpolate(track.y,0.0))
+		ready_pose.append(ready)
 	style.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	style.vertex_color_use_as_albedo = true
 	mesh = surface
@@ -51,11 +61,13 @@ func reset() -> void:
 	in_reach = false
 	touch_time = -INF
 	net_hit.clear()
+	clear_reach()
 	meter.reset_serve()
 
 func queue_bump(time: float) -> void:
 	if grade == Timing.Grade.WAITING and time-pressed_at >= ATTEMPT_TIME:
 		pressed_at = time
+		clear_reach()
 
 func platform_center() -> Vector3:
 	var rig: Skeleton3D = setter.skeleton
@@ -99,7 +111,7 @@ func flight_point(origin: Vector3, velocity: Vector3, time: float) -> Vector3:
 
 func approach(path: Callable, time: float, end: float) -> float:
 	var center := ready_contact()
-	var nearest := Timing.METER_NEAR_RADIUS
+	var nearest := 1.12
 	var delay := -1.0
 	for index in range(20):
 		var ahead := Timing.APPROACH_WINDOW*index/19.0
@@ -121,6 +133,8 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 	if striking:
 		var windup := lerpf(-0.14,0.0,smoothstep(0.0,Timing.GREEN_START,elapsed))
 		apply_pose(contact_frame+windup,smoothstep(0.0,0.055,elapsed))
+		var intercept := advance_reach(path,time,end,delta)
+		pose_reach(smoothstep(0.0,1.0,reach_progress),intercept)
 		var center := platform_center()
 		var first: Vector3 = path.call(previous)
 		var last: Vector3 = path.call(time)
@@ -145,12 +159,65 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 		else: grade = Timing.Grade.EARLY if is_finite(pressed_at) else Timing.Grade.LATE
 	if is_finite(touch_time):
 		var follow := time-touch_time
-		if follow < 0.36:
+		if follow > 0.0 and follow < 0.36:
 			apply_pose(contact_frame+follow,1.0-smoothstep(0.12,0.36,follow))
+			pose_reach(smoothstep(0.0,1.0,reach_progress)*(1.0-smoothstep(0.06,0.32,follow)),touch)
 			Drive.apply(setter.skeleton,setter.get_pose_author(),outgoing,Drive.effort(incoming,outgoing),follow,true,incoming,Drive.swing_effort(touch,outgoing))
 	elif grade == Timing.Grade.WAITING and elapsed > ATTEMPT_TIME and elapsed < ATTEMPT_TIME+0.12:
-		apply_pose(contact_frame,1.0-smoothstep(ATTEMPT_TIME,ATTEMPT_TIME+0.12,elapsed))
+		var recovery := 1.0-smoothstep(ATTEMPT_TIME,ATTEMPT_TIME+0.12,elapsed)
+		apply_pose(contact_frame,recovery)
+		pose_reach(smoothstep(0.0,1.0,reach_progress)*recovery,Vector3.INF)
 	meter.update_timing(true,approach(path,time,end) if grade == Timing.Grade.WAITING else -1.0,striking,grade,delta)
+
+func clear_reach() -> void:
+	reach.clear()
+	reach_step = Vector3.ZERO
+	reach_travel = Vector3.ZERO
+	reach_progress = 0.0
+
+func advance_reach(path: Callable, time: float, end: float, delta: float) -> Vector3:
+	var intercept := Vector3.INF
+	var lookahead := minf(time+0.30,end)
+	if lookahead > time:
+		var future: Vector3 = path.call(lookahead)
+		var now: Vector3 = path.call(time)
+		intercept = Geometry3D.get_closest_point_to_segment(ready_contact(),now,future)
+		if reach.is_empty() and (lookahead >= end or not intercept.is_equal_approx(future)):
+			plan_reach(intercept-ready_contact())
+	if not reach.is_empty():
+		var before := smoothstep(0.0,1.0,reach_progress)
+		var duration := 0.19 if reach.tier == 2 else 0.15
+		reach_progress = minf(1.0,reach_progress+delta/duration)
+		var origin := setter.position
+		var next := origin+reach_step*(smoothstep(0.0,1.0,reach_progress)-before)
+		setter.position.x = clampf(next.x,-4.0,4.0)
+		setter.position.z = clampf(next.z,-4.5,2.5)
+		reach_travel += setter.position-origin
+	return intercept
+
+func plan_reach(offset: Vector3) -> void:
+	var local := setter.basis.inverse()*offset
+	var horizontal := offset.slide(Vector3.UP)
+	if offset.length() <= PLATFORM_RADIUS or horizontal.length() < 0.12: return
+	var tier := Timing.practice_reach_tier(offset)
+	if tier == 3: return
+	var back := local.z < -absf(local.x)*0.65
+	var short_back := tier == 1 and back and -local.z > absf(local.x)*1.4
+	var forward := local.z > absf(local.x)*1.4
+	var side := tier == 2 and absf(local.x) > absf(local.z)*1.4
+	reach = {
+		"tier":tier,"back":back,"rear_diagonal":tier == 2 and back and absf(local.x)>0.20,
+		"short_straight_back":short_back,"forward_lunge":forward,
+		"lead":"r" if (tier == 1 and (forward or short_back)) or local.x < 0.0 else "l",
+		"side_lunge":side,"height":offset.y if tier == 2 else 0.0,
+	}
+	var limit := 0.68 if side else (0.75 if tier == 2 else 0.46)
+	reach_step = horizontal.limit_length(limit)*(1.0 if back and tier == 2 else 0.78)
+
+func pose_reach(weight: float, intercept: Vector3) -> void:
+	if reach.is_empty() or weight <= 0.0: return
+	var local := setter.basis.inverse()
+	setter.pose_reception_reach(local*reach_step,local*reach_travel,weight,reach_progress,ready_pose,reach,false,0,intercept)
 
 func reach_platform(offset: Vector3) -> void:
 	var rig: Skeleton3D = setter.skeleton
