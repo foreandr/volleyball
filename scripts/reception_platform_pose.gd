@@ -1,7 +1,7 @@
 extends RefCounted
 
 const HAND_GAP := 0.065
-const ELBOW_ANGLE := 161.0
+const ELBOW_ANGLE := 168.0
 
 static func connect_arms(pose: Array, author: RefCounted, desired: Vector3, weight: float, shoulder_advance := 0.022) -> void:
 	if weight <= 0.001: return

@@ -226,6 +226,13 @@ func recalculate() -> void:
 	if missed:
 		aim_point = arrows.landing_target()
 		aim_point.y = Flight.FLOOR
+		if practice_mode:
+			var direction: Vector3 = aim_point-actor.global_position
+			direction.y = 0.0
+			var reach := 0.42 if arrows.selected_distance == 1 else 0.85
+			aim_point = impact_point+direction.normalized()*reach
+			if float(actor.get_meta("feed_settings",{}).get("source_height",0.0)) >= 4.6:
+				aim_point.y += 0.36
 	var feed: Dictionary
 	if review_feed.is_empty():
 		feed = Flight.feed(aim_point,actor.get_meta("feed_settings",{}))
