@@ -420,10 +420,14 @@ func step_cpu_receive(previous: float, delta: float) -> void:
 	if not is_finite(cpu_receive_clock):
 		var arrows = preview_player.get_node("DirectionArrows")
 		if arrows.selected != 0:
-			var deep_rear: bool = arrows.selected_distance == 2 and arrows.selected in [4,5,6]
+			var direction: int = player_controls.receive_animation_direction()
+			var deep_rear: bool = arrows.selected_distance == 2 and direction in [4,5,6]
 			var windup_time := 0.26 if deep_rear else 0.18
 			if not ball_preview.incoming_net.is_empty() or preview_clock < ball_preview.contact_time-windup_time: return
 			cpu_reach_offset = ball_preview.aim_point-ball_preview.platform(ball_preview.contact_time).ball
+			if direction != arrows.selected:
+				var sideways: Vector3 = arrows.global_basis.orthonormalized()*arrows.direction(direction)
+				cpu_reach_offset = sideways*Vector2(cpu_reach_offset.x,cpu_reach_offset.z).length()+Vector3.UP*cpu_reach_offset.y
 		else:
 			var approach: float = ball_preview.practice_approach(preview_clock)
 			if approach < 0.45:

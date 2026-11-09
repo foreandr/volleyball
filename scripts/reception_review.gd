@@ -19,6 +19,8 @@ const CASES := [
 	[2,"Left lunge",Vector3(0.85,0,0),Vector3(0,-7,-3)],
 	[2,"Forward-left reach",Vector3(0.59,0,0.59),Vector3(0,-5,-3)],
 ]
+const RIGHT_LUNGE := 10
+const BACK_RIGHT_LUNGE := 11
 const FEED_TIME := 0.70
 const READY_POSITION := Vector3(0,0.04,-3.4)
 const SLOW_RATE := 0.35
@@ -234,7 +236,8 @@ func step(delta: float) -> void:
 	update_title_card(elapsed)
 	if elapsed >= -0.25 and elapsed < 0.28:
 		var pose_offset := minf(0.0,elapsed+0.15)*1.4+maxf(0.0,elapsed)*1.4
-		page.player_controls.play_receive_pose(delta,offset,pose_offset)
+		var animation_offset: Vector3 = CASES[RIGHT_LUNGE][2] if index == BACK_RIGHT_LUNGE else offset
+		page.player_controls.play_receive_pose(delta,animation_offset,pose_offset)
 		if elapsed >= -0.03:
 			ball.try_practice_pass(previous,page.preview_clock,0.16)
 	elif elapsed >= 0.28 and not released:

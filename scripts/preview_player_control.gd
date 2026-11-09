@@ -298,6 +298,11 @@ func reset_reach() -> void:
 	high_adjustment = Vector3.ZERO
 	if reception_drill_active(): page.ball_preview.practice_reach_center = Vector3.INF
 
+func receive_animation_direction() -> int:
+	var arrows = page.preview_player.get_node("DirectionArrows")
+	if arrows.selected_distance == 2 and arrows.selected == 4: return 3
+	return arrows.selected
+
 func step_into_receive(delta: float, review_offset: Vector3) -> void:
 	var actor: Node3D = page.preview_player
 	var ball = page.ball_preview
@@ -313,6 +318,7 @@ func step_into_receive(delta: float, review_offset: Vector3) -> void:
 		if offset.is_zero_approx(): return
 		var tier: int = ball.practice_reach_tier(offset)
 		var arrows = actor.get_node("DirectionArrows")
+		var animation_direction := receive_animation_direction()
 		var directional_cpu: bool = not active and review_offset.is_finite() and not page.reception_review.active
 		if directional_cpu:
 			tier = arrows.selected_distance
@@ -328,29 +334,29 @@ func step_into_receive(delta: float, review_offset: Vector3) -> void:
 		reach_height = offset.y if tier == 2 or directional_cpu else 0.0
 		reach_side_lunge = tier == 2 and absf(local.x) > absf(local.z)*1.4
 		reach_forward_lunge = local.z > absf(local.x)*1.4
-		if directional_cpu and tier == 2 and arrows.selected in [2,3,7,8]:
+		if directional_cpu and tier == 2 and animation_direction in [2,3,7,8]:
 			reach_side_lunge = true
 			reach_forward_lunge = false
 		var horizontal := Vector3(offset.x,0.0,offset.z)
 		var step_limit := 0.68 if reach_side_lunge else (0.75 if tier == 2 else 0.46)
 		var stride := 1.0 if reach_back and tier == 2 else 0.78
 		reach_step = horizontal.limit_length(step_limit)*stride
-		if directional_cpu and ((tier == 1 and arrows.selected == 6) or (tier == 2 and arrows.selected == 3)):
+		if directional_cpu and ((tier == 1 and animation_direction == 6) or (tier == 2 and animation_direction == 3)):
 			# Keep the shoulder inside the ball's lane while the platform reaches across it.
 			reach_step -= actor.basis.x*reach_step.dot(actor.basis.x)*0.32
-		if directional_cpu and tier == 2 and arrows.selected in [4,5,6]:
+		if directional_cpu and tier == 2 and animation_direction in [4,5,6]:
 			reach_back = true
 			reach_side_lunge = false
 			reach_forward_lunge = false
-			var clearance_side := -1.0 if arrows.selected == 4 else 1.0
-			if reach_height >= 0.20 and arrows.selected != 5: clearance_side *= -1.0
+			var clearance_side := -1.0 if animation_direction == 4 else 1.0
+			if reach_height >= 0.20 and animation_direction != 5: clearance_side *= -1.0
 			var clearance := 0.24
-			if reach_height < 0.20 and arrows.selected != 5:
-				clearance = 0.0 if arrows.selected == 4 else 0.10
+			if reach_height < 0.20 and animation_direction != 5:
+				clearance = 0.0 if animation_direction == 4 else 0.10
 			reach_step = horizontal-court_forward*0.32-court_forward.cross(Vector3.UP)*clearance_side*clearance
 			reach_step = reach_step.limit_length(1.20)
 		reach_rear_diagonal = tier == 2 and reach_back and absf(local.x)>0.20
-		if directional_cpu: reach_rear_diagonal = tier == 2 and arrows.selected in [4,6]
+		if directional_cpu: reach_rear_diagonal = tier == 2 and animation_direction in [4,6]
 		reach_lead = "l" if local.x >= 0.0 else "r"
 	var before := smoothstep(0.0,1.0,reach_progress)
 	reach_progress = minf(1.0,reach_progress+delta/(0.19 if reach_tier == 2 else 0.15))
@@ -473,7 +479,7 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 		author.set_world_basis(pose,foot_name,foot.basis)
 	if high or reach_tier == 2 or side_receive or reach_forward_lunge or reach_back:
 		var extension := 0.17 if reach_forward_lunge else (0.10 if reach_side_lunge else 0.05)
-		var cpu_direction: int = actor.get_node("DirectionArrows").selected if not active and not page.reception_review.active else 0
+		var cpu_direction: int = receive_animation_direction() if not active and not page.reception_review.active else 0
 		if reach_back: extension = 0.10 if reach_tier == 1 and cpu_direction == 6 else 0.22
 		var arms := Vector3(step.x,0.0,step.z).normalized()*extension*weight
 		if reach_forward_lunge or short_lunge: arms.y = 0.07*weight
