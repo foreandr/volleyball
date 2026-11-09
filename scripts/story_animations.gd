@@ -307,6 +307,7 @@ func _process(delta: float) -> void:
 			if ball_preview.crossed(preview_clock,floor_time): ball_preview.finish_practice_serve()
 		var approach: float = ball_preview.practice_approach(preview_clock) if in_control and ball_preview.practice_grade == BallPreview.Grade.WAITING else -1.0
 		timing_meter.update_timing(in_control,approach,player_controls.receive_hold>0.0,ball_preview.practice_grade,delta)
+		ball_preview.update_practice_cone(timing_meter.visible,player_controls.receive_hold)
 		if not in_control:
 			preview_player.animator.seek(0.0,true)
 			drill_status.text = "F1 to play  |  WASD to move\nHold Space just before contact"

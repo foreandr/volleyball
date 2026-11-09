@@ -26,6 +26,7 @@ var cached_revision := -1
 var positions := {}
 var rotations := {}
 var guide: MeshInstance3D
+var spread_cone: MeshInstance3D
 var source_ball: MeshInstance3D
 var source_ground: MeshInstance3D
 var feed_valid := true
@@ -74,6 +75,8 @@ func _ready() -> void:
 	add_child(guide)
 	guide.global_transform = Transform3D.IDENTITY
 	guide.hide()
+	spread_cone = preload("res://scripts/reception_spread_cone.gd").new()
+	add_child(spread_cone)
 	source_ball = MeshInstance3D.new()
 	source_ball.name = "IncomingBall"
 	source_ball.mesh = ball.mesh
@@ -149,6 +152,7 @@ func stop() -> void:
 	if is_instance_valid(source_ball): source_ball.hide()
 	if is_instance_valid(source_ground): source_ground.hide()
 	if is_instance_valid(guide): guide.hide()
+	if is_instance_valid(spread_cone): spread_cone.hide()
 	if is_instance_valid(audio): audio.stop()
 	if is_instance_valid(net_audio): net_audio.stop()
 
@@ -270,20 +274,36 @@ func try_practice_pass(previous_time: float, time: float, held: float) -> bool:
 	if touch.distance_to(platform_center)>RECEIVE_RADIUS: return false
 	practice_in_reach = true
 	if held <= 0.0: return false
-	var timing_error := 0.0
+	var timing_error := practice_timing_error(held)
 	if held < GREEN_START:
 		practice_grade = Grade.LATE
-		timing_error = (GREEN_START-held)/GREEN_START
 	elif held > GREEN_END:
 		practice_grade = Grade.EARLY
-		timing_error = clampf((held-GREEN_END)/0.30,0.0,1.0)
 	else:
 		practice_grade = Grade.PERFECT
 	var velocity := practice_pass_velocity(touch,timing_error)
-	recovery = {"time":last,"point":touch,"velocity":velocity,"end_time":last+Flight.landing_time(touch,velocity)}
+	recovery = {"time":last,"point":touch,"velocity":velocity,"spread":practice_spread(timing_error),"end_time":last+Flight.landing_time(touch,velocity)}
 	recovery_net = Net.first_hit(func(t): return touch+velocity*(t-last)+Vector3.DOWN*4.905*pow(t-last,2),last,recovery.end_time)
 	update_guide()
 	return true
+
+func practice_timing_error(held: float) -> float:
+	if held < GREEN_START: return (GREEN_START-held)/GREEN_START
+	return clampf((held-GREEN_END)/0.30,0.0,1.0)
+
+func practice_spread(timing_error: float) -> float:
+	return lerpf(0.18,2.10,timing_error) if timing_error > 0.0 else 0.0
+
+func update_practice_cone(show_timing: bool, held: float) -> void:
+	var target: Dictionary = actor.get_meta("pass_target",{})
+	var has_touch := recovery.has("spread")
+	if not show_timing or not target.has("position") or (practice_grade != Grade.WAITING and not has_touch):
+		spread_cone.hide()
+		return
+	var destination := Vector3(target.position.x,0.075,target.position.y)
+	var origin: Vector3 = recovery.point if has_touch else platform(contact_time).ball
+	var spread: float = recovery.spread if has_touch else practice_spread(practice_timing_error(held))
+	spread_cone.show_spread(origin,destination,spread)
 
 func practice_pass_velocity(touch: Vector3, timing_error: float) -> Vector3:
 	var target: Dictionary = actor.get_meta("pass_target",{})
@@ -292,7 +312,7 @@ func practice_pass_velocity(touch: Vector3, timing_error: float) -> Vector3:
 	if timing_error <= 0.0: return ideal
 
 	var direction := Vector2.from_angle(randf()*TAU)
-	var spread := lerpf(0.18,2.10,timing_error)*randf_range(0.55,1.0)
+	var spread := practice_spread(timing_error)*randf_range(0.55,1.0)
 	var destination: Vector2 = target.position+direction*spread
 	var ideal_peak := touch.y+ideal.y*ideal.y/(2.0*Flight.GRAVITY)
 	var height_spread := lerpf(0.10,1.35,timing_error)
