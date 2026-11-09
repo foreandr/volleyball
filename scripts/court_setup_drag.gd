@@ -21,6 +21,7 @@ func handle(event: InputEvent) -> bool:
 			if mode.is_empty(): return false
 			if mode=="player" and moved: StorySession.save_preview_setup()
 			if mode == "player" and not moved and click_point.is_finite(): page.angle_control.place_point(click_point,click_mode)
+			page.angle_control.finish_placement()
 			mode = ""
 			return true
 		var camera: Camera3D = page.preview_camera
@@ -54,6 +55,7 @@ func handle(event: InputEvent) -> bool:
 		if not hit is Vector3:
 			mode = ""
 			return false
+		page.angle_control.begin_placement()
 		if mode == "player" or picked_handle or picked_source: grab_offset = origin-hit
 		else:
 			grab_offset = Vector3.ZERO

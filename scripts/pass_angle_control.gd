@@ -1,5 +1,9 @@
 extends VBoxContainer
 signal angle_requested(value: float)
+const PLACEMENT_FIELDS := ["feed_spot","pass_destination","pass_start"]
+const PLACEMENT_HISTORY_LIMIT := 50
+var placement_start := {}
+var placement_history: Array[Dictionary] = []
 var field: SpinBox
 var slider: HSlider
 var actual_label: Label
@@ -44,6 +48,8 @@ func _ready() -> void:
 	source_pad = preload("res://scripts/ball_source_pad.gd").new()
 	source_pad.set_positions(StorySession.feed_spot,StorySession.pass_start)
 	source_pad.source_moved.connect(func(position): place_point(position,"ball"))
+	source_pad.placement_started.connect(begin_placement)
+	source_pad.placement_finished.connect(finish_placement)
 	build_host.add_child(source_pad)
 	height_field = parameter("Source height",0.2,12.0,StorySession.source_height)
 	back_field = parameter("Back from net",-12.0,40.0,StorySession.feed_spot.y-4.0)
@@ -67,6 +73,8 @@ func _ready() -> void:
 	destination_pad = preload("res://scripts/ball_source_pad.gd").new()
 	destination_pad.mode = "destination"
 	destination_pad.source_moved.connect(func(position): place_point(position,"destination"))
+	destination_pad.placement_started.connect(begin_placement)
+	destination_pad.placement_finished.connect(finish_placement)
 	build_host.add_child(destination_pad)
 	apex_field = parameter("Pass height",0.5,20.0,StorySession.pass_apex)
 	apex_field.allow_greater = true
@@ -84,6 +92,32 @@ func _ready() -> void:
 	actual_label = Label.new()
 	actual_label.hide()
 	build_host.add_child(actual_label)
+
+func begin_placement() -> void:
+	for field_name in PLACEMENT_FIELDS:
+		placement_start[field_name] = StorySession.get(field_name)
+
+func finish_placement() -> void:
+	var changed := {}
+	for field_name in placement_start:
+		if not placement_start[field_name].is_equal_approx(StorySession.get(field_name)):
+			changed[field_name] = placement_start[field_name]
+	placement_start.clear()
+	if changed.is_empty(): return
+	placement_history.append(changed)
+	if placement_history.size() > PLACEMENT_HISTORY_LIMIT: placement_history.pop_front()
+
+func undo_placement() -> bool:
+	if not placement_start.is_empty() or placement_history.is_empty(): return false
+	var previous: Dictionary = placement_history.pop_back()
+	for field_name in previous:
+		StorySession.set(field_name,previous[field_name])
+	if StorySession.pass_destination.is_finite():
+		var distance := StorySession.pass_start.distance_to(StorySession.pass_destination)
+		distance_field.set_value_no_signal(distance)
+		distance_field.get_meta("slider").set_value_no_signal(distance)
+	pending = true
+	return true
 
 func place_point(position: Vector2, type: String) -> void:
 	if type == "destination": StorySession.pass_destination = position

@@ -322,6 +322,11 @@ func _input(event: InputEvent) -> void:
 		return
 	if selected_category.is_empty(): return
 	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_Z and event.ctrl_pressed and not (event.shift_pressed or event.alt_pressed or event.meta_pressed):
+			var focus := get_viewport().gui_get_focus_owner()
+			if not (focus is LineEdit or focus is TextEdit) and not player_controls.active and angle_control.visible:
+				if angle_control.undo_placement(): get_viewport().set_input_as_handled()
+			return
 		if event.keycode in [KEY_Q,KEY_E]:
 			cycle_type(-1 if event.keycode == KEY_Q else 1)
 			get_viewport().set_input_as_handled()

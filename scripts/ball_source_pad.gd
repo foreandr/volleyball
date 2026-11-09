@@ -1,5 +1,7 @@
 extends Control
 signal source_moved(position: Vector2)
+signal placement_started
+signal placement_finished
 var source_position := Vector2(0,12.5)
 var player_position := Vector2.ZERO
 var dragging := false
@@ -49,7 +51,11 @@ func style() -> StyleBoxFlat:
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		dragging = event.pressed
-		if dragging: move_source(event.position)
+		if dragging:
+			placement_started.emit()
+			move_source(event.position)
+		else:
+			placement_finished.emit()
 		accept_event()
 	elif event is InputEventMouseMotion and dragging:
 		move_source(event.position)
