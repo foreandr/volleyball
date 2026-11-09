@@ -337,6 +337,9 @@ func step_into_receive(delta: float, review_offset: Vector3) -> void:
 		var step_limit := 0.68 if reach_side_lunge else (0.75 if tier == 2 else 0.46)
 		var stride := 1.0 if reach_back and tier == 2 else 0.78
 		reach_step = horizontal.limit_length(step_limit)*stride
+		if directional_cpu and ((tier == 1 and arrows.selected == 6) or (tier == 2 and arrows.selected == 3)):
+			# Keep the shoulder inside the ball's lane while the platform reaches across it.
+			reach_step -= actor.basis.x*reach_step.dot(actor.basis.x)*0.32
 		if tier == 2 and (forward_offset < -0.45 or (directional_cpu and arrows.selected in [4,5,6])):
 			reach_back = true
 			reach_side_lunge = false
@@ -461,9 +464,12 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 		author.set_world_basis(pose,foot_name,foot.basis)
 	if high or reach_tier == 2 or side_receive or reach_forward_lunge or reach_back:
 		var extension := 0.17 if reach_forward_lunge else (0.10 if reach_side_lunge else 0.05)
-		if reach_back: extension = 0.22
+		var cpu_direction: int = actor.get_node("DirectionArrows").selected if not active and not page.reception_review.active else 0
+		if reach_back: extension = 0.10 if reach_tier == 1 and cpu_direction == 6 else 0.22
 		var arms := Vector3(step.x,0.0,step.z).normalized()*extension*weight
 		if reach_forward_lunge: arms.y = 0.07*weight
+		if reach_side_lunge and cpu_direction == 3:
+			arms += Vector3(0.0,0.17,0.14)*weight
 		var center: Vector3 = (author.point(pose,"hand_l")+author.point(pose,"hand_r"))*0.5
 		if twisting:
 			var chest_forward := Basis(Vector3.UP,chest_yaw)*Vector3.BACK
