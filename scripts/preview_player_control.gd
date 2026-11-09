@@ -363,19 +363,21 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 	if deep:
 		author.rotate_world(pose,"spine_02",Vector3.BACK,-side_lean*0.12*weight)
 		author.rotate_world(pose,"spine_02",Vector3.RIGHT,0.14*weight)
+	if deep or reach_side_lunge:
 		var parent := rig.get_bone_parent(pelvis)
 		var drop := (0.22 if reach_forward_lunge else 0.36)*weight
 		if reach_side_lunge:
+			# Set pelvis height from the planted trailing ankle and a nearly straight knee.
 			var trail := "r" if reach_lead == "l" else "l"
 			var hip: Vector3 = author.point(pose,"thigh_"+trail)
 			var knee: Vector3 = author.point(pose,"calf_"+trail)
 			var foot: Vector3 = author.point(pose,"foot_"+trail)
 			var leg_length := hip.distance_to(knee)+knee.distance_to(foot)
-			var ground_offset := hip-(foot-travel/scale_)
-			var horizontal := Vector2(ground_offset.x,ground_offset.z).length()
-			var extension := leg_length*lerpf(0.84,0.985,weight)
+			var planted_offset := hip-(foot-travel/scale_)
+			var horizontal := Vector2(planted_offset.x,planted_offset.z).length()
+			var extension := lerpf(hip.distance_to(foot),leg_length*0.998,weight)
 			var hip_height := sqrt(maxf(0.0,extension*extension-horizontal*horizontal))
-			drop = clampf(ground_offset.y-hip_height,0.0,0.43*weight)
+			drop = clampf(planted_offset.y-hip_height,-0.13*weight,0.43*weight)
 		pose[pelvis].origin -= author.world_pose(pose,parent).basis.inverse()*Vector3.UP*drop
 	if reach_forward_lunge and reach_tier == 1 and not high:
 		var parent := rig.get_bone_parent(pelvis)
