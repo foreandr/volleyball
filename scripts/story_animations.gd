@@ -299,6 +299,7 @@ func _process(delta: float) -> void:
 	if reception_drill_active():
 		if preview_clock < previous:
 			ball_preview.reset_practice_serve()
+			player_controls.reset_reach()
 			timing_meter.reset_serve()
 			if in_control: drill_status.text = "Next serve  |  Hold Q just before contact"
 		elif in_control:

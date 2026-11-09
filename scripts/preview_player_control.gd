@@ -7,6 +7,10 @@ var animator_active := true
 var animation_process := 0
 var moving := false
 var receive_hold := 0.0
+var reach_step := Vector3.ZERO
+var reach_progress := 0.0
+var reach_travel := Vector3.ZERO
+var reach_lead := "l"
 var indicator: Label
 var save_clock := 0.0
 var footwork: RefCounted
@@ -71,6 +75,7 @@ func set_active(value: bool) -> void:
 	var actor: Node3D = page.preview_player
 	active = value
 	receive_hold = 0.0
+	reset_reach()
 	side_steps.active = false
 	side_weight = 0
 	stamina_bar.visible = active
@@ -142,8 +147,66 @@ func step(delta: float) -> void:
 		actor.animator.play("custom_preview/clip",0)
 		actor.animator.seek(page.ball_preview.contact_time,true)
 		actor.animator.pause()
+		step_into_receive(delta)
 	else:
+		reset_reach()
 		move_player(direction.limit_length(),delta)
+
+func reset_reach() -> void:
+	if reach_step.is_zero_approx(): return
+	reach_step = Vector3.ZERO
+	reach_travel = Vector3.ZERO
+	reach_progress = 0.0
+	if reception_drill_active(): page.ball_preview.practice_reach_center = Vector3.INF
+
+func step_into_receive(delta: float) -> void:
+	var actor: Node3D = page.preview_player
+	var ball = page.ball_preview
+	if reach_step.is_zero_approx():
+		var offset: Vector3 = ball.practice_step_offset(page.preview_clock)
+		var local := actor.basis.inverse()*offset
+		if absf(local.x)<0.12 and local.z> -0.12: return
+		reach_step = offset.limit_length(0.46)*0.78
+		reach_lead = "l" if local.x >= 0.0 else "r"
+	var before := smoothstep(0.0,1.0,reach_progress)
+	reach_progress = minf(1.0,reach_progress+delta/0.15)
+	var amount := smoothstep(0.0,1.0,reach_progress)
+	var next := actor.position+reach_step*(amount-before)
+	var previous := actor.position
+	actor.position.x = clampf(next.x,-4.0,4.0)
+	actor.position.z = clampf(next.z,-4.5,2.5)
+	reach_travel += actor.position-previous
+	face_ball()
+	var local_step := actor.basis.inverse()*reach_step
+	var local_travel := actor.basis.inverse()*reach_travel
+	pose_receive_step(actor,local_step,local_travel,amount)
+	ball.update_practice_platform()
+	follow_camera()
+
+func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: float) -> void:
+	var rig: Skeleton3D = actor.skeleton
+	var author: RefCounted = footwork.author
+	var pose: Array = []
+	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
+	var scale_: float = rig.global_basis.get_scale().y
+	var back := clampf(-step.z/0.32,0.0,1.0)
+	var side_lean := clampf(step.x/0.32,-1.0,1.0)
+	var shoulder_side := 1.0 if reach_lead == "l" else -1.0
+	author.rotate_world(pose,"spine_02",Vector3.BACK,-side_lean*0.27*weight)
+	author.rotate_world(pose,"spine_02",Vector3.RIGHT,-back*0.14*weight)
+	author.rotate_world(pose,"spine_03",Vector3.UP,shoulder_side*back*0.31*weight)
+	for side in ["l","r"]:
+		var foot_name: String = "foot_"+side
+		var foot: Transform3D = author.world_pose(pose,rig.find_bone(foot_name))
+		var target := foot.origin-travel/scale_
+		if side == reach_lead:
+			target += step/scale_*weight*1.32+Vector3.UP*sin(PI*reach_progress)*0.08
+		var pole: Vector3 = author.point(pose,"calf_"+side)-author.point(pose,"thigh_"+side)
+		author.limb(pose,"thigh_"+side,"calf_"+side,foot_name,target,pole)
+		author.set_world_basis(pose,foot_name,foot.basis)
+	for bone in rig.get_bone_count():
+		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
+
 
 func move_player(direction: Vector2, delta: float) -> void:
 	var actor: Node3D = page.preview_player

@@ -44,6 +44,7 @@ const RECEIVE_RADIUS := 0.25
 const METER_NEAR_RADIUS := 0.90
 var practice_grade := Grade.WAITING
 var practice_in_reach := false
+var practice_reach_center := Vector3.INF
 var aim_point := Vector3.ZERO
 var net_audio: AudioStreamPlayer
 var net_contact_count := 0
@@ -186,6 +187,7 @@ func platform(time: float) -> Dictionary:
 
 
 func recalculate() -> void:
+	practice_reach_center = Vector3.INF
 	practice_grade = Grade.WAITING
 	practice_in_reach = false
 	recovery.clear()
@@ -239,11 +241,36 @@ func reset_practice_serve() -> void:
 	recovery_net.clear()
 	update_guide()
 
+func practice_platform_center() -> Vector3:
+	return practice_reach_center if practice_reach_center.is_finite() else platform(contact_time).ball
+
+func practice_step_offset(time: float) -> Vector3:
+	if practice_grade != Grade.WAITING or not incoming_net.is_empty(): return Vector3.ZERO
+	var elapsed := time-contact_time
+	var first := maxf(elapsed,-feed_duration)
+	var last := minf(elapsed+0.23,practice_floor_time)
+	if last <= first: return Vector3.ZERO
+	var center: Vector3 = platform(contact_time).ball
+	var nearest := Geometry3D.get_closest_point_to_segment(center,practice_position(first),practice_position(last))
+	var offset := nearest-center
+	if offset.length() <= RECEIVE_RADIUS or offset.length() > 0.67 or absf(offset.y) > 0.30:
+		return Vector3.ZERO
+	return Vector3(offset.x,0.0,offset.z)
+
+func update_practice_platform() -> void:
+	var rig: Skeleton3D = actor.skeleton
+	var elbows := []
+	var wrists := []
+	for side in ["l","r"]:
+		elbows.append(rig.global_transform*rig.get_bone_global_pose(rig.find_bone("lowerarm_"+side)).origin)
+		wrists.append(rig.global_transform*rig.get_bone_global_pose(rig.find_bone("hand_"+side)).origin)
+	practice_reach_center = Contact.surface(elbows,wrists,0.032*rig.global_basis.get_scale().y).ball
+
 func practice_approach(time: float) -> float:
 	if not incoming_net.is_empty(): return -1.0
 	var elapsed := time-contact_time
 	if elapsed < -feed_duration or elapsed > practice_floor_time: return -1.0
-	var center: Vector3 = platform(contact_time).ball
+	var center := practice_platform_center()
 	var nearest := practice_position(elapsed).distance_to(center)
 	if nearest <= RECEIVE_RADIUS: return 1.0
 	var nearest_delay := 0.0
@@ -267,7 +294,7 @@ func try_practice_pass(previous_time: float, time: float, held: float) -> bool:
 	var first := maxf(previous_time-contact_time,-feed_duration)
 	var last := minf(time-contact_time,practice_floor_time)
 	if last < first: return false
-	var platform_center: Vector3 = platform(contact_time).ball
+	var platform_center := practice_platform_center()
 	var previous := practice_position(first)
 	var current := practice_position(last)
 	var touch := Geometry3D.get_closest_point_to_segment(platform_center,previous,current)
@@ -301,7 +328,7 @@ func update_practice_cone(show_timing: bool, held: float) -> void:
 		spread_cone.hide()
 		return
 	var destination := Vector3(target.position.x,0.075,target.position.y)
-	var origin: Vector3 = recovery.point if has_touch else platform(contact_time).ball
+	var origin: Vector3 = recovery.point if has_touch else practice_platform_center()
 	var spread: float = recovery.spread if has_touch else practice_spread(practice_timing_error(held))
 	spread_cone.show_spread(origin,destination,spread)
 
