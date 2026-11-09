@@ -261,6 +261,8 @@ func start_setting_drill() -> void:
 	preview_player.get_node("DirectionArrows").hide()
 	player_controls.locomotion = ""
 	player_controls.setter_travel = Vector3.ZERO
+	player_controls.setter_step_rate = player_controls.QUICK_STEP_RATE
+	player_controls.show_stamina(true)
 	player_controls.footwork.weight = 0.0
 	player_controls.footwork.travel = Vector3.ZERO
 	player_controls.side_weight = 0.0
@@ -284,6 +286,7 @@ func stop_setting_drill() -> void:
 	preview_player.model.rotation.y = 0.0
 	preview_player.get_node("DirectionArrows").show()
 	player_controls.indicator.text = "Camera"
+	player_controls.show_stamina(false)
 	update_camera()
 
 func refresh_type() -> void:
@@ -400,6 +403,7 @@ func reception_drill_active() -> bool:
 
 func _process(delta: float) -> void:
 	if is_instance_valid(setting_drill):
+		player_controls.read_pace_input()
 		player_controls.move_player(player_controls.movement_input(),delta,false,setting_drill.ball.global_position)
 		setting_drill.step(delta)
 		return

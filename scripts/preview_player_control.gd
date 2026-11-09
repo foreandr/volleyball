@@ -38,11 +38,12 @@ var recovery_delay := 0.0
 var sprinting := false
 var sprint_requested := false
 var locomotion := ""
-var stamina_bar: ProgressBar
+var stamina_ring: MeshInstance3D
 var side_steps: RefCounted
 var side_weight := 0.0
 var shuffle_heading := Vector3.ZERO
 var setter_travel := Vector3.ZERO
+var setter_step_rate := QUICK_STEP_RATE
 
 func _init(host: Control) -> void:
 	page = host
@@ -60,21 +61,9 @@ func _init(host: Control) -> void:
 	indicator.offset_top = 10
 	indicator.offset_bottom = 30
 	indicator.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	stamina_bar = ProgressBar.new()
-	stamina_bar.show_percentage = false
-	stamina_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	stamina_bar.value = stamina
-	stamina_bar.visible = false
-	page.preview.add_child(stamina_bar)
-	stamina_bar.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-	stamina_bar.offset_left = -124
-	stamina_bar.offset_right = -14
-	stamina_bar.offset_top = 35
-	stamina_bar.offset_bottom = 43
-	var fill := StyleBoxFlat.new()
-	fill.bg_color = Color("e4ba56")
-	fill.set_corner_radius_all(3)
-	stamina_bar.add_theme_stylebox_override("fill",fill)
+	stamina_ring = preload("res://scripts/player_stamina_ring.gd").new()
+	page.preview_player.add_child(stamina_ring)
+	stamina_ring.hide()
 	var saved: Dictionary = page.get_node("/root/StorySession").preview_camera
 	if not saved.is_empty():
 		page.orbit_yaw = saved.yaw
@@ -100,7 +89,7 @@ func set_active(value: bool) -> void:
 	reset_reach()
 	side_steps.active = false
 	side_weight = 0
-	stamina_bar.visible = active
+	show_stamina(active)
 	locomotion = ""
 	sprinting = false
 	if active:
@@ -144,9 +133,7 @@ func step(delta: float) -> void:
 		stamina = minf(100,stamina+17*delta)
 		return
 	var direction := movement_input()
-	sprint_requested = Input.is_physical_key_pressed(KEY_SHIFT)
-	var connected := Input.get_connected_joypads()
-	if not connected.is_empty(): sprint_requested = sprint_requested or Input.is_joy_button_pressed(connected[0],JOY_BUTTON_RIGHT_SHOULDER)
+	read_pace_input()
 	if receive_queued:
 		receive_elapsed = delta
 		receive_queued = false
@@ -176,6 +163,15 @@ func pan_frozen_camera(direction: Vector2, delta: float) -> void:
 	if direction.is_zero_approx(): return
 	receive_camera_pan = (receive_camera_pan+page.camera_pan_delta(direction,delta,3.5)).limit_length(4.0)
 	follow_camera()
+
+func show_stamina(value: bool) -> void:
+	stamina_ring.visible = value
+	if value: stamina_ring.set_fraction(stamina/100.0)
+
+func read_pace_input() -> void:
+	sprint_requested = Input.is_physical_key_pressed(KEY_SHIFT)
+	var connected := Input.get_connected_joypads()
+	if not connected.is_empty(): sprint_requested = sprint_requested or Input.is_joy_button_pressed(connected[0],JOY_BUTTON_RIGHT_SHOULDER)
 
 func movement_input() -> Vector2:
 	var direction := Vector2.ZERO
@@ -474,9 +470,12 @@ func move_player(direction: Vector2, delta: float, track_ball := true, setting_t
 		var facing := actor.basis.z.normalized()
 		step_direction = Vector2(travel.dot(facing.cross(Vector3.UP)),travel.dot(facing))
 	if exhausted and stamina>=25: exhausted = false
-	var quick_pace := not setting and sprint_requested and direction.length()>0.1 and not exhausted and stamina>0
-	sprinting = quick_pace and step_direction.y>0.3
-	var step_rate := QUICK_STEP_RATE if quick_pace or setting else 1.0
+	var quick_pace := sprint_requested and direction.length()>0.1 and not exhausted and stamina>0
+	sprinting = not setting and quick_pace and step_direction.y>0.3
+	var step_rate := QUICK_STEP_RATE if quick_pace else 1.0
+	if setting:
+		setter_step_rate = move_toward(setter_step_rate,QUICK_STEP_RATE*step_rate,delta*7.0)
+		step_rate = setter_step_rate
 	var speed := 4.5 if sprinting else 1.65*step_rate
 	var velocity := travel*speed
 	var before := actor.position
@@ -506,7 +505,7 @@ func move_player(direction: Vector2, delta: float, track_ball := true, setting_t
 	else:
 		recovery_delay = maxf(0,recovery_delay-delta)
 		if recovery_delay<=0: stamina = minf(100,stamina+17*delta)
-	stamina_bar.value = stamina
+	if stamina_ring.visible: stamina_ring.set_fraction(stamina/100.0)
 	var action := "run" if sprinting else "idle"
 	if action!=locomotion:
 		locomotion = action

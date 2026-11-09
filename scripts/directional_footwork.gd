@@ -43,9 +43,12 @@ func step(direction: Vector3, delta: float, step_rate: float, continuous := fals
 		if not continuous:
 			target.x -= ready_foot.origin.x*0.30*absf(travel.z)*weight
 		else:
-			var lateral_stride := minf(float(recipe.stride),absf(ready_foot.origin.x)*0.90)
+			var stance_width: float = absf(author.feet["l"].origin.x-author.feet["r"].origin.x)
+			var lateral_stride := minf(float(recipe.stride),stance_width*0.45)
 			target.x = ready_foot.origin.x+travel.x*stride*lateral_stride*weight
 		var pole: Vector3 = author.point(author.baseline,"calf_"+side)-author.point(author.baseline,"thigh_"+side)
+		if continuous:
+			pole = Vector3(0.12 if side == "l" else -0.12,0.16,1.0)
 		author.limb(pose,"thigh_"+side,"calf_"+side,"foot_"+side,target,pole)
 		# Roll through the swing and return to a flat shoe at contact.
 		var swing := clampf((offset-0.5)*2.0,0.0,1.0)
