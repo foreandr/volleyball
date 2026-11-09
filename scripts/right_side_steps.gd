@@ -110,7 +110,16 @@ func apply_pose(amount := 1.0) -> void:
 				var stagger := 0.39 if side == "l" else -0.09
 				target.z = lerpf(pelvis_z + stagger, target.z, 0.15)
 			author.limb(pose,"thigh_"+side,"calf_"+side,"foot_"+side,target,knee_pole)
-			author.set_world_basis(pose,"foot_"+side,foot.basis)
+			var foot_name: String = "foot_"+side
+			author.set_world_basis(pose,foot_name,foot.basis)
+			if left_shuffle:
+				# Turn the shoe with the stance while retaining the clip's ankle pitch and toe flex.
+				var toe_direction: Vector3 = author.point(pose,"ball_"+side)-author.point(pose,foot_name)
+				toe_direction.y = 0.0
+				var toe_out := deg_to_rad(8.0 if side == "l" else -8.0)
+				var heading := Vector3.BACK.rotated(Vector3.UP,LEFT_SHUFFLE_YAW+toe_out)
+				var correction := toe_direction.signed_angle_to(heading,Vector3.UP)
+				author.rotate_world(pose,foot_name,Vector3.UP,correction)
 	last_pose = pose
 	last_weight = weight
 	install(pose,weight*amount)
