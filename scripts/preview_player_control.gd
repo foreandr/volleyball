@@ -320,6 +320,10 @@ func reset_reach() -> void:
 	high_adjustment = Vector3.ZERO
 	if reception_drill_active(): page.ball_preview.practice_reach_center = Vector3.INF
 
+func cpu_knee_slide() -> bool:
+	var arrows = page.preview_player.get_node("DirectionArrows")
+	return not active and arrows.selected_distance == 3 and arrows.selected in [3,7]
+
 func receive_animation_direction() -> int:
 	var arrows = page.preview_player.get_node("DirectionArrows")
 	if arrows.selected_distance == 2:
@@ -450,7 +454,7 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 	var deep := reach_tier == 2 and reach_height < 0.20
 	var high := reach_height >= 0.20
 	var short_lunge := reach_tier == 1 and not high and (side_receive or reach_back)
-	var knee_slide: bool = not active and reach_side_lunge and actor.get_node("DirectionArrows").selected_distance == 3
+	var knee_slide := reach_side_lunge and cpu_knee_slide()
 	var straight_back := reach_short_straight_back or (reach_tier == 2 and reach_back and not reach_rear_diagonal)
 	var pelvis := rig.find_bone("pelvis")
 	var hips: Transform3D = pose[pelvis]
@@ -535,12 +539,14 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 		if short_straight: arms = Vector3.BACK*0.17*weight
 		if reach_forward_lunge or short_lunge: arms.y = 0.07*weight
 		if reach_rear_diagonal: arms.y = 0.10*weight
-		if knee_slide and cpu_direction == 7:
-			arms += Vector3(-0.07,0.36,-0.06)*weight
 		if reach_side_lunge and cpu_direction == 3:
 			arms += Vector3(0.0,0.17,0.14)*weight
 		var center: Vector3 = (author.point(pose,"hand_l")+author.point(pose,"hand_r"))*0.5
-		if high:
+		if knee_slide and cpu_direction != 0:
+			var target: Vector3 = rig.global_transform.affine_inverse()*page.ball_preview.aim_point
+			var wrist_target := target+Vector3(0.0,-0.04,0.13)
+			arms = arms.lerp(wrist_target-center,weight*0.85)
+		elif high:
 			var shoulder_height: float = (author.point(pose,"upperarm_l").y+author.point(pose,"upperarm_r").y)*0.5
 			arms.y = maxf(0.0,shoulder_height-center.y-0.02)*weight
 			var intercept: Dictionary = page.ball_preview.practice_shoulder_intercept()
@@ -644,6 +650,8 @@ func face_ball() -> void:
 	var actor: Node3D = page.preview_player
 	var ball: Node3D = page.ball_preview
 	var target: Vector3 = ball.global_position if ball.ball.visible else ball.source_ball.global_position
+	if cpu_knee_slide() and not page.reception_review.active:
+		target = ball.practice_position(page.preview_clock-ball.contact_time)
 	var toward := target-actor.global_position
 	if Vector2(toward.x,toward.z).length_squared()>0.01:
 		var ball_yaw := atan2(toward.x,toward.z)

@@ -196,6 +196,9 @@ Scroll to set pass height",16)
 		var arrow_hint := label("Middle-click a court arrow to aim the feed",16)
 		arrow_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		content.add_child(arrow_hint)
+		var path_hint := label("Dotted line shows aim. Solid line shows the actual pass.",16)
+		path_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		content.add_child(path_hint)
 		var arrow_labels := ["Distance 1  |  Short reach","Distance 2  |  Lunge","Distance 3  |  Dive target"]
 		var arrow_colors := [Color("67e8ff"),Color("c291ff"),Color("82a8ff")]
 		for index in arrow_labels.size():
@@ -425,7 +428,7 @@ func _process(delta: float) -> void:
 		else:
 			step_cpu_receive(previous,delta)
 		if preview_clock >= previous and ball_preview.try_body_dig(previous,preview_clock):
-			drill_status.text = "Body dig  |  Deflected off the player"
+			drill_status.text = body_dig_status()
 		var approach: float = ball_preview.practice_approach(preview_clock) if in_control and ball_preview.practice_grade == BallPreview.Grade.WAITING else -1.0
 		timing_meter.update_timing(in_control,approach,player_controls.receive_elapsed>0.0,ball_preview.practice_grade,delta)
 		ball_preview.update_practice_cone(timing_meter.visible,player_controls.receive_elapsed)
@@ -510,7 +513,13 @@ func step_cpu_receive(previous: float, delta: float) -> void:
 		cpu_side_slide_start = preview_player.position
 		cpu_side_slide_time = preview_clock
 		ball_preview.practice_reach_center = Vector3.INF
-		drill_status.text = "CPU knee slide  |  F1 to take control"
+		if ball_preview.recovery.has("spread"):
+			drill_status.text = "Clean platform contact"
+			if not ball_preview.recovery_net.is_empty(): drill_status.text += "  |  Pass hit the net"
+		elif ball_preview.recovery.has("body_touch"):
+			drill_status.text = body_dig_status()
+		else:
+			drill_status.text = "Platform missed"
 		return
 	var after_touch := 0.0
 	if ball_preview.recovery.has("spread"):
@@ -525,6 +534,12 @@ func step_cpu_receive(previous: float, delta: float) -> void:
 		player_controls.reset_reach()
 		preview_player.animator.seek(0.0,true)
 		player_controls.blend_receive_recovery(delta)
+
+func body_dig_status() -> String:
+	var part := str(ball_preview.recovery.get("body_part",""))
+	if part.begins_with("upperarm"): return "Body dig  |  Shoulder or upper-arm deflection"
+	if part == "Head": return "Body dig  |  Head deflection"
+	return "Body dig  |  Deflected off the player"
 
 func step_cpu_forward_dive(previous: float) -> void:
 	var time: float = preview_clock-ball_preview.contact_time+ForwardDive.WINDUP
