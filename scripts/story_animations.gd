@@ -1,5 +1,6 @@
 extends "res://scripts/create.gd"
 const Flight = preload("res://scripts/pass_flight.gd")
+const LeftReceives = preload("res://scripts/left_receive_variants.gd")
 const Catalog = preload("res://scripts/volleyball_animations.gd")
 const MOVE_TYPES := {
 	"Forearm reception":["Forearm"],
@@ -25,6 +26,10 @@ var angle_control: VBoxContainer
 var source_clip: Animation
 var trajectory_solver: RefCounted
 var render_clip: Animation
+var base_render_clip: Animation
+var variant_picker: OptionButton
+var variant_label: Label
+var left_clips := {}
 var preview_clock := 0.0
 var reception_controls: VBoxContainer
 var replace_body_layer := false
@@ -86,6 +91,8 @@ func clear_content() -> void:
 		content.remove_child(child)
 		child.queue_free()
 	reception_controls = null
+	variant_picker = null
+	variant_label = null
 	animation_list = null
 	edit_button = null
 	selected_entry.clear()
@@ -160,11 +167,49 @@ func select_category(category: String) -> void:
 	animation_list.add_theme_font_size_override("font_size",18)
 	animation_list.item_selected.connect(preview_animation)
 	content.add_child(animation_list)
+	if category == "Forearm reception": build_variant_picker()
 	edit_button = button("Edit",open_editor)
 	edit_button.name = "EditAnimation"
 	content.add_child(edit_button)
 	refresh_type()
 	animation_list.grab_focus()
+
+func build_variant_picker() -> void:
+	variant_label = label("Directional reception",18)
+	content.add_child(variant_label)
+	variant_picker = OptionButton.new()
+	variant_picker.name = "DirectionalReceivePicker"
+	variant_picker.custom_minimum_size.y = 38
+	variant_picker.add_item("Landing only")
+	for index in LeftReceives.STYLES.size():
+		variant_picker.add_item("%02d  %s" % [index+1,LeftReceives.STYLES[index][0]])
+	content.add_child(variant_picker)
+	variant_picker.item_selected.connect(func(index):
+		StorySession.left_receive_variant = index
+		update_feed_aim())
+	sync_variant_picker()
+
+func sync_variant_picker() -> void:
+	if not is_instance_valid(variant_picker): return
+	var direction: int = angle_control.reach_picker.selected
+	variant_label.text = "Reception - "+angle_control.reach_picker.get_item_text(direction)
+	variant_picker.disabled = direction != LeftReceives.LEFT_ARROW
+	var index := clampi(StorySession.left_receive_variant,0,LeftReceives.STYLES.size())
+	variant_picker.select(0 if variant_picker.disabled else index)
+
+func choose_render_clip() -> Animation:
+	if not is_instance_valid(variant_picker) or variant_picker.disabled or variant_picker.selected <= 0:
+		return base_render_clip
+	var index := variant_picker.selected
+	if not left_clips.has(index):
+		left_clips[index] = LeftReceives.bake(preview_player,base_render_clip,index)
+	return left_clips[index]
+
+func set_base_render_clip(clip: Animation) -> void:
+	if clip != base_render_clip:
+		base_render_clip = clip
+		left_clips.clear()
+	render_clip = choose_render_clip()
 
 func current_type() -> String:
 	if selected_category.is_empty(): return ""
@@ -207,9 +252,10 @@ func preview_animation(index: int) -> void:
 	recipe_signature = Catalog.Recipes.signature(str(entry.get("recipe","")))
 	recipe_revision = Catalog.Recipes.revision
 	trajectory_solver = preload("res://scripts/pass_trajectory_solver.gd").new(preview_player,source_clip)
-	render_clip = source_clip
+	var base := source_clip
 	if source_clip.has_meta("contact_time"):
-		render_clip = trajectory_solver.solve(StorySession.pass_output_angle if StorySession.pass_output_angle >= 0 else 45.0,StorySession.pass_distance).clip
+		base = trajectory_solver.solve(StorySession.pass_output_angle if StorySession.pass_output_angle >= 0 else 45.0,StorySession.pass_distance).clip
+	set_base_render_clip(base)
 	preview_player.install_custom(render_clip,"preview",false)
 	if not is_instance_valid(ball_preview):
 		ball_preview = preload("res://scripts/animation_ball_preview.gd").new()
@@ -231,7 +277,7 @@ func apply_output_angle(value: float) -> void:
 	StorySession.pass_output_angle = value
 	var result: Dictionary = trajectory_solver.solve(value,StorySession.pass_distance)
 	var last_contact_clock: float = ball_preview.last_time
-	render_clip = result.clip
+	set_base_render_clip(result.clip)
 	preview_player.install_custom(render_clip,"preview",false)
 	preview_player.animator.play("custom_preview/clip",0)
 	preview_player.animator.seek(ball_preview.animation_time(preview_clock),true)
@@ -247,11 +293,27 @@ func apply_output_angle(value: float) -> void:
 func update_feed_aim() -> void:
 	if not is_instance_valid(ball_preview) or not ball_preview.active: return
 	angle_control.apply_feed_aim(preview_player)
-	ball_preview.recalculate()
+	sync_variant_picker()
+	var next_clip := choose_render_clip()
+	if next_clip != render_clip:
+		render_clip = next_clip
+		preview_player.install_custom(render_clip,"preview",false)
+		ball_preview.configure(preview_player,render_clip)
+		preview_clock = minf(0,ball_preview.contact_time-ball_preview.feed_duration)
+		if not player_controls.active:
+			preview_player.animator.play("custom_preview/clip",0)
+			preview_player.animator.seek(0,true)
+			preview_player.animator.pause()
+	else:
+		ball_preview.recalculate()
 	ball_preview.tick(preview_clock,false)
 	sync_ball_results(angle_control.requested)
 
 func sync_ball_results(value: float) -> void:
+	if render_clip.has_meta("receive_arrow"):
+		angle_control.actual_label.visible = true
+		angle_control.actual_label.text = render_clip.resource_name
+		return
 	if ball_preview.missed:
 		angle_control.actual_label.visible = true
 		angle_control.actual_label.text = "Feed aimed at the selected arrow"

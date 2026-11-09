@@ -182,7 +182,7 @@ func recalculate() -> void:
 	var after := platform(minf(clip.length,contact_time+1.0/60))
 	surface_velocity = (after.surface-before.surface)/(2.0/60)
 	var arrows = actor.get_node_or_null("DirectionArrows")
-	missed = arrows != null and arrows.selected != 0
+	missed = arrows != null and arrows.selected != 0 and arrows.selected != int(clip.get_meta("receive_arrow",0))
 	aim_point = impact_point
 	if missed:
 		aim_point = arrows.landing_target()
@@ -292,12 +292,14 @@ func update_guide() -> void:
 		var angle := TAU*index/32.0
 		path.surface_add_vertex(Vector3(landing.x+cos(angle)*0.2,0.055,landing.z+sin(angle)*0.2))
 	path.surface_end()
-	if missed:
+	var arrows = actor.get_node_or_null("DirectionArrows")
+	if arrows != null and arrows.selected != 0:
+		var target: Vector3 = arrows.landing_target()
 		path.surface_begin(Mesh.PRIMITIVE_LINE_STRIP)
 		path.surface_set_color(Color("ff4848"))
 		for index in range(33):
 			var angle := TAU*index/32.0
-			path.surface_add_vertex(Vector3(aim_point.x+cos(angle)*0.17,0.06,aim_point.z+sin(angle)*0.17))
+			path.surface_add_vertex(Vector3(target.x+cos(angle)*0.17,0.06,target.z+sin(angle)*0.17))
 		path.surface_end()
 	guide.mesh = path
 	var material := StandardMaterial3D.new()
