@@ -9,21 +9,21 @@ const DURATION := POSE_DURATION-CONTACT_POSE_TIME+WINDUP
 # Time from load, hip drop and body pitch, from the side-view reference.
 const KEYS := [
 	[0.00,0.00,0.0],
-	[0.14,0.15,18.0],
-	[0.28,0.31,49.0],
-	[0.40,0.47,73.0],
-	[0.55,0.49,82.0],
-	[0.72,0.49,82.0],
+	[0.14,0.12,11.0],
+	[0.28,0.22,48.0],
+	[0.40,0.37,80.0],
+	[0.55,0.46,84.0],
+	[0.72,0.46,84.0],
 	[0.92,0.42,59.0],
 	[1.10,0.24,28.0],
 	[1.28,0.00,0.0],
 ]
 
-static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D], start: Vector3, heading: Vector3, time: float, ball_point: Vector3) -> void:
+static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D], start: Vector3, heading: Vector3, time: float, ball_point: Vector3, release_platform: bool) -> void:
 	# Start later while preserving the reach at the intended ball contact.
 	time = time*CONTACT_POSE_TIME/WINDUP if time < WINDUP else time-WINDUP+CONTACT_POSE_TIME
 	var rig: Skeleton3D = actor.skeleton
-	var travel := 1.58*smoothstep(0.08,0.60,time)
+	var travel := 0.23*smoothstep(0.02,0.20,time)+1.35*smoothstep(0.16,0.61,time)
 	var drop := 0.0
 	var pitch := 0.0
 	for index in range(1,KEYS.size()):
@@ -42,21 +42,33 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 	var scale_: float = rig.global_basis.get_scale().y
 	pose[pelvis].origin -= author.world_pose(pose,parent).basis.inverse()*Vector3.UP*drop/scale_
 	author.rotate_world(pose,"pelvis",Vector3.RIGHT,pitch)
-	author.rotate_world(pose,"Head",Vector3.RIGHT,-pitch*0.32)
-	var launch := smoothstep(0.12,0.42,time)
+	var extension := smoothstep(0.19,0.39,time)
+	var landing := smoothstep(0.41,0.55,time)
 	var get_up := smoothstep(0.73,POSE_DURATION,time)
-	var brace := smoothstep(0.40,0.55,time)*(1.0-smoothstep(0.86,1.18,time))
+	author.rotate_world(pose,"spine_03",Vector3.RIGHT,-0.22*extension*(1.0-get_up))
+	author.rotate_world(pose,"neck_01",Vector3.RIGHT,-0.24*extension*(1.0-get_up))
+	author.rotate_world(pose,"Head",Vector3.RIGHT,-pitch*0.24)
+	var head: Vector3 = author.point(pose,"Head")
+	var head_lift := maxf(0.0,0.24-(rig.global_transform*head).y)
+	pose[pelvis].origin += author.world_pose(pose,parent).basis.inverse()*Vector3.UP*head_lift/scale_
+	var brace := landing*(1.0-smoothstep(0.86,1.18,time)) if release_platform else 0.0
 	for side in ["l","r"]:
 		var foot_name: String = "foot_"+side
 		var foot: Transform3D = author.world_pose(ready,rig.find_bone(foot_name))
-		var trail := foot.origin-Vector3.BACK*(0.63 if side == "l" else 0.78)
-		var kick := smoothstep(0.18,0.46,time)*(1.0-smoothstep(0.49,0.72,time))
-		trail.y += kick*(0.44 if side == "l" else 0.14)
-		var ankle := (foot.origin-Vector3.BACK*minf(travel,0.32)).lerp(trail,launch).lerp(foot.origin,get_up)
-		author.limb(pose,"thigh_"+side,"calf_"+side,foot_name,ankle,Vector3(0.20 if side == "l" else -0.20,0.1,1.0))
+		var ankle := foot.origin-Vector3.BACK*travel/scale_
+		if side == "r":
+			var plant := smoothstep(0.015,0.15,time)
+			ankle.z += 0.42*plant
+			ankle.y += 0.09*sin(PI*plant)
+		var trail := foot.origin-Vector3.BACK*(0.69 if side == "l" else 0.81)
+		var kick := smoothstep(0.18,0.42,time)*(1.0-smoothstep(0.48,0.74,time))
+		trail.y += kick*(0.48 if side == "l" else 0.13)
+		ankle = ankle.lerp(trail,extension).lerp(foot.origin,get_up)
+		author.limb(pose,"thigh_"+side,"calf_"+side,foot_name,ankle,Vector3(0.20 if side == "l" else -0.20,0.18,1.0))
 		author.set_world_basis(pose,foot_name,foot.basis)
 	var grip: Vector3 = (author.point(pose,"hand_l")+author.point(pose,"hand_r"))*0.5
-	var reach := smoothstep(0.11,0.31,time)*(1.0-smoothstep(0.41,0.54,time))
+	var reach := smoothstep(0.11,0.31,time)
+	if release_platform: reach *= 1.0-smoothstep(0.41,0.54,time)
 	if reach > 0.0:
 		var target := rig.global_transform.affine_inverse()*ball_point+Vector3(0,-0.07,0.18)
 		target.y = maxf(0.13,target.y)
@@ -65,7 +77,7 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 		for side in ["l","r"]:
 			var hand: String = "hand_"+side
 			var shoulder: Vector3 = author.point(pose,"upperarm_"+side)
-			var palm := Vector3(shoulder.x+(0.13 if side == "l" else -0.13),0.10,shoulder.z+0.30)
+			var palm := Vector3(shoulder.x+(0.13 if side == "l" else -0.13),0.10,shoulder.z+0.19)
 			author.limb(pose,"upperarm_"+side,"lowerarm_"+side,hand,palm,Vector3(0.8 if side == "l" else -0.8,0.4,-0.25),brace)
 	for bone in rig.get_bone_count():
 		rig.set_bone_pose_position(bone,pose[bone].origin)
