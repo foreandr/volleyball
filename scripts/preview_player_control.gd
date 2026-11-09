@@ -333,6 +333,14 @@ func step_into_receive(delta: float, review_offset: Vector3) -> void:
 		var step_limit := 0.68 if reach_side_lunge else (0.75 if tier == 2 else 0.46)
 		var stride := 1.0 if reach_back and tier == 2 else 0.78
 		reach_step = horizontal.limit_length(step_limit)*stride
+		if directional_cpu and tier == 2 and arrows.selected in [4,5,6]:
+			reach_back = true
+			reach_side_lunge = false
+			reach_forward_lunge = false
+			var clearance_side := -1.0 if arrows.selected == 4 else 1.0
+			if reach_height >= 0.20 and arrows.selected != 5: clearance_side *= -1.0
+			reach_step = horizontal-court_forward*0.32-court_forward.cross(Vector3.UP)*clearance_side*0.24
+			reach_step = reach_step.limit_length(1.20)
 		reach_lead = "l" if local.x >= 0.0 else "r"
 	var before := smoothstep(0.0,1.0,reach_progress)
 	reach_progress = minf(1.0,reach_progress+delta/(0.19 if reach_tier == 2 else 0.15))
@@ -398,9 +406,9 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 	if deep:
 		author.rotate_world(pose,"spine_02",Vector3.BACK,-side_lean*0.12*weight)
 		author.rotate_world(pose,"spine_02",Vector3.RIGHT,0.14*weight)
-	if deep or reach_side_lunge:
+	if deep or reach_side_lunge or (high and reach_back):
 		var parent := rig.get_bone_parent(pelvis)
-		var drop := (0.22 if reach_forward_lunge else 0.36)*weight
+		var drop := (0.16 if reach_back else (0.22 if reach_forward_lunge else 0.36))*weight
 		if reach_side_lunge:
 			# Set pelvis height from the planted trailing ankle and a nearly straight knee.
 			var trail := "r" if reach_lead == "l" else "l"
@@ -426,6 +434,7 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 		var target := foot.origin-travel/scale_
 		if side == reach_lead:
 			var extension := 0.98 if reach_side_lunge or reach_forward_lunge else (1.18 if deep else 1.32)
+			if reach_back and reach_tier == 2: extension = 0.84
 			target += step/scale_*weight*extension+Vector3.UP*sin(PI*reach_progress)*0.08
 			if reach_side_lunge: target.z += 0.28*weight
 			if reach_forward_lunge: target.z += (0.12 if reach_tier == 2 else 0.07)*weight
