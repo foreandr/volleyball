@@ -15,7 +15,7 @@ var category_buttons: Dictionary = {}
 var selected_category := ""
 var type_indices: Dictionary = {}
 var type_label: Label
-var animation_list: ItemList
+var animation_list
 var trigger_held := {}
 var edit_button: Button
 var selected_entry: Dictionary = {}
@@ -145,13 +145,20 @@ func select_category(category: String) -> void:
 			if part=="body": replace_body_layer = true
 			apply_output_angle(angle_control.requested))
 		content.add_child(label("Forearms / platform",18))
-	animation_list = ItemList.new()
-	animation_list.name = "AnimationList"
-	animation_list.allow_reselect = true
+	if category == "Forearm reception":
+		var platforms := OptionButton.new()
+		platforms.name = "PlatformPicker"
+		platforms.custom_minimum_size.y = 38
+		animation_list = platforms
+	else:
+		var list := ItemList.new()
+		list.name = "AnimationList"
+		list.allow_reselect = true
+		list.item_activated.connect(open_editor)
+		list.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		animation_list = list
 	animation_list.add_theme_font_size_override("font_size",18)
 	animation_list.item_selected.connect(preview_animation)
-	animation_list.item_activated.connect(open_editor)
-	animation_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	content.add_child(animation_list)
 	edit_button = button("Edit",open_editor)
 	edit_button.name = "EditAnimation"
@@ -171,7 +178,8 @@ func refresh_type() -> void:
 	selected_entry.clear()
 	if is_instance_valid(edit_button): edit_button.disabled = true
 	for entry in Catalog.entries(selected_category,current_type()):
-		var index := animation_list.add_item(entry.name)
+		var index: int = animation_list.item_count
+		animation_list.add_item(entry.name)
 		animation_list.set_item_metadata(index,entry)
 	if animation_list.item_count > 0:
 		var initial := 0
@@ -283,7 +291,8 @@ func refresh_recipes() -> void:
 		recipe_revision = Catalog.Recipes.revision
 		animation_list.clear()
 		for entry in Catalog.entries(selected_category,current_type()):
-			var index := animation_list.add_item(entry.name)
+			var index: int = animation_list.item_count
+			animation_list.add_item(entry.name)
 			animation_list.set_item_metadata(index,entry)
 			if entry.id==id:
 				animation_list.select(index)
