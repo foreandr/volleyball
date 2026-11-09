@@ -22,6 +22,8 @@ const CASES := [
 	[3,"Forward dive",Vector3(0,0,1.42),Vector3(0,-9.2,-18)],
 	[3,"Forward-right dive",Vector3(-1.0,0,1.0),Vector3(-1,-9.2,-18)],
 	[3,"Forward-left dive",Vector3(1.0,0,1.0),Vector3(1,-9.2,-18)],
+	[3,"Right knee slide",Vector3(-1.42,0,0),Vector3(0,-7,-3)],
+	[3,"Left knee slide",Vector3(1.42,0,0),Vector3(0,-7,-3)],
 ]
 const SHORT_BACK := 4
 const RIGHT_LUNGE := 10
@@ -214,7 +216,12 @@ func load_case(next_index: int) -> void:
 	actor.transform = original_transform
 	actor.position = READY_POSITION
 	actor.rotation.y = 0.0
-	actor.get_node("DirectionArrows").select_direction(0)
+	page.reset_cpu_receive(false)
+	var arrows = actor.get_node("DirectionArrows")
+	if is_knee_slide():
+		arrows.select_direction(3 if CASES[index][2].x < 0 else 7,3)
+	else:
+		arrows.select_direction(0)
 	actor.animator.play("custom_preview/clip",0)
 	actor.animator.seek(0.0,true)
 	actor.animator.pause()
@@ -223,7 +230,7 @@ func load_case(next_index: int) -> void:
 	var velocity: Vector3 = actor.global_basis.orthonormalized()*CASES[index][3]
 	var aim: Vector3 = ball.platform(ball.contact_time).ball+offset
 	dive_ready.clear()
-	if CASES[index][0] == 3:
+	if CASES[index][0] == 3 and not is_knee_slide():
 		aim.y = 0.46
 		dive_kick_offset = page.dive_kick_offset()
 		dive_lower_duration = page.dive_lower_duration()
@@ -245,6 +252,9 @@ func load_case(next_index: int) -> void:
 	ball.update_practice_aim(true)
 	update_controls()
 
+func is_knee_slide() -> bool:
+	return CASES[index][0] == 3 and CASES[index][2].z == 0.0
+
 func step(delta: float) -> void:
 	page.pan_camera(page.player_controls.movement_input(),delta)
 	if paused: return
@@ -257,7 +267,12 @@ func step(delta: float) -> void:
 	var rear_side_lunge := index in [BACK_RIGHT_LUNGE,BACK_LEFT_LUNGE]
 	var short_back := index == SHORT_BACK
 	var receive_start := -0.12 if short_back else -0.25
-	if not dive_ready.is_empty():
+	if is_knee_slide():
+		if not released:
+			page.step_cpu_receive(previous,delta)
+			if not page.cpu_side_slide_pose.is_empty() and page.preview_clock-page.cpu_side_slide_time >= page.SideKneeSlide.DURATION:
+				released = true
+	elif not dive_ready.is_empty():
 		var dive_time := elapsed+ForwardDive.WINDUP
 		if dive_time >= ForwardDive.DURATION or not ball.incoming_net.is_empty(): released = true
 		if dive_time >= 0.0 and not released:
@@ -294,7 +309,7 @@ func step(delta: float) -> void:
 	var end: float = maxf(ball.cycle_end(),ball.contact_time+recovery_time)
 	ball.tick(minf(page.preview_clock,end),true)
 	ball.update_practice_aim(true)
-	if page.preview_clock < end: return
+	if page.preview_clock < end or (is_knee_slide() and not released): return
 	page.preview_clock = end
 	if not page.player_controls.settle_for_next_feed(READY_POSITION,0.0,delta):
 		ball.ball.hide()
@@ -318,6 +333,7 @@ func stop(restore_control := true) -> void:
 	finished = false
 	page.player_controls.clear_receive_transition()
 	page.player_controls.reset_reach()
+	page.reset_cpu_receive(false)
 	var actor: Node3D = page.preview_player
 	actor.transform = original_transform
 	actor.set_meta("feed_settings",original_feed)

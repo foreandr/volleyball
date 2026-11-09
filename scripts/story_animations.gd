@@ -1,6 +1,7 @@
 extends "res://scripts/create.gd"
 const BallPreview = preload("res://scripts/animation_ball_preview.gd")
 const Flight = preload("res://scripts/pass_flight.gd")
+const SideKneeSlide = preload("res://scripts/side_knee_slide.gd")
 const ForwardDive = preload("res://scripts/forward_reception_dive.gd")
 const Catalog = preload("res://scripts/volleyball_animations.gd")
 const MOVE_TYPES := {
@@ -33,6 +34,9 @@ var cpu_receive_clock := -INF
 var cpu_reach_offset := Vector3.INF
 var cpu_start := Vector3.INF
 var cpu_start_yaw := 0.0
+var cpu_side_slide_pose: Array[Transform3D] = []
+var cpu_side_slide_start := Vector3.ZERO
+var cpu_side_slide_time := 0.0
 var cpu_dive_ready: Array[Transform3D] = []
 var cpu_dive_clasp: Array[Transform3D] = []
 var cpu_dive_kick_offset := 0.0
@@ -389,6 +393,8 @@ func _process(delta: float) -> void:
 	set_cpu_arrows_pinned(drill and not in_control)
 	var first := minf(0,ball_preview.contact_time-ball_preview.feed_duration)
 	var last: float = ball_preview.cycle_end()
+	if not cpu_side_slide_pose.is_empty():
+		last = maxf(last,cpu_side_slide_time+SideKneeSlide.DURATION)
 	if not cpu_dive_ready.is_empty():
 		last = maxf(last,ball_preview.contact_time+ForwardDive.DURATION-ForwardDive.WINDUP)
 	if drill and not in_control and cpu_start.is_finite() and preview_clock+delta >= last:
@@ -450,11 +456,17 @@ func reset_cpu_receive(restore_position: bool) -> void:
 	cpu_receive_clock = -INF
 	cpu_reach_offset = Vector3.INF
 	cpu_dive_ready.clear()
+	cpu_side_slide_pose.clear()
 
 func step_cpu_receive(previous: float, delta: float) -> void:
 	var arrows = preview_player.get_node("DirectionArrows")
-	if arrows.selected != 0 and arrows.selected_distance == 3:
+	var knee_slide: bool = arrows.selected_distance == 3 and arrows.selected in [3,7]
+	if arrows.selected != 0 and arrows.selected_distance == 3 and not knee_slide:
 		if arrows.selected in [1,2,8]: step_cpu_forward_dive(previous)
+		return
+	if not cpu_side_slide_pose.is_empty():
+		SideKneeSlide.sample(preview_player,player_controls.footwork.author,cpu_side_slide_pose,
+			player_controls.receive_ready_pose,cpu_side_slide_start,player_controls.reach_lead,preview_clock-cpu_side_slide_time)
 		return
 	var short_back: bool = arrows.selected_distance == 1 and arrows.selected == 5
 	if not is_finite(cpu_receive_clock):
@@ -464,16 +476,20 @@ func step_cpu_receive(previous: float, delta: float) -> void:
 			var short_straight: bool = arrows.selected_distance == 1 and direction in [1,5]
 			var windup_time := 0.12 if short_back else (0.26 if deep_rear else (0.22 if short_straight else 0.18))
 			var straight_back: bool = arrows.selected_distance == 2 and direction == 5
-			var setup_step: bool = direction != arrows.selected or straight_back or short_back
+			var setup_step: bool = direction != arrows.selected or straight_back or short_back or knee_slide
 			var until_contact: float = ball_preview.contact_time-preview_clock
 			if not ball_preview.incoming_net.is_empty(): return
-			var setup_time := 0.38 if short_back else (0.34 if direction == 7 else 0.24)
+			var setup_time := 0.32 if knee_slide else (0.38 if short_back else (0.34 if direction == 7 else 0.24))
 			if setup_step and until_contact <= windup_time+setup_time and until_contact > windup_time:
 				if not cpu_start.is_finite():
 					cpu_start = preview_player.position
 					cpu_start_yaw = preview_player.rotation.y
-				var setup_distance := 0.48 if short_back else (0.28 if straight_back else (0.55 if direction == 7 else 0.42))
-				player_controls.step_back_for_lunge(cpu_start,arrows.global_basis.z,delta,setup_distance)
+				if knee_slide:
+					var sideways: Vector3 = arrows.global_basis.orthonormalized()*arrows.direction(direction)
+					player_controls.move_cpu_toward(cpu_start+sideways*0.50-preview_player.position,delta)
+				else:
+					var setup_distance := 0.48 if short_back else (0.28 if straight_back else (0.55 if direction == 7 else 0.42))
+					player_controls.step_back_for_lunge(cpu_start,arrows.global_basis.z,delta,setup_distance)
 				return
 			if until_contact > windup_time: return
 			cpu_reach_offset = ball_preview.aim_point-ball_preview.platform(ball_preview.contact_time).ball
@@ -493,6 +509,13 @@ func step_cpu_receive(previous: float, delta: float) -> void:
 		cpu_receive_clock = preview_clock
 		drill_status.text = "CPU receiving  |  F1 to take control"
 	var elapsed := preview_clock-cpu_receive_clock
+	if knee_slide and (not ball_preview.recovery.is_empty() or elapsed >= 0.28):
+		cpu_side_slide_pose = player_controls.snapshot_receive_pose()
+		cpu_side_slide_start = preview_player.position
+		cpu_side_slide_time = preview_clock
+		ball_preview.practice_reach_center = Vector3.INF
+		drill_status.text = "CPU knee slide  |  F1 to take control"
+		return
 	var after_touch := 0.0
 	if ball_preview.recovery.has("spread"):
 		after_touch = maxf(0.0,preview_clock-ball_preview.contact_time-float(ball_preview.recovery.time))
@@ -542,7 +565,9 @@ func update_distance_status(in_control: bool) -> void:
 		tier = ball_preview.practice_reach_tier(offset)
 		high = offset.y >= 0.20
 	var names := ["Short reach","High shoulder reach" if high else "Low lunge","Dive target (animation pending)"]
-	if tier == 3 and arrows.selected in [1,2,8]: names[2] = "Forward dive"
+	if tier == 3:
+		if arrows.selected in [1,2,8]: names[2] = "Forward dive"
+		if arrows.selected in [3,7]: names[2] = "Side knee slide"
 	distance_status.text = "Distance %d  |  %s" % [tier,names[tier-1]]
 
 func aim_pass_at_mouse(screen_point: Vector2) -> void:

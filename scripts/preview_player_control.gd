@@ -343,9 +343,9 @@ func step_into_receive(delta: float, review_offset: Vector3) -> void:
 		var tier: int = ball.practice_reach_tier(offset)
 		var arrows = actor.get_node("DirectionArrows")
 		var animation_direction := receive_animation_direction()
-		var directional_cpu: bool = not active and review_offset.is_finite() and not page.reception_review.active
+		var directional_cpu: bool = not active and review_offset.is_finite() and (not page.reception_review.active or arrows.selected_distance == 3)
 		if directional_cpu:
-			tier = arrows.selected_distance
+			tier = 2 if arrows.selected_distance == 3 and animation_direction in [3,7] else arrows.selected_distance
 		if tier == 3: return
 		var local := actor.basis.inverse()*offset
 		if tier == 1 and absf(local.x)<0.12 and absf(local.z)<0.12: return
