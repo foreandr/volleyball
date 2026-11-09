@@ -413,7 +413,7 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 		author.rotate_world(pose,"spine_02",Vector3.RIGHT,0.14*weight)
 	if deep or reach_side_lunge or (high and reach_back):
 		var parent := rig.get_bone_parent(pelvis)
-		var drop := (0.16 if reach_back else (0.22 if reach_forward_lunge else 0.36))*weight
+		var drop := (0.21 if reach_back else (0.22 if reach_forward_lunge else 0.36))*weight
 		if reach_side_lunge:
 			# Set pelvis height from the planted trailing ankle and a nearly straight knee.
 			var trail := "r" if reach_lead == "l" else "l"
