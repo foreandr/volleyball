@@ -312,6 +312,11 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 	if side_receive:
 		# Open the shoulders toward the ball and lower the opposite shoulder.
 		var roll := 0.56 if reach_tier == 2 else 0.43
+		if reach_side_lunge:
+			# Roll the ribcage down with the trailing shoulder.
+			author.rotate_world(pose,"spine_02",Vector3.BACK,side_lean*0.24*weight)
+			author.rotate_world(pose,"spine_02",Vector3.RIGHT,0.10*weight)
+			roll -= 0.15
 		author.rotate_world(pose,"spine_03",Vector3.BACK,side_lean*roll*weight)
 		author.rotate_world(pose,"spine_02",Vector3.UP,side_lean*0.08*weight)
 		author.rotate_world(pose,"spine_03",Vector3.UP,side_lean*0.19*weight)
