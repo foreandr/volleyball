@@ -19,7 +19,7 @@ const KEYS := [
 	[1.28,0.00,0.0],
 ]
 
-static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D], start: Vector3, heading: Vector3, time: float, ball_point: Vector3, release_time: float, kick_offset: float) -> void:
+static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D], clasp: Array[Transform3D], start: Vector3, heading: Vector3, time: float, ball_point: Vector3, release_time: float, kick_offset: float) -> void:
 	var kick_time := time-WINDUP-kick_offset
 	var kick := smoothstep(0.0,0.13,kick_time)*(1.0-smoothstep(0.22,0.40,kick_time))
 	# Start later while preserving the reach at the intended ball contact.
@@ -68,20 +68,37 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 			ankle.z += 0.42*plant
 			ankle.y += 0.09*sin(PI*plant)
 		var trail := foot.origin-Vector3.BACK*(0.69 if side == "l" else 0.81)
-		trail.y += kick*(0.74 if side == "l" else 0.64)
-		trail.z += kick*0.28
+		trail.y += kick*(0.46 if side == "l" else 0.37)
+		trail.z += kick*0.14
 		ankle = ankle.lerp(trail,extension).lerp(foot.origin,get_up)
 		var lateral := 0.20 if side == "l" else -0.20
-		var pole := Vector3(lateral,0.18,1.0).lerp(Vector3(lateral,-0.75,-0.9),kick)
-		author.limb(pose,"thigh_"+side,"calf_"+side,foot_name,ankle,pole)
-		author.set_world_basis(pose,foot_name,Basis(Vector3.RIGHT,-0.68*kick)*foot.basis)
+		var calf: String = "calf_"+side
+		var pole := Vector3(lateral,0.18,1.0).lerp(Vector3(lateral,-0.75,0.10),kick)
+		author.limb(pose,"thigh_"+side,calf,foot_name,ankle,pole)
+		var ready_shin: Vector3 = foot.origin-author.point(ready,calf)
+		var posed_shin: Vector3 = author.point(pose,foot_name)-author.point(pose,calf)
+		var ankle_swing := Quaternion(ready_shin.normalized(),posed_shin.normalized())
+		var toe_rotation := Quaternion.IDENTITY.slerp(ankle_swing,extension*(1.0-get_up))
+		author.set_world_basis(pose,foot_name,Basis(toe_rotation)*foot.basis)
 	var grip: Vector3 = (author.point(pose,"hand_l")+author.point(pose,"hand_r"))*0.5
 	var reach := smoothstep(0.11,0.31,time)
 	reach *= 1.0-smoothstep(0.0,0.13,since_brace)
 	if reach > 0.0:
-		var target := rig.global_transform.affine_inverse()*ball_point+Vector3(0,-0.07,0.18)
-		target.y = maxf(0.13,target.y)
+		var target := rig.global_transform.affine_inverse()*ball_point+Vector3(0,-0.14,0.18)
+		var head_height: float = author.point(pose,"Head").y
+		target.y = clampf(target.y,0.13,maxf(0.13,head_height))
 		PlatformPose.connect_arms(pose,author,grip.lerp(target,reach),reach,0.0)
+		var turn := Quaternion(PlatformPose.platform_axis(clasp,author),PlatformPose.platform_axis(pose,author))
+		for side in ["l","r"]:
+			var wrist: String = "hand_"+side
+			var bone := rig.find_bone(wrist)
+			var current: Transform3D = author.world_pose(pose,bone)
+			var reference: Transform3D = author.world_pose(clasp,bone)
+			author.set_world_basis(pose,wrist,current.basis.slerp(Basis(turn)*reference.basis,reach))
+		for bone in rig.get_bone_count():
+			var name_ := str(rig.get_bone_name(bone))
+			if name_.begins_with("thumb") or name_.begins_with("index") or name_.begins_with("middle") or name_.begins_with("ring") or name_.begins_with("pinky"):
+				pose[bone].basis = pose[bone].basis.slerp(clasp[bone].basis,reach)
 	if brace > 0.0:
 		for side in ["l","r"]:
 			var hand: String = "hand_"+side

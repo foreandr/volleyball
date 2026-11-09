@@ -34,6 +34,7 @@ var cpu_reach_offset := Vector3.INF
 var cpu_start := Vector3.INF
 var cpu_start_yaw := 0.0
 var cpu_dive_ready: Array[Transform3D] = []
+var cpu_dive_clasp: Array[Transform3D] = []
 var cpu_dive_kick_offset := 0.0
 var middle_arrow := Vector2i(-1,1)
 var middle_press := Vector2.ZERO
@@ -506,8 +507,11 @@ func step_cpu_forward_dive(previous: float) -> void:
 		preview_player.animator.seek(0.0,true)
 		preview_player.animator.pause()
 		cpu_dive_ready = player_controls.snapshot_receive_pose()
+		preview_player.animator.seek(ball_preview.contact_time,true)
+		cpu_dive_clasp = player_controls.snapshot_receive_pose()
+		preview_player.animator.seek(0.0,true)
 	var heading: Vector3 = (ball_preview.aim_point-cpu_start).slide(Vector3.UP).normalized()
-	ForwardDive.sample(preview_player,player_controls.footwork.author,cpu_dive_ready,cpu_start,heading,time,ball_preview.aim_point,float(ball_preview.recovery.get("time",0.07))+ForwardDive.WINDUP,cpu_dive_kick_offset)
+	ForwardDive.sample(preview_player,player_controls.footwork.author,cpu_dive_ready,cpu_dive_clasp,cpu_start,heading,time,ball_preview.aim_point,float(ball_preview.recovery.get("time",0.07))+ForwardDive.WINDUP,cpu_dive_kick_offset)
 	drill_status.text = "CPU forward dive  |  F1 to take control"
 	if time >= ForwardDive.WINDUP-0.12 and time <= ForwardDive.WINDUP+0.07:
 		ball_preview.update_practice_platform()
