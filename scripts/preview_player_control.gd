@@ -361,7 +361,10 @@ func step_into_receive(delta: float, review_offset: Vector3) -> void:
 			if reach_height < 0.20 and animation_direction != 5:
 				clearance = 0.0 if animation_direction == 4 else 0.10
 			reach_step = horizontal-court_forward*0.32-court_forward.cross(Vector3.UP)*clearance_side*clearance
-			reach_step = reach_step.limit_length(1.20)
+			var remaining := 1.20
+			if animation_direction == 5 and page.cpu_start.is_finite():
+				remaining -= actor.position.distance_to(page.cpu_start)
+			reach_step = reach_step.limit_length(remaining)
 		reach_rear_diagonal = tier == 2 and reach_back and absf(local.x)>0.20
 		if directional_cpu: reach_rear_diagonal = tier == 2 and animation_direction in [4,6]
 		reach_lead = "l" if local.x >= 0.0 else "r"
@@ -520,7 +523,7 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 
 
 
-func step_back_for_side_lunge(start: Vector3, forward: Vector3, delta: float, distance := 0.42) -> void:
+func step_back_for_lunge(start: Vector3, forward: Vector3, delta: float, distance := 0.42) -> void:
 	var target := start-forward.normalized()*distance
 	move_cpu_toward(target-page.preview_player.position,delta)
 

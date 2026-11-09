@@ -21,6 +21,7 @@ const CASES := [
 ]
 const RIGHT_LUNGE := 10
 const BACK_RIGHT_LUNGE := 11
+const BACK_LUNGE := 12
 const BACK_LEFT_LUNGE := 13
 const LEFT_LUNGE := 14
 const FEED_TIME := 0.70
@@ -238,7 +239,9 @@ func step(delta: float) -> void:
 	update_title_card(elapsed)
 	var rear_side_lunge := index in [BACK_RIGHT_LUNGE,BACK_LEFT_LUNGE]
 	if rear_side_lunge and elapsed >= -0.66 and elapsed < -0.25:
-		page.player_controls.step_back_for_side_lunge(READY_POSITION,Vector3.BACK,delta,0.64)
+		page.player_controls.step_back_for_lunge(READY_POSITION,Vector3.BACK,delta,0.64)
+	elif index == BACK_LUNGE and elapsed >= -0.49 and elapsed < -0.25:
+		page.player_controls.step_back_for_lunge(READY_POSITION,Vector3.BACK,delta,0.28)
 	elif elapsed >= -0.25 and elapsed < 0.28:
 		var pose_offset := minf(0.0,elapsed+0.15)*1.4+maxf(0.0,elapsed)*1.4
 		var animation_offset := offset
