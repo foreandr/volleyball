@@ -536,7 +536,7 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 		if reach_forward_lunge or short_lunge: arms.y = 0.07*weight
 		if reach_rear_diagonal: arms.y = 0.10*weight
 		if knee_slide and cpu_direction == 7:
-			arms += Vector3(0.0,0.15,0.07)*weight
+			arms += Vector3(-0.07,0.36,-0.06)*weight
 		if reach_side_lunge and cpu_direction == 3:
 			arms += Vector3(0.0,0.17,0.14)*weight
 		var center: Vector3 = (author.point(pose,"hand_l")+author.point(pose,"hand_r"))*0.5
