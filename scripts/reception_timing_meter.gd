@@ -44,7 +44,7 @@ func update_timing(active: bool, progress: float, receiving_now: bool, result: i
 	else:
 		fill = 1.0
 		result_time = maxf(0.0,result_time-delta)
-		visible = result_time > 0.0 and (shown_this_serve or grade == Timing.Grade.PERFECT)
+		visible = result_time > 0.0 and (shown_this_serve or grade in [Timing.Grade.PERFECT,Timing.Grade.BODY_DIG])
 	flash = maxf(0.0,flash-delta*2.5)
 	if visible: queue_redraw()
 
@@ -79,6 +79,7 @@ func _draw() -> void:
 		Timing.Grade.EARLY: heading = "TOO EARLY"
 		Timing.Grade.LATE: heading = "TOO LATE"
 		Timing.Grade.MISS: heading = "OUT OF REACH"
+		Timing.Grade.BODY_DIG: heading = "BODY DIG"
 	if grade in [Timing.Grade.EARLY,Timing.Grade.LATE,Timing.Grade.MISS]: accent = AMBER
 	var font := ThemeDB.fallback_font
 	var font_size := 26 if grade == Timing.Grade.PERFECT else 19

@@ -29,6 +29,7 @@ var render_clip: Animation
 var preview_clock := 0.0
 var build_label := ""
 var cpu_receive_clock := -INF
+var cpu_high_offset := Vector3.INF
 var cpu_start := Vector3.INF
 var middle_arrow := Vector2i(-1,1)
 var middle_press := Vector2.ZERO
@@ -381,6 +382,8 @@ func _process(delta: float) -> void:
 			if ball_preview.crossed(preview_clock,floor_time): ball_preview.finish_practice_serve()
 		else:
 			step_cpu_receive(previous,delta)
+		if preview_clock >= previous and ball_preview.try_body_dig(previous,preview_clock):
+			drill_status.text = "Body dig  |  Deflected off the player"
 		var approach: float = ball_preview.practice_approach(preview_clock) if in_control and ball_preview.practice_grade == BallPreview.Grade.WAITING else -1.0
 		timing_meter.update_timing(in_control,approach,player_controls.receive_elapsed>0.0,ball_preview.practice_grade,delta)
 		ball_preview.update_practice_cone(timing_meter.visible,player_controls.receive_elapsed)
@@ -407,17 +410,25 @@ func reset_cpu_receive(restore_position: bool) -> void:
 		player_controls.reset_reach()
 	cpu_start = Vector3.INF
 	cpu_receive_clock = -INF
+	cpu_high_offset = Vector3.INF
 
 func step_cpu_receive(previous: float, delta: float) -> void:
 	if not is_finite(cpu_receive_clock):
-		var intercept: Dictionary = ball_preview.practice_intercept()
+		var arrows = preview_player.get_node("DirectionArrows")
+		var side_feed: bool = arrows.selected in [2,3,4,6,7,8]
+		var feed_settings: Dictionary = preview_player.get_meta("feed_settings",{})
+		var high_feed: bool = (side_feed or arrows.selected == 5) and float(feed_settings.get("source_height",0.0))>=4.6
+		var intercept: Dictionary = ball_preview.practice_shoulder_intercept() if high_feed else ball_preview.practice_intercept()
+		high_feed = high_feed and not intercept.is_empty()
 		if not intercept.is_empty() and float(intercept.time)-preview_clock > 0.24:
 			var center: Vector3 = ball_preview.platform(ball_preview.contact_time).ball
 			var travel: Vector3 = intercept.point-center
 			travel.y = 0.0
-			var arrows = preview_player.get_node("DirectionArrows")
-			var side_feed: bool = arrows.selected in [2,3,4,6,7,8]
-			if arrows.selected != 0 and (arrows.selected_distance == 2 or side_feed):
+			if high_feed:
+				var lateral: Vector3 = preview_player.global_basis.x.normalized()
+				var side_sign := -1.0 if arrows.selected in [2,3,4] else 1.0
+				travel += preview_player.global_basis.z.normalized()*0.10-lateral*side_sign*0.22
+			elif arrows.selected != 0 and (arrows.selected_distance == 2 or side_feed):
 				var start: Vector3 = cpu_start if cpu_start.is_finite() else preview_player.position
 				var arrow_heading: Vector3 = ball_preview.aim_point-start
 				arrow_heading.y = 0.0
@@ -428,13 +439,19 @@ func step_cpu_receive(previous: float, delta: float) -> void:
 				travel -= arrow_heading*minf(1.8,gap/maxf(0.25,transverse))
 			if travel.length() > (0.14 if side_feed else 0.24):
 				if not cpu_start.is_finite(): cpu_start = preview_player.position
-				player_controls.move_cpu_toward(travel,delta)
+				player_controls.move_cpu_toward(travel,delta*(1.55 if high_feed else 1.0))
 				drill_status.text = "CPU lining up  |  F1 to take control"
 				return
+		if high_feed:
+			if float(intercept.time)-preview_clock > 0.20: return
+			var center: Vector3 = ball_preview.platform(ball_preview.contact_time).ball
+			var offset: Vector3 = intercept.point-center
+			var horizontal := Vector3(offset.x,0.0,offset.z).limit_length(0.46)
+			cpu_high_offset = horizontal+Vector3.UP*clampf(offset.y,0.33,0.59)
 		var approach: float = ball_preview.practice_approach(preview_clock)
 		var offset: Vector3 = ball_preview.practice_step_offset(preview_clock)
 		var can_reach: bool = not offset.is_zero_approx() and ball_preview.practice_reach_tier(offset) <= 2
-		if approach < 0.45 and not can_reach:
+		if not high_feed and approach < 0.45 and not can_reach:
 			preview_player.animator.play("custom_preview/clip",0)
 			preview_player.animator.seek(0.0,true)
 			preview_player.animator.pause()
@@ -448,7 +465,7 @@ func step_cpu_receive(previous: float, delta: float) -> void:
 		after_touch = maxf(0.0,preview_clock-ball_preview.contact_time-float(ball_preview.recovery.time))
 	if elapsed <= 0.44 and after_touch < 0.18:
 		var windup := 0.14*(1.0-smoothstep(0.0,0.085,elapsed))
-		player_controls.play_receive_pose(delta,Vector3.INF,-windup+after_touch*1.4)
+		player_controls.play_receive_pose(delta,cpu_high_offset,-windup+after_touch*1.4)
 		if ball_preview.try_practice_pass(previous,preview_clock,0.16):
 			drill_status.text = "CPU pass  |  F1 to take control"
 	else:

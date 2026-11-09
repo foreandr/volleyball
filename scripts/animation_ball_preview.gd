@@ -40,7 +40,7 @@ var missed := false
 var practice_mode := false
 var review_feed := {}
 var practice_floor_time := 0.0
-enum Grade { WAITING, PERFECT, EARLY, LATE, MISS }
+enum Grade { WAITING, PERFECT, EARLY, LATE, MISS, BODY_DIG }
 const GREEN_START := 0.075
 const GREEN_END := 0.25
 const APPROACH_WINDOW := 0.38
@@ -50,6 +50,7 @@ var practice_grade := Grade.WAITING
 var practice_in_reach := false
 var practice_early_attempt := false
 var practice_reach_center := Vector3.INF
+var practice_forearms: Array[Vector3] = []
 var aim_point := Vector3.ZERO
 var net_audio: AudioStreamPlayer
 var net_contact_count := 0
@@ -206,6 +207,7 @@ func platform(time: float) -> Dictionary:
 
 func recalculate() -> void:
 	practice_reach_center = Vector3.INF
+	practice_forearms.clear()
 	practice_grade = Grade.WAITING
 	practice_in_reach = false
 	practice_early_attempt = false
@@ -270,9 +272,9 @@ func reset_practice_serve() -> void:
 func practice_platform_center() -> Vector3:
 	return practice_reach_center if practice_reach_center.is_finite() else platform(contact_time).ball
 
-func practice_intercept() -> Dictionary:
+func practice_intercept(height := -1.0) -> Dictionary:
 	if not incoming_net.is_empty(): return {}
-	var height: float = platform(contact_time).ball.y
+	if height < 0.0: height = platform(contact_time).ball.y
 	if feed_info.start.y <= height: return {}
 	var first := -feed_duration
 	var last := practice_floor_time
@@ -283,6 +285,14 @@ func practice_intercept() -> Dictionary:
 		else:
 			last = time
 	return {"point":practice_position(last),"time":contact_time+last}
+
+func practice_shoulder_intercept() -> Dictionary:
+	var rig: Skeleton3D = actor.skeleton
+	var cache := {}
+	var left := pose(rig.find_bone("upperarm_l"),contact_time,cache).origin
+	var right := pose(rig.find_bone("upperarm_r"),contact_time,cache).origin
+	var shoulders := rig.global_transform*((left+right)*0.5)
+	return practice_intercept(shoulders.y+0.04)
 
 func practice_step_offset(time: float) -> Vector3:
 	if practice_grade != Grade.WAITING or not incoming_net.is_empty(): return Vector3.ZERO
@@ -310,7 +320,13 @@ func update_practice_platform() -> void:
 	for side in ["l","r"]:
 		elbows.append(rig.global_transform*rig.get_bone_global_pose(rig.find_bone("lowerarm_"+side)).origin)
 		wrists.append(rig.global_transform*rig.get_bone_global_pose(rig.find_bone("hand_"+side)).origin)
-	practice_reach_center = Contact.surface(elbows,wrists,0.032*rig.global_basis.get_scale().y).ball
+	var surface := Contact.surface(elbows,wrists,0.032*rig.global_basis.get_scale().y)
+	practice_reach_center = surface.ball
+	var clearance: Vector3 = surface.ball-surface.surface
+	practice_forearms.assign([
+		(elbows[0]+elbows[1])*0.5+clearance,
+		(wrists[0]+wrists[1])*0.5+clearance,
+	])
 
 func practice_approach(time: float) -> float:
 	if not incoming_net.is_empty(): return -1.0
@@ -344,7 +360,11 @@ func try_practice_pass(previous_time: float, time: float, receive_elapsed: float
 	var previous := practice_position(first)
 	var current := practice_position(last)
 	var touch := Geometry3D.get_closest_point_to_segment(platform_center,previous,current)
-	if touch.distance_to(platform_center)>RECEIVE_RADIUS: return false
+	if touch.distance_to(platform_center)>RECEIVE_RADIUS:
+		if not practice_reach_center.is_finite() or practice_forearms.size()!=2: return false
+		var points := Geometry3D.get_closest_points_between_segments(previous,current,practice_forearms[0],practice_forearms[1])
+		if points[0].distance_to(points[1])>0.19: return false
+		touch = points[0]
 	practice_in_reach = true
 	if receive_elapsed <= 0.0: return false
 	var timing_error := practice_timing_error(receive_elapsed)
@@ -357,6 +377,70 @@ func try_practice_pass(previous_time: float, time: float, receive_elapsed: float
 	var velocity := practice_pass_velocity(touch,timing_error)
 	recovery = {"time":last,"point":touch,"velocity":velocity,"spread":practice_spread(timing_error),"end_time":last+Flight.landing_time(touch,velocity)}
 	recovery_net = Net.first_hit(func(t): return touch+velocity*(t-last)+Vector3.DOWN*4.905*pow(t-last,2),last,recovery.end_time)
+	update_guide()
+	return true
+
+func try_body_dig(previous_time: float, time: float) -> bool:
+	if not recovery.is_empty() or not incoming_net.is_empty(): return false
+	var first := maxf(previous_time-contact_time,-feed_duration)
+	var last := minf(time-contact_time,practice_floor_time)
+	if last <= first: return false
+	var from := practice_position(first)
+	var to := practice_position(last)
+	var flight := to-from
+	if flight.length_squared()<0.000001: return false
+	var rig: Skeleton3D = actor.skeleton
+	var points := {}
+	for name_ in ["Head","neck_01","spine_03","pelvis","upperarm_l","upperarm_r","lowerarm_l","lowerarm_r","hand_l","hand_r","thigh_l","thigh_r","calf_l","calf_r","foot_l","foot_r"]:
+		var bone := rig.find_bone(name_)
+		if bone >= 0: points[name_] = rig.global_transform*rig.get_bone_global_pose(bone).origin
+	var capsules := [
+		["Head","neck_01",0.12],["spine_03","pelvis",0.18],
+		["upperarm_l","upperarm_r",0.09],
+		["upperarm_l","lowerarm_l",0.065],["upperarm_r","lowerarm_r",0.065],
+		["lowerarm_l","hand_l",0.045],["lowerarm_r","hand_r",0.045],
+		["thigh_l","calf_l",0.085],["thigh_r","calf_r",0.085],
+		["calf_l","foot_l",0.060],["calf_r","foot_r",0.060],
+	]
+	var best := INF
+	var contact := Vector3.ZERO
+	var normal := Vector3.ZERO
+	var body_part := ""
+	for capsule in capsules:
+		if not points.has(capsule[0]) or not points.has(capsule[1]): continue
+		var start: Vector3 = points[capsule[0]]
+		var end: Vector3 = points[capsule[1]]
+		var clearance := RADIUS+float(capsule[2])
+		var nearest := Geometry3D.get_closest_points_between_segments(from,to,start,end)
+		if nearest[0].distance_to(nearest[1])>clearance: continue
+		var entry := 0.0
+		var inside := clampf((nearest[0]-from).dot(flight)/flight.length_squared(),0.0,1.0)
+		if from.distance_to(Geometry3D.get_closest_point_to_segment(from,start,end))>clearance:
+			for sample in range(8):
+				var middle := (entry+inside)*0.5
+				var candidate := from+flight*middle
+				if candidate.distance_to(Geometry3D.get_closest_point_to_segment(candidate,start,end))>clearance:
+					entry = middle
+				else:
+					inside = middle
+		else:
+			inside = 0.0
+		if inside>=best: continue
+		var hit := from+flight*inside
+		var difference := hit-Geometry3D.get_closest_point_to_segment(hit,start,end)
+		var axis := difference.normalized() if difference.length_squared()>0.0001 else -flight.normalized()
+		if flight.dot(axis)>=0.0: continue
+		best = inside
+		contact = hit
+		normal = axis
+		body_part = capsule[0]
+	if not is_finite(best): return false
+	var elapsed := lerpf(first,last,best)
+	var velocity: Vector3 = incoming+feed_info.acceleration*elapsed
+	var bounce := Contact.rebound(velocity,Vector3.ZERO,normal,0.35)
+	practice_grade = Grade.BODY_DIG
+	recovery = {"time":elapsed,"point":contact,"velocity":bounce,"body_touch":true,"body_part":body_part,"end_time":elapsed+Flight.landing_time(contact,bounce)}
+	recovery_net = Net.first_hit(func(t): return contact+bounce*(t-elapsed)+Vector3.DOWN*4.905*pow(t-elapsed,2),elapsed,recovery.end_time)
 	update_guide()
 	return true
 
