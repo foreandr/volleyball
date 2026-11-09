@@ -36,8 +36,8 @@ var missed := false
 var practice_mode := false
 var practice_floor_time := 0.0
 enum Grade { WAITING, PERFECT, EARLY, LATE, MISS }
-const GREEN_START := 0.10
-const GREEN_END := 0.22
+const GREEN_START := 0.075
+const GREEN_END := 0.25
 const APPROACH_WINDOW := 0.38
 const RECEIVE_RADIUS := 0.25
 const METER_NEAR_RADIUS := 0.90

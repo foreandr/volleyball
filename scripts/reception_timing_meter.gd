@@ -50,7 +50,7 @@ func update_timing(active: bool, progress: float, space_held: bool, result: int,
 
 func _draw() -> void:
 	var track := Rect2(19,49,size.x-38,16)
-	var zone_start := 0.84
+	var zone_start := 0.78
 	var style := StyleBoxFlat.new()
 	style.bg_color = INK
 	style.set_corner_radius_all(12)
