@@ -1,4 +1,5 @@
 extends RefCounted
+const QUICK_STEP_RATE := 1.5
 var page: Control
 var active := false
 var free_view := {}
@@ -129,15 +130,17 @@ func move_player(direction: Vector2, delta: float) -> void:
 	forward = forward.normalized()
 	var right := forward.cross(Vector3.UP)
 	if exhausted and stamina>=25: exhausted = false
-	sprinting = sprint_requested and direction.y>0.3 and direction.length()>0.1 and not exhausted and stamina>0
-	var speed := 4.5 if sprinting else 1.65
+	var quick_pace := sprint_requested and direction.length()>0.1 and not exhausted and stamina>0
+	sprinting = quick_pace and direction.y>0.3
+	var step_rate := QUICK_STEP_RATE if quick_pace else 1.0
+	var speed := 4.5 if sprinting else 1.65*step_rate
 	var velocity := (right*direction.x+forward*direction.y)*speed
 	var before := actor.position
 	var movement := velocity*delta
-	var right_step: bool = not sprinting and (side_steps.active or absf(direction.x)>0.3)
+	var shuffle_step: bool = not sprinting and (side_steps.active or absf(direction.x)>0.3)
 	side_steps.sampled = false
-	if right_step:
-		var distance_: float = side_steps.advance(direction,delta)*actor.scale.y
+	if shuffle_step:
+		var distance_: float = side_steps.advance(direction,delta*step_rate)*actor.scale.y
 		movement = (right*side_steps.travel_direction.x+forward*side_steps.travel_direction.y)*distance_
 	else: side_steps.active = false
 	actor.position.x = clampf(actor.position.x+movement.x,-4,4)
@@ -146,7 +149,7 @@ func move_player(direction: Vector2, delta: float) -> void:
 	session.pass_start = Vector2(actor.position.x,actor.position.z)
 	var now_moving := actor.position.distance_to(before)>0.00001
 	sprinting = sprinting and now_moving
-	if sprinting:
+	if quick_pace and now_moving:
 		stamina = maxf(0,stamina-25*delta)
 		recovery_delay = 0.7
 		if stamina<=0: exhausted = true
@@ -164,11 +167,11 @@ func move_player(direction: Vector2, delta: float) -> void:
 	var local_velocity: Vector3 = actor.basis.inverse()*velocity
 	var model_yaw := atan2(local_velocity.x,local_velocity.z) if sprinting else 0.0
 	actor.model.rotation.y = lerp_angle(actor.model.rotation.y,model_yaw,1-exp(-delta*16))
-	side_weight = move_toward(side_weight,1.0 if right_step else 0.0,delta*9)
-	if right_step or sprinting:
+	side_weight = move_toward(side_weight,1.0 if shuffle_step else 0.0,delta*9)
+	if shuffle_step or sprinting:
 		footwork.weight = 0
 	else:
-		footwork.step(local_velocity/1.65 if moving else Vector3.ZERO,delta)
+		footwork.step(local_velocity/(1.65*step_rate) if moving else Vector3.ZERO,delta,step_rate)
 	if side_weight>0: side_steps.apply_pose(side_weight)
 	follow_camera()
 
