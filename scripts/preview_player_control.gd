@@ -26,6 +26,8 @@ var reach_height := 0.0
 var reach_side_lunge := false
 var reach_forward_lunge := false
 var reach_back := false
+var rear_twist_target := Vector3.INF
+var rear_twist_side := 1.0
 var indicator: Label
 var save_clock := 0.0
 var footwork: RefCounted
@@ -210,12 +212,13 @@ func play_receive_pose(delta: float, review_offset := Vector3.INF, pose_offset :
 	actor.animator.pause()
 	step_into_receive(delta,review_offset)
 	var ball = page.ball_preview
-	var struck: bool = ball.recovery.has("spread")
-	var outgoing: Vector3 = ball.recovery.velocity if struck else ball.practice_pass_velocity(ball.practice_platform_center(),0.0)
-	var incoming: Vector3 = ball.incoming
-	if struck: incoming += ball.feed_info.acceleration*float(ball.recovery.time)
-	var power := PassDrive.effort(incoming,outgoing)
-	PassDrive.apply(actor.skeleton,footwork.author,outgoing,power,pose_offset,struck,incoming)
+	if not rear_twist_target.is_finite():
+		var struck: bool = ball.recovery.has("spread")
+		var outgoing: Vector3 = ball.recovery.velocity if struck else ball.practice_pass_velocity(ball.practice_platform_center(),0.0)
+		var incoming: Vector3 = ball.incoming
+		if struck: incoming += ball.feed_info.acceleration*float(ball.recovery.time)
+		var power := PassDrive.effort(incoming,outgoing)
+		PassDrive.apply(actor.skeleton,footwork.author,outgoing,power,pose_offset,struck,incoming)
 	if receive_entry_elapsed < 0.10:
 		receive_entry_elapsed += delta
 		blend_pose_from(receive_entry_pose,smoothstep(0.0,0.10,receive_entry_elapsed))
@@ -290,6 +293,7 @@ func reset_reach() -> void:
 	reach_side_lunge = false
 	reach_forward_lunge = false
 	reach_back = false
+	rear_twist_target = Vector3.INF
 	reach_tier = 1
 	reach_travel = Vector3.ZERO
 	reach_progress = 0.0
@@ -333,20 +337,19 @@ func step_into_receive(delta: float, review_offset: Vector3) -> void:
 		var step_limit := 0.68 if reach_side_lunge else (0.75 if tier == 2 else 0.46)
 		var stride := 1.0 if reach_back and tier == 2 else 0.78
 		reach_step = horizontal.limit_length(step_limit)*stride
-		if directional_cpu and tier == 2 and arrows.selected in [4,5,6]:
+		if tier == 2 and (forward_offset < -0.45 or (directional_cpu and arrows.selected in [4,5,6])):
 			reach_back = true
 			reach_side_lunge = false
 			reach_forward_lunge = false
-			var clearance_side := -1.0 if arrows.selected == 4 else 1.0
-			if reach_height >= 0.20 and arrows.selected != 5: clearance_side *= -1.0
-			reach_step = horizontal-court_forward*0.32-court_forward.cross(Vector3.UP)*clearance_side*0.24
-			reach_step = reach_step.limit_length(1.20)
+			rear_twist_target = ball.platform(ball.contact_time).ball+offset
+			rear_twist_side = -1.0 if local.x < -0.08 else 1.0
+			reach_step = (horizontal-actor.basis.x*rear_twist_side*0.55).limit_length(0.25)
 		reach_lead = "l" if local.x >= 0.0 else "r"
 	var before := smoothstep(0.0,1.0,reach_progress)
 	reach_progress = minf(1.0,reach_progress+delta/(0.19 if reach_tier == 2 else 0.15))
 	var amount := smoothstep(0.0,1.0,reach_progress)
 	var next := actor.position+reach_step*(amount-before)
-	if reach_height >= 0.29 and ball.recovery.is_empty() and ball.practice_reach_center.is_finite():
+	if not rear_twist_target.is_finite() and reach_height >= 0.29 and ball.recovery.is_empty() and ball.practice_reach_center.is_finite():
 		var intercept: Dictionary = ball.practice_intercept(ball.practice_reach_center.y)
 		if not active and review_offset.is_finite() and not page.reception_review.active:
 			intercept = {"point":ball.aim_point,"time":ball.contact_time}
@@ -360,7 +363,7 @@ func step_into_receive(delta: float, review_offset: Vector3) -> void:
 	actor.position.x = clampf(next.x,-4.0,4.0)
 	actor.position.z = clampf(next.z,-4.5,2.5)
 	reach_travel += actor.position-previous
-	face_ball()
+	if not rear_twist_target.is_finite(): face_ball()
 	var local_step := actor.basis.inverse()*reach_step
 	var local_travel := actor.basis.inverse()*reach_travel
 	pose_receive_step(actor,local_step,local_travel,amount)
@@ -394,7 +397,17 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 	var high := reach_height >= 0.20
 	var pelvis := rig.find_bone("pelvis")
 	var hips: Transform3D = pose[pelvis]
-	if high or (reach_back and reach_tier == 2):
+	var twisting := rear_twist_target.is_finite()
+	var chest_yaw := 0.0
+	if twisting:
+		chest_yaw = rear_twist_side*weight*(0.96 if high else 1.20)
+		author.rotate_world(pose,"pelvis",Vector3.UP,chest_yaw*0.25)
+		author.rotate_world(pose,"spine_01",Vector3.UP,chest_yaw*0.19)
+		author.rotate_world(pose,"spine_02",Vector3.UP,chest_yaw*0.27)
+		author.rotate_world(pose,"spine_03",Vector3.UP,chest_yaw*0.29)
+		author.rotate_world(pose,"spine_02",Vector3.RIGHT,-0.24*weight)
+		author.rotate_world(pose,"spine_03",Vector3.BACK,-rear_twist_side*0.20*weight)
+	elif high or (reach_back and reach_tier == 2):
 		# Clear the incoming path by turning the ribcage, leaving the joined platform out in front.
 		var turn := (shoulder_side*0.50 if high else side_lean*0.12)*weight
 		author.rotate_world(pose,"spine_02",Vector3.UP,turn*0.55)
@@ -403,12 +416,12 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 			author.rotate_world(pose,"spine_02",Vector3.RIGHT,-0.19*weight)
 			author.rotate_world(pose,"spine_02",Vector3.BACK,shoulder_side*0.15*weight)
 			author.rotate_world(pose,"spine_03",Vector3.BACK,-shoulder_side*0.07*weight)
-	if deep:
+	if deep and not twisting:
 		author.rotate_world(pose,"spine_02",Vector3.BACK,-side_lean*0.12*weight)
 		author.rotate_world(pose,"spine_02",Vector3.RIGHT,0.14*weight)
 	if deep or reach_side_lunge or (high and reach_back):
 		var parent := rig.get_bone_parent(pelvis)
-		var drop := (0.16 if reach_back else (0.22 if reach_forward_lunge else 0.36))*weight
+		var drop := (0.10 if twisting else (0.16 if reach_back else (0.22 if reach_forward_lunge else 0.36)))*weight
 		if reach_side_lunge:
 			# Set pelvis height from the planted trailing ankle and a nearly straight knee.
 			var trail := "r" if reach_lead == "l" else "l"
@@ -452,7 +465,12 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 		var arms := Vector3(step.x,0.0,step.z).normalized()*extension*weight
 		if reach_forward_lunge: arms.y = 0.07*weight
 		var center: Vector3 = (author.point(pose,"hand_l")+author.point(pose,"hand_r"))*0.5
-		if high:
+		if twisting:
+			var chest_forward := Basis(Vector3.UP,chest_yaw)*Vector3.BACK
+			var contact := rig.global_transform.affine_inverse()*rear_twist_target
+			var grip := contact+chest_forward*0.14+(Vector3(0,0.08,0.26) if high else Vector3.DOWN*0.18)
+			PlatformPose.connect_arms(pose,author,grip,smoothstep(0.0,0.68,weight),0.0,chest_forward)
+		elif high:
 			var shoulder_height: float = (author.point(pose,"upperarm_l").y+author.point(pose,"upperarm_r").y)*0.5
 			arms.y = maxf(0.0,shoulder_height-center.y-0.02)*weight
 			var intercept: Dictionary = page.ball_preview.practice_shoulder_intercept()
@@ -465,7 +483,7 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 				arms = arms.lerp(wrist_target-center,weight*0.85)
 		elif not reach_back:
 			arms.x -= side_lean*0.05*weight
-		PlatformPose.connect_arms(pose,author,center+arms,smoothstep(0.0,0.68,weight))
+		if not twisting: PlatformPose.connect_arms(pose,author,center+arms,smoothstep(0.0,0.68,weight))
 	rig.set_bone_pose_position(pelvis,pose[pelvis].origin)
 	for bone in rig.get_bone_count():
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
