@@ -426,11 +426,12 @@ func step_cpu_receive(previous: float, delta: float) -> void:
 			var setup_step: bool = direction != arrows.selected
 			var until_contact: float = ball_preview.contact_time-preview_clock
 			if not ball_preview.incoming_net.is_empty(): return
-			if setup_step and until_contact <= windup_time+0.24 and until_contact > windup_time:
+			var setup_time := 0.34 if direction == 7 else 0.24
+			if setup_step and until_contact <= windup_time+setup_time and until_contact > windup_time:
 				if not cpu_start.is_finite():
 					cpu_start = preview_player.position
 					cpu_start_yaw = preview_player.rotation.y
-				player_controls.step_back_for_side_lunge(cpu_start,arrows.global_basis.z,delta)
+				player_controls.step_back_for_side_lunge(cpu_start,arrows.global_basis.z,delta,0.55 if direction == 7 else 0.42)
 				return
 			if until_contact > windup_time: return
 			cpu_reach_offset = ball_preview.aim_point-ball_preview.platform(ball_preview.contact_time).ball

@@ -21,6 +21,8 @@ const CASES := [
 ]
 const RIGHT_LUNGE := 10
 const BACK_RIGHT_LUNGE := 11
+const BACK_LEFT_LUNGE := 13
+const LEFT_LUNGE := 14
 const FEED_TIME := 0.70
 const READY_POSITION := Vector3(0,0.04,-3.4)
 const SLOW_RATE := 0.35
@@ -234,11 +236,14 @@ func step(delta: float) -> void:
 	page.preview_clock += delta
 	var elapsed: float = page.preview_clock-ball.contact_time
 	update_title_card(elapsed)
-	if index == BACK_RIGHT_LUNGE and elapsed >= -0.66 and elapsed < -0.25:
+	var rear_side_lunge := index in [BACK_RIGHT_LUNGE,BACK_LEFT_LUNGE]
+	if rear_side_lunge and elapsed >= -0.66 and elapsed < -0.25:
 		page.player_controls.step_back_for_side_lunge(READY_POSITION,Vector3.BACK,delta,0.64)
 	elif elapsed >= -0.25 and elapsed < 0.28:
 		var pose_offset := minf(0.0,elapsed+0.15)*1.4+maxf(0.0,elapsed)*1.4
-		var animation_offset: Vector3 = CASES[RIGHT_LUNGE][2] if index == BACK_RIGHT_LUNGE else offset
+		var animation_offset := offset
+		if rear_side_lunge:
+			animation_offset = CASES[RIGHT_LUNGE if index == BACK_RIGHT_LUNGE else LEFT_LUNGE][2]
 		page.player_controls.play_receive_pose(delta,animation_offset,pose_offset)
 		if elapsed >= -0.03:
 			ball.try_practice_pass(previous,page.preview_clock,0.16)

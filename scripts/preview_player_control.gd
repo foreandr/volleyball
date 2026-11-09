@@ -300,7 +300,9 @@ func reset_reach() -> void:
 
 func receive_animation_direction() -> int:
 	var arrows = page.preview_player.get_node("DirectionArrows")
-	if arrows.selected_distance == 2 and arrows.selected == 4: return 3
+	if arrows.selected_distance == 2:
+		if arrows.selected == 4: return 3
+		if arrows.selected == 6: return 7
 	return arrows.selected
 
 func step_into_receive(delta: float, review_offset: Vector3) -> void:
