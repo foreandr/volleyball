@@ -14,6 +14,7 @@ var reach_lead := "l"
 var reach_tier := 1
 var reach_height := 0.0
 var reach_side_lunge := false
+var reach_forward_lunge := false
 var indicator: Label
 var save_clock := 0.0
 var footwork: RefCounted
@@ -138,38 +139,42 @@ func step(delta: float) -> void:
 	var holding := reception_drill_active() and not (focus is LineEdit or focus is TextEdit) and Input.is_physical_key_pressed(KEY_Q)
 	receive_hold = receive_hold+delta if holding else 0.0
 	if holding:
-		var actor: Node3D = page.preview_player
-		side_steps.active = false
-		side_steps.hold = 0.0
-		side_weight = 0.0
-		locomotion = ""
-		sprinting = false
-		moving = false
-		actor.model.rotation.y = 0.0
-		face_ball()
-		actor.animator.play("custom_preview/clip",0)
-		actor.animator.seek(page.ball_preview.contact_time,true)
-		actor.animator.pause()
-		step_into_receive(delta)
+		hold_receive(delta)
 	else:
 		reset_reach()
 		move_player(direction.limit_length(),delta)
+
+func hold_receive(delta: float, review_offset := Vector3.INF) -> void:
+	var actor: Node3D = page.preview_player
+	side_steps.active = false
+	side_steps.hold = 0.0
+	side_weight = 0.0
+	locomotion = ""
+	sprinting = false
+	moving = false
+	actor.model.rotation.y = 0.0
+	face_ball()
+	actor.animator.play("custom_preview/clip",0)
+	actor.animator.seek(page.ball_preview.contact_time,true)
+	actor.animator.pause()
+	step_into_receive(delta,review_offset)
 
 func reset_reach() -> void:
 	if reach_step.is_zero_approx() and reach_height == 0.0: return
 	reach_step = Vector3.ZERO
 	reach_height = 0.0
 	reach_side_lunge = false
+	reach_forward_lunge = false
 	reach_tier = 1
 	reach_travel = Vector3.ZERO
 	reach_progress = 0.0
 	if reception_drill_active(): page.ball_preview.practice_reach_center = Vector3.INF
 
-func step_into_receive(delta: float) -> void:
+func step_into_receive(delta: float, review_offset: Vector3) -> void:
 	var actor: Node3D = page.preview_player
 	var ball = page.ball_preview
 	if reach_step.is_zero_approx() and reach_height == 0.0:
-		var offset: Vector3 = ball.practice_step_offset(page.preview_clock)
+		var offset: Vector3 = review_offset if review_offset.is_finite() else ball.practice_step_offset(page.preview_clock)
 		if offset.is_zero_approx(): return
 		var tier: int = ball.practice_reach_tier(offset)
 		if tier == 3: return
@@ -178,6 +183,7 @@ func step_into_receive(delta: float) -> void:
 		reach_tier = tier
 		reach_height = offset.y if tier == 2 else 0.0
 		reach_side_lunge = tier == 2 and reach_height < 0.20 and absf(local.x) > absf(local.z)*1.4
+		reach_forward_lunge = tier == 2 and reach_height < 0.20 and local.z > absf(local.x)*1.4
 		var horizontal := Vector3(offset.x,0.0,offset.z)
 		var step_limit := 0.68 if reach_side_lunge else (0.75 if tier == 2 else 0.46)
 		reach_step = horizontal.limit_length(step_limit)*0.78
@@ -195,7 +201,7 @@ func step_into_receive(delta: float) -> void:
 	var local_travel := actor.basis.inverse()*reach_travel
 	pose_receive_step(actor,local_step,local_travel,amount)
 	ball.update_practice_platform()
-	follow_camera()
+	if active: follow_camera()
 
 func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: float) -> void:
 	var rig: Skeleton3D = actor.skeleton
@@ -220,7 +226,7 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 		author.rotate_world(pose,"spine_02",Vector3.BACK,-side_lean*0.12*weight)
 		author.rotate_world(pose,"spine_02",Vector3.RIGHT,0.14*weight)
 		var parent := rig.get_bone_parent(pelvis)
-		var drop := 0.36*weight
+		var drop := (0.22 if reach_forward_lunge else 0.36)*weight
 		if reach_side_lunge:
 			var trail := "r" if reach_lead == "l" else "l"
 			var hip: Vector3 = author.point(pose,"thigh_"+trail)
@@ -240,9 +246,10 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 		var foot: Transform3D = author.world_pose(leg_pose,rig.find_bone(foot_name))
 		var target := foot.origin-travel/scale_
 		if side == reach_lead:
-			var extension := 0.98 if reach_side_lunge else (1.18 if deep else 1.32)
+			var extension := 0.98 if reach_side_lunge or reach_forward_lunge else (1.18 if deep else 1.32)
 			target += step/scale_*weight*extension+Vector3.UP*sin(PI*reach_progress)*0.08
 			if reach_side_lunge: target.z += 0.28*weight
+			if reach_forward_lunge: target.z += 0.12*weight
 		var pole: Vector3 = author.point(leg_pose,"calf_"+side)-author.point(leg_pose,"thigh_"+side)
 		if reach_side_lunge and side == reach_lead:
 			# Load the knee over the lead foot as the other leg extends.
@@ -252,7 +259,9 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 		author.limb(pose,"thigh_"+side,"calf_"+side,foot_name,target,pole)
 		author.set_world_basis(pose,foot_name,foot.basis)
 	if reach_tier == 2:
-		var arms := Vector3(step.x,0.0,step.z).normalized()*(0.19 if reach_side_lunge else 0.14)*weight
+		var extension := 0.23 if reach_forward_lunge else (0.19 if reach_side_lunge else 0.14)
+		var arms := Vector3(step.x,0.0,step.z).normalized()*extension*weight
+		if reach_forward_lunge: arms.y = 0.10*weight
 		if high: arms.y = clampf(reach_height/scale_,0.18,0.53)*weight
 		for side in ["l","r"]:
 			var hand_name: String = "hand_"+side

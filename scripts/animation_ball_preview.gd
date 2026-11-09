@@ -35,6 +35,7 @@ var incoming_net := {}
 var outgoing_net := {}
 var missed := false
 var practice_mode := false
+var review_feed := {}
 var practice_floor_time := 0.0
 enum Grade { WAITING, PERFECT, EARLY, LATE, MISS }
 const GREEN_START := 0.075
@@ -205,7 +206,13 @@ func recalculate() -> void:
 	if missed:
 		aim_point = arrows.landing_target()
 		aim_point.y = Flight.FLOOR
-	var feed := Flight.feed(aim_point,actor.get_meta("feed_settings",{}))
+	var feed: Dictionary
+	if review_feed.is_empty():
+		feed = Flight.feed(aim_point,actor.get_meta("feed_settings",{}))
+	else:
+		missed = false
+		aim_point = review_feed.aim
+		feed = review_feed.duplicate()
 	feed_info = feed
 	incoming = feed.incoming
 	feed_duration = feed.duration

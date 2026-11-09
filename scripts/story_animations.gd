@@ -30,6 +30,7 @@ var preview_clock := 0.0
 var drill_status: Label
 var distance_status: Label
 var timing_meter: Control
+var reception_review: HBoxContainer
 var reception_controls: VBoxContainer
 var replace_body_layer := false
 var recipe_poll := 0.0
@@ -45,6 +46,10 @@ func _ready() -> void:
 	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	preview.get_parent().add_child(overlay)
 	overlay.add_child(timing_meter)
+	reception_review = preload("res://scripts/reception_review.gd").new(self)
+	var column := find_child("ScreenTitle",true,false).get_parent().get_parent()
+	column.add_child(reception_review)
+	column.move_child(reception_review,1)
 	setup_drag = preload("res://scripts/court_setup_drag.gd").new(self)
 	preview_camera.fov = 42.0
 	preview_camera.far = 150.0
@@ -107,6 +112,9 @@ func set_title(text: String) -> void:
 	if heading: heading.text = text
 
 func show_categories() -> void:
+	if is_instance_valid(reception_review):
+		reception_review.stop(false)
+		reception_review.hide()
 	if is_instance_valid(right_panel): right_panel.hide()
 	if is_instance_valid(ball_preview): ball_preview.stop()
 	if is_instance_valid(preview_player): preview_player.play_action("idle")
@@ -125,6 +133,8 @@ func show_categories() -> void:
 func select_category(category: String) -> void:
 	category = Catalog.category_name(category)
 	if not MOVE_TYPES.has(category): return
+	reception_review.stop(false)
+	reception_review.visible = category == "Forearm reception"
 	selected_category = category
 	clear_content()
 	set_title(category.to_upper())
@@ -172,7 +182,7 @@ func select_category(category: String) -> void:
 	animation_list.item_selected.connect(preview_animation)
 	content.add_child(animation_list)
 	if category == "Forearm reception":
-		drill_status = label("F1 to play  |  WASD to move\nHold Q just before contact",16)
+		drill_status = label("F1 to play  |  WASD to move\nMouse to aim  |  Hold Q to receive",16)
 		drill_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		content.add_child(drill_status)
 		distance_status = label("Distance 1  |  Short reach\nDistance 2  |  Lunge or high reach\nDistance 3  |  Dive planned",16)
@@ -213,6 +223,7 @@ func refresh_type() -> void:
 		if is_instance_valid(ball_preview): ball_preview.stop()
 
 func preview_animation(index: int) -> void:
+	reception_review.stop(false)
 	if not is_instance_valid(preview_player): return
 	replace_body_layer = false
 	var entry: Dictionary = animation_list.get_item_metadata(index)
@@ -245,6 +256,7 @@ func preview_animation(index: int) -> void:
 	if ball_preview.active: sync_ball_results(float(render_clip.get_meta("desired_output_angle",ball_preview.output_angle())))
 
 func apply_output_angle(value: float) -> void:
+	reception_review.stop(false)
 	if source_clip == null or not source_clip.has_meta("contact_time"): return
 	angle_control.apply_setup(preview_player)
 	if is_instance_valid(reception_controls): reception_controls.apply(preview_player,replace_body_layer)
@@ -266,6 +278,7 @@ func apply_output_angle(value: float) -> void:
 	sync_ball_results(value)
 
 func update_feed_aim() -> void:
+	reception_review.stop(false)
 	if not is_instance_valid(ball_preview) or not ball_preview.active: return
 	angle_control.apply_feed_aim(preview_player)
 	timing_meter.reset_serve()
@@ -286,6 +299,9 @@ func reception_drill_active() -> bool:
 	return is_instance_valid(ball_preview) and ball_preview.active and ball_preview.practice_mode
 
 func _process(delta: float) -> void:
+	if reception_review.active:
+		reception_review.step(delta)
+		return
 	super._process(delta)
 	var in_control: bool = player_controls!=null and player_controls.active
 	if not in_control:
@@ -317,7 +333,7 @@ func _process(delta: float) -> void:
 		update_distance_status(in_control)
 		if not in_control:
 			preview_player.animator.seek(0.0,true)
-			drill_status.text = "F1 to play  |  WASD to move\nHold Q just before contact"
+			drill_status.text = "F1 to play  |  WASD to move\nMouse to aim  |  Hold Q to receive"
 	else:
 		timing_meter.hide()
 		if not in_control: preview_player.animator.seek(ball_preview.animation_time(preview_clock),true)
@@ -367,8 +383,30 @@ func refresh_recipes() -> void:
 	trajectory_solver = preload("res://scripts/pass_trajectory_solver.gd").new(preview_player,source_clip)
 	apply_output_angle(angle_control.requested)
 
+func aim_pass_at_mouse(screen_point: Vector2) -> void:
+	var point: Vector2 = setup_drag.screen_position(screen_point)
+	var floor_hit: Variant = Plane(Vector3.UP,0.055).intersects_ray(preview_camera.project_ray_origin(point),preview_camera.project_ray_normal(point))
+	if not floor_hit is Vector3: return
+	var destination := Vector2(clampf(floor_hit.x,-4.5,4.5),clampf(floor_hit.z,-5.0,13.0))
+	if destination.distance_squared_to(StorySession.pass_destination)<0.000225: return
+	StorySession.pass_destination = destination
+	StorySession.pass_distance = StorySession.pass_start.distance_to(destination)
+	var target: Dictionary = preview_player.get_meta("pass_target",{})
+	target.position = destination
+	preview_player.set_meta("pass_target",target)
+	angle_control.distance_field.set_value_no_signal(StorySession.pass_distance)
+	angle_control.distance_field.get_meta("slider").set_value_no_signal(StorySession.pass_distance)
+	ball_preview.update_guide()
+
 func handle_preview_input(event: InputEvent) -> void:
+	if reception_review.active:
+		super.handle_preview_input(event)
+		return
 	if player_controls!=null and player_controls.active:
+		if reception_drill_active() and event is InputEventMouseMotion:
+			aim_pass_at_mouse(event.position)
+			preview.accept_event()
+			return
 		super.handle_preview_input(event)
 		return
 	if setup_drag != null and setup_drag.handle(event):
@@ -377,6 +415,7 @@ func handle_preview_input(event: InputEvent) -> void:
 	super.handle_preview_input(event)
 
 func open_editor(index := -1) -> void:
+	reception_review.stop(false)
 	if index >= 0: preview_animation(index)
 	if selected_entry.is_empty(): return
 	StorySession.edit_entry = selected_entry.duplicate(true)
@@ -397,6 +436,8 @@ func open_menu() -> void:
 	else: get_tree().change_scene_to_file("res://scenes/story.tscn")
 
 func _input(event: InputEvent) -> void:
+	if is_instance_valid(reception_review) and reception_review.active and event is InputEventKey and event.pressed and event.keycode in [KEY_F1,KEY_F2]:
+		reception_review.stop(false)
 	super._input(event)
 	if event is InputEventKey and event.keycode in [KEY_F1,KEY_F2]: return
 	if event is InputEventJoypadButton and event.pressed and event.button_index == JOY_BUTTON_B:
