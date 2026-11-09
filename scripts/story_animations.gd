@@ -397,7 +397,7 @@ func reception_drill_active() -> bool:
 
 func _process(delta: float) -> void:
 	if is_instance_valid(setting_drill):
-		player_controls.move_player(player_controls.movement_input(),delta,false,true)
+		player_controls.move_player(player_controls.movement_input(),delta,false,setting_drill.ball.global_position)
 		setting_drill.step(delta)
 		return
 	if reception_review.frozen:
