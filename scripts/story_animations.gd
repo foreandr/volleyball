@@ -228,6 +228,7 @@ func preview_animation(index: int) -> void:
 		ball_preview = BallPreview.new()
 		preview_player.get_parent().add_child(ball_preview)
 	ball_preview.practice_mode = selected_category == "Forearm reception"
+	timing_meter.reset_serve()
 	ball_preview.configure(preview_player,render_clip)
 	if is_instance_valid(reception_controls): reception_controls.show_result(render_clip)
 	preview_clock = minf(0,ball_preview.contact_time-ball_preview.feed_duration)
@@ -251,6 +252,7 @@ func apply_output_angle(value: float) -> void:
 	preview_player.animator.seek(ball_preview.animation_time(preview_clock),true)
 	preview_player.animator.advance(0)
 	preview_player.animator.pause()
+	timing_meter.reset_serve()
 	ball_preview.configure(preview_player,render_clip)
 	if is_instance_valid(reception_controls): reception_controls.show_result(render_clip)
 	ball_preview.tick(preview_clock,false)
@@ -261,6 +263,7 @@ func apply_output_angle(value: float) -> void:
 func update_feed_aim() -> void:
 	if not is_instance_valid(ball_preview) or not ball_preview.active: return
 	angle_control.apply_feed_aim(preview_player)
+	timing_meter.reset_serve()
 	ball_preview.recalculate()
 	ball_preview.tick(preview_clock,false)
 	sync_ball_results(angle_control.requested)
@@ -296,12 +299,14 @@ func _process(delta: float) -> void:
 	if reception_drill_active():
 		if preview_clock < previous:
 			ball_preview.reset_practice_serve()
+			timing_meter.reset_serve()
 			if in_control: drill_status.text = "Next serve  |  Hold Space just before contact"
 		elif in_control:
 			ball_preview.try_practice_pass(previous,preview_clock,player_controls.receive_hold)
 			var floor_time: float = ball_preview.contact_time+ball_preview.practice_floor_time
 			if ball_preview.crossed(preview_clock,floor_time): ball_preview.finish_practice_serve()
-		timing_meter.update_timing(in_control,player_controls.receive_hold,ball_preview.practice_grade,delta)
+		var approach: float = ball_preview.practice_approach(preview_clock) if in_control and ball_preview.practice_grade == BallPreview.Grade.WAITING else -1.0
+		timing_meter.update_timing(in_control,approach,player_controls.receive_hold>0.0,ball_preview.practice_grade,delta)
 		if not in_control:
 			preview_player.animator.seek(0.0,true)
 			drill_status.text = "F1 to play  |  WASD to move\nHold Space just before contact"

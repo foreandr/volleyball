@@ -38,7 +38,9 @@ var practice_floor_time := 0.0
 enum Grade { WAITING, PERFECT, EARLY, LATE, MISS }
 const GREEN_START := 0.10
 const GREEN_END := 0.22
-const METER_DURATION := 0.40
+const APPROACH_WINDOW := 0.38
+const RECEIVE_RADIUS := 0.25
+const METER_NEAR_RADIUS := 0.90
 var practice_grade := Grade.WAITING
 var practice_in_reach := false
 var aim_point := Vector3.ZERO
@@ -233,22 +235,39 @@ func reset_practice_serve() -> void:
 	recovery_net.clear()
 	update_guide()
 
+func practice_approach(time: float) -> float:
+	if not incoming_net.is_empty(): return -1.0
+	var elapsed := time-contact_time
+	if elapsed < -feed_duration or elapsed > practice_floor_time: return -1.0
+	var center: Vector3 = platform(contact_time).ball
+	var nearest := practice_position(elapsed).distance_to(center)
+	if nearest <= RECEIVE_RADIUS: return 1.0
+	var nearest_delay := 0.0
+	# Look ahead along the ball path for the first reachable contact.
+	for sample in range(1,20):
+		var delay := minf(APPROACH_WINDOW*sample/19.0,practice_floor_time-elapsed)
+		var next := practice_position(elapsed+delay)
+		var distance := next.distance_to(center)
+		if distance <= RECEIVE_RADIUS:
+			return 1.0-delay/APPROACH_WINDOW
+		if distance < nearest:
+			nearest = distance
+			nearest_delay = delay
+		if delay >= practice_floor_time-elapsed: break
+	if nearest <= METER_NEAR_RADIUS and nearest_delay > 0.0:
+		return 1.0-nearest_delay/APPROACH_WINDOW
+	return -1.0
+
 func try_practice_pass(previous_time: float, time: float, held: float) -> bool:
 	if practice_grade != Grade.WAITING or not incoming_net.is_empty(): return false
 	var first := maxf(previous_time-contact_time,-feed_duration)
 	var last := minf(time-contact_time,practice_floor_time)
 	if last < first: return false
-	var rig: Skeleton3D = actor.skeleton
-	var elbows := []
-	var wrists := []
-	for side in ["l","r"]:
-		elbows.append(rig.global_transform*rig.get_bone_global_pose(rig.find_bone("lowerarm_"+side)).origin)
-		wrists.append(rig.global_transform*rig.get_bone_global_pose(rig.find_bone("hand_"+side)).origin)
-	var platform_center: Vector3 = Contact.surface(elbows,wrists,0.032*rig.global_basis.get_scale().y).ball
+	var platform_center: Vector3 = platform(contact_time).ball
 	var previous := practice_position(first)
 	var current := practice_position(last)
 	var touch := Geometry3D.get_closest_point_to_segment(platform_center,previous,current)
-	if touch.distance_to(platform_center)>0.25: return false
+	if touch.distance_to(platform_center)>RECEIVE_RADIUS: return false
 	practice_in_reach = true
 	if held <= 0.0: return false
 	if held < GREEN_START:
