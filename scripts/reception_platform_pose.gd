@@ -3,14 +3,15 @@ extends RefCounted
 const HAND_GAP := 0.065
 const ELBOW_ANGLE := 161.0
 
-static func connect_arms(pose: Array, author: RefCounted, desired: Vector3, weight: float) -> void:
+static func connect_arms(pose: Array, author: RefCounted, desired: Vector3, weight: float, shoulder_advance := 0.022) -> void:
 	if weight <= 0.001: return
 	var rig: Skeleton3D = author.rig
 	var original := pose.duplicate()
-	for side in ["l","r"]:
-		var arm: String = "upperarm_"+side
-		var shoulder: Vector3 = author.point(pose,arm)
-		author.aim_joint(pose,"clavicle_"+side,arm,shoulder+Vector3.BACK*0.022*weight)
+	if shoulder_advance > 0.0:
+		for side in ["l","r"]:
+			var arm: String = "upperarm_"+side
+			var shoulder: Vector3 = author.point(pose,arm)
+			author.aim_joint(pose,"clavicle_"+side,arm,shoulder+Vector3.BACK*shoulder_advance*weight)
 	var left: Vector3 = author.point(pose,"upperarm_l")
 	var right: Vector3 = author.point(pose,"upperarm_r")
 	var left_hand := Vector3.RIGHT*HAND_GAP*0.5

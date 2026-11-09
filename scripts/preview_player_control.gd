@@ -210,8 +210,10 @@ func play_receive_pose(delta: float, review_offset := Vector3.INF, pose_offset :
 	var ball = page.ball_preview
 	var struck: bool = ball.recovery.has("spread")
 	var outgoing: Vector3 = ball.recovery.velocity if struck else ball.practice_pass_velocity(ball.practice_platform_center(),0.0)
-	var power := PassDrive.effort(ball.incoming,outgoing)
-	PassDrive.apply(actor.skeleton,footwork.author,outgoing,power,pose_offset,struck)
+	var incoming: Vector3 = ball.incoming
+	if struck: incoming += ball.feed_info.acceleration*float(ball.recovery.time)
+	var power := PassDrive.effort(incoming,outgoing)
+	PassDrive.apply(actor.skeleton,footwork.author,outgoing,power,pose_offset,struck,incoming)
 	if receive_entry_elapsed < 0.10:
 		receive_entry_elapsed += delta
 		blend_pose_from(receive_entry_pose,smoothstep(0.0,0.10,receive_entry_elapsed))
