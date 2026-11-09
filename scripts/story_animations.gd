@@ -417,23 +417,24 @@ func reset_cpu_receive(restore_position: bool) -> void:
 	cpu_reach_offset = Vector3.INF
 
 func step_cpu_receive(previous: float, delta: float) -> void:
+	var arrows = preview_player.get_node("DirectionArrows")
+	var short_back: bool = arrows.selected_distance == 1 and arrows.selected == 5
 	if not is_finite(cpu_receive_clock):
-		var arrows = preview_player.get_node("DirectionArrows")
 		if arrows.selected != 0:
 			var direction: int = player_controls.receive_animation_direction()
 			var deep_rear: bool = arrows.selected_distance == 2 and direction in [4,5,6]
 			var short_straight: bool = arrows.selected_distance == 1 and direction in [1,5]
-			var windup_time := 0.26 if deep_rear else (0.22 if short_straight else 0.18)
+			var windup_time := 0.12 if short_back else (0.26 if deep_rear else (0.22 if short_straight else 0.18))
 			var straight_back: bool = arrows.selected_distance == 2 and direction == 5
-			var setup_step: bool = direction != arrows.selected or straight_back
+			var setup_step: bool = direction != arrows.selected or straight_back or short_back
 			var until_contact: float = ball_preview.contact_time-preview_clock
 			if not ball_preview.incoming_net.is_empty(): return
-			var setup_time := 0.34 if direction == 7 else 0.24
+			var setup_time := 0.38 if short_back else (0.34 if direction == 7 else 0.24)
 			if setup_step and until_contact <= windup_time+setup_time and until_contact > windup_time:
 				if not cpu_start.is_finite():
 					cpu_start = preview_player.position
 					cpu_start_yaw = preview_player.rotation.y
-				var setup_distance := 0.28 if straight_back else (0.55 if direction == 7 else 0.42)
+				var setup_distance := 0.48 if short_back else (0.28 if straight_back else (0.55 if direction == 7 else 0.42))
 				player_controls.step_back_for_lunge(cpu_start,arrows.global_basis.z,delta,setup_distance)
 				return
 			if until_contact > windup_time: return
@@ -459,7 +460,7 @@ func step_cpu_receive(previous: float, delta: float) -> void:
 		after_touch = maxf(0.0,preview_clock-ball_preview.contact_time-float(ball_preview.recovery.time))
 	if elapsed <= 0.44 and after_touch < 0.18 and not ball_preview.recovery.has("body_touch"):
 		var windup := 0.14*(1.0-smoothstep(0.0,0.085,elapsed))
-		player_controls.play_receive_pose(delta,cpu_reach_offset,-windup+after_touch*1.4)
+		player_controls.play_receive_pose(delta,cpu_reach_offset,-windup+after_touch*1.4,short_back)
 		if ball_preview.try_practice_pass(previous,preview_clock,0.16):
 			drill_status.text = "CPU pass  |  F1 to take control"
 	else:

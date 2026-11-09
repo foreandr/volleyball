@@ -195,7 +195,7 @@ func queue_receive() -> bool:
 	if receive_elapsed == 0.0: receive_queued = true
 	return true
 
-func play_receive_pose(delta: float, review_offset := Vector3.INF, pose_offset := 0.0) -> void:
+func play_receive_pose(delta: float, review_offset := Vector3.INF, pose_offset := 0.0, planted := false) -> void:
 	var actor: Node3D = page.preview_player
 	var entering := receive_entry_pose.is_empty()
 	if entering:
@@ -217,18 +217,26 @@ func play_receive_pose(delta: float, review_offset := Vector3.INF, pose_offset :
 		receive_ready_pose = snapshot_receive_pose()
 	actor.animator.seek(maxf(0.0,page.ball_preview.contact_time+pose_offset),true)
 	actor.animator.pause()
-	step_into_receive(delta,review_offset)
+	if not planted: step_into_receive(delta,review_offset)
 	var struck: bool = ball.recovery.has("spread")
 	var outgoing: Vector3 = ball.recovery.velocity if struck else ball.practice_pass_velocity(ball.practice_platform_center(),0.0)
 	var incoming: Vector3 = ball.incoming
 	if struck: incoming += ball.feed_info.acceleration*float(ball.recovery.time)
 	var power := PassDrive.effort(incoming,outgoing)
 	PassDrive.apply(actor.skeleton,footwork.author,outgoing,power,pose_offset,struck,incoming)
+	if planted:
+		var rig: Skeleton3D = actor.skeleton
+		for name_ in ["pelvis","thigh_l","thigh_r","calf_l","calf_r","foot_l","foot_r","ball_l","ball_r"]:
+			var bone := rig.find_bone(name_)
+			if bone < 0: continue
+			rig.set_bone_pose_position(bone,receive_ready_pose[bone].origin)
+			rig.set_bone_pose_rotation(bone,receive_ready_pose[bone].basis.get_rotation_quaternion())
 	if receive_entry_elapsed < 0.10:
 		receive_entry_elapsed += delta
 		blend_pose_from(receive_entry_pose,smoothstep(0.0,0.10,receive_entry_elapsed))
-		if not reach_step.is_zero_approx() or reach_height != 0.0:
+		if not planted and (not reach_step.is_zero_approx() or reach_height != 0.0):
 			ball.update_practice_platform()
+	if planted: ball.update_practice_platform()
 
 func snapshot_receive_pose() -> Array[Transform3D]:
 	var rig: Skeleton3D = page.preview_player.skeleton

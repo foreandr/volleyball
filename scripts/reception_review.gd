@@ -19,6 +19,7 @@ const CASES := [
 	[2,"Left lunge",Vector3(0.85,0,0),Vector3(0,-7,-3)],
 	[2,"Forward-left reach",Vector3(0.59,0,0.59),Vector3(0,-5,-3)],
 ]
+const SHORT_BACK := 4
 const RIGHT_LUNGE := 10
 const BACK_RIGHT_LUNGE := 11
 const BACK_LUNGE := 12
@@ -238,16 +239,20 @@ func step(delta: float) -> void:
 	var elapsed: float = page.preview_clock-ball.contact_time
 	update_title_card(elapsed)
 	var rear_side_lunge := index in [BACK_RIGHT_LUNGE,BACK_LEFT_LUNGE]
-	if rear_side_lunge and elapsed >= -0.66 and elapsed < -0.25:
+	var short_back := index == SHORT_BACK
+	var receive_start := -0.12 if short_back else -0.25
+	if short_back and elapsed >= -0.50 and elapsed < receive_start:
+		page.player_controls.step_back_for_lunge(READY_POSITION,Vector3.BACK,delta,0.48)
+	elif rear_side_lunge and elapsed >= -0.66 and elapsed < -0.25:
 		page.player_controls.step_back_for_lunge(READY_POSITION,Vector3.BACK,delta,0.64)
 	elif index == BACK_LUNGE and elapsed >= -0.49 and elapsed < -0.25:
 		page.player_controls.step_back_for_lunge(READY_POSITION,Vector3.BACK,delta,0.28)
-	elif elapsed >= -0.25 and elapsed < 0.28:
+	elif elapsed >= receive_start and elapsed < 0.28:
 		var pose_offset := minf(0.0,elapsed+0.15)*1.4+maxf(0.0,elapsed)*1.4
 		var animation_offset := offset
 		if rear_side_lunge:
 			animation_offset = CASES[RIGHT_LUNGE if index == BACK_RIGHT_LUNGE else LEFT_LUNGE][2]
-		page.player_controls.play_receive_pose(delta,animation_offset,pose_offset)
+		page.player_controls.play_receive_pose(delta,animation_offset,pose_offset,short_back)
 		if elapsed >= -0.03:
 			ball.try_practice_pass(previous,page.preview_clock,0.16)
 	elif elapsed >= 0.28 and not released:
