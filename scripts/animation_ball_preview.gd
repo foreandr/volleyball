@@ -270,19 +270,35 @@ func try_practice_pass(previous_time: float, time: float, held: float) -> bool:
 	if touch.distance_to(platform_center)>RECEIVE_RADIUS: return false
 	practice_in_reach = true
 	if held <= 0.0: return false
+	var timing_error := 0.0
 	if held < GREEN_START:
 		practice_grade = Grade.LATE
-		return false
-	if held > GREEN_END:
+		timing_error = (GREEN_START-held)/GREEN_START
+	elif held > GREEN_END:
 		practice_grade = Grade.EARLY
-		return false
-	practice_grade = Grade.PERFECT
-	var target: Dictionary = actor.get_meta("pass_target",{})
-	var velocity := Flight.target_velocity(touch,target,float(clip.get_meta("desired_output_angle",45.0)))
+		timing_error = clampf((held-GREEN_END)/0.30,0.0,1.0)
+	else:
+		practice_grade = Grade.PERFECT
+	var velocity := practice_pass_velocity(touch,timing_error)
 	recovery = {"time":last,"point":touch,"velocity":velocity,"end_time":last+Flight.landing_time(touch,velocity)}
 	recovery_net = Net.first_hit(func(t): return touch+velocity*(t-last)+Vector3.DOWN*4.905*pow(t-last,2),last,recovery.end_time)
 	update_guide()
 	return true
+
+func practice_pass_velocity(touch: Vector3, timing_error: float) -> Vector3:
+	var target: Dictionary = actor.get_meta("pass_target",{})
+	var angle := float(clip.get_meta("desired_output_angle",45.0))
+	var ideal := Flight.target_velocity(touch,target,angle)
+	if timing_error <= 0.0: return ideal
+
+	var direction := Vector2.from_angle(randf()*TAU)
+	var spread := lerpf(0.18,2.10,timing_error)*randf_range(0.55,1.0)
+	var destination: Vector2 = target.position+direction*spread
+	var ideal_peak := touch.y+ideal.y*ideal.y/(2.0*Flight.GRAVITY)
+	var height_spread := lerpf(0.10,1.35,timing_error)
+	var height_error := height_spread*randf_range(0.45,1.0)
+	if randf()<0.5: height_error = -height_error
+	return Flight.target_velocity(touch,{"position":destination,"fit":"height","height":ideal_peak+height_error},angle)
 
 func finish_practice_serve() -> void:
 	if practice_grade == Grade.WAITING:
