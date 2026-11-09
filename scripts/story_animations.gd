@@ -182,7 +182,7 @@ func select_category(category: String) -> void:
 	animation_list.item_selected.connect(preview_animation)
 	content.add_child(animation_list)
 	if category == "Forearm reception":
-		drill_status = label("F1 to play  |  WASD to move\nMouse to aim  |  Hold Q to receive",16)
+		drill_status = label("F1 to play  |  WASD to move\nMouse to aim  |  Tap Q to receive",16)
 		drill_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		content.add_child(drill_status)
 		distance_status = label("Distance 1  |  Short reach\nDistance 2  |  Lunge or high reach\nDistance 3  |  Dive planned",16)
@@ -322,18 +322,18 @@ func _process(delta: float) -> void:
 			ball_preview.reset_practice_serve()
 			player_controls.reset_reach()
 			timing_meter.reset_serve()
-			if in_control: drill_status.text = "Next serve  |  Hold Q just before contact"
+			if in_control: drill_status.text = "Next serve  |  Tap Q just before contact"
 		elif in_control:
-			ball_preview.try_practice_pass(previous,preview_clock,player_controls.receive_hold)
+			ball_preview.try_practice_pass(previous,preview_clock,player_controls.receive_elapsed)
 			var floor_time: float = ball_preview.contact_time+ball_preview.practice_floor_time
 			if ball_preview.crossed(preview_clock,floor_time): ball_preview.finish_practice_serve()
 		var approach: float = ball_preview.practice_approach(preview_clock) if in_control and ball_preview.practice_grade == BallPreview.Grade.WAITING else -1.0
-		timing_meter.update_timing(in_control,approach,player_controls.receive_hold>0.0,ball_preview.practice_grade,delta)
-		ball_preview.update_practice_cone(timing_meter.visible,player_controls.receive_hold)
+		timing_meter.update_timing(in_control,approach,player_controls.receive_elapsed>0.0,ball_preview.practice_grade,delta)
+		ball_preview.update_practice_cone(timing_meter.visible,player_controls.receive_elapsed)
 		update_distance_status(in_control)
 		if not in_control:
 			preview_player.animator.seek(0.0,true)
-			drill_status.text = "F1 to play  |  WASD to move\nMouse to aim  |  Hold Q to receive"
+			drill_status.text = "F1 to play  |  WASD to move\nMouse to aim  |  Tap Q to receive"
 	else:
 		timing_meter.hide()
 		if not in_control: preview_player.animator.seek(ball_preview.animation_time(preview_clock),true)
@@ -446,6 +446,10 @@ func _input(event: InputEvent) -> void:
 		return
 	if selected_category.is_empty(): return
 	if event is InputEventKey and event.pressed and not event.echo:
+		if event.physical_keycode == KEY_Q and not (event.ctrl_pressed or event.alt_pressed or event.meta_pressed):
+			if player_controls.queue_receive():
+				get_viewport().set_input_as_handled()
+				return
 		if event.keycode == KEY_Z and event.ctrl_pressed and not (event.shift_pressed or event.alt_pressed or event.meta_pressed):
 			var focus := get_viewport().gui_get_focus_owner()
 			if not (focus is LineEdit or focus is TextEdit) and not player_controls.active and angle_control.visible:

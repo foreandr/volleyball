@@ -45,6 +45,7 @@ const RECEIVE_RADIUS := 0.25
 const METER_NEAR_RADIUS := 0.90
 var practice_grade := Grade.WAITING
 var practice_in_reach := false
+var practice_early_attempt := false
 var practice_reach_center := Vector3.INF
 var aim_point := Vector3.ZERO
 var net_audio: AudioStreamPlayer
@@ -191,6 +192,7 @@ func recalculate() -> void:
 	practice_reach_center = Vector3.INF
 	practice_grade = Grade.WAITING
 	practice_in_reach = false
+	practice_early_attempt = false
 	recovery.clear()
 	recovery_net.clear()
 	var hit := platform(contact_time)
@@ -243,6 +245,7 @@ func practice_position(elapsed: float) -> Vector3:
 func reset_practice_serve() -> void:
 	practice_grade = Grade.WAITING
 	practice_in_reach = false
+	practice_early_attempt = false
 	if recovery.is_empty(): return
 	recovery.clear()
 	recovery_net.clear()
@@ -302,7 +305,7 @@ func practice_approach(time: float) -> float:
 		return 1.0-nearest_delay/APPROACH_WINDOW
 	return -1.0
 
-func try_practice_pass(previous_time: float, time: float, held: float) -> bool:
+func try_practice_pass(previous_time: float, time: float, receive_elapsed: float) -> bool:
 	if practice_grade != Grade.WAITING or not incoming_net.is_empty(): return false
 	var first := maxf(previous_time-contact_time,-feed_duration)
 	var last := minf(time-contact_time,practice_floor_time)
@@ -313,11 +316,11 @@ func try_practice_pass(previous_time: float, time: float, held: float) -> bool:
 	var touch := Geometry3D.get_closest_point_to_segment(platform_center,previous,current)
 	if touch.distance_to(platform_center)>RECEIVE_RADIUS: return false
 	practice_in_reach = true
-	if held <= 0.0: return false
-	var timing_error := practice_timing_error(held)
-	if held < GREEN_START:
+	if receive_elapsed <= 0.0: return false
+	var timing_error := practice_timing_error(receive_elapsed)
+	if receive_elapsed < GREEN_START:
 		practice_grade = Grade.LATE
-	elif held > GREEN_END:
+	elif receive_elapsed > GREEN_END:
 		practice_grade = Grade.EARLY
 	else:
 		practice_grade = Grade.PERFECT
@@ -327,14 +330,14 @@ func try_practice_pass(previous_time: float, time: float, held: float) -> bool:
 	update_guide()
 	return true
 
-func practice_timing_error(held: float) -> float:
-	if held < GREEN_START: return (GREEN_START-held)/GREEN_START
-	return clampf((held-GREEN_END)/0.30,0.0,1.0)
+func practice_timing_error(receive_elapsed: float) -> float:
+	if receive_elapsed < GREEN_START: return (GREEN_START-receive_elapsed)/GREEN_START
+	return clampf((receive_elapsed-GREEN_END)/0.30,0.0,1.0)
 
 func practice_spread(timing_error: float) -> float:
 	return lerpf(0.18,2.10,timing_error) if timing_error > 0.0 else 0.0
 
-func update_practice_cone(show_timing: bool, held: float) -> void:
+func update_practice_cone(show_timing: bool, receive_elapsed: float) -> void:
 	var target: Dictionary = actor.get_meta("pass_target",{})
 	var has_touch := recovery.has("spread")
 	if not show_timing or not target.has("position") or (practice_grade != Grade.WAITING and not has_touch):
@@ -342,7 +345,7 @@ func update_practice_cone(show_timing: bool, held: float) -> void:
 		return
 	var destination := Vector3(target.position.x,0.075,target.position.y)
 	var origin: Vector3 = recovery.point if has_touch else practice_platform_center()
-	var spread: float = recovery.spread if has_touch else practice_spread(practice_timing_error(held))
+	var spread: float = recovery.spread if has_touch else practice_spread(practice_timing_error(receive_elapsed))
 	spread_cone.show_spread(origin,destination,spread)
 
 func practice_pass_velocity(touch: Vector3, timing_error: float) -> Vector3:
@@ -361,8 +364,11 @@ func practice_pass_velocity(touch: Vector3, timing_error: float) -> Vector3:
 	return Flight.target_velocity(touch,{"position":destination,"fit":"height","height":ideal_peak+height_error},angle)
 
 func finish_practice_serve() -> void:
-	if practice_grade == Grade.WAITING:
-		practice_grade = Grade.LATE if practice_in_reach else Grade.MISS
+	if practice_grade != Grade.WAITING: return
+	if not practice_in_reach:
+		practice_grade = Grade.MISS
+	else:
+		practice_grade = Grade.EARLY if practice_early_attempt else Grade.LATE
 
 func animation_time(time: float) -> float:
 	return clampf(time,0,clip.length) if incoming_net.is_empty() else 0.0

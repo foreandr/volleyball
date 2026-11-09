@@ -5,7 +5,7 @@ const GREEN := Color("65ff94")
 const AMBER := Color("ffb968")
 const INK := Color("111c29")
 var fill := 0.0
-var holding := false
+var receiving := false
 var shown_this_serve := false
 var result_time := 0.0
 var grade := Timing.Grade.WAITING
@@ -27,11 +27,11 @@ func reset_serve() -> void:
 	flash = 0.0
 	hide()
 
-func update_timing(active: bool, progress: float, receive_held: bool, result: int, delta: float) -> void:
+func update_timing(active: bool, progress: float, receiving_now: bool, result: int, delta: float) -> void:
 	if not active:
 		hide()
 		return
-	holding = receive_held
+	receiving = receiving_now
 	if result != grade:
 		flash = 1.0 if result == Timing.Grade.PERFECT else 0.0
 		result_time = 0.85
@@ -72,8 +72,8 @@ func _draw() -> void:
 		draw_rect(Rect2(green_zone.position,Vector2(track.size.x*(progress-zone_start),track.size.y)),GREEN)
 	var accent := GREEN if grade == Timing.Grade.PERFECT else Color.WHITE
 	var heading := "BALL INCOMING"
-	if holding: heading = "HOLDING Q"
-	elif progress >= 1.0-Timing.GREEN_END/Timing.APPROACH_WINDOW: heading = "HOLD Q"
+	if receiving: heading = "RECEIVING"
+	elif progress >= 1.0-Timing.GREEN_END/Timing.APPROACH_WINDOW: heading = "TAP Q"
 	match grade:
 		Timing.Grade.PERFECT: heading = "PERFECT PASS"
 		Timing.Grade.EARLY: heading = "TOO EARLY"

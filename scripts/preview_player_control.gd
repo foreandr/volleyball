@@ -6,7 +6,8 @@ var free_view := {}
 var animator_active := true
 var animation_process := 0
 var moving := false
-var receive_hold := 0.0
+var receive_elapsed := 0.0
+var receive_queued := false
 var reach_step := Vector3.ZERO
 var reach_progress := 0.0
 var reach_travel := Vector3.ZERO
@@ -78,7 +79,8 @@ func set_active(value: bool) -> void:
 	if active==value: return
 	var actor: Node3D = page.preview_player
 	active = value
-	receive_hold = 0.0
+	receive_elapsed = 0.0
+	receive_queued = false
 	reset_reach()
 	side_steps.active = false
 	side_weight = 0
@@ -136,15 +138,34 @@ func step(delta: float) -> void:
 	sprint_requested = Input.is_physical_key_pressed(KEY_SHIFT)
 	var connected := Input.get_connected_joypads()
 	if not connected.is_empty(): sprint_requested = sprint_requested or Input.is_joy_button_pressed(connected[0],JOY_BUTTON_RIGHT_SHOULDER)
-	var holding := reception_drill_active() and not (focus is LineEdit or focus is TextEdit) and Input.is_physical_key_pressed(KEY_Q)
-	receive_hold = receive_hold+delta if holding else 0.0
-	if holding:
-		hold_receive(delta)
-	else:
-		reset_reach()
-		move_player(direction.limit_length(),delta)
+	if receive_queued:
+		receive_elapsed = delta
+		receive_queued = false
+	elif receive_elapsed > 0.0:
+		receive_elapsed += delta
+	var drill := reception_drill_active()
+	if drill and receive_elapsed > 0.0:
+		var ball = page.ball_preview
+		var after_touch := 0.0
+		if ball.recovery.has("spread"):
+			after_touch = maxf(0.0,page.preview_clock-ball.contact_time-float(ball.recovery.time))
+		if receive_elapsed <= 0.44 and after_touch < 0.18:
+			var windup := 0.14*(1.0-smoothstep(0.0,0.085,receive_elapsed))
+			play_receive_pose(delta,Vector3.INF,-windup+after_touch*1.4)
+			return
+		if receive_elapsed > 0.44: ball.practice_early_attempt = true
+	receive_elapsed = 0.0
+	reset_reach()
+	move_player(direction.limit_length(),delta)
 
-func hold_receive(delta: float, review_offset := Vector3.INF) -> void:
+func queue_receive() -> bool:
+	if not active or not reception_drill_active(): return false
+	var focus := page.get_viewport().gui_get_focus_owner()
+	if focus is LineEdit or focus is TextEdit: return false
+	if receive_elapsed == 0.0: receive_queued = true
+	return true
+
+func play_receive_pose(delta: float, review_offset := Vector3.INF, pose_offset := 0.0) -> void:
 	var actor: Node3D = page.preview_player
 	side_steps.active = false
 	side_steps.hold = 0.0
@@ -155,7 +176,7 @@ func hold_receive(delta: float, review_offset := Vector3.INF) -> void:
 	actor.model.rotation.y = 0.0
 	face_ball()
 	actor.animator.play("custom_preview/clip",0)
-	actor.animator.seek(page.ball_preview.contact_time,true)
+	actor.animator.seek(maxf(0.0,page.ball_preview.contact_time+pose_offset),true)
 	actor.animator.pause()
 	step_into_receive(delta,review_offset)
 

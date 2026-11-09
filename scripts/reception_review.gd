@@ -28,6 +28,7 @@ var index := 0
 var original_transform: Transform3D
 var original_control := false
 var offset := Vector3.ZERO
+var released := false
 var counter: Label
 var play_button: Button
 var previous_button: Button
@@ -75,6 +76,7 @@ func toggle_play() -> void:
 func load_case(next_index: int) -> void:
 	index = next_index
 	finished = false
+	released = false
 	var actor: Node3D = page.preview_player
 	var ball = page.ball_preview
 	page.player_controls.reset_reach()
@@ -109,10 +111,15 @@ func step(delta: float) -> void:
 	var previous: float = page.preview_clock
 	page.preview_clock += delta
 	var elapsed: float = page.preview_clock-ball.contact_time
-	if elapsed >= -0.25:
-		page.player_controls.hold_receive(delta,offset)
+	if elapsed >= -0.25 and elapsed < 0.28:
+		var pose_offset := minf(0.0,elapsed+0.15)*1.4+maxf(0.0,elapsed)*1.4
+		page.player_controls.play_receive_pose(delta,offset,pose_offset)
 		if elapsed >= -0.03:
 			ball.try_practice_pass(previous,page.preview_clock,0.16)
+	elif elapsed >= 0.28 and not released:
+		released = true
+		page.player_controls.reset_reach()
+		page.preview_player.play_action("idle")
 	var end: float = maxf(ball.cycle_end(),ball.contact_time+0.65)
 	ball.tick(minf(page.preview_clock,end),true)
 	if page.preview_clock < end: return
