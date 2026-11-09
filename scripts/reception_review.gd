@@ -24,6 +24,7 @@ var page
 var active := false
 var paused := false
 var finished := false
+var loop_current := false
 var index := 0
 var original_transform: Transform3D
 var original_control := false
@@ -37,6 +38,7 @@ var play_button: Button
 var previous_button: Button
 var next_button: Button
 var stop_button: Button
+var loop_button: Button
 var title_card: PanelContainer
 var title_count: Label
 var title_move: Label
@@ -53,6 +55,9 @@ func _init(host: Control) -> void:
 	add_child(previous_button)
 	next_button = page.button("Next",func(): load_case(posmod(index+1,CASES.size())))
 	add_child(next_button)
+	loop_button = page.button("Loop clip",toggle_loop)
+	loop_button.toggle_mode = true
+	add_child(loop_button)
 	stop_button = page.button("Stop",stop)
 	add_child(stop_button)
 	build_title_card()
@@ -101,7 +106,9 @@ func update_controls() -> void:
 	var progress := "%d/%d  |  Distance %d  |  %s" % [index+1,CASES.size(),CASES[index][0],CASES[index][1]] if active else "Forearm Reception Animations  |  %d available" % CASES.size()
 	counter.text = progress
 	play_button.text = "Replay all" if finished else ("Resume" if paused else ("Pause" if active else "Play all"))
-	for button in [previous_button,next_button,stop_button]: button.disabled = not active
+	loop_button.set_pressed_no_signal(loop_current)
+	loop_button.text = "Looping clip" if loop_current else "Loop clip"
+	for button in [previous_button,next_button,loop_button,stop_button]: button.disabled = not active
 
 func toggle_play() -> void:
 	if not page.reception_drill_active(): return
@@ -117,6 +124,14 @@ func toggle_play() -> void:
 		load_case(0)
 	else:
 		paused = not paused
+	update_controls()
+
+func toggle_loop() -> void:
+	if not active: return
+	loop_current = not loop_current
+	if loop_current:
+		paused = false
+		if finished: load_case(index)
 	update_controls()
 
 func prepare_review_clip() -> void:
@@ -185,7 +200,9 @@ func step(delta: float) -> void:
 	var end: float = maxf(ball.cycle_end(),ball.contact_time+0.65)
 	ball.tick(minf(page.preview_clock,end),true)
 	if page.preview_clock < end: return
-	if index+1 < CASES.size():
+	if loop_current:
+		load_case(index)
+	elif index+1 < CASES.size():
 		load_case(index+1)
 	else:
 		finished = true
@@ -195,6 +212,7 @@ func step(delta: float) -> void:
 func stop(restore_control := true) -> void:
 	if not active: return
 	active = false
+	loop_current = false
 	title_card.hide()
 	paused = false
 	finished = false
