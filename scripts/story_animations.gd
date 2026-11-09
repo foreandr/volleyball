@@ -182,7 +182,7 @@ func select_category(category: String) -> void:
 	animation_list.item_selected.connect(preview_animation)
 	content.add_child(animation_list)
 	if category == "Forearm reception":
-		drill_status = label("F1 to play  |  WASD to move\nMouse to aim  |  Tap Q to receive\nMiddle drag to set pass height",16)
+		drill_status = label("F1 to play  |  WASD to move\nMouse to aim  |  Tap Q to receive\nScroll to set pass height",16)
 		drill_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		content.add_child(drill_status)
 		distance_status = label("Distance 1  |  Short reach\nDistance 2  |  Lunge or high reach\nDistance 3  |  Dive planned",16)
@@ -330,10 +330,11 @@ func _process(delta: float) -> void:
 		var approach: float = ball_preview.practice_approach(preview_clock) if in_control and ball_preview.practice_grade == BallPreview.Grade.WAITING else -1.0
 		timing_meter.update_timing(in_control,approach,player_controls.receive_elapsed>0.0,ball_preview.practice_grade,delta)
 		ball_preview.update_practice_cone(timing_meter.visible,player_controls.receive_elapsed)
+		ball_preview.update_practice_aim(in_control)
 		update_distance_status(in_control)
 		if not in_control:
 			preview_player.animator.seek(0.0,true)
-			drill_status.text = "F1 to play  |  WASD to move\nMouse to aim  |  Tap Q to receive\nMiddle drag to set pass height"
+			drill_status.text = "F1 to play  |  WASD to move\nMouse to aim  |  Tap Q to receive\nScroll to set pass height"
 	else:
 		timing_meter.hide()
 		if not in_control: preview_player.animator.seek(ball_preview.animation_time(preview_clock),true)
@@ -397,10 +398,11 @@ func aim_pass_at_mouse(screen_point: Vector2) -> void:
 	angle_control.distance_field.set_value_no_signal(StorySession.pass_distance)
 	angle_control.distance_field.get_meta("slider").set_value_no_signal(StorySession.pass_distance)
 	ball_preview.update_guide()
+	ball_preview.update_practice_aim(true)
 
-func adjust_pass_height(mouse_delta: float) -> void:
+func adjust_pass_height(height_delta: float) -> void:
 	var minimum := maxf(0.5,ball_preview.practice_platform_center().y+0.05)
-	var height := clampf(StorySession.pass_apex-mouse_delta*0.018,minimum,20.0)
+	var height := clampf(StorySession.pass_apex+height_delta,minimum,20.0)
 	StorySession.pass_apex = height
 	StorySession.destination_fit = "height"
 	var target: Dictionary = preview_player.get_meta("pass_target",{})
@@ -410,6 +412,7 @@ func adjust_pass_height(mouse_delta: float) -> void:
 	angle_control.apex_field.set_value_no_signal(height)
 	angle_control.apex_field.get_meta("slider").set_value_no_signal(height)
 	drill_status.text = "Pass height  |  %.1f m" % height
+	ball_preview.update_practice_aim(true)
 
 func handle_preview_input(event: InputEvent) -> void:
 	if reception_review.active:
@@ -417,12 +420,19 @@ func handle_preview_input(event: InputEvent) -> void:
 		return
 	if player_controls!=null and player_controls.active:
 		if reception_drill_active():
-			if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_MIDDLE:
-				preview.accept_event()
-				return
+			if event is InputEventMouseButton:
+				if event.button_index in [MOUSE_BUTTON_WHEEL_UP,MOUSE_BUTTON_WHEEL_DOWN]:
+					if event.pressed:
+						var direction := 1.0 if event.button_index == MOUSE_BUTTON_WHEEL_UP else -1.0
+						adjust_pass_height(direction*0.25*maxf(0.1,event.factor))
+					preview.accept_event()
+					return
+				if event.button_index == MOUSE_BUTTON_MIDDLE:
+					preview.accept_event()
+					return
 			if event is InputEventMouseMotion:
 				if event.button_mask & MOUSE_BUTTON_MASK_MIDDLE:
-					adjust_pass_height(event.relative.y)
+					adjust_pass_height(-event.relative.y*0.018)
 				else:
 					aim_pass_at_mouse(event.position)
 				preview.accept_event()

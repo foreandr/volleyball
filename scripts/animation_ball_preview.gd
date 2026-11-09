@@ -27,6 +27,9 @@ var positions := {}
 var rotations := {}
 var guide: MeshInstance3D
 var spread_cone: MeshInstance3D
+var practice_aim_arc: MeshInstance3D
+var last_aim_origin := Vector3.INF
+var last_aim_velocity := Vector3.INF
 var source_ball: MeshInstance3D
 var source_ground: MeshInstance3D
 var feed_valid := true
@@ -80,6 +83,18 @@ func _ready() -> void:
 	guide.hide()
 	spread_cone = preload("res://scripts/reception_spread_cone.gd").new()
 	add_child(spread_cone)
+	practice_aim_arc = MeshInstance3D.new()
+	practice_aim_arc.name = "ProjectedPassArc"
+	practice_aim_arc.top_level = true
+	practice_aim_arc.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(practice_aim_arc)
+	practice_aim_arc.global_transform = Transform3D.IDENTITY
+	practice_aim_arc.mesh = ImmediateMesh.new()
+	var aim_material := StandardMaterial3D.new()
+	aim_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	aim_material.albedo_color = Color("8df3ff")
+	practice_aim_arc.material_override = aim_material
+	practice_aim_arc.hide()
 	source_ball = MeshInstance3D.new()
 	source_ball.name = "IncomingBall"
 	source_ball.mesh = ball.mesh
@@ -156,6 +171,7 @@ func stop() -> void:
 	if is_instance_valid(source_ground): source_ground.hide()
 	if is_instance_valid(guide): guide.hide()
 	if is_instance_valid(spread_cone): spread_cone.hide()
+	if is_instance_valid(practice_aim_arc): practice_aim_arc.hide()
 	if is_instance_valid(audio): audio.stop()
 	if is_instance_valid(net_audio): net_audio.stop()
 
@@ -347,6 +363,27 @@ func update_practice_cone(show_timing: bool, receive_elapsed: float) -> void:
 	var origin: Vector3 = recovery.point if has_touch else practice_platform_center()
 	var spread: float = recovery.spread if has_touch else practice_spread(practice_timing_error(receive_elapsed))
 	spread_cone.show_spread(origin,destination,spread)
+
+func update_practice_aim(show_aim: bool) -> void:
+	var target: Dictionary = actor.get_meta("pass_target",{})
+	practice_aim_arc.visible = show_aim and target.has("position")
+	if not practice_aim_arc.visible: return
+	var origin := practice_platform_center()
+	var angle := float(clip.get_meta("desired_output_angle",45.0))
+	var velocity := Flight.target_velocity(origin,target,angle)
+	if origin.distance_squared_to(last_aim_origin)<0.0004 and velocity.distance_squared_to(last_aim_velocity)<0.0004:
+		return
+	last_aim_origin = origin
+	last_aim_velocity = velocity
+	var duration := Flight.landing_time(origin,velocity)
+	var path: ImmediateMesh = practice_aim_arc.mesh
+	path.clear_surfaces()
+	path.surface_begin(Mesh.PRIMITIVE_LINES)
+	for index in range(34):
+		for fraction in [0.0,0.58]:
+			var time: float = (index+fraction)*duration/34.0
+			path.surface_add_vertex(origin+velocity*time+Vector3.DOWN*0.5*Flight.GRAVITY*time*time)
+	path.surface_end()
 
 func practice_pass_velocity(touch: Vector3, timing_error: float) -> Vector3:
 	var target: Dictionary = actor.get_meta("pass_target",{})
