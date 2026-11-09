@@ -1,5 +1,6 @@
 extends RefCounted
 const SIZES := ["short","medium","long"]
+const LEFT_SHUFFLE_YAW := deg_to_rad(-26.0)
 var actor: Node3D
 var author: RefCounted
 var clips: Array[Animation] = []
@@ -84,7 +85,7 @@ func apply_pose(amount := 1.0) -> void:
 		var rotation := clips[a].rotation_track_interpolate(qa,phase*clips[a].length).slerp(clips[b].rotation_track_interpolate(qb,phase*clips[b].length),blend)
 		pose.append(Transform3D(Basis(rotation),position))
 	if side_sign<0: pose = mirrored(pose)
-	# Turn the captured foot paths into diagonal paths while retaining the ready torso.
+	# Turn the captured foot paths into diagonal paths.
 	var from := Vector3(-side_sign,0,0)
 	var to := Vector3(-travel_direction.x,0,travel_direction.y).normalized()
 	var turn := Basis(Quaternion(from,to))
@@ -94,15 +95,21 @@ func apply_pose(amount := 1.0) -> void:
 		for side in ["l","r"]:
 			feet[side] = author.world_pose(pose,rig.find_bone("foot_"+side))
 			poles[side] = author.point(pose,"calf_"+side)-author.point(pose,"thigh_"+side)
-		if side_sign<0:
-			var pelvis: Transform3D = author.world_pose(pose,rig.find_bone("pelvis"))
-			var spine: Transform3D = author.world_pose(pose,rig.find_bone("spine_01"))
-			author.set_world_basis(pose,"pelvis",Basis(Vector3.UP,deg_to_rad(-12.0))*pelvis.basis)
-			author.set_world_basis(pose,"spine_01",spine.basis)
+		var left_shuffle := side_sign < 0
+		var pelvis_z: float = author.point(pose, "pelvis").z
+		if left_shuffle:
+			# The spine inherits the pelvis turn so the shoulders follow the hips.
+			author.rotate_world(pose, "pelvis", Vector3.UP, LEFT_SHUFFLE_YAW)
 		for side in ["l","r"]:
 			var foot: Transform3D = feet[side]
 			var target: Vector3 = author.feet[side].origin+turn*(foot.origin-author.feet[side].origin)
-			author.limb(pose,"thigh_"+side,"calf_"+side,"foot_"+side,target,poles[side])
+			var knee_pole: Vector3 = poles[side]
+			if left_shuffle:
+				# Stagger the stance while retaining the captured lift and lateral travel.
+				knee_pole = Vector3.BACK if side == "l" else Vector3(-1.0, 0.0, 0.65)
+				var stagger := 0.39 if side == "l" else -0.09
+				target.z = lerpf(pelvis_z + stagger, target.z, 0.15)
+			author.limb(pose,"thigh_"+side,"calf_"+side,"foot_"+side,target,knee_pole)
 			author.set_world_basis(pose,"foot_"+side,foot.basis)
 	last_pose = pose
 	last_weight = weight
