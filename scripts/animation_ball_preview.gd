@@ -122,7 +122,7 @@ func _ready() -> void:
 	source_ground.hide()
 	hide()
 
-func make_ball() -> ArrayMesh:
+static func make_ball() -> ArrayMesh:
 	var mesh := SurfaceTool.new()
 	mesh.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var colors := [Color("f5f1dd"),Color("2e64b4"),Color("efd13b")]

@@ -453,10 +453,10 @@ func move_cpu_toward(travel: Vector3, delta: float, track_ball := true) -> void:
 	sprint_requested = distance>0.85
 	move_player(Vector2(direction.dot(forward.cross(Vector3.UP)),direction.dot(forward)),delta,track_ball)
 
-func move_player(direction: Vector2, delta: float, track_ball := true) -> void:
+func move_player(direction: Vector2, delta: float, track_ball := true, setting := false) -> void:
 	var actor: Node3D = page.preview_player
 	var session = page.get_node("/root/StorySession")
-	var forward := (Vector3(0,0,4)-actor.position).normalized()
+	var forward := Vector3.BACK if setting else (Vector3(0,0,4)-actor.position).normalized()
 	forward.y = 0
 	forward = forward.normalized()
 	var right := forward.cross(Vector3.UP)
@@ -469,14 +469,14 @@ func move_player(direction: Vector2, delta: float, track_ball := true) -> void:
 		step_direction = Vector2(travel.dot(facing.cross(Vector3.UP)),travel.dot(facing))
 	if exhausted and stamina>=25: exhausted = false
 	var quick_pace := sprint_requested and direction.length()>0.1 and not exhausted and stamina>0
-	sprinting = quick_pace and step_direction.y>0.3
+	sprinting = direction.length()>0.1 if setting else quick_pace and step_direction.y>0.3
 	var step_rate := QUICK_STEP_RATE if quick_pace else 1.0
-	var speed := 4.5 if sprinting else 1.65*step_rate
+	var speed := 4.0 if setting else (4.5 if sprinting else 1.65*step_rate)
 	var velocity := travel*speed
 	var before := actor.position
 	var movement := velocity*delta
 	var lateral := absf(step_direction.x)>0.3
-	var shuffle_step: bool = not sprinting and (side_steps.active or lateral)
+	var shuffle_step: bool = not setting and not sprinting and (side_steps.active or lateral)
 	side_steps.sampled = false
 	if shuffle_step:
 		if lateral: shuffle_heading = travel.normalized()
@@ -489,7 +489,7 @@ func move_player(direction: Vector2, delta: float, track_ball := true) -> void:
 		if track_ball: face_ball()
 	else:
 		actor.rotation.y = atan2(forward.x,forward.z)
-		session.pass_start = Vector2(actor.position.x,actor.position.z)
+		if not setting: session.pass_start = Vector2(actor.position.x,actor.position.z)
 	var now_moving := actor.position.distance_to(before)>0.00001
 	sprinting = sprinting and now_moving
 	if quick_pace and now_moving:

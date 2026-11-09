@@ -9,7 +9,7 @@ const MOVE_TYPES := {
 	"Spiking":["Line Hit","Cross Hit"],
 	"Serving":["Float","Spin","Hybrid","Skyball","Underhand","Standing Float","Standing Spin"],
 	"Blocking":["Straight","Left","Right"],
-	"Setting":["Forward","Back","Left","Right"],
+	"Setting":["Hand setting","Bump setting"],
 	"Chasing":["Forward","Back","Left","Right"]
 }
 const CATEGORIES := ["Forearm reception","Setting","Serving","Blocking","Spiking","Chasing"]
@@ -46,6 +46,10 @@ var drill_status: Label
 var distance_status: Label
 var timing_meter: Control
 var reception_review: HBoxContainer
+var setting_drill: Node3D
+var setter_original_transform: Transform3D
+var setter_animation_process: int
+var setter_animator_active: bool
 
 func _ready() -> void:
 	process_priority = 10
@@ -136,6 +140,7 @@ func set_title(text: String) -> void:
 	if heading: heading.text = text+"  |  "+build_label
 
 func show_categories() -> void:
+	stop_setting_drill()
 	if is_instance_valid(reception_review):
 		reception_review.stop(false)
 		reception_review.hide()
@@ -164,6 +169,9 @@ func select_category(category: String) -> void:
 	preview_player.get_node("DirectionArrows").show_dive_ring = category == "Forearm reception"
 	clear_content()
 	set_title(category.to_upper())
+	if category == "Setting":
+		start_setting_drill()
+		return
 	var row := HBoxContainer.new()
 	row.visible = MOVE_TYPES[category].size()>1
 	row.add_theme_constant_override("separation",8)
@@ -227,6 +235,53 @@ Scroll to set pass height",16)
 func current_type() -> String:
 	if selected_category.is_empty(): return ""
 	return MOVE_TYPES[selected_category][type_indices.get(selected_category,0)]
+
+func start_setting_drill() -> void:
+	if player_controls.active: player_controls.set_active(false)
+	if is_instance_valid(ball_preview): ball_preview.stop()
+	right_panel.hide()
+	angle_control.hide()
+	angle_control.pending = false
+	var modes := OptionButton.new()
+	modes.name = "SettingType"
+	for mode in MOVE_TYPES["Setting"]: modes.add_item(mode)
+	modes.select(type_indices.get("Setting",0))
+	modes.item_selected.connect(func(index: int): type_indices["Setting"] = index)
+	content.add_child(modes)
+	content.add_child(label("WASD to get under the pass",16))
+	drill_status = label("",16)
+	content.add_child(drill_status)
+	setter_original_transform = preview_player.transform
+	setter_animation_process = preview_player.animator.callback_mode_process
+	setter_animator_active = preview_player.animator.active
+	preview_player.animator.active = true
+	preview_player.animator.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
+	preview_player.position = Vector3(1.45,0.04,-1.8)
+	preview_player.rotation.y = 0.0
+	preview_player.get_node("DirectionArrows").hide()
+	player_controls.locomotion = ""
+	player_controls.side_weight = 0.0
+	player_controls.side_steps.active = false
+	player_controls.indicator.text = "Setter"
+	preview_camera.position = Vector3(0,7.5,-11.2)
+	preview_camera.look_at(Vector3(0,1.45,2.6))
+	setting_drill = preload("res://scripts/setting_drill.gd").new()
+	preview_player.get_parent().add_child(setting_drill)
+	setting_drill.configure(preview_player,drill_status)
+	preview.grab_focus()
+
+func stop_setting_drill() -> void:
+	if not is_instance_valid(setting_drill): return
+	setting_drill.queue_free()
+	setting_drill = null
+	preview_player.transform = setter_original_transform
+	preview_player.animator.callback_mode_process = setter_animation_process
+	preview_player.animator.active = setter_animator_active
+	preview_player.animator.speed_scale = 1.0
+	preview_player.model.rotation.y = 0.0
+	preview_player.get_node("DirectionArrows").show()
+	player_controls.indicator.text = "Camera"
+	update_camera()
 
 func refresh_type() -> void:
 	right_panel.hide()
@@ -341,6 +396,10 @@ func reception_drill_active() -> bool:
 	return is_instance_valid(ball_preview) and ball_preview.active and ball_preview.practice_mode
 
 func _process(delta: float) -> void:
+	if is_instance_valid(setting_drill):
+		player_controls.move_player(player_controls.movement_input(),delta,false,true)
+		setting_drill.step(delta)
+		return
 	if reception_review.frozen:
 		var direction: Vector2 = player_controls.movement_input()
 		if player_controls.active: player_controls.pan_frozen_camera(direction,delta)
@@ -610,6 +669,9 @@ func handle_middle_arrow(event: InputEvent) -> bool:
 	return false
 
 func handle_preview_input(event: InputEvent) -> void:
+	if is_instance_valid(setting_drill):
+		if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE: open_menu()
+		return
 	if reception_review.active:
 		super.handle_preview_input(event)
 		return
@@ -653,7 +715,7 @@ func open_editor(index := -1) -> void:
 	get_tree().change_scene_to_file("res://scenes/animation_editor.tscn")
 
 func cycle_type(direction: int) -> void:
-	if selected_category.is_empty(): return
+	if selected_category.is_empty() or selected_category == "Setting": return
 	type_indices[selected_category] = posmod(int(type_indices.get(selected_category,0))+direction,MOVE_TYPES[selected_category].size())
 	refresh_type()
 
@@ -665,6 +727,9 @@ func open_menu() -> void:
 	else: get_tree().change_scene_to_file("res://scenes/story.tscn")
 
 func _input(event: InputEvent) -> void:
+	if is_instance_valid(setting_drill) and event is InputEventKey and event.keycode in [KEY_F1,KEY_F2,KEY_Q,KEY_E]:
+		get_viewport().set_input_as_handled()
+		return
 	if is_instance_valid(reception_review) and event is InputEventKey and event.pressed and not event.echo and event.keycode in [KEY_F1,KEY_F2]:
 		reception_review.stop(false)
 	super._input(event)
