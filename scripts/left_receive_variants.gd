@@ -22,7 +22,7 @@ const STYLES := [
 	["Deep drop step", 20, 27, 19, 0.21, 0.31, -0.14, 0.16, 0.43],
 	["Shoulder scoop", 16, 34, 25, 0.13, 0.13, -0.06, 0.14, 0.29],
 	["Extended platform", 17, 38, 13, 0.18, 0.19, 0.11, 0.09, 0.36],
-	["Emergency reach", 25, 35, 20, 0.26, 0.35, -0.08, 0.17, 0.29],
+	["Emergency reach", 25, 27, 20, 0.26, 0.35, -0.08, 0.17, 0.29],
 ]
 
 static func bake(actor: Node3D, base: Animation, index: int) -> Animation:

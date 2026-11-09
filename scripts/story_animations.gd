@@ -202,7 +202,9 @@ func choose_render_clip() -> Animation:
 		return base_render_clip
 	var index := variant_picker.selected
 	if not left_clips.has(index):
-		left_clips[index] = LeftReceives.bake(preview_player,base_render_clip,index)
+		var authored := LeftReceives.bake(preview_player,base_render_clip,index)
+		var solver = preload("res://scripts/pass_trajectory_solver.gd").new(preview_player,authored)
+		left_clips[index] = solver.solve(StorySession.pass_output_angle,StorySession.pass_distance).clip
 	return left_clips[index]
 
 func set_base_render_clip(clip: Animation) -> void:
