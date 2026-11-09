@@ -79,30 +79,35 @@ func load_story(id: String) -> bool:
 	return true
 
 var edit_animation: Animation
-var pass_output_angle := -1.0
+var pass_output_angle := 74.67337813955865
 
-var pass_distance := 6.0
-var pass_start := Vector2(0,-3.2)
+var pass_distance := 5.0
+var pass_start := Vector2(0.05625502,-3.4254649)
 
-var incoming_speed := 14.0
-var incoming_angle := 40.0
-var feed_spot := Vector2(0,12.5)
+var incoming_speed := 18.6
+var incoming_angle := 22.49393445518888
+var feed_spot := Vector2(1.5444031,14.2)
 
 var incoming_spin := "No spin"
-var spin_rate := 3.0
+var spin_rate := 6.8
 var float_strength := 0.6
 
-var source_height := 3.0
+var source_height := 3.3
 var feed_fit := "angle"
 
 var ball_tab := 0
-var pass_destination := Vector2.INF
-var pass_apex := 3.0
-var destination_fit := "angle"
+var pass_destination := Vector2(0.026413498,1.5744464)
+var pass_apex := 4.9
+var destination_fit := "height"
 
 var reception_body := "Balanced"
 var reception_hands := "From platform"
-var preview_camera := {}
+var preview_camera := {
+	"distance": 15.011005634576883,
+	"focus": Vector3(-4.4370165,1,1.1591442),
+	"pitch": 0.4883845413923259,
+	"yaw": 4.626478332834786,
+}
 var preview_hash := 0
 var preview_path := "user://preview_setup.cfg"
 const PREVIEW_FIELDS := ["pass_start","pass_distance","pass_output_angle","incoming_speed","incoming_angle","feed_spot","incoming_spin","spin_rate","float_strength","source_height","feed_fit","ball_tab","pass_destination","pass_apex","destination_fit","preview_camera"]
@@ -121,3 +126,12 @@ func save_preview_setup() -> void:
 	var config := ConfigFile.new()
 	for field in values: config.set_value("preview",field,values[field])
 	if config.save(preview_path)==OK: preview_hash = signature
+
+func _input(event: InputEvent) -> void:
+	if not event is InputEventKey or not event.pressed or event.echo: return
+	if event.physical_keycode != KEY_M or event.ctrl_pressed or event.alt_pressed or event.meta_pressed: return
+	var focus := get_viewport().gui_get_focus_owner()
+	if focus is LineEdit or focus is TextEdit: return
+	var master := AudioServer.get_bus_index("Master")
+	AudioServer.set_bus_mute(master,not AudioServer.is_bus_mute(master))
+	get_viewport().set_input_as_handled()

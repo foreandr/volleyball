@@ -173,8 +173,14 @@ func refresh_type() -> void:
 		var index := animation_list.add_item(entry.name)
 		animation_list.set_item_metadata(index,entry)
 	if animation_list.item_count > 0:
-		animation_list.select(0)
-		preview_animation(0)
+		var initial := 0
+		if selected_category == "Forearm reception":
+			for index in animation_list.item_count:
+				if animation_list.get_item_metadata(index).id == "straight_pass_02":
+					initial = index
+					break
+		animation_list.select(initial)
+		preview_animation(initial)
 	elif is_instance_valid(preview_player):
 		preview_player.play_action("idle")
 		if is_instance_valid(ball_preview): ball_preview.stop()

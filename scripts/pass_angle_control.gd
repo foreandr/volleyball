@@ -98,10 +98,16 @@ func move_distance(value: float) -> void:
 
 func update_spin_controls() -> void:
 	var type: String = SPINS[spin_picker.selected]
-	for control in [spin_rate_field,float_field]:
-		var show_: bool = type == "Dead float" if control == float_field else true
-		control.get_parent().visible = show_
-		control.get_meta("slider").visible = show_
+	var rate_enabled := type != "No spin" and type != "Dead float"
+	var rate_slider: HSlider = spin_rate_field.get_meta("slider")
+	spin_rate_field.editable = rate_enabled
+	rate_slider.editable = rate_enabled
+	var tint := Color.WHITE if rate_enabled else Color(1,1,1,0.45)
+	spin_rate_field.get_parent().modulate = tint
+	rate_slider.modulate = tint
+	var is_float := type == "Dead float"
+	float_field.get_parent().visible = is_float
+	float_field.get_meta("slider").visible = is_float
 
 
 func parameter(title_: String, low: float, high: float, value: float, unit := "m") -> SpinBox:
