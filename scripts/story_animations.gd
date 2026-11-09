@@ -36,6 +36,7 @@ var cpu_start_yaw := 0.0
 var cpu_dive_ready: Array[Transform3D] = []
 var cpu_dive_clasp: Array[Transform3D] = []
 var cpu_dive_kick_offset := 0.0
+var cpu_dive_lower_duration := 0.18
 var middle_arrow := Vector2i(-1,1)
 var middle_press := Vector2.ZERO
 var middle_dragged := false
@@ -220,28 +221,38 @@ Scroll to set pass height",16)
 	animation_list.grab_focus()
 
 func add_dive_kick_control() -> void:
+	add_dive_slider("DiveKick","dive_kick_ms",Vector2i(-180,200),
+		"Lower values raise the legs sooner. Applies to the next dive.",func(value: int) -> String:
+			if value == 0: return "Leg kick  |  at contact"
+			var timing := "%d ms %s contact" % [absi(value),"before" if value < 0 else "after"]
+			return "Leg kick  |  "+timing)
+	add_dive_slider("DiveLower","dive_lower_ms",Vector2i(60,420),
+		"Higher values lower the legs more slowly. Applies to the next dive.",func(value: int) -> String:
+			return "Leg lowering  |  %d ms" % value)
+
+func add_dive_slider(control_name: String, setting: String, limits: Vector2i, hint: String, format_value: Callable) -> void:
 	var readout := label("",16)
-	readout.name = "DiveKickReadout"
+	readout.name = control_name+"Readout"
 	content.add_child(readout)
 	var slider := HSlider.new()
-	slider.name = "DiveKickSlider"
-	slider.min_value = -180
-	slider.max_value = 200
+	slider.name = control_name+"Slider"
+	slider.min_value = limits.x
+	slider.max_value = limits.y
 	slider.step = 10
-	slider.value = StorySession.dive_kick_ms
-	slider.tooltip_text = "Lower values raise the legs sooner. Applies to the next dive."
+	slider.value = StorySession.get(setting)
+	slider.tooltip_text = hint
 	content.add_child(slider)
-	var show_value := func(value: float):
-		var timing := "%d ms %s contact" % [absi(int(value)),"before" if value < 0.0 else "after"]
-		readout.text = "Leg kick  |  "+("at contact" if value == 0.0 else timing)
-	show_value.call(slider.value)
+	readout.text = format_value.call(int(slider.value))
 	slider.value_changed.connect(func(value: float):
-		show_value.call(value)
-		StorySession.dive_kick_ms = int(value)
+		readout.text = format_value.call(int(value))
+		StorySession.set(setting,int(value))
 		StorySession.save_preview_setup())
 
 func dive_kick_offset() -> float:
 	return clampi(StorySession.dive_kick_ms,-180,200)/1000.0
+
+func dive_lower_duration() -> float:
+	return clampi(StorySession.dive_lower_ms,60,420)/1000.0
 
 func current_type() -> String:
 	if selected_category.is_empty(): return ""
@@ -501,6 +512,7 @@ func step_cpu_forward_dive(previous: float) -> void:
 	if time < 0.0 or not ball_preview.incoming_net.is_empty(): return
 	if cpu_dive_ready.is_empty():
 		cpu_dive_kick_offset = dive_kick_offset()
+		cpu_dive_lower_duration = dive_lower_duration()
 		cpu_start = preview_player.position
 		cpu_start_yaw = preview_player.rotation.y
 		preview_player.animator.play("custom_preview/clip",0)
@@ -511,7 +523,7 @@ func step_cpu_forward_dive(previous: float) -> void:
 		cpu_dive_clasp = player_controls.snapshot_receive_pose()
 		preview_player.animator.seek(0.0,true)
 	var heading: Vector3 = (ball_preview.aim_point-cpu_start).slide(Vector3.UP).normalized()
-	ForwardDive.sample(preview_player,player_controls.footwork.author,cpu_dive_ready,cpu_dive_clasp,cpu_start,heading,time,ball_preview.aim_point,float(ball_preview.recovery.get("time",0.07))+ForwardDive.WINDUP,cpu_dive_kick_offset)
+	ForwardDive.sample(preview_player,player_controls.footwork.author,cpu_dive_ready,cpu_dive_clasp,cpu_start,heading,time,ball_preview.aim_point,float(ball_preview.recovery.get("time",0.07))+ForwardDive.WINDUP,cpu_dive_kick_offset,cpu_dive_lower_duration)
 	drill_status.text = "CPU forward dive  |  F1 to take control"
 	if time >= ForwardDive.WINDUP-0.12 and time <= ForwardDive.WINDUP+0.07:
 		ball_preview.update_practice_platform()

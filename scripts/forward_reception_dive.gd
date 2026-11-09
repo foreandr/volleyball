@@ -19,9 +19,9 @@ const KEYS := [
 	[1.28,0.00,0.0],
 ]
 
-static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D], clasp: Array[Transform3D], start: Vector3, heading: Vector3, time: float, ball_point: Vector3, release_time: float, kick_offset: float) -> void:
+static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D], clasp: Array[Transform3D], start: Vector3, heading: Vector3, time: float, ball_point: Vector3, release_time: float, kick_offset: float, lower_duration: float) -> void:
 	var kick_time := time-WINDUP-kick_offset
-	var kick := smoothstep(0.0,0.13,kick_time)*(1.0-smoothstep(0.22,0.40,kick_time))
+	var kick := smoothstep(0.0,0.13,kick_time)*(1.0-smoothstep(0.22,0.22+lower_duration,kick_time))
 	# Start later while preserving the reach at the intended ball contact.
 	time = time*CONTACT_POSE_TIME/WINDUP if time < WINDUP else time-WINDUP+CONTACT_POSE_TIME
 	var rig: Skeleton3D = actor.skeleton
