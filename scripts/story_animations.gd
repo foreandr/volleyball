@@ -469,7 +469,7 @@ func step_cpu_receive(previous: float, delta: float) -> void:
 		return
 	if not cpu_side_slide_pose.is_empty():
 		SideKneeSlide.sample(preview_player,player_controls.footwork.author,cpu_side_slide_pose,
-			player_controls.receive_ready_pose,cpu_side_slide_start,player_controls.reach_lead,preview_clock-cpu_side_slide_time)
+			player_controls.receive_ready_pose,cpu_side_slide_start,player_controls.reach_lead,preview_clock-cpu_side_slide_time,ball_preview.recovery)
 		return
 	var short_back: bool = arrows.selected_distance == 1 and arrows.selected == 5
 	if not is_finite(cpu_receive_clock):

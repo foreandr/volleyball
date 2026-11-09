@@ -1,8 +1,11 @@
 extends RefCounted
 
+const PlatformPose = preload("res://scripts/reception_platform_pose.gd")
+const PassDrive = preload("res://scripts/reception_pass_drive.gd")
+
 const DURATION := 0.72
 
-static func sample(actor: Node3D, author: RefCounted, from_pose: Array[Transform3D], ready: Array[Transform3D], start: Vector3, side: String, time: float) -> void:
+static func sample(actor: Node3D, author: RefCounted, from_pose: Array[Transform3D], ready: Array[Transform3D], start: Vector3, side: String, time: float, contact: Dictionary) -> void:
 	var rig: Skeleton3D = actor.skeleton
 	var sign_ := 1.0 if side == "l" else -1.0
 	var lateral := actor.basis.x.normalized()*sign_
@@ -46,6 +49,22 @@ static func sample(actor: Node3D, author: RefCounted, from_pose: Array[Transform
 	for bone in rig.get_bone_count():
 		var sampled: Transform3D = pose[bone]
 		pose[bone] = sampled.interpolate_with(ready[bone],recover)
+	var joined := 1.0-smoothstep(0.36,0.68,time)
+	if joined > 0.0:
+		var left: Vector3 = author.point(pose,"upperarm_l")
+		var right: Vector3 = author.point(pose,"upperarm_r")
+		var chest := (left+right)*0.5
+		var cross_body := (left-right).slide(Vector3.UP).normalized()
+		var forward := cross_body.cross(Vector3.UP)
+		var hands: Vector3 = (author.point(pose,"hand_l")+author.point(pose,"hand_r"))*0.5
+		var target := chest+(hands-chest).slide(cross_body)
+		if contact.has("spread"):
+			var velocity: Vector3 = contact.velocity
+			var drive := PassDrive.swing_effort(contact.point,velocity)
+			var follow := smoothstep(0.0,0.13,time)*(1.0-smoothstep(0.19,0.36,time))
+			var rise := clampf(velocity.y/velocity.length(),0.0,1.0)
+			target += (forward*lerpf(0.23,0.11,rise)+Vector3.UP*lerpf(0.38,0.52,rise))*drive*follow
+		PlatformPose.connect_arms(pose,author,target,joined,0.0,cross_body)
 	# Keep both soles level and above the court throughout the recovery blend.
 	for foot_side in [side,trail]:
 		var foot_bone: String = "foot_"+foot_side

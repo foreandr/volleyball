@@ -1,13 +1,20 @@
 extends RefCounted
 
+const Flight = preload("res://scripts/pass_flight.gd")
 const PlatformPose = preload("res://scripts/reception_platform_pose.gd")
+
+static func swing_effort(origin: Vector3, outgoing: Vector3) -> float:
+	var duration := Flight.landing_time(origin,outgoing)
+	var distance := outgoing.slide(Vector3.UP).length()*duration
+	var rise := pow(maxf(0.0,outgoing.y),2)/(2.0*Flight.GRAVITY)
+	return clampf(0.12+0.62*smoothstep(4.0,20.0,distance)+0.26*smoothstep(1.0,6.0,rise),0.0,1.0)
 
 static func effort(incoming: Vector3, outgoing: Vector3) -> float:
 	var demand := outgoing.length()+0.30*maxf(0.0,(outgoing-incoming).length()-20.0)
 	return smoothstep(9.0,28.0,demand)
 
-static func apply(rig: Skeleton3D, author: RefCounted, outgoing: Vector3, power: float, pose_offset: float, struck: bool, incoming := Vector3.ZERO) -> void:
-	var arms := smoothstep(0.0,0.65,power)
+static func apply(rig: Skeleton3D, author: RefCounted, outgoing: Vector3, power: float, pose_offset: float, struck: bool, incoming := Vector3.ZERO, swing := -1.0) -> void:
+	var arms := swing if swing >= 0.0 else smoothstep(0.0,0.65,power)
 	var torso := smoothstep(0.22,0.85,power)
 	var legs := smoothstep(0.52,1.0,power)
 	var load := clampf(-pose_offset/0.14,0.0,1.0) if not struck else 0.0

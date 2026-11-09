@@ -223,7 +223,8 @@ func play_receive_pose(delta: float, review_offset := Vector3.INF, pose_offset :
 	var incoming: Vector3 = ball.incoming
 	if struck: incoming += ball.feed_info.acceleration*float(ball.recovery.time)
 	var power := PassDrive.effort(incoming,outgoing)
-	PassDrive.apply(actor.skeleton,footwork.author,outgoing,power,pose_offset,struck,incoming)
+	var origin: Vector3 = ball.recovery.point if struck else ball.practice_platform_center()
+	PassDrive.apply(actor.skeleton,footwork.author,outgoing,power,pose_offset,struck,incoming,PassDrive.swing_effort(origin,outgoing))
 	if planted:
 		var rig: Skeleton3D = actor.skeleton
 		for name_ in ["pelvis","thigh_l","thigh_r","calf_l","calf_r","foot_l","foot_r","ball_l","ball_r"]:
