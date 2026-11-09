@@ -26,6 +26,7 @@ var reach_height := 0.0
 var reach_side_lunge := false
 var reach_forward_lunge := false
 var reach_back := false
+var reach_short_straight_back := false
 var reach_rear_diagonal := false
 var indicator: Label
 var save_clock := 0.0
@@ -291,6 +292,7 @@ func reset_reach() -> void:
 	reach_side_lunge = false
 	reach_forward_lunge = false
 	reach_back = false
+	reach_short_straight_back = false
 	reach_rear_diagonal = false
 	reach_tier = 1
 	reach_travel = Vector3.ZERO
@@ -334,6 +336,9 @@ func step_into_receive(delta: float, review_offset: Vector3) -> void:
 		var side_offset := offset.dot(court_forward.cross(Vector3.UP))
 		reach_back = forward_offset < -absf(side_offset)*0.65
 		reach_height = offset.y if tier == 2 or directional_cpu else 0.0
+		reach_short_straight_back = tier == 1 and reach_height < 0.20 and reach_back and -local.z > absf(local.x)*1.4
+		if directional_cpu:
+			reach_short_straight_back = tier == 1 and reach_height < 0.20 and animation_direction == 5
 		reach_side_lunge = tier == 2 and absf(local.x) > absf(local.z)*1.4
 		reach_forward_lunge = local.z > absf(local.x)*1.4
 		if directional_cpu and tier == 2 and animation_direction in [2,3,7,8]:
@@ -443,8 +448,8 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 		pose[pelvis].origin -= author.world_pose(pose,parent).basis.inverse()*Vector3.UP*drop
 	if (reach_forward_lunge and reach_tier == 1 and not high) or short_lunge:
 		var parent := rig.get_bone_parent(pelvis)
-		pose[pelvis].origin -= author.world_pose(pose,parent).basis.inverse()*Vector3.UP*(0.075 if short_lunge else 0.11)*weight
-		author.rotate_world(pose,"spine_02",Vector3.RIGHT,(0.04 if short_lunge else 0.12)*weight)
+		pose[pelvis].origin -= author.world_pose(pose,parent).basis.inverse()*Vector3.UP*(0.075 if short_lunge and not reach_short_straight_back else 0.11)*weight
+		author.rotate_world(pose,"spine_02",Vector3.RIGHT,(0.04 if short_lunge and not reach_short_straight_back else 0.12)*weight)
 	var leg_pose := pose.duplicate()
 	leg_pose[pelvis] = hips
 	for side in ["l","r"]:
@@ -454,12 +459,13 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 		if side == reach_lead:
 			var extension := 0.98 if reach_side_lunge or reach_forward_lunge else (1.18 if deep else 1.32)
 			if reach_back and reach_tier == 2: extension = 0.84
-			if short_lunge: extension = 1.08
+			if short_lunge: extension = 0.98 if reach_short_straight_back else 1.08
 			target += step/scale_*weight*extension+Vector3.UP*sin(PI*reach_progress)*0.08
 			if reach_side_lunge: target.z += 0.28*weight
 			if reach_rear_diagonal: target.z += 0.08*weight
 			if short_lunge and side_receive: target.z += 0.09*weight
 			if reach_forward_lunge: target.z += (0.12 if reach_tier == 2 else 0.07)*weight
+			if reach_short_straight_back: target.z -= 0.07*weight
 		elif reach_back and reach_tier == 2:
 			# Slide the trailing shoe along the court once the planted ankle is out of reach.
 			var hip: Vector3 = author.point(pose,"thigh_"+side)
@@ -472,7 +478,7 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 			target.x = hip.x+ground_offset.x
 			target.z = hip.z+ground_offset.z
 		var pole: Vector3 = author.point(leg_pose,"calf_"+side)-author.point(leg_pose,"thigh_"+side)
-		if (reach_side_lunge or reach_rear_diagonal or short_lunge) and side == reach_lead:
+		if (reach_side_lunge or reach_rear_diagonal or (short_lunge and not reach_short_straight_back)) and side == reach_lead:
 			# Load the knee over the lead foot as the other leg extends.
 			var hip: Vector3 = author.point(pose,"thigh_"+side)
 			var knee_over_foot := target+Vector3(shoulder_side*0.08,0.28,0.32)-hip
