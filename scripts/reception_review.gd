@@ -49,7 +49,7 @@ var review_clip: Animation
 var offset := Vector3.ZERO
 var released := false
 var dive_ready: Array[Transform3D] = []
-var dive_windup := ForwardDive.WINDUP
+var dive_kick_offset := 0.0
 var counter: Label
 var play_button: Button
 var previous_button: Button
@@ -223,7 +223,7 @@ func load_case(next_index: int) -> void:
 	dive_ready.clear()
 	if CASES[index][0] == 3:
 		aim.y = 0.46
-		dive_windup = page.dive_windup()
+		dive_kick_offset = page.dive_kick_offset()
 		dive_ready = page.player_controls.snapshot_receive_pose()
 	var acceleration := Vector3.DOWN*Flight.GRAVITY
 	ball.review_feed = {"aim":aim,"incoming":velocity,"acceleration":acceleration,"duration":FEED_TIME,
@@ -252,11 +252,11 @@ func step(delta: float) -> void:
 	var short_back := index == SHORT_BACK
 	var receive_start := -0.12 if short_back else -0.25
 	if not dive_ready.is_empty():
-		var dive_time := elapsed+dive_windup
+		var dive_time := elapsed+ForwardDive.WINDUP
 		if dive_time >= ForwardDive.DURATION or not ball.incoming_net.is_empty(): released = true
 		if dive_time >= 0.0 and not released:
 			var heading: Vector3 = (ball.aim_point-READY_POSITION).slide(Vector3.UP).normalized()
-			ForwardDive.sample(page.preview_player,page.player_controls.footwork.author,dive_ready,READY_POSITION,heading,dive_time,ball.aim_point,float(ball.recovery.get("time",ForwardDive.WINDUP+0.07-dive_windup))+dive_windup)
+			ForwardDive.sample(page.preview_player,page.player_controls.footwork.author,dive_ready,READY_POSITION,heading,dive_time,ball.aim_point,float(ball.recovery.get("time",0.07))+ForwardDive.WINDUP,dive_kick_offset)
 			if dive_time >= ForwardDive.WINDUP-0.12 and dive_time <= ForwardDive.WINDUP+0.07:
 				ball.update_practice_platform()
 				ball.try_practice_pass(previous,page.preview_clock,0.16)
@@ -284,7 +284,7 @@ func step(delta: float) -> void:
 	if released:
 		page.preview_player.animator.seek(0.0,true)
 		page.player_controls.blend_receive_recovery(delta)
-	var recovery_time := ForwardDive.DURATION-dive_windup if not dive_ready.is_empty() else 0.65
+	var recovery_time := ForwardDive.DURATION-ForwardDive.WINDUP if not dive_ready.is_empty() else 0.65
 	var end: float = maxf(ball.cycle_end(),ball.contact_time+recovery_time)
 	ball.tick(minf(page.preview_clock,end),true)
 	ball.update_practice_aim(true)
