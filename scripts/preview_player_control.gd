@@ -261,7 +261,8 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 		# Open the shoulders toward the ball and lower the opposite shoulder.
 		var roll := 0.56 if reach_tier == 2 else 0.43
 		author.rotate_world(pose,"spine_03",Vector3.BACK,side_lean*roll*weight)
-		author.rotate_world(pose,"spine_03",Vector3.UP,side_lean*0.18*weight)
+		author.rotate_world(pose,"spine_02",Vector3.UP,side_lean*0.08*weight)
+		author.rotate_world(pose,"spine_03",Vector3.UP,side_lean*0.12*weight)
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,-back*0.14*weight)
 	author.rotate_world(pose,"spine_03",Vector3.UP,shoulder_side*back*0.31*weight)
 	var deep := reach_tier == 2 and reach_height < 0.20
@@ -308,12 +309,13 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 		author.limb(pose,"thigh_"+side,"calf_"+side,foot_name,target,pole)
 		author.set_world_basis(pose,foot_name,foot.basis)
 	if reach_tier == 2 or side_receive:
-		var extension := 0.20 if reach_forward_lunge else (0.18 if reach_side_lunge else 0.12)
+		var extension := 0.17 if reach_forward_lunge else (0.10 if reach_side_lunge else (0.14 if reach_back or high else 0.05))
 		var arms := Vector3(step.x,0.0,step.z).normalized()*extension*weight
 		if reach_forward_lunge: arms.y = 0.07*weight
 		if high: arms.y = clampf(reach_height/scale_,0.18,0.53)*weight
 		var center: Vector3 = (author.point(pose,"hand_l")+author.point(pose,"hand_r"))*0.5
-		if not reach_back or high:
+		if not reach_back and not high:
+			arms.x -= side_lean*0.05*weight
 			PlatformPose.connect_arms(pose,author,center+arms,smoothstep(0.0,0.82,weight))
 		else:
 			for side in ["l","r"]:
