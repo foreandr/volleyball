@@ -249,6 +249,7 @@ func preview_animation(index: int) -> void:
 	var entry: Dictionary = animation_list.get_item_metadata(index)
 	selected_entry = entry.duplicate(true)
 	if is_instance_valid(edit_button): edit_button.disabled = false
+	set_cpu_arrows_pinned(false)
 	angle_control.apply_setup(preview_player)
 	if is_instance_valid(reception_controls): reception_controls.apply(preview_player)
 	source_clip = Catalog.load_clip(entry,preview_player)
@@ -280,6 +281,7 @@ func preview_animation(index: int) -> void:
 func apply_output_angle(value: float) -> void:
 	reception_review.stop(false)
 	if source_clip == null or not source_clip.has_meta("contact_time"): return
+	set_cpu_arrows_pinned(false)
 	angle_control.apply_setup(preview_player)
 	if is_instance_valid(reception_controls): reception_controls.apply(preview_player,replace_body_layer)
 	StorySession.pass_output_angle = value
@@ -344,8 +346,22 @@ func _process(delta: float) -> void:
 	if not is_instance_valid(ball_preview) or not ball_preview.active:
 		timing_meter.hide()
 		return
+	var drill := reception_drill_active()
+	set_cpu_arrows_pinned(drill and not in_control)
 	var first := minf(0,ball_preview.contact_time-ball_preview.feed_duration)
 	var last: float = ball_preview.cycle_end()
+	if drill and not in_control and cpu_start.is_finite() and preview_clock+delta >= last:
+		var return_path: Vector3 = cpu_start-preview_player.position
+		if return_path.length_squared()>0.0025:
+			preview_clock = last
+			player_controls.end_receive_pose()
+			player_controls.reset_reach()
+			player_controls.move_cpu_toward(return_path,delta)
+			player_controls.blend_receive_recovery(delta)
+			drill_status.text = "CPU returning  |  F1 to take control"
+			ball_preview.tick(preview_clock,false)
+			ball_preview.update_practice_aim(true)
+			return
 	var previous := preview_clock
 	if setup_drag.mode.is_empty() or reception_drill_active():
 		preview_clock = first+fposmod(preview_clock-first+delta,last-first)
@@ -374,6 +390,16 @@ func _process(delta: float) -> void:
 		timing_meter.hide()
 		if not in_control: preview_player.animator.seek(ball_preview.animation_time(preview_clock),true)
 	ball_preview.tick(preview_clock,true)
+
+func set_cpu_arrows_pinned(pinned: bool) -> void:
+	var arrows: MeshInstance3D = preview_player.get_node("DirectionArrows")
+	if arrows.top_level == pinned: return
+	var placement := arrows.global_transform
+	arrows.top_level = pinned
+	if pinned:
+		arrows.global_transform = placement
+	else:
+		arrows.transform = Transform3D.IDENTITY
 
 func reset_cpu_receive(restore_position: bool) -> void:
 	if cpu_start.is_finite():

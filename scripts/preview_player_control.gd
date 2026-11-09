@@ -394,8 +394,9 @@ func move_cpu_toward(travel: Vector3, delta: float) -> void:
 	var forward := Vector3(0,0,4)-actor.position
 	forward.y = 0.0
 	forward = forward.normalized()
-	var direction := travel.normalized()
-	sprint_requested = travel.length()>0.85
+	var distance := travel.length()
+	var direction := travel.normalized()*minf(1.0,distance/0.27)
+	sprint_requested = distance>0.85
 	move_player(Vector2(direction.dot(forward.cross(Vector3.UP)),direction.dot(forward)),delta)
 
 func move_player(direction: Vector2, delta: float) -> void:

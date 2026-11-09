@@ -134,6 +134,7 @@ func toggle_play() -> void:
 		original_transform = page.preview_player.transform
 		original_control = page.player_controls.active
 		page.player_controls.set_active(false)
+		page.set_cpu_arrows_pinned(false)
 		prepare_review_clip()
 		active = true
 		load_case(0)
