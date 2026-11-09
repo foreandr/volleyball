@@ -1,6 +1,6 @@
 extends MeshInstance3D
 
-const LANDING_RADIUS := 1.00
+const LANDING_RADIUS := 0.90
 var selected := 0
 
 func _ready() -> void:
