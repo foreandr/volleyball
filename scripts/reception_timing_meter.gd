@@ -27,11 +27,11 @@ func reset_serve() -> void:
 	flash = 0.0
 	hide()
 
-func update_timing(active: bool, progress: float, space_held: bool, result: int, delta: float) -> void:
+func update_timing(active: bool, progress: float, receive_held: bool, result: int, delta: float) -> void:
 	if not active:
 		hide()
 		return
-	holding = space_held
+	holding = receive_held
 	if result != grade:
 		flash = 1.0 if result == Timing.Grade.PERFECT else 0.0
 		result_time = 0.85
@@ -72,8 +72,8 @@ func _draw() -> void:
 		draw_rect(Rect2(green_zone.position,Vector2(track.size.x*(progress-zone_start),track.size.y)),GREEN)
 	var accent := GREEN if grade == Timing.Grade.PERFECT else Color.WHITE
 	var heading := "BALL INCOMING"
-	if holding: heading = "HOLDING SPACE"
-	elif progress >= 1.0-Timing.GREEN_END/Timing.APPROACH_WINDOW: heading = "HOLD SPACE"
+	if holding: heading = "HOLDING Q"
+	elif progress >= 1.0-Timing.GREEN_END/Timing.APPROACH_WINDOW: heading = "HOLD Q"
 	match grade:
 		Timing.Grade.PERFECT: heading = "PERFECT PASS"
 		Timing.Grade.EARLY: heading = "TOO EARLY"

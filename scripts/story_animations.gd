@@ -170,7 +170,7 @@ func select_category(category: String) -> void:
 	animation_list.item_selected.connect(preview_animation)
 	content.add_child(animation_list)
 	if category == "Forearm reception":
-		drill_status = label("F1 to play  |  WASD to move\nHold Space just before contact",16)
+		drill_status = label("F1 to play  |  WASD to move\nHold Q just before contact",16)
 		drill_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		content.add_child(drill_status)
 	edit_button = button("Edit",open_editor)
@@ -300,7 +300,7 @@ func _process(delta: float) -> void:
 		if preview_clock < previous:
 			ball_preview.reset_practice_serve()
 			timing_meter.reset_serve()
-			if in_control: drill_status.text = "Next serve  |  Hold Space just before contact"
+			if in_control: drill_status.text = "Next serve  |  Hold Q just before contact"
 		elif in_control:
 			ball_preview.try_practice_pass(previous,preview_clock,player_controls.receive_hold)
 			var floor_time: float = ball_preview.contact_time+ball_preview.practice_floor_time
@@ -310,7 +310,7 @@ func _process(delta: float) -> void:
 		ball_preview.update_practice_cone(timing_meter.visible,player_controls.receive_hold)
 		if not in_control:
 			preview_player.animator.seek(0.0,true)
-			drill_status.text = "F1 to play  |  WASD to move\nHold Space just before contact"
+			drill_status.text = "F1 to play  |  WASD to move\nHold Q just before contact"
 	else:
 		timing_meter.hide()
 		if not in_control: preview_player.animator.seek(ball_preview.animation_time(preview_clock),true)
@@ -392,7 +392,7 @@ func _input(event: InputEvent) -> void:
 			if not (focus is LineEdit or focus is TextEdit) and not player_controls.active and angle_control.visible:
 				if angle_control.undo_placement(): get_viewport().set_input_as_handled()
 			return
-		if event.keycode in [KEY_Q,KEY_E]:
+		if event.keycode in [KEY_Q,KEY_E] and selected_category != "Forearm reception":
 			cycle_type(-1 if event.keycode == KEY_Q else 1)
 			get_viewport().set_input_as_handled()
 	if event is InputEventJoypadMotion and event.axis in [JOY_AXIS_TRIGGER_LEFT,JOY_AXIS_TRIGGER_RIGHT]:
