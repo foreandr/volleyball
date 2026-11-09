@@ -206,12 +206,12 @@ func play_receive_pose(delta: float, review_offset := Vector3.INF, pose_offset :
 	sprinting = false
 	moving = false
 	actor.model.rotation.y = 0.0
-	face_ball()
+	var ball = page.ball_preview
+	if ball.recovery.is_empty(): face_ball()
 	actor.animator.play("custom_preview/clip",0)
 	actor.animator.seek(maxf(0.0,page.ball_preview.contact_time+pose_offset),true)
 	actor.animator.pause()
 	step_into_receive(delta,review_offset)
-	var ball = page.ball_preview
 	if not rear_twist_target.is_finite():
 		var struck: bool = ball.recovery.has("spread")
 		var outgoing: Vector3 = ball.recovery.velocity if struck else ball.practice_pass_velocity(ball.practice_platform_center(),0.0)
@@ -366,7 +366,7 @@ func step_into_receive(delta: float, review_offset: Vector3) -> void:
 	actor.position.x = clampf(next.x,-4.0,4.0)
 	actor.position.z = clampf(next.z,-4.5,2.5)
 	reach_travel += actor.position-previous
-	if not rear_twist_target.is_finite(): face_ball()
+	if not rear_twist_target.is_finite() and ball.recovery.is_empty(): face_ball()
 	var local_step := actor.basis.inverse()*reach_step
 	var local_travel := actor.basis.inverse()*reach_travel
 	pose_receive_step(actor,local_step,local_travel,amount)
@@ -382,7 +382,7 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 	var side_lean := clampf(step.x/0.32,-1.0,1.0)
 	var shoulder_side := 1.0 if reach_lead == "l" else -1.0
 	author.rotate_world(pose,"spine_02",Vector3.BACK,-side_lean*0.27*weight)
-	var side_receive := not reach_back and absf(step.x)>0.10 and absf(step.x)>absf(step.z)*0.55
+	var side_receive := reach_side_lunge or (not reach_back and absf(step.x)>0.10 and absf(step.x)>absf(step.z)*0.55)
 	if side_receive:
 		# Open the shoulders toward the ball and lower the opposite shoulder.
 		var roll := 0.56 if reach_tier == 2 else 0.43
