@@ -484,7 +484,7 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 			var knee_over_foot := target+Vector3(shoulder_side*0.08,0.28,0.32)-hip
 			pole = pole.normalized().lerp(knee_over_foot.normalized(),weight)
 		elif reach_short_straight_back and side == "r":
-			pole = pole.normalized()+Vector3.LEFT*0.14*weight
+			pole = pole.normalized()+Vector3.LEFT*0.09*weight
 		elif reach_forward_lunge and reach_tier == 2 and side == "r":
 			pole = pole.normalized()+Vector3.LEFT*0.09*weight
 		author.limb(pose,"thigh_"+side,"calf_"+side,foot_name,target,pole)
