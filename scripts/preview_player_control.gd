@@ -11,6 +11,10 @@ var moving := false
 var receive_elapsed := 0.0
 var receive_queued := false
 var receive_camera_pan := Vector3.ZERO
+var receive_entry_pose: Array[Transform3D] = []
+var receive_entry_elapsed := 0.0
+var receive_exit_pose: Array[Transform3D] = []
+var receive_exit_elapsed := 0.0
 var reach_step := Vector3.ZERO
 var reach_progress := 0.0
 var reach_travel := Vector3.ZERO
@@ -86,6 +90,7 @@ func set_active(value: bool) -> void:
 	receive_elapsed = 0.0
 	receive_queued = false
 	receive_camera_pan = Vector3.ZERO
+	clear_receive_transition()
 	reset_reach()
 	side_steps.active = false
 	side_weight = 0
@@ -156,8 +161,15 @@ func step(delta: float) -> void:
 		if receive_elapsed > 0.44: ball.practice_early_attempt = true
 	receive_elapsed = 0.0
 	receive_camera_pan = Vector3.ZERO
+	end_receive_pose()
 	reset_reach()
 	move_player(direction,delta)
+	blend_receive_recovery(delta)
+
+func pan_frozen_camera(direction: Vector2, delta: float) -> void:
+	if direction.is_zero_approx(): return
+	receive_camera_pan = (receive_camera_pan+page.camera_pan_delta(direction,delta,3.5)).limit_length(4.0)
+	follow_camera()
 
 func movement_input() -> Vector2:
 	var direction := Vector2.ZERO
@@ -179,6 +191,10 @@ func queue_receive() -> bool:
 
 func play_receive_pose(delta: float, review_offset := Vector3.INF, pose_offset := 0.0) -> void:
 	var actor: Node3D = page.preview_player
+	if receive_entry_pose.is_empty():
+		receive_entry_pose = snapshot_receive_pose()
+		receive_entry_elapsed = 0.0
+		receive_exit_pose.clear()
 	side_steps.active = false
 	side_steps.hold = 0.0
 	side_weight = 0.0
@@ -196,6 +212,42 @@ func play_receive_pose(delta: float, review_offset := Vector3.INF, pose_offset :
 	var outgoing: Vector3 = ball.recovery.velocity if struck else ball.practice_pass_velocity(ball.practice_platform_center(),0.0)
 	var power := PassDrive.effort(ball.incoming,outgoing)
 	PassDrive.apply(actor.skeleton,footwork.author,outgoing,power,pose_offset,struck)
+	if receive_entry_elapsed < 0.10:
+		receive_entry_elapsed += delta
+		blend_pose_from(receive_entry_pose,smoothstep(0.0,0.10,receive_entry_elapsed))
+		if not reach_step.is_zero_approx() or reach_height != 0.0:
+			ball.update_practice_platform()
+
+func snapshot_receive_pose() -> Array[Transform3D]:
+	var rig: Skeleton3D = page.preview_player.skeleton
+	var result: Array[Transform3D] = []
+	for bone in rig.get_bone_count(): result.append(rig.get_bone_pose(bone))
+	return result
+
+func blend_pose_from(start: Array[Transform3D], weight: float) -> void:
+	var rig: Skeleton3D = page.preview_player.skeleton
+	for bone in rig.get_bone_count():
+		var current := rig.get_bone_pose(bone)
+		rig.set_bone_pose_position(bone,start[bone].origin.lerp(current.origin,weight))
+		rig.set_bone_pose_rotation(bone,start[bone].basis.get_rotation_quaternion().slerp(current.basis.get_rotation_quaternion(),weight))
+
+func end_receive_pose() -> void:
+	if receive_entry_pose.is_empty(): return
+	receive_entry_pose.clear()
+	receive_exit_pose = snapshot_receive_pose()
+	receive_exit_elapsed = 0.0
+
+func blend_receive_recovery(delta: float) -> void:
+	if receive_exit_pose.is_empty(): return
+	receive_exit_elapsed += delta
+	if receive_exit_elapsed >= 0.17:
+		receive_exit_pose.clear()
+		return
+	blend_pose_from(receive_exit_pose,smoothstep(0.0,0.17,receive_exit_elapsed))
+
+func clear_receive_transition() -> void:
+	receive_entry_pose.clear()
+	receive_exit_pose.clear()
 
 func reset_reach() -> void:
 	if reach_step.is_zero_approx() and reach_height == 0.0: return
@@ -262,7 +314,7 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 		var roll := 0.56 if reach_tier == 2 else 0.43
 		author.rotate_world(pose,"spine_03",Vector3.BACK,side_lean*roll*weight)
 		author.rotate_world(pose,"spine_02",Vector3.UP,side_lean*0.08*weight)
-		author.rotate_world(pose,"spine_03",Vector3.UP,side_lean*0.12*weight)
+		author.rotate_world(pose,"spine_03",Vector3.UP,side_lean*0.19*weight)
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,-back*0.14*weight)
 	author.rotate_world(pose,"spine_03",Vector3.UP,shoulder_side*back*0.31*weight)
 	var deep := reach_tier == 2 and reach_height < 0.20

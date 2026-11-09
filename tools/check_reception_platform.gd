@@ -17,12 +17,26 @@ func check() -> void:
 	var rig: Skeleton3D = page.preview_player.skeleton
 	for index in [8,10,14]:
 		review.load_case(index)
-		for frame in range(42): review.step(1.0/60)
+		for frame in range(26): review.step(1.0/60)
+		var ready_wrist := bone_position(rig,"hand_l")
+		review.step(1.0/60)
+		if ready_wrist.distance_to(bone_position(rig,"hand_l")) > 0.10:
+			push_error("Clip %d snapped into the receive." % (index+1))
+			quit(1)
+			return
+		for frame in range(15): review.step(1.0/60)
 		for frame in range(3):
 			review.step(1.0/60)
 			if not check_platform(rig,index):
 				quit(1)
 				return
+		for frame in range(13): review.step(1.0/60)
+		var contact_wrist := bone_position(rig,"hand_l")
+		review.step(1.0/60)
+		if contact_wrist.distance_to(bone_position(rig,"hand_l")) > 0.10:
+			push_error("Clip %d snapped out of the receive." % (index+1))
+			quit(1)
+			return
 	print("Lunge platform check passed for forward, left and right.")
 	quit()
 
@@ -39,7 +53,7 @@ func check_platform(rig: Skeleton3D, index: int) -> bool:
 	var right_angle := rad_to_deg((right_shoulder-right_elbow).angle_to(right_wrist-right_elbow))
 	var tilt := left_shoulder.y-right_shoulder.y
 	var correct_tilt := index == 8 or (tilt > 0.02 if index == 14 else tilt < -0.02)
-	if elbow_gap <= 0.15 and wrist_gap <= 0.075 and minf(left_angle,right_angle) >= 158.0 and correct_tilt:
+	if elbow_gap <= 0.18 and wrist_gap <= 0.075 and minf(left_angle,right_angle) >= 156.0 and correct_tilt:
 		return true
 	push_error("Clip %d: elbow gap %.3f m, wrist gap %.3f m, elbows %.1f / %.1f degrees, tilt %.3f m." %
 		[index+1,elbow_gap,wrist_gap,left_angle,right_angle,tilt])

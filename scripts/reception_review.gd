@@ -27,6 +27,8 @@ var paused := false
 var finished := false
 var loop_current := false
 var slow_motion := false
+var frozen := false
+var animator_before_freeze := true
 var index := 0
 var original_transform: Transform3D
 var original_control := false
@@ -42,6 +44,7 @@ var next_button: Button
 var stop_button: Button
 var loop_button: Button
 var slow_button: Button
+var freeze_button: Button
 var title_card: PanelContainer
 var title_count: Label
 var title_move: Label
@@ -65,6 +68,9 @@ func _init(host: Control) -> void:
 	slow_button.toggle_mode = true
 	slow_button.tooltip_text = "Play the reception at 35% speed"
 	add_child(slow_button)
+	freeze_button = page.button("Freeze pose",toggle_freeze)
+	freeze_button.toggle_mode = true
+	add_child(freeze_button)
 	stop_button = page.button("Stop",stop)
 	add_child(stop_button)
 	build_title_card()
@@ -117,11 +123,14 @@ func update_controls() -> void:
 	loop_button.text = "Looping clip" if loop_current else "Loop clip"
 	slow_button.set_pressed_no_signal(slow_motion)
 	slow_button.text = "Slow mo on" if slow_motion else "Slow mo"
+	freeze_button.set_pressed_no_signal(frozen)
+	freeze_button.text = "Resume pose" if frozen else "Freeze pose"
 	for button in [previous_button,next_button,loop_button,stop_button]: button.disabled = not active
 
 func toggle_play() -> void:
 	if not page.reception_drill_active(): return
 	if not active:
+		set_frozen(false)
 		original_transform = page.preview_player.transform
 		original_control = page.player_controls.active
 		page.player_controls.set_active(false)
@@ -133,6 +142,20 @@ func toggle_play() -> void:
 		load_case(0)
 	else:
 		paused = not paused
+	update_controls()
+
+func toggle_freeze() -> void:
+	if page.reception_drill_active(): set_frozen(not frozen)
+
+func set_frozen(value: bool) -> void:
+	if frozen == value: return
+	var animator: AnimationPlayer = page.preview_player.animator
+	if value:
+		animator_before_freeze = animator.active
+		animator.active = false
+	else:
+		animator.active = animator_before_freeze
+	frozen = value
 	update_controls()
 
 func toggle_slow_motion() -> void:
@@ -169,6 +192,7 @@ func load_case(next_index: int) -> void:
 	released = false
 	var actor: Node3D = page.preview_player
 	var ball = page.ball_preview
+	page.player_controls.clear_receive_transition()
 	page.player_controls.reset_reach()
 	page.timing_meter.reset_serve()
 	actor.transform = original_transform
@@ -213,8 +237,12 @@ func step(delta: float) -> void:
 			ball.try_practice_pass(previous,page.preview_clock,0.16)
 	elif elapsed >= 0.28 and not released:
 		released = true
+		page.player_controls.end_receive_pose()
 		page.player_controls.reset_reach()
-		page.preview_player.play_action("idle")
+		page.preview_player.animator.seek(0.0,true)
+	if released:
+		page.preview_player.animator.seek(0.0,true)
+		page.player_controls.blend_receive_recovery(delta)
 	var end: float = maxf(ball.cycle_end(),ball.contact_time+0.65)
 	ball.tick(minf(page.preview_clock,end),true)
 	ball.update_practice_aim(true)
@@ -229,12 +257,14 @@ func step(delta: float) -> void:
 		update_controls()
 
 func stop(restore_control := true) -> void:
+	set_frozen(false)
 	if not active: return
 	active = false
 	loop_current = false
 	title_card.hide()
 	paused = false
 	finished = false
+	page.player_controls.clear_receive_transition()
 	page.player_controls.reset_reach()
 	var actor: Node3D = page.preview_player
 	actor.transform = original_transform

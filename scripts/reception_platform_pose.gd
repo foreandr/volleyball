@@ -1,7 +1,7 @@
 extends RefCounted
 
 const HAND_GAP := 0.065
-const ELBOW_ANGLE := 160.0
+const ELBOW_ANGLE := 158.0
 
 static func connect_arms(pose: Array, author: RefCounted, desired: Vector3, weight: float) -> void:
 	if weight <= 0.001: return
@@ -10,8 +10,8 @@ static func connect_arms(pose: Array, author: RefCounted, desired: Vector3, weig
 	for side in ["l","r"]:
 		var arm: String = "upperarm_"+side
 		var shoulder: Vector3 = author.point(pose,arm)
-		var inward := -0.090 if side == "l" else 0.090
-		author.aim_joint(pose,"clavicle_"+side,arm,shoulder+Vector3(inward,0.0,0.09)*weight)
+		var inward := -0.045 if side == "l" else 0.045
+		author.aim_joint(pose,"clavicle_"+side,arm,shoulder+Vector3(inward,0.0,0.071)*weight)
 	var left: Vector3 = author.point(pose,"upperarm_l")
 	var right: Vector3 = author.point(pose,"upperarm_r")
 	var left_hand := Vector3.RIGHT*HAND_GAP*0.5
@@ -36,7 +36,7 @@ static func connect_arms(pose: Array, author: RefCounted, desired: Vector3, weig
 		var hand: String = "hand_"+side
 		var old_hand: Transform3D = author.world_pose(original,rig.find_bone(hand))
 		var target := grip+(left_hand if side == "l" else right_hand)
-		var pole := Vector3(-0.85 if side == "l" else 0.85,-0.15,0.44)
+		var pole := Vector3(-0.82 if side == "l" else 0.82,-0.18,0.45)
 		author.limb(pose,arm,elbow,hand,old_hand.origin.lerp(target,weight),pole,1.0,174.0)
 	# Carry the authored clasp through a shared rotation instead of twisting each hand.
 	var turn := Quaternion(platform_axis(original,author),platform_axis(pose,author))

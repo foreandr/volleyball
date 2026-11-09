@@ -251,6 +251,7 @@ func preview_animation(index: int) -> void:
 	ball_preview.practice_mode = selected_category == "Forearm reception"
 	reset_cpu_receive(false)
 	timing_meter.reset_serve()
+	player_controls.clear_receive_transition()
 	ball_preview.configure(preview_player,render_clip)
 	if is_instance_valid(reception_controls): reception_controls.show_result(render_clip)
 	preview_clock = minf(0,ball_preview.contact_time-ball_preview.feed_duration)
@@ -277,6 +278,7 @@ func apply_output_angle(value: float) -> void:
 	preview_player.animator.pause()
 	reset_cpu_receive(false)
 	timing_meter.reset_serve()
+	player_controls.clear_receive_transition()
 	ball_preview.configure(preview_player,render_clip)
 	if is_instance_valid(reception_controls): reception_controls.show_result(render_clip)
 	ball_preview.tick(preview_clock,false)
@@ -308,6 +310,11 @@ func reception_drill_active() -> bool:
 	return is_instance_valid(ball_preview) and ball_preview.active and ball_preview.practice_mode
 
 func _process(delta: float) -> void:
+	if reception_review.frozen:
+		var direction: Vector2 = player_controls.movement_input()
+		if player_controls.active: player_controls.pan_frozen_camera(direction,delta)
+		else: pan_camera(direction,delta)
+		return
 	if reception_review.active:
 		reception_review.step(delta)
 		return
@@ -330,6 +337,7 @@ func _process(delta: float) -> void:
 	if reception_drill_active():
 		if preview_clock < previous:
 			reset_cpu_receive(not in_control)
+			if not in_control: player_controls.clear_receive_transition()
 			ball_preview.reset_practice_serve()
 			player_controls.reset_reach()
 			timing_meter.reset_serve()
@@ -403,8 +411,10 @@ func step_cpu_receive(previous: float, delta: float) -> void:
 		if ball_preview.try_practice_pass(previous,preview_clock,0.16):
 			drill_status.text = "CPU pass  |  F1 to take control"
 	else:
+		player_controls.end_receive_pose()
 		player_controls.reset_reach()
 		preview_player.animator.seek(0.0,true)
+		player_controls.blend_receive_recovery(delta)
 
 func update_distance_status(in_control: bool) -> void:
 	var tier: int = player_controls.reach_tier if in_control else 1
@@ -565,7 +575,7 @@ func open_menu() -> void:
 	else: get_tree().change_scene_to_file("res://scenes/story.tscn")
 
 func _input(event: InputEvent) -> void:
-	if is_instance_valid(reception_review) and reception_review.active and event is InputEventKey and event.pressed and event.keycode in [KEY_F1,KEY_F2]:
+	if is_instance_valid(reception_review) and event is InputEventKey and event.pressed and not event.echo and event.keycode in [KEY_F1,KEY_F2]:
 		reception_review.stop(false)
 	super._input(event)
 	if event is InputEventKey and event.keycode in [KEY_F1,KEY_F2]: return
