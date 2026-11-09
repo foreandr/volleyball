@@ -279,9 +279,10 @@ func step_into_receive(delta: float, review_offset: Vector3) -> void:
 					offset = up_close
 		if offset.is_zero_approx(): return
 		var tier: int = ball.practice_reach_tier(offset)
+		var arrows = actor.get_node("DirectionArrows")
 		var directional_cpu: bool = not active and review_offset.is_finite() and not page.reception_review.active
 		if directional_cpu:
-			tier = actor.get_node("DirectionArrows").selected_distance
+			tier = arrows.selected_distance
 		if tier == 3: return
 		var local := actor.basis.inverse()*offset
 		if tier == 1 and absf(local.x)<0.12 and absf(local.z)<0.12: return
@@ -294,6 +295,9 @@ func step_into_receive(delta: float, review_offset: Vector3) -> void:
 		reach_height = offset.y if tier == 2 or directional_cpu else 0.0
 		reach_side_lunge = tier == 2 and absf(local.x) > absf(local.z)*1.4
 		reach_forward_lunge = local.z > absf(local.x)*1.4
+		if directional_cpu and tier == 2 and arrows.selected in [2,3,7,8]:
+			reach_side_lunge = true
+			reach_forward_lunge = false
 		var horizontal := Vector3(offset.x,0.0,offset.z)
 		var step_limit := 0.68 if reach_side_lunge else (0.75 if tier == 2 else 0.46)
 		var stride := 1.0 if reach_back and tier == 2 else 0.78
