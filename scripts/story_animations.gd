@@ -27,6 +27,7 @@ var source_clip: Animation
 var trajectory_solver: RefCounted
 var render_clip: Animation
 var preview_clock := 0.0
+var build_label := ""
 var cpu_receive_clock := -INF
 var cpu_start := Vector3.INF
 var middle_arrow := Vector2i(-1,1)
@@ -45,6 +46,9 @@ var body_recipe_text := FileAccess.get_file_as_string("res://assets/animation_re
 
 func _ready() -> void:
 	process_priority = 10
+	build_label = current_build_label()
+	if DisplayServer.get_name() != "headless":
+		DisplayServer.window_set_title("Volleyball | "+build_label)
 	super._ready()
 	timing_meter = preload("res://scripts/reception_timing_meter.gd").new()
 	var overlay := Control.new()
@@ -90,8 +94,19 @@ func build_ball_controls(host: VBoxContainer) -> void:
 	angle_control.angle_requested.connect(apply_output_angle)
 	angle_control.feed_aim_changed.connect(update_feed_aim)
 
+func current_build_label() -> String:
+	var version := "v"+str(ProjectSettings.get_setting("application/config/version","0.1.1"))
+	var root_path := ProjectSettings.globalize_path("res://")
+	var git_path := root_path.path_join(".git")
+	if OS.is_debug_build() and (DirAccess.dir_exists_absolute(git_path) or FileAccess.file_exists(git_path)):
+		var output := []
+		if OS.execute("git",["-C",root_path,"describe","--always","--dirty","--abbrev=8"],output) == 0 and not output.is_empty():
+			var revision := str(output[0]).strip_edges()
+			if not revision.is_empty(): return version+" | "+revision
+	return version
+
 func screen_title() -> String:
-	return "ANIMATIONS"
+	return "ANIMATIONS  |  "+build_label
 
 func initial_profile() -> Dictionary:
 	return StorySession.active.get("profile",Profile.load_profile()).duplicate(true)
@@ -114,7 +129,7 @@ func clear_content() -> void:
 
 func set_title(text: String) -> void:
 	var heading := find_child("ScreenTitle",true,false) as Label
-	if heading: heading.text = text
+	if heading: heading.text = text+"  |  "+build_label
 
 func show_categories() -> void:
 	if is_instance_valid(reception_review):
