@@ -18,6 +18,7 @@ var spin_rate_field: SpinBox
 var float_field: SpinBox
 var reach_picker: OptionButton
 var arrow_set_picker: OptionButton
+var allow_dive := false
 var source_pad: Control
 var height_field: SpinBox
 var back_field: SpinBox
@@ -93,8 +94,9 @@ func _ready() -> void:
 	arrow_set_picker = OptionButton.new()
 	arrow_set_picker.add_item("Distance 1 - Shift")
 	arrow_set_picker.add_item("Distance 2 - Lunge")
-	arrow_set_picker.select(clampi(StorySession.receive_distance_tier-1,0,1))
-	arrow_set_picker.tooltip_text = "Middle-click an inner or outer arrow on the court"
+	if allow_dive: arrow_set_picker.add_item("Distance 3 - Dive")
+	arrow_set_picker.select(clampi(StorySession.receive_distance_tier-1,0,arrow_set_picker.item_count-1))
+	arrow_set_picker.tooltip_text = "Middle-click an arrow on the court"
 	arrow_row.add_child(arrow_set_picker)
 	arrow_set_picker.item_selected.connect(func(_index): feed_aim_changed.emit())
 	build_host = destination_panel

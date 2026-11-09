@@ -229,7 +229,7 @@ func recalculate() -> void:
 		if practice_mode:
 			var direction: Vector3 = aim_point-actor.global_position
 			direction.y = 0.0
-			var reach := 0.42 if arrows.selected_distance == 1 else 0.85
+			var reach: float = [0.42,0.85,1.42][arrows.selected_distance-1]
 			aim_point = impact_point+direction.normalized()*reach
 			if float(actor.get_meta("feed_settings",{}).get("source_height",0.0)) >= 4.6:
 				aim_point.y += 0.36

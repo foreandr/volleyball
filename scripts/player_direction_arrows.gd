@@ -4,8 +4,15 @@ const LANDING_RADIUS := 0.90
 const SIDE_LANDING_RADIUS := 0.55
 const LONG_LANDING_RADIUS := 1.55
 const LONG_SIDE_RADIUS := 1.10
+const DIVE_RADIUS := 2.22
+const DIVE_SIDE_RADIUS := 1.72
 var selected := 0
 var selected_distance := 1
+var show_dive_ring := false:
+	set(value):
+		if value == show_dive_ring: return
+		show_dive_ring = value
+		rebuild()
 
 func _ready() -> void:
 	name = "DirectionArrows"
@@ -23,7 +30,7 @@ func pick(local_point: Vector3) -> Vector2i:
 	if point.length() <= 0.27: return Vector2i(0,selected_distance)
 	var closest := Vector2i(-1,1)
 	var best := 0.25
-	for distance in [1,2]:
+	for distance in range(1,4 if show_dive_ring else 3):
 		for index in range(1,9):
 			var center := arrow_center(index,distance)
 			var candidate := point.distance_to(Vector2(center.x,center.z))
@@ -39,6 +46,7 @@ func arrow_center(index: int, distance := 1) -> Vector3:
 	var side := index in [3,7]
 	var radius := SIDE_LANDING_RADIUS if side else LANDING_RADIUS
 	if distance == 2: radius = LONG_SIDE_RADIUS if side else LONG_LANDING_RADIUS
+	if distance == 3: radius = DIVE_SIDE_RADIUS if side else DIVE_RADIUS
 	return direction(index)*radius
 
 func direction(index: int) -> Vector3:
@@ -52,9 +60,9 @@ func rebuild() -> void:
 	material.cull_mode = BaseMaterial3D.CULL_DISABLED
 	material.vertex_color_use_as_albedo = true
 	surface.surface_begin(Mesh.PRIMITIVE_TRIANGLES,material)
-	for distance in [1,2]:
+	for distance in range(1,4 if show_dive_ring else 3):
 		for index in range(1,9):
-			var color := Color("67e8ff") if distance == 1 else Color("c291ff")
+			var color: Color = [Color("67e8ff"),Color("c291ff"),Color("ffca72")][distance-1]
 			if index == selected and distance == selected_distance: color = Color("ff4848")
 			surface.surface_set_color(color)
 			var forward := direction(index)

@@ -39,12 +39,6 @@ var drill_status: Label
 var distance_status: Label
 var timing_meter: Control
 var reception_review: HBoxContainer
-var reception_controls: VBoxContainer
-var replace_body_layer := false
-var recipe_poll := 0.0
-var recipe_signature := 0
-var recipe_revision := -1
-var body_recipe_text := FileAccess.get_file_as_string("res://assets/animation_recipes/reception_bodies.json")
 
 func _ready() -> void:
 	process_priority = 10
@@ -72,6 +66,7 @@ func _ready() -> void:
 		if MOVE_TYPES.has(destination.category):
 			type_indices[destination.category] = MOVE_TYPES[destination.category].find(destination.type)
 			select_category(destination.category)
+			if not is_instance_valid(animation_list): return
 			for index in animation_list.item_count:
 				if animation_list.get_item_metadata(index).id == destination.get("id",""):
 					animation_list.select(index)
@@ -92,6 +87,7 @@ func has_ball_controls() -> bool:
 
 func build_ball_controls(host: VBoxContainer) -> void:
 	angle_control = preload("res://scripts/pass_angle_control.gd").new()
+	angle_control.allow_dive = true
 	host.add_child(angle_control)
 	angle_control.angle_requested.connect(apply_output_angle)
 	angle_control.feed_aim_changed.connect(update_feed_aim)
@@ -121,7 +117,6 @@ func clear_content() -> void:
 	for child in content.get_children():
 		content.remove_child(child)
 		child.queue_free()
-	reception_controls = null
 	drill_status = null
 	distance_status = null
 	animation_list = null
@@ -141,6 +136,7 @@ func show_categories() -> void:
 	if is_instance_valid(ball_preview): ball_preview.stop()
 	if is_instance_valid(preview_player): preview_player.play_action("idle")
 	selected_category = ""
+	if is_instance_valid(preview_player): preview_player.get_node("DirectionArrows").show_dive_ring = false
 	clear_content()
 	set_title("ANIMATIONS")
 	category_buttons.clear()
@@ -158,6 +154,7 @@ func select_category(category: String) -> void:
 	reception_review.stop(false)
 	reception_review.visible = category == "Forearm reception"
 	selected_category = category
+	preview_player.get_node("DirectionArrows").show_dive_ring = category == "Forearm reception"
 	clear_content()
 	set_title(category.to_upper())
 	var row := HBoxContainer.new()
@@ -181,35 +178,36 @@ func select_category(category: String) -> void:
 	next.custom_minimum_size = Vector2(52,44)
 	next.size_flags_horizontal = Control.SIZE_SHRINK_END
 	row.add_child(next)
-	if category=="Forearm reception":
-		reception_controls = preload("res://scripts/reception_controls.gd").new()
-		content.add_child(reception_controls)
-		reception_controls.changed.connect(func(part):
-			if part=="body": replace_body_layer = true
-			apply_output_angle(angle_control.requested))
-		content.add_child(label("Forearms / platform",18))
 	if category == "Forearm reception":
-		var platforms := OptionButton.new()
-		platforms.name = "PlatformPicker"
-		platforms.custom_minimum_size.y = 38
-		animation_list = platforms
-	else:
-		var list := ItemList.new()
-		list.name = "AnimationList"
-		list.allow_reselect = true
-		list.item_activated.connect(open_editor)
-		list.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		animation_list = list
+		drill_status = label("F1 to play  |  WASD to move
+Mouse to aim  |  Tap Q to receive
+Scroll to set pass height",16)
+		drill_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		content.add_child(drill_status)
+		var arrow_hint := label("Middle-click a court arrow to aim the feed",16)
+		arrow_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		content.add_child(arrow_hint)
+		var arrow_labels := ["Distance 1  |  Short reach","Distance 2  |  Lunge","Distance 3  |  Dive target"]
+		var arrow_colors := [Color("67e8ff"),Color("c291ff"),Color("ffca72")]
+		for index in arrow_labels.size():
+			var legend := label(arrow_labels[index],16)
+			legend.add_theme_color_override("font_color",arrow_colors[index])
+			content.add_child(legend)
+		distance_status = label("",16)
+		distance_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		content.add_child(distance_status)
+		refresh_type()
+		preview.grab_focus()
+		return
+	var list := ItemList.new()
+	list.name = "AnimationList"
+	list.allow_reselect = true
+	list.item_activated.connect(open_editor)
+	list.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	animation_list = list
 	animation_list.add_theme_font_size_override("font_size",18)
 	animation_list.item_selected.connect(preview_animation)
 	content.add_child(animation_list)
-	if category == "Forearm reception":
-		drill_status = label("F1 to play  |  WASD to move\nMouse to aim  |  Tap Q to receive\nMiddle-click an arrow for the feed\nScroll to set pass height",16)
-		drill_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		content.add_child(drill_status)
-		distance_status = label("Distance 1  |  Short reach\nDistance 2  |  Lunge or high reach\nDistance 3  |  Dive planned",16)
-		distance_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		content.add_child(distance_status)
 	edit_button = button("Edit",open_editor)
 	edit_button.name = "EditAnimation"
 	content.add_child(edit_button)
@@ -224,40 +222,42 @@ func refresh_type() -> void:
 	right_panel.hide()
 	angle_control.hide()
 	type_label.text = current_type()
-	animation_list.clear()
 	selected_entry.clear()
+	if selected_category == "Forearm reception":
+		for entry in Catalog.entries(selected_category,current_type()):
+			if entry.id == "straight_pass_02":
+				preview_entry(entry)
+				return
+		if is_instance_valid(ball_preview): ball_preview.stop()
+		return
+	animation_list.clear()
 	if is_instance_valid(edit_button): edit_button.disabled = true
 	for entry in Catalog.entries(selected_category,current_type()):
 		var index: int = animation_list.item_count
 		animation_list.add_item(entry.name)
 		animation_list.set_item_metadata(index,entry)
 	if animation_list.item_count > 0:
-		var initial := 0
-		if selected_category == "Forearm reception":
-			for index in animation_list.item_count:
-				if animation_list.get_item_metadata(index).id == "straight_pass_02":
-					initial = index
-					break
-		animation_list.select(initial)
-		preview_animation(initial)
+		animation_list.select(0)
+		preview_animation(0)
 	elif is_instance_valid(preview_player):
 		preview_player.play_action("idle")
 		if is_instance_valid(ball_preview): ball_preview.stop()
 
 func preview_animation(index: int) -> void:
+	if is_instance_valid(animation_list):
+		preview_entry(animation_list.get_item_metadata(index))
+
+func preview_entry(entry: Dictionary) -> void:
 	reception_review.stop(false)
 	if not is_instance_valid(preview_player): return
-	replace_body_layer = false
-	var entry: Dictionary = animation_list.get_item_metadata(index)
 	selected_entry = entry.duplicate(true)
 	if is_instance_valid(edit_button): edit_button.disabled = false
 	set_cpu_arrows_pinned(false)
 	angle_control.apply_setup(preview_player,selected_category == "Forearm reception")
-	if is_instance_valid(reception_controls): reception_controls.apply(preview_player)
+	if selected_category == "Forearm reception":
+		preview_player.set_meta("reception_options",{"body":"Balanced","hands":"From platform","replace_body":false})
 	source_clip = Catalog.load_clip(entry,preview_player)
 	if source_clip==null: return
-	recipe_signature = Catalog.Recipes.signature(str(entry.get("recipe","")))
-	recipe_revision = Catalog.Recipes.revision
 	trajectory_solver = preload("res://scripts/pass_trajectory_solver.gd").new(preview_player,source_clip)
 	render_clip = source_clip
 	if source_clip.has_meta("contact_time"):
@@ -271,7 +271,6 @@ func preview_animation(index: int) -> void:
 	timing_meter.reset_serve()
 	player_controls.clear_receive_transition()
 	ball_preview.configure(preview_player,render_clip)
-	if is_instance_valid(reception_controls): reception_controls.show_result(render_clip)
 	preview_clock = minf(0,ball_preview.contact_time-ball_preview.feed_duration)
 	preview_player.animator.play("custom_preview/clip",0)
 	preview_player.animator.advance(0)
@@ -285,7 +284,6 @@ func apply_output_angle(value: float) -> void:
 	if source_clip == null or not source_clip.has_meta("contact_time"): return
 	set_cpu_arrows_pinned(false)
 	angle_control.apply_setup(preview_player,selected_category == "Forearm reception")
-	if is_instance_valid(reception_controls): reception_controls.apply(preview_player,replace_body_layer)
 	StorySession.pass_output_angle = value
 	var result: Dictionary = trajectory_solver.solve(value,StorySession.pass_distance)
 	var last_contact_clock: float = ball_preview.last_time
@@ -299,7 +297,6 @@ func apply_output_angle(value: float) -> void:
 	timing_meter.reset_serve()
 	player_controls.clear_receive_transition()
 	ball_preview.configure(preview_player,render_clip)
-	if is_instance_valid(reception_controls): reception_controls.show_result(render_clip)
 	ball_preview.tick(preview_clock,false)
 	ball_preview.last_time = last_contact_clock
 	angle_control.pending = false
@@ -345,11 +342,6 @@ func _process(delta: float) -> void:
 	if reception_drill_active(): delta = reception_review.playback_delta(delta)
 	super._process(delta)
 	var in_control: bool = player_controls!=null and player_controls.active
-	if not in_control:
-		recipe_poll += delta
-		if recipe_poll>=0.4:
-			recipe_poll = 0
-			refresh_recipes()
 	if not is_instance_valid(ball_preview) or not ball_preview.active:
 		timing_meter.hide()
 		return
@@ -418,6 +410,7 @@ func reset_cpu_receive(restore_position: bool) -> void:
 
 func step_cpu_receive(previous: float, delta: float) -> void:
 	var arrows = preview_player.get_node("DirectionArrows")
+	if arrows.selected != 0 and arrows.selected_distance == 3: return
 	var short_back: bool = arrows.selected_distance == 1 and arrows.selected == 5
 	if not is_finite(cpu_receive_clock):
 		if arrows.selected != 0:
@@ -471,47 +464,16 @@ func step_cpu_receive(previous: float, delta: float) -> void:
 
 func update_distance_status(in_control: bool) -> void:
 	var tier: int = player_controls.reach_tier if in_control else 1
+	var arrows = preview_player.get_node("DirectionArrows")
+	if not player_controls.active and arrows.selected != 0:
+		tier = arrows.selected_distance
 	var high: bool = player_controls.reach_height >= 0.20
 	if in_control and tier == 1 and ball_preview.practice_grade == BallPreview.Grade.WAITING:
 		var offset: Vector3 = ball_preview.practice_step_offset(preview_clock)
 		tier = ball_preview.practice_reach_tier(offset)
 		high = offset.y >= 0.20
-	var names := ["Short reach","High shoulder reach" if high else "Low lunge","Dive planned"]
+	var names := ["Short reach","High shoulder reach" if high else "Low lunge","Dive target (animation pending)"]
 	distance_status.text = "Distance %d  |  %s" % [tier,names[tier-1]]
-	if tier != 3: distance_status.text += "\nDistance 3  |  Dive planned"
-
-func refresh_recipes() -> void:
-	if selected_category!="Forearm reception" or selected_entry.is_empty(): return
-	Catalog.Recipes.refresh()
-	var body_path := "res://assets/animation_recipes/reception_bodies.json"
-	var text := FileAccess.get_file_as_string(body_path)
-	var body_changed := false
-	if text!=body_recipe_text:
-		var parser := JSON.new()
-		if parser.parse(text)==OK and parser.data is Dictionary:
-			preload("res://scripts/reception_layers.gd").BODIES = parser.data
-			body_recipe_text = text
-			body_changed = true
-	var id: String = selected_entry.id
-	if recipe_revision!=Catalog.Recipes.revision:
-		recipe_revision = Catalog.Recipes.revision
-		animation_list.clear()
-		for entry in Catalog.entries(selected_category,current_type()):
-			var index: int = animation_list.item_count
-			animation_list.add_item(entry.name)
-			animation_list.set_item_metadata(index,entry)
-			if entry.id==id:
-				animation_list.select(index)
-				selected_entry = entry.duplicate(true)
-	var signature := Catalog.Recipes.signature(str(selected_entry.get("recipe","")))
-	if signature==recipe_signature and not body_changed: return
-	var replacement := Catalog.load_clip(selected_entry,preview_player)
-	if replacement==null: return
-	source_clip = replacement
-	recipe_signature = signature
-	preload("res://scripts/pass_trajectory_solver.gd").cache.clear()
-	trajectory_solver = preload("res://scripts/pass_trajectory_solver.gd").new(preview_player,source_clip)
-	apply_output_angle(angle_control.requested)
 
 func aim_pass_at_mouse(screen_point: Vector2) -> void:
 	var point: Vector2 = setup_drag.screen_position(screen_point)
@@ -607,6 +569,7 @@ func handle_preview_input(event: InputEvent) -> void:
 	super.handle_preview_input(event)
 
 func open_editor(index := -1) -> void:
+	if selected_category == "Forearm reception": return
 	reception_review.stop(false)
 	if index >= 0: preview_animation(index)
 	if selected_entry.is_empty(): return
