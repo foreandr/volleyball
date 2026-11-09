@@ -221,7 +221,7 @@ func play_receive_pose(delta: float, review_offset := Vector3.INF, pose_offset :
 		if struck: incoming += ball.feed_info.acceleration*float(ball.recovery.time)
 		var power := PassDrive.effort(incoming,outgoing)
 		PassDrive.apply(actor.skeleton,footwork.author,outgoing,power,pose_offset,struck,incoming)
-	if receive_entry_elapsed < 0.10:
+	if not rear_overhead and receive_entry_elapsed < 0.10:
 		receive_entry_elapsed += delta
 		blend_pose_from(receive_entry_pose,smoothstep(0.0,0.10,receive_entry_elapsed))
 		if not reach_step.is_zero_approx() or reach_height != 0.0:
@@ -411,6 +411,7 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 	author.rotate_world(pose,"spine_03",Vector3.UP,shoulder_side*back*(0.18 if reach_tier == 2 else 0.31)*weight)
 	var deep := reach_tier == 2 and reach_height < 0.20
 	var high := reach_height >= 0.20
+	var short_lunge := reach_tier == 1 and not high and (side_receive or reach_back)
 	var pelvis := rig.find_bone("pelvis")
 	var hips: Transform3D = pose[pelvis]
 	var twisting := rear_twist_target.is_finite()
@@ -451,10 +452,10 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 			var hip_height := sqrt(maxf(0.0,extension*extension-horizontal*horizontal))
 			drop = clampf(planted_offset.y-hip_height,-0.13*weight,0.43*weight)
 		pose[pelvis].origin -= author.world_pose(pose,parent).basis.inverse()*Vector3.UP*drop
-	if reach_forward_lunge and reach_tier == 1 and not high:
+	if (reach_forward_lunge and reach_tier == 1 and not high) or short_lunge:
 		var parent := rig.get_bone_parent(pelvis)
-		pose[pelvis].origin -= author.world_pose(pose,parent).basis.inverse()*Vector3.UP*0.11*weight
-		author.rotate_world(pose,"spine_02",Vector3.RIGHT,0.12*weight)
+		pose[pelvis].origin -= author.world_pose(pose,parent).basis.inverse()*Vector3.UP*(0.075 if short_lunge else 0.11)*weight
+		author.rotate_world(pose,"spine_02",Vector3.RIGHT,(0.04 if short_lunge else 0.12)*weight)
 	var leg_pose := pose.duplicate()
 	leg_pose[pelvis] = hips
 	for side in ["l","r"]:
@@ -464,11 +465,13 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 		if side == reach_lead:
 			var extension := 0.98 if reach_side_lunge or reach_forward_lunge else (1.18 if deep else 1.32)
 			if reach_back and reach_tier == 2: extension = 0.84
+			if short_lunge: extension = 1.08
 			target += step/scale_*weight*extension+Vector3.UP*sin(PI*reach_progress)*0.08
 			if reach_side_lunge: target.z += 0.28*weight
+			if short_lunge and side_receive: target.z += 0.09*weight
 			if reach_forward_lunge: target.z += (0.12 if reach_tier == 2 else 0.07)*weight
 		var pole: Vector3 = author.point(leg_pose,"calf_"+side)-author.point(leg_pose,"thigh_"+side)
-		if reach_side_lunge and side == reach_lead:
+		if (reach_side_lunge or short_lunge) and side == reach_lead:
 			# Load the knee over the lead foot as the other leg extends.
 			var hip: Vector3 = author.point(pose,"thigh_"+side)
 			var knee_over_foot := target+Vector3(shoulder_side*0.08,0.28,0.32)-hip
@@ -480,7 +483,7 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 		var cpu_direction: int = actor.get_node("DirectionArrows").selected if not active and not page.reception_review.active else 0
 		if reach_back: extension = 0.10 if reach_tier == 1 and cpu_direction == 6 else 0.22
 		var arms := Vector3(step.x,0.0,step.z).normalized()*extension*weight
-		if reach_forward_lunge: arms.y = 0.07*weight
+		if reach_forward_lunge or short_lunge: arms.y = 0.07*weight
 		if reach_side_lunge and cpu_direction == 3:
 			arms += Vector3(0.0,0.17,0.14)*weight
 		var center: Vector3 = (author.point(pose,"hand_l")+author.point(pose,"hand_r"))*0.5
@@ -511,7 +514,7 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 
 func pose_overhead_rear(actor: Node3D, pose: Array, author: RefCounted) -> void:
 	var rig: Skeleton3D = actor.skeleton
-	var turn := rear_twist_side*deg_to_rad(80.0)*smoothstep(0.0,0.55,reach_progress)
+	var turn := rear_twist_side*deg_to_rad(80.0)*smoothstep(0.20,0.61,reach_progress)
 	author.rotate_world(pose,"spine_01",Vector3.UP,turn*0.24)
 	author.rotate_world(pose,"spine_02",Vector3.UP,turn*0.34)
 	author.rotate_world(pose,"spine_03",Vector3.UP,turn*0.42)
@@ -521,9 +524,10 @@ func pose_overhead_rear(actor: Node3D, pose: Array, author: RefCounted) -> void:
 	var contact := rig.global_transform.affine_inverse()*rear_twist_target
 	var toward := (contact-shoulder_center).slide(Vector3.UP).limit_length(0.22)
 	var grip := shoulder_center+toward+forward*0.24
-	grip.y = head.y+0.70
-	var lift := smoothstep(0.48,0.96,reach_progress)
-	PlatformPose.connect_arms(pose,author,grip,lift,0.0,forward)
+	var lift := smoothstep(0.59,0.97,reach_progress)
+	grip.y = lerpf(shoulder_center.y-0.22,head.y+0.70,lift)
+	var join := smoothstep(0.0,0.20,reach_progress)
+	PlatformPose.connect_arms(pose,author,grip,join,0.0,forward)
 	for bone in rig.get_bone_count():
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
 

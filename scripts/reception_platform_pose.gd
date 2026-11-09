@@ -14,7 +14,7 @@ static func connect_arms(pose: Array, author: RefCounted, desired: Vector3, weig
 			author.aim_joint(pose,"clavicle_"+side,arm,shoulder+Vector3.BACK*shoulder_advance*weight)
 	var left: Vector3 = author.point(pose,"upperarm_l")
 	var right: Vector3 = author.point(pose,"upperarm_r")
-	var left_hand := Vector3.RIGHT*HAND_GAP*0.5
+	var left_hand := Vector3.UP.cross(forward)*HAND_GAP*0.5
 	var right_hand := -left_hand
 	# Solve one wrist center that both arms can reach at the same extension.
 	var a := left-left_hand
