@@ -127,14 +127,7 @@ func step(delta: float) -> void:
 	if not active:
 		stamina = minf(100,stamina+17*delta)
 		return
-	var direction := Vector2.ZERO
-	var focus := page.get_viewport().gui_get_focus_owner()
-	if not (focus is LineEdit or focus is TextEdit):
-		direction = Vector2(float(Input.is_physical_key_pressed(KEY_D))-float(Input.is_physical_key_pressed(KEY_A)),float(Input.is_physical_key_pressed(KEY_W))-float(Input.is_physical_key_pressed(KEY_S)))
-		var pads := Input.get_connected_joypads()
-		if not pads.is_empty():
-			var stick := Vector2(Input.get_joy_axis(pads[0],JOY_AXIS_LEFT_X),-Input.get_joy_axis(pads[0],JOY_AXIS_LEFT_Y))
-			if stick.length()>0.15: direction += stick*((stick.length()-0.15)/0.85)/stick.length()
+	var direction := movement_input()
 	sprint_requested = Input.is_physical_key_pressed(KEY_SHIFT)
 	var connected := Input.get_connected_joypads()
 	if not connected.is_empty(): sprint_requested = sprint_requested or Input.is_joy_button_pressed(connected[0],JOY_BUTTON_RIGHT_SHOULDER)
@@ -151,12 +144,35 @@ func step(delta: float) -> void:
 			after_touch = maxf(0.0,page.preview_clock-ball.contact_time-float(ball.recovery.time))
 		if receive_elapsed <= 0.44 and after_touch < 0.18:
 			var windup := 0.14*(1.0-smoothstep(0.0,0.085,receive_elapsed))
+			move_during_receive(direction,delta)
 			play_receive_pose(delta,Vector3.INF,-windup+after_touch*1.4)
 			return
 		if receive_elapsed > 0.44: ball.practice_early_attempt = true
 	receive_elapsed = 0.0
 	reset_reach()
-	move_player(direction.limit_length(),delta)
+	move_player(direction,delta)
+
+func movement_input() -> Vector2:
+	var direction := Vector2.ZERO
+	var focus := page.get_viewport().gui_get_focus_owner()
+	if not (focus is LineEdit or focus is TextEdit):
+		direction = Vector2(float(Input.is_physical_key_pressed(KEY_D))-float(Input.is_physical_key_pressed(KEY_A)),float(Input.is_physical_key_pressed(KEY_W))-float(Input.is_physical_key_pressed(KEY_S)))
+		var pads := Input.get_connected_joypads()
+		if not pads.is_empty():
+			var stick := Vector2(Input.get_joy_axis(pads[0],JOY_AXIS_LEFT_X),-Input.get_joy_axis(pads[0],JOY_AXIS_LEFT_Y))
+			if stick.length()>0.15: direction += stick*((stick.length()-0.15)/0.85)/stick.length()
+	return direction.limit_length()
+
+func move_during_receive(direction: Vector2, delta: float) -> void:
+	if direction.is_zero_approx(): return
+	var actor: Node3D = page.preview_player
+	var forward := Vector3(0,0,4)-actor.position
+	forward.y = 0.0
+	forward = forward.normalized()
+	var travel := (forward.cross(Vector3.UP)*direction.x+forward*direction.y)*1.65*delta
+	actor.position.x = clampf(actor.position.x+travel.x,-4.0,4.0)
+	actor.position.z = clampf(actor.position.z+travel.z,-4.5,2.5)
+	if active: follow_camera()
 
 func queue_receive() -> bool:
 	if not active or not reception_drill_active(): return false

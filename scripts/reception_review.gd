@@ -27,6 +27,9 @@ var finished := false
 var index := 0
 var original_transform: Transform3D
 var original_control := false
+var original_feed: Dictionary
+var original_target: Dictionary
+var review_clip: Animation
 var offset := Vector3.ZERO
 var released := false
 var counter: Label
@@ -34,6 +37,9 @@ var play_button: Button
 var previous_button: Button
 var next_button: Button
 var stop_button: Button
+var title_card: PanelContainer
+var title_count: Label
+var title_move: Label
 
 func _init(host: Control) -> void:
 	page = host
@@ -49,8 +55,47 @@ func _init(host: Control) -> void:
 	add_child(next_button)
 	stop_button = page.button("Stop",stop)
 	add_child(stop_button)
+	build_title_card()
 	update_controls()
 	hide()
+
+func build_title_card() -> void:
+	title_card = PanelContainer.new()
+	title_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	page.timing_meter.get_parent().add_child(title_card)
+	title_card.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+	title_card.offset_left = -142
+	title_card.offset_right = 142
+	title_card.offset_top = 34
+	title_card.offset_bottom = 116
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.055,0.10,0.16,0.90)
+	panel_style.border_color = Color("526a83")
+	panel_style.set_border_width_all(1)
+	panel_style.set_corner_radius_all(10)
+	panel_style.content_margin_top = 8
+	panel_style.content_margin_bottom = 10
+	title_card.add_theme_stylebox_override("panel",panel_style)
+	var text := VBoxContainer.new()
+	text.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	text.add_theme_constant_override("separation",0)
+	title_card.add_child(text)
+	title_count = page.label("",31)
+	title_count.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title_count.add_theme_color_override("font_color",Color("ffce70"))
+	title_count.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	text.add_child(title_count)
+	title_move = page.label("",16)
+	title_move.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title_move.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	text.add_child(title_move)
+	title_card.hide()
+
+func update_title_card(elapsed: float) -> void:
+	var time := elapsed+FEED_TIME
+	var opacity := smoothstep(0.0,0.22,time)*(1.0-smoothstep(0.94,1.42,time))
+	title_card.modulate.a = opacity
+	title_card.visible = opacity > 0.0
 
 func update_controls() -> void:
 	var progress := "%d/%d  |  Distance %d  |  %s" % [index+1,CASES.size(),CASES[index][0],CASES[index][1]] if active else "Forearm Reception Animations  |  %d available" % CASES.size()
@@ -64,6 +109,7 @@ func toggle_play() -> void:
 		original_transform = page.preview_player.transform
 		original_control = page.player_controls.active
 		page.player_controls.set_active(false)
+		prepare_review_clip()
 		active = true
 		load_case(0)
 	elif finished:
@@ -72,6 +118,19 @@ func toggle_play() -> void:
 	else:
 		paused = not paused
 	update_controls()
+
+func prepare_review_clip() -> void:
+	var actor: Node3D = page.preview_player
+	original_feed = actor.get_meta("feed_settings",{})
+	original_target = actor.get_meta("pass_target",{})
+	actor.position = Vector3(0,0.04,-3.4)
+	actor.rotation.y = 0.0
+	actor.set_meta("feed_settings",{"speed":18.6,"source":Vector2(0,14.2),"source_height":3.3,"fit":"angle","spin":"No spin"})
+	actor.set_meta("pass_target",{"position":Vector2(0,1.6),"height":4.9,"fit":"height"})
+	var solver = preload("res://scripts/pass_trajectory_solver.gd").new(actor,page.source_clip)
+	review_clip = solver.solve(75.0,5.0).clip
+	actor.install_custom(review_clip,"preview",false)
+	page.ball_preview.configure(actor,review_clip)
 
 func load_case(next_index: int) -> void:
 	index = next_index
@@ -82,10 +141,8 @@ func load_case(next_index: int) -> void:
 	page.player_controls.reset_reach()
 	page.timing_meter.reset_serve()
 	actor.transform = original_transform
-	actor.position.x = clampf(actor.position.x,-2.5,2.5)
-	actor.position.z = minf(actor.position.z,-2.0)
-	var court_forward := Vector3(0,0,4)-actor.position
-	actor.rotation.y = atan2(court_forward.x,court_forward.z)
+	actor.position = Vector3(0,0.04,-3.4)
+	actor.rotation.y = 0.0
 	actor.get_node("DirectionArrows").select_direction(0)
 	actor.animator.play("custom_preview/clip",0)
 	actor.animator.seek(0.0,true)
@@ -99,6 +156,9 @@ func load_case(next_index: int) -> void:
 		"start":aim-velocity*FEED_TIME+acceleration*0.5*FEED_TIME*FEED_TIME,"side":Vector3.RIGHT,"valid":true}
 	ball.recalculate()
 	page.preview_clock = ball.contact_time-FEED_TIME
+	title_count.text = "%d / %d" % [index+1,CASES.size()]
+	title_move.text = "Distance %d  |  %s" % [CASES[index][0],CASES[index][1]]
+	update_title_card(-FEED_TIME)
 	page.drill_status.text = "CPU review  |  Automatic receive"
 	page.distance_status.text = "Distance %d  |  %s
 Distance 3  |  Dive planned" % [CASES[index][0],CASES[index][1]]
@@ -111,6 +171,8 @@ func step(delta: float) -> void:
 	var previous: float = page.preview_clock
 	page.preview_clock += delta
 	var elapsed: float = page.preview_clock-ball.contact_time
+	update_title_card(elapsed)
+	page.player_controls.move_during_receive(page.player_controls.movement_input(),delta)
 	if elapsed >= -0.25 and elapsed < 0.28:
 		var pose_offset := minf(0.0,elapsed+0.15)*1.4+maxf(0.0,elapsed)*1.4
 		page.player_controls.play_receive_pose(delta,offset,pose_offset)
@@ -133,13 +195,20 @@ func step(delta: float) -> void:
 func stop(restore_control := true) -> void:
 	if not active: return
 	active = false
+	title_card.hide()
 	paused = false
 	finished = false
 	page.player_controls.reset_reach()
-	page.preview_player.transform = original_transform
+	var actor: Node3D = page.preview_player
+	actor.transform = original_transform
+	actor.set_meta("feed_settings",original_feed)
+	actor.set_meta("pass_target",original_target)
+	actor.install_custom(page.render_clip,"preview",false)
+	actor.animator.seek(0.0,true)
+	actor.animator.pause()
 	page.ball_preview.review_feed.clear()
-	page.angle_control.apply_feed_aim(page.preview_player)
-	page.ball_preview.recalculate()
+	page.angle_control.apply_feed_aim(actor)
+	page.ball_preview.configure(actor,page.render_clip)
 	page.preview_clock = minf(0.0,page.ball_preview.contact_time-page.ball_preview.feed_duration)
 	page.ball_preview.tick(page.preview_clock,false)
 	if restore_control and original_control: page.player_controls.set_active(true)
