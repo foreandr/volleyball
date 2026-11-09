@@ -407,7 +407,7 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 			var intercept: Dictionary = page.ball_preview.practice_shoulder_intercept()
 			if not intercept.is_empty():
 				var ball_point: Vector3 = rig.global_transform.affine_inverse()*intercept.point
-				var wrist_target := ball_point+Vector3(0.0,-0.13,0.13)
+				var wrist_target := ball_point+Vector3(0.0,-0.25,0.21)
 				arms = arms.lerp(wrist_target-center,weight*0.85)
 		elif not reach_back:
 			arms.x -= side_lean*0.05*weight

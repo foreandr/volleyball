@@ -426,8 +426,10 @@ func step_cpu_receive(previous: float, delta: float) -> void:
 			travel.y = 0.0
 			if high_feed:
 				var lateral: Vector3 = preview_player.global_basis.x.normalized()
-				var side_sign := -1.0 if arrows.selected in [2,3,4] else 1.0
-				travel += preview_player.global_basis.z.normalized()*0.10-lateral*side_sign*0.22
+				var side_sign := 1.0 if arrows.selected in [2,3,4] else -1.0
+				var incoming: Vector3 = ball_preview.incoming
+				incoming.y = 0.0
+				travel += incoming.normalized()*0.32-lateral*side_sign*0.35
 			elif arrows.selected != 0 and (arrows.selected_distance == 2 or side_feed):
 				var start: Vector3 = cpu_start if cpu_start.is_finite() else preview_player.position
 				var arrow_heading: Vector3 = ball_preview.aim_point-start
@@ -463,7 +465,7 @@ func step_cpu_receive(previous: float, delta: float) -> void:
 	var after_touch := 0.0
 	if ball_preview.recovery.has("spread"):
 		after_touch = maxf(0.0,preview_clock-ball_preview.contact_time-float(ball_preview.recovery.time))
-	if elapsed <= 0.44 and after_touch < 0.18:
+	if elapsed <= 0.44 and after_touch < 0.18 and not ball_preview.recovery.has("body_touch"):
 		var windup := 0.14*(1.0-smoothstep(0.0,0.085,elapsed))
 		player_controls.play_receive_pose(delta,cpu_high_offset,-windup+after_touch*1.4)
 		if ball_preview.try_practice_pass(previous,preview_clock,0.16):
