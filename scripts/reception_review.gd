@@ -53,8 +53,6 @@ var offset := Vector3.ZERO
 var released := false
 var dive_ready: Array[Transform3D] = []
 var dive_clasp: Array[Transform3D] = []
-var dive_kick_offset := 0.0
-var dive_lower_duration := 0.18
 var counter: Label
 var play_button: Button
 var previous_button: Button
@@ -235,8 +233,6 @@ func load_case(next_index: int) -> void:
 	dive_ready.clear()
 	if CASES[index][0] >= 3 and not is_knee_slide():
 		aim.y = Flight.FLOOR+0.045 if CASES[index][0] == 4 else 0.46
-		dive_kick_offset = page.dive_kick_offset()
-		dive_lower_duration = page.dive_lower_duration()
 		dive_ready = page.player_controls.snapshot_receive_pose()
 		actor.animator.seek(ball.contact_time,true)
 		dive_clasp = page.player_controls.snapshot_receive_pose()
@@ -281,7 +277,7 @@ func step(delta: float) -> void:
 		if dive_time >= 0.0 and not released:
 			var heading: Vector3 = (ball.aim_point-READY_POSITION).slide(Vector3.UP).normalized()
 			var pancake: bool = CASES[index][0] == 4
-			ForwardDive.sample(page.preview_player,page.player_controls.footwork.author,dive_ready,dive_clasp,READY_POSITION,heading,dive_time,ball.aim_point,float(ball.recovery.get("time",0.07))+ForwardDive.WINDUP,dive_kick_offset,dive_lower_duration,pancake)
+			page.preview_player.pose_reception_dive(dive_ready,dive_clasp,READY_POSITION,heading,dive_time,ball.aim_point,float(ball.recovery.get("time",0.07))+ForwardDive.WINDUP,pancake)
 			if pancake:
 				if ball.try_pancake(previous,page.preview_clock): page.drill_status.text = "Pancake save"
 			elif dive_time >= ForwardDive.WINDUP-0.12 and dive_time <= ForwardDive.WINDUP+0.07:

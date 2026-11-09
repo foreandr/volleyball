@@ -1,4 +1,12 @@
 extends Node3D
+
+const FOREARM_PLATFORM := "straight_pass_02"
+const ForearmReach = preload("res://scripts/forearm_reach_pose.gd")
+const ForwardDive = preload("res://scripts/forward_reception_dive.gd")
+const SideKneeSlide = preload("res://scripts/side_knee_slide.gd")
+const PassRecipes = preload("res://scripts/pass_recipe_library.gd")
+
+var pose_author: RefCounted
 @export var team_color := Color("2c8fe5")
 @export var player_number := 1
 var display_name := "Player"
@@ -50,6 +58,11 @@ func _ready() -> void:
 	animator.advance(float(player_number)*0.31)
 
 func play_action(action: String) -> void:
+	if action == "forearm" and not animation_slots.has(action):
+		PassRecipes.refresh()
+		var platform := PassRecipes.clip(self,FOREARM_PLATFORM)
+		if platform != null: install_custom(platform,action,false)
+		return
 	var clip: String = animation_slots.get(action,action)
 	if animator.has_animation(clip): animator.play(clip,0.15)
 
@@ -77,3 +90,17 @@ func apply_profile(profile: Dictionary) -> void:
 	height_cm = values.height_cm
 	handedness = values.handedness
 	scale = Vector3.ONE*(height_cm/180.0)
+
+func get_pose_author() -> RefCounted:
+	if pose_author == null:
+		pose_author = preload("res://tools/animation_author.gd").new(skeleton,preload("res://assets/animations/goalkeeper_idle.tres"))
+	return pose_author
+
+func pose_reception_reach(step: Vector3, travel: Vector3, weight: float, progress: float, ready: Array[Transform3D], reach: Dictionary, knee_slide: bool, direction: int, contact: Vector3) -> void:
+	ForearmReach.sample(skeleton,get_pose_author(),step,travel,weight,progress,ready,reach,knee_slide,direction,contact)
+
+func pose_reception_dive(ready: Array[Transform3D], clasp: Array[Transform3D], start: Vector3, heading: Vector3, time: float, ball_point: Vector3, release_time: float, pancake := false) -> void:
+	ForwardDive.sample(self,get_pose_author(),ready,clasp,start,heading,time,ball_point,release_time,pancake)
+
+func pose_reception_knee_slide(from_pose: Array[Transform3D], ready: Array[Transform3D], start: Vector3, side: String, time: float, contact: Dictionary) -> void:
+	SideKneeSlide.sample(self,get_pose_author(),from_pose,ready,start,side,time,contact)

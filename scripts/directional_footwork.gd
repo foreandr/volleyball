@@ -8,7 +8,7 @@ var travel := Vector3.ZERO
 
 func _init(player: Node3D) -> void:
 	actor = player
-	author = preload("res://tools/animation_author.gd").new(actor.skeleton,load("res://assets/animations/goalkeeper_idle.tres"))
+	author = actor.get_pose_author()
 
 func step(direction: Vector3, delta: float, step_rate: float) -> void:
 	weight = move_toward(weight,1.0 if direction.length()>0.05 else 0.0,delta*7)
