@@ -20,11 +20,13 @@ const CASES := [
 	[2,"Forward-left reach",Vector3(0.59,0,0.59),Vector3(0,-5,-3)],
 ]
 const FEED_TIME := 0.70
+const SLOW_RATE := 0.35
 var page
 var active := false
 var paused := false
 var finished := false
 var loop_current := false
+var slow_motion := false
 var index := 0
 var original_transform: Transform3D
 var original_control := false
@@ -39,6 +41,7 @@ var previous_button: Button
 var next_button: Button
 var stop_button: Button
 var loop_button: Button
+var slow_button: Button
 var title_card: PanelContainer
 var title_count: Label
 var title_move: Label
@@ -58,6 +61,10 @@ func _init(host: Control) -> void:
 	loop_button = page.button("Loop clip",toggle_loop)
 	loop_button.toggle_mode = true
 	add_child(loop_button)
+	slow_button = page.button("Slow mo",toggle_slow_motion)
+	slow_button.toggle_mode = true
+	slow_button.tooltip_text = "Play the reception at 35% speed"
+	add_child(slow_button)
 	stop_button = page.button("Stop",stop)
 	add_child(stop_button)
 	build_title_card()
@@ -108,6 +115,8 @@ func update_controls() -> void:
 	play_button.text = "Replay all" if finished else ("Resume" if paused else ("Pause" if active else "Play all"))
 	loop_button.set_pressed_no_signal(loop_current)
 	loop_button.text = "Looping clip" if loop_current else "Loop clip"
+	slow_button.set_pressed_no_signal(slow_motion)
+	slow_button.text = "Slow mo on" if slow_motion else "Slow mo"
 	for button in [previous_button,next_button,loop_button,stop_button]: button.disabled = not active
 
 func toggle_play() -> void:
@@ -125,6 +134,13 @@ func toggle_play() -> void:
 	else:
 		paused = not paused
 	update_controls()
+
+func toggle_slow_motion() -> void:
+	slow_motion = not slow_motion
+	update_controls()
+
+func playback_delta(delta: float) -> float:
+	return delta*SLOW_RATE if slow_motion else delta
 
 func toggle_loop() -> void:
 	if not active: return
@@ -184,6 +200,7 @@ Distance 3  |  Dive planned" % [CASES[index][0],CASES[index][1]]
 func step(delta: float) -> void:
 	page.pan_camera(page.player_controls.movement_input(),delta)
 	if paused: return
+	delta = playback_delta(delta)
 	var ball = page.ball_preview
 	var previous: float = page.preview_clock
 	page.preview_clock += delta

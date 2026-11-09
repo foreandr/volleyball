@@ -311,6 +311,7 @@ func _process(delta: float) -> void:
 	if reception_review.active:
 		reception_review.step(delta)
 		return
+	if reception_drill_active(): delta = reception_review.playback_delta(delta)
 	super._process(delta)
 	var in_control: bool = player_controls!=null and player_controls.active
 	if not in_control:
