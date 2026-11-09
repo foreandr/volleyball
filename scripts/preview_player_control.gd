@@ -507,6 +507,10 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 
 
 
+func step_back_for_side_lunge(start: Vector3, forward: Vector3, delta: float, distance := 0.42) -> void:
+	var target := start-forward.normalized()*distance
+	move_cpu_toward(target-page.preview_player.position,delta)
+
 func move_cpu_toward(travel: Vector3, delta: float) -> void:
 	var actor: Node3D = page.preview_player
 	var forward := Vector3(0,0,4)-actor.position
