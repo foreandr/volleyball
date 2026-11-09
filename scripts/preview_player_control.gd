@@ -13,9 +13,11 @@ var receive_queued := false
 var receive_camera_pan := Vector3.ZERO
 var receive_entry_pose: Array[Transform3D] = []
 var receive_entry_elapsed := 0.0
+var receive_ready_pose: Array[Transform3D] = []
 var receive_exit_pose: Array[Transform3D] = []
 var receive_exit_elapsed := 0.0
 var neutral_hold := 0.0
+var return_started := false
 var reach_step := Vector3.ZERO
 var reach_progress := 0.0
 var high_adjustment := Vector3.ZERO
@@ -195,7 +197,8 @@ func queue_receive() -> bool:
 
 func play_receive_pose(delta: float, review_offset := Vector3.INF, pose_offset := 0.0) -> void:
 	var actor: Node3D = page.preview_player
-	if receive_entry_pose.is_empty():
+	var entering := receive_entry_pose.is_empty()
+	if entering:
 		receive_entry_pose = snapshot_receive_pose()
 		receive_entry_elapsed = 0.0
 		receive_exit_pose.clear()
@@ -209,6 +212,9 @@ func play_receive_pose(delta: float, review_offset := Vector3.INF, pose_offset :
 	var ball = page.ball_preview
 	if ball.recovery.is_empty(): face_ball()
 	actor.animator.play("custom_preview/clip",0)
+	if entering:
+		actor.animator.seek(0.0,true)
+		receive_ready_pose = snapshot_receive_pose()
 	actor.animator.seek(maxf(0.0,page.ball_preview.contact_time+pose_offset),true)
 	actor.animator.pause()
 	step_into_receive(delta,review_offset)
@@ -255,6 +261,7 @@ func clear_receive_transition() -> void:
 	receive_entry_pose.clear()
 	receive_exit_pose.clear()
 	neutral_hold = 0.0
+	return_started = false
 
 func settle_for_next_feed(start: Vector3, yaw: float, delta: float) -> bool:
 	var actor: Node3D = page.preview_player
@@ -262,7 +269,12 @@ func settle_for_next_feed(start: Vector3, yaw: float, delta: float) -> bool:
 	reset_reach()
 	var return_path := start-actor.position
 	if return_path.length_squared() > 0.0025:
-		move_cpu_toward(return_path,delta)
+		if not return_started:
+			return_started = true
+			receive_exit_pose = snapshot_receive_pose()
+			receive_exit_elapsed = 0.0
+		actor.rotation.y = lerp_angle(actor.rotation.y,yaw,1-exp(-16.0*delta))
+		move_cpu_toward(return_path,delta,false)
 		blend_receive_recovery(delta)
 		return false
 	actor.position = start
@@ -397,6 +409,11 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 	var author: RefCounted = footwork.author
 	var pose: Array = []
 	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
+	if reach_tier == 2 and reach_back and not reach_rear_diagonal and not receive_ready_pose.is_empty():
+		# Keep the shuffle-to-lunge foot solve on one stance instead of switching authored leg poses mid-step.
+		for name_ in ["pelvis","thigh_l","thigh_r","calf_l","calf_r","foot_l","foot_r","ball_l","ball_r"]:
+			var bone := rig.find_bone(name_)
+			if bone >= 0: pose[bone] = receive_ready_pose[bone]
 	var scale_: float = rig.global_basis.get_scale().y
 	var back := clampf(-step.z/0.32,0.0,1.0)
 	var side_lean := clampf(step.x/0.32,-1.0,1.0)
@@ -487,6 +504,8 @@ func pose_receive_step(actor: Node3D, step: Vector3, travel: Vector3, weight: fl
 			var hip: Vector3 = author.point(pose,"thigh_"+side)
 			var knee_over_foot := target+Vector3(shoulder_side*0.08,0.28,0.32)-hip
 			pole = pole.normalized().lerp(knee_over_foot.normalized(),weight)
+		elif straight_back and reach_tier == 2:
+			pole = Vector3(-0.46 if side == "r" else 0.46,0.42,1.0)
 		elif straight_back and side == "r":
 			pole = pole.normalized()+Vector3.LEFT*0.09*weight
 		elif reach_forward_lunge and reach_tier == 2 and side == "r":
@@ -527,7 +546,7 @@ func step_back_for_lunge(start: Vector3, forward: Vector3, delta: float, distanc
 	var target := start-forward.normalized()*distance
 	move_cpu_toward(target-page.preview_player.position,delta)
 
-func move_cpu_toward(travel: Vector3, delta: float) -> void:
+func move_cpu_toward(travel: Vector3, delta: float, track_ball := true) -> void:
 	var actor: Node3D = page.preview_player
 	var forward := Vector3(0,0,4)-actor.position
 	forward.y = 0.0
@@ -535,9 +554,9 @@ func move_cpu_toward(travel: Vector3, delta: float) -> void:
 	var distance := travel.length()
 	var direction := travel.normalized()*minf(1.0,distance/0.27)
 	sprint_requested = distance>0.85
-	move_player(Vector2(direction.dot(forward.cross(Vector3.UP)),direction.dot(forward)),delta)
+	move_player(Vector2(direction.dot(forward.cross(Vector3.UP)),direction.dot(forward)),delta,track_ball)
 
-func move_player(direction: Vector2, delta: float) -> void:
+func move_player(direction: Vector2, delta: float, track_ball := true) -> void:
 	var actor: Node3D = page.preview_player
 	var session = page.get_node("/root/StorySession")
 	var forward := (Vector3(0,0,4)-actor.position).normalized()
@@ -548,7 +567,7 @@ func move_player(direction: Vector2, delta: float) -> void:
 	var travel := right*direction.x+forward*direction.y
 	var step_direction := direction
 	if drill:
-		face_ball()
+		if track_ball: face_ball()
 		var facing := actor.basis.z.normalized()
 		step_direction = Vector2(travel.dot(facing.cross(Vector3.UP)),travel.dot(facing))
 	if exhausted and stamina>=25: exhausted = false
@@ -570,7 +589,7 @@ func move_player(direction: Vector2, delta: float) -> void:
 	actor.position.x = clampf(actor.position.x+movement.x,-4,4)
 	actor.position.z = clampf(actor.position.z+movement.z,-4.5,2.5)
 	if drill:
-		face_ball()
+		if track_ball: face_ball()
 	else:
 		actor.rotation.y = atan2(forward.x,forward.z)
 		session.pass_start = Vector2(actor.position.x,actor.position.z)
