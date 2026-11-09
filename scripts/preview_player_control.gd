@@ -360,6 +360,8 @@ func step_into_receive(delta: float, review_offset: Vector3) -> void:
 		var step_limit := 0.68 if reach_side_lunge else (0.75 if tier == 2 else 0.46)
 		var stride := 1.0 if reach_back and tier == 2 else 0.78
 		reach_step = horizontal.limit_length(step_limit)*stride
+		if directional_cpu and reach_short_straight_back:
+			reach_step -= court_forward*0.16
 		if directional_cpu and ((tier == 1 and animation_direction == 6) or (tier == 2 and animation_direction == 3)):
 			# Keep the shoulder inside the ball's lane while the platform reaches across it.
 			reach_step -= actor.basis.x*reach_step.dot(actor.basis.x)*0.32

@@ -422,7 +422,8 @@ func step_cpu_receive(previous: float, delta: float) -> void:
 		if arrows.selected != 0:
 			var direction: int = player_controls.receive_animation_direction()
 			var deep_rear: bool = arrows.selected_distance == 2 and direction in [4,5,6]
-			var windup_time := 0.26 if deep_rear else 0.18
+			var short_back: bool = arrows.selected_distance == 1 and direction == 5
+			var windup_time := 0.26 if deep_rear else (0.22 if short_back else 0.18)
 			var straight_back: bool = arrows.selected_distance == 2 and direction == 5
 			var setup_step: bool = direction != arrows.selected or straight_back
 			var until_contact: float = ball_preview.contact_time-preview_clock
