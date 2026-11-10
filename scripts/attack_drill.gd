@@ -26,6 +26,7 @@ var swing_practice := true
 var swing_review := false
 var torso_rotation_scale := 2.0
 var leg_kickback_scale := 2.0
+var leg_rotation_scale := 1.0
 var swing_button_down := false
 var stage_start := 0.0
 var serve_target: Vector3
@@ -443,7 +444,7 @@ func pose_bow_draw(weight: float, contact: Vector3, extension := 0.0, follow := 
 	var rotation_weight := weight*torso_rotation_scale*lerpf(0.48,1.22,power)
 	var turn := lerpf(-0.57,0.42+aim_turn*0.52,chest_turn)+(0.34+aim_turn*0.38)*follow
 	var airborne := smoothstep(0.08,0.45,setter.position.y-jump.start.y)
-	var leg_turn := clampf(turn*rotation_weight*0.24,-0.32,0.32)*airborne*smoothstep(0.50,0.95,extension)
+	var leg_turn := clampf(turn*rotation_weight*0.24,-0.32,0.32)*leg_rotation_scale*airborne*smoothstep(0.50,0.95,extension)
 	if not is_zero_approx(leg_turn):
 		var spine: Transform3D = author.world_pose(pose,rig.find_bone("spine_01"))
 		var hips: Vector3 = author.point(pose,"pelvis")
