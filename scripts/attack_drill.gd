@@ -31,7 +31,8 @@ var practice_setup_path := "user://attack_practice.cfg"
 var torso_rotation_scale := 2.0
 var leg_kickback_scale := 2.0
 var leg_rotation_scale := 1.0
-var draw_delay := 0.05
+var draw_delay := SpikeArm.DEFAULT_DRAW_DELAY
+var elbow_clearance := SpikeArm.DEFAULT_ELBOW_CLEARANCE
 var stage_start := 0.0
 var serve_target: Vector3
 var pass_origin: Vector3
@@ -513,7 +514,7 @@ func pose_bow_draw(weight: float, contact: Vector3, extension := 0.0, follow := 
 	author.rotate_world(pose,"spine_03",chest_axis,clampf(turn*rotation_weight,-1.45,1.45))
 	var line_weight := shot_line_weight(shot_aim,contact)
 	var palm_finish := SpikeArm.finish_palm_direction(shot_aim,contact,line_weight >= 0.5)
-	SpikeArm.apply(pose,author,ball_target,weight,extension,follow,draw_progress,arm_lift,line_weight,palm_finish)
+	SpikeArm.apply(pose,author,ball_target,weight,extension,follow,draw_progress,arm_lift,line_weight,palm_finish,elbow_clearance)
 	var guide_drop := maxf(smoothstep(0.07,0.83,extension),smoothstep(0.0,0.62,follow))
 	SpikeArm.apply_guide_arm(pose,author,Vector3(0.06,0.43,0.64),Vector3(0.26,-0.55,0.15),guide_drop,weight,172.0)
 	for bone in rig.get_bone_count():

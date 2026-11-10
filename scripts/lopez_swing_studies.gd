@@ -26,6 +26,8 @@ static func bake(base: Animation, actor: Node3D, index: int, crosscourt := false
 	var session := EditSession.new(base,rig)
 	var timing: float = base.get_meta("contact_time")
 	var prep: float = base.get_meta("study_prep_duration")
+	var draw_start := prep+float(base.get_meta("study_draw_delay",SpikeArm.DEFAULT_DRAW_DELAY))-SpikeArm.DEFAULT_DRAW_DELAY
+	var elbow_clearance: float = base.get_meta("study_elbow_clearance",SpikeArm.DEFAULT_ELBOW_CLEARANCE)
 	var profile: Array = STUDIES[index]
 	var ball: Vector3 = base.get_meta("study_ball_point")+OUTSIDE_CONTACT
 	var feed: Dictionary = base.get_meta("editor_feed").duplicate()
@@ -46,7 +48,7 @@ static func bake(base: Animation, actor: Node3D, index: int, crosscourt := false
 		var pose: Array[Transform3D] = []
 		for bone in rig.get_bone_count():
 			pose.append(Transform3D(Basis(session.source_rotation(bone,frame)),session.source_position(bone,frame)))
-		shape(pose,author,profile,ball,(time-prep)/(timing-prep),(time-timing)/(base.length-timing),crosscourt,shot_turn-base_turn,palm_finish)
+		shape(pose,author,profile,ball,(time-draw_start)/(timing-draw_start),(time-timing)/(base.length-timing),crosscourt,shot_turn-base_turn,palm_finish,elbow_clearance)
 		return pose
 	var title: String = profile[0]+(" Crosscourt" if crosscourt else "")
 	var clip: Animation = author.bake({"name":title,"duration":duration,"contact_time":timing},sampler)
@@ -56,7 +58,7 @@ static func bake(base: Animation, actor: Node3D, index: int, crosscourt := false
 	clip.set_meta("editor_frame_count",25)
 	return clip
 
-static func shape(pose: Array[Transform3D], author: RefCounted, profile: Array, ball: Vector3, progress: float, landing: float, crosscourt: bool, aim_turn: float, palm_finish: float) -> void:
+static func shape(pose: Array[Transform3D], author: RefCounted, profile: Array, ball: Vector3, progress: float, landing: float, crosscourt: bool, aim_turn: float, palm_finish: float, elbow_clearance: float) -> void:
 	var rising := smoothstep(0.03,0.32,progress)
 	var drive := smoothstep(float(profile[7]),1.0,progress)
 	var settle := smoothstep(0.12,0.92,landing)
@@ -92,7 +94,9 @@ static func shape(pose: Array[Transform3D], author: RefCounted, profile: Array, 
 	SpikeArm.apply_guide_arm(pose,author,guide_reach,Vector3(0.52,-0.48,-0.06),guide_drop,air,158.0)
 
 	var shoulder: Vector3 = author.point(pose,"upperarm_r")
-	var chamber := shoulder+Vector3(-float(profile[11]),float(profile[2]),-float(profile[1]))
+	var outside: Vector3 = (shoulder-author.point(pose,"upperarm_l")).normalized()
+	var chamber_width := float(profile[11])+elbow_clearance-SpikeArm.DEFAULT_ELBOW_CLEARANCE
+	var chamber := shoulder+outside*chamber_width+Vector3(0.0,float(profile[2]),-float(profile[1]))
 	var release_start := float(profile[7])
 	var elbow_lead := smoothstep(release_start,lerpf(release_start,1.0,0.50),progress)
 	var hand_release := smoothstep(lerpf(release_start,1.0,0.49),1.0,progress)

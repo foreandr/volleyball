@@ -1,12 +1,14 @@
 extends RefCounted
 
 const SWING_NAME := "06 Low Bow"
+const DEFAULT_DRAW_DELAY := 0.05
+const DEFAULT_ELBOW_CLEARANCE := 0.12
 
 static func follow_heading(target: Vector3, origin: Vector3, facing := 0.0) -> float:
 	var direction := target-origin
 	return clampf(angle_difference(facing,atan2(direction.x,direction.z)),-0.95,0.95)
 
-static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float, extension: float, follow: float, draw_progress: float, arm_lift: float, line_weight: float, palm_finish: float) -> void:
+static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float, extension: float, follow: float, draw_progress: float, arm_lift: float, line_weight: float, palm_finish: float, elbow_clearance: float) -> void:
 	var shoulder: Vector3 = author.point(pose,"upperarm_r")
 	var draw := Vector3(-0.04,0.40,0.08).lerp(Vector3(0.02,0.05,-0.12),draw_progress)
 	var wrist_target := ball-(ball-shoulder).normalized()*0.06
@@ -24,7 +26,7 @@ static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float,
 		pose = base.duplicate()
 	var solve_weight := 1.0 if finish > 0.0 else weight
 	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",target,elbow_pole,solve_weight,elbow_limit)
-	drop_low_bow_elbow(pose,author,weight*draw_progress*(1.0-arm_lift)*(1.0-smoothstep(0.0,0.48,extension)))
+	drop_low_bow_elbow(pose,author,weight*draw_progress*(1.0-arm_lift)*(1.0-smoothstep(0.0,0.48,extension)),elbow_clearance)
 	var wrist_alignment := lerpf(0.90,0.68,smoothstep(0.04,0.70,extension))
 	wrist_alignment = lerpf(wrist_alignment,0.96,smoothstep(0.0,0.86,follow))
 	align_wrist_to_forearm(pose,author,wrist_alignment*solve_weight)
@@ -117,7 +119,7 @@ static func align_wrist_to_forearm(pose: Array, author: RefCounted, amount: floa
 	var direction := (fingers-wrist).normalized().slerp(relaxed,amount)
 	author.aim_joint(pose,"hand_r","middle_01_r",wrist+direction)
 
-static func drop_low_bow_elbow(pose: Array, author: RefCounted, weight: float) -> void:
+static func drop_low_bow_elbow(pose: Array, author: RefCounted, weight: float, clearance: float) -> void:
 	if weight <= 0.0: return
 	var shoulder: Vector3 = author.point(pose,"upperarm_r")
 	var opposite: Vector3 = author.point(pose,"upperarm_l")
@@ -125,12 +127,12 @@ static func drop_low_bow_elbow(pose: Array, author: RefCounted, weight: float) -
 	var forward := Vector3.UP.cross(outside)
 	var elbow: Vector3 = author.point(pose,"lowerarm_r")
 	var upper := (elbow-shoulder).normalized()
-	var lowered := (outside*0.22+forward*0.03+Vector3.DOWN*0.30).normalized()
+	var lowered := (outside*(0.10+clearance)+forward*0.03+Vector3.DOWN*0.30).normalized()
 	author.aim_joint(pose,"upperarm_r","lowerarm_r",shoulder+upper.slerp(lowered,weight))
 	elbow = author.point(pose,"lowerarm_r")
 	var wrist: Vector3 = author.point(pose,"hand_r")
 	var chest: Vector3 = author.point(pose,"spine_03")
-	var draw_target := chest+outside*0.31+forward*0.23+Vector3.UP*0.04
+	var draw_target := chest+outside*(0.12+clearance*(0.19/DEFAULT_ELBOW_CLEARANCE))+forward*0.23+Vector3.UP*0.04
 	var forearm := (wrist-elbow).normalized()
 	var toward_chest := (draw_target-elbow).normalized()
 	author.aim_joint(pose,"lowerarm_r","hand_r",elbow+forearm.slerp(toward_chest,weight))

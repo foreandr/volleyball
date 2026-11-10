@@ -399,21 +399,27 @@ func show_attack_positions() -> void:
 	slow_motion.toggled.connect(func(_enabled: bool): update_speed.call())
 	update_speed.call()
 
-	var delay_readout := label("",16)
-	positions.add_child(delay_readout)
-	var delay := HSlider.new()
-	delay.name = "LowBowDrawDelay"
-	delay.min_value = 0
-	delay.max_value = 140
-	delay.step = 5
-	delay.value = setting_drill.draw_delay*1000.0
-	delay.custom_minimum_size.y = 24
-	positions.add_child(delay)
-	var update_delay := func(milliseconds: float):
-		setting_drill.draw_delay = milliseconds/1000.0
-		delay_readout.text = "Draw delay  %d ms" % roundi(milliseconds)
-	delay.value_changed.connect(update_delay)
-	update_delay.call(delay.value)
+	add_attack_tuning_slider(positions,"Draw delay","LowBowDrawDelay","ms",140,5,setting_drill.draw_delay*1000.0,
+		func(value: float): setting_drill.draw_delay = value/1000.0)
+	add_attack_tuning_slider(positions,"Elbow clearance","AttackElbowClearance","cm",24,1,setting_drill.elbow_clearance*100.0,
+		func(value: float): setting_drill.elbow_clearance = value/100.0)
+
+func add_attack_tuning_slider(panel_content: VBoxContainer, caption: String, node_name: String, units: String, maximum: float, step: float, initial: float, apply: Callable) -> void:
+	var readout := label("",16)
+	panel_content.add_child(readout)
+	var slider := HSlider.new()
+	slider.name = node_name
+	slider.max_value = maximum
+	slider.step = step
+	slider.value = StorySession.attack_swing_tuning.get(node_name,initial)
+	slider.custom_minimum_size.y = 24
+	panel_content.add_child(slider)
+	var update := func(value: float):
+		StorySession.attack_swing_tuning[node_name] = value
+		apply.call(value)
+		readout.text = "%s  %d %s" % [caption,roundi(value),units]
+	slider.value_changed.connect(update)
+	update.call(slider.value)
 
 func add_low_bow_controls() -> void:
 	content.add_child(label(setting_drill.SpikeArm.SWING_NAME,16))
@@ -1071,6 +1077,8 @@ func bake_low_bow_starter(include_landing := false, shot_target := Vector3(2.0,0
 		clip.set_meta("study_ball_point",start_inverse*aim)
 		clip.set_meta("study_prep_duration",prep_duration)
 		clip.set_meta("study_base_aim",drill.swing_aim)
+		clip.set_meta("study_draw_delay",drill.draw_delay)
+		clip.set_meta("study_elbow_clearance",drill.elbow_clearance)
 	clip.set_meta("editor_start",start)
 	clip.set_meta("editor_group","Right Arm")
 	clip.set_meta("editor_frame_count",15)
