@@ -99,7 +99,7 @@ func step(actor: Node3D, delta: float, input: Vector2) -> void:
 	var second := smoothstep(0.12,0.225,pose_time)
 	var distance := stride*(0.34*first+0.66*second+AIR_TRAVEL_FRACTION*flight)
 	var base := start+heading*distance+Vector3.UP*(4.0*height*flight*(1.0-flight))
-	var lunge := approach_lunge*smoothstep(0.0,0.16,elapsed-load_time)
+	var lunge := approach_lunge*smoothstep(0.0,0.34,elapsed-load_time)
 	var position := base+air_offset+lunge
 	actor.position = Court.clamp_setter(position,front_limit)
 	if air_delta > 0.0: air_offset += actor.position-position
