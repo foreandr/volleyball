@@ -33,7 +33,8 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 	head = author.point(pose,"Head")
 	var aim := target_local-head
 	var diamond := head+Vector3(clampf(aim.x,-0.22,0.22),clampf(aim.y-0.075,0.12,0.27),clampf(aim.z-0.07,0.09,0.35))
-	diamond += rig.global_basis.inverse()*push-Vector3.UP*0.055*cushion
+	var local_push := rig.global_basis.inverse()*push
+	diamond += local_push-Vector3.UP*0.055*cushion
 	var elbow_limit := lerpf(152.0,176.0,clampf(push.length()/0.24,0.0,1.0))-12.0*cushion
 	for side in ["l","r"]:
 		var sign_ := 1.0 if side == "l" else -1.0
@@ -49,7 +50,10 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 		var fingers: Vector3 = author.point(pose,"middle_01_"+side)-base.origin
 		var across: Vector3 = author.point(pose,"index_01_"+side)-author.point(pose,"pinky_01_"+side)
 		var target_fingers := Vector3(-sign_*0.52,0.82,0.23)
-		var target_across := Vector3(-sign_*0.68,-0.38,0.63)
+		var follow := smoothstep(0.04,0.20,push.length())
+		target_fingers = target_fingers.lerp(local_push.normalized(),0.46*follow)
+		# Index side stays inward and back so the pinky edge cups forward.
+		var target_across := Vector3(-sign_*0.72,-0.30,-0.54)
 		author.set_world_basis(pose,hand,hand_basis(target_fingers,target_across)*hand_basis(fingers,across).inverse()*base.basis)
 		shape_digit(author,pose,"index",side,diamond+Vector3(sign_*0.018,0.065,0.025))
 		shape_digit(author,pose,"thumb",side,diamond+Vector3(sign_*0.016,-0.047,0.045))
