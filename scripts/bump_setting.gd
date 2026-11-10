@@ -13,6 +13,7 @@ const SpreadCone = preload("res://scripts/reception_spread_cone.gd")
 const GREEN_START := 0.035
 const GREEN_END := 0.37
 const APPROACH_TIME := 0.60
+const IDEAL_LEAD := (GREEN_START+GREEN_END)*0.5
 const PLATFORM_PREP_TIME := 0.26
 
 var setter: Node3D
@@ -28,6 +29,7 @@ var reach_progress := 0.0
 var destination := Vector2(2.75,3.0)
 var height := 3.8
 var grade := Timing.Grade.WAITING
+var cue_lead := INF
 var pressed_at := -INF
 var low_save := LowSave.new()
 var pose_started_at := -INF
@@ -70,6 +72,7 @@ func configure(player: Node3D, animation: Animation, timing_meter: Control) -> v
 
 func reset() -> void:
 	grade = Timing.Grade.WAITING
+	cue_lead = INF
 	pressed_at = -INF
 	low_save.active = false
 	pose_started_at = -INF
@@ -136,7 +139,15 @@ func approach(path: Callable, time: float, end: float) -> float:
 		var next: Vector3 = path.call(time+ahead+0.005)
 		if next.y >= point.y: continue
 		var distance := point.distance_to(center)
-		if distance <= PLATFORM_RADIUS: return 1.0-ahead/APPROACH_TIME
+		if distance <= PLATFORM_RADIUS:
+			var low := maxf(0.0,ahead-APPROACH_TIME/19.0)
+			var high := ahead
+			for refinement in range(5):
+				var mid := (low+high)*0.5
+				var sample: Vector3 = path.call(time+mid)
+				if sample.distance_to(center) <= PLATFORM_RADIUS: high = mid
+				else: low = mid
+			return 1.0-high/APPROACH_TIME
 		if distance < nearest:
 			nearest = distance
 			delay = ahead
@@ -200,6 +211,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 			apply_pose(contact_frame+follow,1.0-smoothstep(0.12,0.36,follow))
 			pose_reach(smoothstep(0.0,1.0,reach_progress)*(1.0-smoothstep(0.06,0.32,follow)),touch)
 			Drive.apply(setter.skeleton,setter.get_pose_author(),outgoing,Drive.effort(incoming,outgoing),follow,true,incoming,Drive.swing_effort(touch,outgoing))
+	cue_lead = (1.0-progress)*APPROACH_TIME if progress >= 0.0 and grade == Timing.Grade.WAITING else INF
 	meter.update_timing(true,progress,striking,grade,delta,1.0-GREEN_END/APPROACH_TIME)
 	if meter.visible and (grade == Timing.Grade.WAITING or is_finite(touch_time)):
 		var anticipated := (1.0-maxf(progress,0.0))*APPROACH_TIME

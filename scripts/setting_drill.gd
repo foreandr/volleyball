@@ -59,6 +59,9 @@ var bump: MeshInstance3D
 var bump_enabled := false
 var ready_range: MeshInstance3D
 var range_style := StandardMaterial3D.new()
+var timing_ring: MeshInstance3D
+var timing_center: MeshInstance3D
+var timing_style := StandardMaterial3D.new()
 var arm_swing_weight := 0.0
 
 func configure(player: Node3D, readout: Label, meter: Control, use_bump: bool) -> void:
@@ -113,7 +116,43 @@ func configure(player: Node3D, readout: Label, meter: Control, use_bump: bool) -
 	ready_range.material_override = range_style
 	ready_range.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(ready_range)
+	build_timing_cue()
 	reset_feed()
+
+func build_timing_cue() -> void:
+	timing_style.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	timing_ring = MeshInstance3D.new()
+	timing_ring.name = "BumpTimingRing"
+	var rim := TorusMesh.new()
+	rim.inner_radius = 0.93
+	rim.outer_radius = 1.0
+	timing_ring.mesh = rim
+	timing_ring.position.y = 0.018
+	timing_ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	timing_ring.material_override = timing_style
+	ready_range.add_child(timing_ring)
+	timing_center = MeshInstance3D.new()
+	timing_center.name = "BumpTimingCenter"
+	var dot := CylinderMesh.new()
+	dot.top_radius = 0.092
+	dot.bottom_radius = 0.092
+	dot.height = 0.008
+	timing_center.mesh = dot
+	timing_center.position.y = 0.023
+	timing_center.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	timing_center.material_override = timing_style
+	ready_range.add_child(timing_center)
+
+func update_timing_cue() -> void:
+	var lead: float = bump.cue_lead
+	var showing := bump_enabled and is_finite(lead)
+	timing_ring.visible = showing
+	timing_center.visible = showing
+	if not showing: return
+	var radius := lerpf(0.092,2.0,inverse_lerp(BumpSetting.IDEAL_LEAD,BumpSetting.APPROACH_TIME,clampf(lead,BumpSetting.IDEAL_LEAD,BumpSetting.APPROACH_TIME)))
+	timing_ring.scale = Vector3(radius,1.0,radius)
+	timing_style.albedo_color = Color("65ff94") if lead >= BumpSetting.GREEN_START and lead <= BumpSetting.GREEN_END else Color("ff9b52")
+
 
 func set_bump_mode(enabled: bool) -> void:
 	if bump_enabled == enabled: return
@@ -151,6 +190,7 @@ func reset_feed() -> void:
 	receiving = false
 	judged = false
 	bump.reset()
+	update_timing_cue()
 	var reception: Array = RECEPTIONS[rep % RECEPTIONS.size()]
 	receive_tier = reception[0]
 	receive_offset = reception[1]
@@ -230,6 +270,7 @@ func step_bump(time: float, previous: float, delta: float) -> void:
 	var path := func(t): return flight_point(contact,pass_velocity,minf(t,landing))
 	var incoming := pass_velocity+Vector3.DOWN*Flight.GRAVITY*time
 	bump.update_attempt(time,previous,landing,path,incoming,delta)
+	update_timing_cue()
 	var reset_at := landing
 	if is_finite(bump.touch_time):
 		var after_touch: float = time-bump.touch_time
