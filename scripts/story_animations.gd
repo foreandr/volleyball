@@ -64,6 +64,10 @@ var attack_study_clip: Animation
 var attack_study_clock := 0.0
 var attack_study_flight := 0.0
 var attack_study_play: Button
+var attack_study_selector: OptionButton
+var attack_cycle_button: Button
+var attack_cycle_index := -1
+var attack_cycle_base: Animation
 var setting_camera_focus := SETTING_CAMERA_FOCUS
 var setter_original_transform: Transform3D
 var setter_original_height: float
@@ -326,6 +330,7 @@ func start_setting_drill(attack := false) -> void:
 			stop_attack_study(false)
 			setting_drill.set_swing_practice(index == 0)
 			attack_study_play.disabled = index != 0
+			attack_cycle_button.disabled = index != 0
 		else: setting_drill.set_bump_mode(index == 1)
 		show_mode.call(index)
 		preview.grab_focus())
@@ -441,6 +446,7 @@ func add_low_bow_controls() -> void:
 	content.add_child(label(setting_drill.SpikeArm.SWING_NAME,16))
 	var studies := OptionButton.new()
 	studies.name = "SwingStudies"
+	attack_study_selector = studies
 	studies.add_item("06 Low Bow")
 	for study in LopezStudies.STUDIES: studies.add_item(study[0])
 	content.add_child(studies)
@@ -454,35 +460,75 @@ func add_low_bow_controls() -> void:
 		preview.grab_focus())
 	attack_study_play.name = "PlayAttackSwing"
 	attack_study_play.disabled = not setting_drill.swing_practice
-	content.add_child(attack_study_play)
+	var playback := HBoxContainer.new()
+	content.add_child(playback)
+	playback.add_child(attack_study_play)
+	attack_study_play.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	attack_cycle_button = button("Play all swings",func():
+		if attack_cycle_index >= 0: stop_attack_study()
+		else:
+			attack_cycle_base = null
+			play_attack_cycle_at(0)
+		preview.grab_focus())
+	attack_cycle_button.name = "PlayAttackCycle"
+	attack_cycle_button.disabled = not setting_drill.swing_practice
+	attack_cycle_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	playback.add_child(attack_cycle_button)
 	studies.item_selected.connect(func(index: int):
-		if attack_study_clip == null: return
-		if index == 0: stop_attack_study()
-		else: play_attack_study(index-1))
+		if attack_cycle_index >= 0:
+			play_attack_cycle_at(index)
+		elif attack_study_clip != null:
+			if index == 0: stop_attack_study()
+			else: play_attack_study(index-1))
 	content.add_child(button("Open swing editor",func(): open_low_bow_editor(studies.selected-1)))
+
+func play_attack_cycle_at(index: int) -> void:
+	attack_cycle_index = index
+	attack_study_selector.select(index)
+	attack_cycle_button.text = "Stop cycle"
+	if index == 0:
+		attack_study_clip = null
+		attack_study_play.text = "Play swing"
+		attack_study_play.disabled = true
+		setting_drill.reset_feed()
+	else:
+		play_attack_study(index-1)
 
 func play_attack_study(study: int) -> void:
 	setting_drill.restore_torso_lean(preview_player)
 	var target: Vector3 = setting_drill.swing_aim
 	var crosscourt: bool = setting_drill.shot_line_weight(target,setting_drill.practice_set_target) < 0.5
-	attack_study_clip = build_attack_clip(study,target,crosscourt)
+	if attack_cycle_index >= 0:
+		if attack_cycle_base == null:
+			attack_cycle_base = bake_low_bow_starter(true,target)
+		target = attack_cycle_base.get_meta("study_base_aim")
+		crosscourt = setting_drill.shot_line_weight(target,setting_drill.practice_set_target) < 0.5
+		attack_study_clip = LopezStudies.bake(attack_cycle_base,preview_player,study,crosscourt,target)
+	else:
+		attack_study_clip = build_attack_clip(study,target,crosscourt)
 	setting_drill.restore_torso_lean(preview_player)
 	setting_drill.jump.active = false
 	setting_drill.timing_cue.hide()
 	preview_player.position = attack_study_clip.get_meta("editor_start")
+	preview_player.rotation.y = 0.0
 	preview_player.install_custom(attack_study_clip,"attack_study",false)
 	preview_player.animator.play("custom_attack_study/clip",0)
 	preview_player.animator.advance(0)
 	attack_study_clock = 0.0
 	var feed: Dictionary = attack_study_clip.get_meta("editor_feed")
 	attack_study_flight = Flight.landing_time(feed.aim,feed.spike_outgoing)
-	attack_study_play.text = "Stop swing"
+	attack_study_play.text = "Stop swing" if attack_cycle_index < 0 else "Play swing"
+	attack_study_play.disabled = attack_cycle_index >= 0
 	step_attack_study(0.0)
 
 func stop_attack_study(resume := true) -> void:
-	if attack_study_clip == null: return
+	if attack_study_clip == null and attack_cycle_index < 0: return
 	attack_study_clip = null
+	attack_cycle_base = null
+	attack_cycle_index = -1
+	attack_cycle_button.text = "Play all swings"
 	attack_study_play.text = "Play swing"
+	attack_study_play.disabled = not setting_drill.swing_practice
 	if resume: setting_drill.reset_feed()
 
 func step_attack_study(delta: float) -> void:
@@ -491,7 +537,11 @@ func step_attack_study(delta: float) -> void:
 		return
 	var contact: float = attack_study_clip.get_meta("contact_time")
 	var length := maxf(attack_study_clip.length,contact+attack_study_flight)+0.15
-	attack_study_clock = fposmod(attack_study_clock+delta,length)
+	attack_study_clock += delta
+	if attack_cycle_index >= 0 and attack_study_clock >= length:
+		play_attack_cycle_at((attack_cycle_index+1)%attack_study_selector.item_count)
+		return
+	attack_study_clock = fposmod(attack_study_clock,length)
 	preview_player.animator.seek(minf(attack_study_clock,attack_study_clip.length-0.0001),true)
 	var feed: Dictionary = attack_study_clip.get_meta("editor_feed")
 	var elapsed := attack_study_clock-contact
@@ -695,7 +745,11 @@ func _process(delta: float) -> void:
 		var jump_lift: float = preview_player.position.y-setting_drill.jump.start.y if setting_drill.jump.active else 0.0
 		player_controls.stamina_ring.set_airborne_lift(jump_lift)
 		var was_diving: bool = setting_drill.bump.low_save.active
+		var previous_clock: float = setting_drill.clock
 		setting_drill.step(delta)
+		if attack_cycle_index == 0 and setting_drill.clock < previous_clock:
+			play_attack_cycle_at(1)
+			return
 		if not was_diving and setting_drill.bump.low_save.active:
 			player_controls.setter_travel = Vector3.ZERO
 			player_controls.spend_dive_stamina()
