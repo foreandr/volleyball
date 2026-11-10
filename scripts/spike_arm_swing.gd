@@ -8,11 +8,12 @@ static func follow_heading(target: Vector3, origin: Vector3, facing := 0.0) -> f
 	var direction := target-origin
 	return clampf(angle_difference(facing,atan2(direction.x,direction.z)),-0.95,0.95)
 
-static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float, extension: float, follow: float, draw_progress: float, arm_lift: float, line_weight: float, palm_finish: float, elbow_clearance: float, previous_roll: float, roll_step: float, shot_direction: Vector3, compact_finish: float) -> float:
+static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float, extension: float, follow: float, draw_progress: float, arm_lift: float, line_weight: float, palm_finish: float, elbow_clearance: float, previous_roll: float, roll_step: float, shot_direction: Vector3, compact_finish: float, backswing_reach: float) -> float:
 	var shoulder: Vector3 = author.point(pose,"upperarm_r")
 	var draw := Vector3(-0.04,0.40,0.08).lerp(Vector3(0.02,0.05,-0.12),draw_progress)
 	var wrist_target := ball-(ball-shoulder).normalized()*0.06-shot_direction*0.11
 	var raised_draw := draw.lerp(Vector3(-0.08,0.40,0.22),arm_lift)
+	raised_draw.z -= backswing_reach
 	var target := (shoulder+raised_draw).lerp(wrist_target,extension)
 	target += Vector3(-0.05,0.14,-0.10)*sin(PI*extension)
 	var finish := follow

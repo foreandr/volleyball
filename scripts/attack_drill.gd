@@ -23,6 +23,8 @@ const SWING_CONTACT_HEIGHT := 2.22
 const PALM_RADIUS := 0.065
 const SWING_FOLLOW_TIME := 0.49
 const DEFAULT_BOUNCINESS := 2.25
+const DEFAULT_BACKSWING_BEND := 35.0
+const DEFAULT_BACKSWING_REACH := 0.16
 const SEQUENCE_SET_X := [3.55,0.0,-3.55]
 const SEQUENCE_SHOT_X := [
 	[3.55,0.0,-3.55],
@@ -45,6 +47,8 @@ var leg_rotation_scale := 1.0
 var air_turn_speed := 240.0
 var draw_delay := SpikeArm.DEFAULT_DRAW_DELAY
 var elbow_clearance := SpikeArm.DEFAULT_ELBOW_CLEARANCE
+var backswing_bend := DEFAULT_BACKSWING_BEND
+var backswing_reach := DEFAULT_BACKSWING_REACH
 var stage_start := 0.0
 var serve_target: Vector3
 var pass_origin: Vector3
@@ -683,8 +687,9 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 	var chest_yaw := clampf(turn*rotation_weight,-1.45,1.45)
 	author.rotate_world(pose,"spine_03",chest_axis,chest_yaw)
 	var load_back := 1.0-smoothstep(0.04,0.55,extension)
+	var backswing_weight := draw_progress*(1.0-arm_lift)*(1.0-smoothstep(0.0,0.38,extension))
 	var contact_crunch := smoothstep(0.42,0.95,extension)
-	var pitch := deg_to_rad((-50.0-torso_lean_degrees)*load_back+11.5*contact_crunch)
+	var pitch := deg_to_rad((-50.0-torso_lean_degrees)*load_back+11.5*contact_crunch+backswing_bend*backswing_weight)
 	if stage == Stage.HIT:
 		var hit_age := clock-stage_start
 		var forward_crunch := smoothstep(0.0,0.09,hit_age)
@@ -714,9 +719,9 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 		var roll_step := deg_to_rad(2700.0)*delta
 		var shot_direction := (rig.to_local(shot_aim)-ball_target).normalized()
 		var compact_finish := SpikeArm.compact_finish_weight(shot_aim,contact,line_weight < 0.5)
-		swing_palm_roll = SpikeArm.apply(pose,author,ball_target,weight,extension,follow,draw_progress,arm_lift,line_weight,palm_finish,elbow_clearance,swing_palm_roll,roll_step,shot_direction,compact_finish)
+		swing_palm_roll = SpikeArm.apply(pose,author,ball_target,weight,extension,follow,draw_progress,arm_lift,line_weight,palm_finish,elbow_clearance,swing_palm_roll,roll_step,shot_direction,compact_finish,backswing_reach*backswing_weight)
 		var guide_drop := maxf(smoothstep(0.07,0.83,extension),smoothstep(0.0,0.62,follow))
-		SpikeArm.apply_guide_arm(pose,author,Vector3(0.06,0.43,0.64),Vector3(0.26,-0.55,0.15),guide_drop,weight,172.0)
+		SpikeArm.apply_guide_arm(pose,author,Vector3(0.06,0.43,0.64-backswing_reach*backswing_weight*0.6),Vector3(0.26,-0.55,0.15),guide_drop,weight,172.0)
 		if stage == Stage.HIT and follow >= 0.90:
 			swing_finish_pose = pose.duplicate()
 	for bone in rig.get_bone_count():

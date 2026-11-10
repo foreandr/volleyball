@@ -418,6 +418,11 @@ func show_attack_positions() -> void:
 	add_attack_tuning_slider(positions,"Ball bounciness","AttackBallBounciness","%",25,400,5,setting_drill.ball_bounciness*100.0,
 		func(value: float): setting_drill.ball_bounciness = value/100.0)
 
+	var bend := add_attack_tuning_slider(positions,"Backswing bend","AttackBackswingBend","°",0,65,1,setting_drill.backswing_bend,
+		func(value: float): setting_drill.backswing_bend = value)
+	var reach := add_attack_tuning_slider(positions,"Backswing reach","AttackBackswingReach","cm",0,42,1,setting_drill.backswing_reach*100.0,
+		func(value: float): setting_drill.backswing_reach = value/100.0)
+
 	var delay := add_attack_tuning_slider(positions,"Draw delay","LowBowDrawDelay","ms",-220,240,5,setting_drill.draw_delay*1000.0,
 		func(value: float): setting_drill.draw_delay = value/1000.0)
 	var clearance := add_attack_tuning_slider(positions,"Elbow clearance","AttackElbowClearance","cm",0,36,1,setting_drill.elbow_clearance*100.0,
@@ -426,6 +431,8 @@ func show_attack_positions() -> void:
 	var reset := button("Reset swing tuning",func():
 		delay.value = setting_drill.SpikeArm.DEFAULT_DRAW_DELAY*1000.0
 		clearance.value = setting_drill.SpikeArm.DEFAULT_ELBOW_CLEARANCE*100.0
+		bend.value = setting_drill.DEFAULT_BACKSWING_BEND
+		reach.value = setting_drill.DEFAULT_BACKSWING_REACH*100.0
 		preview.grab_focus())
 	reset.name = "ResetAttackTuning"
 	positions.add_child(reset)
