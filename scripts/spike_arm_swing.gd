@@ -1,10 +1,8 @@
 extends RefCounted
 
 const SWING_NAME := "06 Low Bow"
-const BASE_DRAW_DELAY := 0.05
-const DEFAULT_DRAW_DELAY := 0.07
-const BASE_ELBOW_CLEARANCE := 0.12
-const DEFAULT_ELBOW_CLEARANCE := 0.16
+const DEFAULT_DRAW_DELAY := 0.05
+const DEFAULT_ELBOW_CLEARANCE := 0.12
 
 static func follow_heading(target: Vector3, origin: Vector3, facing := 0.0) -> float:
 	var direction := target-origin
@@ -14,9 +12,7 @@ static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float,
 	var shoulder: Vector3 = author.point(pose,"upperarm_r")
 	var draw := Vector3(-0.04,0.40,0.08).lerp(Vector3(0.02,0.05,-0.12),draw_progress)
 	var wrist_target := ball-(ball-shoulder).normalized()*0.06
-	var outside: Vector3 = (shoulder-author.point(pose,"upperarm_l")).normalized()
-	var draw_offset := outside*(elbow_clearance-BASE_ELBOW_CLEARANCE)*0.55
-	var raised_draw := draw.lerp(Vector3(-0.08,0.40,0.22),arm_lift)+draw_offset
+	var raised_draw := draw.lerp(Vector3(-0.08,0.40,0.22),arm_lift)
 	var target := (shoulder+raised_draw).lerp(wrist_target,extension)
 	target += Vector3(-0.05,0.14,-0.10)*sin(PI*extension)
 	var finish := follow
@@ -35,9 +31,6 @@ static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float,
 	wrist_alignment = lerpf(wrist_alignment,0.96,smoothstep(0.0,0.86,follow))
 	align_wrist_to_forearm(pose,author,wrist_alignment*solve_weight)
 	var palm_progress := maxf(0.38*smoothstep(0.35,0.98,extension),follow)
-	if palm_finish > 0.0:
-		var draw_roll := maxf(draw_progress,smoothstep(0.06,0.65,weight))
-		palm_progress = maxf(palm_progress,0.90*draw_roll)
 	roll_finish_palm(pose,author,palm_finish,palm_progress)
 	if finish > 0.0:
 		blend_right_arm(base,pose,author,weight)
@@ -112,8 +105,7 @@ static func roll_finish_palm(pose: Array, author: RefCounted, direction: float, 
 	var down := (Vector3.DOWN*signf(direction)).slide(axis)
 	var roll := edge.signed_angle_to(down.normalized(),axis)
 	# The two edges have no meaningful height difference when the hand points straight down.
-	var visibility := smoothstep(0.025,0.16,down.length()) if direction > 0.0 else smoothstep(0.10,0.34,down.length())
-	author.rotate_world(pose,"hand_r",axis,roll*weight*visibility)
+	author.rotate_world(pose,"hand_r",axis,roll*weight*smoothstep(0.10,0.34,down.length()))
 
 static func align_finish_wrist(pose: Array, author: RefCounted, progress: float) -> void:
 	align_wrist_to_forearm(pose,author,smoothstep(0.25,0.95,progress))
@@ -140,7 +132,7 @@ static func drop_low_bow_elbow(pose: Array, author: RefCounted, weight: float, c
 	elbow = author.point(pose,"lowerarm_r")
 	var wrist: Vector3 = author.point(pose,"hand_r")
 	var chest: Vector3 = author.point(pose,"spine_03")
-	var draw_target := chest+outside*(0.12+clearance*(0.19/BASE_ELBOW_CLEARANCE))+forward*0.23+Vector3.UP*0.04
+	var draw_target := chest+outside*(0.12+clearance*(0.19/DEFAULT_ELBOW_CLEARANCE))+forward*0.23+Vector3.UP*0.04
 	var forearm := (wrist-elbow).normalized()
 	var toward_chest := (draw_target-elbow).normalized()
 	author.aim_joint(pose,"lowerarm_r","hand_r",elbow+forearm.slerp(toward_chest,weight))

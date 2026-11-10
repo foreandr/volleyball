@@ -26,7 +26,7 @@ static func bake(base: Animation, actor: Node3D, index: int, crosscourt := false
 	var session := EditSession.new(base,rig)
 	var timing: float = base.get_meta("contact_time")
 	var prep: float = base.get_meta("study_prep_duration")
-	var draw_start := prep+float(base.get_meta("study_draw_delay",SpikeArm.DEFAULT_DRAW_DELAY))-SpikeArm.BASE_DRAW_DELAY
+	var draw_start := prep+float(base.get_meta("study_draw_delay",SpikeArm.DEFAULT_DRAW_DELAY))-SpikeArm.DEFAULT_DRAW_DELAY
 	var elbow_clearance: float = base.get_meta("study_elbow_clearance",SpikeArm.DEFAULT_ELBOW_CLEARANCE)
 	var profile: Array = STUDIES[index]
 	var ball: Vector3 = base.get_meta("study_ball_point")+OUTSIDE_CONTACT
@@ -95,7 +95,7 @@ static func shape(pose: Array[Transform3D], author: RefCounted, profile: Array, 
 
 	var shoulder: Vector3 = author.point(pose,"upperarm_r")
 	var outside: Vector3 = (shoulder-author.point(pose,"upperarm_l")).normalized()
-	var chamber_width := float(profile[11])+elbow_clearance-SpikeArm.BASE_ELBOW_CLEARANCE
+	var chamber_width := float(profile[11])+elbow_clearance-SpikeArm.DEFAULT_ELBOW_CLEARANCE
 	var chamber := shoulder+outside*chamber_width+Vector3(0.0,float(profile[2]),-float(profile[1]))
 	var release_start := float(profile[7])
 	var elbow_lead := smoothstep(release_start,lerpf(release_start,1.0,0.50),progress)
@@ -108,8 +108,7 @@ static func shape(pose: Array[Transform3D], author: RefCounted, profile: Array, 
 	var strike_weight := rising*(1.0-smoothstep(0.59,1.22,landing))
 	author.limb(strike_pose,"upperarm_r","lowerarm_r","hand_r",strike_target,pole,1.0,lerpf(148.0,172.0,sweep))
 	SpikeArm.align_finish_wrist(strike_pose,author,sweep)
-	if palm_finish < 0.0:
-		SpikeArm.roll_finish_palm(strike_pose,author,palm_finish,maxf(0.38*hand_release,sweep))
+	SpikeArm.roll_finish_palm(strike_pose,author,palm_finish,maxf(0.38*hand_release,sweep))
 
 	# Lead with the elbow while the bent forearm trails behind it.
 	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",chamber,Vector3(-1.0,-0.12,-0.34),air,108.0)
@@ -125,6 +124,3 @@ static func shape(pose: Array[Transform3D], author: RefCounted, profile: Array, 
 	author.aim_joint(pose,"lowerarm_r","hand_r",elbow+forearm.slerp(trailing,lead_weight))
 	SpikeArm.blend_right_arm(pose,strike_pose,author,hand_release*strike_weight)
 	SpikeArm.align_wrist_to_forearm(pose,author,0.90*windup)
-	if palm_finish > 0.0:
-		var recovery := 1.0-smoothstep(0.59,1.22,landing)
-		SpikeArm.roll_finish_palm(pose,author,palm_finish*recovery,maxf(0.90*rising,sweep))
