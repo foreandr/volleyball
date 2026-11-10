@@ -973,7 +973,7 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 		var across: Vector3 = author.point(pose,"upperarm_l")-author.point(pose,"upperarm_r")
 		var torso_up: Vector3 = author.point(pose,"neck_01")-author.point(pose,"spine_01")
 		var chest_forward := across.cross(torso_up).normalized()
-		author.rotate_world(pose,"spine_01",chest_forward,deg_to_rad(-20.0)*tilt_weight*weight)
+		author.rotate_world(pose,"spine_01",chest_forward,deg_to_rad(-25.0)*tilt_weight*weight)
 	var neck: Vector3 = author.point(pose,"neck_01")
 	var gaze := ball_target-neck
 	var flat_gaze := gaze.slide(Vector3.UP)
