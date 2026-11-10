@@ -75,8 +75,11 @@ static func blend_arm(base: Array, target: Array, author: RefCounted, weight: fl
 
 static func hip_finish(pose: Array, author: RefCounted, crosscourt: bool, clearance := 0.06) -> Vector3:
 	var hip: Vector3 = author.point(pose,"thigh_r" if crosscourt else "thigh_l")
-	var side := -1.0 if crosscourt else 1.0
-	return hip+Vector3(side*clearance,0.08,0.16) if crosscourt else hip+Vector3(side*clearance,0.02,0.09)
+	if not crosscourt: return hip+Vector3(clearance,0.02,0.09)
+	var left_hip: Vector3 = author.point(pose,"thigh_l")
+	var outside := (hip-left_hip).slide(Vector3.UP).normalized()
+	var forward := Vector3.UP.cross(outside)
+	return hip+outside*(clearance+0.05)+forward*0.12+Vector3.UP*0.04
 
 static func finish_elbow_pole(same_side: bool) -> Vector3:
 	return Vector3(-0.85,-0.08,-0.09) if same_side else Vector3(-0.85,0.04,-0.33)
@@ -96,7 +99,15 @@ static func follow_through_target(pose: Array, author: RefCounted, shoulder: Vec
 	var clearance := (0.08 if same_side else 0.15)*smoothstep(0.08,0.58,progress)*(1.0-smoothstep(0.63,1.0,progress))
 	# Carry the arm forward of the ribs while preserving reach and both endpoints.
 	var offset := (direction*radius+chest_forward*clearance).normalized()*radius
-	return shoulder+offset
+	var target := shoulder+offset
+	if same_side:
+		# Keep the wrist outside the ribs as the chest turns and pitches forward.
+		var outside := -across.normalized()
+		var flank := shoulder.lerp(hip,progress)
+		var side_gap := (target-flank).dot(outside)
+		var guide := smoothstep(0.08,0.48,progress)*(1.0-smoothstep(0.78,1.0,progress))
+		target += outside*maxf(0.0,0.09-side_gap)*guide
+	return target
 
 static func finish_palm_weight(target: Vector3, origin: Vector3, cross_body: bool) -> float:
 	if cross_body: return 1.0
