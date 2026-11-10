@@ -758,7 +758,7 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 		var drive := clock-swing_drive_started if is_finite(swing_drive_started) else -INF
 		var approach_point := flight_point(pass_origin,pass_motion,clampf(maxf(time+0.12,pin_arrival-0.14),0.0,flight_end))
 		var drive_phase := clampf(drive/swing_drive_duration,0.0,1.0)
-		var extension := smootherstep(0.0,1.0,drive_phase) if approach_practice else smoothstep(0.0,1.0,drive_phase*(1.18-0.18*drive_phase))
+		var extension := smootherstep(0.08,1.0,drive_phase) if approach_practice else smoothstep(0.0,1.0,drive_phase*(1.18-0.18*drive_phase))
 		if drive < 0.0:
 			pose_bow_draw(delta,load,approach_point,0.0,0.0,draw_progress,arm_lift)
 		else:
@@ -1003,7 +1003,7 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 				var elbow_pole := lerp_angle(0.0,PI*0.5,overhead)
 				var bend := forward*sin(elbow_pole)-up*cos(elbow_pole)-outward*0.10
 				author.limb(front_pose,upper,"lowerarm_"+side,"hand_"+side,target,bend,1.0,lerpf(155.0,174.0,overhead))
-				var front_weight := 1.0-smootherstep(0.21,0.43,handoff_age)
+				var front_weight := 1.0-smootherstep(0.21,0.39 if side == "r" else 0.43,handoff_age)
 				SpikeArm.blend_arm(pose,front_pose,author,front_weight,side)
 				var source_weight := 1.0-smootherstep(0.0,0.12,handoff_age)
 				SpikeArm.blend_arm(pose,approach_arm_transition,author,source_weight,side)
