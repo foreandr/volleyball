@@ -85,18 +85,31 @@ static func recover_same_side_arm(pose: Array, finish: Array, author: RefCounted
 	var shoulder: Vector3 = author.point(pose,"upperarm_r")
 	var elbow: Vector3 = author.point(pose,"lowerarm_r")
 	var wrist: Vector3 = author.point(pose,"hand_r")
-	var clearance_angle := 0.0
-	for point: Vector3 in [elbow.lerp(wrist,0.5),wrist]:
+	var fingertips: Vector3 = author.point(pose,"middle_03_r")
+	var knee: Vector3 = author.point(pose,"calf_r")
+	var thigh_axis := (knee-hip).slide(outside)
+	var flank_angle := 0.0
+	var thigh_angle := 0.0
+	for point: Vector3 in [elbow.lerp(wrist,0.5),wrist,wrist.lerp(fingertips,0.6),fingertips]:
 		var height := clampf((point.y-hip.y)/maxf(0.10,shoulder.y-hip.y),0.0,1.0)
 		var flank := hip.lerp(shoulder,height)
 		var offset := point-flank
 		var side_gap := offset.dot(outside)
 		var beside_body := 1.0-smoothstep(0.12,0.28,offset.dot(forward))
 		var lever := maxf(0.18,shoulder.y-point.y)
-		clearance_angle = maxf(clearance_angle,(0.055-side_gap)*beside_body/lever)
-	# Only lift out enough to clear the flank, then let the ready pose take over.
-	var clearance_weight := smoothstep(0.0,0.24,arc)
-	author.rotate_world(pose,"upperarm_r",forward,-minf(clearance_angle,0.25)*clearance_weight)
+		flank_angle = maxf(flank_angle,(0.055-side_gap)*beside_body/lever)
+
+		var along_thigh := clampf((point-hip).dot(thigh_axis)/maxf(0.001,thigh_axis.length_squared()),0.0,1.0)
+		var from_thigh := point-hip.lerp(knee,along_thigh)
+		var radius := lerpf(0.19,0.13,along_thigh)
+		var depth := from_thigh.slide(outside).length()
+		var near_thigh := 1.0-smoothstep(radius,radius+0.06,depth)
+		var thigh_gap := sqrt(maxf(0.0,pow(radius+0.04,2.0)-depth*depth))
+		thigh_angle = maxf(thigh_angle,(thigh_gap-from_thigh.dot(outside))*near_thigh/lever)
+	# Hold the leg clearance through the return even after the wrist clears the ribs.
+	var flank_turn := minf(flank_angle,0.25)*smoothstep(0.0,0.24,arc)
+	var thigh_turn := minf(thigh_angle,0.46)*smoothstep(0.0,0.045,1.0-weight)
+	author.rotate_world(pose,"upperarm_r",forward,-maxf(flank_turn,thigh_turn))
 
 static func hip_finish(pose: Array, author: RefCounted, crosscourt: bool, clearance := 0.06) -> Vector3:
 	var hip: Vector3 = author.point(pose,"thigh_r" if crosscourt else "thigh_l")
