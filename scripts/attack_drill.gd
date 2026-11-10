@@ -215,7 +215,6 @@ func start_swing_practice() -> void:
 	ball.position = pass_origin
 	region.show()
 	aim_swing(swing_aim)
-	swing_target.show()
 	swing_started = clock
 	status.text = ""
 	trace.begin_feed({"mode":"swing_practice","source":pass_origin,"velocity":pass_motion,"pin":practice_set_target,"takeoff":practice_takeoff})
@@ -265,12 +264,10 @@ func court_facing_weight() -> float:
 	if stage == Stage.SET and jump.active: return 0.0
 	return 0.5 if stage == Stage.PASS or stage == Stage.SET else 0.0
 
-func can_aim_swing() -> bool:
-	return stage == Stage.SET
-
 func aim_swing(point: Vector3) -> void:
 	swing_aim = Vector3(clampf(point.x,-SHOT_AIM_HALF_WIDTH,SHOT_AIM_HALF_WIDTH),Flight.FLOOR,clampf(point.z,SHOT_AIM_NEAR,SHOT_AIM_FAR))
 	swing_target.position = Vector3(swing_aim.x,0.065,swing_aim.z)
+	swing_target.show()
 
 func swing_input(pressed: bool) -> void:
 	if swing_practice or stage != Stage.SET: return
@@ -429,7 +426,6 @@ func play_cpu_set(time: float, delta: float) -> void:
 			status.text = "Space to jump  |  Hold left-click to spike"
 			region.show()
 			aim_swing(swing_aim)
-			swing_target.show()
 			trace.write("cpu_set",clock,{"point":pass_origin,"velocity":pass_motion,"pin_arrival":pin_arrival},true)
 		return
 	ball.position = flight_point(pass_origin,pass_motion,minf(time,cpu_contact_time))
