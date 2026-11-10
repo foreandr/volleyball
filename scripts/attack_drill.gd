@@ -411,17 +411,29 @@ func pose_bow_draw(weight: float, contact := Vector3.ZERO, extension := 0.0, fol
 	var author: RefCounted = setter.get_pose_author()
 	var pose: Array[Transform3D] = []
 	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
-	author.rotate_world(pose,"spine_03",Vector3.UP,lerpf(-0.32,0.25,extension)*weight)
-	var right_shoulder: Vector3 = author.point(pose,"upperarm_r")
-	var draw_hand := right_shoulder+Vector3(0.04,0.34,-0.15)
+	var chest_turn := smoothstep(0.0,0.88,extension)
+	author.rotate_world(pose,"spine_02",Vector3.UP,(0.12*chest_turn+0.08*follow)*weight)
+	author.rotate_world(pose,"spine_03",Vector3.UP,(lerpf(-0.32,0.29,chest_turn)+0.12*follow)*weight)
 	var ball_target := rig.to_local(contact)
+	var right_shoulder: Vector3 = author.point(pose,"upperarm_r")
+	var reach := ball_target-right_shoulder
+	var lean_weight := smoothstep(0.12,0.82,extension)*(1.0-smoothstep(0.0,0.72,follow))*weight
+	var pitch := clampf((reach.z-0.18)*0.75,-0.24,0.27)*lean_weight
+	var roll := clampf(-reach.x*0.70,-0.23,0.23)*lean_weight
+	author.rotate_world(pose,"spine_01",Vector3.RIGHT,pitch*0.62)
+	author.rotate_world(pose,"spine_02",Vector3.RIGHT,pitch*0.38)
+	author.rotate_world(pose,"spine_01",Vector3.BACK,roll*0.62)
+	author.rotate_world(pose,"spine_02",Vector3.BACK,roll*0.38)
+	right_shoulder = author.point(pose,"upperarm_r")
+	var draw_hand := right_shoulder+Vector3(0.04,0.34,-0.15)
 	var wrist_target := ball_target-(ball_target-right_shoulder).normalized()*0.06
 	var through := right_shoulder+Vector3(0.28,-0.28,0.43)
 	var target := draw_hand.lerp(wrist_target,extension).lerp(through,follow)
 	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",
 		target,Vector3(-0.85,0.52,-0.74),weight,lerpf(108.0,175.0,extension))
 	var left_shoulder: Vector3 = author.point(pose,"upperarm_l")
-	var guide_hand := left_shoulder+Vector3(0.06,lerpf(0.43,-0.18,extension),lerpf(0.64,0.30,extension))
+	var guide_drop := smoothstep(0.04,0.57,extension)
+	var guide_hand := left_shoulder+Vector3(0.06,0.43,0.64).lerp(Vector3(0.12,-0.54,0.04),guide_drop)
 	author.limb(pose,"upperarm_l","lowerarm_l","hand_l",
 		guide_hand,Vector3(0.26,-0.55,0.15),weight,174.0)
 	for bone in rig.get_bone_count():
