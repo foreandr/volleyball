@@ -945,7 +945,12 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 		var forward_crunch := smoothstep(0.0,0.09,hit_age)
 		pitch = lerpf(pitch,deg_to_rad(30.0-torso_lean_degrees),forward_crunch)
 		pitch *= 1.0-smoothstep(0.10,0.27,hit_age)
-	if approach_practice: pitch *= 0.38
+	if approach_practice:
+		pitch *= 0.38
+		if stage == Stage.SET:
+			var rise_age := clock-swing_started
+			var arch := smootherstep(0.12,0.23,rise_age)*(1.0-smootherstep(0.23,0.36,rise_age))
+			pitch = lerpf(pitch,deg_to_rad(-40.0),arch)
 	author.rotate_world(pose,"spine_01",Vector3.RIGHT,pitch*0.45*weight)
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,pitch*0.55*weight)
 	var neck: Vector3 = author.point(pose,"neck_01")
@@ -978,7 +983,7 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 			swing_finish_pose = pose.duplicate()
 	if approach_practice and not approach_arm_transition.is_empty():
 		var handoff_age := clock-stage_start if stage == Stage.HIT else clock-swing_started
-		if stage == Stage.SET and handoff_age < 0.28:
+		if stage == Stage.SET and handoff_age < 0.36:
 			var front_pose := pose.duplicate()
 			var across: Vector3 = (author.point(pose,"upperarm_l")-author.point(pose,"upperarm_r")).normalized()
 			var up: Vector3 = (author.point(pose,"neck_01")-author.point(pose,"spine_01")).normalized()
@@ -987,11 +992,17 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 				var upper: String = "upperarm_"+side
 				var shoulder: Vector3 = author.point(pose,upper)
 				var outward := across*(1.0 if side == "l" else -1.0)
-				var target := shoulder+(forward*sin(deg_to_rad(80.0))-up*cos(deg_to_rad(80.0)))*0.54-outward*0.07
-				author.limb(front_pose,upper,"lowerarm_"+side,"hand_"+side,target,-up-outward*0.10,1.0,155.0)
-				var front_weight := 1.0-smootherstep(0.14,0.28,handoff_age)
+				var elbow: Vector3 = author.point(pose,"lowerarm_"+side)
+				var wrist: Vector3 = author.point(pose,"hand_"+side)
+				var arm_length := shoulder.distance_to(elbow)+elbow.distance_to(wrist)
+				var overhead := smootherstep(0.12,0.23,handoff_age)
+				var front := (forward*sin(deg_to_rad(80.0))-up*cos(deg_to_rad(80.0))).normalized()
+				var lift_direction := front.slerp(Vector3.UP,overhead)
+				var target := shoulder+lift_direction*lerpf(0.54,arm_length*0.995,overhead)-outward*lerpf(0.07,0.02,overhead)
+				author.limb(front_pose,upper,"lowerarm_"+side,"hand_"+side,target,-up-outward*0.10,1.0,lerpf(155.0,179.0,overhead))
+				var front_weight := 1.0-smootherstep(0.23,0.36,handoff_age)
 				SpikeArm.blend_arm(pose,front_pose,author,front_weight,side)
-				var source_weight := 1.0-smootherstep(0.0,0.14,handoff_age)
+				var source_weight := 1.0-smootherstep(0.0,0.12,handoff_age)
 				SpikeArm.blend_arm(pose,approach_arm_transition,author,source_weight,side)
 		elif stage == Stage.HIT:
 			var source_weight := 1.0-smootherstep(0.0,0.09,handoff_age)
