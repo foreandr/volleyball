@@ -307,7 +307,7 @@ func start_setting_drill(attack := false) -> void:
 		if attack:
 			controls_hint.text = "Hold left-click to swing\nAim on the far court" if index == 0 else "WASD to move  |  Q forearms  |  I / E hands\nMouse to aim  |  Scroll for pass height\nSpace to jump  |  Hold left-click to spike"
 			return
-		controls_hint.text = "WASD to move  |  Tap Q to bump set\nMouse to aim  |  Scroll to change height" if index == 1 else "WASD to move  |  Tap E to set\nMouse to aim  |  Scroll to change height\nSpace jump  |  7 to 40 in"
+		controls_hint.text = "WASD to move  |  Tap Q to bump set\nMouse to aim  |  Scroll to change height" if index == 1 else "WASD to move  |  Tap E to set\nMouse to aim  |  Scroll to change height\nSpace jump  |  7 to 50 in"
 	show_mode.call(modes.selected)
 	modes.item_selected.connect(func(index: int):
 		type_indices[mode_category] = index

@@ -3,9 +3,9 @@ extends RefCounted
 const HandPose = preload("res://scripts/hand_setting_pose.gd")
 const Court = preload("res://scripts/preview_court.gd")
 const LOAD_TIME := 0.24
-const FULL_AIR_TIME := 0.91
+const FULL_AIR_TIME := 1.02
 const LAND_TIME := 0.16
-const FULL_HEIGHT := 1.016
+const FULL_HEIGHT := 1.27
 const TAP_HEIGHT := 0.18
 const AIR_STEER_SPEED := 1.00
 const AIR_STEER_ACCELERATION := 5.0
