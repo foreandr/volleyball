@@ -6,6 +6,7 @@ const BallTimingRing = preload("res://scripts/ball_timing_ring.gd")
 const Flight = preload("res://scripts/pass_flight.gd")
 const SideKneeSlide = preload("res://scripts/side_knee_slide.gd")
 const ForwardDive = preload("res://scripts/forward_reception_dive.gd")
+const LOW_BOW_EDIT_ID := "low_bow_swing"
 const BACKWARD_EDIT_ID := "d2_backward_from_d1"
 const Catalog = preload("res://scripts/volleyball_animations.gd")
 const MOVE_TYPES := {
@@ -379,6 +380,7 @@ func add_spike_swing_picker() -> void:
 		loop_selected.text = "Stop looping swing" if setting_drill.loop_selected_swing else "Loop selected swing")
 	content.add_child(play_all)
 	content.add_child(loop_selected)
+	content.add_child(button("Edit 06 Low Bow",open_low_bow_editor))
 
 func add_torso_lean_slider() -> void:
 	var readout := label("",16)
@@ -934,6 +936,56 @@ func orbit_setting_camera(pixels: Vector2) -> void:
 
 func adjust_bump_height(amount: float) -> void:
 	setting_drill.bump.height = clampf(setting_drill.bump.height+amount,1.25,20.0)
+
+func open_low_bow_editor() -> void:
+	StorySession.edit_entry = {"id":LOW_BOW_EDIT_ID,"name":"06 Low Bow","category":"Attacking","type":"Line Hit"}
+	for entry in Catalog.custom_entries():
+		if entry.get("source") == LOW_BOW_EDIT_ID: StorySession.edit_entry = entry.duplicate(true)
+	if StorySession.edit_entry.has("path"):
+		StorySession.edit_animation = Catalog.load_clip(StorySession.edit_entry,preview_player)
+	else:
+		StorySession.edit_animation = bake_low_bow_starter()
+	get_tree().change_scene_to_file("res://scenes/animation_editor.tscn")
+
+func bake_low_bow_starter() -> Animation:
+	var drill = setting_drill
+	drill.set_swing_practice(true)
+	drill.swing_variant = 5
+	drill.aim_swing(Vector3(2.0,0.0,10.5))
+	drill.swing_input(true)
+	var start := preview_player.position
+	var rig: Skeleton3D = preview_player.skeleton
+	var start_inverse := rig.global_transform.affine_inverse()
+	var source: Vector3 = drill.pass_origin
+	var velocity: Vector3 = drill.pass_motion
+	var poses: Array = []
+	var contact := 0.60
+	var aim: Vector3
+	var outgoing := Vector3.ZERO
+	for tick in range(127):
+		if tick > 0:
+			drill.restore_torso_lean(preview_player)
+			drill.step_jump(1.0/120.0)
+			drill.apply_torso_lean(preview_player)
+			drill.step(1.0/120.0)
+		if drill.stage == drill.Stage.HIT and outgoing.is_zero_approx():
+			contact = float(tick)/120.0
+			aim = drill.swing_contact
+			outgoing = drill.pass_motion
+		var pose: Array[Transform3D] = player_controls.snapshot_receive_pose()
+		pose[0] = start_inverse*rig.global_transform*pose[0]
+		poses.append(pose)
+	if outgoing.is_zero_approx(): aim = drill.flight_point(source,velocity,contact)
+	var sample := func(time: float) -> Array:
+		return poses[mini(roundi(time*120.0),poses.size()-1)]
+	var clip: Animation = preview_player.get_pose_author().bake({"name":"06 Low Bow","duration":contact*14.0/9.0,"contact_time":contact},sample)
+	clip.set_meta("editor_start",start)
+	clip.set_meta("editor_group","Right Arm")
+	clip.set_meta("editor_frame_count",15)
+	clip.set_meta("editor_feed",{"aim":aim,"incoming":velocity+Vector3.DOWN*Flight.GRAVITY*contact,
+		"acceleration":Vector3.DOWN*Flight.GRAVITY,"duration":contact,"start":source,
+		"side":Vector3.RIGHT,"valid":true,"spike_outgoing":outgoing})
+	return clip
 
 func load_custom_backward_clip() -> Animation:
 	var copies := Catalog.custom_entries()

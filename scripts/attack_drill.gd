@@ -453,7 +453,14 @@ func pose_bow_draw(weight: float, contact: Vector3, extension := 0.0, follow := 
 	var power := swing_power if stage == Stage.HIT else swing_charge()
 	var rotation_weight := weight*torso_rotation_scale*lerpf(0.48,1.22,power)
 	var turn := lerpf(-0.57,0.42+aim_turn*0.52,chest_turn)+(0.34+aim_turn*0.38)*follow
-	var tuck := clampf(smoothstep(0.08,0.45,setter.position.y-jump.start.y)*weight*(1.0-0.75*follow)*leg_kickback_scale,0.0,1.0)
+	var airborne := smoothstep(0.08,0.45,setter.position.y-jump.start.y)
+	var leg_turn := clampf(turn*rotation_weight*0.24,-0.32,0.32)*airborne*smoothstep(0.50,0.95,extension)
+	if not is_zero_approx(leg_turn):
+		var spine: Transform3D = author.world_pose(pose,rig.find_bone("spine_01"))
+		var hips: Vector3 = author.point(pose,"pelvis")
+		author.rotate_world(pose,"pelvis",(spine.origin-hips).normalized(),leg_turn)
+		author.set_world_basis(pose,"spine_01",spine.basis)
+	var tuck := clampf(airborne*weight*(1.0-0.75*follow)*leg_kickback_scale,0.0,1.0)
 	if tuck > 0.0:
 		for side in ["l","r"]:
 			var thigh: String = "thigh_"+side
@@ -463,9 +470,9 @@ func pose_bow_draw(weight: float, contact: Vector3, extension := 0.0, follow := 
 			var knee: Vector3 = author.point(pose,calf)
 			var ankle: Vector3 = author.point(pose,foot)
 			var outward := 1.0 if side == "l" else -1.0
-			var thigh_axis := (knee-hip).normalized().slerp(Vector3(0.18*outward,-1.0,0.16).normalized(),tuck)
+			var thigh_axis := (knee-hip).normalized().slerp(Vector3(0.18*outward,-1.0,0.16).normalized().rotated(Vector3.UP,leg_turn),tuck)
 			var heel_lift := (0.24 if side == "r" else 0.10)+0.78*maxf(0.0,leg_kickback_scale-1.0)
-			var shin_axis := (ankle-knee).normalized().slerp(Vector3(0.07*outward,heel_lift,-1.0).normalized(),tuck)
+			var shin_axis := (ankle-knee).normalized().slerp(Vector3(0.07*outward,heel_lift,-1.0).normalized().rotated(Vector3.UP,leg_turn),tuck)
 			author.aim_joint(pose,thigh,calf,hip+thigh_axis)
 			knee = author.point(pose,calf)
 			author.aim_joint(pose,calf,foot,knee+shin_axis)

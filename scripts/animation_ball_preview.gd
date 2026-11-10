@@ -263,8 +263,16 @@ func recalculate() -> void:
 	source_ground.global_position = Vector3(feed.start.x,0.065,feed.start.z)
 	source_ground.show()
 	outgoing = Vector3.ZERO if missed else Contact.rebound(incoming,surface_velocity,surface_normal,float(clip.get_meta("reception_restitution",0.55)))
-	if missed and review_feed.get("require_platform",false): outgoing = incoming
-	flight_duration = Flight.landing_time(aim_point,outgoing) if not missed or review_feed.get("require_platform",false) else 0.0
+	if review_feed.has("spike_outgoing"):
+		var rig: Skeleton3D = actor.skeleton
+		var cache := {}
+		var wrist := pose(rig.find_bone("hand_r"),contact_time,cache).origin
+		var knuckle := pose(rig.find_bone("middle_01_r"),contact_time,cache).origin
+		var palm := rig.to_global(wrist.lerp(knuckle,0.75))
+		missed = palm.distance_to(aim_point)>0.19 or review_feed.spike_outgoing.is_zero_approx()
+		outgoing = incoming if missed else review_feed.spike_outgoing
+	elif missed and review_feed.get("require_platform",false): outgoing = incoming
+	flight_duration = Flight.landing_time(aim_point,outgoing) if not missed or review_feed.get("require_platform",false) or review_feed.has("spike_outgoing") else 0.0
 	incoming_net = Net.first_hit(func(time): return Flight.position(feed_info,aim_point,time),-feed_duration,0.0)
 	outgoing_net = {}
 	if not missed and incoming_net.is_empty(): outgoing_net = Net.first_hit(flight_position,0.0,flight_duration)

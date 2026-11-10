@@ -53,9 +53,11 @@ func _ready() -> void:
 		preview_player.set_height_cm(Profile.DEFAULTS.height_cm)
 		preview_player.position = session.source.get_meta("editor_start")
 		preview_player.rotation.y = 0.0
-		view_focus = preview_player.position+Vector3(0,1.10,0)
-		view_distance = 4.6
-		orbit_yaw = 1.1
+		var spike: bool = session.source.has_meta("editor_group")
+		view_focus = preview_player.position+Vector3(0,1.85 if spike else 1.10,0)
+		view_distance = 5.8 if spike else 4.6
+		orbit_yaw = -2.1 if spike else 1.1
+		if spike: preview_player.get_node("DirectionArrows").hide()
 		update_camera()
 	ball_preview = preload("res://scripts/animation_ball_preview.gd").new()
 	ball_preview.review_feed = session.source.get_meta("editor_feed",{})
@@ -77,7 +79,7 @@ func _ready() -> void:
 		copy_name.text = draft.name
 		frame = draft.frame
 	refresh_ball_angle()
-	select_group(draft.get("group","Both Arms"))
+	select_group(draft.get("group",session.source.get_meta("editor_group","Both Arms")))
 	set_frame(frame)
 	if draft.get("source","") == entry.id and StorySession.edit_animation != null:
 		var requested := float(StorySession.edit_animation.get_meta("desired_output_angle",-1))
