@@ -20,8 +20,8 @@ static func apply(actor: Node3D, target: Vector3, blend: float) -> void:
 	var pose: Array = []
 	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
 	var original := pose.duplicate()
-	author.rotate_world(pose,"spine_01",Vector3.RIGHT,-0.14)
-	author.rotate_world(pose,"spine_02",Vector3.RIGHT,-0.06)
+	author.rotate_world(pose,"spine_01",Vector3.RIGHT,-0.18)
+	author.rotate_world(pose,"spine_02",Vector3.RIGHT,-0.075)
 	var target_local := rig.to_local(target)
 	var head: Vector3 = author.point(pose,"Head")
 	var offset := target_local-head

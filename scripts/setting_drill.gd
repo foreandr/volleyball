@@ -188,11 +188,15 @@ func update_ball_ring() -> void:
 	range_style.albedo_color = Color("6beeb3") if distance <= radius else Color("657f9b")
 
 func apply_setter_arms(phase: float, moving: bool, delta: float) -> void:
+	var rig: Skeleton3D = setter.skeleton
+	if not bump_enabled:
+		var chest := rig.find_bone("spine_01")
+		var pitch_axis := (rig.get_bone_global_pose(chest).basis.inverse()*Vector3.RIGHT).normalized()
+		rig.set_bone_pose_rotation(chest,rig.get_bone_pose_rotation(chest)*Quaternion(pitch_axis,-0.10))
 	var distance := (ball.position-setter.position).slide(Vector3.UP).length()
 	var weight := smoothstep(1.85,2.15,distance) if moving else 0.0
 	arm_swing_weight = move_toward(arm_swing_weight,weight,delta*7.0)
 	if arm_swing_weight <= 0.0: return
-	var rig: Skeleton3D = setter.skeleton
 	for side in ["l","r"]:
 		var sign_ := 1.0 if side == "l" else -1.0
 		var shoulder := rig.find_bone("upperarm_"+side)
