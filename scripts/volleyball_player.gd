@@ -1,5 +1,6 @@
 extends Node3D
 
+const Profile = preload("res://scripts/player_profile.gd")
 const FOREARM_PLATFORM := "straight_pass_02"
 const ForearmReach = preload("res://scripts/forearm_reach_pose.gd")
 const ForwardDive = preload("res://scripts/forward_reception_dive.gd")
@@ -10,7 +11,7 @@ var pose_author: RefCounted
 @export var team_color := Color("2c8fe5")
 @export var player_number := 1
 var display_name := "Player"
-var height_cm := 180.0
+var height_cm: float = Profile.DEFAULTS.height_cm
 var handedness := "Right"
 var model: Node3D
 var skeleton: Skeleton3D
@@ -18,6 +19,7 @@ var animator: AnimationPlayer
 var animation_slots := {"idle":"volleyball/goalkeeper_idle","run":"base/Jog_Fwd","jump":"base/Jump_Start","land":"base/Jump_Land"}
 
 func _ready() -> void:
+	set_height_cm(height_cm)
 	add_child(preload("res://scripts/player_direction_arrows.gd").new())
 	model = preload("res://assets/characters/base/Superhero_Male_FullBody.gltf").instantiate()
 	add_child(model)
@@ -85,10 +87,13 @@ func install_custom(resource: Resource, slot := "idle", save := true) -> bool:
 	return true
 
 func apply_profile(profile: Dictionary) -> void:
-	var values := preload("res://scripts/player_profile.gd").clean(profile)
+	var values := Profile.clean(profile)
 	display_name = values.name
-	height_cm = values.height_cm
+	set_height_cm(values.height_cm)
 	handedness = values.handedness
+
+func set_height_cm(value: float) -> void:
+	height_cm = value
 	scale = Vector3.ONE*(height_cm/180.0)
 
 func get_pose_author() -> RefCounted:

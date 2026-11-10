@@ -78,7 +78,7 @@ func queue_hand_receive() -> void:
 
 func receive_cue_time() -> float:
 	if not bump.hand_setting: return SERVE_TIME
-	var height := RECEIVE_START.y+HandPose.CONTACT_HEIGHT+HandPose.CONTACT_RADIUS
+	var height := RECEIVE_START.y+HandPose.CONTACT_HEIGHT*setter.scale.y+HandPose.CONTACT_RADIUS
 	var latest := descending_time(ATTACK_SERVE_SOURCE,serve_velocity,height)
 	if not jump.active: return latest
 	var earliest := descending_time(ATTACK_SERVE_SOURCE,serve_velocity,height+jump.height)
@@ -135,7 +135,9 @@ func step(delta: float) -> void:
 				elif not bump.low_save.active:
 					bump.follow_forearm(receive_time,serve_velocity+Vector3.DOWN*Flight.GRAVITY*bump.touch_time)
 			play_cpu_set(time,delta)
-		Stage.SET: play_pin_ball(time,previous,delta)
+		Stage.SET:
+			cpu_set.update_hand_push(cpu_set.release_time+time,cpu_set.release_time+time-cpu_set.touch_time)
+			play_pin_ball(time,previous,delta)
 		Stage.CAUGHT:
 			HandPose.apply(setter,setter.to_global(bump.hand_anchor),1.0)
 			ball.position = bump.platform_center()
@@ -158,6 +160,7 @@ func trace_snapshot(time: float) -> Dictionary:
 		"ball_to_cpu":ball.position.distance_to(receiver.position),
 		"ball_to_platform":ball.position.distance_to(platform),
 		"contact_check":bump.contact_check,"jumping":jump.active,
+		"reach":bump.reach,"reach_step":bump.reach_step,"rear_setup":bump.rear_setup,"reach_progress":bump.reach_progress,
 	}
 
 func play_serve(time: float, previous: float, delta: float) -> void:
@@ -174,7 +177,7 @@ func play_serve(time: float, previous: float, delta: float) -> void:
 			return
 		pass_origin = bump.release_point if bump.hand_setting else bump.touch
 		pass_motion = bump.outgoing
-		var head_height := CPU_HOME.y+HandPose.CONTACT_HEIGHT
+		var head_height := CPU_HOME.y+HandPose.CONTACT_HEIGHT*receiver.scale.y
 		cpu_contact_time = descending_time(pass_origin,pass_motion,head_height)
 		if cpu_contact_time <= 0.0:
 			miss("Pass was too low to set")
@@ -185,12 +188,12 @@ func play_serve(time: float, previous: float, delta: float) -> void:
 			return
 		bump.hide()
 		var incoming := (pass_origin-cpu_contact_point).slide(Vector3.UP).normalized()
-		cpu_stand = Court.clamp_setter(Vector3(cpu_contact_point.x,CPU_HOME.y,cpu_contact_point.z)-incoming*HandPose.CONTACT_FORWARD)
-		receiver.rotation.y = atan2(incoming.x,incoming.z)
+		cpu_stand = Court.clamp_setter(Vector3(cpu_contact_point.x,CPU_HOME.y,cpu_contact_point.z)-incoming*HandPose.CONTACT_FORWARD*receiver.scale.z)
 		stage = Stage.PASS
 		stage_start = clock
 		status.text = "CPU setting to the pin"
-		trace.write("player_pass",clock,{"point":pass_origin,"velocity":pass_motion,"cpu_contact":cpu_contact_point},true)
+		trace.write("player_pass",clock,{"point":pass_origin,"velocity":pass_motion,"cpu_contact":cpu_contact_point,
+			"grade":bump.grade,"reach":bump.reach,"contact":bump.contact_check},true)
 	elif time >= end:
 		miss("Serve missed")
 
@@ -217,6 +220,10 @@ func play_cpu_set(time: float, delta: float) -> void:
 	ball.position = flight_point(pass_origin,pass_motion,minf(time,cpu_contact_time))
 	var travel := (cpu_stand-receiver.position).limit_length(3.2*delta)
 	receiver.position += travel
+	var toward_ball := (ball.position-receiver.position).slide(Vector3.UP)
+	var turn_rate := 7.0*smoothstep(0.25,0.95,toward_ball.length())
+	if turn_rate > 0.0:
+		receiver.rotation.y = rotate_toward(receiver.rotation.y,atan2(toward_ball.x,toward_ball.z),delta*turn_rate)
 	cpu_feet.step(receiver.basis.inverse()*travel/maxf(delta*3.2,0.001),delta,1.4)
 	var lead := cpu_contact_time-time
 	if lead <= 0.22:

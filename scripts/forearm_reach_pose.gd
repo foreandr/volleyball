@@ -11,6 +11,7 @@ static func sample(rig: Skeleton3D, author: RefCounted, step: Vector3, travel: V
 	var lead: String = reach.lead
 	var side_lunge: bool = reach.side_lunge
 	var height: float = reach.height
+	var centered_back: bool = reach.get("centered_back",false)
 	var pose: Array = []
 	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
 	if tier == 2 and back and not rear_diagonal and not ready.is_empty():
@@ -37,7 +38,7 @@ static func sample(rig: Skeleton3D, author: RefCounted, step: Vector3, travel: V
 		author.rotate_world(pose,"spine_02",Vector3.UP,side_lean*0.08*weight)
 		author.rotate_world(pose,"spine_03",Vector3.UP,side_lean*0.19*weight)
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,-back_amount*0.14*weight)
-	author.rotate_world(pose,"spine_03",Vector3.UP,shoulder_side*back_amount*(0.18 if tier == 2 else 0.31)*weight)
+	author.rotate_world(pose,"spine_03",Vector3.UP,shoulder_side*back_amount*(0.0 if centered_back else (0.18 if tier == 2 else 0.31))*weight)
 	var deep := tier == 2 and height < 0.20
 	var high := height >= 0.20
 	var short_lunge := tier == 1 and not high and (side_receive or back)
@@ -48,12 +49,13 @@ static func sample(rig: Skeleton3D, author: RefCounted, step: Vector3, travel: V
 	if high or (back and tier == 2):
 		# Clear the incoming path by turning the ribcage, leaving the joined platform out in front.
 		var turn := (shoulder_side*0.50 if high else side_lean*0.12)*weight
+		if centered_back: turn *= 0.15
 		author.rotate_world(pose,"spine_02",Vector3.UP,turn*0.55)
 		author.rotate_world(pose,"spine_03",Vector3.UP,turn*0.45)
 		if high:
 			author.rotate_world(pose,"spine_02",Vector3.RIGHT,-0.19*weight)
-			author.rotate_world(pose,"spine_02",Vector3.BACK,shoulder_side*0.15*weight)
-			author.rotate_world(pose,"spine_03",Vector3.BACK,-shoulder_side*0.07*weight)
+			author.rotate_world(pose,"spine_02",Vector3.BACK,shoulder_side*(0.03 if centered_back else 0.15)*weight)
+			author.rotate_world(pose,"spine_03",Vector3.BACK,-shoulder_side*(0.0 if centered_back else 0.07)*weight)
 	if deep:
 		author.rotate_world(pose,"spine_02",Vector3.BACK,-side_lean*0.12*weight)
 		author.rotate_world(pose,"spine_02",Vector3.RIGHT,0.14*weight)

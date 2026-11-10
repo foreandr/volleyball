@@ -33,6 +33,8 @@ var ready_pose: Array[Transform3D] = []
 var reach := {}
 var reach_step := Vector3.ZERO
 var reach_travel := Vector3.ZERO
+var rear_setup := Vector3.ZERO
+var rear_setup_travel := Vector3.ZERO
 var reach_progress := 0.0
 var destination := Vector2(2.75,3.0)
 var height := 3.8
@@ -334,6 +336,8 @@ func clear_reach() -> void:
 	reach_step = Vector3.ZERO
 	reach_travel = Vector3.ZERO
 	reach_progress = 0.0
+	rear_setup = Vector3.ZERO
+	rear_setup_travel = Vector3.ZERO
 
 func advance_reach(path: Callable, time: float, end: float, delta: float) -> Vector3:
 	var intercept := Vector3.INF
@@ -345,12 +349,17 @@ func advance_reach(path: Callable, time: float, end: float, delta: float) -> Vec
 		if reach.is_empty() and (lookahead >= end or not intercept.is_equal_approx(future)):
 			plan_reach(intercept-ready_contact())
 	if not reach.is_empty():
-		var before := smoothstep(0.0,1.0,reach_progress)
-		var duration := 0.19 if reach.tier == 2 else 0.15
+		var before := reach_progress
+		var duration := 0.27 if not rear_setup.is_zero_approx() else (0.19 if reach.tier == 2 else 0.15)
 		reach_progress = minf(1.0,reach_progress+delta/duration)
 		var origin := setter.position
-		var next := origin+reach_step*(smoothstep(0.0,1.0,reach_progress)-before)
-		setter.position = Court.clamp_setter(next)
+		var setup := rear_setup*(smoothstep(0.0,0.50,reach_progress)-smoothstep(0.0,0.50,before))
+		setter.position = Court.clamp_setter(origin+setup)
+		rear_setup_travel += setter.position-origin
+		origin = setter.position
+		var lateral_start := 0.28 if not rear_setup.is_zero_approx() else 0.0
+		var travel := smoothstep(lateral_start,1.0,reach_progress)-smoothstep(lateral_start,1.0,before)
+		setter.position = Court.clamp_setter(origin+reach_step*travel)
 		reach_travel += setter.position-origin
 	return intercept
 
@@ -361,17 +370,27 @@ func plan_reach(offset: Vector3) -> void:
 	var tier := Timing.practice_reach_tier(offset)
 	if tier == 3: return
 	var back := local.z < -absf(local.x)*0.65
-	var short_back := tier == 1 and back and -local.z > absf(local.x)*1.4
+	var straight_back := back and -local.z > absf(local.x)*1.4
+	var short_back := tier == 1 and straight_back
+	var rear_side := tier == 2 and back and not straight_back
 	var forward := local.z > absf(local.x)*1.4
 	var side := tier == 2 and absf(local.x) > absf(local.z)*1.4
 	reach = {
-		"tier":tier,"back":back,"rear_diagonal":tier == 2 and back and absf(local.x)>0.20,
+		"tier":tier,"back":back and not rear_side,"rear_diagonal":false,
 		"short_straight_back":short_back,"forward_lunge":forward,
-		"lead":"r" if (tier == 1 and (forward or short_back)) or local.x < 0.0 else "l",
-		"side_lunge":side,"height":offset.y if tier == 2 else 0.0,
+		"lead":"r" if straight_back or (tier == 1 and forward) or local.x < 0.0 else "l",
+		"side_lunge":side or rear_side,"height":offset.y if tier == 2 else 0.0,
+		"centered_back":straight_back,"backward":back,
 	}
 	var limit := 0.68 if side else (0.75 if tier == 2 else 0.46)
 	reach_step = horizontal.limit_length(limit)*(1.0 if back and tier == 2 else 0.78)
+	if rear_side:
+		var forward_axis := setter.basis.z.normalized()
+		rear_setup = forward_axis*clampf(horizontal.dot(forward_axis),-0.48,0.0)
+		reach_step = horizontal.slide(forward_axis).limit_length(0.68)
+
+func backward_reach_active() -> bool:
+	return reach.get("backward",false) and grade == Timing.Grade.WAITING
 
 func follow_forearm(time: float, incoming: Vector3) -> void:
 	var follow := time-touch_time
@@ -384,7 +403,18 @@ func follow_forearm(time: float, incoming: Vector3) -> void:
 func pose_reach(weight: float, intercept: Vector3) -> void:
 	if reach.is_empty() or weight <= 0.0: return
 	var local := setter.basis.inverse()
-	setter.pose_reception_reach(local*reach_step,local*reach_travel,weight,reach_progress,ready_pose,reach,false,0,intercept)
+	var pose_progress := reach_progress
+	if not rear_setup.is_zero_approx():
+		pose_progress = clampf(inverse_lerp(0.28,1.0,reach_progress),0.0,1.0)
+		var step_weight := smoothstep(0.0,0.30,reach_progress)*(1.0-smoothstep(0.30,0.62,reach_progress))
+		if step_weight > 0.0:
+			var shuffle := {"tier":1,"back":true,"rear_diagonal":false,"short_straight_back":true,
+				"forward_lunge":false,"lead":reach.lead,"side_lunge":false,"height":0.0,"centered_back":true}
+			setter.pose_reception_reach(local*rear_setup,local*rear_setup_travel,step_weight,
+				clampf(reach_progress/0.50,0.0,1.0),ready_pose,shuffle,false,0,intercept)
+		weight *= smoothstep(0.0,0.65,pose_progress)
+	if weight > 0.0:
+		setter.pose_reception_reach(local*reach_step,local*reach_travel,weight,pose_progress,ready_pose,reach,false,0,intercept)
 
 func reach_platform(offset: Vector3) -> void:
 	var rig: Skeleton3D = setter.skeleton

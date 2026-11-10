@@ -34,12 +34,21 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 	var aim := target_local-head
 	var diamond := head+Vector3(clampf(aim.x,-0.22,0.22),clampf(aim.y-0.075,0.12,0.27),clampf(aim.z-0.07,0.09,0.35))
 	var local_push := rig.global_basis.inverse()*push
+	var horizontal_push := local_push.slide(Vector3.UP)
+	var turn := 0.0
+	if horizontal_push.length_squared() > 0.0001:
+		var set_yaw := atan2(horizontal_push.x,horizontal_push.z)
+		var facing := PI if horizontal_push.z < -absf(horizontal_push.x) else 0.0
+		turn = clampf(angle_difference(facing,set_yaw),-0.82,0.82)*smoothstep(0.0,0.12,push.length())
+		author.rotate_world(pose,"spine_02",Vector3.UP,turn*0.42)
+		author.rotate_world(pose,"spine_03",Vector3.UP,turn*0.58)
+		author.rotate_world(pose,"spine_02",Vector3.RIGHT,clampf(local_push.z,-0.17,0.17)*0.55)
 	diamond += local_push-Vector3.UP*0.055*cushion
 	var elbow_limit := lerpf(152.0,176.0,clampf(push.length()/0.24,0.0,1.0))-12.0*cushion
 	for side in ["l","r"]:
 		var sign_ := 1.0 if side == "l" else -1.0
 		var hand: String = "hand_"+side
-		var wrist := diamond+Vector3(sign_*0.14,-0.08,-0.015)
+		var wrist := diamond+Vector3(sign_*0.14,-0.08,-0.015).rotated(Vector3.UP,turn*0.65)
 		author.limb(pose,"upperarm_"+side,"lowerarm_"+side,hand,wrist,Vector3(sign_*0.9,-0.55,0.25),1.0,elbow_limit)
 		for digit in ["thumb","index","middle","ring","pinky"]:
 			for joint in ["01","02","03"]:

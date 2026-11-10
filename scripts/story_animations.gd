@@ -64,6 +64,7 @@ func _ready() -> void:
 	if DisplayServer.get_name() != "headless":
 		DisplayServer.window_set_title("Volleyball | "+build_label)
 	super._ready()
+	preview_player.set_height_cm(preview_player.Profile.DEFAULTS.height_cm)
 	preview_overlay = Control.new()
 	preview_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	preview.get_parent().add_child(preview_overlay)
@@ -463,7 +464,7 @@ func _process(delta: float) -> void:
 		setting_drill.trace_move_scale = 0.0 if diving else setting_drill.setter_movement_scale()
 		var court_weight: float = setting_drill.court_facing_weight()
 		if not diving and not setting_drill.jump.active:
-			player_controls.move_player(setting_drill.trace_input,delta,false,setting_drill.ball.global_position,setting_drill.trace_move_scale,court_weight)
+			player_controls.move_player(setting_drill.trace_input,delta,false,setting_drill.ball.global_position,setting_drill.trace_move_scale,court_weight,not setting_drill.bump.backward_reach_active())
 			setting_drill.apply_setter_arms(player_controls.footwork.phase,player_controls.moving,delta)
 		elif setting_drill.jump.active and court_weight > 0.0:
 			player_controls.track_setting_ball(preview_player,setting_drill.ball.global_position,delta,court_weight)
