@@ -286,7 +286,7 @@ func start_setting_drill() -> void:
 	var controls_hint := label("",16)
 	controls_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	var show_mode := func(index: int):
-		controls_hint.text = "WASD to move  |  Tap Q to bump set\nMouse to aim  |  Scroll to change height" if index == 1 else "WASD to get under the pass"
+		controls_hint.text = "WASD to move  |  Tap Q to bump set\nMouse to aim  |  Scroll to change height" if index == 1 else "WASD to move  |  Tap E to hand set\nMouse to aim  |  Scroll to change height"
 	show_mode.call(modes.selected)
 	modes.item_selected.connect(func(index: int):
 		type_indices["Setting"] = index
@@ -750,7 +750,7 @@ func handle_preview_input(event: InputEvent) -> void:
 	if is_instance_valid(setting_drill):
 		if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
 			open_menu()
-		elif setting_drill.bump_enabled:
+		else:
 			if event is InputEventMouseMotion:
 				if event.button_mask & MOUSE_BUTTON_MASK_MIDDLE:
 					adjust_bump_height(-event.relative.y*0.018)
@@ -825,7 +825,8 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 	if is_instance_valid(setting_drill) and event is InputEventKey and event.keycode in [KEY_F1,KEY_F2,KEY_Q,KEY_E]:
-		if event.keycode == KEY_Q and event.pressed and not event.echo: setting_drill.queue_bump()
+		var set_key := KEY_Q if setting_drill.bump_enabled else KEY_E
+		if event.keycode == set_key and event.pressed and not event.echo: setting_drill.queue_set()
 		get_viewport().set_input_as_handled()
 		return
 	if is_instance_valid(reception_review) and event is InputEventKey and event.pressed and not event.echo and event.keycode in [KEY_F1,KEY_F2]:

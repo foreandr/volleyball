@@ -61,7 +61,6 @@ var landing: float
 var clock := 0.0
 var rep := 0
 var receiving := false
-var judged := false
 var bump: MeshInstance3D
 var bump_enabled := false
 var ready_range: MeshInstance3D
@@ -117,7 +116,7 @@ func configure(player: Node3D, readout: Label, use_bump: bool, build := "") -> v
 	add_child(bump)
 	bump.configure(setter,clip)
 	bump_enabled = use_bump
-	bump.visible = use_bump
+	bump.hand_setting = not use_bump
 	ready_range = MeshInstance3D.new()
 	var outline := TorusMesh.new()
 	outline.inner_radius = 1.965
@@ -133,30 +132,28 @@ func configure(player: Node3D, readout: Label, use_bump: bool, build := "") -> v
 	reset_feed()
 
 func update_timing_cue(after_pass := -INF) -> void:
-	timing_cue.update_timing(after_pass,timing_arrival,BumpSetting.GREEN_START,BumpSetting.GREEN_END,bump_enabled and is_finite(bump.touch_time))
+	timing_cue.update_timing(after_pass,timing_arrival,BumpSetting.GREEN_START,BumpSetting.GREEN_END,is_finite(bump.touch_time))
 
 func set_bump_mode(enabled: bool) -> void:
 	if bump_enabled == enabled: return
 	bump_enabled = enabled
-	bump.visible = enabled
+	bump.hand_setting = not enabled
 	reset_feed()
 
 func setter_movement_scale() -> float:
-	if not bump_enabled: return 1.0
 	return bump.movement_scale(clock-0.45-SERVE_TIME,timing_arrival,ball.global_position)
 
 func setter_is_diving() -> bool:
 	return bump.low_save.active and not bump.low_save.finished(clock-0.45-SERVE_TIME)
 
-func queue_bump() -> void:
-	if bump_enabled:
-		var previous_press: float = bump.pressed_at
-		bump.queue_bump(clock-0.45-SERVE_TIME)
-		trace.write("q_tap",clock,{
-			"accepted":previous_press != bump.pressed_at,"press_after_cpu_contact":bump.pressed_at,
-			"seconds_to_green_reference":timing_arrival-(clock-0.45-SERVE_TIME),
-			"snapshot":trace_snapshot(clock-0.45-SERVE_TIME),
-		},true)
+func queue_set() -> void:
+	var previous_press: float = bump.pressed_at
+	bump.queue_bump(clock-0.45-SERVE_TIME)
+	trace.write("q_tap" if bump_enabled else "e_tap",clock,{
+		"accepted":previous_press != bump.pressed_at,"press_after_cpu_contact":bump.pressed_at,
+		"seconds_to_green_reference":timing_arrival-(clock-0.45-SERVE_TIME),
+		"snapshot":trace_snapshot(clock-0.45-SERVE_TIME),
+	},true)
 
 func mark_trace() -> bool:
 	if trace.file == null: return false
@@ -195,7 +192,6 @@ func reset_feed() -> void:
 		trace.write("feed_end",clock,{"result":status.text,"closest_check":trace.closest_check},true)
 	clock = 0.0
 	receiving = false
-	judged = false
 	bump.reset()
 	update_timing_cue()
 	var reception: Array = RECEPTIONS[rep % RECEPTIONS.size()]
@@ -220,21 +216,19 @@ func reset_feed() -> void:
 	arrival = rise/Flight.GRAVITY+sqrt(2.0*(PASS_APEX-SET_HEIGHT)/Flight.GRAVITY)
 	pass_velocity = (target-contact).slide(Vector3.UP)/arrival+Vector3.UP*rise
 	landing = Flight.landing_time(contact,pass_velocity)
-	var stand := target
-	timing_arrival = arrival
-	if bump_enabled:
-		var bump_height: float = bump.ready_contact().y
-		timing_arrival = rise/Flight.GRAVITY+sqrt(2.0*(PASS_APEX-bump_height-BumpSetting.PLATFORM_RADIUS)/Flight.GRAVITY)
-		var bump_arrival := rise/Flight.GRAVITY+sqrt(2.0*(PASS_APEX-bump_height)/Flight.GRAVITY)
-		stand = flight_point(contact,pass_velocity,bump_arrival)+pass_velocity.slide(Vector3.UP).normalized()*0.62
+	var set_height: float = bump.ready_contact().y
+	timing_arrival = rise/Flight.GRAVITY+sqrt(2.0*(PASS_APEX-set_height-bump.contact_radius())/Flight.GRAVITY)
+	var set_arrival := rise/Flight.GRAVITY+sqrt(2.0*(PASS_APEX-set_height)/Flight.GRAVITY)
+	var stance_offset := 0.62 if bump_enabled else 0.21
+	var stand := flight_point(contact,pass_velocity,set_arrival)+pass_velocity.slide(Vector3.UP).normalized()*stance_offset
 	region.position = Vector3(stand.x,0.065,stand.z)
 	region_style.albedo_color = Color("49d6ff")
-	region.visible = bump_enabled
+	region.show()
 	ball.position = SOURCE
 	receiver.play_action("idle")
 	status.text = "Serve incoming"
 	trace.begin_feed({
-		"mode":"bump" if bump_enabled else "hand_positioning","cpu_move":receiver_move_name(),
+		"mode":"bump" if bump_enabled else "hand","cpu_move":receiver_move_name(),
 		"cpu_tier":receive_tier,"serve_start":SOURCE,"serve_velocity":serve_velocity,
 		"cpu_contact":contact,"cpu_pass_velocity":pass_velocity,
 		"setter_region":region.position,"setter_start":setter.position,
@@ -244,7 +238,7 @@ func reset_feed() -> void:
 func step(delta: float) -> void:
 	var previous := clock-0.45-SERVE_TIME
 	clock += delta
-	if bump_enabled: bump.update_aim()
+	bump.update_aim()
 	var elapsed := clock-0.45
 	if elapsed < 0.0: return
 	var after_pass := elapsed-SERVE_TIME
@@ -277,19 +271,7 @@ func step(delta: float) -> void:
 	ball.position = flight_point(contact,pass_velocity,minf(after_pass,landing))
 	if previous < 0.0:
 		trace.write("cpu_contact",clock,{"point":contact,"outgoing_velocity":pass_velocity,"move":receiver_move_name()},true)
-	if bump_enabled:
-		step_bump(after_pass,maxf(0.0,previous),delta)
-		return
-	update_timing_cue(after_pass)
-	sample_trace(after_pass)
-	if not judged and after_pass >= arrival:
-		judged = true
-		var under := (setter.position-region.position).slide(Vector3.UP).length() <= REGION_RADIUS
-		region_style.albedo_color = Color("66e891") if under else Color("ff9966")
-		status.text = "Under the ball" if under else "Outside the target"
-	if after_pass >= landing+0.8:
-		rep += 1
-		reset_feed()
+	step_bump(after_pass,maxf(0.0,previous),delta)
 
 func step_bump(time: float, previous: float, delta: float) -> void:
 	var path := func(t): return flight_point(contact,pass_velocity,minf(t,landing))
@@ -333,7 +315,7 @@ func receiver_move_name() -> String:
 func setter_move_name() -> String:
 	if bump.low_save.active: return "pancake" if bump.low_save.pancake else "forward_dive"
 	if not bump.reach.is_empty(): return "lunge" if bump.reach.tier == 2 else "step"
-	if is_finite(bump.pose_started_at): return "standing_bump"
+	if is_finite(bump.pose_started_at): return "hand_set" if not bump_enabled else "standing_bump"
 	return "ready"
 
 func sample_trace(time: float) -> void:

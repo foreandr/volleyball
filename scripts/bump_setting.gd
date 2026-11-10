@@ -1,5 +1,6 @@
 extends MeshInstance3D
 
+const HandPose = preload("res://scripts/hand_setting_pose.gd")
 const Court = preload("res://scripts/preview_court.gd")
 const Flight = preload("res://scripts/pass_flight.gd")
 const Timing = preload("res://scripts/animation_ball_preview.gd")
@@ -19,6 +20,7 @@ const APPROACH_TIME := 0.60
 const PLATFORM_PREP_TIME := 0.26
 
 var setter: Node3D
+var hand_setting := false
 var clip: Animation
 var contact_frame: float
 var tracks: Array[Vector2i] = []
@@ -99,6 +101,7 @@ func movement_scale(time: float, arrival: float, ball_position: Vector3) -> floa
 	return 1.0-brake
 
 func platform_center() -> Vector3:
+	if hand_setting: return HandPose.contact_center(setter)
 	var rig: Skeleton3D = setter.skeleton
 	var elbows := []
 	var wrists := []
@@ -108,7 +111,19 @@ func platform_center() -> Vector3:
 	return Contact.surface(elbows,wrists,0.055).ball
 
 func ready_contact() -> Vector3:
+	if hand_setting: return setter.to_global(Vector3(0,HandPose.CONTACT_HEIGHT,HandPose.CONTACT_FORWARD))
 	return setter.to_global(Vector3(0,1.04,0.62))
+
+func contact_radius() -> float:
+	return HandPose.CONTACT_RADIUS if hand_setting else PLATFORM_RADIUS
+
+func hand_intercept(path: Callable, time: float, end: float) -> Vector3:
+	var current: Vector3 = path.call(time)
+	var next: Vector3 = path.call(minf(time+0.16,end))
+	var center := ready_contact()
+	if current.is_equal_approx(next): return center
+	var nearest := Geometry3D.get_closest_point_to_segment(center,current,next)
+	return center+(nearest-center).limit_length(0.32)
 
 func aim_velocity(origin: Vector3, error := 0.0) -> Vector3:
 	return Timing.aimed_pass_velocity(origin,{"position":destination,"fit":"height","height":height},45.0,error)
@@ -149,13 +164,13 @@ func approach(path: Callable, time: float, end: float) -> float:
 		var next: Vector3 = path.call(time+ahead+0.005)
 		if next.y >= point.y: continue
 		var distance := point.distance_to(center)
-		if distance <= PLATFORM_RADIUS:
+		if distance <= contact_radius():
 			var low := maxf(0.0,ahead-APPROACH_TIME/19.0)
 			var high := ahead
 			for refinement in range(5):
 				var mid := (low+high)*0.5
 				var sample: Vector3 = path.call(time+mid)
-				if sample.distance_to(center) <= PLATFORM_RADIUS: high = mid
+				if sample.distance_to(center) <= contact_radius(): high = mid
 				else: low = mid
 			return 1.0-high/APPROACH_TIME
 		if distance < nearest:
@@ -171,11 +186,14 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 	if attempted and grade == Timing.Grade.WAITING:
 		if not is_finite(pose_started_at) and progress >= 1.0-PLATFORM_PREP_TIME/APPROACH_TIME:
 			pose_started_at = maxf(pressed_at,time-delta)
-		if reach.is_empty(): low_save.plan(setter,path,time,end,clip)
+		if not hand_setting and reach.is_empty(): low_save.plan(setter,path,time,end,clip)
 	var elapsed := time-pose_started_at
 	var striking := attempted and grade == Timing.Grade.WAITING and (low_save.active or is_finite(pose_started_at)) and time < end
 	if striking:
-		if low_save.active:
+		if hand_setting:
+			var target := hand_intercept(path,time,end)
+			HandPose.apply(setter,target,aim_velocity(target),0.0,smoothstep(0.0,0.075,elapsed))
+		elif low_save.active:
 			low_save.sample(setter,time,low_save.contact_time+0.07)
 		else:
 			var windup := lerpf(-0.14,0.0,smoothstep(0.0,GREEN_START,elapsed))
@@ -184,7 +202,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 			pose_reach(smoothstep(0.0,1.0,reach_progress),intercept)
 		var pancake := low_save.active and low_save.pancake
 		var center := LowSave.palm_center(setter) if pancake else platform_center()
-		var radius := 0.16 if pancake else PLATFORM_RADIUS
+		var radius := 0.16 if pancake else contact_radius()
 		var near_dive_contact := low_save.active and not pancake and absf(time-low_save.contact_time)<=0.12
 		var allowance := DIVE_CONTACT_ALLOWANCE if near_dive_contact else 0.0
 		var cutoff := radius+allowance
@@ -193,16 +211,16 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 		if center.is_finite() and not first.is_equal_approx(last):
 			var point := Geometry3D.get_closest_point_to_segment(center,first,last)
 			var gap := point.distance_to(center)
-			if not low_save.active and gap > PLATFORM_RADIUS and gap <= 0.58:
+			if not hand_setting and not low_save.active and gap > PLATFORM_RADIUS and gap <= 0.58:
 				reach_platform(point-center)
 				center = platform_center()
 				point = Geometry3D.get_closest_point_to_segment(center,first,last)
 			var timing := (cue_arrival if is_finite(cue_arrival) and not low_save.active else time)-pressed_at
 			var green := timing >= GREEN_START and timing <= GREEN_END
-			var assisted := green and not low_save.active and point.distance_to(center) > radius and close_body_contact(point,center)
+			var assisted := green and not hand_setting and not low_save.active and point.distance_to(center) > radius and close_body_contact(point,center)
 			var gap_after_adjustment := point.distance_to(center)
 			contact_check = {
-				"time":time,"surface":"palm" if pancake else "forearms","surface_center":center,
+				"time":time,"surface":"hands" if hand_setting else ("palm" if pancake else "forearms"),"surface_center":center,
 				"ball_point":point,"gap_before_adjustment":gap,"gap":gap_after_adjustment,
 				"radius":cutoff,"base_radius":radius,"dive_allowance":allowance,
 				"margin":gap_after_adjustment-cutoff,"assist":assisted,
@@ -233,9 +251,13 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 	elif is_finite(touch_time) and not low_save.active:
 		var follow := time-touch_time
 		if follow > 0.0 and follow < 0.36:
-			apply_pose(contact_frame+follow,1.0-smoothstep(0.12,0.36,follow))
-			pose_reach(smoothstep(0.0,1.0,reach_progress)*(1.0-smoothstep(0.06,0.32,follow)),touch)
-			Drive.apply(setter.skeleton,setter.get_pose_author(),outgoing,Drive.effort(incoming,outgoing),follow,true,incoming,Drive.swing_effort(touch,outgoing))
+			var blend := 1.0-smoothstep(0.12,0.36,follow)
+			if hand_setting:
+				HandPose.apply(setter,touch,outgoing,smoothstep(0.0,0.11,follow),blend)
+			else:
+				apply_pose(contact_frame+follow,blend)
+				pose_reach(smoothstep(0.0,1.0,reach_progress)*(1.0-smoothstep(0.06,0.32,follow)),touch)
+				Drive.apply(setter.skeleton,setter.get_pose_author(),outgoing,Drive.effort(incoming,outgoing),follow,true,incoming,Drive.swing_effort(touch,outgoing))
 	var recent_touch := is_finite(touch_time) and time-touch_time <= BallTimingRing.RESULT_DURATION
 	if (grade == Timing.Grade.WAITING and progress >= 0.0) or recent_touch:
 		var anticipated := (1.0-maxf(progress,0.0))*APPROACH_TIME
