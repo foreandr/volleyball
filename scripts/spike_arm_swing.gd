@@ -12,7 +12,7 @@ static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float,
 	var shoulder: Vector3 = author.point(pose,"upperarm_r")
 	var draw := Vector3(-0.04,0.40,0.08).lerp(Vector3(0.02,0.05,-0.12),draw_progress)
 	var wrist_target := ball-(ball-shoulder).normalized()*0.06-shot_direction*0.11
-	var lift_target := Vector3(-0.08,0.56,0.13) if overhead_entry else Vector3(-0.08,0.40,0.22)
+	var lift_target := Vector3(-0.095,0.035,-0.065) if overhead_entry else Vector3(-0.08,0.40,0.22)
 	var raised_draw := draw.lerp(lift_target,arm_lift)
 	raised_draw.z -= backswing_reach
 	var target := (shoulder+raised_draw).lerp(wrist_target,extension)
