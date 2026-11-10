@@ -35,7 +35,7 @@ static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float,
 		# Start the across-body roll on forward extension, after the arm leaves the draw.
 		release_turn = 0.70*smoothstep(0.24,0.86,extension)
 	var palm_progress := maxf(release_turn,follow)
-	roll_finish_palm(pose,author,palm_finish,palm_progress)
+	roll_finish_palm(pose,author,palm_finish,palm_progress,line_weight >= 0.5)
 	if finish > 0.0:
 		blend_right_arm(base,pose,author,weight)
 	open_strike_hand(base,author,weight*lerpf(0.70,0.94,smoothstep(0.12,0.85,extension)))
@@ -97,7 +97,7 @@ static func finish_palm_weight(target: Vector3, origin: Vector3, cross_body: boo
 	var lateral := absf(target.x-origin.x)/maxf(target.z-origin.z,0.1)
 	return smoothstep(0.045,0.13,lateral)
 
-static func roll_finish_palm(pose: Array, author: RefCounted, amount: float, follow: float) -> void:
+static func roll_finish_palm(pose: Array, author: RefCounted, amount: float, follow: float, cross_body: bool) -> void:
 	var weight := amount*smoothstep(0.05,0.84,follow)
 	if weight <= 0.0: return
 	var wrist: Vector3 = author.point(pose,"hand_r")
@@ -106,10 +106,10 @@ static func roll_finish_palm(pose: Array, author: RefCounted, amount: float, fol
 	var pinky: Vector3 = author.point(pose,"pinky_01_r")
 	var thumb: Vector3 = author.point(pose,"thumb_01_r")
 	var edge := (pinky-thumb).slide(axis).normalized()
-	var pinky_up := Vector3.UP.slide(axis)
-	var roll := edge.signed_angle_to(pinky_up.normalized(),axis)
+	var pinky_target := (Vector3.DOWN if cross_body else Vector3.UP).slide(axis)
+	var roll := edge.signed_angle_to(pinky_target.normalized(),axis)
 	# The two edges have no meaningful height difference when the hand points straight down.
-	var visibility := smoothstep(0.10,0.34,pinky_up.length())
+	var visibility := smoothstep(0.015,0.10,pinky_target.length()) if cross_body else smoothstep(0.10,0.34,pinky_target.length())
 	author.rotate_world(pose,"hand_r",axis,roll*weight*visibility)
 
 static func align_finish_wrist(pose: Array, author: RefCounted, progress: float) -> void:
