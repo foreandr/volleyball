@@ -412,10 +412,15 @@ func reception_drill_active() -> bool:
 func _process(delta: float) -> void:
 	pass_timing_cue.hide()
 	if is_instance_valid(setting_drill):
-		player_controls.read_pace_input()
-		player_controls.move_player(player_controls.movement_input(),delta,false,setting_drill.ball.global_position)
-		setting_drill.apply_setter_arms(player_controls.footwork.phase,player_controls.moving,delta)
+		if not setting_drill.setter_is_diving():
+			player_controls.read_pace_input()
+			player_controls.move_player(player_controls.movement_input(),delta,false,setting_drill.ball.global_position)
+			setting_drill.apply_setter_arms(player_controls.footwork.phase,player_controls.moving,delta)
+		var was_diving: bool = setting_drill.bump.low_save.active
 		setting_drill.step(delta)
+		if not was_diving and setting_drill.bump.low_save.active:
+			player_controls.setter_travel = Vector3.ZERO
+			player_controls.spend_dive_stamina()
 		setting_drill.update_ball_ring()
 		return
 	if reception_review.frozen:

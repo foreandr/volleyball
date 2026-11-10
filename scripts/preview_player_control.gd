@@ -1,5 +1,6 @@
 extends RefCounted
 const QUICK_STEP_RATE := 1.5
+const Stamina = preload("res://scripts/player_stamina.gd")
 const LowSave = preload("res://scripts/player_reception_save.gd")
 const PassDrive = preload("res://scripts/reception_pass_drive.gd")
 var page: Control
@@ -35,9 +36,7 @@ var reach_rear_diagonal := false
 var indicator: Label
 var save_clock := 0.0
 var footwork: RefCounted
-var stamina := 100.0
-var exhausted := false
-var recovery_delay := 0.0
+var stamina := Stamina.new()
 var sprinting := false
 var sprint_requested := false
 var locomotion := ""
@@ -132,7 +131,7 @@ func step(delta: float) -> void:
 		session.preview_camera = free_view if active else {"yaw":page.orbit_yaw,"pitch":page.orbit_pitch,"distance":page.view_distance,"focus":page.view_focus}
 		session.save_preview_setup()
 	if not active:
-		stamina = minf(100,stamina+17*delta)
+		stamina.recover(delta)
 		return
 	var direction := movement_input()
 	read_pace_input()
@@ -146,7 +145,9 @@ func step(delta: float) -> void:
 		var ball = page.ball_preview
 		var time: float = page.preview_clock+delta-ball.contact_time
 		var path := func(t): return ball.practice_position(t)
-		if low_save.active or (ball.practice_grade == ball.Grade.WAITING and ball.incoming_net.is_empty() and low_save.plan(page.preview_player,path,time,ball.practice_floor_time,ball.clip)):
+		if not low_save.active and ball.practice_grade == ball.Grade.WAITING and ball.incoming_net.is_empty():
+			if low_save.plan(page.preview_player,path,time,ball.practice_floor_time,ball.clip): spend_dive_stamina()
+		if low_save.active:
 			if not low_save.finished(time):
 				var release := float(ball.recovery.get("time",low_save.contact_time+0.07))
 				var actor: Node3D = page.preview_player
@@ -184,7 +185,14 @@ func pan_frozen_camera(direction: Vector2, delta: float) -> void:
 
 func show_stamina(value: bool) -> void:
 	stamina_ring.visible = value
-	if value: stamina_ring.set_fraction(stamina/100.0)
+	if value: update_stamina_ring()
+
+func spend_dive_stamina() -> void:
+	stamina.spend(Stamina.DIVE_COST)
+	update_stamina_ring()
+
+func update_stamina_ring() -> void:
+	if stamina_ring.visible: stamina_ring.set_fraction(stamina.value/100.0)
 
 func read_pace_input() -> void:
 	sprint_requested = Input.is_physical_key_pressed(KEY_SHIFT)
@@ -496,8 +504,7 @@ func move_player(direction: Vector2, delta: float, track_ball := true, setting_t
 	if drill or setting:
 		var facing := actor.basis.z.normalized()
 		step_direction = Vector2(travel.dot(facing.cross(Vector3.UP)),travel.dot(facing))
-	if exhausted and stamina>=25: exhausted = false
-	var quick_pace := sprint_requested and direction.length()>0.1 and not exhausted and stamina>0
+	var quick_pace := sprint_requested and direction.length()>0.1 and stamina.can_sprint()
 	sprinting = not setting and quick_pace and step_direction.y>0.3
 	var step_rate := QUICK_STEP_RATE if quick_pace else 1.0
 	if setting:
@@ -526,13 +533,10 @@ func move_player(direction: Vector2, delta: float, track_ball := true, setting_t
 	var now_moving := actor.position.distance_to(before)>0.00001
 	sprinting = sprinting and now_moving
 	if quick_pace and now_moving:
-		stamina = maxf(0,stamina-25*delta)
-		recovery_delay = 0.7
-		if stamina<=0: exhausted = true
+		stamina.spend(Stamina.SPRINT_DRAIN*delta)
 	else:
-		recovery_delay = maxf(0,recovery_delay-delta)
-		if recovery_delay<=0: stamina = minf(100,stamina+17*delta)
-	if stamina_ring.visible: stamina_ring.set_fraction(stamina/100.0)
+		stamina.recover(delta)
+	update_stamina_ring()
 	var action := "run" if sprinting else "idle"
 	if action!=locomotion:
 		locomotion = action

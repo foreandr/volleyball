@@ -6,9 +6,8 @@ const OUTER := 0.54
 var surface := ImmediateMesh.new()
 var style := StandardMaterial3D.new()
 var shown_fraction := -1.0
-var fill_color := Color("ffb72d")
-var track_color := Color("343d49")
-var outlined := false
+const FILL_COLOR := Color.WHITE
+const TRACK_COLOR := Color("080a0d")
 
 func _ready() -> void:
 	name = "StaminaRing"
@@ -25,11 +24,10 @@ func set_fraction(fraction: float) -> void:
 	shown_fraction = fraction
 	surface.clear_surfaces()
 	surface.surface_begin(Mesh.PRIMITIVE_TRIANGLES,style)
-	if outlined:
-		draw_arc(0.0,1.0,track_color,INNER-0.018,INNER)
-		draw_arc(0.0,1.0,track_color,OUTER,OUTER+0.018)
-	draw_arc(0.0,fraction,fill_color)
-	draw_arc(fraction,1.0,track_color)
+	draw_arc(0.0,1.0,TRACK_COLOR,INNER-0.018,INNER)
+	draw_arc(0.0,1.0,TRACK_COLOR,OUTER,OUTER+0.018)
+	draw_arc(0.0,fraction,FILL_COLOR)
+	draw_arc(fraction,1.0,TRACK_COLOR)
 	surface.surface_end()
 
 func draw_arc(from: float, to: float, color: Color, inner := INNER, outer := OUTER) -> void:
