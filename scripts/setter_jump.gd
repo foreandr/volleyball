@@ -25,8 +25,13 @@ var heading: Vector3
 var stride := 0.0
 var air_velocity := Vector3.ZERO
 var air_offset := Vector3.ZERO
+var approach_plant := false
+var right_foot_start: Vector3
+var left_foot_start: Vector3
+var right_plant: Vector3
+var left_plant: Vector3
 
-func begin(actor: Node3D, input: Vector2) -> void:
+func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF) -> void:
 	if active: return
 	active = true
 	held = true
@@ -39,6 +44,17 @@ func begin(actor: Node3D, input: Vector2) -> void:
 	var travel := Vector3(-input.x,0,input.y)
 	stride = 0.17+0.31*travel.length()
 	heading = travel.normalized() if not travel.is_zero_approx() else actor.basis.z.normalized()
+	approach_plant = ball_target.is_finite()
+	if approach_plant:
+		var rig: Skeleton3D = actor.skeleton
+		right_foot_start = rig.to_global(rig.get_bone_global_pose(rig.find_bone("foot_r")).origin)
+		left_foot_start = rig.to_global(rig.get_bone_global_pose(rig.find_bone("foot_l")).origin)
+		right_plant = right_foot_start+heading.slide(Vector3.UP).normalized()*stride*0.68
+		var toward_ball := (ball_target-right_plant).slide(Vector3.UP).normalized()
+		if toward_ball.is_zero_approx(): toward_ball = heading.slide(Vector3.UP).normalized()
+		left_plant = right_plant+toward_ball*0.43+Vector3.UP.cross(toward_ball)*0.19
+		right_plant.y = minf(right_foot_start.y,left_foot_start.y)
+		left_plant.y = right_plant.y
 	actor.play_action("idle")
 
 func release() -> void:
@@ -98,6 +114,14 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 		var foot_pose: Transform3D = author.world_pose(original,rig.find_bone(foot))
 		var lift := sin(PI*first) if left else sin(PI*second)
 		var target := foot_pose.origin+travel*stagger*(1.0 if left else -1.0)+Vector3.UP*(0.085*lift+0.07*tuck)
+		if approach_plant and elapsed < LOAD_TIME+0.08:
+			var step_progress := smoothstep(0.105,0.21,elapsed) if left else smoothstep(0.015,0.105,elapsed)
+			var plant_from := left_foot_start if left else right_foot_start
+			var plant_to := left_plant if left else right_plant
+			var planted := plant_from.lerp(plant_to,step_progress)
+			planted.y += sin(PI*step_progress)*(0.12 if left else 0.09)
+			var release_weight := smoothstep(LOAD_TIME,LOAD_TIME+0.08,elapsed)
+			target = rig.to_local(planted).lerp(target,release_weight)
 		author.limb(pose,"thigh_"+side,"calf_"+side,foot,target,Vector3(0.09 if left else -0.09,0.25,1.0))
 		author.set_world_basis(pose,foot,foot_pose.basis)
 		var upper_arm: String = "upperarm_"+side

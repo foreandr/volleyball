@@ -364,7 +364,10 @@ func setter_is_diving() -> bool:
 func queue_jump(direction: Vector2) -> void:
 	if jump.active or setter_is_diving() or stage in [Stage.HIT,Stage.SHANK]: return
 	takeoff_yaw = setter.rotation.y
-	jump.begin(setter,direction)
+	var ball_target := Vector3.INF
+	if approach_practice:
+		ball_target = flight_point(pass_origin,pass_motion,pin_arrival) if stage == Stage.SET else PIN
+	jump.begin(setter,direction,ball_target)
 	trace.write("jump",clock,{"position":setter.position,"direction":jump.heading},true)
 
 func step_jump(delta: float) -> void:
