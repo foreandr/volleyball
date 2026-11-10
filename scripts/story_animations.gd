@@ -357,12 +357,12 @@ func start_setting_drill(attack := false) -> void:
 		show_attack_positions()
 		setting_drill.bump.set_custom_backward(load_custom_backward_clip())
 		add_low_bow_controls()
+		add_attack_tuning_slider(content,"Air turn speed","AttackAirTurnSpeed","°/s",0,720,10,setting_drill.air_turn_speed,
+			func(value: float): setting_drill.air_turn_speed = value)
 		add_attack_pose_slider("Torso rotation","TorsoRotation",50,setting_drill.torso_rotation_scale,
-			func(value: float): setting_drill.torso_rotation_scale = value,400)
+			func(value: float): setting_drill.torso_rotation_scale = value)
 		add_attack_pose_slider("Leg kickback","LegKickback",0,setting_drill.leg_kickback_scale,
 			func(value: float): setting_drill.leg_kickback_scale = value)
-		add_attack_pose_slider("Hip rotation","HipRotation",0,setting_drill.hip_rotation_scale,
-			func(value: float): setting_drill.hip_rotation_scale = value,400)
 		add_attack_pose_slider("Leg rotation","LegRotation",0,setting_drill.leg_rotation_scale,
 			func(value: float): setting_drill.leg_rotation_scale = value)
 	add_torso_lean_slider()
@@ -452,13 +452,13 @@ func add_torso_lean_slider() -> void:
 	update.call(slider.value)
 	content.add_child(slider)
 
-func add_attack_pose_slider(caption: String, node_name: String, minimum: float, initial: float, apply: Callable, maximum := 200.0) -> void:
+func add_attack_pose_slider(caption: String, node_name: String, minimum: float, initial: float, apply: Callable) -> void:
 	var rotation_readout := label("",16)
 	content.add_child(rotation_readout)
 	var slider := HSlider.new()
 	slider.name = node_name
 	slider.min_value = minimum
-	slider.max_value = maximum
+	slider.max_value = 200
 	slider.step = 5
 	slider.custom_minimum_size.y = 24
 	slider.value = initial*100.0
