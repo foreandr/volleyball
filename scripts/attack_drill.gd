@@ -121,7 +121,7 @@ func set_swing_review(enabled: bool) -> void:
 func start_swing_practice() -> void:
 	stage = Stage.SET
 	bump.hide()
-	setter.position = PIN+Vector3(0.35,RECEIVE_START.y-PIN.y,-0.48)
+	setter.position = PIN+Vector3(0.20,RECEIVE_START.y-PIN.y,-0.48)
 	jump.begin(setter,Vector2(0.0,0.65))
 	for frame in range(16): jump.step(setter,1.0/60.0,Vector2.ZERO)
 	jump.release()
