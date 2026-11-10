@@ -1,5 +1,6 @@
 extends Node3D
 
+const Trace = preload("res://scripts/setting_trace.gd")
 const StaminaRing = preload("res://scripts/player_stamina_ring.gd")
 const Stamina = preload("res://scripts/player_stamina.gd")
 const Player = preload("res://scripts/volleyball_player.gd")
@@ -67,8 +68,12 @@ var ready_range: MeshInstance3D
 var range_style := StandardMaterial3D.new()
 var timing_cue: Node3D
 var arm_swing_weight := 0.0
+var trace := Trace.new()
+var trace_input := Vector2.ZERO
+var trace_sprint := false
+var trace_move_scale := 1.0
 
-func configure(player: Node3D, readout: Label, use_bump: bool) -> void:
+func configure(player: Node3D, readout: Label, use_bump: bool, build := "") -> void:
 	setter = player
 	status = readout
 	receiver = Player.new()
@@ -124,6 +129,7 @@ func configure(player: Node3D, readout: Label, use_bump: bool) -> void:
 	add_child(ready_range)
 	timing_cue = BallTimingRing.new()
 	ready_range.add_child(timing_cue)
+	trace.open(build)
 	reset_feed()
 
 func update_timing_cue(after_pass := -INF) -> void:
@@ -144,7 +150,19 @@ func setter_is_diving() -> bool:
 
 func queue_bump() -> void:
 	if bump_enabled:
+		var previous_press: float = bump.pressed_at
 		bump.queue_bump(clock-0.45-SERVE_TIME)
+		trace.write("q_tap",clock,{
+			"accepted":previous_press != bump.pressed_at,"press_after_cpu_contact":bump.pressed_at,
+			"seconds_to_green_reference":timing_arrival-(clock-0.45-SERVE_TIME),
+			"snapshot":trace_snapshot(clock-0.45-SERVE_TIME),
+		},true)
+
+func mark_trace() -> void:
+	trace.write("player_marker",clock,{"snapshot":trace_snapshot(clock-0.45-SERVE_TIME),"previous_feed":trace.feed-1,"closest_check":trace.closest_check},true)
+
+func _exit_tree() -> void:
+	trace.close(clock)
 
 func update_ball_ring() -> void:
 	ready_range.position = Vector3(ball.position.x,0.058,ball.position.z)
@@ -171,6 +189,8 @@ func apply_setter_arms(phase: float, moving: bool, delta: float) -> void:
 
 
 func reset_feed() -> void:
+	if trace.feed > 0:
+		trace.write("feed_end",clock,{"result":status.text,"closest_check":trace.closest_check},true)
 	clock = 0.0
 	receiving = false
 	judged = false
@@ -211,6 +231,13 @@ func reset_feed() -> void:
 	ball.position = SOURCE
 	receiver.play_action("idle")
 	status.text = "Serve incoming"
+	trace.begin_feed({
+		"mode":"bump" if bump_enabled else "hand_positioning","cpu_move":receiver_move_name(),
+		"cpu_tier":receive_tier,"serve_start":SOURCE,"serve_velocity":serve_velocity,
+		"cpu_contact":contact,"cpu_pass_velocity":pass_velocity,
+		"setter_region":region.position,"setter_start":setter.position,
+		"cpu_contact_clock":0.45+SERVE_TIME,"set_timing_clock":0.45+SERVE_TIME+timing_arrival,
+	})
 
 func step(delta: float) -> void:
 	var previous := clock-0.45-SERVE_TIME
@@ -240,15 +267,19 @@ func step(delta: float) -> void:
 	if after_pass < 0.0:
 		timing_cue.update_timing(elapsed,SERVE_TIME,BallPreview.GREEN_START,BallPreview.GREEN_END)
 		ball.position = flight_point(SOURCE,serve_velocity,elapsed)
+		sample_trace(after_pass)
 		return
 	if not region.visible or status.text == "Serve incoming":
 		region.show()
 		status.text = "Get your platform under the ball" if bump_enabled else "Move under the pass"
 	ball.position = flight_point(contact,pass_velocity,minf(after_pass,landing))
+	if previous < 0.0:
+		trace.write("cpu_contact",clock,{"point":contact,"outgoing_velocity":pass_velocity,"move":receiver_move_name()},true)
 	if bump_enabled:
 		step_bump(after_pass,maxf(0.0,previous),delta)
 		return
 	update_timing_cue(after_pass)
+	sample_trace(after_pass)
 	if not judged and after_pass >= arrival:
 		judged = true
 		var under := (setter.position-region.position).slide(Vector3.UP).length() <= REGION_RADIUS
@@ -261,6 +292,8 @@ func step(delta: float) -> void:
 func step_bump(time: float, previous: float, delta: float) -> void:
 	var path := func(t): return flight_point(contact,pass_velocity,minf(t,landing))
 	var incoming := pass_velocity+Vector3.DOWN*Flight.GRAVITY*time
+	var old_grade: int = bump.grade
+	var old_move := setter_move_name()
 	bump.update_attempt(time,previous,landing,path,incoming,delta,timing_arrival)
 	update_timing_cue(time)
 	var reset_at := landing
@@ -275,9 +308,74 @@ func step_bump(time: float, previous: float, delta: float) -> void:
 		if after_touch <= BallTimingRing.RESULT_DURATION: timing_cue.show_result(bump.grade)
 	elif bump.grade != BallPreview.Grade.WAITING:
 		status.text = BallTimingRing.result_text(bump.grade,"set")
+	trace.check_contact(bump.contact_check)
+	if old_move != setter_move_name():
+		trace.write("setter_move",clock,trace_snapshot(time),true)
+	if old_grade != bump.grade:
+		trace.write("set_result",clock,{
+			"snapshot":trace_snapshot(time),"closest_check":trace.closest_check,
+			"contact_time":bump.touch_time,"contact_point":bump.touch if is_finite(bump.touch_time) else null,
+			"outgoing_velocity":bump.outgoing if is_finite(bump.touch_time) else null,
+			"spread":bump.contact_spread if is_finite(bump.touch_time) else null,"net":bump.net_hit,
+		},true)
+	sample_trace(time)
 	if time >= reset_at+0.85:
 		rep += 1
 		reset_feed()
+
+func receiver_move_name() -> String:
+	if is_forward_dive(): return "forward_dive"
+	if is_knee_slide(): return "knee_slide"
+	return "lunge" if receive_tier == 2 else "step"
+
+func setter_move_name() -> String:
+	if bump.low_save.active: return "pancake" if bump.low_save.pancake else "forward_dive"
+	if not bump.reach.is_empty(): return "lunge" if bump.reach.tier == 2 else "step"
+	if is_finite(bump.pose_started_at): return "standing_bump"
+	return "ready"
+
+func sample_trace(time: float) -> void:
+	if trace.file == null or clock < trace.next_sample: return
+	trace.sample(clock,trace_snapshot(time))
+
+func trace_snapshot(time: float) -> Dictionary:
+	var position_: Vector3 = ball.global_position
+	var velocity := serve_velocity+Vector3.DOWN*Flight.GRAVITY*maxf(0.0,time+SERVE_TIME)
+	var phase := "serve"
+	if clock < 0.45:
+		phase = "pre_serve"
+		velocity = Vector3.ZERO
+	if time >= 0.0:
+		phase = "cpu_pass"
+		velocity = pass_velocity+Vector3.DOWN*Flight.GRAVITY*time if time < landing else Vector3.ZERO
+	if is_finite(bump.touch_time):
+		phase = "setter_output"
+		var after_touch: float = time-bump.touch_time
+		velocity = bump.outgoing+Vector3.DOWN*Flight.GRAVITY*after_touch if after_touch < bump.floor_time else Vector3.ZERO
+		if not bump.net_hit.is_empty() and after_touch >= bump.net_hit.time:
+			phase = "net_rebound"
+			velocity = (Net.after_hit(bump.net_hit,after_touch+0.001)-Net.after_hit(bump.net_hit,after_touch))/0.001
+	var platform: Vector3 = bump.platform_center()
+	var cpu_platform := platform_contact()
+	return {
+		"phase":phase,"ball_position":position_,"ball_velocity":velocity,
+		"setter_position":setter.global_position,"setter_yaw":setter.global_rotation.y,
+		"receiver_position":receiver.global_position,"receiver_yaw":receiver.global_rotation.y,
+		"ball_to_setter":position_.distance_to(setter.global_position),
+		"ball_to_setter_horizontal":(position_-setter.global_position).slide(Vector3.UP).length(),
+		"ball_to_receiver":position_.distance_to(receiver.global_position),
+		"ball_to_receiver_horizontal":(position_-receiver.global_position).slide(Vector3.UP).length(),
+		"setter_platform":platform,"ball_to_platform":position_.distance_to(platform),
+		"receiver_platform":cpu_platform,"ball_to_receiver_platform":position_.distance_to(cpu_platform),
+		"move_input":trace_input,"sprint_requested":trace_sprint,"movement_scale":trace_move_scale,
+		"setter_move":setter_move_name(),"reach_step":bump.reach_step,
+		"save_target":bump.low_save.aim if bump.low_save.active else null,
+		"save_contact_time":bump.low_save.contact_time if bump.low_save.active else null,
+		"aim":bump.destination,"aim_apex":bump.height,"grade":bump.grade,"result":status.text,
+		"press_after_cpu_contact":bump.pressed_at,"pose_started":bump.pose_started_at,
+		"seconds_to_green_reference":timing_arrival-time,"approach_progress":bump.approach_progress,
+		"contact_check":bump.contact_check,
+	}
 
 func recover_receiver_arms(time: float) -> void:
 	var weight := smoothstep(0.075,0.27,time)

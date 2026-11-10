@@ -32,6 +32,8 @@ var pressed_at := -INF
 var low_save := LowSave.new()
 var pose_started_at := -INF
 var cone: MeshInstance3D
+var contact_check := {}
+var approach_progress := -1.0
 var contact_spread := 0.0
 var contact_destination := Vector2.ZERO
 var touch_time := -INF
@@ -67,6 +69,8 @@ func configure(player: Node3D, animation: Animation) -> void:
 	reset()
 
 func reset() -> void:
+	contact_check.clear()
+	approach_progress = -1.0
 	grade = Timing.Grade.WAITING
 	pressed_at = -INF
 	low_save.active = false
@@ -158,7 +162,9 @@ func approach(path: Callable, time: float, end: float) -> float:
 	return 1.0-delay/APPROACH_TIME if delay >= 0.0 else -1.0
 
 func update_attempt(time: float, previous: float, end: float, path: Callable, incoming: Vector3, delta: float, cue_arrival := INF) -> void:
+	contact_check.clear()
 	var progress := approach(path,time,end) if grade == Timing.Grade.WAITING else -1.0
+	approach_progress = progress
 	var attempted := is_finite(pressed_at)
 	if attempted and grade == Timing.Grade.WAITING:
 		if not is_finite(pose_started_at) and progress >= 1.0-PLATFORM_PREP_TIME/APPROACH_TIME:
@@ -189,7 +195,14 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 			var timing := (cue_arrival if is_finite(cue_arrival) and not low_save.active else time)-pressed_at
 			var green := timing >= GREEN_START and timing <= GREEN_END
 			var assisted := green and not low_save.active and point.distance_to(center) > radius and close_body_contact(point,center)
-			if assisted or point.distance_to(center) <= radius:
+			var gap_after_adjustment := point.distance_to(center)
+			contact_check = {
+				"time":time,"surface":"palm" if pancake else "forearms","surface_center":center,
+				"ball_point":point,"gap_before_adjustment":gap,"gap":gap_after_adjustment,
+				"radius":radius,"margin":gap_after_adjustment-radius,"assist":assisted,
+				"accepted":assisted or gap_after_adjustment <= radius,
+			}
+			if contact_check.accepted:
 				touch_time = lerpf(previous,time,first.distance_to(point)/first.distance_to(last))
 				touch = point
 				if not is_finite(cue_arrival) or low_save.active: timing = touch_time-pressed_at

@@ -283,7 +283,7 @@ func start_setting_drill() -> void:
 	preview_camera.look_at(Vector3(0,1.45,2.6))
 	setting_drill = preload("res://scripts/setting_drill.gd").new()
 	preview_player.get_parent().add_child(setting_drill)
-	setting_drill.configure(preview_player,drill_status,modes.selected == 1)
+	setting_drill.configure(preview_player,drill_status,modes.selected == 1,build_label)
 	preview.grab_focus()
 
 func stop_setting_drill() -> void:
@@ -412,9 +412,13 @@ func reception_drill_active() -> bool:
 func _process(delta: float) -> void:
 	pass_timing_cue.hide()
 	if is_instance_valid(setting_drill):
-		if not setting_drill.setter_is_diving():
-			player_controls.read_pace_input()
-			player_controls.move_player(player_controls.movement_input(),delta,false,setting_drill.ball.global_position,setting_drill.setter_movement_scale())
+		player_controls.read_pace_input()
+		setting_drill.trace_input = player_controls.movement_input()
+		setting_drill.trace_sprint = player_controls.sprint_requested
+		var diving: bool = setting_drill.setter_is_diving()
+		setting_drill.trace_move_scale = 0.0 if diving else setting_drill.setter_movement_scale()
+		if not diving:
+			player_controls.move_player(setting_drill.trace_input,delta,false,setting_drill.ball.global_position,setting_drill.trace_move_scale)
 			setting_drill.apply_setter_arms(player_controls.footwork.phase,player_controls.moving,delta)
 		var was_diving: bool = setting_drill.bump.low_save.active
 		setting_drill.step(delta)
@@ -781,6 +785,10 @@ func open_menu() -> void:
 	else: get_tree().change_scene_to_file("res://scenes/story.tscn")
 
 func _input(event: InputEvent) -> void:
+	if is_instance_valid(setting_drill) and event is InputEventKey and event.keycode == KEY_F8 and event.pressed and not event.echo:
+		setting_drill.mark_trace()
+		get_viewport().set_input_as_handled()
+		return
 	if is_instance_valid(setting_drill) and event is InputEventKey and event.keycode in [KEY_F1,KEY_F2,KEY_Q,KEY_E]:
 		if event.keycode == KEY_Q and event.pressed and not event.echo: setting_drill.queue_bump()
 		get_viewport().set_input_as_handled()
