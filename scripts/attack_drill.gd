@@ -286,9 +286,7 @@ func play_pin_ball(time: float) -> void:
 			hit_spike(charge)
 			return
 		var load := smoothstep(0.0,0.20,clock-swing_started)
-		var near := 1.0-smoothstep(SWING_CONTACT_HEIGHT,SWING_CONTACT_HEIGHT+0.75,toward_ball.y)
-		var drive := 0.57*near*smoothstep(pin_arrival-0.42,pin_arrival-0.24,time) if airborne else 0.0
-		pose_swing(ball.position,drive,load)
+		pose_bow_draw(load)
 	if time >= flight_end: miss("Spike missed")
 
 func hit_spike(charge: float) -> void:
@@ -305,7 +303,7 @@ func hit_spike(charge: float) -> void:
 	region.hide()
 	timing_cue.hide()
 	status.text = "Spike  |  %d%% power" % roundi(charge*100.0)
-	pose_swing(swing_contact,0.57,1.0)
+	pose_bow_draw(1.0)
 	trace.write("spike",clock,{"point":swing_contact,"aim":swing_aim,"velocity":pass_motion,"power":charge,"net":not swing_net_hit.is_empty()},true)
 
 func play_spike(time: float) -> void:
@@ -316,33 +314,26 @@ func play_spike(time: float) -> void:
 	else:
 		ball.position = flight_point(pass_origin,pass_motion,minf(time,end))
 	if time < SWING_FOLLOW_TIME:
-		pose_swing(swing_contact,lerpf(0.57,1.0,smoothstep(0.0,0.16,time)),1.0-smoothstep(0.11,SWING_FOLLOW_TIME,time))
+		pose_bow_draw(1.0-smoothstep(0.11,SWING_FOLLOW_TIME,time))
 	if time >= end+0.48 and not jump.active: reset_feed()
 
-func pose_swing(contact: Vector3, phase: float, weight: float) -> void:
+func pose_bow_draw(weight: float) -> void:
 	var rig: Skeleton3D = setter.skeleton
 	var author: RefCounted = setter.get_pose_author()
 	var pose: Array[Transform3D] = []
 	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
-	var side := "l" if setter.handedness == "Left" else "r"
-	var sign_ := 1.0 if side == "l" else -1.0
-	var upper := "upperarm_"+side
-	var forearm := "lowerarm_"+side
-	var wrist := "hand_"+side
-	author.rotate_world(pose,"spine_03",Vector3.UP,sign_*lerpf(-0.32,0.35,phase)*weight)
-	var shoulder: Vector3 = author.point(pose,upper)
-	var ball_target := rig.to_local(contact)
-	var windup := shoulder+Vector3(sign_*0.25,0.28,-0.34)
-	var direction := (rig.to_local(swing_aim)-ball_target).normalized()
-	var follow := shoulder+(direction+Vector3.DOWN*0.75+Vector3.LEFT*sign_*0.38).normalized()*0.51
-	var target := windup.lerp(ball_target,smoothstep(0.0,0.57,phase))
-	target = target.lerp(follow,smoothstep(0.57,1.0,phase))
-	author.limb(pose,upper,forearm,wrist,target,Vector3(sign_*0.85,-0.24,-0.35),weight,171.0)
-	var guide := "r" if side == "l" else "l"
+	var striking := "l" if setter.handedness == "Left" else "r"
+	var guide := "r" if striking == "l" else "l"
+	var sign_ := 1.0 if striking == "l" else -1.0
+	author.rotate_world(pose,"spine_03",Vector3.UP,sign_*0.32*weight)
+	var striking_shoulder: Vector3 = author.point(pose,"upperarm_"+striking)
+	var draw_hand := striking_shoulder+Vector3(-sign_*0.04,0.34,-0.15)
+	author.limb(pose,"upperarm_"+striking,"lowerarm_"+striking,"hand_"+striking,
+		draw_hand,Vector3(sign_*0.85,0.52,-0.74),weight,108.0)
 	var guide_shoulder: Vector3 = author.point(pose,"upperarm_"+guide)
-	var drop := smoothstep(0.12,0.75,phase)
-	var guide_target := guide_shoulder+Vector3(-sign_*0.18,lerpf(0.45,-0.28,drop),0.25)
-	author.limb(pose,"upperarm_"+guide,"lowerarm_"+guide,"hand_"+guide,guide_target,Vector3(-sign_*0.8,-0.28,0.3),weight,154.0)
+	var guide_hand := guide_shoulder+Vector3(-sign_*0.06,0.43,0.64)
+	author.limb(pose,"upperarm_"+guide,"lowerarm_"+guide,"hand_"+guide,
+		guide_hand,Vector3(-sign_*0.26,-0.55,0.15),weight,174.0)
 	for bone in rig.get_bone_count():
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
 
