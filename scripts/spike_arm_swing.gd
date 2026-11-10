@@ -8,7 +8,7 @@ static func follow_heading(target: Vector3, origin: Vector3, facing := 0.0) -> f
 	var direction := target-origin
 	return clampf(angle_difference(facing,atan2(direction.x,direction.z)),-0.95,0.95)
 
-static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float, extension: float, follow: float, draw_progress: float, arm_lift: float, line_weight: float, palm_finish: float, elbow_clearance: float) -> void:
+static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float, extension: float, follow: float, draw_progress: float, arm_lift: float, line_weight: float, palm_finish: float, elbow_clearance: float, previous_roll: float, roll_step: float) -> float:
 	var shoulder: Vector3 = author.point(pose,"upperarm_r")
 	var draw := Vector3(-0.04,0.40,0.08).lerp(Vector3(0.02,0.05,-0.12),draw_progress)
 	var wrist_target := ball-(ball-shoulder).normalized()*0.06
@@ -35,10 +35,11 @@ static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float,
 		# Start the across-body roll on forward extension, after the arm leaves the draw.
 		release_turn = 0.70*smoothstep(0.24,0.86,extension)
 	var palm_progress := maxf(release_turn,follow)
-	roll_finish_palm(pose,author,palm_finish,palm_progress,line_weight >= 0.5)
+	var roll := roll_finish_palm(pose,author,palm_finish,palm_progress,line_weight >= 0.5,previous_roll,roll_step)
 	if finish > 0.0:
 		blend_right_arm(base,pose,author,weight)
 	open_strike_hand(base,author,weight*lerpf(0.70,0.94,smoothstep(0.12,0.85,extension)))
+	return roll
 
 static func open_strike_hand(pose: Array, author: RefCounted, weight: float) -> void:
 	# Release the curl inherited from the jump pose without locking the fingers at full extension.
@@ -97,9 +98,9 @@ static func finish_palm_weight(target: Vector3, origin: Vector3, cross_body: boo
 	var lateral := absf(target.x-origin.x)/maxf(target.z-origin.z,0.1)
 	return smoothstep(0.045,0.13,lateral)
 
-static func roll_finish_palm(pose: Array, author: RefCounted, amount: float, follow: float, cross_body: bool) -> void:
+static func roll_finish_palm(pose: Array, author: RefCounted, amount: float, follow: float, cross_body: bool, previous_roll := 0.0, roll_step := INF) -> float:
 	var weight := amount*smoothstep(0.05,0.84,follow)
-	if weight <= 0.0: return
+	if weight <= 0.0: return 0.0
 	var wrist: Vector3 = author.point(pose,"hand_r")
 	var knuckle: Vector3 = author.point(pose,"middle_01_r")
 	var axis := (knuckle-wrist).normalized()
@@ -110,7 +111,10 @@ static func roll_finish_palm(pose: Array, author: RefCounted, amount: float, fol
 	var roll := edge.signed_angle_to(pinky_target.normalized(),axis)
 	# The two edges have no meaningful height difference when the hand points straight down.
 	var visibility := smoothstep(0.015,0.10,pinky_target.length()) if cross_body else smoothstep(0.10,0.34,pinky_target.length())
-	author.rotate_world(pose,"hand_r",axis,roll*weight*visibility)
+	var target_roll := roll*weight*visibility
+	var applied := rotate_toward(previous_roll,target_roll,roll_step) if is_finite(roll_step) else target_roll
+	author.rotate_world(pose,"hand_r",axis,applied)
+	return applied
 
 static func align_finish_wrist(pose: Array, author: RefCounted, progress: float) -> void:
 	align_wrist_to_forearm(pose,author,smoothstep(0.25,0.95,progress))

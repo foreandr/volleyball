@@ -55,6 +55,7 @@ var swing_impact_speed := 0.0
 var swing_aim := Vector3(PIN.x,Flight.FLOOR,9.5)
 var swing_contact_aim: Vector3
 var swing_finish_pose: Array[Transform3D] = []
+var swing_palm_roll := 0.0
 var swing_contact: Vector3
 var swing_contact_extension := 1.0
 var swing_power := 0.0
@@ -124,6 +125,7 @@ func reset_feed() -> void:
 	previous_palm = Vector3.INF
 	swing_net_hit.clear()
 	swing_finish_pose.clear()
+	swing_palm_roll = 0.0
 	if swing_target == null:
 		swing_target = region.duplicate()
 		add_child(swing_target)
@@ -395,11 +397,11 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 		var drive_phase := clampf(drive/swing_drive_duration,0.0,1.0)
 		var extension := smoothstep(0.0,1.0,drive_phase*(1.18-0.18*drive_phase))
 		if drive < 0.0:
-			pose_bow_draw(load,approach_point,0.0,0.0,draw_progress,arm_lift)
+			pose_bow_draw(delta,load,approach_point,0.0,0.0,draw_progress,arm_lift)
 		else:
 			var follow := smoothstep(swing_drive_duration+0.035,swing_drive_duration+0.16,drive)
 			var contact_target := approach_point.lerp(ball.position,smoothstep(0.0,0.50,extension))
-			pose_bow_draw(load,contact_target,extension,follow,draw_progress,arm_lift)
+			pose_bow_draw(delta,load,contact_target,extension,follow,draw_progress,arm_lift)
 		var palm := right_palm()
 		if airborne and drive > 0.0 and drive <= swing_drive_duration+0.12 and previous_palm.is_finite():
 			swing_impact_speed = palm.distance_to(previous_palm)/maxf(delta,0.001)
@@ -466,16 +468,16 @@ func play_spike(time: float, delta: float) -> void:
 		ball.position = flight_point(pass_origin,pass_motion,minf(time,end))
 	if time < SWING_FOLLOW_TIME:
 		var follow := 1.0-pow(1.0-clampf(time/0.19,0.0,1.0),2.0)
-		pose_bow_draw(1.0-smoothstep(0.19,SWING_FOLLOW_TIME,time),swing_contact,swing_contact_extension,follow)
+		pose_bow_draw(delta,1.0-smoothstep(0.19,SWING_FOLLOW_TIME,time),swing_contact,swing_contact_extension,follow)
 	if time >= maxf(SWING_FOLLOW_TIME,end+(0.22 if swing_practice else 0.48)) and not jump.active: reset_feed()
 
-func pose_bow_draw(weight: float, contact: Vector3, extension := 0.0, follow := 0.0, draw_progress := 1.0, arm_lift := 1.0) -> void:
+func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0.0, follow := 0.0, draw_progress := 1.0, arm_lift := 1.0) -> void:
 	var rig: Skeleton3D = setter.skeleton
 	var author: RefCounted = setter.get_pose_author()
 	var pose: Array[Transform3D] = []
 	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
 	var drive_age := clock-swing_drive_started if is_finite(swing_drive_started) else 0.0
-	var rotation_phase := smoothstep(-0.04,swing_drive_duration+0.05,drive_age) if is_finite(swing_drive_started) else 0.0
+	var rotation_phase := smoothstep(0.0,swing_drive_duration+0.02,drive_age) if is_finite(swing_drive_started) else 0.0
 	var shot_aim := swing_contact_aim if stage == Stage.HIT else swing_aim
 	var aim_turn := SpikeArm.follow_heading(shot_aim,contact,rig.global_rotation.y)
 	var power := swing_power if stage == Stage.HIT else swing_charge()
@@ -538,7 +540,9 @@ func pose_bow_draw(weight: float, contact: Vector3, extension := 0.0, follow := 
 		SpikeArm.open_strike_hand(pose,author,0.94*weight)
 	else:
 		var palm_finish := SpikeArm.finish_palm_weight(shot_aim,contact,line_weight >= 0.5)
-		SpikeArm.apply(pose,author,ball_target,weight,extension,follow,draw_progress,arm_lift,line_weight,palm_finish,elbow_clearance)
+		# Smooth the roll through the near-vertical hand angle using game time.
+		var roll_step := deg_to_rad(2700.0)*delta
+		swing_palm_roll = SpikeArm.apply(pose,author,ball_target,weight,extension,follow,draw_progress,arm_lift,line_weight,palm_finish,elbow_clearance,swing_palm_roll,roll_step)
 		if stage == Stage.HIT and follow >= 0.90:
 			swing_finish_pose = pose.duplicate()
 	var guide_drop := maxf(smoothstep(0.07,0.83,extension),smoothstep(0.0,0.62,follow))
