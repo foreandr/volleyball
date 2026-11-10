@@ -81,6 +81,22 @@ static func recover_same_side_arm(pose: Array, finish: Array, author: RefCounted
 	# Ease the hanging arm forward beside the hip as the body straightens.
 	var arc := sin(PI*weight)
 	author.rotate_world(pose,"upperarm_r",outside,0.26*arc)
+	var forward := Vector3.UP.cross(outside)
+	var shoulder: Vector3 = author.point(pose,"upperarm_r")
+	var elbow: Vector3 = author.point(pose,"lowerarm_r")
+	var wrist: Vector3 = author.point(pose,"hand_r")
+	var clearance_angle := 0.0
+	for point: Vector3 in [elbow.lerp(wrist,0.5),wrist]:
+		var height := clampf((point.y-hip.y)/maxf(0.10,shoulder.y-hip.y),0.0,1.0)
+		var flank := hip.lerp(shoulder,height)
+		var offset := point-flank
+		var side_gap := offset.dot(outside)
+		var beside_body := 1.0-smoothstep(0.12,0.28,offset.dot(forward))
+		var lever := maxf(0.18,shoulder.y-point.y)
+		clearance_angle = maxf(clearance_angle,(0.055-side_gap)*beside_body/lever)
+	# Only lift out enough to clear the flank, then let the ready pose take over.
+	var clearance_weight := smoothstep(0.0,0.24,arc)
+	author.rotate_world(pose,"upperarm_r",forward,-minf(clearance_angle,0.25)*clearance_weight)
 
 static func hip_finish(pose: Array, author: RefCounted, crosscourt: bool, clearance := 0.06) -> Vector3:
 	var hip: Vector3 = author.point(pose,"thigh_r" if crosscourt else "thigh_l")
