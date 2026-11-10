@@ -2,6 +2,7 @@ extends RefCounted
 
 const OUTSIDE_CONTACT := Vector3(-0.32,-0.11,0.03)
 
+const SpikeArm = preload("res://scripts/spike_arm_swing.gd")
 const Flight = preload("res://scripts/pass_flight.gd")
 const EditSession = preload("res://scripts/animation_edit_session.gd")
 
@@ -19,7 +20,7 @@ const STUDIES := [
 	["10 Fast arm whip",      0.25, 0.30, 0.32, 0.22, 0.23, 0.22, 0.75, 0.32, 0.30, 0.15, 0.28],
 ]
 
-static func bake(base: Animation, actor: Node3D, index: int, crosscourt := false) -> Animation:
+static func bake(base: Animation, actor: Node3D, index: int, crosscourt := false, shot_target := Vector3.INF) -> Animation:
 	var rig: Skeleton3D = actor.skeleton
 	var author: RefCounted = actor.get_pose_author()
 	var session := EditSession.new(base,rig)
@@ -43,7 +44,7 @@ static func bake(base: Animation, actor: Node3D, index: int, crosscourt := false
 	feed.aim += offset
 	feed.incoming += offset/float(feed.duration)
 	var outgoing: Vector3 = feed.spike_outgoing
-	var target := Vector3(-2.5 if crosscourt else feed.aim.x,Flight.FLOOR,10.5)
+	var target := shot_target if shot_target.is_finite() else Vector3(-2.5 if crosscourt else feed.aim.x,Flight.FLOOR,10.5)
 	var travel: Vector3 = target-feed.aim
 	var flight_time := travel.slide(Vector3.UP).length()/maxf(outgoing.slide(Vector3.UP).length(),0.1)
 	feed.spike_outgoing = travel/flight_time+Vector3.UP*Flight.GRAVITY*flight_time*0.5
@@ -59,7 +60,6 @@ static func shape(pose: Array[Transform3D], author: RefCounted, profile: Array, 
 	var air := rising*(1.0-settle)
 	var sweep := 1.0-pow(1.0-clampf(landing/0.56,0.0,1.0),2.0)
 	var finish_hold := sweep*(1.0-smoothstep(0.59,0.95,landing))
-	var finish_side := -1.0 if crosscourt else 1.0
 	var strike_wrist: Vector3 = author.point(pose,"hand_r")
 	var strike_palm: Vector3 = strike_wrist.lerp(author.point(pose,"middle_01_r"),0.75)
 	strike_wrist += (ball-strike_palm).limit_length(0.33)
@@ -94,8 +94,7 @@ static func shape(pose: Array[Transform3D], author: RefCounted, profile: Array, 
 	var elbow_lead := smoothstep(release_start,lerpf(release_start,1.0,0.50),progress)
 	var hand_release := smoothstep(lerpf(release_start,1.0,0.49),1.0,progress)
 	var pole := Vector3(-1.0,-0.12,-0.34).lerp(Vector3(-0.95,-0.08,0.48),hand_release)
-	var hip: Vector3 = author.point(pose,"thigh_r" if crosscourt else "thigh_l")
-	var finish_target := hip+Vector3(finish_side*float(profile[8])*0.31,0.06,0.14)
+	var finish_target := SpikeArm.hip_finish(pose,author,crosscourt,float(profile[8])*0.19)
 	var strike_target := strike_wrist.lerp(finish_target,sweep)
 	strike_target += Vector3(-0.08,0.0,0.36)*sin(PI*sweep)
 	pole = pole.lerp(Vector3(-0.80,-0.15,0.64),sweep)

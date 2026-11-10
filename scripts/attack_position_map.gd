@@ -75,10 +75,7 @@ func _gui_input(event: InputEvent) -> void:
 				if drag_marker == "start":
 					drill.practice_takeoff = drill.Court.clamp_setter(drill.practice_takeoff+shift,drill.ATTACK_FRONT_LIMIT)
 				else:
-					var point: Vector3 = drill.practice_set_target+shift
-					point.x = clampf(point.x,-4.5,4.5)
-					point.z = clampf(point.z,-5.0,4.0)
-					drill.practice_set_target = point
+					drill.move_practice_target(drill.practice_set_target+shift)
 				drill.reset_feed()
 			drag_marker = ""
 		accept_event()

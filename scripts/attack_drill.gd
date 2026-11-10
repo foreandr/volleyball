@@ -21,11 +21,12 @@ const SWING_CHARGE_TIME := 0.65
 const SWING_REACH := 1.55
 const SWING_CONTACT_HEIGHT := 2.22
 const PALM_RADIUS := 0.065
-const SWING_FOLLOW_TIME := 0.30
+const SWING_FOLLOW_TIME := 0.32
 var stage := Stage.SERVE
 var swing_practice := true
-var practice_takeoff := PIN+Vector3(-0.70,RECEIVE_START.y-PIN.y,-0.48)
+var practice_takeoff := PIN+Vector3(-0.70,RECEIVE_START.y-PIN.y,-0.98)
 var practice_set_target := PIN
+var practice_setup_path := "user://attack_practice.cfg"
 var swing_review := false
 var torso_rotation_scale := 2.0
 var leg_kickback_scale := 2.0
@@ -57,6 +58,26 @@ var swing_power := 0.0
 var spike_topspin_rps := 0.0
 var swing_net_hit := {}
 var swing_target: MeshInstance3D
+
+func _ready() -> void:
+	load_practice_target()
+
+func load_practice_target() -> void:
+	var config := ConfigFile.new()
+	if config.load(practice_setup_path) != OK: return
+	var point: Variant = config.get_value("practice","set_target",PIN)
+	if point is Vector3 and point.is_finite():
+		practice_set_target = clamp_practice_target(point)
+
+func move_practice_target(point: Vector3) -> void:
+	practice_set_target = clamp_practice_target(point)
+	var config := ConfigFile.new()
+	config.set_value("practice","set_target",practice_set_target)
+	var error := config.save(practice_setup_path)
+	if error != OK: push_warning("Could not save the swing practice target: %s" % error_string(error))
+
+func clamp_practice_target(point: Vector3) -> Vector3:
+	return Vector3(clampf(point.x,-4.5,4.5),PIN.y,clampf(point.z,-5.0,4.0))
 
 func reset_feed() -> void:
 	if trace.feed > 0:
@@ -143,7 +164,7 @@ func start_swing_practice() -> void:
 	swing_target.show()
 	if swing_button_down or swing_review: swing_started = clock
 	status.text = "Hold left-click to swing"
-	trace.begin_feed({"mode":"swing_practice","source":pass_origin,"velocity":pass_motion,"pin":PIN})
+	trace.begin_feed({"mode":"swing_practice","source":pass_origin,"velocity":pass_motion,"pin":practice_set_target,"takeoff":practice_takeoff})
 
 func set_key() -> int:
 	return KEY_Q if stage == Stage.SERVE else KEY_NONE
@@ -440,8 +461,8 @@ func play_spike(time: float, delta: float) -> void:
 	else:
 		ball.position = flight_point(pass_origin,pass_motion,minf(time,end))
 	if time < SWING_FOLLOW_TIME:
-		var follow := 1.0-pow(1.0-clampf(time/0.22,0.0,1.0),2.0)
-		pose_bow_draw(1.0-smoothstep(0.11,SWING_FOLLOW_TIME,time),swing_contact,swing_contact_extension,follow)
+		var follow := 1.0-pow(1.0-clampf(time/0.17,0.0,1.0),2.0)
+		pose_bow_draw(1.0-smoothstep(0.17,SWING_FOLLOW_TIME,time),swing_contact,swing_contact_extension,follow)
 	if time >= end+(0.22 if swing_practice else 0.48) and not jump.active: reset_feed()
 
 func pose_bow_draw(weight: float, contact: Vector3, extension := 0.0, follow := 0.0, draw_progress := 1.0, arm_lift := 1.0) -> void:
@@ -492,8 +513,7 @@ func pose_bow_draw(weight: float, contact: Vector3, extension := 0.0, follow := 
 	# Twist the ribcage around its own axis so the lean stays independent.
 	var chest_axis: Vector3 = (author.point(pose,"neck_01")-author.point(pose,"spine_03")).normalized()
 	author.rotate_world(pose,"spine_03",chest_axis,clampf(turn*rotation_weight,-1.45,1.45))
-	var across_court := absf(swing_aim.x-PIN.x)/maxf(swing_aim.z-PIN.z,0.1)
-	var line_weight := 1.0-smoothstep(0.16,0.38,across_court)
+	var line_weight := shot_line_weight(swing_aim,contact)
 	SpikeArm.apply(pose,author,ball_target,weight,extension,follow,draw_progress,arm_lift,line_weight)
 	var left_shoulder: Vector3 = author.point(pose,"upperarm_l")
 	var guide_drop := 0.78*smoothstep(0.07,1.0,extension)+0.22*follow
@@ -502,6 +522,10 @@ func pose_bow_draw(weight: float, contact: Vector3, extension := 0.0, follow := 
 		guide_hand,Vector3(0.26,-0.55,0.15),weight,lerpf(172.0,148.0,guide_drop))
 	for bone in rig.get_bone_count():
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
+
+func shot_line_weight(target: Vector3, origin: Vector3) -> float:
+	var across_court := absf(target.x-origin.x)/maxf(target.z-origin.z,0.1)
+	return 1.0-smoothstep(0.16,0.38,across_court)
 
 func airborne_reach_lean(contact: Vector3) -> Vector2:
 	var drift: Vector3 = jump.horizontal_velocity()*0.12

@@ -391,14 +391,7 @@ func add_low_bow_controls() -> void:
 	studies.add_item("06 Low Bow")
 	for study in LopezStudies.STUDIES: studies.add_item(study[0])
 	content.add_child(studies)
-	var finish := OptionButton.new()
-	finish.name = "StudyShot"
-	finish.add_item("Line | Left hip")
-	finish.add_item("Crosscourt | Right hip")
-	finish.hide()
-	studies.item_selected.connect(func(index: int): finish.visible = index > 0)
-	content.add_child(finish)
-	content.add_child(button("Open swing editor",func(): open_low_bow_editor(studies.selected-1,finish.selected == 1)))
+	content.add_child(button("Open swing editor",func(): open_low_bow_editor(studies.selected-1)))
 
 func add_torso_lean_slider() -> void:
 	var readout := label("",16)
@@ -960,7 +953,9 @@ func orbit_setting_camera(pixels: Vector2) -> void:
 func adjust_bump_height(amount: float) -> void:
 	setting_drill.bump.height = clampf(setting_drill.bump.height+amount,1.25,20.0)
 
-func open_low_bow_editor(study := -1, crosscourt := false) -> void:
+func open_low_bow_editor(study := -1) -> void:
+	var shot_target: Vector3 = setting_drill.swing_aim
+	var crosscourt: bool = setting_drill.shot_line_weight(shot_target,setting_drill.practice_set_target) < 0.5
 	var id := LOW_BOW_EDIT_ID if study < 0 else "lopez_study_%02d" % (study+1)
 	var title: String = "06 Low Bow" if study < 0 else LopezStudies.STUDIES[study][0]
 	if study >= 0 and crosscourt:
@@ -973,7 +968,7 @@ func open_low_bow_editor(study := -1, crosscourt := false) -> void:
 		StorySession.edit_animation = Catalog.load_clip(StorySession.edit_entry,preview_player)
 	else:
 		var base := bake_low_bow_starter(study >= 0)
-		StorySession.edit_animation = base if study < 0 else LopezStudies.bake(base,preview_player,study,crosscourt)
+		StorySession.edit_animation = base if study < 0 else LopezStudies.bake(base,preview_player,study,crosscourt,shot_target)
 	get_tree().change_scene_to_file("res://scenes/animation_editor.tscn")
 
 func bake_low_bow_starter(include_landing := false) -> Animation:
