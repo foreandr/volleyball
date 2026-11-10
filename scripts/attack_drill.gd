@@ -170,9 +170,6 @@ func start_swing_practice() -> void:
 	stage = Stage.SET
 	bump.hide()
 	setter.position = practice_takeoff
-	jump.begin(setter,Vector2(0.0,0.65))
-	for frame in range(16): jump.step(setter,1.0/60.0,Vector2.ZERO)
-	jump.release()
 	receiver.rotation.y = atan2(PIN.x-CPU_HOME.x,PIN.z-CPU_HOME.z)
 	var source := receiver.to_global(Vector3(0.0,HandPose.CONTACT_HEIGHT,HandPose.CONTACT_FORWARD))
 	var velocity := set_toward_pin(source)
@@ -180,6 +177,10 @@ func start_swing_practice() -> void:
 	var preroll := descending_time(source,velocity,PIN_HEIGHT)-lead
 	pass_origin = flight_point(source,velocity,preroll)
 	pass_motion = velocity+Vector3.DOWN*Flight.GRAVITY*preroll+(practice_set_target-PIN)/lead
+	setter.rotation.y = incoming_set_heading()
+	jump.begin(setter,Vector2(0.0,0.65))
+	for frame in range(16): jump.step(setter,1.0/60.0,Vector2.ZERO)
+	jump.release()
 	pin_arrival = lead
 	flight_end = Flight.landing_time(pass_origin,pass_motion)
 	ball.position = pass_origin
@@ -223,8 +224,12 @@ func receive_cue_time() -> float:
 			latest = midpoint
 	return latest
 
+func incoming_set_heading() -> float:
+	var incoming := pass_motion.slide(Vector3.UP)
+	return setter.rotation.y if incoming.is_zero_approx() else atan2(-incoming.x,-incoming.z)
+
 func court_facing_weight() -> float:
-	if stage == Stage.SET and jump.active and is_finite(swing_started): return 0.0
+	if stage == Stage.SET and jump.active: return 0.0
 	return 0.5 if stage == Stage.PASS or stage == Stage.SET else 0.0
 
 func can_aim_swing() -> bool:
@@ -264,6 +269,7 @@ func setter_is_diving() -> bool:
 func queue_jump(direction: Vector2) -> void:
 	if jump.active or setter_is_diving() or stage == Stage.HIT: return
 	jump.begin(setter,direction)
+	if stage == Stage.SET: setter.rotation.y = incoming_set_heading()
 	trace.write("jump",clock,{"position":setter.position,"direction":jump.heading},true)
 
 func setter_movement_scale() -> float:
@@ -396,6 +402,8 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 	if not spin_axis.is_zero_approx(): ball.rotate(spin_axis,TAU*SET_TOPSPIN_RPS*delta)
 	ball.position = flight_point(pass_origin,pass_motion,minf(time,flight_end))
 	timing_cue.update_timing(time,pin_arrival,BumpSetting.GREEN_START,BumpSetting.GREEN_END)
+	if jump.active and not is_finite(swing_started):
+		setter.rotation.y = rotate_toward(setter.rotation.y,incoming_set_heading(),8.0*delta)
 	if is_finite(swing_started) and jump.active and setter.position.y > jump.start.y+0.02:
 		if not is_finite(swing_charge_started): swing_charge_started = clock
 		var charge := swing_charge()

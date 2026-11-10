@@ -1036,7 +1036,11 @@ func bake_low_bow_starter(shot_target: Vector3) -> Animation:
 	drill.aim_swing(shot_target)
 	var start := preview_player.position
 	var rig: Skeleton3D = preview_player.skeleton
+	# The editor starts with zero actor yaw; bake the incoming heading into the root track.
+	var start_heading := preview_player.rotation.y
+	preview_player.rotation.y = 0.0
 	var start_inverse := rig.global_transform.affine_inverse()
+	preview_player.rotation.y = start_heading
 	var source: Vector3 = drill.pass_origin
 	var velocity: Vector3 = drill.pass_motion
 	var poses: Array = []
