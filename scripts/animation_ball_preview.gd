@@ -182,7 +182,7 @@ func pose(bone: int, time: float, cache: Dictionary) -> Transform3D:
 	var rig: Skeleton3D = actor.skeleton
 	var local := rig.get_bone_rest(bone)
 	if edit_session != null:
-		var frame := time*60
+		var frame: float = time*edit_session.frame_rate
 		local.origin = edit_session.source_position(bone,frame)+edit_session.position_offset_at(bone,frame)
 		local.basis = Basis(edit_session.source_rotation(bone,frame)*edit_session.offset_at(bone,frame))
 	else:

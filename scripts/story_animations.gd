@@ -845,6 +845,7 @@ func open_backward_editor() -> void:
 		StorySession.edit_animation = Catalog.load_clip(StorySession.edit_entry,preview_player)
 	else:
 		StorySession.edit_animation = bake_backward_starter()
+	StorySession.edit_animation.set_meta("editor_frame_count",15)
 	get_tree().change_scene_to_file("res://scenes/animation_editor.tscn")
 
 func bake_backward_starter() -> Animation:

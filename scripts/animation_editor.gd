@@ -230,7 +230,7 @@ func apply_output_angle(value: float) -> void:
 	StorySession.pass_output_angle = value
 	refresh_ball_angle()
 	set_frame(frame)
-	ball_preview.tick((playhead if playing else float(frame))/EditSession.FPS,false)
+	ball_preview.tick((playhead if playing else float(frame))/session.frame_rate,false)
 
 func bone_label(name_: String) -> String:
 	var side := ""
@@ -257,7 +257,7 @@ func step_frame(direction: int) -> void:
 func set_playing(value: bool) -> void:
 	playing = value
 	playhead = float(frame)
-	if playing and frame == 0: playhead = minf(0,ball_preview.contact_time-ball_preview.feed_duration)*EditSession.FPS
+	if playing and frame == 0: playhead = minf(0,ball_preview.contact_time-ball_preview.feed_duration)*session.frame_rate
 	if is_instance_valid(ball_preview): ball_preview.last_time = session.time_at(frame)
 	if is_instance_valid(play_button): play_button.text = "Pause" if playing else "Play"
 
@@ -266,11 +266,13 @@ func _process(delta: float) -> void:
 	if player_controls!=null and player_controls.active: return
 	if session == null: return
 	if playing and setup_drag.mode.is_empty():
-		var first: float = minf(0,ball_preview.contact_time-ball_preview.feed_duration)*EditSession.FPS
-		var last: float = ball_preview.cycle_end()*EditSession.FPS
-		playhead = first+fposmod(playhead-first+delta*EditSession.FPS,last-first)
-		set_frame(floori(ball_preview.animation_time(playhead/EditSession.FPS)*EditSession.FPS))
-	if is_instance_valid(ball_preview): ball_preview.tick((playhead if playing else float(frame))/EditSession.FPS,playing)
+		var first: float = minf(0,ball_preview.contact_time-ball_preview.feed_duration)*session.frame_rate
+		var last: float = ball_preview.cycle_end()*session.frame_rate
+		playhead = first+fposmod(playhead-first+delta*session.frame_rate,last-first)
+		var playback_frame: float = ball_preview.animation_time(playhead/session.frame_rate)*session.frame_rate
+		set_frame(floori(playback_frame))
+		session.sample(playback_frame)
+	if is_instance_valid(ball_preview): ball_preview.tick((playhead if playing else float(frame))/session.frame_rate,playing)
 	if is_instance_valid(angle_control) and ball_preview.active: angle_control.set_actual(ball_preview.output_angle(),Flight.distance(ball_preview.impact_point,ball_preview.outgoing))
 	if is_instance_valid(overlay): overlay.queue_redraw()
 

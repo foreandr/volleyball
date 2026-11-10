@@ -9,6 +9,7 @@ var position_edits: Dictionary = {}
 var rotation_tracks: Dictionary = {}
 var position_tracks: Dictionary = {}
 var last_frame := 0
+var frame_rate := FPS
 
 func _init(clip: Animation, skeleton: Skeleton3D) -> void:
 	rig = skeleton
@@ -19,14 +20,16 @@ func replace_source(clip: Animation) -> void:
 	revision += 1
 	edits.clear()
 	position_edits.clear()
-	last_frame = ceili(source.length*FPS)
+	var frame_count := int(source.get_meta("editor_frame_count",0))
+	last_frame = frame_count-1 if frame_count >= 2 else ceili(source.length*FPS)
+	frame_rate = last_frame/source.length if frame_count >= 2 else FPS
 	for bone in rig.get_bone_count():
 		var path := NodePath(PREFIX+rig.get_bone_name(bone))
 		rotation_tracks[bone] = source.find_track(path,Animation.TYPE_ROTATION_3D)
 		position_tracks[bone] = source.find_track(path,Animation.TYPE_POSITION_3D)
 
 func time_at(frame: float) -> float:
-	return clampf(frame/FPS,0,source.length)
+	return clampf(frame/frame_rate,0,source.length)
 
 func source_rotation(bone: int, frame: float) -> Quaternion:
 	var track: int = rotation_tracks[bone]
@@ -132,8 +135,10 @@ func bake() -> Animation:
 		if track >= 0: copy.remove_track(track)
 		track = copy.add_track(Animation.TYPE_ROTATION_3D)
 		copy.track_set_path(track,path)
-		for frame in range(last_frame+1):
-			copy.rotation_track_insert_key(track,time_at(frame),(source_rotation(bone,frame)*offset_at(bone,frame)).normalized())
+		for tick in range(ceili(copy.length*FPS)+1):
+			var time := minf(copy.length,tick/FPS)
+			var frame := time*frame_rate
+			copy.rotation_track_insert_key(track,time,(source_rotation(bone,frame)*offset_at(bone,frame)).normalized())
 	for name_ in position_edits:
 		var bone := rig.find_bone(name_)
 		var path := NodePath(PREFIX+name_)
@@ -141,5 +146,8 @@ func bake() -> Animation:
 		if track >= 0: copy.remove_track(track)
 		track = copy.add_track(Animation.TYPE_POSITION_3D)
 		copy.track_set_path(track,path)
-		for frame in range(last_frame+1): copy.position_track_insert_key(track,time_at(frame),source_position(bone,frame)+position_offset_at(bone,frame))
+		for tick in range(ceili(copy.length*FPS)+1):
+			var time := minf(copy.length,tick/FPS)
+			var frame := time*frame_rate
+			copy.position_track_insert_key(track,time,source_position(bone,frame)+position_offset_at(bone,frame))
 	return copy
