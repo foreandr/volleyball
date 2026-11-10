@@ -987,8 +987,8 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 				var upper: String = "upperarm_"+side
 				var shoulder: Vector3 = author.point(pose,upper)
 				var outward := across*(1.0 if side == "l" else -1.0)
-				var target := shoulder+(forward*sin(deg_to_rad(80.0))-up*cos(deg_to_rad(80.0)))*0.54+outward*0.06
-				author.limb(front_pose,upper,"lowerarm_"+side,"hand_"+side,target,-up+outward*0.3,1.0,155.0)
+				var target := shoulder+(forward*sin(deg_to_rad(80.0))-up*cos(deg_to_rad(80.0)))*0.54-outward*0.07
+				author.limb(front_pose,upper,"lowerarm_"+side,"hand_"+side,target,-up-outward*0.10,1.0,155.0)
 				var front_weight := 1.0-smootherstep(0.14,0.28,handoff_age)
 				SpikeArm.blend_arm(pose,front_pose,author,front_weight,side)
 				var source_weight := 1.0-smootherstep(0.0,0.14,handoff_age)
