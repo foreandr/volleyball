@@ -54,7 +54,7 @@ var jump_height_meter: Control
 var marker_popup: Label
 var marker_fade: Tween
 var pass_timing_cue: Node3D
-var reception_review: HBoxContainer
+var reception_review: VBoxContainer
 var setting_drill: Node3D
 var setter_original_transform: Transform3D
 var setter_animation_process: int
@@ -76,7 +76,7 @@ func _ready() -> void:
 	pass_timing_cue = BallTimingRing.new()
 	preview_player.get_parent().add_child(pass_timing_cue)
 	reception_review = preload("res://scripts/reception_review.gd").new(self)
-	var column := find_child("ScreenTitle",true,false).get_parent().get_parent()
+	var column := find_child("ScreenColumn",true,false)
 	column.add_child(reception_review)
 	column.move_child(reception_review,1)
 	setup_drag = preload("res://scripts/court_setup_drag.gd").new(self)
@@ -157,13 +157,17 @@ func current_build_label() -> String:
 	return version
 
 func screen_title() -> String:
-	return "ANIMATIONS  |  "+build_label
+	return "ANIMATIONS"
+
+func screen_subtitle() -> String:
+	return build_label
 
 func initial_profile() -> Dictionary:
 	return StorySession.active.get("profile",Profile.load_profile()).duplicate(true)
 
 func build_controls(controls: VBoxContainer) -> void:
 	content = controls
+	content.add_theme_constant_override("separation",10)
 	show_categories()
 
 func clear_content() -> void:
@@ -179,7 +183,7 @@ func clear_content() -> void:
 
 func set_title(text: String) -> void:
 	var heading := find_child("ScreenTitle",true,false) as Label
-	if heading: heading.text = text+"  |  "+build_label
+	if heading: heading.text = text
 
 func show_categories() -> void:
 	if is_instance_valid(pass_timing_cue): pass_timing_cue.hide()
@@ -268,6 +272,7 @@ Scroll to set pass height",16)
 	list.name = "AnimationList"
 	list.allow_reselect = true
 	list.item_activated.connect(open_editor)
+	list.custom_minimum_size.y = 160
 	list.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	animation_list = list
 	animation_list.add_theme_font_size_override("font_size",18)

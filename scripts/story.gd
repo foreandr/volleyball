@@ -48,6 +48,8 @@ func show_load() -> void:
 	clear_menu("LOAD STORY")
 	var scroll := ScrollContainer.new()
 	scroll.custom_minimum_size = Vector2(440,330)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.follow_focus = true
 	column.add_child(scroll)
 	var saves := VBoxContainer.new()
 	saves.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -56,6 +58,8 @@ func show_load() -> void:
 	for record in StorySession.saved_stories():
 		var entry := Button.new()
 		entry.text = record.profile.name
+		entry.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		entry.tooltip_text = entry.text
 		entry.name = "Slot_"+record.id
 		entry.custom_minimum_size.y = 52
 		entry.pressed.connect(func():

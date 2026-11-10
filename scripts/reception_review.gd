@@ -1,4 +1,4 @@
-extends HBoxContainer
+extends VBoxContainer
 
 const Flight = preload("res://scripts/pass_flight.gd")
 const ForwardDive = preload("res://scripts/forward_reception_dive.gd")
@@ -69,26 +69,29 @@ func _init(host: Control) -> void:
 	page = host
 	add_theme_constant_override("separation",8)
 	counter = page.label("",17)
-	counter.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	counter.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	add_child(counter)
+	var transport := HBoxContainer.new()
+	transport.add_theme_constant_override("separation",8)
+	add_child(transport)
 	play_button = page.button("Play all",toggle_play)
-	add_child(play_button)
+	transport.add_child(play_button)
 	previous_button = page.button("Previous",func(): load_case(posmod(index-1,CASES.size())))
-	add_child(previous_button)
+	transport.add_child(previous_button)
 	next_button = page.button("Next",func(): load_case(posmod(index+1,CASES.size())))
-	add_child(next_button)
+	transport.add_child(next_button)
 	loop_button = page.button("Loop clip",toggle_loop)
 	loop_button.toggle_mode = true
-	add_child(loop_button)
+	transport.add_child(loop_button)
 	slow_button = page.button("Slow mo",toggle_slow_motion)
 	slow_button.toggle_mode = true
 	slow_button.tooltip_text = "Play the reception at 35% speed"
-	add_child(slow_button)
+	transport.add_child(slow_button)
 	freeze_button = page.button("Freeze pose",toggle_freeze)
 	freeze_button.toggle_mode = true
-	add_child(freeze_button)
+	transport.add_child(freeze_button)
 	stop_button = page.button("Stop",stop)
-	add_child(stop_button)
+	transport.add_child(stop_button)
 	build_title_card()
 	update_controls()
 	hide()

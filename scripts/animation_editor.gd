@@ -112,16 +112,8 @@ func screen_title() -> String:
 func initial_profile() -> Dictionary:
 	return StorySession.active.get("profile",Profile.load_profile()).duplicate(true)
 
-func build_controls(host: VBoxContainer) -> void:
-	var scroll := ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	host.add_child(scroll)
-	var controls := VBoxContainer.new()
-	controls.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	controls.size_flags_vertical = Control.SIZE_EXPAND_FILL
+func build_controls(controls: VBoxContainer) -> void:
 	controls.add_theme_constant_override("separation",8)
-	scroll.add_child(controls)
 	copy_name = LineEdit.new()
 	copy_name.name = "CopyName"
 	copy_name.text = entry.name+" Copy"

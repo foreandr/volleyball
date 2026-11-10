@@ -32,17 +32,28 @@ func _ready() -> void:
 	for edge in ["left","right","top","bottom"]: margin.add_theme_constant_override("margin_"+edge,24)
 	add_child(margin)
 	var column := VBoxContainer.new()
+	column.name = "ScreenColumn"
 	column.add_theme_constant_override("separation",18)
 	margin.add_child(column)
 	var header := HBoxContainer.new()
 	column.add_child(header)
+	var title_block := VBoxContainer.new()
+	title_block.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(title_block)
 	var title := label(screen_title(),32)
+	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	title.name = "ScreenTitle"
 	title.add_theme_color_override("font_color",Color("ffce70"))
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header.add_child(title)
+	title_block.add_child(title)
+	var subtitle := screen_subtitle()
+	if not subtitle.is_empty():
+		var build := label(subtitle,14)
+		build.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		build.tooltip_text = subtitle
+		title_block.add_child(build)
 	var back := button("Back",open_menu)
-	back.custom_minimum_size = Vector2(180,44)
+	back.custom_minimum_size = Vector2(110,44)
 	back.size_flags_horizontal = Control.SIZE_SHRINK_END
 	header.add_child(back)
 	var workspace_row := HBoxContainer.new()
@@ -64,7 +75,13 @@ func _ready() -> void:
 	tools.add_child(tool_margin)
 	var controls := VBoxContainer.new()
 	controls.add_theme_constant_override("separation",16)
-	tool_margin.add_child(controls)
+	var tool_scroll := ScrollContainer.new()
+	tool_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	tool_scroll.follow_focus = true
+	tool_margin.add_child(tool_scroll)
+	controls.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	controls.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	tool_scroll.add_child(controls)
 	var stage := panel()
 	stage.name = "RightPreview"
 	stage.custom_minimum_size.x = 400
@@ -93,6 +110,7 @@ func _ready() -> void:
 		right_panel.add_child(inset)
 		var scroll := ScrollContainer.new()
 		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		scroll.follow_focus = true
 		inset.add_child(scroll)
 		ball_controls_host = VBoxContainer.new()
 		ball_controls_host.name = "BallControls"
@@ -112,6 +130,9 @@ func build_ball_controls(_host: VBoxContainer) -> void:
 
 func screen_title() -> String:
 	return "CREATE PLAYER"
+
+func screen_subtitle() -> String:
+	return ""
 
 func initial_profile() -> Dictionary:
 	return StorySession.draft.duplicate(true) if StorySession.creating_story else Profile.load_profile()

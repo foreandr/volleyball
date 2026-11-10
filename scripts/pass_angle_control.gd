@@ -124,6 +124,7 @@ func _ready() -> void:
 	distance_field.value_changed.connect(move_distance)
 	distance_field.get_meta("slider").value_changed.connect(move_distance)
 	actual_label = Label.new()
+	actual_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	actual_label.hide()
 	build_host.add_child(actual_label)
 
@@ -196,6 +197,7 @@ func parameter(title_: String, low: float, high: float, value: float, unit := "m
 	build_host.add_child(row)
 	var title := Label.new()
 	title.text = title_
+	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(title)
 	var number := SpinBox.new()
