@@ -122,19 +122,14 @@ func aim_swing(point: Vector3) -> void:
 	swing_aim = Vector3(clampf(point.x,-4.4,4.4),Flight.FLOOR,clampf(point.z,4.3,12.9))
 	swing_target.position = Vector3(swing_aim.x,0.065,swing_aim.z)
 
-func swing_input(pressed: bool, direction: Vector2) -> void:
+func swing_input(pressed: bool) -> void:
 	if stage != Stage.SET: return
 	if not pressed:
 		if is_finite(swing_started) and not is_finite(swing_released): swing_released = clock
 		return
-	if is_finite(swing_started) and jump.active: return
+	if is_finite(swing_started) and not is_finite(swing_released): return
 	swing_started = clock
 	swing_released = -INF
-	var approach := direction
-	if approach.is_zero_approx():
-		var toward_pin := PIN-setter.position
-		approach = Vector2(-toward_pin.x,toward_pin.z).limit_length()
-	queue_jump(approach)
 	status.text = "Charging swing"
 	trace.write("swing_start",clock,{"player":setter.position,"aim":swing_aim},true)
 
@@ -250,7 +245,7 @@ func play_cpu_set(time: float, delta: float) -> void:
 			bump.hand_setting = false
 			trace.closest_check.clear()
 			trace.closest_margin = INF
-			status.text = "Hold left-click to jump and spike"
+			status.text = "Space to jump  |  Hold left-click to spike"
 			region.show()
 			aim_swing(swing_aim)
 			swing_target.show()
