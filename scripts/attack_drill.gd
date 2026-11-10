@@ -14,7 +14,7 @@ const SET_APEX := 5.0
 const SET_TOPSPIN_RPS := 2.2
 const LOW_BOW_FRAME := 1.0/30.0
 
-enum Stage { SERVE, PASS, SET, HIT, MISS }
+enum Stage { SERVE, PASS, SET, HIT, MISS, SHANK }
 const SWING_CHARGE_TIME := 0.65
 const SWING_REACH := 1.55
 const SWING_CONTACT_HEIGHT := 2.22
@@ -132,6 +132,8 @@ func reset_feed() -> void:
 	bump.reset()
 	bump.green_start = 0.01
 	bump.green_end = 0.60
+	bump.green_forearm_allowance = 0.30
+	bump.green_hand_allowance = 0.15
 	bump.show()
 	bump.hand_setting = false
 	bump.quick_hand_receive = false
@@ -198,6 +200,10 @@ func set_key() -> int:
 
 func can_aim_set() -> bool:
 	return stage == Stage.SERVE and not is_finite(bump.touch_time)
+
+func set_pass_aim(point: Vector3) -> void:
+	# The landing marker is beyond the setter’s overhead interception point.
+	bump.destination = Vector2(clampf(point.x,-3.0,3.0),clampf(point.z,0.0,4.5))
 
 func queue_hand_receive() -> void:
 	if stage != Stage.SERVE or is_finite(bump.touch_time): return
@@ -269,7 +275,7 @@ func setter_is_diving() -> bool:
 	return stage == Stage.PASS and not bump.low_save.finished(bump.touch_time+clock-stage_start)
 
 func queue_jump(direction: Vector2) -> void:
-	if jump.active or setter_is_diving() or stage == Stage.HIT: return
+	if jump.active or setter_is_diving() or stage in [Stage.HIT,Stage.SHANK]: return
 	jump.begin(setter,direction)
 	trace.write("jump",clock,{"position":setter.position,"direction":jump.heading},true)
 
@@ -288,13 +294,11 @@ func step(delta: float) -> void:
 	match stage:
 		Stage.SERVE: play_serve(time,previous,delta)
 		Stage.PASS:
-			if not bump.hand_setting:
-				var receive_time: float = bump.touch_time+time
-				if setter_is_diving():
-					bump.low_save.sample(setter,receive_time,bump.touch_time)
-				elif not bump.low_save.active:
-					bump.follow_forearm(receive_time,serve_velocity+Vector3.DOWN*Flight.GRAVITY*bump.touch_time)
+			follow_receive(time)
 			play_cpu_set(time,delta)
+		Stage.SHANK:
+			follow_receive(time)
+			play_shank(time,previous)
 		Stage.SET:
 			if not swing_practice:
 				cpu_set.update_hand_push(cpu_set.release_time+time,cpu_set.release_time+time-cpu_set.touch_time)
@@ -309,7 +313,7 @@ func trace_snapshot(time: float) -> Dictionary:
 	var velocity := Vector3.ZERO
 	match stage:
 		Stage.SERVE: velocity = serve_velocity+Vector3.DOWN*Flight.GRAVITY*time
-		Stage.PASS,Stage.SET,Stage.HIT: velocity = pass_motion+Vector3.DOWN*Flight.GRAVITY*time
+		Stage.PASS,Stage.SET,Stage.HIT,Stage.SHANK: velocity = pass_motion+Vector3.DOWN*Flight.GRAVITY*time
 	var platform: Vector3 = bump.platform_center()
 	return {
 		"stage":stage,"result":status.text,"ball_position":ball.position,"ball_velocity":velocity,
@@ -338,11 +342,11 @@ func play_serve(time: float, previous: float, delta: float) -> void:
 		var head_height := CPU_HOME.y+HandPose.CONTACT_HEIGHT*receiver.scale.y
 		cpu_contact_time = descending_time(pass_origin,pass_motion,head_height)
 		if cpu_contact_time <= 0.0:
-			miss("Pass was too low to set")
+			shank("Pass was too low to set")
 			return
 		cpu_contact_point = flight_point(pass_origin,pass_motion,cpu_contact_time)
 		if cpu_contact_point.z >= 3.75 or (not bump.net_hit.is_empty() and bump.net_hit.time < cpu_contact_time):
-			miss("Pass went past the setter")
+			shank("Pass went past the setter")
 			return
 		bump.hide()
 		var incoming := (pass_origin-cpu_contact_point).slide(Vector3.UP).normalized()
@@ -354,6 +358,31 @@ func play_serve(time: float, previous: float, delta: float) -> void:
 			"grade":bump.grade,"reach":bump.reach,"contact":bump.contact_check},true)
 	elif time >= end:
 		miss("Serve missed")
+
+func follow_receive(time: float) -> void:
+	if bump.hand_setting: return
+	var receive_time: float = bump.touch_time+time
+	if setter_is_diving():
+		bump.low_save.sample(setter,receive_time,bump.touch_time)
+	elif not bump.low_save.active:
+		bump.follow_forearm(receive_time,serve_velocity+Vector3.DOWN*Flight.GRAVITY*bump.touch_time)
+
+func shank(message: String, elapsed := 0.0) -> void:
+	trace.check_contact(bump.contact_check)
+	miss(message)
+	stage = Stage.SHANK
+	stage_start = clock-elapsed
+	bump.hide()
+
+func play_shank(time: float, previous: float) -> void:
+	var hit: Dictionary = bump.net_hit
+	var end := Flight.landing_time(pass_origin,pass_motion) if hit.is_empty() else float(hit.end_time)
+	show_attack_net(hit,time)
+	if not hit.is_empty() and time >= hit.time:
+		ball.position = Net.after_hit(hit,minf(time,end))
+	else:
+		ball.position = flight_point(pass_origin,pass_motion,minf(time,end))
+	if previous >= end: reset_feed()
 
 func play_cpu_set(time: float, delta: float) -> void:
 	if is_finite(cpu_set.touch_time):
@@ -390,7 +419,7 @@ func play_cpu_set(time: float, delta: float) -> void:
 		HandPose.apply(receiver,cpu_contact_point,1.0-smoothstep(0.0,0.22,lead))
 	if time >= cpu_contact_time:
 		if receiver.position.distance_to(cpu_stand)>0.60:
-			miss("CPU could not reach the pass")
+			shank("CPU could not reach the pass",time)
 			return
 		cpu_set.height = SET_APEX
 		var ideal := set_toward_pin(cpu_contact_point)
@@ -521,8 +550,8 @@ func play_spike(time: float, delta: float) -> void:
 		var fall_time := float(swing_net_hit.drop_time) if hit_net else landing_time
 		var landing_velocity: Vector3 = swing_net_hit.velocity if hit_net else pass_motion
 		landing_velocity += Vector3.DOWN*Flight.GRAVITY*fall_time
-		var bounce_speed := clampf(-landing_velocity.y*0.32,0.55,2.8)
-		var bounce_velocity := landing_velocity.slide(Vector3.UP)*0.38+Vector3.UP*bounce_speed
+		var bounce_speed := clampf(-landing_velocity.y*0.58,3.8,6.5)
+		var bounce_velocity := landing_velocity.slide(Vector3.UP)*0.25+Vector3.UP*bounce_speed
 		var bounce_time := Flight.landing_time(ground,bounce_velocity)
 		bounce_end += bounce_time
 		ball.position = flight_point(ground,bounce_velocity,minf(time-landing_time,bounce_time))

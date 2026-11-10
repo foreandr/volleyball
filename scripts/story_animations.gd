@@ -950,8 +950,8 @@ func handle_preview_input(event: InputEvent) -> void:
 				var point: Vector2 = setup_drag.screen_position(event.position)
 				var hit: Variant = Plane(Vector3.UP,0.055).intersects_ray(preview_camera.project_ray_origin(point),preview_camera.project_ray_normal(point))
 				if hit is Vector3:
-					if setting_drill.can_aim_set(): setting_drill.bump.destination = Court.clamp_set_aim(hit)
-					else: setting_drill.aim_swing(hit)
+					if selected_category == "Attacking": setting_drill.set_pass_aim(hit)
+					else: setting_drill.bump.destination = Court.clamp_set_aim(hit)
 		elif event is InputEventMouseButton and event.pressed:
 			if event.button_index == MOUSE_BUTTON_LEFT and selected_category == "Attacking" and setting_drill.can_aim_swing():
 				var point: Vector2 = setup_drag.screen_position(event.position)

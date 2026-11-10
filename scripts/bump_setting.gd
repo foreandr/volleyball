@@ -44,6 +44,8 @@ var destination := Vector2(2.75,3.0)
 var height := 3.8
 var green_start := GREEN_START
 var green_end := GREEN_END
+var green_forearm_allowance := 0.0
+var green_hand_allowance := 0.0
 var grade := Timing.Grade.WAITING
 var pressed_at := -INF
 var low_save := LowSave.new()
@@ -255,14 +257,18 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 				point = Geometry3D.get_closest_point_to_segment(center,first,last)
 			var timing := (cue_arrival if is_finite(cue_arrival) and not low_save.active else time)-pressed_at
 			var green := timing >= green_start and timing <= green_end
-			var assisted := green and not hand_setting and not low_save.active and point.distance_to(center) > radius and close_body_contact(point,center)
 			var gap_after_adjustment := point.distance_to(center)
+			var receive_allowance := green_hand_allowance if hand_setting else green_forearm_allowance
+			var near_receive := green and not low_save.active and receive_allowance > 0.0 and gap_after_adjustment <= radius+receive_allowance
+			var assisted := green and not hand_setting and not low_save.active and gap_after_adjustment > radius and (near_receive or close_body_contact(point,center))
 			var from_setter := point-setter.global_position
 			var hand_assisted := (
 				hand_setting and green and gap_after_adjustment > radius
-				and gap_after_adjustment <= radius+HandPose.GREEN_CONTACT_ALLOWANCE
-				and from_setter.slide(Vector3.UP).length() <= 0.80
-				and absf(point.y-center.y) <= 0.32
+				and (near_receive or (
+					gap_after_adjustment <= radius+HandPose.GREEN_CONTACT_ALLOWANCE
+					and from_setter.slide(Vector3.UP).length() <= 0.80
+					and absf(point.y-center.y) <= 0.32
+				))
 			)
 			contact_check = {
 				"time":time,"surface":"hands" if hand_setting else ("palm" if pancake else "forearms"),"surface_center":center,
