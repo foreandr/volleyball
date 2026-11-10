@@ -436,10 +436,10 @@ func pose_bow_draw(weight: float, contact := Vector3.ZERO, extension := 0.0, fol
 	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",
 		target,Vector3(-0.85,0.52,-0.74),weight,lerpf(108.0,175.0,extension))
 	var left_shoulder: Vector3 = author.point(pose,"upperarm_l")
-	var guide_drop := smoothstep(0.04,0.57,extension)
-	var guide_hand := left_shoulder+Vector3(0.06,0.43,0.64).lerp(Vector3(0.12,-0.54,0.04),guide_drop)
+	var guide_drop := 0.78*smoothstep(0.07,1.0,extension)+0.22*follow
+	var guide_hand := left_shoulder+Vector3(0.06,0.43,0.64).lerp(Vector3(0.12,-0.46,0.12),guide_drop)
 	author.limb(pose,"upperarm_l","lowerarm_l","hand_l",
-		guide_hand,Vector3(0.26,-0.55,0.15),weight,174.0)
+		guide_hand,Vector3(0.26,-0.55,0.15),weight,lerpf(172.0,148.0,guide_drop))
 	for bone in rig.get_bone_count():
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
 
