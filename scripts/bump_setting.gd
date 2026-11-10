@@ -220,12 +220,19 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 			var green := timing >= GREEN_START and timing <= GREEN_END
 			var assisted := green and not hand_setting and not low_save.active and point.distance_to(center) > radius and close_body_contact(point,center)
 			var gap_after_adjustment := point.distance_to(center)
+			var from_setter := point-setter.global_position
+			var hand_assisted := (
+				hand_setting and green and gap_after_adjustment > radius
+				and gap_after_adjustment <= radius+HandPose.GREEN_CONTACT_ALLOWANCE
+				and from_setter.slide(Vector3.UP).length() <= 0.62
+				and absf(point.y-center.y) <= 0.23
+			)
 			contact_check = {
 				"time":time,"surface":"hands" if hand_setting else ("palm" if pancake else "forearms"),"surface_center":center,
 				"ball_point":point,"gap_before_adjustment":gap,"gap":gap_after_adjustment,
 				"radius":cutoff,"base_radius":radius,"dive_allowance":allowance,
-				"margin":gap_after_adjustment-cutoff,"assist":assisted,
-				"accepted":assisted or gap_after_adjustment <= cutoff,
+				"margin":gap_after_adjustment-cutoff,"assist":assisted or hand_assisted,"hand_assist":hand_assisted,
+				"accepted":assisted or hand_assisted or gap_after_adjustment <= cutoff,
 			}
 			if contact_check.accepted:
 				touch_time = lerpf(previous,time,first.distance_to(point)/first.distance_to(last))

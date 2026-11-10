@@ -3,6 +3,7 @@ extends RefCounted
 const CONTACT_HEIGHT := 1.83
 const CONTACT_FORWARD := 0.23
 const CONTACT_RADIUS := 0.30
+const GREEN_CONTACT_ALLOWANCE := 0.08
 const HOLD_TIME := 0.58
 
 static func contact_center(actor: Node3D) -> Vector3:
