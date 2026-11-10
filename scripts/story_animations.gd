@@ -919,8 +919,7 @@ func handle_preview_input(event: InputEvent) -> void:
 			open_menu()
 		elif event is InputEventMouseMotion:
 			if event.button_mask & MOUSE_BUTTON_MASK_MIDDLE:
-				var zoom: bool = selected_category == "Attacking" and not event.shift_pressed
-				orbit_setting_camera(event.relative,zoom)
+				orbit_setting_camera(event.relative)
 			elif setting_drill.can_aim_set():
 				var point: Vector2 = setup_drag.screen_position(event.position)
 				var hit: Variant = Plane(Vector3.UP,0.055).intersects_ray(preview_camera.project_ray_origin(point),preview_camera.project_ray_normal(point))
@@ -933,8 +932,13 @@ func handle_preview_input(event: InputEvent) -> void:
 				var hit: Variant = Plane(Vector3.UP,0.055).intersects_ray(preview_camera.project_ray_origin(point),preview_camera.project_ray_normal(point))
 				if hit is Vector3 and hit.z >= setting_drill.SHOT_AIM_NEAR: setting_drill.aim_swing(hit)
 				setting_drill.swing_input(true)
-			elif setting_drill.can_aim_set() and event.button_index in [MOUSE_BUTTON_WHEEL_UP,MOUSE_BUTTON_WHEEL_DOWN]:
-				adjust_bump_height((0.25 if event.button_index == MOUSE_BUTTON_WHEEL_UP else -0.25)*maxf(0.1,event.factor))
+			elif event.button_index in [MOUSE_BUTTON_WHEEL_UP,MOUSE_BUTTON_WHEEL_DOWN]:
+				var wheel := (1.0 if event.button_index == MOUSE_BUTTON_WHEEL_UP else -1.0)*maxf(0.1,event.factor)
+				if selected_category == "Attacking" and not event.shift_pressed:
+					zoom_attack_camera(wheel)
+					preview.accept_event()
+				elif setting_drill.can_aim_set():
+					adjust_bump_height(0.25*wheel)
 		return
 	if reception_review.active:
 		super.handle_preview_input(event)
@@ -968,20 +972,22 @@ func handle_preview_input(event: InputEvent) -> void:
 		return
 	super.handle_preview_input(event)
 
-func orbit_setting_camera(pixels: Vector2, zoom := false) -> void:
+func orbit_setting_camera(pixels: Vector2) -> void:
 	var offset := preview_camera.position-setting_camera_focus
 	var distance := offset.length()
 	var yaw := atan2(offset.x,offset.z)-pixels.x*0.008
-	var pitch := asin(offset.y/distance)
-	if zoom and not is_zero_approx(pixels.y):
-		distance = clampf(distance*exp(pixels.y*0.008),2.8,24.0)
-		var actor_focus := preview_player.position+Vector3.UP*2.0
-		if setting_drill.jump.active:
-			actor_focus = setting_drill.jump.start+Vector3(0.0,2.0,0.45)
-		setting_camera_focus = SETTING_CAMERA_FOCUS.lerp(actor_focus,1.0-smoothstep(4.0,14.0,distance))
-	elif not zoom:
-		pitch = clampf(pitch+pixels.y*0.006,0.08,1.22)
+	var pitch := clampf(asin(offset.y/distance)+pixels.y*0.006,0.08,1.22)
 	preview_camera.position = setting_camera_focus+Vector3(sin(yaw)*cos(pitch),sin(pitch),cos(yaw)*cos(pitch))*distance
+	preview_camera.look_at(setting_camera_focus)
+
+func zoom_attack_camera(wheel: float) -> void:
+	var offset := preview_camera.position-setting_camera_focus
+	var distance := clampf(offset.length()*exp(-wheel*0.17),2.8,24.0)
+	var actor_focus := preview_player.position+Vector3.UP*2.0
+	if setting_drill.jump.active:
+		actor_focus = setting_drill.jump.start+Vector3(0.0,2.0,0.45)
+	setting_camera_focus = SETTING_CAMERA_FOCUS.lerp(actor_focus,1.0-smoothstep(4.0,14.0,distance))
+	preview_camera.position = setting_camera_focus+offset.normalized()*distance
 	preview_camera.look_at(setting_camera_focus)
 
 func adjust_bump_height(amount: float) -> void:

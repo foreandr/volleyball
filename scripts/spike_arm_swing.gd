@@ -25,21 +25,21 @@ static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float,
 	var solve_weight := 1.0 if finish > 0.0 else weight
 	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",target,elbow_pole,solve_weight,elbow_limit)
 	drop_low_bow_elbow(pose,author,weight*draw_progress*(1.0-arm_lift)*(1.0-smoothstep(0.0,0.48,extension)))
-	var draw_wrist := 0.90*weight*(1.0-smoothstep(0.04,0.52,extension))*(1.0-follow)
-	align_wrist_to_forearm(pose,author,draw_wrist)
-	var wrist: Vector3 = author.point(pose,"hand_r")
-	var axis: Vector3 = (author.point(pose,"middle_01_r")-wrist).normalized()
-	var pinky: Vector3 = author.point(pose,"pinky_01_r")
-	var thumb: Vector3 = author.point(pose,"thumb_01_r")
-	var edge := (pinky-thumb).slide(axis).normalized()
-	var down := Vector3.DOWN.slide(axis)
-	var target_edge := down.normalized().rotated(axis,PI*(1.0-line_weight))
-	var roll := edge.signed_angle_to(target_edge,axis)
-	var roll_weight := solve_weight*smoothstep(0.25,0.85,extension)*(1.0-smoothstep(0.0,0.9,follow))*smoothstep(0.0,0.30,down.length())
-	author.rotate_world(pose,"hand_r",axis,roll*roll_weight)
-	align_finish_wrist(pose,author,finish)
+	var wrist_alignment := lerpf(0.90,0.68,smoothstep(0.04,0.70,extension))
+	wrist_alignment = lerpf(wrist_alignment,0.96,smoothstep(0.0,0.86,follow))
+	align_wrist_to_forearm(pose,author,wrist_alignment*solve_weight)
 	if finish > 0.0:
 		blend_right_arm(base,pose,author,weight)
+	open_strike_hand(base,author,weight*lerpf(0.70,0.94,smoothstep(0.12,0.85,extension)))
+
+static func open_strike_hand(pose: Array, author: RefCounted, weight: float) -> void:
+	# Release the curl inherited from the jump pose without locking the fingers at full extension.
+	for finger in ["index","middle","ring","pinky","thumb"]:
+		for segment in range(1,4):
+			var index: int = author.rig.find_bone("%s_%02d_r" % [finger,segment])
+			var current: Quaternion = pose[index].basis.get_rotation_quaternion()
+			var relaxed: Quaternion = author.rig.get_bone_rest(index).basis.get_rotation_quaternion()
+			pose[index].basis = Basis(current.slerp(relaxed,weight))
 
 static func apply_guide_arm(pose: Array, author: RefCounted, reach: Vector3, reach_pole: Vector3, drop: float, weight: float, reach_limit: float) -> void:
 	if weight <= 0.0: return
