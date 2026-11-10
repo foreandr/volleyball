@@ -348,7 +348,25 @@ func start_setting_drill(attack := false) -> void:
 			func(value: float): setting_drill.torso_rotation_scale = value)
 		add_attack_pose_slider("Leg kickback","LegKickback",0,setting_drill.leg_kickback_scale,
 			func(value: float): setting_drill.leg_kickback_scale = value)
+	add_torso_lean_slider()
 	preview.grab_focus()
+
+func add_torso_lean_slider() -> void:
+	var readout := label("",16)
+	content.add_child(readout)
+	var slider := HSlider.new()
+	slider.name = "TorsoLean"
+	slider.min_value = -30
+	slider.max_value = 20
+	slider.step = 1
+	slider.custom_minimum_size.y = 24
+	slider.value = setting_drill.torso_lean_degrees
+	var update := func(value: float):
+		setting_drill.torso_lean_degrees = value
+		readout.text = "Torso lean  |  %d\u00b0" % roundi(value)
+	slider.value_changed.connect(update)
+	update.call(slider.value)
+	content.add_child(slider)
 
 func add_attack_pose_slider(caption: String, node_name: String, minimum: float, initial: float, apply: Callable) -> void:
 	var rotation_readout := label("",16)
@@ -372,6 +390,7 @@ func stop_setting_drill() -> void:
 	if marker_fade != null: marker_fade.kill()
 	marker_popup.hide()
 	jump_height_meter.hide()
+	setting_drill.restore_torso_lean(preview_player)
 	setting_drill.queue_free()
 	setting_drill = null
 	preview_player.transform = setter_original_transform
@@ -497,6 +516,7 @@ func reception_drill_active() -> bool:
 func _process(delta: float) -> void:
 	pass_timing_cue.hide()
 	if is_instance_valid(setting_drill):
+		setting_drill.restore_torso_lean(preview_player)
 		player_controls.read_pace_input()
 		setting_drill.trace_input = player_controls.movement_input()
 		setting_drill.trace_sprint = player_controls.sprint_requested
@@ -509,6 +529,7 @@ func _process(delta: float) -> void:
 		elif setting_drill.jump.active and court_weight > 0.0:
 			player_controls.track_setting_ball(preview_player,setting_drill.ball.global_position,delta,court_weight)
 		setting_drill.step_jump(delta)
+		if not diving: setting_drill.apply_torso_lean(preview_player)
 		update_jump_height_meter()
 		var jump_lift: float = preview_player.position.y-setting_drill.jump.start.y if setting_drill.jump.active else 0.0
 		player_controls.stamina_ring.set_airborne_lift(jump_lift)

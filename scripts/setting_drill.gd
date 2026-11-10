@@ -73,6 +73,8 @@ var arm_swing_weight := 0.0
 var trace := Trace.new()
 var trace_input := Vector2.ZERO
 var trace_sprint := false
+var torso_lean_degrees := -10.0
+var torso_before_lean := {}
 var trace_move_scale := 1.0
 
 func configure(player: Node3D, readout: Label, use_bump: bool, build := "") -> void:
@@ -153,6 +155,27 @@ func queue_jump(direction: Vector2) -> void:
 	if jump.active or setter_is_diving() or (not bump_enabled and is_finite(bump.touch_time) and not is_finite(bump.release_time)): return
 	jump.begin(setter,direction)
 	trace.write("jump",clock,{"position":setter.position,"direction":jump.heading},true)
+
+func restore_torso_lean(actor: Node3D) -> void:
+	if not torso_before_lean.has(actor): return
+	var rig: Skeleton3D = actor.skeleton
+	var rotations: Dictionary = torso_before_lean[actor]
+	for bone in rotations: rig.set_bone_pose_rotation(bone,rotations[bone])
+	torso_before_lean.erase(actor)
+
+func apply_torso_lean(actor: Node3D) -> void:
+	if is_zero_approx(torso_lean_degrees): return
+	var rig: Skeleton3D = actor.skeleton
+	var rotations := {}
+	for name_ in ["spine_01","spine_02"]:
+		var bone := rig.find_bone(name_)
+		if bone < 0: continue
+		var parent := rig.get_bone_parent(bone)
+		var axis := rig.get_bone_global_pose(parent).basis.inverse()*Vector3.RIGHT
+		var base := rig.get_bone_pose_rotation(bone)
+		rotations[bone] = base
+		rig.set_bone_pose_rotation(bone,Quaternion(axis.normalized(),deg_to_rad(torso_lean_degrees)*0.5)*base)
+	torso_before_lean[actor] = rotations
 
 func step_jump(delta: float) -> void:
 	if jump.active: jump.step(setter,delta,trace_input)

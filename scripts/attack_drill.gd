@@ -3,12 +3,13 @@ extends "res://scripts/setting_drill.gd"
 const Court = preload("res://scripts/preview_court.gd")
 const HandPose = preload("res://scripts/hand_setting_pose.gd")
 const Footwork = preload("res://scripts/directional_footwork.gd")
-const PIN := Vector3(3.55,0.065,2.3)
+const PIN := Vector3(3.55,0.065,2.85)
 const RECEIVE_START := Vector3(3.05,0.04,-3.10)
 const ATTACK_SERVE_SOURCE := Vector3(3.05,2.8,8.5)
-const CPU_HOME := Vector3(-0.55,0.04,1.15)
+const CPU_HOME := Vector3(-0.55,0.04,1.65)
 const PIN_HEIGHT := 2.75
 const SET_APEX := 5.0
+const SET_TOPSPIN_RPS := 2.2
 
 enum Stage { SERVE, PASS, SET, HIT, MISS }
 const SWING_CHARGE_TIME := 0.65
@@ -77,6 +78,7 @@ func reset_feed() -> void:
 	serve_target = RECEIVE_START+Vector3(0.0,1.13,-0.17)
 	serve_velocity = (serve_target-ATTACK_SERVE_SOURCE)/SERVE_TIME+Vector3.UP*Flight.GRAVITY*SERVE_TIME*0.5
 	ball.position = ATTACK_SERVE_SOURCE
+	ball.rotation = Vector3.ZERO
 	region.position = PIN
 	region.hide()
 	swing_started = -INF
@@ -210,7 +212,9 @@ func step(delta: float) -> void:
 	clock += delta
 	var time := clock-stage_start
 	var previous := maxf(0.0,time-delta)
+	restore_torso_lean(receiver)
 	receiver.animator.advance(delta)
+	apply_torso_lean(receiver)
 	match stage:
 		Stage.SERVE: play_serve(time,previous,delta)
 		Stage.PASS:
@@ -325,6 +329,8 @@ func play_cpu_set(time: float, delta: float) -> void:
 		cpu_set.begin_hand_contact(cpu_contact_point,time)
 
 func play_pin_ball(time: float, previous: float, delta: float) -> void:
+	var spin_axis := Vector3.UP.cross(pass_motion).normalized()
+	if not spin_axis.is_zero_approx(): ball.rotate(spin_axis,TAU*SET_TOPSPIN_RPS*delta)
 	ball.position = flight_point(pass_origin,pass_motion,minf(time,flight_end))
 	timing_cue.update_timing(time,pin_arrival,BumpSetting.GREEN_START,BumpSetting.GREEN_END)
 	if is_finite(swing_started) and jump.active and setter.position.y > jump.start.y+0.02:
