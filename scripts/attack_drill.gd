@@ -9,7 +9,7 @@ const Footwork = preload("res://scripts/directional_footwork.gd")
 const PIN := Vector3(3.55,0.065,3.35)
 const ATTACK_FRONT_LIMIT := 3.55
 const APPROACH_MIN_PLANT_TIME := 0.20
-const APPROACH_SET_TURN_RATE := 4.5
+const APPROACH_SET_TURN_RATE := 3.1
 const APPROACH_CHARGE_TIME := 0.85
 const APPROACH_START := Vector3(3.10,0.04,-0.05)
 const APPROACH_RADII := [1.85,2.4,3.4]
@@ -667,9 +667,9 @@ func play_cpu_set(time: float, delta: float) -> void:
 	if toward_ball.length_squared() < 0.09 and travel.is_zero_approx():
 		toward_ball = (pass_origin-cpu_contact_point).slide(Vector3.UP)
 	var lead := cpu_contact_time-time
-	if approach_practice and lead < 0.22:
+	if approach_practice and lead < 0.30:
 		var target := approach_set_target-receiver.position
-		var preturn := 1.0-smoothstep(0.0,0.22,lead)
+		var preturn := 1.0-smoothstep(0.0,0.30,lead)
 		var yaw := lerp_angle(atan2(toward_ball.x,toward_ball.z),atan2(target.x,target.z),preturn*0.28)
 		face_receiver(Vector3(sin(yaw),0.0,cos(yaw)),delta*lerpf(9.0,APPROACH_SET_TURN_RATE,preturn))
 	else:
