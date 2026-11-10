@@ -54,7 +54,7 @@ func _ready() -> void:
 	var editor_feed: Dictionary = session.source.get_meta("editor_feed",{}).duplicate()
 	var spike := editor_feed.has("spike_outgoing")
 	if session.source.has_meta("editor_start"):
-		preview_player.set_height_cm(Profile.DEFAULTS.height_cm)
+		preview_player.set_height_cm(float(session.source.get_meta("editor_height_cm",Profile.DEFAULTS.height_cm)))
 		preview_player.position = session.source.get_meta("editor_start")
 		preview_player.rotation.y = 0.0
 		if spike:

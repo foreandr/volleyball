@@ -6,6 +6,7 @@ const BallTimingRing = preload("res://scripts/ball_timing_ring.gd")
 const Flight = preload("res://scripts/pass_flight.gd")
 const SideKneeSlide = preload("res://scripts/side_knee_slide.gd")
 const ForwardDive = preload("res://scripts/forward_reception_dive.gd")
+const LopezStudies = preload("res://scripts/lopez_swing_studies.gd")
 const LOW_BOW_EDIT_ID := "low_bow_swing"
 const BACKWARD_EDIT_ID := "d2_backward_from_d1"
 const Catalog = preload("res://scripts/volleyball_animations.gd")
@@ -385,7 +386,12 @@ func add_low_bow_controls() -> void:
 		loop.text = "Stop looping" if setting_drill.swing_review else "Loop Low Bow")
 	loop.disabled = not setting_drill.swing_practice
 	content.add_child(loop)
-	content.add_child(button("Edit 06 Low Bow",open_low_bow_editor))
+	var studies := OptionButton.new()
+	studies.name = "SwingStudies"
+	studies.add_item("06 Low Bow")
+	for study in LopezStudies.STUDIES: studies.add_item(study[0])
+	content.add_child(studies)
+	content.add_child(button("Open swing editor",func(): open_low_bow_editor(studies.selected-1)))
 
 func add_torso_lean_slider() -> void:
 	var readout := label("",16)
@@ -947,17 +953,20 @@ func orbit_setting_camera(pixels: Vector2) -> void:
 func adjust_bump_height(amount: float) -> void:
 	setting_drill.bump.height = clampf(setting_drill.bump.height+amount,1.25,20.0)
 
-func open_low_bow_editor() -> void:
-	StorySession.edit_entry = {"id":LOW_BOW_EDIT_ID,"name":"06 Low Bow","category":"Attacking","type":"Line Hit"}
+func open_low_bow_editor(study := -1) -> void:
+	var id := LOW_BOW_EDIT_ID if study < 0 else "lopez_study_%02d" % (study+1)
+	var title: String = "06 Low Bow" if study < 0 else LopezStudies.STUDIES[study][0]
+	StorySession.edit_entry = {"id":id,"name":title,"category":"Attacking","type":"Line Hit"}
 	for entry in Catalog.custom_entries():
-		if entry.get("source") == LOW_BOW_EDIT_ID: StorySession.edit_entry = entry.duplicate(true)
+		if entry.get("source") == id: StorySession.edit_entry = entry.duplicate(true)
 	if StorySession.edit_entry.has("path"):
 		StorySession.edit_animation = Catalog.load_clip(StorySession.edit_entry,preview_player)
 	else:
-		StorySession.edit_animation = bake_low_bow_starter()
+		var base := bake_low_bow_starter(study >= 0)
+		StorySession.edit_animation = base if study < 0 else LopezStudies.bake(base,preview_player,study)
 	get_tree().change_scene_to_file("res://scenes/animation_editor.tscn")
 
-func bake_low_bow_starter() -> Animation:
+func bake_low_bow_starter(include_landing := false) -> Animation:
 	var drill = setting_drill
 	drill.set_swing_practice(true)
 	drill.aim_swing(Vector3(2.0,0.0,10.5))
@@ -968,6 +977,20 @@ func bake_low_bow_starter() -> Animation:
 	var source: Vector3 = drill.pass_origin
 	var velocity: Vector3 = drill.pass_motion
 	var poses: Array = []
+	var prep: Array = []
+	if include_landing:
+		# Recreate the short plant and arm drive normally skipped by Swing Practice.
+		preview_player.position = drill.jump.start
+		drill.jump.active = false
+		drill.jump.begin(preview_player,Vector2(0.0,0.65))
+		start = preview_player.position
+		start_inverse = rig.global_transform.affine_inverse()
+		for tick in range(32):
+			var pose: Array[Transform3D] = player_controls.snapshot_receive_pose()
+			pose[0] = start_inverse*rig.global_transform*pose[0]
+			prep.append(pose)
+			drill.jump.step(preview_player,1.0/120.0,Vector2.ZERO)
+		drill.jump.release()
 	var contact := 0.60
 	var aim: Vector3
 	var outgoing := Vector3.ZERO
@@ -985,9 +1008,16 @@ func bake_low_bow_starter() -> Animation:
 		pose[0] = start_inverse*rig.global_transform*pose[0]
 		poses.append(pose)
 	if outgoing.is_zero_approx(): aim = drill.flight_point(source,velocity,contact)
+	var frames := prep+poses
+	var prep_duration := prep.size()/120.0
 	var sample := func(time: float) -> Array:
-		return poses[mini(roundi(time*120.0),poses.size()-1)]
-	var clip: Animation = preview_player.get_pose_author().bake({"name":"06 Low Bow","duration":contact*14.0/9.0,"contact_time":contact},sample)
+		return frames[mini(roundi(time*120.0),frames.size()-1)]
+	var duration := 1.05+prep_duration if include_landing else contact*14.0/9.0
+	var clip: Animation = preview_player.get_pose_author().bake({"name":"06 Low Bow","duration":duration,"contact_time":contact+prep_duration},sample)
+	if include_landing:
+		clip.set_meta("editor_height_cm",preview_player.height_cm)
+		clip.set_meta("study_ball_point",start_inverse*aim)
+		clip.set_meta("study_prep_duration",prep_duration)
 	clip.set_meta("editor_start",start)
 	clip.set_meta("editor_group","Right Arm")
 	clip.set_meta("editor_frame_count",15)
