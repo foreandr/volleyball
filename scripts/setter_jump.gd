@@ -77,12 +77,15 @@ func horizontal_velocity() -> Vector3:
 func load_duration() -> float:
 	return assisted_load_time if approach_plant else LOAD_TIME
 
+func flight_duration(jump_height: float, assisted: bool) -> float:
+	return FULL_AIR_TIME*sqrt(jump_height/FULL_HEIGHT)*(1.18 if assisted else 1.0)
+
 func step(actor: Node3D, delta: float, input: Vector2) -> void:
 	var load_time := load_duration()
 	if elapsed < load_time:
 		if held: hold_time += minf(delta,load_time-elapsed)
 		height = assisted_height if assisted_height > 0.0 else lerpf(TAP_HEIGHT,max_height,clampf(hold_time/LOAD_TIME,0.0,1.0))
-		air_time = FULL_AIR_TIME*sqrt(height/FULL_HEIGHT)
+		air_time = flight_duration(height,assisted_height > 0.0)
 	var previous_flight := clampf(elapsed-load_time,0.0,air_time)
 	elapsed += delta
 	var air_delta := clampf(elapsed-load_time,0.0,air_time)-previous_flight
