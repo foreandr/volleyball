@@ -130,8 +130,11 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 	var parent := rig.get_bone_parent(pelvis)
 	var hips: Transform3D = author.world_pose(pose,parent)
 	var scale_: float = rig.global_basis.get_scale().y
-	pose[pelvis].origin -= hips.basis.inverse()*Vector3.UP*(0.15*load+0.14*impact)/scale_
-	author.rotate_world(pose,"spine_02",Vector3.RIGHT,(0.16+load_bend_extra)*load+0.13*impact-0.22*arm_drive)
+	var lead_load := 0.0
+	if lead_time > 0.0:
+		lead_load = smoothstep(0.0,lead_time*0.82,elapsed)*(1.0-smoothstep(0.0,0.11,pose_time))
+	pose[pelvis].origin -= hips.basis.inverse()*Vector3.UP*(0.15*load+0.14*impact+0.065*lead_load)/scale_
+	author.rotate_world(pose,"spine_02",Vector3.RIGHT,(0.16+load_bend_extra)*load+0.13*impact-0.22*arm_drive+0.14*lead_load)
 	var travel := actor.basis.inverse()*heading*stride/scale_
 	var stagger := 0.34*(first-second)
 	var tuck := sin(PI*flight)
@@ -145,7 +148,7 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 			var step_progress := smoothstep(0.105,0.21,pose_time) if left else smoothstep(0.015,0.105,pose_time)
 			var plant_from := left_foot_start if left else right_foot_start
 			if left and lead_time > 0.0:
-				var lead_progress := smoothstep(0.0,lead_time,elapsed)
+				var lead_progress := smoothstep(0.0,lead_time*0.82,elapsed)
 				plant_from += heading*lead_distance*lead_progress+Vector3.UP*0.10*sin(PI*lead_progress)
 			var plant_to := left_plant if left else right_plant
 			var planted := plant_from.lerp(plant_to,step_progress)
