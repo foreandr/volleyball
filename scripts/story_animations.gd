@@ -342,8 +342,27 @@ func start_setting_drill(attack := false) -> void:
 	if attack: setting_drill.swing_practice = modes.selected == 0
 	preview_player.get_parent().add_child(setting_drill)
 	setting_drill.configure(preview_player,drill_status,modes.selected == 1,build_label)
-	if attack: setting_drill.bump.set_custom_backward(load_custom_backward_clip())
+	if attack:
+		setting_drill.bump.set_custom_backward(load_custom_backward_clip())
+		add_torso_rotation_slider()
 	preview.grab_focus()
+
+func add_torso_rotation_slider() -> void:
+	var rotation_readout := label("",16)
+	content.add_child(rotation_readout)
+	var slider := HSlider.new()
+	slider.name = "TorsoRotation"
+	slider.min_value = 50
+	slider.max_value = 200
+	slider.step = 5
+	slider.custom_minimum_size.y = 24
+	slider.value = setting_drill.torso_rotation_scale*100.0
+	var update := func(value: float):
+		setting_drill.torso_rotation_scale = value/100.0
+		rotation_readout.text = "Torso rotation  |  %d%%" % roundi(value)
+	slider.value_changed.connect(update)
+	update.call(slider.value)
+	content.add_child(slider)
 
 func stop_setting_drill() -> void:
 	if not is_instance_valid(setting_drill): return

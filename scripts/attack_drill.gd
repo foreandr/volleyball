@@ -18,6 +18,7 @@ const PALM_RADIUS := 0.065
 const SWING_FOLLOW_TIME := 0.30
 var stage := Stage.SERVE
 var swing_practice := true
+var torso_rotation_scale := 1.50
 var swing_button_down := false
 var stage_start := 0.0
 var serve_target: Vector3
@@ -415,9 +416,9 @@ func pose_bow_draw(weight: float, contact := Vector3.ZERO, extension := 0.0, fol
 	var aim := rig.to_local(swing_aim)-rig.to_local(setter.global_position)
 	var aim_turn := clampf(atan2(aim.x,aim.z),-0.48,0.48)
 	var turn := lerpf(-0.57,0.42+aim_turn*0.52,chest_turn)+(0.34+aim_turn*0.38)*follow
-	author.rotate_world(pose,"spine_01",Vector3.UP,turn*0.20*weight)
-	author.rotate_world(pose,"spine_02",Vector3.UP,turn*0.34*weight)
-	author.rotate_world(pose,"spine_03",Vector3.UP,turn*0.46*weight)
+	author.rotate_world(pose,"spine_01",Vector3.UP,turn*0.20*weight*torso_rotation_scale)
+	author.rotate_world(pose,"spine_02",Vector3.UP,turn*0.34*weight*torso_rotation_scale)
+	author.rotate_world(pose,"spine_03",Vector3.UP,turn*0.46*weight*torso_rotation_scale)
 	var ball_target := rig.to_local(contact)
 	var right_shoulder: Vector3 = author.point(pose,"upperarm_r")
 	var reach := ball_target-right_shoulder
