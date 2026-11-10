@@ -322,18 +322,15 @@ func pose_bow_draw(weight: float) -> void:
 	var author: RefCounted = setter.get_pose_author()
 	var pose: Array[Transform3D] = []
 	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
-	var striking := "l" if setter.handedness == "Left" else "r"
-	var guide := "r" if striking == "l" else "l"
-	var sign_ := 1.0 if striking == "l" else -1.0
-	author.rotate_world(pose,"spine_03",Vector3.UP,sign_*0.32*weight)
-	var striking_shoulder: Vector3 = author.point(pose,"upperarm_"+striking)
-	var draw_hand := striking_shoulder+Vector3(-sign_*0.04,0.34,-0.15)
-	author.limb(pose,"upperarm_"+striking,"lowerarm_"+striking,"hand_"+striking,
-		draw_hand,Vector3(sign_*0.85,0.52,-0.74),weight,108.0)
-	var guide_shoulder: Vector3 = author.point(pose,"upperarm_"+guide)
-	var guide_hand := guide_shoulder+Vector3(-sign_*0.06,0.43,0.64)
-	author.limb(pose,"upperarm_"+guide,"lowerarm_"+guide,"hand_"+guide,
-		guide_hand,Vector3(-sign_*0.26,-0.55,0.15),weight,174.0)
+	author.rotate_world(pose,"spine_03",Vector3.UP,-0.32*weight)
+	var right_shoulder: Vector3 = author.point(pose,"upperarm_r")
+	var draw_hand := right_shoulder+Vector3(0.04,0.34,-0.15)
+	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",
+		draw_hand,Vector3(-0.85,0.52,-0.74),weight,108.0)
+	var left_shoulder: Vector3 = author.point(pose,"upperarm_l")
+	var guide_hand := left_shoulder+Vector3(0.06,0.43,0.64)
+	author.limb(pose,"upperarm_l","lowerarm_l","hand_l",
+		guide_hand,Vector3(0.26,-0.55,0.15),weight,174.0)
 	for bone in rig.get_bone_count():
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
 
