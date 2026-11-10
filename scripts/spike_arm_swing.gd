@@ -79,7 +79,7 @@ static func hip_finish(pose: Array, author: RefCounted, crosscourt: bool, cleara
 	var left_hip: Vector3 = author.point(pose,"thigh_l")
 	var outside := (hip-left_hip).slide(Vector3.UP).normalized()
 	var forward := Vector3.UP.cross(outside)
-	return hip+outside*(clearance+0.05)+forward*0.12+Vector3.UP*0.04
+	return hip+outside*(clearance+0.07)-forward*0.30+Vector3.UP*0.08
 
 static func finish_elbow_pole(same_side: bool) -> Vector3:
 	return Vector3(-0.85,-0.08,-0.09) if same_side else Vector3(-0.85,0.04,-0.33)
