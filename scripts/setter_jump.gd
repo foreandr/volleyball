@@ -59,7 +59,7 @@ func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time
 	lead_distance = 0.0
 	if approach_plant:
 		var ball_offset := (ball_target-start).slide(Vector3.UP)
-		if three_step: lead_distance = clampf(ball_offset.length()-1.24,0.34,0.82)
+		if three_step: lead_distance = clampf(ball_offset.length()-1.12,0.40,0.90)
 		stride = minf(0.40,minf(stride,maxf(0.08,ball_offset.length()*0.60)))
 		var rig: Skeleton3D = actor.skeleton
 		right_foot_start = rig.to_global(rig.get_bone_global_pose(rig.find_bone("foot_r")).origin)
@@ -115,7 +115,7 @@ func step(actor: Node3D, delta: float, input: Vector2) -> void:
 	if landing >= LAND_TIME:
 		active = false
 		return
-	var lead_load := 0.48*smoothstep(0.0,lead_time,elapsed) if lead_time > 0.0 else 0.0
+	var lead_load := 0.70*smoothstep(0.0,lead_time*0.78,elapsed) if lead_time > 0.0 else 0.0
 	var load_in := lerpf(lead_load,1.0,smoothstep(0.02,0.19,pose_time))
 	var load := load_in*(1.0-smoothstep(0.19,LOAD_TIME+0.055,pose_time))
 	var impact := smoothstep(-0.025,0.04,landing)*(1.0-smoothstep(0.04,LAND_TIME,landing))
@@ -148,7 +148,7 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 			var plant_from := left_foot_start if left else right_foot_start
 			if left and lead_time > 0.0:
 				var lead_progress := smoothstep(0.0,lead_time*0.82,elapsed)
-				plant_from += heading*lead_distance*lead_progress+Vector3.UP*0.10*sin(PI*lead_progress)
+				plant_from += heading*lead_distance*lead_progress+Vector3.UP*0.055*sin(PI*lead_progress)
 			var plant_to := left_plant if left else right_plant
 			var planted := plant_from.lerp(plant_to,step_progress)
 			planted.y += sin(PI*step_progress)*(0.12 if left else 0.09)
