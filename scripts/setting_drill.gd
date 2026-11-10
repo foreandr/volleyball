@@ -117,6 +117,7 @@ func configure(player: Node3D, readout: Label, use_bump: bool, build := "") -> v
 	bump.configure(setter,clip)
 	bump_enabled = use_bump
 	bump.hand_setting = not use_bump
+	bump.visible = use_bump
 	ready_range = MeshInstance3D.new()
 	var outline := TorusMesh.new()
 	outline.inner_radius = 1.965
@@ -138,6 +139,7 @@ func set_bump_mode(enabled: bool) -> void:
 	if bump_enabled == enabled: return
 	bump_enabled = enabled
 	bump.hand_setting = not enabled
+	bump.visible = enabled
 	reset_feed()
 
 func setter_movement_scale() -> float:
@@ -238,7 +240,7 @@ func reset_feed() -> void:
 func step(delta: float) -> void:
 	var previous := clock-0.45-SERVE_TIME
 	clock += delta
-	bump.update_aim()
+	if bump_enabled: bump.update_aim()
 	var elapsed := clock-0.45
 	if elapsed < 0.0: return
 	var after_pass := elapsed-SERVE_TIME
@@ -284,14 +286,22 @@ func step_bump(time: float, previous: float, delta: float) -> void:
 	if is_finite(bump.touch_time):
 		var after_touch: float = time-bump.touch_time
 		reset_at = bump.touch_time+bump.floor_time
-		if not bump.net_hit.is_empty() and after_touch >= bump.net_hit.time:
+		if not bump_enabled:
+			if after_touch <= bump.floor_time:
+				var caught: Vector3 = bump.touch
+				ball.position = caught.lerp(bump.platform_center(),smoothstep(0.0,0.075,after_touch))
+			else:
+				rep += 1
+				reset_feed()
+				return
+		elif not bump.net_hit.is_empty() and after_touch >= bump.net_hit.time:
 			ball.position = Net.after_hit(bump.net_hit,after_touch)
 		else:
 			ball.position = flight_point(bump.touch,bump.outgoing,minf(after_touch,bump.floor_time))
-		status.text = BallTimingRing.result_text(bump.grade,"set")
+		status.text = BallTimingRing.result_text(bump.grade,"set" if bump_enabled else "catch")
 		if after_touch <= BallTimingRing.RESULT_DURATION: timing_cue.show_result(bump.grade)
 	elif bump.grade != BallPreview.Grade.WAITING:
-		status.text = BallTimingRing.result_text(bump.grade,"set")
+		status.text = BallTimingRing.result_text(bump.grade,"set" if bump_enabled else "catch")
 	trace.check_contact(bump.contact_check)
 	if old_move != setter_move_name():
 		trace.write("setter_move",clock,trace_snapshot(time),true)
@@ -333,9 +343,9 @@ func trace_snapshot(time: float) -> Dictionary:
 		phase = "cpu_pass"
 		velocity = pass_velocity+Vector3.DOWN*Flight.GRAVITY*time if time < landing else Vector3.ZERO
 	if is_finite(bump.touch_time):
-		phase = "setter_output"
+		phase = "setter_output" if bump_enabled else "held_ball"
 		var after_touch: float = time-bump.touch_time
-		velocity = bump.outgoing+Vector3.DOWN*Flight.GRAVITY*after_touch if after_touch < bump.floor_time else Vector3.ZERO
+		velocity = bump.outgoing+Vector3.DOWN*Flight.GRAVITY*after_touch if bump_enabled and after_touch < bump.floor_time else Vector3.ZERO
 		if not bump.net_hit.is_empty() and after_touch >= bump.net_hit.time:
 			phase = "net_rebound"
 			velocity = (Net.after_hit(bump.net_hit,after_touch+0.001)-Net.after_hit(bump.net_hit,after_touch))/0.001

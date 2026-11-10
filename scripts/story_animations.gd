@@ -286,7 +286,7 @@ func start_setting_drill() -> void:
 	var controls_hint := label("",16)
 	controls_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	var show_mode := func(index: int):
-		controls_hint.text = "WASD to move  |  Tap Q to bump set\nMouse to aim  |  Scroll to change height" if index == 1 else "WASD to move  |  Tap E to hand set\nMouse to aim  |  Scroll to change height"
+		controls_hint.text = "WASD to move  |  Tap Q to bump set\nMouse to aim  |  Scroll to change height" if index == 1 else "WASD to move  |  Tap E to catch"
 	show_mode.call(modes.selected)
 	modes.item_selected.connect(func(index: int):
 		type_indices["Setting"] = index
@@ -750,7 +750,7 @@ func handle_preview_input(event: InputEvent) -> void:
 	if is_instance_valid(setting_drill):
 		if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
 			open_menu()
-		else:
+		elif setting_drill.bump_enabled:
 			if event is InputEventMouseMotion:
 				if event.button_mask & MOUSE_BUTTON_MASK_MIDDLE:
 					adjust_bump_height(-event.relative.y*0.018)

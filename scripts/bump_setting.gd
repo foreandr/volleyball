@@ -91,6 +91,7 @@ func queue_bump(time: float) -> void:
 
 func movement_scale(time: float, arrival: float, ball_position: Vector3) -> float:
 	if is_finite(touch_time):
+		if hand_setting and time-touch_time < HandPose.HOLD_TIME: return 0.0
 		return smoothstep(0.045,0.15,time-touch_time)
 	if not is_finite(pressed_at) or grade != Timing.Grade.WAITING: return 1.0
 	var distance := (ball_position-setter.global_position).slide(Vector3.UP).length()
@@ -192,7 +193,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 	if striking:
 		if hand_setting:
 			var target := hand_intercept(path,time,end)
-			HandPose.apply(setter,target,aim_velocity(target),0.0,smoothstep(0.0,0.075,elapsed))
+			HandPose.apply(setter,target,smoothstep(0.0,0.105,elapsed))
 		elif low_save.active:
 			low_save.sample(setter,time,low_save.contact_time+0.07)
 		else:
@@ -235,31 +236,34 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 				var error := timing_error(timing)*(Timing.PANCAKE_ERROR_SCALE if pancake else 1.0)
 				contact_spread = Timing.practice_spread(error)
 				contact_destination = destination
-				if pancake:
+				if hand_setting:
+					outgoing = Vector3.ZERO
+					floor_time = HandPose.HOLD_TIME
+				elif pancake:
 					outgoing = Timing.pancake_pop(incoming)
 					var target := Timing.pancake_target(touch,outgoing)
 					contact_destination = target.position
 					if error > 0.0: outgoing = Timing.aimed_pass_velocity(touch,target,45.0,error)
 				else: outgoing = aim_velocity(touch,error)
-				floor_time = Flight.landing_time(touch,outgoing)
-				net_hit = Net.first_hit(func(t): return flight_point(touch,outgoing,t),0.0,floor_time)
-				if not net_hit.is_empty(): floor_time = net_hit.end_time
+				if not hand_setting:
+					floor_time = Flight.landing_time(touch,outgoing)
+					net_hit = Net.first_hit(func(t): return flight_point(touch,outgoing,t),0.0,floor_time)
+					if not net_hit.is_empty(): floor_time = net_hit.end_time
 	elif attempted and grade == Timing.Grade.WAITING and time >= end:
 		grade = Timing.Grade.MISS
 	if low_save.active and not striking and not low_save.finished(time):
 		low_save.sample(setter,time,touch_time if is_finite(touch_time) else low_save.contact_time+0.07)
 	elif is_finite(touch_time) and not low_save.active:
 		var follow := time-touch_time
-		if follow > 0.0 and follow < 0.36:
+		if hand_setting and follow < HandPose.HOLD_TIME:
+			HandPose.apply(setter,touch,1.0)
+		elif not hand_setting and follow > 0.0 and follow < 0.36:
 			var blend := 1.0-smoothstep(0.12,0.36,follow)
-			if hand_setting:
-				HandPose.apply(setter,touch,outgoing,smoothstep(0.0,0.11,follow),blend)
-			else:
-				apply_pose(contact_frame+follow,blend)
-				pose_reach(smoothstep(0.0,1.0,reach_progress)*(1.0-smoothstep(0.06,0.32,follow)),touch)
-				Drive.apply(setter.skeleton,setter.get_pose_author(),outgoing,Drive.effort(incoming,outgoing),follow,true,incoming,Drive.swing_effort(touch,outgoing))
+			apply_pose(contact_frame+follow,blend)
+			pose_reach(smoothstep(0.0,1.0,reach_progress)*(1.0-smoothstep(0.06,0.32,follow)),touch)
+			Drive.apply(setter.skeleton,setter.get_pose_author(),outgoing,Drive.effort(incoming,outgoing),follow,true,incoming,Drive.swing_effort(touch,outgoing))
 	var recent_touch := is_finite(touch_time) and time-touch_time <= BallTimingRing.RESULT_DURATION
-	if (grade == Timing.Grade.WAITING and progress >= 0.0) or recent_touch:
+	if not hand_setting and ((grade == Timing.Grade.WAITING and progress >= 0.0) or recent_touch):
 		var anticipated := (1.0-maxf(progress,0.0))*APPROACH_TIME
 		if is_finite(pressed_at): anticipated += time-pressed_at
 		var spread := contact_spread if is_finite(touch_time) else Timing.practice_spread(timing_error(anticipated))
