@@ -53,13 +53,15 @@ func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time
 	assisted_load_time = plant_time
 	assisted_height = jump_height
 	if approach_plant:
+		var ball_offset := (ball_target-start).slide(Vector3.UP)
+		stride = minf(stride,maxf(0.08,ball_offset.length()*0.60))
 		var rig: Skeleton3D = actor.skeleton
 		right_foot_start = rig.to_global(rig.get_bone_global_pose(rig.find_bone("foot_r")).origin)
 		left_foot_start = rig.to_global(rig.get_bone_global_pose(rig.find_bone("foot_l")).origin)
 		right_plant = right_foot_start+heading.slide(Vector3.UP).normalized()*stride*0.68
 		var toward_ball := (ball_target-right_plant).slide(Vector3.UP).normalized()
 		var reach := (ball_target-start-heading*stride).slide(Vector3.UP)
-		approach_lunge = reach.normalized()*clampf(reach.length()-0.12,0.0,0.64)
+		approach_lunge = reach.normalized()*clampf(reach.length()-0.16,0.0,1.10)
 		if toward_ball.is_zero_approx(): toward_ball = heading.slide(Vector3.UP).normalized()
 		left_plant = right_plant+toward_ball*0.43+Vector3.UP.cross(toward_ball)*0.19
 		right_plant.y = minf(right_foot_start.y,left_foot_start.y)
