@@ -44,6 +44,7 @@ var swing_practice := true
 var approach_practice := false
 var takeoff_yaw := 0.0
 var approach_jump_queued := false
+var approach_steps := 2
 var approach_space_held := false
 var approach_intercept := Vector3.INF
 var approach_start := APPROACH_START
@@ -135,7 +136,7 @@ func build_approach_rings() -> void:
 		ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		var material := StandardMaterial3D.new()
 		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		material.albedo_color = Color("64edba") if i == 0 else Color("8ba1bd")
+		material.albedo_color = [Color("64edba"),Color("72baff"),Color("8ba1bd")][i]
 		ring.material_override = material
 		approach_rings.add_child(ring)
 
@@ -224,6 +225,7 @@ func reset_feed() -> void:
 	cpu_set.reset()
 	jump.active = false
 	approach_jump_queued = false
+	approach_steps = 2
 	approach_intercept = Vector3.INF
 	approach_setup_drag = ""
 	approach_rings.visible = approach_practice
@@ -456,15 +458,18 @@ func queue_jump(direction: Vector2) -> void:
 
 func try_queue_approach(log_rejection: bool) -> void:
 	if stage not in [Stage.PASS,Stage.SET] or is_finite(approach_pressed_at): return
-	var intercept := find_approach_intercept()
+	var intercept := find_approach_intercept(true,0)
+	if not intercept.is_finite():
+		intercept = find_approach_intercept(true,1)
+		if intercept.is_finite(): approach_steps = 3
 	if not intercept.is_finite():
 		if log_rejection:
 			status.text = unavailable_approach_status()
-			trace.write("approach_rejected",clock,{"target":approach_set_target,"range":APPROACH_RADII[0]+REGION_RADIUS,"reason":status.text},true)
+			trace.write("approach_rejected",clock,{"target":approach_set_target,"range":APPROACH_RADII[1]+REGION_RADIUS,"reason":status.text},true)
 		return
 	approach_pressed_at = clock
 	approach_jump_queued = true
-	trace.write("approach_press",clock,{"stage":stage,"position":setter.position,"intercept":intercept,"two_step":true},true)
+	trace.write("approach_press",clock,{"stage":stage,"position":setter.position,"intercept":intercept,"steps":approach_steps},true)
 
 func release_approach_jump() -> void:
 	approach_space_held = false
@@ -473,20 +478,20 @@ func release_approach_jump() -> void:
 		trace.write("approach_release",clock,{"held":clock-approach_pressed_at},true)
 
 func unavailable_approach_status() -> String:
-	return "Too late to plant" if find_approach_intercept(false).is_finite() else "Set outside two-step reach"
+	return "Too late to plant" if find_approach_intercept(false).is_finite() else "Set outside approach reach"
 
-func find_approach_intercept(respect_timing := true) -> Vector3:
+func find_approach_intercept(respect_timing := true, tier := 1) -> Vector3:
 	var origin := pass_origin if stage == Stage.SET else cpu_contact_point
 	var velocity := pass_motion if stage == Stage.SET else set_toward_pin(origin,approach_set_target,approach_set_apex)
 	var apex := origin.y+velocity.y*velocity.y/(2.0*Flight.GRAVITY)
 	var earliest := descending_time(origin,velocity,minf(apex-0.15,3.59))
 	var latest := descending_time(origin,velocity,3.10)
 	if respect_timing and stage == Stage.SET:
-		earliest = maxf(earliest,clock-stage_start+APPROACH_MIN_PLANT_TIME+0.10)
+		earliest = maxf(earliest,clock-stage_start+APPROACH_MIN_PLANT_TIME+0.10+(jump.LEAD_STEP_TIME if tier == 1 else 0.0))
 	if earliest > latest: return Vector3.INF
 	for sample in 7:
 		var point := flight_point(origin,velocity,lerpf(earliest,latest,sample/6.0))
-		if (point-setter.position).slide(Vector3.UP).length() <= APPROACH_RADII[0]+REGION_RADIUS: return point
+		if (point-setter.position).slide(Vector3.UP).length() <= APPROACH_RADII[tier]+REGION_RADIUS: return point
 	return Vector3.INF
 
 func queued_approach_input(delta: float) -> Vector2:
@@ -498,11 +503,11 @@ func queued_approach_input(delta: float) -> Vector2:
 	if approach_space_held and not approach_jump_queued and not jump.active: try_queue_approach(false)
 	if not approach_jump_queued:
 		return Vector2.ZERO if jump.active else trace_input
-	if stage == Stage.SET: time_two_step_plant(delta)
+	if stage == Stage.SET: time_approach_plant(delta)
 	return Vector2.ZERO
 
-func time_two_step_plant(delta: float) -> void:
-	var ball_target := find_approach_intercept()
+func time_approach_plant(delta: float) -> void:
+	var ball_target := find_approach_intercept(true,approach_steps-2)
 	if not ball_target.is_finite(): return
 	var toward := (ball_target-setter.position).slide(Vector3.UP)
 	var distance_weight := smoothstep(0.15,APPROACH_RADII[0],toward.length())
@@ -514,19 +519,20 @@ func time_two_step_plant(delta: float) -> void:
 	var contact_at := descending_time(pass_origin,pass_motion,contact_height)
 	var time_before_lift := contact_at-(clock-stage_start)-air_time*0.54
 	var plant_time := lerpf(0.30,jump.APPROACH_LOAD_TIME,distance_weight)+0.15
-	if time_before_lift > plant_time+delta: return
+	var lead_time := jump.LEAD_STEP_TIME if approach_steps == 3 else 0.0
+	if time_before_lift > plant_time+lead_time+delta: return
 	approach_jump_queued = false
 	approach_expected_hit_at = stage_start+contact_at
 	approach_intercept = flight_point(pass_origin,pass_motion,contact_at)
 	var direction := (approach_intercept-setter.position).slide(Vector3.UP).normalized()
-	begin_attack_jump(Vector2(-direction.x,direction.z),clampf(time_before_lift,APPROACH_MIN_PLANT_TIME,plant_time),jump_height)
+	begin_attack_jump(Vector2(-direction.x,direction.z),clampf(time_before_lift-lead_time,APPROACH_MIN_PLANT_TIME,plant_time),jump_height)
 
 func begin_attack_jump(direction: Vector2, plant_time := 0.36, jump_height := 0.0) -> void:
 	takeoff_yaw = setter.rotation.y
 	var ball_target := Vector3.INF
 	if approach_practice:
 		ball_target = approach_intercept
-	jump.begin(setter,direction,ball_target,plant_time,jump_height)
+	jump.begin(setter,direction,ball_target,plant_time,jump_height,approach_practice and approach_steps == 3)
 	trace.write("jump",clock,{"position":setter.position,"direction":jump.heading,"plant_time":jump.load_duration(),"assisted_height":jump_height},true)
 
 func step_jump(delta: float) -> void:
