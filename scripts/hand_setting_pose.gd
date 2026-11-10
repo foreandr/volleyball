@@ -53,9 +53,22 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 		author.set_world_basis(pose,hand,hand_basis(target_fingers,target_across)*hand_basis(fingers,across).inverse()*base.basis)
 		shape_digit(author,pose,"index",side,diamond+Vector3(sign_*0.018,0.065,0.025))
 		shape_digit(author,pose,"thumb",side,diamond+Vector3(sign_*0.016,-0.047,0.045))
+		spread_outer_fingers(author,pose,side)
 	for bone in rig.get_bone_count():
 		var before: Basis = original[bone].basis
 		rig.set_bone_pose_rotation(bone,before.slerp(pose[bone].basis,blend).get_rotation_quaternion())
+
+static func spread_outer_fingers(author: RefCounted, pose: Array, side: String) -> void:
+	var inside: Vector3 = author.point(pose,"index_01_"+side)
+	var outside: Vector3 = author.point(pose,"pinky_01_"+side)
+	var spread := (outside-inside).normalized()
+	var digits := ["middle","ring","pinky"]
+	var spacing := [0.005,0.012,0.020]
+	for index in digits.size():
+		var first: String = digits[index]+"_01_"+side
+		var second: String = digits[index]+"_02_"+side
+		var joint: Vector3 = author.point(pose,second)
+		author.aim_joint(pose,first,second,joint+spread*spacing[index])
 
 static func shape_digit(author: RefCounted, pose: Array, digit: String, side: String, tip: Vector3) -> void:
 	var first := "%s_01_%s" % [digit,side]
