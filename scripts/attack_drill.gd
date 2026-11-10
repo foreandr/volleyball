@@ -1006,7 +1006,8 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 				var overhead := clampf((handoff_age-0.08)/0.18,0.0,1.0)
 				var front := (forward*sin(deg_to_rad(80.0))-up*cos(deg_to_rad(80.0))).normalized()
 				var lift_direction := front.slerp(Vector3.UP,overhead)
-				var target := shoulder+lift_direction*lerpf(0.54,arm_length*0.995,overhead)-outward*lerpf(0.07,0.02,overhead)
+				var front_reach := 0.43 if side == "r" else 0.54
+				var target := shoulder+lift_direction*lerpf(front_reach,arm_length*0.995,overhead)-outward*lerpf(0.07,0.02,overhead)
 				# Keep the elbow bend on the same side as the hand passes overhead.
 				var elbow_pole := lerp_angle(0.0,PI*0.5,overhead)
 				var bend := forward*sin(elbow_pole)-up*cos(elbow_pole)-outward*0.10
