@@ -27,13 +27,15 @@ var stride := 0.0
 var air_velocity := Vector3.ZERO
 var air_offset := Vector3.ZERO
 var approach_plant := false
+var assisted_load_time := APPROACH_LOAD_TIME
+var assisted_height := 0.0
 var approach_lunge := Vector3.ZERO
 var right_foot_start: Vector3
 var left_foot_start: Vector3
 var right_plant: Vector3
 var left_plant: Vector3
 
-func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF) -> void:
+func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time := APPROACH_LOAD_TIME, jump_height := 0.0) -> void:
 	if active: return
 	active = true
 	held = true
@@ -48,6 +50,8 @@ func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF) -> void:
 	heading = travel.normalized() if not travel.is_zero_approx() else actor.basis.z.normalized()
 	approach_lunge = Vector3.ZERO
 	approach_plant = ball_target.is_finite()
+	assisted_load_time = plant_time
+	assisted_height = jump_height
 	if approach_plant:
 		var rig: Skeleton3D = actor.skeleton
 		right_foot_start = rig.to_global(rig.get_bone_global_pose(rig.find_bone("foot_r")).origin)
@@ -69,13 +73,13 @@ func horizontal_velocity() -> Vector3:
 	return air_velocity+heading*(stride*AIR_TRAVEL_FRACTION/air_time)
 
 func load_duration() -> float:
-	return APPROACH_LOAD_TIME if approach_plant else LOAD_TIME
+	return assisted_load_time if approach_plant else LOAD_TIME
 
 func step(actor: Node3D, delta: float, input: Vector2) -> void:
 	var load_time := load_duration()
 	if elapsed < load_time:
 		if held: hold_time += minf(delta,load_time-elapsed)
-		height = lerpf(TAP_HEIGHT,max_height,clampf(hold_time/LOAD_TIME,0.0,1.0))
+		height = assisted_height if assisted_height > 0.0 else lerpf(TAP_HEIGHT,max_height,clampf(hold_time/LOAD_TIME,0.0,1.0))
 		air_time = FULL_AIR_TIME*sqrt(height/FULL_HEIGHT)
 	var previous_flight := clampf(elapsed-load_time,0.0,air_time)
 	elapsed += delta

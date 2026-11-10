@@ -313,7 +313,7 @@ func start_setting_drill(attack := false) -> void:
 		if attack:
 			controls_hint.visible = index != 0
 			if index == 2:
-				controls_hint.text = "WASD to approach  |  Hold Space to approach and charge\nMove mouse to aim  |  Automatic spike\nDrag player or set ring\nCtrl-click start  |  Shift-click set"
+				controls_hint.text = "WASD to move  |  Hold Space inside green ring\nMove mouse to aim  |  Automatic spike\nDrag player or set ring\nCtrl-click start  |  Shift-click set"
 				return
 			controls_hint.text = "WASD to move  |  Q forearms  |  I / E hands\nMouse to aim  |  Shift + scroll for pass height\nSpace to jump  |  Hold left-click to spike"
 			return
@@ -664,12 +664,9 @@ func _process(delta: float) -> void:
 		var approach_speed := 0.0
 		var approach_rate := 0.0
 		if selected_category == "Attacking" and setting_drill.approach_practice:
-			var previous_steps: int = setting_drill.approach_run_steps
 			setting_drill.trace_input = setting_drill.queued_approach_input(delta)
 			approach_speed = setting_drill.approach_run_speed
-			approach_rate = setting_drill.approach_run_rate
-			if previous_steps == 0 and setting_drill.approach_run_steps > 0:
-				player_controls.footwork.phase = 0.5 if setting_drill.approach_run_steps%2 == 1 else 0.0
+			approach_rate = 1.45
 		setting_drill.trace_sprint = player_controls.sprint_requested
 		var diving: bool = setting_drill.setter_is_diving()
 		setting_drill.trace_move_scale = 0.0 if diving else setting_drill.setter_movement_scale()
@@ -1281,7 +1278,8 @@ func _input(event: InputEvent) -> void:
 	if is_instance_valid(setting_drill) and event is InputEventKey and event.keycode == KEY_SPACE:
 		if event.pressed and not event.echo:
 			setting_drill.queue_jump(player_controls.movement_input())
-			player_controls.setter_travel = Vector3.ZERO
+			if selected_category != "Attacking" or not setting_drill.approach_practice or setting_drill.approach_jump_queued:
+				player_controls.setter_travel = Vector3.ZERO
 		elif not event.pressed:
 			if selected_category == "Attacking" and setting_drill.approach_practice:
 				setting_drill.release_approach_jump()
