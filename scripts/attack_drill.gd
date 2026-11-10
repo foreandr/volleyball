@@ -91,6 +91,7 @@ var swing_impact_speed := 0.0
 var swing_aim := Vector3(PIN.x,Flight.FLOOR,9.5)
 var swing_contact_aim: Vector3
 var swing_finish_pose: Array[Transform3D] = []
+var approach_arm_transition: Array[Transform3D] = []
 var swing_palm_roll := 0.0
 var swing_contact: Vector3
 var swing_contact_extension := 1.0
@@ -258,6 +259,7 @@ func reset_feed() -> void:
 	swing_net_hit.clear()
 	show_attack_net({},0.0)
 	swing_finish_pose.clear()
+	approach_arm_transition.clear()
 	swing_palm_roll = 0.0
 	if swing_target == null:
 		swing_target = region.duplicate()
@@ -404,7 +406,13 @@ func swing_input(pressed: bool) -> void:
 	if is_finite(swing_started) and not is_finite(swing_released): return
 	start_attack_swing()
 
+func capture_approach_arm_pose() -> void:
+	var rig: Skeleton3D = setter.skeleton
+	approach_arm_transition.clear()
+	for bone in rig.get_bone_count(): approach_arm_transition.append(rig.get_bone_pose(bone))
+
 func start_attack_swing() -> void:
+	if approach_practice: capture_approach_arm_pose()
 	swing_started = clock
 	swing_charge_started = -INF
 	swing_released = -INF
@@ -810,6 +818,7 @@ func hand_contact_fraction(before: Vector3, after: Vector3, palm_radius := PALM_
 	return entry if entry >= 0.0 and entry <= 1.0 else -1.0
 
 func hit_spike(charge: float, point: Vector3, palm_gap := 0.0) -> void:
+	if approach_practice: capture_approach_arm_pose()
 	spike_bounce_speed = 0.0
 	if not ball_audio_muted: spike_audio.play()
 	swing_contact = point
@@ -961,11 +970,19 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 		var roll_step := deg_to_rad(2700.0)*delta
 		var shot_direction := (rig.to_local(shot_aim)-ball_target).normalized()
 		var compact_finish := SpikeArm.compact_finish_weight(shot_aim,contact,line_weight < 0.5)
-		swing_palm_roll = SpikeArm.apply(pose,author,ball_target,weight,extension,follow,draw_progress,arm_lift,line_weight,palm_finish,elbow_clearance,swing_palm_roll,roll_step,shot_direction,compact_finish,backswing_reach*backswing_weight)
+		var arm_weight := 1.0 if approach_practice and stage == Stage.SET else weight
+		swing_palm_roll = SpikeArm.apply(pose,author,ball_target,arm_weight,extension,follow,draw_progress,arm_lift,line_weight,palm_finish,elbow_clearance,swing_palm_roll,roll_step,shot_direction,compact_finish,backswing_reach*backswing_weight)
 		var guide_drop := maxf(smoothstep(0.07,0.83,extension),smoothstep(0.0,0.62,follow))
-		SpikeArm.apply_guide_arm(pose,author,Vector3(0.06,0.43,0.64-backswing_reach*backswing_weight*0.6),Vector3(0.26,-0.55,0.15),guide_drop,weight,172.0)
+		SpikeArm.apply_guide_arm(pose,author,Vector3(0.06,0.43,0.64-backswing_reach*backswing_weight*0.6),Vector3(0.26,-0.55,0.15),guide_drop,arm_weight,172.0)
 		if stage == Stage.HIT and follow >= 0.90:
 			swing_finish_pose = pose.duplicate()
+	if approach_practice and not approach_arm_transition.is_empty():
+		var handoff_age := clock-stage_start if stage == Stage.HIT else clock-swing_started
+		var handoff_time := 0.09 if stage == Stage.HIT else 0.24
+		var source_weight := 1.0-smootherstep(0.0,handoff_time,handoff_age)
+		if source_weight > 0.0:
+			SpikeArm.blend_arm(pose,approach_arm_transition,author,source_weight)
+			SpikeArm.blend_arm(pose,approach_arm_transition,author,source_weight,"l")
 	for bone in rig.get_bone_count():
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
 
