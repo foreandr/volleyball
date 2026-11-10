@@ -1,5 +1,6 @@
 extends MeshInstance3D
 
+const Court = preload("res://scripts/preview_court.gd")
 const Flight = preload("res://scripts/pass_flight.gd")
 const Timing = preload("res://scripts/animation_ball_preview.gd")
 const Drive = preload("res://scripts/reception_pass_drive.gd")
@@ -275,8 +276,7 @@ func advance_reach(path: Callable, time: float, end: float, delta: float) -> Vec
 		reach_progress = minf(1.0,reach_progress+delta/duration)
 		var origin := setter.position
 		var next := origin+reach_step*(smoothstep(0.0,1.0,reach_progress)-before)
-		setter.position.x = clampf(next.x,-4.0,4.0)
-		setter.position.z = clampf(next.z,-4.5,2.5)
+		setter.position = Court.clamp_setter(next)
 		reach_travel += setter.position-origin
 	return intercept
 

@@ -1,5 +1,6 @@
 extends RefCounted
 const QUICK_STEP_RATE := 1.5
+const Court = preload("res://scripts/preview_court.gd")
 const Stamina = preload("res://scripts/player_stamina.gd")
 const LowSave = preload("res://scripts/player_reception_save.gd")
 const PassDrive = preload("res://scripts/reception_pass_drive.gd")
@@ -522,8 +523,11 @@ func move_player(direction: Vector2, delta: float, track_ball := true, setting_t
 		var distance_: float = side_steps.advance(step_direction,delta*step_rate)*actor.scale.y
 		movement = shuffle_heading*distance_
 	else: side_steps.active = false
-	actor.position.x = clampf(actor.position.x+movement.x,-4,4)
-	actor.position.z = clampf(actor.position.z+movement.z,-4.5,2.5)
+	if setting:
+		actor.position = Court.clamp_setter(actor.position+movement)
+	else:
+		actor.position.x = clampf(actor.position.x+movement.x,-4,4)
+		actor.position.z = clampf(actor.position.z+movement.z,-4.5,2.5)
 	if not setting:
 		if drill:
 			if track_ball: face_ball()

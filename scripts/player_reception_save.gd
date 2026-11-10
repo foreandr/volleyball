@@ -4,12 +4,17 @@ const Dive = preload("res://scripts/forward_reception_dive.gd")
 const Flight = preload("res://scripts/pass_flight.gd")
 const PANCAKE_HEIGHT := Flight.FLOOR+0.045
 const DIVE_HEIGHT := 0.46
+const MIN_WINDUP := 0.15
+const ENTRY_BLEND := 0.07
 var active := false
 var pancake := false
 var aim: Vector3
 var start: Vector3
 var heading: Vector3
 var contact_time: float
+var start_time: float
+var start_yaw: float
+var entry_pose: Array[Transform3D] = []
 var ready: Array[Transform3D] = []
 var clasp: Array[Transform3D] = []
 
@@ -29,6 +34,7 @@ func plan(actor: Node3D, path: Callable, time: float, end: float, clip: Animatio
 			var point: Vector3 = path.call(middle)
 			if point.y > height: low = middle
 			else: high = middle
+		if high-time < MIN_WINDUP: continue
 		var point: Vector3 = path.call(high)
 		var offset := (point-actor.position).slide(Vector3.UP)
 		var distance := offset.length()
@@ -43,13 +49,29 @@ func plan(actor: Node3D, path: Callable, time: float, end: float, clip: Animatio
 		start = actor.position
 		heading = offset.normalized()
 		contact_time = high
+		start_time = time
+		start_yaw = actor.rotation.y
+		entry_pose.clear()
+		var rig: Skeleton3D = actor.skeleton
+		for bone in rig.get_bone_count(): entry_pose.append(rig.get_bone_pose(bone))
 		ready = sample_clip(actor.skeleton,clip,0.0)
 		clasp = sample_clip(actor.skeleton,clip,float(clip.get_meta("contact_time")))
 		return true
 	return false
 
 func sample(actor: Node3D, time: float, release: float) -> void:
-	actor.pose_reception_dive(ready,clasp,start,heading,maxf(0.0,time-contact_time+Dive.WINDUP),aim,release-contact_time+Dive.WINDUP,pancake)
+	var pose_time := Dive.WINDUP+(time-contact_time)
+	if time < contact_time:
+		pose_time = Dive.WINDUP*clampf(inverse_lerp(start_time,contact_time,time),0.0,1.0)
+	actor.pose_reception_dive(ready,clasp,start,heading,pose_time,aim,release-contact_time+Dive.WINDUP,pancake)
+	var entry_weight := smoothstep(0.0,ENTRY_BLEND,time-start_time)
+	if entry_weight < 1.0:
+		var rig: Skeleton3D = actor.skeleton
+		actor.rotation.y = lerp_angle(start_yaw,actor.rotation.y,entry_weight)
+		for bone in entry_pose.size():
+			var value := entry_pose[bone].interpolate_with(rig.get_bone_pose(bone),entry_weight)
+			rig.set_bone_pose_position(bone,value.origin)
+			rig.set_bone_pose_rotation(bone,value.basis.get_rotation_quaternion())
 
 func finished(time: float) -> bool:
 	return time-contact_time+Dive.WINDUP >= Dive.DURATION

@@ -30,7 +30,7 @@ const SERVE_TIME := 1.55
 const PASS_APEX := 4.0
 const SET_HEIGHT := 2.0
 const REGION_RADIUS := 0.65
-const TARGETS := [Vector3(0.8,SET_HEIGHT,1.15),Vector3(-1.45,SET_HEIGHT,0.3),Vector3(1.85,SET_HEIGHT,0.1),Vector3(-0.3,SET_HEIGHT,1.8)]
+const TARGETS := [Vector3(0.8,SET_HEIGHT,1.15),Vector3(-1.45,SET_HEIGHT,0.3),Vector3(1.85,SET_HEIGHT,0.1),Vector3(-0.3,SET_HEIGHT,1.8),Vector3(4.85,SET_HEIGHT,0.5)]
 
 var receiver: Node3D
 var setter: Node3D

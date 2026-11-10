@@ -1,5 +1,6 @@
 extends "res://scripts/create.gd"
 const BallPreview = preload("res://scripts/animation_ball_preview.gd")
+const Court = preload("res://scripts/preview_court.gd")
 const BallTimingRing = preload("res://scripts/ball_timing_ring.gd")
 const Flight = preload("res://scripts/pass_flight.gd")
 const SideKneeSlide = preload("res://scripts/side_knee_slide.gd")
@@ -311,7 +312,7 @@ func start_setting_drill() -> void:
 	player_controls.side_weight = 0.0
 	player_controls.side_steps.active = false
 	player_controls.indicator.text = "Setter"
-	preview_camera.position = Vector3(0,7.5,-11.2)
+	preview_camera.position = Vector3(0,9.2,-18.2)
 	preview_camera.look_at(Vector3(0,1.45,2.6))
 	setting_drill = preload("res://scripts/setting_drill.gd").new()
 	preview_player.get_parent().add_child(setting_drill)
@@ -757,7 +758,7 @@ func handle_preview_input(event: InputEvent) -> void:
 					var point: Vector2 = setup_drag.screen_position(event.position)
 					var hit: Variant = Plane(Vector3.UP,0.055).intersects_ray(preview_camera.project_ray_origin(point),preview_camera.project_ray_normal(point))
 					if hit is Vector3:
-						setting_drill.bump.destination = Vector2(clampf(hit.x,-4.5,4.5),clampf(hit.z,-5.0,13.0))
+						setting_drill.bump.destination = Court.clamp_set_aim(hit)
 			elif event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_WHEEL_UP,MOUSE_BUTTON_WHEEL_DOWN]:
 				adjust_bump_height((0.25 if event.button_index == MOUSE_BUTTON_WHEEL_UP else -0.25)*maxf(0.1,event.factor))
 		return
