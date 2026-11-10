@@ -412,8 +412,12 @@ func pose_bow_draw(weight: float, contact := Vector3.ZERO, extension := 0.0, fol
 	var pose: Array[Transform3D] = []
 	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
 	var chest_turn := smoothstep(0.0,0.88,extension)
-	author.rotate_world(pose,"spine_02",Vector3.UP,(0.12*chest_turn+0.08*follow)*weight)
-	author.rotate_world(pose,"spine_03",Vector3.UP,(lerpf(-0.32,0.29,chest_turn)+0.12*follow)*weight)
+	var aim := rig.to_local(swing_aim)-rig.to_local(setter.global_position)
+	var aim_turn := clampf(atan2(aim.x,aim.z),-0.48,0.48)
+	var turn := lerpf(-0.57,0.42+aim_turn*0.52,chest_turn)+(0.34+aim_turn*0.38)*follow
+	author.rotate_world(pose,"spine_01",Vector3.UP,turn*0.20*weight)
+	author.rotate_world(pose,"spine_02",Vector3.UP,turn*0.34*weight)
+	author.rotate_world(pose,"spine_03",Vector3.UP,turn*0.46*weight)
 	var ball_target := rig.to_local(contact)
 	var right_shoulder: Vector3 = author.point(pose,"upperarm_r")
 	var reach := ball_target-right_shoulder
