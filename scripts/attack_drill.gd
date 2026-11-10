@@ -415,10 +415,19 @@ func pose_bow_draw(weight: float, contact := Vector3.ZERO, extension := 0.0, fol
 	var chest_turn := smoothstep(0.0,0.88,extension)
 	var aim := rig.to_local(swing_aim)-rig.to_local(setter.global_position)
 	var aim_turn := clampf(atan2(aim.x,aim.z),-0.48,0.48)
+	var power := swing_power if stage == Stage.HIT else swing_charge()
+	var rotation_weight := weight*torso_rotation_scale*lerpf(0.48,1.22,power)
 	var turn := lerpf(-0.57,0.42+aim_turn*0.52,chest_turn)+(0.34+aim_turn*0.38)*follow
-	author.rotate_world(pose,"spine_01",Vector3.UP,turn*0.20*weight*torso_rotation_scale)
-	author.rotate_world(pose,"spine_02",Vector3.UP,turn*0.34*weight*torso_rotation_scale)
-	author.rotate_world(pose,"spine_03",Vector3.UP,turn*0.46*weight*torso_rotation_scale)
+	author.rotate_world(pose,"spine_01",Vector3.UP,turn*0.20*rotation_weight)
+	author.rotate_world(pose,"spine_02",Vector3.UP,turn*0.34*rotation_weight)
+	author.rotate_world(pose,"spine_03",Vector3.UP,turn*0.46*rotation_weight)
+	var tuck := smoothstep(0.08,0.45,setter.position.y-jump.start.y)*weight*(1.0-0.65*follow)
+	if tuck > 0.0:
+		for side in ["l","r"]:
+			var foot: String = "foot_"+side
+			var ankle: Vector3 = author.point(pose,foot)
+			var heel_back := Vector3(0.0,0.17,-0.30 if side == "r" else -0.23)
+			author.limb(pose,"thigh_"+side,"calf_"+side,foot,ankle+heel_back,Vector3(0,0.2,1),tuck)
 	var ball_target := rig.to_local(contact)
 	var right_shoulder: Vector3 = author.point(pose,"upperarm_r")
 	var reach := ball_target-right_shoulder
