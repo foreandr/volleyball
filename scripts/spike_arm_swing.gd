@@ -30,7 +30,11 @@ static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float,
 	var wrist_alignment := lerpf(0.90,0.68,smoothstep(0.04,0.70,extension))
 	wrist_alignment = lerpf(wrist_alignment,0.96,smoothstep(0.0,0.86,follow))
 	align_wrist_to_forearm(pose,author,wrist_alignment*solve_weight)
-	var palm_progress := maxf(0.38*smoothstep(0.35,0.98,extension),follow)
+	var release_turn := 0.38*smoothstep(0.35,0.98,extension)
+	if palm_finish > 0.0:
+		# Start the across-body roll on forward extension, after the arm leaves the draw.
+		release_turn = 0.70*smoothstep(0.24,0.86,extension)
+	var palm_progress := maxf(release_turn,follow)
 	roll_finish_palm(pose,author,palm_finish,palm_progress)
 	if finish > 0.0:
 		blend_right_arm(base,pose,author,weight)
@@ -105,7 +109,8 @@ static func roll_finish_palm(pose: Array, author: RefCounted, direction: float, 
 	var down := (Vector3.DOWN*signf(direction)).slide(axis)
 	var roll := edge.signed_angle_to(down.normalized(),axis)
 	# The two edges have no meaningful height difference when the hand points straight down.
-	author.rotate_world(pose,"hand_r",axis,roll*weight*smoothstep(0.10,0.34,down.length()))
+	var visibility := smoothstep(0.015,0.10,down.length()) if direction > 0.0 else smoothstep(0.10,0.34,down.length())
+	author.rotate_world(pose,"hand_r",axis,roll*weight*visibility)
 
 static func align_finish_wrist(pose: Array, author: RefCounted, progress: float) -> void:
 	align_wrist_to_forearm(pose,author,smoothstep(0.25,0.95,progress))

@@ -108,7 +108,8 @@ static func shape(pose: Array[Transform3D], author: RefCounted, profile: Array, 
 	var strike_weight := rising*(1.0-smoothstep(0.59,1.22,landing))
 	author.limb(strike_pose,"upperarm_r","lowerarm_r","hand_r",strike_target,pole,1.0,lerpf(148.0,172.0,sweep))
 	SpikeArm.align_finish_wrist(strike_pose,author,sweep)
-	SpikeArm.roll_finish_palm(strike_pose,author,palm_finish,maxf(0.38*hand_release,sweep))
+	var release_turn := (0.70 if palm_finish > 0.0 else 0.38)*hand_release
+	SpikeArm.roll_finish_palm(strike_pose,author,palm_finish,maxf(release_turn,sweep))
 
 	# Lead with the elbow while the bent forearm trails behind it.
 	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",chamber,Vector3(-1.0,-0.12,-0.34),air,108.0)
