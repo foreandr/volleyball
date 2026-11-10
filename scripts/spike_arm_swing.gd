@@ -88,7 +88,7 @@ static func hip_finish(pose: Array, author: RefCounted, crosscourt: bool, cleara
 	var left_hip: Vector3 = author.point(pose,"thigh_l")
 	var outside := (hip-left_hip).slide(Vector3.UP).normalized()
 	var forward := Vector3.UP.cross(outside)
-	return hip+outside*(clearance+0.07)-forward*0.30+Vector3.UP*0.08
+	return hip+outside*(clearance+0.045)-forward*0.30+Vector3.UP*0.08
 
 static func finish_elbow_pole(same_side: bool) -> Vector3:
 	return Vector3(-0.85,-0.08,-0.09) if same_side else Vector3(-0.85,0.04,-0.33)
@@ -96,7 +96,7 @@ static func finish_elbow_pole(same_side: bool) -> Vector3:
 static func follow_through_target(pose: Array, author: RefCounted, shoulder: Vector3, contact: Vector3, hip: Vector3, progress: float, same_side: bool) -> Vector3:
 	var start := contact-shoulder
 	var end := hip-shoulder
-	var forward := (Vector3(-0.38,-0.32,0.87) if same_side else Vector3(-0.10,-0.12,1.0)).normalized()
+	var forward := (Vector3(-0.22,-0.32,0.87) if same_side else Vector3(-0.10,-0.12,1.0)).normalized()
 	# Carry the wrist around the shoulder instead of cutting across its reach.
 	var from := start.normalized().slerp(forward,progress)
 	var toward := forward.slerp(end.normalized(),progress)
@@ -115,7 +115,7 @@ static func follow_through_target(pose: Array, author: RefCounted, shoulder: Vec
 		var flank := shoulder.lerp(hip,progress)
 		var side_gap := (target-flank).dot(outside)
 		var guide := smoothstep(0.08,0.48,progress)*(1.0-smoothstep(0.78,1.0,progress))
-		target += outside*maxf(0.0,0.09-side_gap)*guide
+		target += outside*maxf(0.0,0.055-side_gap)*guide
 	return target
 
 static func finish_palm_weight(target: Vector3, origin: Vector3, cross_body: bool) -> float:
