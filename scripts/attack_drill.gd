@@ -450,7 +450,7 @@ func try_queue_approach(log_rejection: bool) -> void:
 	if not intercept.is_finite():
 		if log_rejection:
 			status.text = unavailable_approach_status()
-			trace.write("approach_rejected",clock,{"target":approach_set_target,"range":APPROACH_RADII[0],"reason":status.text},true)
+			trace.write("approach_rejected",clock,{"target":approach_set_target,"range":APPROACH_RADII[0]+REGION_RADIUS,"reason":status.text},true)
 		return
 	approach_pressed_at = clock
 	approach_jump_queued = true
@@ -476,7 +476,7 @@ func find_approach_intercept(respect_timing := true) -> Vector3:
 	if earliest > latest: return Vector3.INF
 	for sample in 7:
 		var point := flight_point(origin,velocity,lerpf(earliest,latest,sample/6.0))
-		if (point-setter.position).slide(Vector3.UP).length() <= APPROACH_RADII[0]: return point
+		if (point-setter.position).slide(Vector3.UP).length() <= APPROACH_RADII[0]+REGION_RADIUS: return point
 	return Vector3.INF
 
 func queued_approach_input(delta: float) -> Vector2:

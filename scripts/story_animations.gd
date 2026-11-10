@@ -313,7 +313,7 @@ func start_setting_drill(attack := false) -> void:
 		if attack:
 			controls_hint.visible = index != 0
 			if index == 2:
-				controls_hint.text = "WASD to move  |  Hold Space inside green ring\nHold from setter touch to spike\nMove mouse to aim\nDrag player or set ring\nCtrl-click start  |  Shift-click set"
+				controls_hint.text = "WASD to move  |  Hold Space when rings overlap\nHold from setter touch to spike\nMove mouse to aim\nDrag player or set ring\nCtrl-click start  |  Shift-click set"
 				return
 			controls_hint.text = "WASD to move  |  Q forearms  |  I / E hands\nMouse to aim  |  Shift + scroll for pass height\nSpace to jump  |  Hold left-click to spike"
 			return
