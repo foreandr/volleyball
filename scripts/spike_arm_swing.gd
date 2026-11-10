@@ -20,7 +20,8 @@ static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float,
 	var same_side := line_weight < 0.5
 	target = follow_through_target(pose,author,shoulder,target,hip_finish(pose,author,same_side),finish,same_side,compact_finish)
 	var elbow_pole := Vector3(-1.0,0.16,-0.84).lerp(Vector3(-0.75,0.38,-0.28),smoothstep(0.62,1.0,extension))
-	var elbow_limit := lerpf(112.0,158.0,smoothstep(0.29,0.98,extension))
+	var draw_elbow_limit := 112.0+42.0*smoothstep(0.0,0.60,backswing_reach)
+	var elbow_limit := lerpf(draw_elbow_limit,158.0,smoothstep(0.29,0.98,extension))
 	elbow_limit = lerpf(elbow_limit,164.0 if same_side else 172.0,finish)
 	elbow_pole = elbow_pole.lerp(finish_elbow_pole(same_side),finish)
 	var base := pose

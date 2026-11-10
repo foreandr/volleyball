@@ -418,9 +418,9 @@ func show_attack_positions() -> void:
 	add_attack_tuning_slider(positions,"Ball bounciness","AttackBallBounciness","%",25,400,5,setting_drill.ball_bounciness*100.0,
 		func(value: float): setting_drill.ball_bounciness = value/100.0)
 
-	var bend := add_attack_tuning_slider(positions,"Backswing bend","AttackBackswingBend","°",0,65,1,setting_drill.backswing_bend,
+	var bend := add_attack_tuning_slider(positions,"Backswing bend","AttackBackswingBend","°",0,120,1,setting_drill.backswing_bend,
 		func(value: float): setting_drill.backswing_bend = value)
-	var reach := add_attack_tuning_slider(positions,"Backswing reach","AttackBackswingReach","cm",0,42,1,setting_drill.backswing_reach*100.0,
+	var reach := add_attack_tuning_slider(positions,"Backswing reach","AttackBackswingReach","cm",0,75,1,setting_drill.backswing_reach*100.0,
 		func(value: float): setting_drill.backswing_reach = value/100.0)
 
 	var delay := add_attack_tuning_slider(positions,"Draw delay","LowBowDrawDelay","ms",-220,240,5,setting_drill.draw_delay*1000.0,
