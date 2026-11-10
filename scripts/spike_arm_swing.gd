@@ -73,6 +73,15 @@ static func blend_arm(base: Array, target: Array, author: RefCounted, weight: fl
 		var to: Quaternion = target[index].basis.get_rotation_quaternion()
 		base[index].basis = Basis(from.slerp(to,weight))
 
+static func recover_same_side_arm(pose: Array, finish: Array, author: RefCounted, weight: float) -> void:
+	blend_arm(pose,finish,author,weight)
+	var hip: Vector3 = author.point(pose,"thigh_r")
+	var left_hip: Vector3 = author.point(pose,"thigh_l")
+	var outside := (hip-left_hip).slide(Vector3.UP).normalized()
+	# Ease the hanging arm forward beside the hip as the body straightens.
+	var arc := sin(PI*weight)
+	author.rotate_world(pose,"upperarm_r",outside,0.26*arc)
+
 static func hip_finish(pose: Array, author: RefCounted, crosscourt: bool, clearance := 0.06) -> Vector3:
 	var hip: Vector3 = author.point(pose,"thigh_r" if crosscourt else "thigh_l")
 	if not crosscourt: return hip+Vector3(clearance,0.02,0.09)

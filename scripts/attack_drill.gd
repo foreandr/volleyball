@@ -539,7 +539,10 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 	author.rotate_world(pose,"neck_01",Vector3.RIGHT,0.045*contact_crunch*weight)
 	var line_weight := shot_line_weight(shot_aim,contact)
 	if stage == Stage.HIT and weight < 1.0 and not swing_finish_pose.is_empty():
-		SpikeArm.blend_arm(pose,swing_finish_pose,author,weight)
+		if line_weight < 0.5:
+			SpikeArm.recover_same_side_arm(pose,swing_finish_pose,author,weight)
+		else:
+			SpikeArm.blend_arm(pose,swing_finish_pose,author,weight)
 		SpikeArm.blend_arm(pose,swing_finish_pose,author,weight,"l")
 		SpikeArm.open_strike_hand(pose,author,0.94*weight)
 	else:
