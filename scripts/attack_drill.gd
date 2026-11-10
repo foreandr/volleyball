@@ -92,6 +92,7 @@ var swing_aim := Vector3(PIN.x,Flight.FLOOR,9.5)
 var swing_contact_aim: Vector3
 var swing_finish_pose: Array[Transform3D] = []
 var approach_arm_transition: Array[Transform3D] = []
+var approach_render_rotations: Array[Quaternion] = []
 var swing_palm_roll := 0.0
 var swing_contact: Vector3
 var swing_contact_extension := 1.0
@@ -260,6 +261,7 @@ func reset_feed() -> void:
 	show_attack_net({},0.0)
 	swing_finish_pose.clear()
 	approach_arm_transition.clear()
+	approach_render_rotations.clear()
 	swing_palm_roll = 0.0
 	if swing_target == null:
 		swing_target = region.duplicate()
@@ -975,13 +977,12 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 		SpikeArm.blend_arm(pose,swing_finish_pose,author,weight,"l")
 		SpikeArm.open_strike_hand(pose,author,0.94*weight)
 	else:
-		var palm_finish := SpikeArm.finish_palm_weight(shot_aim,contact,line_weight >= 0.5)
 		# Smooth the roll through the near-vertical hand angle using game time.
 		var roll_step := deg_to_rad(2700.0)*delta
 		var shot_direction := (rig.to_local(shot_aim)-ball_target).normalized()
 		var compact_finish := SpikeArm.compact_finish_weight(shot_aim,contact,line_weight < 0.5)
 		var arm_weight := 1.0 if approach_practice and stage == Stage.SET else weight
-		swing_palm_roll = SpikeArm.apply(pose,author,ball_target,arm_weight,extension,follow,draw_progress,arm_lift,line_weight,palm_finish,elbow_clearance,swing_palm_roll,roll_step,shot_direction,compact_finish,backswing_reach*backswing_weight,approach_practice)
+		swing_palm_roll = SpikeArm.apply(pose,author,ball_target,arm_weight,extension,follow,draw_progress,arm_lift,line_weight,elbow_clearance,swing_palm_roll,roll_step,shot_direction,compact_finish,backswing_reach*backswing_weight,approach_practice)
 		var guide_drop := maxf(smoothstep(0.07,0.83,extension),smoothstep(0.0,0.62,follow))
 		if approach_practice and stage == Stage.SET:
 			guide_drop = maxf(guide_drop*0.75,0.72*smootherstep(0.28,0.49,clock-swing_started))
@@ -1019,8 +1020,18 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 			if source_weight > 0.0:
 				SpikeArm.blend_arm(pose,approach_arm_transition,author,source_weight)
 				SpikeArm.blend_arm(pose,approach_arm_transition,author,source_weight,"l")
+	var smoothing := 0.0
+	if approach_practice and not approach_arm_transition.is_empty():
+		if approach_render_rotations.is_empty():
+			for source in approach_arm_transition:
+				approach_render_rotations.append(source.basis.get_rotation_quaternion())
+		smoothing = exp(-delta/0.016)*smoothstep(0.0,0.32,weight)
 	for bone in rig.get_bone_count():
-		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
+		var rotation := pose[bone].basis.get_rotation_quaternion()
+		if smoothing > 0.0:
+			rotation = rotation.slerp(approach_render_rotations[bone],smoothing)
+			approach_render_rotations[bone] = rotation
+		rig.set_bone_pose_rotation(bone,rotation)
 
 func shot_line_weight(target: Vector3, origin: Vector3) -> float:
 	# Only an inward angle crosses the court. Outward aim can still run down the near sideline.

@@ -8,7 +8,7 @@ static func follow_heading(target: Vector3, origin: Vector3, facing := 0.0) -> f
 	var direction := target-origin
 	return clampf(angle_difference(facing,atan2(direction.x,direction.z)),-0.95,0.95)
 
-static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float, extension: float, follow: float, draw_progress: float, arm_lift: float, line_weight: float, palm_finish: float, elbow_clearance: float, previous_roll: float, roll_step: float, shot_direction: Vector3, compact_finish: float, backswing_reach: float, overhead_entry := false) -> float:
+static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float, extension: float, follow: float, draw_progress: float, arm_lift: float, line_weight: float, elbow_clearance: float, previous_roll: float, roll_step: float, shot_direction: Vector3, compact_finish: float, backswing_reach: float, overhead_entry := false) -> float:
 	var shoulder: Vector3 = author.point(pose,"upperarm_r")
 	var draw := Vector3(-0.04,0.40,0.08).lerp(Vector3(0.02,0.05,-0.12),draw_progress)
 	var wrist_target := ball-(ball-shoulder).normalized()*0.06-shot_direction*0.11
@@ -19,7 +19,11 @@ static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float,
 	target += Vector3(-0.05,0.14,-0.10)*sin(PI*extension)
 	var finish := follow
 	var same_side := line_weight < 0.5
-	target = follow_through_target(pose,author,shoulder,target,hip_finish(pose,author,same_side),finish,same_side,compact_finish)
+	var finish_point := hip_finish(pose,author,same_side)
+	var across: Vector3 = (author.point(pose,"upperarm_l")-shoulder).normalized()
+	var chest_center: Vector3 = shoulder.lerp(author.point(pose,"upperarm_l"),0.5)
+	var cross_body := (finish_point-chest_center).dot(across) > 0.0
+	target = follow_through_target(pose,author,shoulder,target,finish_point,finish,same_side,compact_finish)
 	var elbow_pole := Vector3(-1.0,0.16,-0.84).lerp(Vector3(-0.75,0.38,-0.28),smoothstep(0.62,1.0,extension))
 	var draw_elbow_limit := 112.0+42.0*smoothstep(0.0,0.60,backswing_reach)
 	var elbow_limit := lerpf(draw_elbow_limit,158.0,smoothstep(0.29,0.98,extension))
@@ -34,13 +38,9 @@ static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float,
 	var wrist_alignment := lerpf(0.90,0.68,smoothstep(0.04,0.70,extension))
 	wrist_alignment = lerpf(wrist_alignment,0.96,smoothstep(0.0,0.86,follow))
 	align_wrist_to_forearm(pose,author,wrist_alignment*solve_weight)
-	var release_turn := 0.38*smoothstep(0.35,0.98,extension)
-	if line_weight >= 0.5:
-		# Start the across-body roll on forward extension, after the arm leaves the draw.
-		release_turn = 0.70*smoothstep(0.24,0.86,extension)
-	var palm_progress := maxf(release_turn,follow)
-	var face_weight := smoothstep(0.07,0.48,extension)*(1.0-smoothstep(0.03,0.60,follow))
-	var roll := roll_finish_palm(pose,author,palm_finish,palm_progress,line_weight >= 0.5,previous_roll,roll_step,shot_direction,face_weight,ball)
+	var palm_progress := maxf(smoothstep(0.20,0.74,extension),follow)
+	var face_weight := smoothstep(0.07,0.35,extension)*(1.0-smoothstep(0.35,0.72,extension))*(1.0-smoothstep(0.03,0.60,follow))
+	var roll := roll_finish_palm(pose,author,1.0,palm_progress,cross_body,previous_roll,roll_step,shot_direction,face_weight,ball)
 	if finish > 0.0:
 		blend_arm(base,pose,author,weight)
 	open_strike_hand(base,author,weight*lerpf(0.70,0.94,smoothstep(0.12,0.85,extension)))
@@ -154,11 +154,6 @@ static func follow_through_target(pose: Array, author: RefCounted, shoulder: Vec
 static func compact_finish_weight(target: Vector3, origin: Vector3, same_side: bool) -> float:
 	var slope := absf(target.x-origin.x)/maxf(target.z-origin.z,0.1)
 	return 1.0-smoothstep(0.30,0.55,slope) if same_side else 1.0-smoothstep(0.065,0.27,slope)
-
-static func finish_palm_weight(target: Vector3, origin: Vector3, cross_body: bool) -> float:
-	if cross_body: return 1.0
-	var lateral := absf(target.x-origin.x)/maxf(target.z-origin.z,0.1)
-	return smoothstep(0.045,0.13,lateral)
 
 static func roll_finish_palm(pose: Array, author: RefCounted, amount: float, follow: float, cross_body: bool, previous_roll := 0.0, roll_step := INF, shot_direction := Vector3.ZERO, face_weight := 0.0, ball := Vector3.ZERO) -> float:
 	var weight := amount*smoothstep(0.05,0.84,follow)
