@@ -35,6 +35,7 @@ var render_clip: Animation
 var preview_clock := 0.0
 var build_label := ""
 var cpu_receive_clock := -INF
+var custom_backward_clip: Animation
 var cpu_reach_offset := Vector3.INF
 var cpu_start := Vector3.INF
 var cpu_start_yaw := 0.0
@@ -257,6 +258,9 @@ Scroll to set pass height",16)
 		distance_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		content.add_child(distance_status)
 		content.add_child(button("Edit D2 backward lunge",open_backward_editor))
+		custom_backward_clip = load_custom_backward_clip()
+		if custom_backward_clip != null:
+			content.add_child(button("Play my D2 lunge",reception_review.play_custom_backward))
 		refresh_type()
 		preview.grab_focus()
 		return
@@ -591,6 +595,13 @@ func reset_cpu_receive(restore_position: bool) -> void:
 
 func step_cpu_receive(previous: float, delta: float) -> void:
 	var arrows = preview_player.get_node("DirectionArrows")
+	if custom_backward_clip != null and arrows.selected_distance == 2 and arrows.selected == 5:
+		if not cpu_start.is_finite():
+			cpu_start = preview_player.position
+			cpu_start_yaw = preview_player.rotation.y
+			preview_player.install_custom(custom_backward_clip,"backward_receive",false)
+		if sample_custom_backward(previous): drill_status.text = "Clean platform contact"
+		return
 	if arrows.selected_distance == 4:
 		step_cpu_forward_dive(previous,true)
 		return
@@ -835,6 +846,22 @@ func orbit_setting_camera(pixels: Vector2) -> void:
 
 func adjust_bump_height(amount: float) -> void:
 	setting_drill.bump.height = clampf(setting_drill.bump.height+amount,1.25,20.0)
+
+func load_custom_backward_clip() -> Animation:
+	var copies := Catalog.custom_entries()
+	for index in range(copies.size()-1,-1,-1):
+		if copies[index].get("source") == BACKWARD_EDIT_ID:
+			return Catalog.load_clip(copies[index],preview_player)
+	return null
+
+func sample_custom_backward(previous: float) -> bool:
+	var elapsed: float = preview_clock-ball_preview.contact_time
+	var contact := float(custom_backward_clip.get_meta("contact_time"))
+	preview_player.animator.play("custom_backward_receive/clip",0)
+	preview_player.animator.seek(clampf(elapsed+contact,0.0,custom_backward_clip.length),true)
+	preview_player.animator.pause()
+	ball_preview.update_practice_platform()
+	return absf(elapsed) <= 0.16 and ball_preview.try_practice_pass(previous,preview_clock,0.16)
 
 func open_backward_editor() -> void:
 	reception_review.stop(false)

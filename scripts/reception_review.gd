@@ -190,6 +190,13 @@ func toggle_loop() -> void:
 		if finished: load_case(index)
 	update_controls()
 
+func play_custom_backward() -> void:
+	if not active: toggle_play()
+	if not active: return
+	paused = false
+	loop_current = true
+	load_case(BACK_LUNGE)
+
 func prepare_review_clip() -> void:
 	var actor: Node3D = page.preview_player
 	original_feed = actor.get_meta("feed_settings",{})
@@ -239,6 +246,12 @@ func load_case(next_index: int) -> void:
 	var acceleration := Vector3.DOWN*Flight.GRAVITY
 	ball.review_feed = {"aim":aim,"incoming":velocity,"acceleration":acceleration,"duration":FEED_TIME,
 		"start":aim-velocity*FEED_TIME+acceleration*0.5*FEED_TIME*FEED_TIME,"side":Vector3.RIGHT,"valid":true}
+	if uses_custom_backward():
+		actor.install_custom(page.custom_backward_clip,"backward_receive",false)
+		ball.review_feed = page.custom_backward_clip.get_meta("editor_feed").duplicate()
+		var shift: Vector3 = actor.position-page.custom_backward_clip.get_meta("editor_start")
+		ball.review_feed.aim += shift
+		ball.review_feed.start += shift
 	ball.recalculate()
 	page.preview_clock = ball.contact_time-FEED_TIME
 	title_count.text = "%d / %d" % [index+1,CASES.size()]
@@ -249,6 +262,9 @@ func load_case(next_index: int) -> void:
 	ball.tick(page.preview_clock,false)
 	ball.update_practice_aim(true)
 	update_controls()
+
+func uses_custom_backward() -> bool:
+	return index == BACK_LUNGE and page.custom_backward_clip != null
 
 func is_knee_slide() -> bool:
 	return CASES[index][0] == 3 and CASES[index][2].z == 0.0
@@ -266,7 +282,9 @@ func step(delta: float) -> void:
 	var short_back := index == SHORT_BACK
 	var receive_start := -0.12 if short_back else -0.25
 	var follow_end: float = page.player_controls.RECEIVE_FOLLOW_TIME+0.06
-	if is_knee_slide():
+	if uses_custom_backward():
+		if page.sample_custom_backward(previous): page.drill_status.text = "Clean platform contact"
+	elif is_knee_slide():
 		if not released:
 			page.step_cpu_receive(previous,delta)
 			if not page.cpu_side_slide_pose.is_empty() and page.preview_clock-page.cpu_side_slide_time >= page.SideKneeSlide.DURATION:
@@ -313,6 +331,8 @@ func step(delta: float) -> void:
 	ball.update_practice_aim(true)
 	if page.preview_clock < end or (is_knee_slide() and not released): return
 	page.preview_clock = end
+	if uses_custom_backward():
+		page.preview_player.animator.play("custom_preview/clip",0)
 	if not page.player_controls.settle_for_next_feed(READY_POSITION,0.0,delta):
 		ball.ball.hide()
 		return
