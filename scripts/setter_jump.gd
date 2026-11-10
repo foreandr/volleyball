@@ -61,8 +61,18 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 		var target := foot_pose.origin+travel*stagger*(1.0 if left else -1.0)+Vector3.UP*(0.085*lift+0.07*tuck)
 		author.limb(pose,"thigh_"+side,"calf_"+side,foot,target,Vector3(0.09 if left else -0.09,0.25,1.0))
 		author.set_world_basis(pose,foot,foot_pose.basis)
-		author.rotate_world(pose,"upperarm_"+side,Vector3.RIGHT,1.52*load-0.95*arm_drive)
-		author.rotate_world(pose,"lowerarm_"+side,Vector3.RIGHT,-0.25*arm_drive)
+		var upper_arm: String = "upperarm_"+side
+		var forearm: String = "lowerarm_"+side
+		author.rotate_world(pose,upper_arm,Vector3.RIGHT,1.52*load-0.95*arm_drive)
+		author.rotate_world(pose,forearm,Vector3.RIGHT,-0.25*arm_drive)
+		var shoulder: Vector3 = author.point(pose,upper_arm)
+		var elbow: Vector3 = author.point(pose,forearm)
+		var wrist: Vector3 = author.point(pose,"hand_"+side)
+		var extension := 0.52*smoothstep(0.02,0.16,(shoulder.z-elbow.z)*scale_)
+		if extension > 0.0:
+			var forearm_pose: Transform3D = author.world_pose(pose,rig.find_bone(forearm))
+			var straighten := Quaternion((wrist-elbow).normalized(),(elbow-shoulder).normalized())
+			author.set_world_basis(pose,forearm,Basis(Quaternion.IDENTITY.slerp(straighten,extension))*forearm_pose.basis)
 	rig.set_bone_pose_position(pelvis,pose[pelvis].origin)
 	for bone in rig.get_bone_count():
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
