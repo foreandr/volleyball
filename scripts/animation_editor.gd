@@ -3,6 +3,7 @@ const EditSession = preload("res://scripts/animation_edit_session.gd")
 const Groups = preload("res://scripts/animation_body_groups.gd")
 const Flight = preload("res://scripts/pass_flight.gd")
 const Catalog = preload("res://scripts/volleyball_animations.gd")
+const ATTACK_EDITOR_OFFSET := Vector3(0.0,0.0,-0.50)
 var ball_preview: Node3D
 var setup_drag: RefCounted
 var reception_controls: VBoxContainer
@@ -25,6 +26,7 @@ var bone_picker: OptionButton
 var bone_indices: Array[int] = []
 var frame_field: SpinBox
 var timeline: HSlider
+var contact_frame_button: Button
 var rotation_fields: Array[SpinBox] = []
 var copy_name: LineEdit
 var play_button: Button
@@ -49,18 +51,23 @@ func _ready() -> void:
 	angle_control.apply_setup(preview_player)
 	if is_instance_valid(reception_controls): reception_controls.apply(preview_player,replace_body_layer)
 	session = EditSession.new(StorySession.edit_animation if StorySession.edit_animation != null else Catalog.load_clip(entry,preview_player),preview_player.skeleton)
+	var editor_feed: Dictionary = session.source.get_meta("editor_feed",{}).duplicate()
+	var spike := editor_feed.has("spike_outgoing")
 	if session.source.has_meta("editor_start"):
 		preview_player.set_height_cm(Profile.DEFAULTS.height_cm)
 		preview_player.position = session.source.get_meta("editor_start")
 		preview_player.rotation.y = 0.0
-		var spike: bool = session.source.has_meta("editor_group")
+		if spike:
+			preview_player.position += ATTACK_EDITOR_OFFSET
+			editor_feed.start += ATTACK_EDITOR_OFFSET
+			editor_feed.aim += ATTACK_EDITOR_OFFSET
 		view_focus = preview_player.position+Vector3(0,1.85 if spike else 1.10,0)
 		view_distance = 5.8 if spike else 4.6
 		orbit_yaw = -2.1 if spike else 1.1
 		if spike: preview_player.get_node("DirectionArrows").hide()
 		update_camera()
 	ball_preview = preload("res://scripts/animation_ball_preview.gd").new()
-	ball_preview.review_feed = session.source.get_meta("editor_feed",{})
+	ball_preview.review_feed = editor_feed
 	preview_player.get_parent().add_child(ball_preview)
 	ball_preview.configure(preview_player,session.source,session)
 	if is_instance_valid(reception_controls): reception_controls.show_result(session.source)
@@ -145,6 +152,10 @@ func build_controls(controls: VBoxContainer) -> void:
 	timeline.step = 1
 	timeline.value_changed.connect(func(value): set_playing(false); set_frame(int(value)))
 	controls.add_child(timeline)
+	contact_frame_button = button("",jump_to_contact_frame)
+	contact_frame_button.name = "ContactFrame"
+	contact_frame_button.hide()
+	controls.add_child(contact_frame_button)
 	var transport := HBoxContainer.new()
 	controls.add_child(transport)
 	play_button = button("Play",func(): set_playing(not playing))
@@ -239,10 +250,26 @@ func set_frame(value: int) -> void:
 	frame_field.set_value_no_signal(frame)
 	timeline.set_value_no_signal(frame)
 	session.sample(frame)
-	if is_instance_valid(ball_preview) and not playing: ball_preview.tick(session.time_at(frame),false)
+	if is_instance_valid(ball_preview) and not playing:
+		ball_preview.tick(session.time_at(frame),false)
+		refresh_contact_frame()
 	refresh_rotation()
 	if is_instance_valid(next_pose_button): next_pose_button.disabled = frame >= session.last_frame
 	if is_instance_valid(later_pose_button): later_pose_button.disabled = frame >= session.last_frame
+
+func contact_frame() -> int:
+	return clampi(roundi(ball_preview.contact_time*session.frame_rate),0,session.last_frame)
+
+func jump_to_contact_frame() -> void:
+	set_playing(false)
+	set_frame(contact_frame())
+
+func refresh_contact_frame() -> void:
+	contact_frame_button.visible = ball_preview.active
+	if not ball_preview.active: return
+	var result := "Contact frame"
+	if ball_preview.missed or not ball_preview.incoming_net.is_empty(): result = "Miss at frame"
+	contact_frame_button.text = "%s %d" % [result,contact_frame()]
 
 func step_frame(direction: int) -> void:
 	set_playing(false)
@@ -266,7 +293,9 @@ func _process(delta: float) -> void:
 		var playback_frame: float = ball_preview.animation_time(playhead/session.frame_rate)*session.frame_rate
 		set_frame(floori(playback_frame))
 		session.sample(playback_frame)
-	if is_instance_valid(ball_preview): ball_preview.tick((playhead if playing else float(frame))/session.frame_rate,playing)
+	if is_instance_valid(ball_preview):
+		ball_preview.tick((playhead if playing else float(frame))/session.frame_rate,playing)
+		refresh_contact_frame()
 	if is_instance_valid(angle_control) and ball_preview.active: angle_control.set_actual(ball_preview.output_angle(),Flight.distance(ball_preview.impact_point,ball_preview.outgoing))
 	if is_instance_valid(overlay): overlay.queue_redraw()
 
