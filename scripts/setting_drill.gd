@@ -257,7 +257,7 @@ func step(delta: float) -> void:
 func step_bump(time: float, previous: float, delta: float) -> void:
 	var path := func(t): return flight_point(contact,pass_velocity,minf(t,landing))
 	var incoming := pass_velocity+Vector3.DOWN*Flight.GRAVITY*time
-	bump.update_attempt(time,previous,landing,path,incoming,delta)
+	bump.update_attempt(time,previous,landing,path,incoming,delta,timing_arrival)
 	update_timing_cue(time)
 	var reset_at := landing
 	if is_finite(bump.touch_time):

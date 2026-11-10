@@ -34,7 +34,6 @@ var pose_started_at := -INF
 var cone: MeshInstance3D
 var contact_spread := 0.0
 var contact_destination := Vector2.ZERO
-var in_reach := false
 var touch_time := -INF
 var touch: Vector3
 var outgoing: Vector3
@@ -73,7 +72,6 @@ func reset() -> void:
 	low_save.active = false
 	pose_started_at = -INF
 	cone.hide()
-	in_reach = false
 	touch_time = -INF
 	net_hit.clear()
 	clear_reach()
@@ -148,14 +146,12 @@ func approach(path: Callable, time: float, end: float) -> float:
 			delay = ahead
 	return 1.0-delay/APPROACH_TIME if delay >= 0.0 else -1.0
 
-func update_attempt(time: float, previous: float, end: float, path: Callable, incoming: Vector3, delta: float) -> void:
+func update_attempt(time: float, previous: float, end: float, path: Callable, incoming: Vector3, delta: float, cue_arrival := INF) -> void:
 	var progress := approach(path,time,end) if grade == Timing.Grade.WAITING else -1.0
 	var attempted := is_finite(pressed_at)
 	if attempted and grade == Timing.Grade.WAITING:
 		if not is_finite(pose_started_at) and progress >= 1.0-PLATFORM_PREP_TIME/APPROACH_TIME:
 			pose_started_at = maxf(pressed_at,time-delta)
-		var incoming_ball: Vector3 = path.call(time)
-		in_reach = in_reach or incoming_ball.distance_to(ready_contact()) <= PLATFORM_RADIUS
 		if reach.is_empty(): low_save.plan(setter,path,time,end,clip)
 	var elapsed := time-pose_started_at
 	var striking := attempted and grade == Timing.Grade.WAITING and (low_save.active or is_finite(pose_started_at)) and time < end
@@ -179,10 +175,14 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 				reach_platform(point-center)
 				center = platform_center()
 				point = Geometry3D.get_closest_point_to_segment(center,first,last)
-			if point.distance_to(center) <= radius:
+			var timing := (cue_arrival if is_finite(cue_arrival) and not low_save.active else time)-pressed_at
+			var green := timing >= GREEN_START and timing <= GREEN_END
+			var assisted := green and not low_save.active and point.distance_to(center) > radius and close_body_contact(point,center)
+			if assisted or point.distance_to(center) <= radius:
 				touch_time = lerpf(previous,time,first.distance_to(point)/first.distance_to(last))
 				touch = point
-				var timing := touch_time-pressed_at
+				if not is_finite(cue_arrival) or low_save.active: timing = touch_time-pressed_at
+				if assisted: reach_platform(point-center)
 				grade = Timing.Grade.LATE if timing < GREEN_START else (Timing.Grade.EARLY if timing > GREEN_END else Timing.Grade.PERFECT)
 				var error := timing_error(timing)*(Timing.PANCAKE_ERROR_SCALE if pancake else 1.0)
 				contact_spread = Timing.practice_spread(error)
@@ -197,7 +197,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 				net_hit = Net.first_hit(func(t): return flight_point(touch,outgoing,t),0.0,floor_time)
 				if not net_hit.is_empty(): floor_time = net_hit.end_time
 	elif attempted and grade == Timing.Grade.WAITING and time >= end:
-		grade = Timing.Grade.EARLY if in_reach else Timing.Grade.MISS
+		grade = Timing.Grade.MISS
 	if low_save.active and not striking and not low_save.finished(time):
 		low_save.sample(setter,time,touch_time if is_finite(touch_time) else low_save.contact_time+0.07)
 	elif is_finite(touch_time) and not low_save.active:
@@ -215,6 +215,11 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 		cone.show_spread(touch if is_finite(touch_time) else ready_contact(),Vector3(target.x,0.075,target.y),spread)
 	else:
 		cone.hide()
+
+func close_body_contact(point: Vector3, platform: Vector3) -> bool:
+	# Give green timing a little forgiveness on balls dropping inside the stance.
+	var from_body := point-setter.global_position
+	return from_body.slide(Vector3.UP).length() <= 0.42 and absf(point.y-platform.y) <= 0.23 and point.distance_to(platform) <= 0.78
 
 func timing_error(elapsed: float) -> float:
 	if elapsed < GREEN_START: return clampf((GREEN_START-elapsed)/GREEN_START,0.0,1.0)
