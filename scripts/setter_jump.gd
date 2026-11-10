@@ -155,8 +155,16 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 		author.rotate_world(pose,forearm,Vector3.RIGHT,-0.25*jump_drive)
 		var shoulder: Vector3 = author.point(pose,upper_arm)
 		var elbow: Vector3 = author.point(pose,forearm)
+		if approach_plant and arm_load > 0.0:
+			var upper_direction := elbow-shoulder
+			var tucked_direction := upper_direction
+			tucked_direction.x *= 1.0-0.65*arm_load
+			var upper_pose: Transform3D = author.world_pose(pose,rig.find_bone(upper_arm))
+			var tuck_rotation := Quaternion(upper_direction.normalized(),tucked_direction.normalized())
+			author.set_world_basis(pose,upper_arm,Basis(tuck_rotation)*upper_pose.basis)
+			elbow = author.point(pose,forearm)
 		var wrist: Vector3 = author.point(pose,"hand_"+side)
-		var extension := 0.52*smoothstep(0.02,0.16,(shoulder.z-elbow.z)*scale_)
+		var extension := (0.52+0.20*arm_load if approach_plant else 0.52)*smoothstep(0.02,0.16,(shoulder.z-elbow.z)*scale_)
 		if extension > 0.0:
 			var forearm_pose: Transform3D = author.world_pose(pose,rig.find_bone(forearm))
 			var straighten := Quaternion((wrist-elbow).normalized(),(elbow-shoulder).normalized())
