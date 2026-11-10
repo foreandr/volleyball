@@ -158,8 +158,10 @@ func queue_bump() -> void:
 			"snapshot":trace_snapshot(clock-0.45-SERVE_TIME),
 		},true)
 
-func mark_trace() -> void:
+func mark_trace() -> bool:
+	if trace.file == null: return false
 	trace.write("player_marker",clock,{"snapshot":trace_snapshot(clock-0.45-SERVE_TIME),"previous_feed":trace.feed-1,"closest_check":trace.closest_check},true)
+	return true
 
 func _exit_tree() -> void:
 	trace.close(clock)

@@ -46,6 +46,8 @@ var middle_dragged := false
 var drill_status: Label
 var distance_status: Label
 var preview_overlay: Control
+var marker_popup: Label
+var marker_fade: Tween
 var pass_timing_cue: Node3D
 var reception_review: HBoxContainer
 var setting_drill: Node3D
@@ -62,6 +64,7 @@ func _ready() -> void:
 	preview_overlay = Control.new()
 	preview_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	preview.get_parent().add_child(preview_overlay)
+	build_marker_popup()
 	pass_timing_cue = BallTimingRing.new()
 	preview_player.get_parent().add_child(pass_timing_cue)
 	reception_review = preload("res://scripts/reception_review.gd").new(self)
@@ -85,6 +88,35 @@ func _ready() -> void:
 					animation_list.select(index)
 					preview_animation(index)
 					break
+
+func build_marker_popup() -> void:
+	marker_popup = label("Debug marker saved",16)
+	marker_popup.name = "DebugMarkerPopup"
+	marker_popup.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	marker_popup.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	marker_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var badge := StyleBoxFlat.new()
+	badge.bg_color = Color("152331")
+	badge.border_color = Color("59d6ec")
+	badge.set_border_width_all(1)
+	badge.set_corner_radius_all(7)
+	marker_popup.add_theme_stylebox_override("normal",badge)
+	preview_overlay.add_child(marker_popup)
+	marker_popup.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+	marker_popup.offset_left = -112
+	marker_popup.offset_right = 112
+	marker_popup.offset_top = 16
+	marker_popup.offset_bottom = 54
+	marker_popup.hide()
+
+func show_marker_popup() -> void:
+	if marker_fade != null: marker_fade.kill()
+	marker_popup.modulate.a = 1.0
+	marker_popup.show()
+	marker_fade = create_tween()
+	marker_fade.tween_interval(0.7)
+	marker_fade.tween_property(marker_popup,"modulate:a",0.0,0.35)
+	marker_fade.tween_callback(marker_popup.hide)
 
 func build_preview_stage(world: Node3D) -> void:
 	world.add_child(preload("res://scripts/preview_court.gd").new())
@@ -288,6 +320,8 @@ func start_setting_drill() -> void:
 
 func stop_setting_drill() -> void:
 	if not is_instance_valid(setting_drill): return
+	if marker_fade != null: marker_fade.kill()
+	marker_popup.hide()
 	setting_drill.queue_free()
 	setting_drill = null
 	preview_player.transform = setter_original_transform
@@ -786,7 +820,7 @@ func open_menu() -> void:
 
 func _input(event: InputEvent) -> void:
 	if is_instance_valid(setting_drill) and event is InputEventKey and event.keycode == KEY_F8 and event.pressed and not event.echo:
-		setting_drill.mark_trace()
+		if setting_drill.mark_trace(): show_marker_popup()
 		get_viewport().set_input_as_handled()
 		return
 	if is_instance_valid(setting_drill) and event is InputEventKey and event.keycode in [KEY_F1,KEY_F2,KEY_Q,KEY_E]:
