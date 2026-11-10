@@ -391,7 +391,14 @@ func add_low_bow_controls() -> void:
 	studies.add_item("06 Low Bow")
 	for study in LopezStudies.STUDIES: studies.add_item(study[0])
 	content.add_child(studies)
-	content.add_child(button("Open swing editor",func(): open_low_bow_editor(studies.selected-1)))
+	var finish := OptionButton.new()
+	finish.name = "StudyShot"
+	finish.add_item("Line | Left hip")
+	finish.add_item("Crosscourt | Right hip")
+	finish.hide()
+	studies.item_selected.connect(func(index: int): finish.visible = index > 0)
+	content.add_child(finish)
+	content.add_child(button("Open swing editor",func(): open_low_bow_editor(studies.selected-1,finish.selected == 1)))
 
 func add_torso_lean_slider() -> void:
 	var readout := label("",16)
@@ -953,17 +960,20 @@ func orbit_setting_camera(pixels: Vector2) -> void:
 func adjust_bump_height(amount: float) -> void:
 	setting_drill.bump.height = clampf(setting_drill.bump.height+amount,1.25,20.0)
 
-func open_low_bow_editor(study := -1) -> void:
+func open_low_bow_editor(study := -1, crosscourt := false) -> void:
 	var id := LOW_BOW_EDIT_ID if study < 0 else "lopez_study_%02d" % (study+1)
 	var title: String = "06 Low Bow" if study < 0 else LopezStudies.STUDIES[study][0]
-	StorySession.edit_entry = {"id":id,"name":title,"category":"Attacking","type":"Line Hit"}
+	if study >= 0 and crosscourt:
+		id += "_cross"
+		title += " Crosscourt"
+	StorySession.edit_entry = {"id":id,"name":title,"category":"Attacking","type":"Cross Hit" if study >= 0 and crosscourt else "Line Hit"}
 	for entry in Catalog.custom_entries():
 		if entry.get("source") == id: StorySession.edit_entry = entry.duplicate(true)
 	if StorySession.edit_entry.has("path"):
 		StorySession.edit_animation = Catalog.load_clip(StorySession.edit_entry,preview_player)
 	else:
 		var base := bake_low_bow_starter(study >= 0)
-		StorySession.edit_animation = base if study < 0 else LopezStudies.bake(base,preview_player,study)
+		StorySession.edit_animation = base if study < 0 else LopezStudies.bake(base,preview_player,study,crosscourt)
 	get_tree().change_scene_to_file("res://scenes/animation_editor.tscn")
 
 func bake_low_bow_starter(include_landing := false) -> Animation:
