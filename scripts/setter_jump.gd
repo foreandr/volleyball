@@ -2,9 +2,9 @@ extends RefCounted
 
 const Court = preload("res://scripts/preview_court.gd")
 const LOAD_TIME := 0.24
-const AIR_TIME := 0.49
+const AIR_TIME := 0.56
 const LAND_TIME := 0.16
-const HEIGHT := 0.30
+const HEIGHT := 0.38
 var active := false
 var elapsed := 0.0
 var start: Vector3
@@ -61,7 +61,7 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 		var target := foot_pose.origin+travel*stagger*(1.0 if left else -1.0)+Vector3.UP*(0.085*lift+0.07*tuck)
 		author.limb(pose,"thigh_"+side,"calf_"+side,foot,target,Vector3(0.09 if left else -0.09,0.25,1.0))
 		author.set_world_basis(pose,foot,foot_pose.basis)
-		author.rotate_world(pose,"upperarm_"+side,Vector3.RIGHT,0.82*load-0.95*arm_drive)
+		author.rotate_world(pose,"upperarm_"+side,Vector3.RIGHT,1.08*load-0.95*arm_drive)
 		author.rotate_world(pose,"lowerarm_"+side,Vector3.RIGHT,-0.25*arm_drive)
 	rig.set_bone_pose_position(pelvis,pose[pelvis].origin)
 	for bone in rig.get_bone_count():
