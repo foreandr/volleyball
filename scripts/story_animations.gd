@@ -467,13 +467,15 @@ func _process(delta: float) -> void:
 			elif player_controls.receive_pose_elapsed > 0.0:
 				ball_preview.try_practice_pass(previous,preview_clock,player_controls.receive_elapsed)
 			var floor_time: float = ball_preview.contact_time+ball_preview.practice_floor_time
-			if ball_preview.crossed(preview_clock,floor_time): ball_preview.finish_practice_serve()
+			if ball_preview.practice_early_attempt and ball_preview.crossed(preview_clock,floor_time):
+				ball_preview.finish_practice_serve()
 		else:
 			step_cpu_receive(previous,delta)
-		if preview_clock >= previous and ball_preview.try_body_dig(previous,preview_clock):
+		var attempted: bool = ball_preview.practice_early_attempt
+		if preview_clock >= previous and ball_preview.try_body_dig(previous,preview_clock) and (not in_control or attempted):
 			drill_status.text = body_dig_status()
 		var approach: float = ball_preview.practice_approach(preview_clock,1.12) if in_control and ball_preview.practice_grade == BallPreview.Grade.WAITING else -1.0
-		timing_meter.update_timing(in_control,approach,player_controls.receive_pose_elapsed>0.0,ball_preview.practice_grade,delta)
+		timing_meter.update_timing(in_control and (attempted or ball_preview.practice_grade == BallPreview.Grade.WAITING),approach,player_controls.receive_pose_elapsed>0.0,ball_preview.practice_grade,delta)
 		var anticipated: float = player_controls.receive_elapsed
 		if approach >= 0.0: anticipated += (1.0-approach)*BallPreview.APPROACH_WINDOW
 		ball_preview.update_practice_cone(timing_meter.visible,anticipated)

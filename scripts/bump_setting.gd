@@ -13,6 +13,7 @@ const SpreadCone = preload("res://scripts/reception_spread_cone.gd")
 const GREEN_START := 0.035
 const GREEN_END := 0.37
 const APPROACH_TIME := 0.60
+const PLATFORM_PREP_TIME := 0.26
 
 var setter: Node3D
 var clip: Animation
@@ -132,6 +133,8 @@ func approach(path: Callable, time: float, end: float) -> float:
 		var ahead := APPROACH_TIME*index/19.0
 		if time+ahead > end: break
 		var point: Vector3 = path.call(time+ahead)
+		var next: Vector3 = path.call(time+ahead+0.005)
+		if next.y >= point.y: continue
 		var distance := point.distance_to(center)
 		if distance <= PLATFORM_RADIUS: return 1.0-ahead/APPROACH_TIME
 		if distance < nearest:
@@ -141,15 +144,15 @@ func approach(path: Callable, time: float, end: float) -> float:
 
 func update_attempt(time: float, previous: float, end: float, path: Callable, incoming: Vector3, delta: float) -> void:
 	var progress := approach(path,time,end) if grade == Timing.Grade.WAITING else -1.0
-	if is_finite(pressed_at) and not is_finite(pose_started_at) and progress >= 0.0:
-		pose_started_at = maxf(pressed_at,time-delta)
-	var elapsed := time-pose_started_at
-	if grade == Timing.Grade.WAITING:
+	var attempted := is_finite(pressed_at)
+	if attempted and grade == Timing.Grade.WAITING:
+		if not is_finite(pose_started_at) and progress >= 1.0-PLATFORM_PREP_TIME/APPROACH_TIME:
+			pose_started_at = maxf(pressed_at,time-delta)
 		var incoming_ball: Vector3 = path.call(time)
 		in_reach = in_reach or incoming_ball.distance_to(ready_contact()) <= PLATFORM_RADIUS
-	if grade == Timing.Grade.WAITING and is_finite(pressed_at) and reach.is_empty():
-		low_save.plan(setter,path,time,end,clip)
-	var striking := grade == Timing.Grade.WAITING and (low_save.active or elapsed >= 0.0) and time < end
+		if reach.is_empty(): low_save.plan(setter,path,time,end,clip)
+	var elapsed := time-pose_started_at
+	var striking := attempted and grade == Timing.Grade.WAITING and (low_save.active or is_finite(pose_started_at)) and time < end
 	if striking:
 		if low_save.active:
 			low_save.sample(setter,time,low_save.contact_time+0.07)
@@ -187,9 +190,8 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 				floor_time = Flight.landing_time(touch,outgoing)
 				net_hit = Net.first_hit(func(t): return flight_point(touch,outgoing,t),0.0,floor_time)
 				if not net_hit.is_empty(): floor_time = net_hit.end_time
-	elif grade == Timing.Grade.WAITING and time >= end:
-		if not in_reach: grade = Timing.Grade.MISS
-		else: grade = Timing.Grade.EARLY if is_finite(pressed_at) else Timing.Grade.LATE
+	elif attempted and grade == Timing.Grade.WAITING and time >= end:
+		grade = Timing.Grade.EARLY if in_reach else Timing.Grade.MISS
 	if low_save.active and not striking and not low_save.finished(time):
 		low_save.sample(setter,time,touch_time if is_finite(touch_time) else low_save.contact_time+0.07)
 	elif is_finite(touch_time) and not low_save.active:
