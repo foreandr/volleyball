@@ -6,6 +6,9 @@ const OUTER := 0.54
 var surface := ImmediateMesh.new()
 var style := StandardMaterial3D.new()
 var shown_fraction := -1.0
+var fill_color := Color("ffb72d")
+var track_color := Color("343d49")
+var outlined := false
 
 func _ready() -> void:
 	name = "StaminaRing"
@@ -22,11 +25,14 @@ func set_fraction(fraction: float) -> void:
 	shown_fraction = fraction
 	surface.clear_surfaces()
 	surface.surface_begin(Mesh.PRIMITIVE_TRIANGLES,style)
-	draw_arc(0.0,fraction,Color("ffb72d"))
-	draw_arc(fraction,1.0,Color("343d49"))
+	if outlined:
+		draw_arc(0.0,1.0,track_color,INNER-0.018,INNER)
+		draw_arc(0.0,1.0,track_color,OUTER,OUTER+0.018)
+	draw_arc(0.0,fraction,fill_color)
+	draw_arc(fraction,1.0,track_color)
 	surface.surface_end()
 
-func draw_arc(from: float, to: float, color: Color) -> void:
+func draw_arc(from: float, to: float, color: Color, inner := INNER, outer := OUTER) -> void:
 	surface.surface_set_color(color)
 	if to <= from: return
 	for index in range(floori(from*SEGMENTS),ceili(to*SEGMENTS)):
@@ -34,5 +40,5 @@ func draw_arc(from: float, to: float, color: Color) -> void:
 		var b := TAU*minf(to,float(index+1)/SEGMENTS)
 		var start := Vector3(sin(a),0,cos(a))
 		var end := Vector3(sin(b),0,cos(b))
-		for point in [start*INNER,start*OUTER,end*OUTER,start*INNER,end*OUTER,end*INNER]:
+		for point in [start*inner,start*outer,end*outer,start*inner,end*outer,end*inner]:
 			surface.surface_add_vertex(point)

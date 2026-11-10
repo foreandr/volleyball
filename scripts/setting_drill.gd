@@ -1,5 +1,7 @@
 extends Node3D
 
+const StaminaRing = preload("res://scripts/player_stamina_ring.gd")
+const RECEIVE_STAMINA_COST := [8.0,16.0,28.0]
 const Player = preload("res://scripts/volleyball_player.gd")
 const Flight = preload("res://scripts/pass_flight.gd")
 const Contact = preload("res://scripts/forearm_contact.gd")
@@ -32,6 +34,8 @@ var receiver: Node3D
 var setter: Node3D
 var status: Label
 var cpu_meter: Control
+var cpu_stamina_ring: MeshInstance3D
+var cpu_stamina := 100.0
 var ball: MeshInstance3D
 var region: MeshInstance3D
 var region_style := StandardMaterial3D.new()
@@ -80,6 +84,11 @@ func configure(player: Node3D, readout: Label, meter: Control, receiver_meter: C
 	receiver.rotation.y = receiver_yaw
 	add_child(receiver)
 	receiver.get_node("DirectionArrows").hide()
+	cpu_stamina_ring = StaminaRing.new()
+	cpu_stamina_ring.fill_color = Color.WHITE
+	cpu_stamina_ring.track_color = Color("080a0d")
+	cpu_stamina_ring.outlined = true
+	receiver.add_child(cpu_stamina_ring)
 	receiver.play_action("forearm")
 	var clip: Animation = receiver.animator.get_animation("custom_forearm/clip")
 	contact_frame = float(clip.get_meta("contact_time"))
@@ -251,6 +260,7 @@ func step(delta: float) -> void:
 	if after_pass >= start and after_pass < finish:
 		if not receiving:
 			receiving = true
+			cpu_stamina = maxf(0.0,cpu_stamina-RECEIVE_STAMINA_COST[receive_tier-1])
 			receiver.play_action("forearm")
 			receiver.animator.pause()
 		pose_receive(after_pass)
@@ -260,6 +270,8 @@ func step(delta: float) -> void:
 		receiver.position = RECEIVER_START
 		receiver.rotation.y = receiver_yaw
 		receiver.play_action("idle")
+	if not receiving or after_pass >= 0.32: cpu_stamina = minf(100.0,cpu_stamina+17.0*delta)
+	cpu_stamina_ring.set_fraction(cpu_stamina/100.0)
 	var cpu_progress := 1.0+after_pass/BallPreview.APPROACH_WINDOW
 	var cpu_grade := BallPreview.Grade.PERFECT if after_pass >= 0.0 else BallPreview.Grade.WAITING
 	cpu_meter.update_timing(true,cpu_progress,receiving,cpu_grade,delta)
