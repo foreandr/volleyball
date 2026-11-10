@@ -313,7 +313,7 @@ func receive_cue_time() -> float:
 	var jump_start := clock-stage_start-jump.elapsed
 	for iteration in range(10):
 		var midpoint := (earliest+latest)*0.5
-		var progress := clampf((midpoint-jump_start-jump.LOAD_TIME)/jump.air_time,0.0,1.0)
+		var progress := clampf((midpoint-jump_start-jump.load_duration())/jump.air_time,0.0,1.0)
 		var hand_height := height+4.0*jump.height*progress*(1.0-progress)
 		if flight_point(ATTACK_SERVE_SOURCE,serve_velocity,midpoint).y > hand_height:
 			earliest = midpoint
@@ -535,7 +535,7 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 	ball.position = flight_point(pass_origin,pass_motion,minf(time,flight_end))
 	timing_cue.update_timing(time,pin_arrival,BumpSetting.GREEN_START,BumpSetting.GREEN_END)
 	var in_air := jump.active and setter.position.y > jump.start.y+0.02
-	var air_age := maxf(0.0,jump.elapsed-jump.LOAD_TIME)
+	var air_age := maxf(0.0,jump.elapsed-jump.load_duration())
 	if in_air and not swing_practice and (air_age < 0.10 or not is_finite(swing_started)):
 		var incoming_yaw := incoming_set_heading()
 		if approach_practice:

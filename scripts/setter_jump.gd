@@ -3,6 +3,7 @@ extends RefCounted
 const HandPose = preload("res://scripts/hand_setting_pose.gd")
 const Court = preload("res://scripts/preview_court.gd")
 const LOAD_TIME := 0.24
+const APPROACH_LOAD_TIME := 0.36
 const FULL_AIR_TIME := 1.02
 const LAND_TIME := 0.16
 const FULL_HEIGHT := 1.27
@@ -63,37 +64,42 @@ func release() -> void:
 func horizontal_velocity() -> Vector3:
 	return air_velocity+heading*(stride*AIR_TRAVEL_FRACTION/air_time)
 
+func load_duration() -> float:
+	return APPROACH_LOAD_TIME if approach_plant else LOAD_TIME
+
 func step(actor: Node3D, delta: float, input: Vector2) -> void:
-	if elapsed < LOAD_TIME:
-		if held: hold_time += minf(delta,LOAD_TIME-elapsed)
+	var load_time := load_duration()
+	if elapsed < load_time:
+		if held: hold_time += minf(delta,load_time-elapsed)
 		height = lerpf(TAP_HEIGHT,max_height,clampf(hold_time/LOAD_TIME,0.0,1.0))
 		air_time = FULL_AIR_TIME*sqrt(height/FULL_HEIGHT)
-	var previous_flight := clampf(elapsed-LOAD_TIME,0.0,air_time)
+	var previous_flight := clampf(elapsed-load_time,0.0,air_time)
 	elapsed += delta
-	var air_delta := clampf(elapsed-LOAD_TIME,0.0,air_time)-previous_flight
+	var air_delta := clampf(elapsed-load_time,0.0,air_time)-previous_flight
 	if air_delta > 0.0:
 		var steering := Vector3(-input.x,0.0,input.y).limit_length()*AIR_STEER_SPEED
 		air_velocity = air_velocity.move_toward(steering,AIR_STEER_ACCELERATION*air_delta)
 		air_offset += air_velocity*air_delta
-	var flight := clampf((elapsed-LOAD_TIME)/air_time,0.0,1.0)
-	var first := smoothstep(0.015,0.12,elapsed)
-	var second := smoothstep(0.12,0.225,elapsed)
+	var flight := clampf((elapsed-load_time)/air_time,0.0,1.0)
+	var pose_time := minf(elapsed,load_time)*LOAD_TIME/load_time+maxf(0.0,elapsed-load_time)
+	var first := smoothstep(0.015,0.12,pose_time)
+	var second := smoothstep(0.12,0.225,pose_time)
 	var distance := stride*(0.34*first+0.66*second+AIR_TRAVEL_FRACTION*flight)
 	var base := start+heading*distance+Vector3.UP*(4.0*height*flight*(1.0-flight))
 	var position := base+air_offset
 	actor.position = Court.clamp_setter(position,front_limit)
 	if air_delta > 0.0: air_offset += actor.position-position
 	actor.animator.advance(delta)
-	var landing := elapsed-LOAD_TIME-air_time
+	var landing := elapsed-load_time-air_time
 	if landing >= LAND_TIME:
 		active = false
 		return
-	var load := smoothstep(0.02,0.19,elapsed)*(1.0-smoothstep(0.19,LOAD_TIME+0.055,elapsed))
+	var load := smoothstep(0.02,0.19,pose_time)*(1.0-smoothstep(0.19,LOAD_TIME+0.055,pose_time))
 	var impact := smoothstep(-0.025,0.04,landing)*(1.0-smoothstep(0.04,LAND_TIME,landing))
-	var arm_drive := smoothstep(0.17,0.37,elapsed)*(1.0-smoothstep(LOAD_TIME+air_time*0.56,LOAD_TIME+air_time*0.93,elapsed))
-	pose_jump(actor,first,second,load,impact,arm_drive)
+	var arm_drive := smoothstep(0.17,0.37,pose_time)*(1.0-smoothstep(LOAD_TIME+air_time*0.56,LOAD_TIME+air_time*0.93,pose_time))
+	pose_jump(actor,first,second,load,impact,arm_drive,pose_time,flight)
 
-func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: float, arm_drive: float) -> void:
+func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: float, arm_drive: float, pose_time: float, flight: float) -> void:
 	var rig: Skeleton3D = actor.skeleton
 	var author: RefCounted = actor.get_pose_author()
 	var pose: Array = []
@@ -107,20 +113,20 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,(0.16+load_bend_extra)*load+0.13*impact-0.22*arm_drive)
 	var travel := actor.basis.inverse()*heading*stride/scale_
 	var stagger := 0.34*(first-second)
-	var tuck := sin(PI*clampf((elapsed-LOAD_TIME)/air_time,0.0,1.0))
+	var tuck := sin(PI*flight)
 	for side in ["l","r"]:
 		var left: bool = side == "l"
 		var foot: String = "foot_"+side
 		var foot_pose: Transform3D = author.world_pose(original,rig.find_bone(foot))
 		var lift := sin(PI*first) if left else sin(PI*second)
 		var target := foot_pose.origin+travel*stagger*(1.0 if left else -1.0)+Vector3.UP*(0.085*lift+0.07*tuck)
-		if approach_plant and elapsed < LOAD_TIME+0.08:
-			var step_progress := smoothstep(0.105,0.21,elapsed) if left else smoothstep(0.015,0.105,elapsed)
+		if approach_plant and pose_time < LOAD_TIME+0.08:
+			var step_progress := smoothstep(0.105,0.21,pose_time) if left else smoothstep(0.015,0.105,pose_time)
 			var plant_from := left_foot_start if left else right_foot_start
 			var plant_to := left_plant if left else right_plant
 			var planted := plant_from.lerp(plant_to,step_progress)
 			planted.y += sin(PI*step_progress)*(0.12 if left else 0.09)
-			var release_weight := smoothstep(LOAD_TIME,LOAD_TIME+0.08,elapsed)
+			var release_weight := smoothstep(LOAD_TIME,LOAD_TIME+0.08,pose_time)
 			target = rig.to_local(planted).lerp(target,release_weight)
 		author.limb(pose,"thigh_"+side,"calf_"+side,foot,target,Vector3(0.09 if left else -0.09,0.25,1.0))
 		author.set_world_basis(pose,foot,foot_pose.basis)
