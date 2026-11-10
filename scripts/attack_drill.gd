@@ -47,6 +47,8 @@ var approach_two_step := false
 var approach_heading := Vector3.BACK
 var approach_start := APPROACH_START
 var approach_set_target := PIN
+var approach_set_apex := SET_APEX
+var approach_setup_drag := ""
 var approach_rings: Node3D
 var approach_pressed_at := -INF
 var approach_released_at := INF
@@ -134,13 +136,17 @@ func build_approach_rings() -> void:
 		ring.material_override = material
 		approach_rings.add_child(ring)
 
-func place_approach_setup(point: Vector3, place_set: bool) -> void:
+func place_approach_setup(point: Vector3, place_set: bool, restart := true) -> void:
 	var position := Court.clamp_setter(Vector3(point.x,0.04,point.z),ATTACK_FRONT_LIMIT)
 	if place_set:
 		approach_set_target = Vector3(position.x,PIN.y,position.z)
+		region.position = approach_set_target
+		region.show()
 	else:
 		approach_start = position
-	reset_feed()
+		setter.position = position
+		approach_rings.position = Vector3(position.x,0.061,position.z)
+	if restart: reset_feed()
 
 func create_ball_sound(stream: AudioStream, volume: float) -> AudioStreamPlayer:
 	var player := AudioStreamPlayer.new()
@@ -215,6 +221,7 @@ func reset_feed() -> void:
 	cpu_set.reset()
 	jump.active = false
 	approach_jump_queued = false
+	approach_setup_drag = ""
 	approach_two_step = false
 	approach_rings.visible = approach_practice
 	approach_pressed_at = -INF
@@ -445,7 +452,7 @@ func approach_ball_target() -> Vector3:
 
 func approach_time_to_plant() -> float:
 	if stage == Stage.PASS:
-		var set_flight := set_toward_pin(cpu_contact_point,approach_set_target)
+		var set_flight := set_toward_pin(cpu_contact_point,approach_set_target,approach_set_apex)
 		var set_arrival := descending_time(cpu_contact_point,set_flight,PIN_HEIGHT)
 		return stage_start+cpu_contact_time+cpu_set.hand_release_delay()+set_arrival-APPROACH_JUMP_LEAD-clock
 	return stage_start+pin_arrival-APPROACH_JUMP_LEAD-clock
@@ -644,8 +651,8 @@ func play_cpu_set(time: float, delta: float) -> void:
 		if receiver.position.distance_to(cpu_stand)>0.60:
 			shank("CPU could not reach the pass",time)
 			return
-		cpu_set.height = SET_APEX
-		var ideal := set_toward_pin(cpu_contact_point,approach_set_target if approach_practice else PIN)
+		cpu_set.height = approach_set_apex if approach_practice else SET_APEX
+		var ideal := set_toward_pin(cpu_contact_point,approach_set_target if approach_practice else PIN,cpu_set.height)
 		var target := flight_point(cpu_contact_point,ideal,Flight.landing_time(cpu_contact_point,ideal))
 		cpu_set.destination = Vector2(target.x,target.z)
 		cpu_set.begin_hand_contact(cpu_contact_point,time)
@@ -925,9 +932,9 @@ func miss(message: String) -> void:
 	swing_target.hide()
 	trace.write("attack_miss",clock,{"ball":ball.position,"player":setter.position,"closest_check":trace.closest_check},true)
 
-func set_toward_pin(origin: Vector3, pin := PIN) -> Vector3:
-	var rise := sqrt(2.0*Flight.GRAVITY*(SET_APEX-origin.y))
-	var duration := (rise+sqrt(2.0*Flight.GRAVITY*(SET_APEX-PIN_HEIGHT)))/Flight.GRAVITY
+func set_toward_pin(origin: Vector3, pin := PIN, apex := SET_APEX) -> Vector3:
+	var rise := sqrt(2.0*Flight.GRAVITY*(apex-origin.y))
+	var duration := (rise+sqrt(2.0*Flight.GRAVITY*(apex-PIN_HEIGHT)))/Flight.GRAVITY
 	return (pin-origin).slide(Vector3.UP)/duration+Vector3.UP*rise
 
 func descending_time(origin: Vector3, velocity: Vector3, height: float) -> float:

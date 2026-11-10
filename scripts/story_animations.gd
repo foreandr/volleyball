@@ -60,6 +60,7 @@ var setting_drill: Node3D
 var attack_position_panel: PanelContainer
 var attack_playback_speed := 1.0
 var setting_camera_focus := SETTING_CAMERA_FOCUS
+var approach_drag_offset := Vector3.ZERO
 var setter_original_transform: Transform3D
 var setter_original_height: float
 var setter_animation_process: int
@@ -312,7 +313,7 @@ func start_setting_drill(attack := false) -> void:
 		if attack:
 			controls_hint.visible = index != 0
 			if index == 2:
-				controls_hint.text = "WASD to approach  |  Hold Space to approach and charge\nMove mouse to aim  |  Automatic spike\nCtrl-click start  |  Shift-click set"
+				controls_hint.text = "WASD to approach  |  Hold Space to approach and charge\nMove mouse to aim  |  Automatic spike\nDrag player or set ring\nCtrl-click start  |  Shift-click set"
 				return
 			controls_hint.text = "WASD to move  |  Q forearms  |  I / E hands\nMouse to aim  |  Shift + scroll for pass height\nSpace to jump  |  Hold left-click to spike"
 			return
@@ -435,6 +436,9 @@ func show_attack_positions(modes: OptionButton) -> void:
 	var reach := add_attack_tuning_slider(positions,"Backswing reach","AttackBackswingReach","cm",0,75,1,setting_drill.backswing_reach*100.0,
 		func(value: float): setting_drill.backswing_reach = value/100.0)
 
+	var set_height := add_attack_tuning_slider(positions,"Set height","ApproachSetHeight","m",4.2,7.5,0.1,setting_drill.approach_set_apex,
+		func(value: float): setting_drill.approach_set_apex = value)
+
 	var delay := add_attack_tuning_slider(positions,"Draw delay","LowBowDrawDelay","ms",-220,240,5,setting_drill.draw_delay*1000.0,
 		func(value: float): setting_drill.draw_delay = value/1000.0)
 	var clearance := add_attack_tuning_slider(positions,"Elbow clearance","AttackElbowClearance","cm",0,36,1,setting_drill.elbow_clearance*100.0,
@@ -448,10 +452,11 @@ func show_attack_positions(modes: OptionButton) -> void:
 		preview.grab_focus())
 	reset.name = "ResetAttackTuning"
 	positions.add_child(reset)
-	var backswing_controls := positions.get_children().slice(bend.get_index()-1,reach.get_index()+1)
+	var approach_controls := positions.get_children().slice(bend.get_index()-1,reach.get_index()+1)
+	var height_controls := positions.get_children().slice(set_height.get_index()-1,set_height.get_index()+1)
 	var show_position_controls := func(index: int):
 		for control in positions.get_children():
-			control.visible = index != 2 or control in backswing_controls
+			control.visible = control in approach_controls or control in height_controls if index == 2 else control not in height_controls
 		update_speed.call()
 	modes.item_selected.connect(show_position_controls)
 	show_position_controls.call(modes.selected)
@@ -470,7 +475,8 @@ func add_attack_tuning_slider(panel_content: VBoxContainer, caption: String, nod
 	var update := func(value: float):
 		StorySession.attack_swing_tuning[node_name] = value
 		apply.call(value)
-		readout.text = "%s  %d %s" % [caption,roundi(value),units]
+		var number := "%.1f" % value if step < 1.0 else str(roundi(value))
+		readout.text = "%s  %s %s" % [caption,number,units]
 	slider.value_changed.connect(update)
 	update.call(slider.value)
 	return slider
@@ -650,6 +656,7 @@ func reception_drill_active() -> bool:
 func _process(delta: float) -> void:
 	pass_timing_cue.hide()
 	if is_instance_valid(setting_drill):
+		if selected_category == "Attacking" and not setting_drill.approach_setup_drag.is_empty(): return
 		delta *= attack_playback_speed
 		setting_drill.restore_torso_lean(preview_player)
 		player_controls.read_pace_input()
@@ -995,10 +1002,35 @@ func handle_middle_arrow(event: InputEvent) -> bool:
 		return true
 	return false
 
-func aim_attack_shot(screen_position: Vector2) -> void:
+func attack_floor_point(screen_position: Vector2) -> Variant:
 	var point: Vector2 = setup_drag.screen_position(screen_position)
-	var hit: Variant = Plane(Vector3.UP,0.055).intersects_ray(preview_camera.project_ray_origin(point),preview_camera.project_ray_normal(point))
+	return Plane(Vector3.UP,0.055).intersects_ray(preview_camera.project_ray_origin(point),preview_camera.project_ray_normal(point))
+
+func aim_attack_shot(screen_position: Vector2) -> void:
+	var hit: Variant = attack_floor_point(screen_position)
 	if hit is Vector3 and hit.z >= setting_drill.SHOT_AIM_NEAR: setting_drill.aim_swing(hit)
+
+func begin_approach_setup_drag(event: InputEventMouseButton) -> bool:
+	var hit: Variant = attack_floor_point(event.position)
+	if not hit is Vector3 or hit.z >= setting_drill.SHOT_AIM_NEAR: return false
+	var point: Vector3 = hit
+	var cursor: Vector2 = setup_drag.screen_position(event.position)
+	var feet := preview_camera.unproject_position(preview_player.position)
+	var torso := preview_camera.unproject_position(preview_player.position+Vector3.UP*1.55)
+	var on_player := cursor.distance_to(Geometry2D.get_closest_point_to_segment(cursor,feet,torso)) <= 18.0
+	var set_gap: float = (point-setting_drill.approach_set_target).slide(Vector3.UP).length()
+	var on_set: bool = set_gap <= setting_drill.REGION_RADIUS+0.10
+	var direct := not (event.shift_pressed or event.ctrl_pressed)
+	if direct and not (on_player or on_set): return false
+	var place_set := event.shift_pressed or (direct and on_set and not on_player)
+	setting_drill.approach_setup_drag = "set" if place_set else "player"
+	approach_drag_offset = Vector3.ZERO
+	if direct:
+		var center: Vector3 = setting_drill.approach_set_target if place_set else preview_player.position
+		approach_drag_offset = (center-point).slide(Vector3.UP)
+	else:
+		setting_drill.place_approach_setup(point,place_set,false)
+	return true
 
 func handle_preview_input(event: InputEvent) -> void:
 	if is_instance_valid(setting_drill):
@@ -1006,7 +1038,12 @@ func handle_preview_input(event: InputEvent) -> void:
 			open_menu()
 		elif event is InputEventMouseMotion:
 			if selected_category == "Attacking" and setting_drill.approach_practice:
-				aim_attack_shot(event.position)
+				if setting_drill.approach_setup_drag.is_empty():
+					aim_attack_shot(event.position)
+				else:
+					var hit: Variant = attack_floor_point(event.position)
+					if hit is Vector3:
+						setting_drill.place_approach_setup(hit+approach_drag_offset,setting_drill.approach_setup_drag == "set",false)
 			elif event.button_mask & MOUSE_BUTTON_MASK_MIDDLE:
 				orbit_setting_camera(event.relative)
 			elif selected_category == "Attacking" and event.button_mask & MOUSE_BUTTON_MASK_LEFT:
@@ -1019,11 +1056,8 @@ func handle_preview_input(event: InputEvent) -> void:
 					else: setting_drill.bump.destination = Court.clamp_set_aim(hit)
 		elif event is InputEventMouseButton and event.pressed:
 			if event.button_index == MOUSE_BUTTON_LEFT and selected_category == "Attacking":
-				if setting_drill.approach_practice and (event.ctrl_pressed or event.shift_pressed):
-					var point: Vector2 = setup_drag.screen_position(event.position)
-					var hit: Variant = Plane(Vector3.UP,0.055).intersects_ray(preview_camera.project_ray_origin(point),preview_camera.project_ray_normal(point))
-					if hit is Vector3 and hit.z < setting_drill.SHOT_AIM_NEAR:
-						setting_drill.place_approach_setup(hit,event.shift_pressed)
+				if setting_drill.approach_practice and begin_approach_setup_drag(event):
+					preview.accept_event()
 					return
 				aim_attack_shot(event.position)
 				setting_drill.swing_input(true)
@@ -1235,6 +1269,10 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 	if is_instance_valid(setting_drill) and selected_category == "Attacking" and event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and not event.pressed:
+		if not setting_drill.approach_setup_drag.is_empty():
+			setting_drill.reset_feed()
+			get_viewport().set_input_as_handled()
+			return
 		setting_drill.swing_input(false)
 	if is_instance_valid(setting_drill) and selected_category == "Attacking" and event is InputEventKey and event.keycode == KEY_I:
 		if event.pressed and not event.echo: setting_drill.queue_hand_receive()
