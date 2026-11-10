@@ -335,11 +335,14 @@ func aim_swing(point: Vector3) -> void:
 	swing_target.show()
 
 func swing_input(pressed: bool) -> void:
-	if swing_practice or stage != Stage.SET: return
+	if swing_practice or approach_practice or stage != Stage.SET: return
 	if not pressed:
 		if is_finite(swing_started) and not is_finite(swing_released): swing_released = clock
 		return
 	if is_finite(swing_started) and not is_finite(swing_released): return
+	start_attack_swing()
+
+func start_attack_swing() -> void:
 	swing_started = clock
 	swing_charge_started = -INF
 	swing_released = -INF
@@ -503,7 +506,7 @@ func play_cpu_set(time: float, delta: float) -> void:
 			bump.hand_setting = false
 			trace.closest_check.clear()
 			trace.closest_margin = INF
-			status.text = "Space to jump  |  Hold left-click to spike"
+			status.text = "Hold Space to jump and spike" if approach_practice else "Space to jump  |  Hold left-click to spike"
 			region.show()
 			aim_swing(swing_aim)
 			trace.write("cpu_set",clock,{"point":pass_origin,"velocity":pass_motion,"pin_arrival":pin_arrival},true)
@@ -536,6 +539,7 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 	timing_cue.update_timing(time,pin_arrival,BumpSetting.GREEN_START,BumpSetting.GREEN_END)
 	var in_air := jump.active and setter.position.y > jump.start.y+0.02
 	var air_age := maxf(0.0,jump.elapsed-jump.load_duration())
+	if approach_practice and in_air and not is_finite(swing_started): start_attack_swing()
 	if in_air and not swing_practice and (air_age < 0.10 or not is_finite(swing_started)):
 		var incoming_yaw := incoming_set_heading()
 		if approach_practice:

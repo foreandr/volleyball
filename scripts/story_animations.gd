@@ -312,7 +312,7 @@ func start_setting_drill(attack := false) -> void:
 		if attack:
 			controls_hint.visible = index != 0
 			if index == 2:
-				controls_hint.text = "WASD to approach the high set\nHold Space to jump  |  Hold left-click to spike"
+				controls_hint.text = "WASD to approach  |  Hold Space to jump\nMove mouse to aim  |  Automatic spike"
 				return
 			controls_hint.text = "WASD to move  |  Q forearms  |  I / E hands\nMouse to aim  |  Shift + scroll for pass height\nSpace to jump  |  Hold left-click to spike"
 			return
@@ -996,7 +996,9 @@ func handle_preview_input(event: InputEvent) -> void:
 		if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
 			open_menu()
 		elif event is InputEventMouseMotion:
-			if event.button_mask & MOUSE_BUTTON_MASK_MIDDLE:
+			if selected_category == "Attacking" and setting_drill.approach_practice:
+				aim_attack_shot(event.position)
+			elif event.button_mask & MOUSE_BUTTON_MASK_MIDDLE:
 				orbit_setting_camera(event.relative)
 			elif selected_category == "Attacking" and event.button_mask & MOUSE_BUTTON_MASK_LEFT:
 				aim_attack_shot(event.position)
