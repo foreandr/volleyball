@@ -19,6 +19,7 @@ const SWING_FOLLOW_TIME := 0.30
 var stage := Stage.SERVE
 var swing_practice := true
 var torso_rotation_scale := 1.50
+var leg_kickback_scale := 1.0
 var swing_button_down := false
 var stage_start := 0.0
 var serve_target: Vector3
@@ -421,13 +422,21 @@ func pose_bow_draw(weight: float, contact := Vector3.ZERO, extension := 0.0, fol
 	author.rotate_world(pose,"spine_01",Vector3.UP,turn*0.20*rotation_weight)
 	author.rotate_world(pose,"spine_02",Vector3.UP,turn*0.34*rotation_weight)
 	author.rotate_world(pose,"spine_03",Vector3.UP,turn*0.46*rotation_weight)
-	var tuck := smoothstep(0.08,0.45,setter.position.y-jump.start.y)*weight*(1.0-0.65*follow)
+	var tuck := clampf(smoothstep(0.08,0.45,setter.position.y-jump.start.y)*weight*(1.0-0.75*follow)*leg_kickback_scale,0.0,1.0)
 	if tuck > 0.0:
 		for side in ["l","r"]:
+			var thigh: String = "thigh_"+side
+			var calf: String = "calf_"+side
 			var foot: String = "foot_"+side
+			var hip: Vector3 = author.point(pose,thigh)
+			var knee: Vector3 = author.point(pose,calf)
 			var ankle: Vector3 = author.point(pose,foot)
-			var heel_back := Vector3(0.0,0.17,-0.30 if side == "r" else -0.23)
-			author.limb(pose,"thigh_"+side,"calf_"+side,foot,ankle+heel_back,Vector3(0,0.2,1),tuck)
+			var thigh_axis := (knee-hip).normalized().slerp(Vector3(0.0,-1.0,0.16).normalized(),tuck)
+			var heel_lift := (0.24 if side == "r" else 0.10)+0.78*maxf(0.0,leg_kickback_scale-1.0)
+			var shin_axis := (ankle-knee).normalized().slerp(Vector3(0.0,heel_lift,-1.0).normalized(),tuck)
+			author.aim_joint(pose,thigh,calf,hip+thigh_axis)
+			knee = author.point(pose,calf)
+			author.aim_joint(pose,calf,foot,knee+shin_axis)
 	var ball_target := rig.to_local(contact)
 	var right_shoulder: Vector3 = author.point(pose,"upperarm_r")
 	var reach := ball_target-right_shoulder

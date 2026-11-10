@@ -344,22 +344,25 @@ func start_setting_drill(attack := false) -> void:
 	setting_drill.configure(preview_player,drill_status,modes.selected == 1,build_label)
 	if attack:
 		setting_drill.bump.set_custom_backward(load_custom_backward_clip())
-		add_torso_rotation_slider()
+		add_attack_pose_slider("Torso rotation","TorsoRotation",50,setting_drill.torso_rotation_scale,
+			func(value: float): setting_drill.torso_rotation_scale = value)
+		add_attack_pose_slider("Leg kickback","LegKickback",0,setting_drill.leg_kickback_scale,
+			func(value: float): setting_drill.leg_kickback_scale = value)
 	preview.grab_focus()
 
-func add_torso_rotation_slider() -> void:
+func add_attack_pose_slider(caption: String, node_name: String, minimum: float, initial: float, apply: Callable) -> void:
 	var rotation_readout := label("",16)
 	content.add_child(rotation_readout)
 	var slider := HSlider.new()
-	slider.name = "TorsoRotation"
-	slider.min_value = 50
+	slider.name = node_name
+	slider.min_value = minimum
 	slider.max_value = 200
 	slider.step = 5
 	slider.custom_minimum_size.y = 24
-	slider.value = setting_drill.torso_rotation_scale*100.0
+	slider.value = initial*100.0
 	var update := func(value: float):
-		setting_drill.torso_rotation_scale = value/100.0
-		rotation_readout.text = "Torso rotation  |  %d%%" % roundi(value)
+		apply.call(value/100.0)
+		rotation_readout.text = "%s  |  %d%%" % [caption,roundi(value)]
 	slider.value_changed.connect(update)
 	update.call(slider.value)
 	content.add_child(slider)
