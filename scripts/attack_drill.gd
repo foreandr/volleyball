@@ -492,8 +492,8 @@ func time_two_step_plant(delta: float) -> void:
 	var air_time := jump.flight_duration(jump_height,true)
 	var contact_height := minf(ball_target.y,2.32+jump_height*0.91)
 	var contact_at := descending_time(pass_origin,pass_motion,contact_height)
-	var time_before_lift := contact_at-(clock-stage_start)-air_time*0.39
-	var plant_time := lerpf(0.30,jump.APPROACH_LOAD_TIME,distance_weight)+0.06
+	var time_before_lift := contact_at-(clock-stage_start)-air_time*0.54
+	var plant_time := lerpf(0.30,jump.APPROACH_LOAD_TIME,distance_weight)+0.15
 	if time_before_lift > plant_time+delta: return
 	approach_jump_queued = false
 	approach_intercept = ball_target
