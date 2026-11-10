@@ -8,7 +8,7 @@ static func follow_heading(target: Vector3, origin: Vector3, facing := 0.0) -> f
 	var direction := target-origin
 	return clampf(angle_difference(facing,atan2(direction.x,direction.z)),-0.95,0.95)
 
-static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float, extension: float, follow: float, draw_progress: float, arm_lift: float, line_weight: float, palm_finish: float, elbow_clearance: float, previous_roll: float, roll_step: float, shot_direction: Vector3) -> float:
+static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float, extension: float, follow: float, draw_progress: float, arm_lift: float, line_weight: float, palm_finish: float, elbow_clearance: float, previous_roll: float, roll_step: float, shot_direction: Vector3, compact_finish: float) -> float:
 	var shoulder: Vector3 = author.point(pose,"upperarm_r")
 	var draw := Vector3(-0.04,0.40,0.08).lerp(Vector3(0.02,0.05,-0.12),draw_progress)
 	var wrist_target := ball-(ball-shoulder).normalized()*0.06-shot_direction*0.11
@@ -17,7 +17,7 @@ static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float,
 	target += Vector3(-0.05,0.14,-0.10)*sin(PI*extension)
 	var finish := follow
 	var same_side := line_weight < 0.5
-	target = follow_through_target(pose,author,shoulder,target,hip_finish(pose,author,same_side),finish,same_side)
+	target = follow_through_target(pose,author,shoulder,target,hip_finish(pose,author,same_side),finish,same_side,compact_finish)
 	var elbow_pole := Vector3(-1.0,0.16,-0.84).lerp(Vector3(-0.75,0.38,-0.28),smoothstep(0.62,1.0,extension))
 	var elbow_limit := lerpf(112.0,158.0,smoothstep(0.29,0.98,extension))
 	elbow_limit = lerpf(elbow_limit,164.0 if same_side else 172.0,finish)
@@ -122,19 +122,20 @@ static func hip_finish(pose: Array, author: RefCounted, crosscourt: bool, cleara
 static func finish_elbow_pole(same_side: bool) -> Vector3:
 	return Vector3(-0.85,-0.08,-0.09) if same_side else Vector3(-0.85,0.04,-0.33)
 
-static func follow_through_target(pose: Array, author: RefCounted, shoulder: Vector3, contact: Vector3, hip: Vector3, progress: float, same_side: bool) -> Vector3:
+static func follow_through_target(pose: Array, author: RefCounted, shoulder: Vector3, contact: Vector3, hip: Vector3, progress: float, same_side: bool, compact_finish: float) -> Vector3:
 	var start := contact-shoulder
 	var end := hip-shoulder
-	var forward := (Vector3(-0.22,-0.32,0.87) if same_side else Vector3(-0.10,-0.12,1.0)).normalized()
+	var sweep_direction := Vector3(-0.22,-0.32,0.87) if same_side else Vector3(-0.10,-0.12,1.0)
+	var forward := sweep_direction.lerp(Vector3(-0.07,-0.60,0.79),compact_finish).normalized()
 	# Carry the wrist around the shoulder instead of cutting across its reach.
 	var from := start.normalized().slerp(forward,progress)
 	var toward := forward.slerp(end.normalized(),progress)
 	var direction := from.slerp(toward,progress)
-	var radius := lerpf(start.length(),end.length(),progress)+0.06*sin(PI*progress)
+	var radius := lerpf(start.length(),end.length(),progress)+lerpf(0.06,-0.09,compact_finish)*sin(PI*progress)
 	var across: Vector3 = author.point(pose,"upperarm_l")-shoulder
 	var up: Vector3 = author.point(pose,"neck_01")-author.point(pose,"spine_03")
 	var chest_forward := across.cross(up).normalized()
-	var clearance := (0.08 if same_side else 0.15)*smoothstep(0.08,0.58,progress)*(1.0-smoothstep(0.63,1.0,progress))
+	var clearance := lerpf(0.08 if same_side else 0.15,0.035,compact_finish)*smoothstep(0.08,0.58,progress)*(1.0-smoothstep(0.63,1.0,progress))
 	# Carry the arm forward of the ribs while preserving reach and both endpoints.
 	var offset := (direction*radius+chest_forward*clearance).normalized()*radius
 	var target := shoulder+offset
@@ -146,6 +147,10 @@ static func follow_through_target(pose: Array, author: RefCounted, shoulder: Vec
 		var guide := smoothstep(0.08,0.48,progress)*(1.0-smoothstep(0.78,1.0,progress))
 		target += outside*maxf(0.0,0.055-side_gap)*guide
 	return target
+
+static func compact_finish_weight(target: Vector3, origin: Vector3, same_side: bool) -> float:
+	var slope := absf(target.x-origin.x)/maxf(target.z-origin.z,0.1)
+	return 1.0-smoothstep(0.30,0.55,slope) if same_side else 1.0-smoothstep(0.065,0.27,slope)
 
 static func finish_palm_weight(target: Vector3, origin: Vector3, cross_body: bool) -> float:
 	if cross_body: return 1.0

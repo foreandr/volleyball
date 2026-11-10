@@ -558,7 +558,8 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 		# Smooth the roll through the near-vertical hand angle using game time.
 		var roll_step := deg_to_rad(2700.0)*delta
 		var shot_direction := (rig.to_local(shot_aim)-ball_target).normalized()
-		swing_palm_roll = SpikeArm.apply(pose,author,ball_target,weight,extension,follow,draw_progress,arm_lift,line_weight,palm_finish,elbow_clearance,swing_palm_roll,roll_step,shot_direction)
+		var compact_finish := SpikeArm.compact_finish_weight(shot_aim,contact,line_weight < 0.5)
+		swing_palm_roll = SpikeArm.apply(pose,author,ball_target,weight,extension,follow,draw_progress,arm_lift,line_weight,palm_finish,elbow_clearance,swing_palm_roll,roll_step,shot_direction,compact_finish)
 		var guide_drop := maxf(smoothstep(0.07,0.83,extension),smoothstep(0.0,0.62,follow))
 		SpikeArm.apply_guide_arm(pose,author,Vector3(0.06,0.43,0.64),Vector3(0.26,-0.55,0.15),guide_drop,weight,172.0)
 		if stage == Stage.HIT and follow >= 0.90:
