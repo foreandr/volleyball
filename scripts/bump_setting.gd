@@ -21,6 +21,8 @@ const PLATFORM_PREP_TIME := 0.26
 
 var setter: Node3D
 var hand_setting := false
+var catch_only := false
+var catch_airborne := false
 var setter_jumping := false
 var clip: Animation
 var contact_frame: float
@@ -98,6 +100,7 @@ func queue_bump(time: float) -> void:
 
 func movement_scale(time: float, arrival: float, ball_position: Vector3) -> float:
 	if is_finite(touch_time):
+		if catch_only: return 0.0
 		if hand_setting: return smoothstep(HandPose.RELEASE_TIME,0.25,time-touch_time)
 		return smoothstep(0.045,0.15,time-touch_time)
 	if not is_finite(pressed_at) or grade != Timing.Grade.WAITING: return 1.0
@@ -196,7 +199,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 			pose_started_at = maxf(pressed_at,time-delta)
 		if not hand_setting and not setter_jumping and reach.is_empty(): low_save.plan(setter,path,time,end,clip)
 	var elapsed := time-pose_started_at
-	var striking := attempted and grade == Timing.Grade.WAITING and (low_save.active or is_finite(pose_started_at)) and time < end
+	var striking := attempted and grade == Timing.Grade.WAITING and (low_save.active or is_finite(pose_started_at)) and time < end and (not catch_only or catch_airborne)
 	if striking:
 		if hand_setting:
 			var target := hand_intercept(path,time,end)
@@ -252,10 +255,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 				contact_spread = Timing.practice_spread(error)
 				contact_destination = destination
 				if hand_setting:
-					hand_anchor = setter.to_local(touch)
-					outgoing = aim_velocity(touch,error)
-					var endpoint := flight_point(touch,outgoing,Flight.landing_time(touch,outgoing))
-					hand_target = {"position":Vector2(endpoint.x,endpoint.z),"height":touch.y+outgoing.y*outgoing.y/(2.0*Flight.GRAVITY),"fit":"height"}
+					begin_hand_contact(touch,touch_time,error)
 				elif pancake:
 					outgoing = Timing.pancake_pop(incoming)
 					var target := Timing.pancake_target(touch,outgoing)
@@ -272,7 +272,9 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 		low_save.sample(setter,time,touch_time if is_finite(touch_time) else low_save.contact_time+0.07)
 	elif is_finite(touch_time) and not low_save.active:
 		var follow := time-touch_time
-		if hand_setting:
+		if catch_only:
+			HandPose.apply(setter,setter.to_global(hand_anchor),1.0)
+		elif hand_setting:
 			update_hand_push(time,follow)
 		elif not hand_setting and follow > 0.0 and follow < 0.36:
 			var blend := 1.0-smoothstep(0.12,0.36,follow)
@@ -280,7 +282,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 			pose_reach(smoothstep(0.0,1.0,reach_progress)*(1.0-smoothstep(0.06,0.32,follow)),touch)
 			Drive.apply(setter.skeleton,setter.get_pose_author(),outgoing,Drive.effort(incoming,outgoing),follow,true,incoming,Drive.swing_effort(touch,outgoing))
 	var recent_touch := is_finite(touch_time) and time-touch_time <= BallTimingRing.RESULT_DURATION
-	if (grade == Timing.Grade.WAITING and progress >= 0.0) or recent_touch:
+	if not catch_only and ((grade == Timing.Grade.WAITING and progress >= 0.0) or recent_touch):
 		var anticipated := (1.0-maxf(progress,0.0))*APPROACH_TIME
 		if is_finite(pressed_at): anticipated += time-pressed_at
 		var spread := contact_spread if is_finite(touch_time) else Timing.practice_spread(timing_error(anticipated))
@@ -288,6 +290,15 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 		cone.show_spread(touch if is_finite(touch_time) else ready_contact(),Vector3(target.x,0.075,target.y),spread)
 	else:
 		cone.hide()
+
+func begin_hand_contact(point: Vector3, time: float, error := 0.0) -> void:
+	touch = point
+	touch_time = time
+	hand_anchor = setter.to_local(point)
+	if catch_only: return
+	outgoing = aim_velocity(touch,error)
+	var endpoint := flight_point(touch,outgoing,Flight.landing_time(touch,outgoing))
+	hand_target = {"position":Vector2(endpoint.x,endpoint.z),"height":touch.y+outgoing.y*outgoing.y/(2.0*Flight.GRAVITY),"fit":"height"}
 
 func update_hand_push(time: float, follow: float) -> void:
 	if follow >= 0.32 and is_finite(release_time): return

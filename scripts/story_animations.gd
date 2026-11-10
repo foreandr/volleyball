@@ -209,8 +209,8 @@ func select_category(category: String) -> void:
 	preview_player.get_node("DirectionArrows").show_dive_ring = category == "Forearm reception"
 	clear_content()
 	set_title(category.to_upper())
-	if category == "Setting":
-		start_setting_drill()
+	if category in ["Setting","Spiking"]:
+		start_setting_drill(category == "Spiking")
 		return
 	var row := HBoxContainer.new()
 	row.visible = MOVE_TYPES[category].size()>1
@@ -276,7 +276,7 @@ func current_type() -> String:
 	if selected_category.is_empty(): return ""
 	return MOVE_TYPES[selected_category][type_indices.get(selected_category,0)]
 
-func start_setting_drill() -> void:
+func start_setting_drill(attack := false) -> void:
 	if player_controls.active: player_controls.set_active(false)
 	if is_instance_valid(ball_preview): ball_preview.stop()
 	right_panel.hide()
@@ -287,11 +287,13 @@ func start_setting_drill() -> void:
 	for mode in MOVE_TYPES["Setting"]: modes.add_item(mode)
 	modes.select(type_indices.get("Setting",0))
 	content.add_child(modes)
+	modes.visible = not attack
 	var controls_hint := label("",16)
 	controls_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	var show_mode := func(index: int):
 		controls_hint.text = "WASD to move  |  Tap Q to bump set\nMouse to aim  |  Scroll to change height" if index == 1 else "WASD to move  |  Tap E to set\nMouse to aim  |  Scroll to change height\nSpace jump  |  7 to 40 in"
-	show_mode.call(modes.selected)
+	if attack: controls_hint.text = "WASD to move  |  Q to receive\nSpace to jump  |  E to catch"
+	else: show_mode.call(modes.selected)
 	modes.item_selected.connect(func(index: int):
 		type_indices["Setting"] = index
 		setting_drill.set_bump_mode(index == 1)
@@ -315,10 +317,10 @@ func start_setting_drill() -> void:
 	player_controls.footwork.travel = Vector3.ZERO
 	player_controls.side_weight = 0.0
 	player_controls.side_steps.active = false
-	player_controls.indicator.text = "Setter"
+	player_controls.indicator.text = "Attacker" if attack else "Setter"
 	preview_camera.position = Vector3(0,7.5,-11.2)
 	preview_camera.look_at(SETTING_CAMERA_FOCUS)
-	setting_drill = preload("res://scripts/setting_drill.gd").new()
+	setting_drill = preload("res://scripts/attack_drill.gd").new() if attack else preload("res://scripts/setting_drill.gd").new()
 	preview_player.get_parent().add_child(setting_drill)
 	setting_drill.configure(preview_player,drill_status,modes.selected == 1,build_label)
 	preview.grab_focus()
@@ -772,12 +774,12 @@ func handle_preview_input(event: InputEvent) -> void:
 		elif event is InputEventMouseMotion:
 			if event.button_mask & MOUSE_BUTTON_MASK_MIDDLE:
 				orbit_setting_camera(event.relative)
-			else:
+			elif selected_category == "Setting":
 				var point: Vector2 = setup_drag.screen_position(event.position)
 				var hit: Variant = Plane(Vector3.UP,0.055).intersects_ray(preview_camera.project_ray_origin(point),preview_camera.project_ray_normal(point))
 				if hit is Vector3:
 					setting_drill.bump.destination = Court.clamp_set_aim(hit)
-		elif event is InputEventMouseButton and event.pressed:
+		elif selected_category == "Setting" and event is InputEventMouseButton and event.pressed:
 			if event.button_index in [MOUSE_BUTTON_WHEEL_UP,MOUSE_BUTTON_WHEEL_DOWN]:
 				adjust_bump_height((0.25 if event.button_index == MOUSE_BUTTON_WHEEL_UP else -0.25)*maxf(0.1,event.factor))
 		return
@@ -835,7 +837,7 @@ func open_editor(index := -1) -> void:
 	get_tree().change_scene_to_file("res://scenes/animation_editor.tscn")
 
 func cycle_type(direction: int) -> void:
-	if selected_category.is_empty() or selected_category == "Setting": return
+	if selected_category.is_empty() or selected_category in ["Setting","Spiking"]: return
 	type_indices[selected_category] = posmod(int(type_indices.get(selected_category,0))+direction,MOVE_TYPES[selected_category].size())
 	refresh_type()
 
@@ -860,7 +862,7 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 	if is_instance_valid(setting_drill) and event is InputEventKey and event.keycode in [KEY_F1,KEY_F2,KEY_Q,KEY_E]:
-		var set_key := KEY_Q if setting_drill.bump_enabled else KEY_E
+		var set_key: int = setting_drill.set_key()
 		if event.keycode == set_key and event.pressed and not event.echo: setting_drill.queue_set()
 		get_viewport().set_input_as_handled()
 		return
