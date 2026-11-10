@@ -16,11 +16,12 @@ static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float,
 	var target := (shoulder+raised_draw).lerp(wrist_target,extension)
 	target += Vector3(-0.05,0.14,-0.10)*sin(PI*extension)
 	var finish := follow
-	target = follow_through_target(pose,author,shoulder,target,hip_finish(pose,author,line_weight < 0.5),finish)
+	var same_side := line_weight < 0.5
+	target = follow_through_target(pose,author,shoulder,target,hip_finish(pose,author,same_side),finish,same_side)
 	var elbow_pole := Vector3(-1.0,0.16,-0.84).lerp(Vector3(-0.75,0.38,-0.28),smoothstep(0.62,1.0,extension))
 	var elbow_limit := lerpf(112.0,158.0,smoothstep(0.29,0.98,extension))
-	elbow_limit = lerpf(elbow_limit,172.0,finish)
-	elbow_pole = elbow_pole.lerp(Vector3(-0.85,0.04,-0.33),finish)
+	elbow_limit = lerpf(elbow_limit,164.0 if same_side else 172.0,finish)
+	elbow_pole = elbow_pole.lerp(finish_elbow_pole(same_side),finish)
 	var base := pose
 	if finish > 0.0:
 		pose = base.duplicate()
@@ -75,12 +76,15 @@ static func blend_arm(base: Array, target: Array, author: RefCounted, weight: fl
 static func hip_finish(pose: Array, author: RefCounted, crosscourt: bool, clearance := 0.06) -> Vector3:
 	var hip: Vector3 = author.point(pose,"thigh_r" if crosscourt else "thigh_l")
 	var side := -1.0 if crosscourt else 1.0
-	return hip+Vector3(side*clearance,0.02,0.09)
+	return hip+Vector3(side*clearance,0.08,0.16) if crosscourt else hip+Vector3(side*clearance,0.02,0.09)
 
-static func follow_through_target(pose: Array, author: RefCounted, shoulder: Vector3, contact: Vector3, hip: Vector3, progress: float) -> Vector3:
+static func finish_elbow_pole(same_side: bool) -> Vector3:
+	return Vector3(-0.85,-0.08,-0.09) if same_side else Vector3(-0.85,0.04,-0.33)
+
+static func follow_through_target(pose: Array, author: RefCounted, shoulder: Vector3, contact: Vector3, hip: Vector3, progress: float, same_side: bool) -> Vector3:
 	var start := contact-shoulder
 	var end := hip-shoulder
-	var forward := Vector3(-0.10,-0.12,1.0).normalized()
+	var forward := (Vector3(-0.38,-0.32,0.87) if same_side else Vector3(-0.10,-0.12,1.0)).normalized()
 	# Carry the wrist around the shoulder instead of cutting across its reach.
 	var from := start.normalized().slerp(forward,progress)
 	var toward := forward.slerp(end.normalized(),progress)
@@ -89,7 +93,7 @@ static func follow_through_target(pose: Array, author: RefCounted, shoulder: Vec
 	var across: Vector3 = author.point(pose,"upperarm_l")-shoulder
 	var up: Vector3 = author.point(pose,"neck_01")-author.point(pose,"spine_03")
 	var chest_forward := across.cross(up).normalized()
-	var clearance := 0.15*smoothstep(0.08,0.58,progress)*(1.0-smoothstep(0.63,1.0,progress))
+	var clearance := (0.08 if same_side else 0.15)*smoothstep(0.08,0.58,progress)*(1.0-smoothstep(0.63,1.0,progress))
 	# Carry the arm forward of the ribs while preserving reach and both endpoints.
 	var offset := (direction*radius+chest_forward*clearance).normalized()*radius
 	return shoulder+offset
@@ -109,6 +113,10 @@ static func roll_finish_palm(pose: Array, author: RefCounted, amount: float, fol
 	var thumb: Vector3 = author.point(pose,"thumb_01_r")
 	var edge := (pinky-thumb).slide(axis).normalized()
 	var pinky_target := (Vector3.DOWN if cross_body else Vector3.UP).slide(axis)
+	if not cross_body:
+		# Carry the pinky out as the hand approaches vertical so the thumb does not flip.
+		var outside: Vector3 = (author.point(pose,"upperarm_r")-author.point(pose,"upperarm_l")).normalized()
+		pinky_target += outside.slide(axis)*0.40*(1.0-smoothstep(0.18,0.52,pinky_target.length()))
 	var roll := edge.signed_angle_to(pinky_target.normalized(),axis)
 	# The two edges have no meaningful height difference when the hand points straight down.
 	var visibility := smoothstep(0.015,0.10,pinky_target.length()) if cross_body else smoothstep(0.10,0.34,pinky_target.length())
