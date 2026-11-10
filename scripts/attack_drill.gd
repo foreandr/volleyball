@@ -452,8 +452,8 @@ func pose_bow_draw(weight: float, contact: Vector3, extension := 0.0, follow := 
 	var right_shoulder: Vector3 = author.point(pose,"upperarm_r")
 	var reach := ball_target-right_shoulder
 	var lean_weight := smoothstep(0.12,0.82,extension)*(1.0-smoothstep(0.0,0.72,follow))*weight
-	var pitch := clampf((reach.z-0.18)*0.75,-0.24,0.27)*lean_weight
-	var roll := clampf(-reach.x*0.70,-0.23,0.23)*lean_weight
+	var pitch := clampf((reach.z-0.10)*0.60,-0.16,0.0)*lean_weight
+	var roll := clampf(-reach.x*0.54,-0.15,0.15)*lean_weight
 	author.rotate_world(pose,"spine_01",Vector3.RIGHT,pitch*0.62)
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,pitch*0.38)
 	author.rotate_world(pose,"spine_01",Vector3.BACK,roll*0.62)
@@ -479,8 +479,8 @@ func pose_bow_draw(weight: float, contact: Vector3, extension := 0.0, follow := 
 func hip_correction(contact: Vector3) -> Vector2:
 	var drift: Vector3 = jump.horizontal_velocity()*0.16
 	var reach := setter.to_local(contact-drift)-Vector3(-0.24,0.0,0.28)
-	var pitch := clampf(reach.z*0.43,-0.20,0.20)
-	var roll := clampf(-reach.x*0.46,-0.22,0.22)
+	var pitch := clampf(reach.z*0.43,-0.15,0.0)
+	var roll := clampf(-reach.x*0.40,-0.16,0.16)
 	return Vector2(pitch,roll)
 
 func miss(message: String) -> void:
