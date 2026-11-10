@@ -60,6 +60,7 @@ var reception_review: VBoxContainer
 var setting_drill: Node3D
 var attack_position_panel: PanelContainer
 var attack_playback_speed := 1.0
+var setting_camera_focus := SETTING_CAMERA_FOCUS
 var setter_original_transform: Transform3D
 var setter_original_height: float
 var setter_animation_process: int
@@ -343,8 +344,9 @@ func start_setting_drill(attack := false) -> void:
 	player_controls.side_weight = 0.0
 	player_controls.side_steps.active = false
 	player_controls.indicator.text = "Attacker" if attack else "Setter"
+	setting_camera_focus = SETTING_CAMERA_FOCUS
 	preview_camera.position = Vector3(0,7.5,-11.2)
-	preview_camera.look_at(SETTING_CAMERA_FOCUS)
+	preview_camera.look_at(setting_camera_focus)
 	setting_drill = preload("res://scripts/attack_drill.gd").new() if attack else preload("res://scripts/setting_drill.gd").new()
 	if attack:
 		setting_drill.swing_practice = modes.selected == 0
@@ -917,7 +919,8 @@ func handle_preview_input(event: InputEvent) -> void:
 			open_menu()
 		elif event is InputEventMouseMotion:
 			if event.button_mask & MOUSE_BUTTON_MASK_MIDDLE:
-				orbit_setting_camera(event.relative)
+				var zoom: bool = selected_category == "Attacking" and not event.shift_pressed
+				orbit_setting_camera(event.relative,zoom)
 			elif setting_drill.can_aim_set():
 				var point: Vector2 = setup_drag.screen_position(event.position)
 				var hit: Variant = Plane(Vector3.UP,0.055).intersects_ray(preview_camera.project_ray_origin(point),preview_camera.project_ray_normal(point))
@@ -965,13 +968,21 @@ func handle_preview_input(event: InputEvent) -> void:
 		return
 	super.handle_preview_input(event)
 
-func orbit_setting_camera(pixels: Vector2) -> void:
-	var offset := preview_camera.position-SETTING_CAMERA_FOCUS
+func orbit_setting_camera(pixels: Vector2, zoom := false) -> void:
+	var offset := preview_camera.position-setting_camera_focus
 	var distance := offset.length()
 	var yaw := atan2(offset.x,offset.z)-pixels.x*0.008
-	var pitch := clampf(asin(offset.y/distance)+pixels.y*0.006,0.08,1.22)
-	preview_camera.position = SETTING_CAMERA_FOCUS+Vector3(sin(yaw)*cos(pitch),sin(pitch),cos(yaw)*cos(pitch))*distance
-	preview_camera.look_at(SETTING_CAMERA_FOCUS)
+	var pitch := asin(offset.y/distance)
+	if zoom and not is_zero_approx(pixels.y):
+		distance = clampf(distance*exp(pixels.y*0.008),2.8,24.0)
+		var actor_focus := preview_player.position+Vector3.UP*2.0
+		if setting_drill.jump.active:
+			actor_focus = setting_drill.jump.start+Vector3(0.0,2.0,0.45)
+		setting_camera_focus = SETTING_CAMERA_FOCUS.lerp(actor_focus,1.0-smoothstep(4.0,14.0,distance))
+	elif not zoom:
+		pitch = clampf(pitch+pixels.y*0.006,0.08,1.22)
+	preview_camera.position = setting_camera_focus+Vector3(sin(yaw)*cos(pitch),sin(pitch),cos(yaw)*cos(pitch))*distance
+	preview_camera.look_at(setting_camera_focus)
 
 func adjust_bump_height(amount: float) -> void:
 	setting_drill.bump.height = clampf(setting_drill.bump.height+amount,1.25,20.0)

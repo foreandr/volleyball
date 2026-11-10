@@ -25,6 +25,8 @@ static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float,
 	var solve_weight := 1.0 if finish > 0.0 else weight
 	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",target,elbow_pole,solve_weight,elbow_limit)
 	drop_low_bow_elbow(pose,author,weight*draw_progress*(1.0-arm_lift)*(1.0-smoothstep(0.0,0.48,extension)))
+	var draw_wrist := 0.90*weight*(1.0-smoothstep(0.04,0.52,extension))*(1.0-follow)
+	align_wrist_to_forearm(pose,author,draw_wrist)
 	var wrist: Vector3 = author.point(pose,"hand_r")
 	var axis: Vector3 = (author.point(pose,"middle_01_r")-wrist).normalized()
 	var pinky: Vector3 = author.point(pose,"pinky_01_r")
@@ -83,7 +85,9 @@ static func follow_through_target(pose: Array, author: RefCounted, shoulder: Vec
 	return shoulder+offset
 
 static func align_finish_wrist(pose: Array, author: RefCounted, progress: float) -> void:
-	var amount := smoothstep(0.25,0.95,progress)
+	align_wrist_to_forearm(pose,author,smoothstep(0.25,0.95,progress))
+
+static func align_wrist_to_forearm(pose: Array, author: RefCounted, amount: float) -> void:
 	if amount <= 0.0: return
 	var wrist: Vector3 = author.point(pose,"hand_r")
 	var fingers: Vector3 = author.point(pose,"middle_01_r")

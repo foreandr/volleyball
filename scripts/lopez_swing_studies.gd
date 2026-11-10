@@ -117,3 +117,4 @@ static func shape(pose: Array[Transform3D], author: RefCounted, profile: Array, 
 	var trailing := Vector3(-0.34,0.48,-0.92).normalized()
 	author.aim_joint(pose,"lowerarm_r","hand_r",elbow+forearm.slerp(trailing,lead_weight))
 	SpikeArm.blend_right_arm(pose,strike_pose,author,hand_release*strike_weight)
+	SpikeArm.align_wrist_to_forearm(pose,author,0.90*windup)
