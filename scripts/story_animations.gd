@@ -420,7 +420,7 @@ func show_attack_positions(modes: OptionButton) -> void:
 	speed.custom_minimum_size.y = 24
 	positions.add_child(speed)
 	var update_speed := func():
-		attack_playback_speed = speed.value if slow_motion.button_pressed and modes.selected != 2 else 1.0
+		attack_playback_speed = speed.value if slow_motion.button_pressed else 1.0
 		slow_motion.text = "Slow motion  %.2f×" % speed.value
 	speed.value_changed.connect(func(_value: float):
 		slow_motion.set_pressed_no_signal(true)
@@ -452,7 +452,8 @@ func show_attack_positions(modes: OptionButton) -> void:
 		preview.grab_focus())
 	reset.name = "ResetAttackTuning"
 	positions.add_child(reset)
-	var approach_controls := positions.get_children().slice(bend.get_index()-1,reach.get_index()+1)
+	var approach_controls := [slow_motion,speed]
+	approach_controls.append_array(positions.get_children().slice(bend.get_index()-1,reach.get_index()+1))
 	var height_controls := positions.get_children().slice(set_height.get_index()-1,set_height.get_index()+1)
 	var show_position_controls := func(index: int):
 		for control in positions.get_children():

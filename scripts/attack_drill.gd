@@ -720,7 +720,7 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 		var charge := swing_charge()
 		status.text = "Swing power  |  %d%%" % roundi(charge*100.0)
 		var airborne := setter.position.y > jump.start.y+0.08
-		var duration := lerpf(0.21,0.09,charge)
+		var duration := lerpf(0.21,0.09,charge)+(0.035 if approach_practice else 0.0)
 		var predicted := flight_point(pass_origin,pass_motion,minf(time+duration,flight_end))
 		var toward_ball := predicted-setter.global_position
 		if not is_finite(swing_drive_started) and airborne and time >= pin_arrival-0.46:
@@ -728,7 +728,7 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 				swing_drive_started = clock
 				swing_drive_duration = duration
 				swing_hand_speed = 0.0
-		var load := smoothstep(0.0,0.18,clock-swing_charge_started)
+		var load := smoothstep(0.0,0.26 if approach_practice else 0.18,clock-swing_charge_started)
 		var estimated_contact := descending_time(pass_origin,pass_motion,PIN_HEIGHT+1.0)
 		var draw_reference := estimated_contact-5.0*LOW_BOW_FRAME
 		var hold_delay := 0.0 if swing_practice else minf(0.12,0.24-draw_delay)*charge
@@ -739,7 +739,7 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 		var arm_lift := smoothstep(lift_start,estimated_contact,time)
 		if approach_practice:
 			draw_progress = 1.0
-			arm_lift = smoothstep(minf(lift_start,estimated_contact-0.20),estimated_contact,time)
+			arm_lift = smootherstep(minf(lift_start,estimated_contact-0.30),estimated_contact,time)
 		if airborne:
 			var expected_contact := flight_point(pass_origin,pass_motion,estimated_contact)
 			var shot := swing_aim-expected_contact
@@ -750,7 +750,7 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 		var drive := clock-swing_drive_started if is_finite(swing_drive_started) else -INF
 		var approach_point := flight_point(pass_origin,pass_motion,clampf(maxf(time+0.12,pin_arrival-0.14),0.0,flight_end))
 		var drive_phase := clampf(drive/swing_drive_duration,0.0,1.0)
-		var extension := smoothstep(0.0,1.0,drive_phase*(1.18-0.18*drive_phase))
+		var extension := smootherstep(0.0,1.0,drive_phase) if approach_practice else smoothstep(0.0,1.0,drive_phase*(1.18-0.18*drive_phase))
 		if drive < 0.0:
 			pose_bow_draw(delta,load,approach_point,0.0,0.0,draw_progress,arm_lift)
 		else:
@@ -782,6 +782,10 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 		if approach_practice and not is_finite(approach_pressed_at):
 			result = "Set went untouched"
 		miss(result)
+
+func smootherstep(start: float, end: float, time: float) -> float:
+	var t := clampf((time-start)/(end-start),0.0,1.0)
+	return t*t*t*(t*(t*6.0-15.0)+10.0)
 
 func right_palm() -> Vector3:
 	var rig: Skeleton3D = setter.skeleton
