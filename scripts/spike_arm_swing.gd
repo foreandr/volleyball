@@ -7,7 +7,7 @@ const VARIANTS := [
 	["High bow, wide elbow", Vector3(-0.04,0.31,-0.17), Vector3(-1.20,0.46,-0.52), Vector3(-0.18,0.12,0.02), Vector3(0.40,-0.31,0.37), 1.45],
 	["High bow, elbow leads", Vector3(0.09,0.30,-0.20), Vector3(-0.52,0.71,-0.74), Vector3(0.07,0.14,-0.14), Vector3(0.30,-0.38,0.32), 1.85],
 	["High bow, cross-body finish", Vector3(0.07,0.33,-0.14), Vector3(-0.85,0.58,-0.60), Vector3(-0.02,0.15,-0.04), Vector3(0.53,-0.27,0.27), 1.35],
-	["Low bow", Vector3(0.04,0.17,-0.19), Vector3(-1.0,0.16,-0.84), Vector3(-0.05,0.09,-0.10), Vector3(0.24,-0.35,0.42), 1.35],
+	["Low bow", Vector3(0.15,0.05,-0.12), Vector3(-1.0,0.16,-0.84), Vector3(-0.05,0.09,-0.10), Vector3(0.24,-0.35,0.42), 1.35],
 	["Low bow, deep draw", Vector3(0.02,0.19,-0.29), Vector3(-0.80,0.19,-1.00), Vector3(-0.09,0.10,-0.16), Vector3(0.27,-0.33,0.45), 1.55],
 	["Low bow, tucked elbow", Vector3(0.12,0.17,-0.17), Vector3(-0.64,0.22,-0.83), Vector3(0.06,0.12,-0.13), Vector3(0.34,-0.39,0.34), 1.70],
 	["Low bow, outside path", Vector3(-0.13,0.20,-0.20), Vector3(-1.10,0.16,-0.65), Vector3(-0.16,0.10,-0.04), Vector3(0.12,-0.38,0.50), 1.30],
@@ -47,22 +47,16 @@ static func apply(pose: Array, author: RefCounted, index: int, ball: Vector3, we
 	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",target,elbow_pole,weight,elbow_limit)
 
 	if index == 5:
-		align_low_bow_to_net(pose,author,weight*(1.0-smoothstep(0.03,0.55,extension)))
+		tuck_low_bow_hand(pose,author,weight*(1.0-smoothstep(0.03,0.55,extension)))
 
-static func align_low_bow_to_net(pose: Array, author: RefCounted, weight: float) -> void:
+static func tuck_low_bow_hand(pose: Array, author: RefCounted, weight: float) -> void:
 	if weight <= 0.0: return
 	var rig: Skeleton3D = author.rig
-	var net_axis := (rig.global_basis.inverse()*Vector3.RIGHT).normalized()
-	var elbow: Vector3 = author.point(pose,"lowerarm_r")
 	var wrist: Vector3 = author.point(pose,"hand_r")
-	var forearm := (wrist-elbow).normalized()
-	if forearm.dot(net_axis) < 0.0: net_axis = -net_axis
-	var across := (net_axis+Vector3.UP*0.12).normalized()
-	var arm_basis: Basis = author.world_pose(pose,rig.find_bone("lowerarm_r")).basis
-	var arm_turn := Quaternion.IDENTITY.slerp(Quaternion(forearm,across),weight)
-	author.set_world_basis(pose,"lowerarm_r",Basis(arm_turn)*arm_basis)
-	wrist = author.point(pose,"hand_r")
 	var fingers: Vector3 = (author.point(pose,"middle_01_r")-wrist).normalized()
-	var hand_basis: Basis = author.world_pose(pose,rig.find_bone("hand_r")).basis
-	var hand_turn := Quaternion.IDENTITY.slerp(Quaternion(fingers,net_axis),weight)
-	author.set_world_basis(pose,"hand_r",Basis(hand_turn)*hand_basis)
+	var chest: Vector3 = author.point(pose,"spine_03")
+	var target := (chest-wrist+Vector3.DOWN*0.18).normalized()
+	var basis: Basis = author.world_pose(pose,rig.find_bone("hand_r")).basis
+	var turn := Quaternion(fingers,target)
+	var amount := minf(1.0,deg_to_rad(65.0)/maxf(turn.get_angle(),0.001))*weight
+	author.set_world_basis(pose,"hand_r",Basis(Quaternion.IDENTITY.slerp(turn,amount))*basis)
