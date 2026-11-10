@@ -52,13 +52,13 @@ func reset_feed() -> void:
 	bump.catch_only = false
 	bump.destination = Vector2(-0.55,2.2)
 	bump.height = 3.8
-	serve_target = RECEIVE_START+Vector3(0.0,1.13,0.66)
+	serve_target = RECEIVE_START+Vector3(0.0,1.13,-0.17)
 	serve_velocity = (serve_target-ATTACK_SERVE_SOURCE)/SERVE_TIME+Vector3.UP*Flight.GRAVITY*SERVE_TIME*0.5
 	ball.position = ATTACK_SERVE_SOURCE
 	region.position = PIN
 	region.hide()
 	timing_cue.hide()
-	status.text = "Receive  |  Q forearms, I hands"
+	status.text = "Receive  |  Q forearms, I / E hands"
 	trace.begin_feed({"mode":"attack_catch","source":ATTACK_SERVE_SOURCE,"serve_velocity":serve_velocity,"pin":PIN})
 
 func set_key() -> int:
@@ -68,14 +68,37 @@ func can_aim_set() -> bool:
 	return stage == Stage.SERVE and not is_finite(bump.touch_time)
 
 func queue_hand_receive() -> void:
-	if stage != Stage.SERVE or is_finite(bump.pressed_at): return
+	if stage != Stage.SERVE or is_finite(bump.touch_time): return
+	if is_finite(bump.pressed_at):
+		if bump.hand_setting or is_finite(bump.pose_started_at): return
+		bump.reset()
 	bump.hand_setting = true
 	bump.quick_hand_receive = true
 	queue_set()
 
 func receive_cue_time() -> float:
 	if not bump.hand_setting: return SERVE_TIME
-	return descending_time(ATTACK_SERVE_SOURCE,serve_velocity,RECEIVE_START.y+HandPose.CONTACT_HEIGHT+HandPose.CONTACT_RADIUS)
+	var height := RECEIVE_START.y+HandPose.CONTACT_HEIGHT+HandPose.CONTACT_RADIUS
+	var latest := descending_time(ATTACK_SERVE_SOURCE,serve_velocity,height)
+	if not jump.active: return latest
+	var earliest := descending_time(ATTACK_SERVE_SOURCE,serve_velocity,height+jump.height)
+	if earliest < 0.0: return latest
+	var jump_start := clock-stage_start-jump.elapsed
+	for iteration in range(10):
+		var midpoint := (earliest+latest)*0.5
+		var progress := clampf((midpoint-jump_start-jump.LOAD_TIME)/jump.air_time,0.0,1.0)
+		var hand_height := height+4.0*jump.height*progress*(1.0-progress)
+		if flight_point(ATTACK_SERVE_SOURCE,serve_velocity,midpoint).y > hand_height:
+			earliest = midpoint
+		else:
+			latest = midpoint
+	return latest
+
+func court_facing_weight() -> float:
+	return 0.5 if stage == Stage.PASS or stage == Stage.SET else 0.0
+
+func queue_catch() -> void:
+	if stage == Stage.SET: queue_set()
 
 func queue_set() -> void:
 	if stage != Stage.SERVE and stage != Stage.SET: return
@@ -178,7 +201,7 @@ func play_cpu_set(time: float, delta: float) -> void:
 			bump.catch_only = true
 			trace.closest_check.clear()
 			trace.closest_margin = INF
-			status.text = "Jump at the pin  |  Space, then E"
+			status.text = "Jump at the pin  |  Space, then click or E"
 			region.show()
 			trace.write("cpu_set",clock,{"point":pass_origin,"velocity":pass_motion,"pin_arrival":pin_arrival},true)
 		return

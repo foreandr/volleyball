@@ -486,7 +486,7 @@ func move_cpu_toward(travel: Vector3, delta: float, track_ball := true) -> void:
 	sprint_requested = distance>0.85
 	move_player(Vector2(direction.dot(forward.cross(Vector3.UP)),direction.dot(forward)),delta,track_ball)
 
-func move_player(direction: Vector2, delta: float, track_ball := true, setting_target := Vector3.INF, movement_scale := 1.0) -> void:
+func move_player(direction: Vector2, delta: float, track_ball := true, setting_target := Vector3.INF, movement_scale := 1.0, court_weight := 0.0) -> void:
 	var actor: Node3D = page.preview_player
 	var session = page.get_node("/root/StorySession")
 	var setting := setting_target.is_finite()
@@ -500,7 +500,7 @@ func move_player(direction: Vector2, delta: float, track_ball := true, setting_t
 		setter_travel = setter_travel.move_toward(travel*movement_scale,delta*8.0).limit_length(movement_scale)
 		travel = setter_travel
 	var step_direction := direction
-	if setting: track_setting_ball(actor,setting_target,delta)
+	if setting: track_setting_ball(actor,setting_target,delta,court_weight)
 	elif drill and track_ball: face_ball()
 	if drill or setting:
 		var facing := actor.basis.z.normalized()
@@ -559,14 +559,18 @@ func move_player(direction: Vector2, delta: float, track_ball := true, setting_t
 	if side_weight>0: side_steps.apply_pose(side_weight)
 	if active: follow_camera()
 
-func track_setting_ball(actor: Node3D, target: Vector3, delta: float) -> void:
+func track_setting_ball(actor: Node3D, target: Vector3, delta: float, court_weight := 0.0) -> void:
 	var toward := (target-actor.global_position).slide(Vector3.UP)
 	# At overhead contact, tiny changes in position should not spin the setter around.
 	var turn_rate := 8.0*smoothstep(0.25,0.95,toward.length())
 	if turn_rate > 0.0:
 		var ball_yaw := atan2(toward.x,toward.z)
 		var net_bias := clampf(angle_difference(ball_yaw,0.0)*0.15,-deg_to_rad(8.0),deg_to_rad(8.0))
-		actor.rotation.y = rotate_toward(actor.rotation.y,ball_yaw+net_bias,delta*turn_rate)
+		var yaw := ball_yaw+net_bias
+		if court_weight > 0.0:
+			var court := Vector3(0.0,0.0,8.5)-actor.global_position
+			yaw = lerp_angle(ball_yaw,atan2(court.x,court.z),court_weight)
+		actor.rotation.y = rotate_toward(actor.rotation.y,yaw,delta*turn_rate)
 
 func face_ball() -> void:
 	if not reception_drill_active(): return

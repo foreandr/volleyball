@@ -292,7 +292,7 @@ func start_setting_drill(attack := false) -> void:
 	controls_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	var show_mode := func(index: int):
 		controls_hint.text = "WASD to move  |  Tap Q to bump set\nMouse to aim  |  Scroll to change height" if index == 1 else "WASD to move  |  Tap E to set\nMouse to aim  |  Scroll to change height\nSpace jump  |  7 to 40 in"
-	if attack: controls_hint.text = "WASD to move  |  Q forearms  |  I hands\nMouse to aim  |  Scroll for pass height\nSpace to jump  |  E to catch"
+	if attack: controls_hint.text = "WASD to move  |  Q forearms  |  I / E hands\nMouse to aim  |  Scroll for pass height\nSpace to jump  |  Click or E to catch"
 	else: show_mode.call(modes.selected)
 	modes.item_selected.connect(func(index: int):
 		type_indices["Setting"] = index
@@ -460,9 +460,12 @@ func _process(delta: float) -> void:
 		setting_drill.trace_sprint = player_controls.sprint_requested
 		var diving: bool = setting_drill.setter_is_diving()
 		setting_drill.trace_move_scale = 0.0 if diving else setting_drill.setter_movement_scale()
+		var court_weight: float = setting_drill.court_facing_weight()
 		if not diving and not setting_drill.jump.active:
-			player_controls.move_player(setting_drill.trace_input,delta,false,setting_drill.ball.global_position,setting_drill.trace_move_scale)
+			player_controls.move_player(setting_drill.trace_input,delta,false,setting_drill.ball.global_position,setting_drill.trace_move_scale,court_weight)
 			setting_drill.apply_setter_arms(player_controls.footwork.phase,player_controls.moving,delta)
+		elif setting_drill.jump.active and court_weight > 0.0:
+			player_controls.track_setting_ball(preview_player,setting_drill.ball.global_position,delta,court_weight)
 		setting_drill.step_jump(delta)
 		update_jump_height_meter()
 		var jump_lift: float = preview_player.position.y-setting_drill.jump.start.y if setting_drill.jump.active else 0.0
@@ -779,8 +782,10 @@ func handle_preview_input(event: InputEvent) -> void:
 				var hit: Variant = Plane(Vector3.UP,0.055).intersects_ray(preview_camera.project_ray_origin(point),preview_camera.project_ray_normal(point))
 				if hit is Vector3:
 					setting_drill.bump.destination = Court.clamp_set_aim(hit)
-		elif setting_drill.can_aim_set() and event is InputEventMouseButton and event.pressed:
-			if event.button_index in [MOUSE_BUTTON_WHEEL_UP,MOUSE_BUTTON_WHEEL_DOWN]:
+		elif event is InputEventMouseButton and event.pressed:
+			if event.button_index == MOUSE_BUTTON_LEFT and selected_category == "Attacking":
+				setting_drill.queue_catch()
+			elif setting_drill.can_aim_set() and event.button_index in [MOUSE_BUTTON_WHEEL_UP,MOUSE_BUTTON_WHEEL_DOWN]:
 				adjust_bump_height((0.25 if event.button_index == MOUSE_BUTTON_WHEEL_UP else -0.25)*maxf(0.1,event.factor))
 		return
 	if reception_review.active:
@@ -867,7 +872,11 @@ func _input(event: InputEvent) -> void:
 		return
 	if is_instance_valid(setting_drill) and event is InputEventKey and event.keycode in [KEY_F1,KEY_F2,KEY_Q,KEY_E]:
 		var set_key: int = setting_drill.set_key()
-		if event.keycode == set_key and event.pressed and not event.echo: setting_drill.queue_set()
+		if event.pressed and not event.echo:
+			if selected_category == "Attacking" and event.keycode == KEY_E and set_key == KEY_Q:
+				setting_drill.queue_hand_receive()
+			elif event.keycode == set_key:
+				setting_drill.queue_set()
 		get_viewport().set_input_as_handled()
 		return
 	if is_instance_valid(reception_review) and event is InputEventKey and event.pressed and not event.echo and event.keycode in [KEY_F1,KEY_F2]:

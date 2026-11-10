@@ -161,6 +161,9 @@ func step_jump(delta: float) -> void:
 func can_aim_set() -> bool:
 	return true
 
+func court_facing_weight() -> float:
+	return 0.0
+
 func set_key() -> int:
 	return KEY_Q if bump_enabled else KEY_E
 
