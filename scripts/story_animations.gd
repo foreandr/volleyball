@@ -336,6 +336,7 @@ func start_setting_drill(attack := false) -> void:
 	setting_drill = preload("res://scripts/attack_drill.gd").new() if attack else preload("res://scripts/setting_drill.gd").new()
 	preview_player.get_parent().add_child(setting_drill)
 	setting_drill.configure(preview_player,drill_status,modes.selected == 1,build_label)
+	if attack: setting_drill.bump.set_custom_backward(load_custom_backward_clip())
 	preview.grab_focus()
 
 func stop_setting_drill() -> void:

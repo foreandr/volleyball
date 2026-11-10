@@ -29,6 +29,9 @@ var setter_jumping := false
 var clip: Animation
 var contact_frame: float
 var tracks: Array[Vector2i] = []
+var custom_backward: Animation
+var custom_backward_tracks: Array[Vector2i] = []
+var custom_backward_time := 0.0
 var ready_pose: Array[Transform3D] = []
 var reach := {}
 var reach_step := Vector3.ZERO
@@ -68,10 +71,9 @@ func configure(player: Node3D, animation: Animation) -> void:
 	clip = animation
 	contact_frame = float(clip.get_meta("contact_time"))
 	var rig: Skeleton3D = setter.skeleton
+	tracks = animation_tracks(clip)
 	for bone in rig.get_bone_count():
-		var path := NodePath("Armature/Skeleton3D:"+rig.get_bone_name(bone))
-		var track := Vector2i(clip.find_track(path,Animation.TYPE_POSITION_3D),clip.find_track(path,Animation.TYPE_ROTATION_3D))
-		tracks.append(track)
+		var track := tracks[bone]
 		var ready := rig.get_bone_pose(bone)
 		if track.x >= 0: ready.origin = clip.position_track_interpolate(track.x,0.0)
 		if track.y >= 0: ready.basis = Basis(clip.rotation_track_interpolate(track.y,0.0))
@@ -83,6 +85,18 @@ func configure(player: Node3D, animation: Animation) -> void:
 	cone = SpreadCone.new()
 	add_child(cone)
 	reset()
+
+func animation_tracks(animation: Animation) -> Array[Vector2i]:
+	var result: Array[Vector2i] = []
+	var rig: Skeleton3D = setter.skeleton
+	for bone in rig.get_bone_count():
+		var path := NodePath("Armature/Skeleton3D:"+rig.get_bone_name(bone))
+		result.append(Vector2i(animation.find_track(path,Animation.TYPE_POSITION_3D),animation.find_track(path,Animation.TYPE_ROTATION_3D)))
+	return result
+
+func set_custom_backward(animation: Animation) -> void:
+	custom_backward = animation
+	if animation != null: custom_backward_tracks = animation_tracks(animation)
 
 func reset() -> void:
 	contact_check.clear()
@@ -216,7 +230,12 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 			apply_pose(contact_frame+windup,smoothstep(0.0,0.09,elapsed))
 			if not setter_jumping:
 				var intercept := advance_reach(path,time,end,delta)
-				pose_reach(smoothstep(0.0,1.0,reach_progress),intercept)
+				if reach.has("custom_clip"):
+					var contact := float(custom_backward.get_meta("contact_time"))
+					custom_backward_time = lerpf(maxf(0.0,contact-0.50),contact,smoothstep(0.0,0.85,reach_progress))
+					apply_custom_backward(custom_backward_time,smoothstep(0.0,0.32,reach_progress))
+				else:
+					pose_reach(smoothstep(0.0,1.0,reach_progress),intercept)
 		var pancake := low_save.active and low_save.pancake
 		var center := LowSave.palm_center(setter) if pancake else platform_center()
 		var radius := 0.16 if pancake else contact_radius()
@@ -395,6 +414,7 @@ func plan_reach(offset: Vector3) -> void:
 	elif straight_back and tier == 2:
 		rear_setup = reach_step.normalized()*minf(0.28,reach_step.length()*0.52)
 		reach_step -= rear_setup
+		if custom_backward != null: reach.custom_clip = custom_backward.resource_name
 
 func backward_reach_active() -> bool:
 	return reach.get("backward",false) and (grade == Timing.Grade.WAITING or (is_finite(touch_time) and rear_follow < 0.25))
@@ -404,6 +424,9 @@ func follow_forearm(time: float, incoming: Vector3) -> void:
 	rear_follow = follow
 	if follow <= 0.0 or follow >= FOREARM_RECOVERY_TIME: return
 	var blend := 1.0-smoothstep(0.13,FOREARM_RECOVERY_TIME,follow)
+	if reach.has("custom_clip"):
+		apply_custom_backward(custom_backward_time+follow,blend)
+		return
 	apply_pose(contact_frame+follow,blend)
 	pose_reach(smoothstep(0.0,1.0,reach_progress)*(1.0-smoothstep(0.10,0.40,follow)),touch)
 	Drive.apply(setter.skeleton,setter.get_pose_author(),outgoing,Drive.effort(incoming,outgoing),follow,true,incoming,Drive.swing_effort(touch,outgoing))
@@ -439,12 +462,18 @@ func reach_platform(offset: Vector3) -> void:
 			var bone := rig.find_bone(part+side)
 			rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
 
+func apply_custom_backward(time: float, weight: float) -> void:
+	sample_pose(custom_backward,custom_backward_tracks,time,weight,true)
+
 func apply_pose(time: float, weight: float) -> void:
+	sample_pose(clip,tracks,time,weight,false)
+
+func sample_pose(animation: Animation, pose_tracks: Array[Vector2i], time: float, weight: float, in_place: bool) -> void:
 	var rig: Skeleton3D = setter.skeleton
-	time = clampf(time,0.0,clip.length)
-	for bone in tracks.size():
-		var track := tracks[bone]
-		if track.x >= 0:
-			rig.set_bone_pose_position(bone,rig.get_bone_pose_position(bone).lerp(clip.position_track_interpolate(track.x,time),weight))
+	time = clampf(time,0.0,animation.length)
+	for bone in pose_tracks.size():
+		var track := pose_tracks[bone]
+		if track.x >= 0 and (not in_place or bone != 0):
+			rig.set_bone_pose_position(bone,rig.get_bone_pose_position(bone).lerp(animation.position_track_interpolate(track.x,time),weight))
 		if track.y >= 0:
-			rig.set_bone_pose_rotation(bone,rig.get_bone_pose_rotation(bone).slerp(clip.rotation_track_interpolate(track.y,time),weight))
+			rig.set_bone_pose_rotation(bone,rig.get_bone_pose_rotation(bone).slerp(animation.rotation_track_interpolate(track.y,time),weight))
