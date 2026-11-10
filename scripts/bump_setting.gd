@@ -81,6 +81,17 @@ func queue_bump(time: float) -> void:
 		pressed_at = time
 		clear_reach()
 
+func movement_scale(time: float, arrival: float, ball_position: Vector3) -> float:
+	if is_finite(touch_time):
+		return smoothstep(0.045,0.15,time-touch_time)
+	if not is_finite(pressed_at) or grade != Timing.Grade.WAITING: return 1.0
+	var distance := (ball_position-setter.global_position).slide(Vector3.UP).length()
+	if distance > 1.15: return 1.0
+	# Let the reception step own the last part of the approach.
+	var lead := arrival-time
+	var brake := smoothstep(-0.11,-0.025,lead)*(1.0-smoothstep(0.025,0.16,lead))
+	return 1.0-brake
+
 func platform_center() -> Vector3:
 	var rig: Skeleton3D = setter.skeleton
 	var elbows := []

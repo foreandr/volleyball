@@ -485,7 +485,7 @@ func move_cpu_toward(travel: Vector3, delta: float, track_ball := true) -> void:
 	sprint_requested = distance>0.85
 	move_player(Vector2(direction.dot(forward.cross(Vector3.UP)),direction.dot(forward)),delta,track_ball)
 
-func move_player(direction: Vector2, delta: float, track_ball := true, setting_target := Vector3.INF) -> void:
+func move_player(direction: Vector2, delta: float, track_ball := true, setting_target := Vector3.INF, movement_scale := 1.0) -> void:
 	var actor: Node3D = page.preview_player
 	var session = page.get_node("/root/StorySession")
 	var setting := setting_target.is_finite()
@@ -496,7 +496,7 @@ func move_player(direction: Vector2, delta: float, track_ball := true, setting_t
 	var drill := reception_drill_active()
 	var travel := right*direction.x+forward*direction.y
 	if setting:
-		setter_travel = setter_travel.move_toward(travel,delta*8.0)
+		setter_travel = setter_travel.move_toward(travel*movement_scale,delta*8.0).limit_length(movement_scale)
 		travel = setter_travel
 	var step_direction := direction
 	if setting: track_setting_ball(actor,setting_target,delta)

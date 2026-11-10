@@ -135,6 +135,10 @@ func set_bump_mode(enabled: bool) -> void:
 	bump.visible = enabled
 	reset_feed()
 
+func setter_movement_scale() -> float:
+	if not bump_enabled: return 1.0
+	return bump.movement_scale(clock-0.45-SERVE_TIME,timing_arrival,ball.global_position)
+
 func setter_is_diving() -> bool:
 	return bump.low_save.active and not bump.low_save.finished(clock-0.45-SERVE_TIME)
 
