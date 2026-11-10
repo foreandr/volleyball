@@ -9,6 +9,7 @@ const Footwork = preload("res://scripts/directional_footwork.gd")
 const PIN := Vector3(3.55,0.065,3.35)
 const ATTACK_FRONT_LIMIT := 3.55
 const APPROACH_JUMP_LEAD := 0.82
+const APPROACH_START := Vector3(3.10,0.04,-0.05)
 const RECEIVE_START := Vector3(3.05,0.04,-3.10)
 const ATTACK_SERVE_SOURCE := Vector3(3.05,2.8,8.5)
 const CPU_HOME := Vector3(-0.55,0.04,3.10)
@@ -17,7 +18,7 @@ const SET_APEX := 5.0
 const SET_TOPSPIN_RPS := 2.2
 const LOW_BOW_FRAME := 1.0/30.0
 
-enum Stage { SERVE, PASS, SET, HIT, MISS, SHANK }
+enum Stage { SERVE, PASS, SET, HIT, MISS, SHANK, APPROACH_RETURN }
 const SWING_CHARGE_TIME := 0.65
 const SWING_REACH := 1.55
 const SWING_CONTACT_HEIGHT := 2.22
@@ -218,7 +219,7 @@ func reset_feed() -> void:
 	if approach_practice:
 		stage = Stage.PASS
 		bump.hide()
-		setter.position = PIN+Vector3(-0.45,RECEIVE_START.y-PIN.y,-3.4)
+		setter.position = APPROACH_START
 		pass_origin = Vector3(-2.0,1.25,-1.0)
 		face_receiver(pass_origin-receiver.position,PI)
 		cpu_stand = CPU_HOME
@@ -386,6 +387,11 @@ func approach_time_to_plant() -> float:
 
 func queued_approach_input(delta: float) -> Vector2:
 	approach_run_speed = 0.0
+	if stage == Stage.APPROACH_RETURN:
+		var offset := (APPROACH_START-setter.position).slide(Vector3.UP)
+		approach_run_speed = minf(3.2,offset.length()/delta)
+		approach_run_rate = 1.45
+		return Vector2(-offset.x,offset.z).normalized()
 	if not approach_jump_queued or stage != Stage.SET: return trace_input
 	var remaining := approach_time_to_plant()
 	var ball_target := flight_point(pass_origin,pass_motion,pin_arrival)
@@ -443,7 +449,9 @@ func step(delta: float) -> void:
 			play_pin_ball(time,previous,delta)
 		Stage.HIT: play_spike(time,delta)
 		Stage.MISS:
-			if time >= (0.26 if swing_practice else 0.85): reset_feed()
+			if time >= (0.26 if swing_practice else 0.85) and (not approach_practice or not jump.active): finish_attack_rep()
+		Stage.APPROACH_RETURN:
+			if setter.position.distance_to(APPROACH_START) < 0.04: reset_feed()
 	if stage == Stage.SERVE or stage == Stage.SET: trace.check_contact(bump.contact_check)
 	if clock >= trace.next_sample: trace.sample(clock,trace_snapshot(clock-stage_start))
 
@@ -583,7 +591,8 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 		if approach_practice:
 			var glance := clampf(angle_difference(takeoff_yaw,incoming_yaw),-deg_to_rad(25.0),deg_to_rad(25.0))
 			incoming_yaw = takeoff_yaw+glance
-		setter.rotation.y = rotate_toward(setter.rotation.y,incoming_yaw,deg_to_rad(720.0)*delta)
+		var turn_rate := 420.0 if approach_practice else 720.0
+		setter.rotation.y = rotate_toward(setter.rotation.y,incoming_yaw,deg_to_rad(turn_rate)*delta)
 	if is_finite(swing_started) and in_air:
 		if not is_finite(swing_charge_started): swing_charge_started = clock
 		var charge := swing_charge()
@@ -713,7 +722,13 @@ func play_spike(time: float, delta: float) -> void:
 	if time < SWING_FOLLOW_TIME:
 		var follow := 1.0-pow(1.0-clampf(time/0.19,0.0,1.0),2.0)
 		pose_bow_draw(delta,1.0-smoothstep(0.19,SWING_FOLLOW_TIME,time),swing_contact,swing_contact_extension,follow)
-	if time >= maxf(SWING_FOLLOW_TIME,bounce_end) and not jump.active: reset_feed()
+	if time >= maxf(SWING_FOLLOW_TIME,bounce_end) and not jump.active: finish_attack_rep()
+
+func finish_attack_rep() -> void:
+	if approach_practice:
+		stage = Stage.APPROACH_RETURN
+		return
+	reset_feed()
 
 func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0.0, follow := 0.0, draw_progress := 1.0, arm_lift := 1.0) -> void:
 	var rig: Skeleton3D = setter.skeleton
@@ -759,6 +774,7 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 	# Tilt after the leg solve so the hips carry the tucked legs into the reach.
 	var reach_weight := airborne*weight*maxf(0.72*arm_lift,extension)
 	reach_weight *= 1.0-smoothstep(0.0,0.85,follow)
+	if approach_practice: reach_weight *= 0.28
 	var lean := airborne_reach_lean(contact)*reach_weight
 	author.rotate_world(pose,"pelvis",Vector3.RIGHT,lean.x)
 	author.rotate_world(pose,"pelvis",Vector3.BACK,lean.y)
@@ -776,6 +792,7 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 		var forward_crunch := smoothstep(0.0,0.09,hit_age)
 		pitch = lerpf(pitch,deg_to_rad(30.0-torso_lean_degrees),forward_crunch)
 		pitch *= 1.0-smoothstep(0.10,0.27,hit_age)
+	if approach_practice: pitch *= 0.38
 	author.rotate_world(pose,"spine_01",Vector3.RIGHT,pitch*0.45*weight)
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,pitch*0.55*weight)
 	var neck: Vector3 = author.point(pose,"neck_01")

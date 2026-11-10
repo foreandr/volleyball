@@ -27,6 +27,7 @@ var stride := 0.0
 var air_velocity := Vector3.ZERO
 var air_offset := Vector3.ZERO
 var approach_plant := false
+var approach_lunge := Vector3.ZERO
 var right_foot_start: Vector3
 var left_foot_start: Vector3
 var right_plant: Vector3
@@ -45,6 +46,7 @@ func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF) -> void:
 	var travel := Vector3(-input.x,0,input.y)
 	stride = 0.17+0.31*travel.length()
 	heading = travel.normalized() if not travel.is_zero_approx() else actor.basis.z.normalized()
+	approach_lunge = Vector3.ZERO
 	approach_plant = ball_target.is_finite()
 	if approach_plant:
 		var rig: Skeleton3D = actor.skeleton
@@ -52,6 +54,8 @@ func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF) -> void:
 		left_foot_start = rig.to_global(rig.get_bone_global_pose(rig.find_bone("foot_l")).origin)
 		right_plant = right_foot_start+heading.slide(Vector3.UP).normalized()*stride*0.68
 		var toward_ball := (ball_target-right_plant).slide(Vector3.UP).normalized()
+		var reach := (ball_target-start-heading*stride).slide(Vector3.UP)
+		approach_lunge = reach.normalized()*clampf(reach.length()-0.12,0.0,0.64)
 		if toward_ball.is_zero_approx(): toward_ball = heading.slide(Vector3.UP).normalized()
 		left_plant = right_plant+toward_ball*0.43+Vector3.UP.cross(toward_ball)*0.19
 		right_plant.y = minf(right_foot_start.y,left_foot_start.y)
@@ -86,7 +90,8 @@ func step(actor: Node3D, delta: float, input: Vector2) -> void:
 	var second := smoothstep(0.12,0.225,pose_time)
 	var distance := stride*(0.34*first+0.66*second+AIR_TRAVEL_FRACTION*flight)
 	var base := start+heading*distance+Vector3.UP*(4.0*height*flight*(1.0-flight))
-	var position := base+air_offset
+	var lunge := approach_lunge*smoothstep(0.0,0.16,elapsed-load_time)
+	var position := base+air_offset+lunge
 	actor.position = Court.clamp_setter(position,front_limit)
 	if air_delta > 0.0: air_offset += actor.position-position
 	actor.animator.advance(delta)
