@@ -43,6 +43,10 @@ var contact_spread := 0.0
 var contact_destination := Vector2.ZERO
 var touch_time := -INF
 var touch: Vector3
+var hand_anchor: Vector3
+var hand_target := {}
+var release_time := -INF
+var release_point: Vector3
 var outgoing: Vector3
 var floor_time := 0.0
 var net_hit := {}
@@ -82,6 +86,8 @@ func reset() -> void:
 	pose_started_at = -INF
 	cone.hide()
 	touch_time = -INF
+	release_time = -INF
+	hand_target.clear()
 	net_hit.clear()
 	clear_reach()
 
@@ -92,7 +98,7 @@ func queue_bump(time: float) -> void:
 
 func movement_scale(time: float, arrival: float, ball_position: Vector3) -> float:
 	if is_finite(touch_time):
-		if hand_setting and time-touch_time < HandPose.HOLD_TIME: return 0.0
+		if hand_setting: return smoothstep(HandPose.RELEASE_TIME,0.25,time-touch_time)
 		return smoothstep(0.045,0.15,time-touch_time)
 	if not is_finite(pressed_at) or grade != Timing.Grade.WAITING: return 1.0
 	var distance := (ball_position-setter.global_position).slide(Vector3.UP).length()
@@ -246,8 +252,10 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 				contact_spread = Timing.practice_spread(error)
 				contact_destination = destination
 				if hand_setting:
-					outgoing = Vector3.ZERO
-					floor_time = HandPose.HOLD_TIME
+					hand_anchor = setter.to_local(touch)
+					outgoing = aim_velocity(touch,error)
+					var endpoint := flight_point(touch,outgoing,Flight.landing_time(touch,outgoing))
+					hand_target = {"position":Vector2(endpoint.x,endpoint.z),"height":touch.y+outgoing.y*outgoing.y/(2.0*Flight.GRAVITY),"fit":"height"}
 				elif pancake:
 					outgoing = Timing.pancake_pop(incoming)
 					var target := Timing.pancake_target(touch,outgoing)
@@ -264,15 +272,15 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 		low_save.sample(setter,time,touch_time if is_finite(touch_time) else low_save.contact_time+0.07)
 	elif is_finite(touch_time) and not low_save.active:
 		var follow := time-touch_time
-		if hand_setting and follow < HandPose.HOLD_TIME:
-			HandPose.apply(setter,touch,1.0)
+		if hand_setting:
+			update_hand_push(time,follow)
 		elif not hand_setting and follow > 0.0 and follow < 0.36:
 			var blend := 1.0-smoothstep(0.12,0.36,follow)
 			apply_pose(contact_frame+follow,blend)
 			pose_reach(smoothstep(0.0,1.0,reach_progress)*(1.0-smoothstep(0.06,0.32,follow)),touch)
 			Drive.apply(setter.skeleton,setter.get_pose_author(),outgoing,Drive.effort(incoming,outgoing),follow,true,incoming,Drive.swing_effort(touch,outgoing))
 	var recent_touch := is_finite(touch_time) and time-touch_time <= BallTimingRing.RESULT_DURATION
-	if not hand_setting and ((grade == Timing.Grade.WAITING and progress >= 0.0) or recent_touch):
+	if (grade == Timing.Grade.WAITING and progress >= 0.0) or recent_touch:
 		var anticipated := (1.0-maxf(progress,0.0))*APPROACH_TIME
 		if is_finite(pressed_at): anticipated += time-pressed_at
 		var spread := contact_spread if is_finite(touch_time) else Timing.practice_spread(timing_error(anticipated))
@@ -280,6 +288,22 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 		cone.show_spread(touch if is_finite(touch_time) else ready_contact(),Vector3(target.x,0.075,target.y),spread)
 	else:
 		cone.hide()
+
+func update_hand_push(time: float, follow: float) -> void:
+	if follow >= 0.32 and is_finite(release_time): return
+	var cushion := smoothstep(0.0,0.045,follow)*(1.0-smoothstep(0.045,0.11,follow))
+	var extension := smoothstep(0.045,HandPose.RELEASE_TIME,follow)
+	var force := smoothstep(4.0,10.0,outgoing.length())
+	var push := outgoing.normalized()*lerpf(0.12,0.33,force)*extension
+	var blend := 1.0-smoothstep(0.17,0.32,follow)
+	HandPose.apply(setter,setter.to_global(hand_anchor),blend,push,cushion)
+	if follow >= HandPose.RELEASE_TIME and not is_finite(release_time):
+		release_time = time
+		release_point = platform_center()
+		outgoing = Flight.target_velocity(release_point,hand_target,45.0)
+		floor_time = Flight.landing_time(release_point,outgoing)
+		net_hit = Net.first_hit(func(t): return flight_point(release_point,outgoing,t),0.0,floor_time)
+		if not net_hit.is_empty(): floor_time = net_hit.end_time
 
 func close_body_contact(point: Vector3, platform: Vector3) -> bool:
 	# Give green timing a little forgiveness on balls dropping inside the stance.

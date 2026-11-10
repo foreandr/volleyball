@@ -290,7 +290,7 @@ func start_setting_drill() -> void:
 	var controls_hint := label("",16)
 	controls_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	var show_mode := func(index: int):
-		controls_hint.text = "WASD to move  |  Tap Q to bump set\nMouse to aim  |  Scroll to change height" if index == 1 else "WASD to move  |  Tap E to catch\nSpace jump  |  7 to 40 in"
+		controls_hint.text = "WASD to move  |  Tap Q to bump set\nMouse to aim  |  Scroll to change height" if index == 1 else "WASD to move  |  Tap E to set\nMouse to aim  |  Scroll to change height\nSpace jump  |  7 to 40 in"
 	show_mode.call(modes.selected)
 	modes.item_selected.connect(func(index: int):
 		type_indices["Setting"] = index
@@ -772,12 +772,12 @@ func handle_preview_input(event: InputEvent) -> void:
 		elif event is InputEventMouseMotion:
 			if event.button_mask & MOUSE_BUTTON_MASK_MIDDLE:
 				orbit_setting_camera(event.relative)
-			elif setting_drill.bump_enabled:
+			else:
 				var point: Vector2 = setup_drag.screen_position(event.position)
 				var hit: Variant = Plane(Vector3.UP,0.055).intersects_ray(preview_camera.project_ray_origin(point),preview_camera.project_ray_normal(point))
 				if hit is Vector3:
 					setting_drill.bump.destination = Court.clamp_set_aim(hit)
-		elif setting_drill.bump_enabled and event is InputEventMouseButton and event.pressed:
+		elif event is InputEventMouseButton and event.pressed:
 			if event.button_index in [MOUSE_BUTTON_WHEEL_UP,MOUSE_BUTTON_WHEEL_DOWN]:
 				adjust_bump_height((0.25 if event.button_index == MOUSE_BUTTON_WHEEL_UP else -0.25)*maxf(0.1,event.factor))
 		return

@@ -4,7 +4,7 @@ const CONTACT_HEIGHT := 1.83
 const CONTACT_FORWARD := 0.23
 const CONTACT_RADIUS := 0.42
 const GREEN_CONTACT_ALLOWANCE := 0.17
-const HOLD_TIME := 0.58
+const RELEASE_TIME := 0.145
 
 static func contact_center(actor: Node3D) -> Vector3:
 	var rig: Skeleton3D = actor.skeleton
@@ -14,7 +14,7 @@ static func contact_center(actor: Node3D) -> Vector3:
 		center += rig.get_bone_global_pose(rig.find_bone("thumb_03_"+side)).origin
 	return rig.to_global(center*0.25+Vector3(0,0.075,0.07))
 
-static func apply(actor: Node3D, target: Vector3, blend: float) -> void:
+static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.ZERO, cushion := 0.0) -> void:
 	var rig: Skeleton3D = actor.skeleton
 	var author: RefCounted = actor.get_pose_author()
 	var pose: Array = []
@@ -33,11 +33,13 @@ static func apply(actor: Node3D, target: Vector3, blend: float) -> void:
 	head = author.point(pose,"Head")
 	var aim := target_local-head
 	var diamond := head+Vector3(clampf(aim.x,-0.22,0.22),clampf(aim.y-0.075,0.12,0.27),clampf(aim.z-0.07,0.09,0.35))
+	diamond += rig.global_basis.inverse()*push-Vector3.UP*0.055*cushion
+	var elbow_limit := lerpf(152.0,176.0,clampf(push.length()/0.24,0.0,1.0))-12.0*cushion
 	for side in ["l","r"]:
 		var sign_ := 1.0 if side == "l" else -1.0
 		var hand: String = "hand_"+side
 		var wrist := diamond+Vector3(sign_*0.14,-0.08,-0.015)
-		author.limb(pose,"upperarm_"+side,"lowerarm_"+side,hand,wrist,Vector3(sign_*0.9,-0.55,0.25),1.0,152.0)
+		author.limb(pose,"upperarm_"+side,"lowerarm_"+side,hand,wrist,Vector3(sign_*0.9,-0.55,0.25),1.0,elbow_limit)
 		for digit in ["thumb","index","middle","ring","pinky"]:
 			for joint in ["01","02","03"]:
 				var finger := rig.find_bone("%s_%s_%s" % [digit,joint,side])
