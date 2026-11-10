@@ -43,6 +43,7 @@ static func save_copy(clip: Animation, original: Dictionary, title: String) -> D
 	return entry
 
 static func category_name(value: String) -> String:
+	if value == "Spiking": return "Attacking"
 	return "Forearm reception" if value in ["Passing","Digging","Reception","Forearm reception"] else value
 
 static func type_name(category: String, value: String) -> String:

@@ -65,7 +65,7 @@ func step(actor: Node3D, delta: float, input: Vector2) -> void:
 		return
 	var load := smoothstep(0.02,0.19,elapsed)*(1.0-smoothstep(0.19,LOAD_TIME+0.055,elapsed))
 	var impact := smoothstep(-0.025,0.04,landing)*(1.0-smoothstep(0.04,LAND_TIME,landing))
-	var arm_drive := smoothstep(0.17,0.34,elapsed)*(1.0-smoothstep(0.40,LOAD_TIME+air_time,elapsed))
+	var arm_drive := smoothstep(0.17,0.37,elapsed)*(1.0-smoothstep(LOAD_TIME+air_time*0.56,LOAD_TIME+air_time*0.93,elapsed))
 	pose_jump(actor,first,second,load,impact,arm_drive)
 
 func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: float, arm_drive: float) -> void:
@@ -93,7 +93,7 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 		author.set_world_basis(pose,foot,foot_pose.basis)
 		var upper_arm: String = "upperarm_"+side
 		var forearm: String = "lowerarm_"+side
-		author.rotate_world(pose,upper_arm,Vector3.RIGHT,1.52*load-0.95*arm_drive)
+		author.rotate_world(pose,upper_arm,Vector3.RIGHT,1.52*load)
 		author.rotate_world(pose,forearm,Vector3.RIGHT,-0.25*arm_drive)
 		var shoulder: Vector3 = author.point(pose,upper_arm)
 		var elbow: Vector3 = author.point(pose,forearm)
@@ -103,6 +103,10 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 			var forearm_pose: Transform3D = author.world_pose(pose,rig.find_bone(forearm))
 			var straighten := Quaternion((wrist-elbow).normalized(),(elbow-shoulder).normalized())
 			author.set_world_basis(pose,forearm,Basis(Quaternion.IDENTITY.slerp(straighten,extension))*forearm_pose.basis)
+		if arm_drive > 0.0:
+			var outward := 1.0 if left else -1.0
+			var overhead := shoulder+Vector3(outward*0.08,0.62,0.09)/scale_
+			author.limb(pose,upper_arm,forearm,"hand_"+side,overhead,Vector3(outward*0.8,-0.42,0.45),arm_drive,172.0)
 	rig.set_bone_pose_position(pelvis,pose[pelvis].origin)
 	for bone in rig.get_bone_count():
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())

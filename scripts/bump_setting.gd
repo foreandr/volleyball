@@ -21,6 +21,7 @@ const PLATFORM_PREP_TIME := 0.26
 
 var setter: Node3D
 var hand_setting := false
+var quick_hand_receive := false
 var catch_only := false
 var catch_airborne := false
 var setter_jumping := false
@@ -101,7 +102,7 @@ func queue_bump(time: float) -> void:
 func movement_scale(time: float, arrival: float, ball_position: Vector3) -> float:
 	if is_finite(touch_time):
 		if catch_only: return 0.0
-		if hand_setting: return smoothstep(HandPose.RELEASE_TIME,0.25,time-touch_time)
+		if hand_setting: return smoothstep(hand_release_delay(),0.25,time-touch_time)
 		return smoothstep(0.045,0.15,time-touch_time)
 	if not is_finite(pressed_at) or grade != Timing.Grade.WAITING: return 1.0
 	var distance := (ball_position-setter.global_position).slide(Vector3.UP).length()
@@ -203,7 +204,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 	if striking:
 		if hand_setting:
 			var target := hand_intercept(path,time,end)
-			HandPose.apply(setter,target,smoothstep(0.0,0.105,elapsed))
+			HandPose.apply(setter,target,smoothstep(0.0,0.062 if quick_hand_receive else 0.105,elapsed))
 		elif low_save.active:
 			low_save.sample(setter,time,low_save.contact_time+0.07)
 		else:
@@ -300,15 +301,20 @@ func begin_hand_contact(point: Vector3, time: float, error := 0.0) -> void:
 	var endpoint := flight_point(touch,outgoing,Flight.landing_time(touch,outgoing))
 	hand_target = {"position":Vector2(endpoint.x,endpoint.z),"height":touch.y+outgoing.y*outgoing.y/(2.0*Flight.GRAVITY),"fit":"height"}
 
+func hand_release_delay() -> float:
+	return 0.078 if quick_hand_receive else HandPose.RELEASE_TIME
+
 func update_hand_push(time: float, follow: float) -> void:
 	if follow >= 0.32 and is_finite(release_time): return
-	var cushion := smoothstep(0.0,0.045,follow)*(1.0-smoothstep(0.045,0.11,follow))
-	var extension := smoothstep(0.045,HandPose.RELEASE_TIME,follow)
+	var delay := hand_release_delay()
+	var scale_ := delay/HandPose.RELEASE_TIME
+	var cushion := smoothstep(0.0,0.045*scale_,follow)*(1.0-smoothstep(0.045*scale_,0.11*scale_,follow))
+	var extension := smoothstep(0.045*scale_,delay,follow)
 	var force := smoothstep(4.0,10.0,outgoing.length())
 	var push := outgoing.normalized()*lerpf(0.12,0.33,force)*extension
 	var blend := 1.0-smoothstep(0.17,0.32,follow)
 	HandPose.apply(setter,setter.to_global(hand_anchor),blend,push,cushion)
-	if follow >= HandPose.RELEASE_TIME and not is_finite(release_time):
+	if follow >= delay and not is_finite(release_time):
 		release_time = time
 		release_point = platform_center()
 		outgoing = Flight.target_velocity(release_point,hand_target,45.0)

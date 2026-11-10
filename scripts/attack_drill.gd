@@ -3,8 +3,9 @@ extends "res://scripts/setting_drill.gd"
 const Court = preload("res://scripts/preview_court.gd")
 const HandPose = preload("res://scripts/hand_setting_pose.gd")
 const Footwork = preload("res://scripts/directional_footwork.gd")
-const PIN := Vector3(-3.55,0.065,2.3)
-const RECEIVE_START := Vector3(0.65,0.04,-3.10)
+const PIN := Vector3(3.55,0.065,2.3)
+const RECEIVE_START := Vector3(3.05,0.04,-3.10)
+const ATTACK_SERVE_SOURCE := Vector3(3.05,2.8,8.5)
 const CPU_HOME := Vector3(-0.55,0.04,1.15)
 const PIN_HEIGHT := 2.75
 const SET_APEX := 4.5
@@ -45,26 +46,41 @@ func reset_feed() -> void:
 	setter.position = RECEIVE_START
 	setter.rotation.y = 0.0
 	bump.reset()
+	bump.show()
 	bump.hand_setting = false
+	bump.quick_hand_receive = false
 	bump.catch_only = false
 	bump.destination = Vector2(-0.55,2.2)
 	bump.height = 3.8
 	serve_target = RECEIVE_START+Vector3(0.0,1.13,0.66)
-	serve_velocity = (serve_target-SOURCE)/SERVE_TIME+Vector3.UP*Flight.GRAVITY*SERVE_TIME*0.5
-	ball.position = SOURCE
+	serve_velocity = (serve_target-ATTACK_SERVE_SOURCE)/SERVE_TIME+Vector3.UP*Flight.GRAVITY*SERVE_TIME*0.5
+	ball.position = ATTACK_SERVE_SOURCE
 	region.position = PIN
 	region.hide()
 	timing_cue.hide()
-	status.text = "Receive the serve  |  Q"
-	trace.begin_feed({"mode":"attack_catch","source":SOURCE,"serve_velocity":serve_velocity,"pin":PIN})
+	status.text = "Receive  |  Q forearms, I hands"
+	trace.begin_feed({"mode":"attack_catch","source":ATTACK_SERVE_SOURCE,"serve_velocity":serve_velocity,"pin":PIN})
 
 func set_key() -> int:
 	return KEY_Q if stage == Stage.SERVE else KEY_E
 
+func can_aim_set() -> bool:
+	return stage == Stage.SERVE and not is_finite(bump.touch_time)
+
+func queue_hand_receive() -> void:
+	if stage != Stage.SERVE or is_finite(bump.pressed_at): return
+	bump.hand_setting = true
+	bump.quick_hand_receive = true
+	queue_set()
+
+func receive_cue_time() -> float:
+	if not bump.hand_setting: return SERVE_TIME
+	return descending_time(ATTACK_SERVE_SOURCE,serve_velocity,RECEIVE_START.y+HandPose.CONTACT_HEIGHT+HandPose.CONTACT_RADIUS)
+
 func queue_set() -> void:
 	if stage != Stage.SERVE and stage != Stage.SET: return
 	bump.queue_bump(clock-stage_start)
-	trace.write("attack_input",clock,{"stage":stage,"position":setter.position,"ball":ball.position},true)
+	trace.write("attack_input",clock,{"stage":stage,"technique":"hands" if bump.hand_setting else "forearms","aim":bump.destination,"height":bump.height,"position":setter.position,"ball":ball.position},true)
 
 func setter_is_diving() -> bool:
 	return stage == Stage.SERVE and bump.low_save.active and not bump.low_save.finished(clock-stage_start)
@@ -76,7 +92,7 @@ func queue_jump(direction: Vector2) -> void:
 
 func setter_movement_scale() -> float:
 	if stage == Stage.SERVE:
-		return bump.movement_scale(clock-stage_start,SERVE_TIME,ball.position)
+		return bump.movement_scale(clock-stage_start,receive_cue_time(),ball.position)
 	return 1.0
 
 func step(delta: float) -> void:
@@ -113,13 +129,18 @@ func trace_snapshot(time: float) -> Dictionary:
 	}
 
 func play_serve(time: float, previous: float, delta: float) -> void:
-	var path := func(t): return flight_point(SOURCE,serve_velocity,t)
-	var end := Flight.landing_time(SOURCE,serve_velocity)
+	var path := func(t): return flight_point(ATTACK_SERVE_SOURCE,serve_velocity,t)
+	var end := Flight.landing_time(ATTACK_SERVE_SOURCE,serve_velocity)
 	ball.position = path.call(minf(time,end))
-	timing_cue.update_timing(time,SERVE_TIME,BallPreview.GREEN_START,BallPreview.GREEN_END)
-	bump.update_attempt(time,previous,end,path,serve_velocity+Vector3.DOWN*Flight.GRAVITY*time,delta,SERVE_TIME)
+	var cue := receive_cue_time()
+	timing_cue.update_timing(time,cue,BumpSetting.GREEN_START,BumpSetting.GREEN_END)
+	bump.update_aim()
+	bump.update_attempt(time,previous,end,path,serve_velocity+Vector3.DOWN*Flight.GRAVITY*time,delta,cue)
 	if is_finite(bump.touch_time):
-		pass_origin = bump.touch
+		if bump.hand_setting and not is_finite(bump.release_time):
+			ball.position = bump.touch.lerp(bump.platform_center(),smoothstep(0.0,0.05,time-bump.touch_time))
+			return
+		pass_origin = bump.release_point if bump.hand_setting else bump.touch
 		pass_motion = bump.outgoing
 		var head_height := CPU_HOME.y+HandPose.CONTACT_HEIGHT
 		cpu_contact_time = descending_time(pass_origin,pass_motion,head_height)
@@ -127,6 +148,10 @@ func play_serve(time: float, previous: float, delta: float) -> void:
 			miss("Pass was too low to set")
 			return
 		cpu_contact_point = flight_point(pass_origin,pass_motion,cpu_contact_time)
+		if cpu_contact_point.z >= 3.75 or (not bump.net_hit.is_empty() and bump.net_hit.time < cpu_contact_time):
+			miss("Pass went past the setter")
+			return
+		bump.hide()
 		var incoming := (pass_origin-cpu_contact_point).slide(Vector3.UP).normalized()
 		cpu_stand = Court.clamp_setter(Vector3(cpu_contact_point.x,CPU_HOME.y,cpu_contact_point.z)-incoming*HandPose.CONTACT_FORWARD)
 		receiver.rotation.y = atan2(incoming.x,incoming.z)
@@ -165,6 +190,9 @@ func play_cpu_set(time: float, delta: float) -> void:
 	if lead <= 0.22:
 		HandPose.apply(receiver,cpu_contact_point,1.0-smoothstep(0.0,0.22,lead))
 	if time >= cpu_contact_time:
+		if receiver.position.distance_to(cpu_stand)>0.60:
+			miss("CPU could not reach the pass")
+			return
 		cpu_set.height = SET_APEX
 		var ideal := set_toward_pin(cpu_contact_point)
 		var target := flight_point(cpu_contact_point,ideal,Flight.landing_time(cpu_contact_point,ideal))

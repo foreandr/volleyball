@@ -9,13 +9,13 @@ const ForwardDive = preload("res://scripts/forward_reception_dive.gd")
 const Catalog = preload("res://scripts/volleyball_animations.gd")
 const MOVE_TYPES := {
 	"Forearm reception":["Forearm"],
-	"Spiking":["Line Hit","Cross Hit"],
+	"Attacking":["Line Hit","Cross Hit"],
 	"Serving":["Float","Spin","Hybrid","Skyball","Underhand","Standing Float","Standing Spin"],
 	"Blocking":["Straight","Left","Right"],
 	"Setting":["Hand setting","Bump setting"],
 	"Chasing":["Forward","Back","Left","Right"]
 }
-const CATEGORIES := ["Forearm reception","Setting","Serving","Blocking","Spiking","Chasing"]
+const CATEGORIES := ["Forearm reception","Setting","Serving","Blocking","Attacking","Chasing"]
 var content: VBoxContainer
 var category_buttons: Dictionary = {}
 var selected_category := ""
@@ -209,8 +209,8 @@ func select_category(category: String) -> void:
 	preview_player.get_node("DirectionArrows").show_dive_ring = category == "Forearm reception"
 	clear_content()
 	set_title(category.to_upper())
-	if category in ["Setting","Spiking"]:
-		start_setting_drill(category == "Spiking")
+	if category in ["Setting","Attacking"]:
+		start_setting_drill(category == "Attacking")
 		return
 	var row := HBoxContainer.new()
 	row.visible = MOVE_TYPES[category].size()>1
@@ -292,7 +292,7 @@ func start_setting_drill(attack := false) -> void:
 	controls_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	var show_mode := func(index: int):
 		controls_hint.text = "WASD to move  |  Tap Q to bump set\nMouse to aim  |  Scroll to change height" if index == 1 else "WASD to move  |  Tap E to set\nMouse to aim  |  Scroll to change height\nSpace jump  |  7 to 40 in"
-	if attack: controls_hint.text = "WASD to move  |  Q to receive\nSpace to jump  |  E to catch"
+	if attack: controls_hint.text = "WASD to move  |  Q forearms  |  I hands\nMouse to aim  |  Scroll for pass height\nSpace to jump  |  E to catch"
 	else: show_mode.call(modes.selected)
 	modes.item_selected.connect(func(index: int):
 		type_indices["Setting"] = index
@@ -774,12 +774,12 @@ func handle_preview_input(event: InputEvent) -> void:
 		elif event is InputEventMouseMotion:
 			if event.button_mask & MOUSE_BUTTON_MASK_MIDDLE:
 				orbit_setting_camera(event.relative)
-			elif selected_category == "Setting":
+			elif setting_drill.can_aim_set():
 				var point: Vector2 = setup_drag.screen_position(event.position)
 				var hit: Variant = Plane(Vector3.UP,0.055).intersects_ray(preview_camera.project_ray_origin(point),preview_camera.project_ray_normal(point))
 				if hit is Vector3:
 					setting_drill.bump.destination = Court.clamp_set_aim(hit)
-		elif selected_category == "Setting" and event is InputEventMouseButton and event.pressed:
+		elif setting_drill.can_aim_set() and event is InputEventMouseButton and event.pressed:
 			if event.button_index in [MOUSE_BUTTON_WHEEL_UP,MOUSE_BUTTON_WHEEL_DOWN]:
 				adjust_bump_height((0.25 if event.button_index == MOUSE_BUTTON_WHEEL_UP else -0.25)*maxf(0.1,event.factor))
 		return
@@ -837,7 +837,7 @@ func open_editor(index := -1) -> void:
 	get_tree().change_scene_to_file("res://scenes/animation_editor.tscn")
 
 func cycle_type(direction: int) -> void:
-	if selected_category.is_empty() or selected_category in ["Setting","Spiking"]: return
+	if selected_category.is_empty() or selected_category in ["Setting","Attacking"]: return
 	type_indices[selected_category] = posmod(int(type_indices.get(selected_category,0))+direction,MOVE_TYPES[selected_category].size())
 	refresh_type()
 
@@ -849,6 +849,10 @@ func open_menu() -> void:
 	else: get_tree().change_scene_to_file("res://scenes/story.tscn")
 
 func _input(event: InputEvent) -> void:
+	if is_instance_valid(setting_drill) and selected_category == "Attacking" and event is InputEventKey and event.keycode == KEY_I:
+		if event.pressed and not event.echo: setting_drill.queue_hand_receive()
+		get_viewport().set_input_as_handled()
+		return
 	if is_instance_valid(setting_drill) and event is InputEventKey and event.keycode == KEY_SPACE:
 		if event.pressed and not event.echo:
 			setting_drill.queue_jump(player_controls.movement_input())

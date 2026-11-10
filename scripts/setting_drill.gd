@@ -158,6 +158,9 @@ func step_jump(delta: float) -> void:
 	if jump.active: jump.step(setter,delta,trace_input)
 	bump.setter_jumping = jump.active
 
+func can_aim_set() -> bool:
+	return true
+
 func set_key() -> int:
 	return KEY_Q if bump_enabled else KEY_E
 
