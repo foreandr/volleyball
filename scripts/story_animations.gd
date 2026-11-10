@@ -400,6 +400,9 @@ func show_attack_positions() -> void:
 	slow_motion.toggled.connect(func(_enabled: bool): update_speed.call())
 	update_speed.call()
 
+	add_attack_tuning_slider(positions,"Ball bounciness","AttackBallBounciness","%",25,400,5,setting_drill.ball_bounciness*100.0,
+		func(value: float): setting_drill.ball_bounciness = value/100.0)
+
 	var delay := add_attack_tuning_slider(positions,"Draw delay","LowBowDrawDelay","ms",-220,240,5,setting_drill.draw_delay*1000.0,
 		func(value: float): setting_drill.draw_delay = value/1000.0)
 	var clearance := add_attack_tuning_slider(positions,"Elbow clearance","AttackElbowClearance","cm",0,36,1,setting_drill.elbow_clearance*100.0,

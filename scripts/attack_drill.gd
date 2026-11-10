@@ -20,6 +20,7 @@ const SWING_REACH := 1.55
 const SWING_CONTACT_HEIGHT := 2.22
 const PALM_RADIUS := 0.065
 const SWING_FOLLOW_TIME := 0.49
+const DEFAULT_BOUNCINESS := 1.75
 const SHOT_AIM_HALF_WIDTH := 7.5
 const SHOT_AIM_NEAR := 4.3
 const SHOT_AIM_FAR := 16.0
@@ -61,6 +62,8 @@ var swing_contact: Vector3
 var swing_contact_extension := 1.0
 var swing_power := 0.0
 var spike_topspin_rps := 0.0
+var ball_bounciness := DEFAULT_BOUNCINESS
+var spike_bounce_speed := 0.0
 var swing_net_hit := {}
 var dynamic_net: Node3D
 var net_audio: AudioStreamPlayer
@@ -511,6 +514,7 @@ func hand_contact_fraction(before: Vector3, after: Vector3) -> float:
 	return entry if entry >= 0.0 and entry <= 1.0 else -1.0
 
 func hit_spike(charge: float, point: Vector3) -> void:
+	spike_bounce_speed = 0.0
 	swing_contact = point
 	ball.position = point
 	swing_power = charge
@@ -550,8 +554,9 @@ func play_spike(time: float, delta: float) -> void:
 		var fall_time := float(swing_net_hit.drop_time) if hit_net else landing_time
 		var landing_velocity: Vector3 = swing_net_hit.velocity if hit_net else pass_motion
 		landing_velocity += Vector3.DOWN*Flight.GRAVITY*fall_time
-		var bounce_speed := clampf(-landing_velocity.y*0.58,3.8,6.5)
-		var bounce_velocity := landing_velocity.slide(Vector3.UP)*0.25+Vector3.UP*bounce_speed
+		if spike_bounce_speed == 0.0:
+			spike_bounce_speed = clampf(-landing_velocity.y*0.58,3.8,6.5)*sqrt(ball_bounciness)
+		var bounce_velocity := landing_velocity.slide(Vector3.UP)*0.25+Vector3.UP*spike_bounce_speed
 		var bounce_time := Flight.landing_time(ground,bounce_velocity)
 		bounce_end += bounce_time
 		ball.position = flight_point(ground,bounce_velocity,minf(time-landing_time,bounce_time))
