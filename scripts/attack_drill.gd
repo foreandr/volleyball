@@ -383,7 +383,8 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 		var estimated_contact := descending_time(pass_origin,pass_motion,PIN_HEIGHT+1.0)
 		var draw_end := estimated_contact-5.0*LOW_BOW_FRAME+draw_delay
 		var draw_progress := smoothstep(draw_end-7.0*LOW_BOW_FRAME,draw_end,time)
-		var arm_lift := smoothstep(draw_end-LOW_BOW_FRAME,estimated_contact,time)
+		var lift_start := minf(draw_end-LOW_BOW_FRAME,estimated_contact-0.04)
+		var arm_lift := smoothstep(lift_start,estimated_contact,time)
 		var drive := clock-swing_drive_started if is_finite(swing_drive_started) else -INF
 		var approach_point := flight_point(pass_origin,pass_motion,clampf(maxf(time+0.12,pin_arrival-0.14),0.0,flight_end))
 		var drive_phase := clampf(drive/swing_drive_duration,0.0,1.0)

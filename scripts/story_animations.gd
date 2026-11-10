@@ -399,9 +399,9 @@ func show_attack_positions() -> void:
 	slow_motion.toggled.connect(func(_enabled: bool): update_speed.call())
 	update_speed.call()
 
-	var delay := add_attack_tuning_slider(positions,"Draw delay","LowBowDrawDelay","ms",180,5,setting_drill.draw_delay*1000.0,
+	var delay := add_attack_tuning_slider(positions,"Draw delay","LowBowDrawDelay","ms",-220,240,5,setting_drill.draw_delay*1000.0,
 		func(value: float): setting_drill.draw_delay = value/1000.0)
-	var clearance := add_attack_tuning_slider(positions,"Elbow clearance","AttackElbowClearance","cm",36,1,setting_drill.elbow_clearance*100.0,
+	var clearance := add_attack_tuning_slider(positions,"Elbow clearance","AttackElbowClearance","cm",0,36,1,setting_drill.elbow_clearance*100.0,
 		func(value: float): setting_drill.elbow_clearance = value/100.0)
 
 	var reset := button("Reset swing tuning",func():
@@ -411,11 +411,12 @@ func show_attack_positions() -> void:
 	reset.name = "ResetAttackTuning"
 	positions.add_child(reset)
 
-func add_attack_tuning_slider(panel_content: VBoxContainer, caption: String, node_name: String, units: String, maximum: float, step: float, initial: float, apply: Callable) -> HSlider:
+func add_attack_tuning_slider(panel_content: VBoxContainer, caption: String, node_name: String, units: String, minimum: float, maximum: float, step: float, initial: float, apply: Callable) -> HSlider:
 	var readout := label("",16)
 	panel_content.add_child(readout)
 	var slider := HSlider.new()
 	slider.name = node_name
+	slider.min_value = minimum
 	slider.max_value = maximum
 	slider.step = step
 	slider.value = StorySession.attack_swing_tuning.get(node_name,initial)
