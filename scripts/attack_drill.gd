@@ -37,6 +37,7 @@ const SHOT_AIM_FAR := 16.0
 var stage := Stage.SERVE
 var swing_practice := true
 var approach_practice := false
+var takeoff_yaw := 0.0
 var shot_sequence_index := -1
 var manual_shot_aim := Vector3.ZERO
 var practice_takeoff := PIN+Vector3(-0.70,RECEIVE_START.y-PIN.y,-0.98)
@@ -211,6 +212,7 @@ func reset_feed() -> void:
 		bump.hide()
 		setter.position = PIN+Vector3(-0.45,RECEIVE_START.y-PIN.y,-3.4)
 		pass_origin = Vector3(-2.0,1.25,-1.0)
+		face_receiver(pass_origin-receiver.position,PI)
 		cpu_stand = CPU_HOME
 		var incoming := (pass_origin-cpu_stand).slide(Vector3.UP).normalized()
 		cpu_contact_point = cpu_stand+incoming*HandPose.CONTACT_FORWARD*receiver.scale.z
@@ -361,6 +363,7 @@ func setter_is_diving() -> bool:
 
 func queue_jump(direction: Vector2) -> void:
 	if jump.active or setter_is_diving() or stage in [Stage.HIT,Stage.SHANK]: return
+	takeoff_yaw = setter.rotation.y
 	jump.begin(setter,direction)
 	trace.write("jump",clock,{"position":setter.position,"direction":jump.heading},true)
 
@@ -390,6 +393,7 @@ func step(delta: float) -> void:
 			follow_receive(time)
 			play_shank(time,previous)
 		Stage.SET:
+			if approach_practice: face_receiver(PIN-receiver.position,delta*7.0)
 			if not swing_practice:
 				cpu_set.update_hand_push(cpu_set.release_time+time,cpu_set.release_time+time-cpu_set.touch_time)
 			play_pin_ball(time,previous,delta)
@@ -476,6 +480,11 @@ func play_shank(time: float, previous: float) -> void:
 	if previous < end and time >= end: play_floor_sound()
 	if previous >= end: reset_feed()
 
+func face_receiver(direction: Vector3, max_turn: float) -> void:
+	if direction.slide(Vector3.UP).length_squared() > 0.0001:
+		var yaw := atan2(direction.x,direction.z)
+		receiver.rotation.y = rotate_toward(receiver.rotation.y,yaw,max_turn)
+
 func play_cpu_set(time: float, delta: float) -> void:
 	if is_finite(cpu_set.touch_time):
 		cpu_set.update_hand_push(time,time-cpu_set.touch_time)
@@ -502,8 +511,7 @@ func play_cpu_set(time: float, delta: float) -> void:
 	var toward_ball := (ball.position-receiver.position).slide(Vector3.UP)
 	if toward_ball.length_squared() < 0.09 and travel.is_zero_approx():
 		toward_ball = (pass_origin-cpu_contact_point).slide(Vector3.UP)
-	if not toward_ball.is_zero_approx():
-		receiver.rotation.y = rotate_toward(receiver.rotation.y,atan2(toward_ball.x,toward_ball.z),delta*9.0)
+	face_receiver(toward_ball,delta*9.0)
 	cpu_feet.step(receiver.basis.inverse()*travel/maxf(delta*3.2,0.001),delta,1.4,true)
 	var lead := cpu_contact_time-time
 	if lead <= 0.22:
@@ -526,7 +534,11 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 	var in_air := jump.active and setter.position.y > jump.start.y+0.02
 	var air_age := maxf(0.0,jump.elapsed-jump.LOAD_TIME)
 	if in_air and not swing_practice and (air_age < 0.10 or not is_finite(swing_started)):
-		setter.rotation.y = rotate_toward(setter.rotation.y,incoming_set_heading(),deg_to_rad(720.0)*delta)
+		var incoming_yaw := incoming_set_heading()
+		if approach_practice:
+			var glance := clampf(angle_difference(takeoff_yaw,incoming_yaw),-deg_to_rad(25.0),deg_to_rad(25.0))
+			incoming_yaw = takeoff_yaw+glance
+		setter.rotation.y = rotate_toward(setter.rotation.y,incoming_yaw,deg_to_rad(720.0)*delta)
 	if is_finite(swing_started) and in_air:
 		if not is_finite(swing_charge_started): swing_charge_started = clock
 		var charge := swing_charge()

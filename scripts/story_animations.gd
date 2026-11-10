@@ -662,7 +662,10 @@ func _process(delta: float) -> void:
 			var attacking_approach: bool = selected_category == "Attacking" and (setting_drill.stage == setting_drill.Stage.SET or setting_drill.approach_practice)
 			if attacking_approach:
 				var approach: Vector2 = setting_drill.trace_input
-				if approach.y > 0.05:
+				if setting_drill.approach_practice:
+					var heading := atan2(-approach.x,maxf(0.65,approach.y)) if approach.y > 0.05 else 0.0
+					preview_player.rotation.y = rotate_toward(preview_player.rotation.y,clampf(heading,-0.60,0.60),delta*8.0)
+				elif approach.y > 0.05:
 					var heading := atan2(-approach.x,approach.y)
 					preview_player.rotation.y = rotate_toward(preview_player.rotation.y,heading,delta*8.0)
 			var track_ball: bool = not attacking_approach and not setting_drill.bump.backward_reach_active()
