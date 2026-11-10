@@ -251,8 +251,8 @@ func recalculate() -> void:
 				fitted.angle = float(settings.get("angle",27.4))+2.0*(attempt+1)
 				feed = Flight.feed(aim_point,fitted)
 	else:
-		missed = false
 		aim_point = review_feed.aim
+		missed = review_feed.get("require_platform",false) and aim_point.distance_to(impact_point) > 0.20
 		feed = review_feed.duplicate()
 	feed_info = feed
 	incoming = feed.incoming
@@ -263,7 +263,8 @@ func recalculate() -> void:
 	source_ground.global_position = Vector3(feed.start.x,0.065,feed.start.z)
 	source_ground.show()
 	outgoing = Vector3.ZERO if missed else Contact.rebound(incoming,surface_velocity,surface_normal,float(clip.get_meta("reception_restitution",0.55)))
-	flight_duration = 0.0 if missed else Flight.landing_time(aim_point,outgoing)
+	if missed and review_feed.get("require_platform",false): outgoing = incoming
+	flight_duration = Flight.landing_time(aim_point,outgoing) if not missed or review_feed.get("require_platform",false) else 0.0
 	incoming_net = Net.first_hit(func(time): return Flight.position(feed_info,aim_point,time),-feed_duration,0.0)
 	outgoing_net = {}
 	if not missed and incoming_net.is_empty(): outgoing_net = Net.first_hit(flight_position,0.0,flight_duration)

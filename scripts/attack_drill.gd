@@ -8,7 +8,7 @@ const RECEIVE_START := Vector3(3.05,0.04,-3.10)
 const ATTACK_SERVE_SOURCE := Vector3(3.05,2.8,8.5)
 const CPU_HOME := Vector3(-0.55,0.04,1.15)
 const PIN_HEIGHT := 2.75
-const SET_APEX := 4.5
+const SET_APEX := 9.0
 
 enum Stage { SERVE, PASS, SET, CAUGHT, MISS }
 var stage := Stage.SERVE

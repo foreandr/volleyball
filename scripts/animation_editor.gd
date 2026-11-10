@@ -49,7 +49,16 @@ func _ready() -> void:
 	angle_control.apply_setup(preview_player)
 	if is_instance_valid(reception_controls): reception_controls.apply(preview_player,replace_body_layer)
 	session = EditSession.new(StorySession.edit_animation if StorySession.edit_animation != null else Catalog.load_clip(entry,preview_player),preview_player.skeleton)
+	if session.source.has_meta("editor_start"):
+		preview_player.set_height_cm(Profile.DEFAULTS.height_cm)
+		preview_player.position = session.source.get_meta("editor_start")
+		preview_player.rotation.y = 0.0
+		view_focus = preview_player.position+Vector3(0,1.10,0)
+		view_distance = 4.6
+		orbit_yaw = 1.1
+		update_camera()
 	ball_preview = preload("res://scripts/animation_ball_preview.gd").new()
+	ball_preview.review_feed = session.source.get_meta("editor_feed",{})
 	preview_player.get_parent().add_child(ball_preview)
 	ball_preview.configure(preview_player,session.source,session)
 	if is_instance_valid(reception_controls): reception_controls.show_result(session.source)
@@ -200,14 +209,14 @@ func build_controls(host: VBoxContainer) -> void:
 func refresh_ball_angle() -> void:
 	ball_preview.configure(preview_player,session.source,session)
 	if is_instance_valid(reception_controls): reception_controls.show_result(session.source)
-	right_panel.visible = ball_preview.active
+	right_panel.visible = ball_preview.active and not session.source.has_meta("editor_feed")
 	angle_control.sync_feed(ball_preview.feed_info)
 	angle_control.sync_output(ball_preview)
 	angle_control.visible = ball_preview.active
 	if ball_preview.active: angle_control.display_result(float(session.source.get_meta("desired_output_angle",ball_preview.output_angle())),ball_preview.output_angle(),Flight.distance(ball_preview.impact_point,ball_preview.outgoing))
 
 func apply_output_angle(value: float) -> void:
-	if session == null or not session.source.has_meta("contact_time"): return
+	if session == null or not session.source.has_meta("contact_time") or session.source.has_meta("editor_feed"): return
 	if trajectory_base == null or trajectory_revision != session.revision:
 		trajectory_base = session.bake()
 		trajectory_solver = preload("res://scripts/pass_trajectory_solver.gd").new(preview_player,trajectory_base)
@@ -412,7 +421,7 @@ func handle_preview_input(event: InputEvent) -> void:
 	if player_controls!=null and player_controls.active:
 		super.handle_preview_input(event)
 		return
-	if setup_drag != null and not gizmo_drag:
+	if setup_drag != null and not gizmo_drag and (session == null or not session.source.has_meta("editor_feed")):
 		var joint_click: bool = event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT and pick_handle(event.position)>=0
 		if (not joint_click or not setup_drag.mode.is_empty()) and setup_drag.handle(event):
 			preview.accept_event()
@@ -499,7 +508,9 @@ func save_copy() -> void:
 	set_playing(false)
 	for field in rotation_fields:
 		if field.get_line_edit().has_focus(): field.apply()
-	var saved := Catalog.save_copy(session.bake(),entry,copy_name.text)
+	var original := entry.duplicate()
+	if session.source.has_meta("editor_feed"): original.id = entry.get("source",entry.id)
+	var saved := Catalog.save_copy(session.bake(),original,copy_name.text)
 	if saved.is_empty():
 		var dialog := AcceptDialog.new()
 		dialog.dialog_text = "Unable to save animation."
