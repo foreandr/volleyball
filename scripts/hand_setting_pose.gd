@@ -2,9 +2,9 @@ extends RefCounted
 
 const CONTACT_HEIGHT := 1.83
 const CONTACT_FORWARD := 0.23
-const CONTACT_RADIUS := 0.42
+const CONTACT_RADIUS := 0.40
 const GREEN_CONTACT_ALLOWANCE := 0.17
-const RELEASE_TIME := 0.145
+const RELEASE_TIME := 0.125
 
 static func contact_center(actor: Node3D) -> Vector3:
 	var rig: Skeleton3D = actor.skeleton
