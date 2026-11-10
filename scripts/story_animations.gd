@@ -300,6 +300,7 @@ func start_setting_drill(attack := false) -> void:
 		show_mode.call(index))
 	content.add_child(controls_hint)
 	drill_status = label("",16)
+	drill_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(drill_status)
 	setter_original_transform = preview_player.transform
 	setter_animation_process = preview_player.animator.callback_mode_process
