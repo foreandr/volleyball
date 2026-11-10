@@ -489,7 +489,7 @@ func move_cpu_toward(travel: Vector3, delta: float, track_ball := true) -> void:
 	sprint_requested = distance>0.85
 	move_player(Vector2(direction.dot(forward.cross(Vector3.UP)),direction.dot(forward)),delta,track_ball)
 
-func move_player(direction: Vector2, delta: float, track_ball := true, setting_target := Vector3.INF, movement_scale := 1.0, court_weight := 0.0, turn_with_ball := true, front_limit := 2.5) -> void:
+func move_player(direction: Vector2, delta: float, track_ball := true, setting_target := Vector3.INF, movement_scale := 1.0, court_weight := 0.0, turn_with_ball := true, front_limit := 2.5, approach_speed := 0.0, approach_rate := 0.0) -> void:
 	var actor: Node3D = page.preview_player
 	var session = page.get_node("/root/StorySession")
 	var setting := setting_target.is_finite()
@@ -501,7 +501,7 @@ func move_player(direction: Vector2, delta: float, track_ball := true, setting_t
 	var travel := right*direction.x+forward*direction.y
 	if setting:
 		setter_travel = setter_travel.move_toward(travel*movement_scale,delta*8.0).limit_length(movement_scale)
-		travel = setter_travel
+		if approach_speed <= 0.0: travel = setter_travel
 	var step_direction := direction
 	if setting and turn_with_ball: track_setting_ball(actor,setting_target,delta,court_weight)
 	elif not setting and drill and track_ball: face_ball()
@@ -515,6 +515,9 @@ func move_player(direction: Vector2, delta: float, track_ball := true, setting_t
 		setter_step_rate = move_toward(setter_step_rate,QUICK_STEP_RATE*step_rate,delta*7.0)
 		step_rate = setter_step_rate
 	var speed := 4.5 if sprinting else 1.65*step_rate
+	if approach_speed > 0.0:
+		speed = approach_speed
+		step_rate = approach_rate
 	var velocity := travel*speed
 	var before := actor.position
 	var movement := velocity*delta
@@ -558,7 +561,7 @@ func move_player(direction: Vector2, delta: float, track_ball := true, setting_t
 	if shuffle_step or sprinting:
 		footwork.weight = 0
 	else:
-		footwork.step(local_velocity/(1.65*step_rate) if moving else Vector3.ZERO,delta,step_rate,setting)
+		footwork.step(local_velocity/(speed if approach_speed > 0.0 else 1.65*step_rate) if moving else Vector3.ZERO,delta,step_rate,setting)
 	if side_weight>0: side_steps.apply_pose(side_weight)
 	if active: follow_camera()
 

@@ -312,7 +312,7 @@ func start_setting_drill(attack := false) -> void:
 		if attack:
 			controls_hint.visible = index != 0
 			if index == 2:
-				controls_hint.text = "WASD to approach  |  Hold Space to jump\nMove mouse to aim  |  Automatic spike"
+				controls_hint.text = "WASD to approach  |  Space to time the approach\nMove mouse to aim  |  Automatic spike"
 				return
 			controls_hint.text = "WASD to move  |  Q forearms  |  I / E hands\nMouse to aim  |  Shift + scroll for pass height\nSpace to jump  |  Hold left-click to spike"
 			return
@@ -654,6 +654,15 @@ func _process(delta: float) -> void:
 		setting_drill.restore_torso_lean(preview_player)
 		player_controls.read_pace_input()
 		setting_drill.trace_input = player_controls.movement_input()
+		var approach_speed := 0.0
+		var approach_rate := 0.0
+		if selected_category == "Attacking" and setting_drill.approach_practice:
+			var previous_steps: int = setting_drill.approach_run_steps
+			setting_drill.trace_input = setting_drill.queued_approach_input(delta)
+			approach_speed = setting_drill.approach_run_speed
+			approach_rate = setting_drill.approach_run_rate
+			if previous_steps == 0 and setting_drill.approach_run_steps > 0:
+				player_controls.footwork.phase = 0.5 if setting_drill.approach_run_steps == 1 else 0.0
 		setting_drill.trace_sprint = player_controls.sprint_requested
 		var diving: bool = setting_drill.setter_is_diving()
 		setting_drill.trace_move_scale = 0.0 if diving else setting_drill.setter_movement_scale()
@@ -669,7 +678,7 @@ func _process(delta: float) -> void:
 					var heading := atan2(-approach.x,approach.y)
 					preview_player.rotation.y = rotate_toward(preview_player.rotation.y,heading,delta*8.0)
 			var track_ball: bool = not attacking_approach and not setting_drill.bump.backward_reach_active()
-			player_controls.move_player(setting_drill.trace_input,delta,false,setting_drill.ball.global_position,setting_drill.trace_move_scale,court_weight,track_ball,setting_drill.jump.front_limit)
+			player_controls.move_player(setting_drill.trace_input,delta,false,setting_drill.ball.global_position,setting_drill.trace_move_scale,court_weight,track_ball,setting_drill.jump.front_limit,approach_speed,approach_rate)
 			setting_drill.apply_setter_arms(player_controls.footwork.phase,player_controls.moving,delta)
 		elif setting_drill.jump.active and court_weight > 0.0:
 			player_controls.track_setting_ball(preview_player,setting_drill.ball.global_position,delta,court_weight)
@@ -1229,7 +1238,7 @@ func _input(event: InputEvent) -> void:
 		if event.pressed and not event.echo:
 			setting_drill.queue_jump(player_controls.movement_input())
 			player_controls.setter_travel = Vector3.ZERO
-		elif not event.pressed:
+		elif not event.pressed and (selected_category != "Attacking" or not setting_drill.approach_practice):
 			setting_drill.jump.release()
 		get_viewport().set_input_as_handled()
 		return

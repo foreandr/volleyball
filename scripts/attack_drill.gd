@@ -8,6 +8,7 @@ const HandPose = preload("res://scripts/hand_setting_pose.gd")
 const Footwork = preload("res://scripts/directional_footwork.gd")
 const PIN := Vector3(3.55,0.065,3.35)
 const ATTACK_FRONT_LIMIT := 3.55
+const APPROACH_JUMP_LEAD := 0.82
 const RECEIVE_START := Vector3(3.05,0.04,-3.10)
 const ATTACK_SERVE_SOURCE := Vector3(3.05,2.8,8.5)
 const CPU_HOME := Vector3(-0.55,0.04,3.10)
@@ -38,6 +39,10 @@ var stage := Stage.SERVE
 var swing_practice := true
 var approach_practice := false
 var takeoff_yaw := 0.0
+var approach_jump_queued := false
+var approach_run_speed := 0.0
+var approach_run_rate := 0.0
+var approach_run_steps := 0
 var shot_sequence_index := -1
 var manual_shot_aim := Vector3.ZERO
 var practice_takeoff := PIN+Vector3(-0.70,RECEIVE_START.y-PIN.y,-0.98)
@@ -170,6 +175,9 @@ func reset_feed() -> void:
 	receiver.rotation.y = PI
 	cpu_set.reset()
 	jump.active = false
+	approach_jump_queued = false
+	approach_run_steps = 0
+	approach_run_speed = 0.0
 	jump.front_limit = ATTACK_FRONT_LIMIT
 	setter.position = RECEIVE_START
 	setter.rotation.y = 0.0
@@ -366,6 +374,36 @@ func setter_is_diving() -> bool:
 
 func queue_jump(direction: Vector2) -> void:
 	if jump.active or setter_is_diving() or stage in [Stage.HIT,Stage.SHANK]: return
+	if approach_practice:
+		if stage not in [Stage.PASS,Stage.SET] or approach_jump_queued: return
+		if stage == Stage.PASS or approach_time_to_plant() > 0.0:
+			approach_jump_queued = true
+			return
+	begin_attack_jump(direction)
+
+func approach_time_to_plant() -> float:
+	return stage_start+pin_arrival-APPROACH_JUMP_LEAD-clock
+
+func queued_approach_input(delta: float) -> Vector2:
+	approach_run_speed = 0.0
+	if not approach_jump_queued or stage != Stage.SET: return trace_input
+	var remaining := approach_time_to_plant()
+	var ball_target := flight_point(pass_origin,pass_motion,pin_arrival)
+	var direction := (ball_target-setter.position).slide(Vector3.UP).normalized()
+	if remaining <= delta:
+		approach_jump_queued = false
+		begin_attack_jump(Vector2(-direction.x,direction.z))
+		return Vector2.ZERO
+	if approach_run_steps == 0:
+		approach_run_steps = 2 if remaining >= 0.34 else 1
+		approach_run_rate = approach_run_steps/(2.0*float(Footwork.recipe.cadence)*remaining)
+	var plant_start := ball_target+Vector3(0.22,0.0,-0.95)
+	var offset := (plant_start-setter.position).slide(Vector3.UP)
+	approach_run_speed = minf(4.8,offset.length()/remaining)
+	var travel := offset.normalized()
+	return Vector2(-travel.x,travel.z)
+
+func begin_attack_jump(direction: Vector2) -> void:
 	takeoff_yaw = setter.rotation.y
 	var ball_target := Vector3.INF
 	if approach_practice:
@@ -506,7 +544,7 @@ func play_cpu_set(time: float, delta: float) -> void:
 			bump.hand_setting = false
 			trace.closest_check.clear()
 			trace.closest_margin = INF
-			status.text = "Hold Space to jump and spike" if approach_practice else "Space to jump  |  Hold left-click to spike"
+			status.text = "Space to start the approach" if approach_practice else "Space to jump  |  Hold left-click to spike"
 			region.show()
 			aim_swing(swing_aim)
 			trace.write("cpu_set",clock,{"point":pass_origin,"velocity":pass_motion,"pin_arrival":pin_arrival},true)
