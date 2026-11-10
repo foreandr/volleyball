@@ -31,6 +31,7 @@ var practice_setup_path := "user://attack_practice.cfg"
 var torso_rotation_scale := 2.0
 var leg_kickback_scale := 2.0
 var leg_rotation_scale := 1.0
+var draw_delay := 0.05
 var stage_start := 0.0
 var serve_target: Vector3
 var pass_origin: Vector3
@@ -379,7 +380,7 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 				swing_hand_speed = 0.0
 		var load := smoothstep(0.0,0.18,clock-swing_charge_started)
 		var estimated_contact := descending_time(pass_origin,pass_motion,PIN_HEIGHT+1.0)
-		var draw_end := estimated_contact-3.5*LOW_BOW_FRAME
+		var draw_end := estimated_contact-5.0*LOW_BOW_FRAME+draw_delay
 		var draw_progress := smoothstep(draw_end-7.0*LOW_BOW_FRAME,draw_end,time)
 		var arm_lift := smoothstep(draw_end-LOW_BOW_FRAME,estimated_contact,time)
 		var drive := clock-swing_drive_started if is_finite(swing_drive_started) else -INF

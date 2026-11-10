@@ -399,6 +399,22 @@ func show_attack_positions() -> void:
 	slow_motion.toggled.connect(func(_enabled: bool): update_speed.call())
 	update_speed.call()
 
+	var delay_readout := label("",16)
+	positions.add_child(delay_readout)
+	var delay := HSlider.new()
+	delay.name = "LowBowDrawDelay"
+	delay.min_value = 0
+	delay.max_value = 140
+	delay.step = 5
+	delay.value = setting_drill.draw_delay*1000.0
+	delay.custom_minimum_size.y = 24
+	positions.add_child(delay)
+	var update_delay := func(milliseconds: float):
+		setting_drill.draw_delay = milliseconds/1000.0
+		delay_readout.text = "Draw delay  %d ms" % roundi(milliseconds)
+	delay.value_changed.connect(update_delay)
+	update_delay.call(delay.value)
+
 func add_low_bow_controls() -> void:
 	content.add_child(label(setting_drill.SpikeArm.SWING_NAME,16))
 	var studies := OptionButton.new()
