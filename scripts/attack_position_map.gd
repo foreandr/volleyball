@@ -2,6 +2,7 @@ extends Control
 
 const START_COLOR := Color("62d9f0")
 const BALL_COLOR := Color("ffd477")
+const SHOT_COLOR := Color("ec9eff")
 const COURT_COLOR := Color("8caebc")
 
 var drill: Node3D
@@ -10,7 +11,7 @@ var drag_start := Vector2.ZERO
 var drag_offset := Vector2.ZERO
 
 func _ready() -> void:
-	custom_minimum_size.y = 336
+	custom_minimum_size.y = 358
 	mouse_filter = Control.MOUSE_FILTER_STOP
 
 func _process(_delta: float) -> void:
@@ -39,7 +40,12 @@ func _draw() -> void:
 		draw_arc(target,7.0,0.0,TAU,24,BALL_COLOR,2.0,true)
 	draw_circle(ball_marker,4.5,BALL_COLOR)
 	draw_arc(start_marker,8.0,0.0,TAU,24,START_COLOR,2.0,true)
+	var shot := court_point(drill.swing_aim)
+	draw_arc(shot,6.0,0.0,TAU,24,SHOT_COLOR,2.0,true)
+	draw_circle(shot,2.0,SHOT_COLOR)
 	var font := get_theme_default_font()
+	draw_arc(Vector2(16,343),4.5,0.0,TAU,24,SHOT_COLOR,1.5,true)
+	draw_string(font,Vector2(29,348),"Shot target",HORIZONTAL_ALIGNMENT_LEFT,-1,16,SHOT_COLOR)
 	if drill.swing_practice:
 		draw_arc(Vector2(16,317),4.5,0.0,TAU,24,BALL_COLOR,1.5,true)
 		draw_string(font,Vector2(29,322),"Set target",HORIZONTAL_ALIGNMENT_LEFT,-1,16,BALL_COLOR)
@@ -55,12 +61,19 @@ func court_point(point: Vector3) -> Vector2:
 	return Vector2(size.x*0.5,126.0)+Vector2(-point.x,4.0-point.z)*court_scale()
 
 func _gui_input(event: InputEvent) -> void:
-	if not is_instance_valid(drill) or not drill.swing_practice: return
+	if not is_instance_valid(drill): return
 	if event is InputEventMouseMotion and not drag_marker.is_empty():
 		drag_offset += event.relative
 		accept_event()
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if event.pressed:
+			var offset: Vector2 = (event.position-court_point(Vector3.ZERO))/court_scale()
+			var point := Vector3(-offset.x,0.0,-offset.y)
+			if absf(point.x) <= drill.SHOT_AIM_HALF_WIDTH and point.z >= drill.SHOT_AIM_NEAR and point.z <= drill.SHOT_AIM_FAR:
+				drill.aim_swing(point)
+				accept_event()
+				return
+			if not drill.swing_practice: return
 			var start := court_point(drill.practice_takeoff)
 			var target := court_point(drill.practice_set_target)
 			var start_distance: float = event.position.distance_to(start)

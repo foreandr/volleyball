@@ -22,6 +22,9 @@ const SWING_REACH := 1.55
 const SWING_CONTACT_HEIGHT := 2.22
 const PALM_RADIUS := 0.065
 const SWING_FOLLOW_TIME := 0.49
+const SHOT_AIM_HALF_WIDTH := 7.5
+const SHOT_AIM_NEAR := 4.3
+const SHOT_AIM_FAR := 16.0
 var stage := Stage.SERVE
 var swing_practice := true
 var practice_takeoff := PIN+Vector3(-0.70,RECEIVE_START.y-PIN.y,-0.98)
@@ -51,7 +54,8 @@ var swing_drive_duration := 0.15
 var previous_palm := Vector3.INF
 var swing_hand_speed := 0.0
 var swing_impact_speed := 0.0
-var swing_aim := Vector3(0.0,Flight.FLOOR,9.5)
+var swing_aim := Vector3(PIN.x,Flight.FLOOR,9.5)
+var swing_contact_aim: Vector3
 var swing_contact: Vector3
 var swing_contact_extension := 1.0
 var swing_power := 0.0
@@ -206,7 +210,7 @@ func can_aim_swing() -> bool:
 	return stage == Stage.SET
 
 func aim_swing(point: Vector3) -> void:
-	swing_aim = Vector3(clampf(point.x,-4.4,4.4),Flight.FLOOR,clampf(point.z,4.3,12.9))
+	swing_aim = Vector3(clampf(point.x,-SHOT_AIM_HALF_WIDTH,SHOT_AIM_HALF_WIDTH),Flight.FLOOR,clampf(point.z,SHOT_AIM_NEAR,SHOT_AIM_FAR))
 	swing_target.position = Vector3(swing_aim.x,0.065,swing_aim.z)
 
 func swing_input(pressed: bool) -> void:
@@ -438,7 +442,8 @@ func hit_spike(charge: float, point: Vector3) -> void:
 	swing_power = charge
 	spike_topspin_rps = clampf(swing_impact_speed*0.55,4.0,10.0)
 	pass_origin = swing_contact
-	var target := swing_aim-pass_origin
+	swing_contact_aim = swing_aim
+	var target := swing_contact_aim-pass_origin
 	var speed := clampf(swing_hand_speed*2.2,1.0,32.0)
 	var duration := target.slide(Vector3.UP).length()/speed
 	pass_motion = target/duration+Vector3.UP*Flight.GRAVITY*duration*0.5
@@ -472,13 +477,12 @@ func pose_bow_draw(weight: float, contact: Vector3, extension := 0.0, follow := 
 	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
 	var drive_age := clock-swing_drive_started if is_finite(swing_drive_started) else 0.0
 	var rotation_phase := smoothstep(-0.04,swing_drive_duration+0.05,drive_age) if is_finite(swing_drive_started) else 0.0
-	var aim := rig.to_local(swing_aim)-rig.to_local(setter.global_position)
-	var aim_turn := clampf(atan2(aim.x,aim.z),-0.48,0.48)
+	var shot_aim := swing_contact_aim if stage == Stage.HIT else swing_aim
+	var aim_turn := SpikeArm.follow_heading(shot_aim,contact,rig.global_rotation.y)
 	var power := swing_power if stage == Stage.HIT else swing_charge()
 	var rotation_weight := weight*torso_rotation_scale*lerpf(0.48,1.22,power)
-	var drive_turn := lerpf(-0.57,0.42+aim_turn*0.52,rotation_phase)
-	var finish_turn := SpikeArm.follow_heading(swing_aim,setter.global_position,setter.global_rotation.y)*0.52
-	var turn := lerpf(drive_turn,finish_turn,follow)
+	var drive_turn := lerpf(-0.57,0.36+aim_turn*0.70,rotation_phase)
+	var turn := lerpf(drive_turn,aim_turn*0.52,follow)
 	var airborne := smoothstep(0.08,0.45,setter.position.y-jump.start.y)
 	var leg_release := smoothstep(0.0,1.0,rotation_phase)
 	var leg_turn := tanh(turn*rotation_weight*0.75)*0.32*leg_rotation_scale*airborne*leg_release
@@ -518,7 +522,7 @@ func pose_bow_draw(weight: float, contact: Vector3, extension := 0.0, follow := 
 	# Twist the ribcage around its own axis so the lean stays independent.
 	var chest_axis: Vector3 = (author.point(pose,"neck_01")-author.point(pose,"spine_03")).normalized()
 	author.rotate_world(pose,"spine_03",chest_axis,clampf(turn*rotation_weight,-1.45,1.45))
-	var line_weight := shot_line_weight(swing_aim,contact)
+	var line_weight := shot_line_weight(shot_aim,contact)
 	SpikeArm.apply(pose,author,ball_target,weight,extension,follow,draw_progress,arm_lift,line_weight)
 	var guide_drop := maxf(smoothstep(0.07,0.83,extension),smoothstep(0.0,0.62,follow))
 	SpikeArm.apply_guide_arm(pose,author,Vector3(0.06,0.43,0.64),Vector3(0.26,-0.55,0.15),guide_drop,weight,172.0)
@@ -526,7 +530,10 @@ func pose_bow_draw(weight: float, contact: Vector3, extension := 0.0, follow := 
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
 
 func shot_line_weight(target: Vector3, origin: Vector3) -> float:
-	var across_court := absf(target.x-origin.x)/maxf(target.z-origin.z,0.1)
+	# Only an inward angle crosses the court. Outward aim can still run down the near sideline.
+	var lateral := target.x-origin.x
+	var inward := absf(lateral) if is_zero_approx(origin.x) else -signf(origin.x)*lateral
+	var across_court := inward/maxf(target.z-origin.z,0.1)
 	return 1.0-smoothstep(0.16,0.38,across_court)
 
 func airborne_reach_lean(contact: Vector3) -> Vector2:

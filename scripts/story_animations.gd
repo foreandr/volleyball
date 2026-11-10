@@ -918,7 +918,7 @@ func handle_preview_input(event: InputEvent) -> void:
 		elif event is InputEventMouseMotion:
 			if event.button_mask & MOUSE_BUTTON_MASK_MIDDLE:
 				orbit_setting_camera(event.relative)
-			elif setting_drill.can_aim_set() or (selected_category == "Attacking" and setting_drill.can_aim_swing()):
+			elif setting_drill.can_aim_set():
 				var point: Vector2 = setup_drag.screen_position(event.position)
 				var hit: Variant = Plane(Vector3.UP,0.055).intersects_ray(preview_camera.project_ray_origin(point),preview_camera.project_ray_normal(point))
 				if hit is Vector3:
@@ -928,7 +928,7 @@ func handle_preview_input(event: InputEvent) -> void:
 			if event.button_index == MOUSE_BUTTON_LEFT and selected_category == "Attacking" and setting_drill.can_aim_swing():
 				var point: Vector2 = setup_drag.screen_position(event.position)
 				var hit: Variant = Plane(Vector3.UP,0.055).intersects_ray(preview_camera.project_ray_origin(point),preview_camera.project_ray_normal(point))
-				if hit is Vector3: setting_drill.aim_swing(hit)
+				if hit is Vector3 and hit.z >= setting_drill.SHOT_AIM_NEAR: setting_drill.aim_swing(hit)
 				setting_drill.swing_input(true)
 			elif setting_drill.can_aim_set() and event.button_index in [MOUSE_BUTTON_WHEEL_UP,MOUSE_BUTTON_WHEEL_DOWN]:
 				adjust_bump_height((0.25 if event.button_index == MOUSE_BUTTON_WHEEL_UP else -0.25)*maxf(0.1,event.factor))
@@ -981,23 +981,23 @@ func open_low_bow_editor(study := -1) -> void:
 	var crosscourt: bool = setting_drill.shot_line_weight(shot_target,setting_drill.practice_set_target) < 0.5
 	var id := LOW_BOW_EDIT_ID if study < 0 else "lopez_study_%02d" % (study+1)
 	var title: String = "06 Low Bow" if study < 0 else LopezStudies.STUDIES[study][0]
-	if study >= 0 and crosscourt:
+	if crosscourt:
 		id += "_cross"
 		title += " Crosscourt"
-	StorySession.edit_entry = {"id":id,"name":title,"category":"Attacking","type":"Cross Hit" if study >= 0 and crosscourt else "Line Hit"}
+	StorySession.edit_entry = {"id":id,"name":title,"category":"Attacking","type":"Cross Hit" if crosscourt else "Line Hit"}
 	for entry in Catalog.custom_entries():
 		if entry.get("source") == id: StorySession.edit_entry = entry.duplicate(true)
 	if StorySession.edit_entry.has("path"):
 		StorySession.edit_animation = Catalog.load_clip(StorySession.edit_entry,preview_player)
 	else:
-		var base := bake_low_bow_starter(study >= 0)
+		var base := bake_low_bow_starter(study >= 0,shot_target)
 		StorySession.edit_animation = base if study < 0 else LopezStudies.bake(base,preview_player,study,crosscourt,shot_target)
 	get_tree().change_scene_to_file("res://scenes/animation_editor.tscn")
 
-func bake_low_bow_starter(include_landing := false) -> Animation:
+func bake_low_bow_starter(include_landing := false, shot_target := Vector3(2.0,0.0,10.5)) -> Animation:
 	var drill = setting_drill
 	drill.set_swing_practice(true)
-	drill.aim_swing(Vector3(2.0,0.0,10.5))
+	drill.aim_swing(shot_target)
 	drill.swing_input(true)
 	var start := preview_player.position
 	var rig: Skeleton3D = preview_player.skeleton

@@ -3,7 +3,7 @@ extends RefCounted
 const SWING_NAME := "06 Low Bow"
 
 static func follow_heading(target: Vector3, origin: Vector3, facing := 0.0) -> float:
-	var direction := target.lerp(Vector3(0.0,target.y,8.5),0.18)-origin
+	var direction := target-origin
 	return clampf(angle_difference(facing,atan2(direction.x,direction.z)),-0.95,0.95)
 
 static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float, extension: float, follow: float, draw_progress: float, arm_lift: float, line_weight: float) -> void:
@@ -14,7 +14,7 @@ static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float,
 	var target := (shoulder+raised_draw).lerp(wrist_target,extension)
 	target += Vector3(-0.05,0.14,-0.10)*sin(PI*extension)
 	var finish := follow
-	target = follow_through_target(shoulder,target,hip_finish(pose,author,line_weight < 0.5),finish)
+	target = follow_through_target(pose,author,shoulder,target,hip_finish(pose,author,line_weight < 0.5),finish)
 	var elbow_pole := Vector3(-1.0,0.16,-0.84).lerp(Vector3(-0.75,0.38,-0.28),smoothstep(0.62,1.0,extension))
 	var elbow_limit := lerpf(112.0,158.0,smoothstep(0.29,0.98,extension))
 	elbow_limit = lerpf(elbow_limit,172.0,finish)
@@ -65,7 +65,7 @@ static func hip_finish(pose: Array, author: RefCounted, crosscourt: bool, cleara
 	var side := -1.0 if crosscourt else 1.0
 	return hip+Vector3(side*clearance,0.02,0.09)
 
-static func follow_through_target(shoulder: Vector3, contact: Vector3, hip: Vector3, progress: float) -> Vector3:
+static func follow_through_target(pose: Array, author: RefCounted, shoulder: Vector3, contact: Vector3, hip: Vector3, progress: float) -> Vector3:
 	var start := contact-shoulder
 	var end := hip-shoulder
 	var forward := Vector3(-0.10,-0.12,1.0).normalized()
@@ -74,7 +74,13 @@ static func follow_through_target(shoulder: Vector3, contact: Vector3, hip: Vect
 	var toward := forward.slerp(end.normalized(),progress)
 	var direction := from.slerp(toward,progress)
 	var radius := lerpf(start.length(),end.length(),progress)+0.06*sin(PI*progress)
-	return shoulder+direction*radius
+	var across: Vector3 = author.point(pose,"upperarm_l")-shoulder
+	var up: Vector3 = author.point(pose,"neck_01")-author.point(pose,"spine_03")
+	var chest_forward := across.cross(up).normalized()
+	var clearance := 0.15*smoothstep(0.08,0.58,progress)*(1.0-smoothstep(0.63,1.0,progress))
+	# Carry the arm forward of the ribs while preserving reach and both endpoints.
+	var offset := (direction*radius+chest_forward*clearance).normalized()*radius
+	return shoulder+offset
 
 static func align_finish_wrist(pose: Array, author: RefCounted, progress: float) -> void:
 	var amount := smoothstep(0.25,0.95,progress)

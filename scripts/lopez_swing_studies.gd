@@ -97,7 +97,7 @@ static func shape(pose: Array[Transform3D], author: RefCounted, profile: Array, 
 	var hand_release := smoothstep(lerpf(release_start,1.0,0.49),1.0,progress)
 	var pole := Vector3(-1.0,-0.12,-0.34).lerp(Vector3(-0.95,-0.08,0.48),hand_release)
 	var finish_target := SpikeArm.hip_finish(pose,author,crosscourt,float(profile[8])*0.19)
-	var strike_target := SpikeArm.follow_through_target(shoulder,strike_wrist,finish_target,sweep)
+	var strike_target := SpikeArm.follow_through_target(pose,author,shoulder,strike_wrist,finish_target,sweep)
 	pole = pole.lerp(Vector3(-0.85,0.04,-0.33),sweep)
 	var strike_pose := pose.duplicate()
 	var strike_weight := rising*(1.0-smoothstep(0.59,1.22,landing))
