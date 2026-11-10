@@ -31,6 +31,7 @@ var cpu_feet: RefCounted
 var pin_arrival := 0.0
 var flight_end := 0.0
 var swing_started := -INF
+var swing_charge_started := -INF
 var swing_released := -INF
 var swing_drive_started := -INF
 var swing_drive_duration := 0.15
@@ -77,6 +78,7 @@ func reset_feed() -> void:
 	region.position = PIN
 	region.hide()
 	swing_started = -INF
+	swing_charge_started = -INF
 	swing_released = -INF
 	swing_drive_started = -INF
 	previous_palm = Vector3.INF
@@ -102,12 +104,12 @@ func start_swing_practice() -> void:
 	bump.hide()
 	setter.position = PIN+Vector3(0.35,RECEIVE_START.y-PIN.y,-0.48)
 	jump.begin(setter,Vector2(0.0,0.65))
-	for frame in range(18): jump.step(setter,1.0/60.0,Vector2.ZERO)
+	for frame in range(16): jump.step(setter,1.0/60.0,Vector2.ZERO)
 	jump.release()
 	receiver.rotation.y = atan2(PIN.x-CPU_HOME.x,PIN.z-CPU_HOME.z)
 	var source := receiver.to_global(Vector3(0.0,HandPose.CONTACT_HEIGHT,HandPose.CONTACT_FORWARD))
 	var velocity := set_toward_pin(source)
-	var lead := 0.62
+	var lead := 0.72
 	var preroll := descending_time(source,velocity,PIN_HEIGHT)-lead
 	pass_origin = flight_point(source,velocity,preroll)
 	pass_motion = velocity+Vector3.DOWN*Flight.GRAVITY*preroll
@@ -172,14 +174,15 @@ func swing_input(pressed: bool) -> void:
 		return
 	if is_finite(swing_started) and not is_finite(swing_released): return
 	swing_started = clock
+	swing_charge_started = -INF
 	swing_released = -INF
 	swing_drive_started = -INF
 	previous_palm = Vector3.INF
-	status.text = "Charging swing"
+	status.text = "Swing queued"
 	trace.write("swing_start",clock,{"player":setter.position,"aim":swing_aim},true)
 
 func swing_charge() -> float:
-	return clampf((minf(clock,swing_released if is_finite(swing_released) else clock)-swing_started)/(0.36 if swing_practice else SWING_CHARGE_TIME),0.0,1.0)
+	return clampf((minf(clock,swing_released if is_finite(swing_released) else clock)-swing_charge_started)/(0.48 if swing_practice else SWING_CHARGE_TIME),0.0,1.0)
 
 func queue_set() -> void:
 	if stage != Stage.SERVE: return
@@ -322,7 +325,8 @@ func play_cpu_set(time: float, delta: float) -> void:
 func play_pin_ball(time: float, previous: float, delta: float) -> void:
 	ball.position = flight_point(pass_origin,pass_motion,minf(time,flight_end))
 	timing_cue.update_timing(time,pin_arrival,BumpSetting.GREEN_START,BumpSetting.GREEN_END)
-	if is_finite(swing_started) and jump.active:
+	if is_finite(swing_started) and jump.active and setter.position.y > jump.start.y+0.02:
+		if not is_finite(swing_charge_started): swing_charge_started = clock
 		var charge := swing_charge()
 		status.text = "Swing power  |  %d%%" % roundi(charge*100.0)
 		var airborne := setter.position.y > jump.start.y+0.08
@@ -334,7 +338,7 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 				swing_drive_started = clock
 				swing_drive_duration = duration
 				swing_hand_speed = 0.0
-		var load := smoothstep(0.0,0.20,clock-swing_started)
+		var load := smoothstep(0.0,0.14,clock-swing_charge_started)
 		var drive := clock-swing_drive_started if is_finite(swing_drive_started) else -INF
 		if drive < 0.0:
 			pose_bow_draw(load)
