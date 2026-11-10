@@ -945,14 +945,19 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 		var forward_crunch := smoothstep(0.0,0.09,hit_age)
 		pitch = lerpf(pitch,deg_to_rad(30.0-torso_lean_degrees),forward_crunch)
 		pitch *= 1.0-smoothstep(0.10,0.27,hit_age)
+	var follow_crunch := 0.0
 	if approach_practice:
 		pitch *= 0.38
 		if stage == Stage.SET:
 			var rise_age := clock-swing_started
 			var arch := smootherstep(0.08,0.25,rise_age)*(1.0-smootherstep(0.25,0.43,rise_age))
 			pitch = lerpf(pitch,deg_to_rad(-40.0),arch)
-	author.rotate_world(pose,"spine_01",Vector3.RIGHT,pitch*0.45*weight)
-	author.rotate_world(pose,"spine_02",Vector3.RIGHT,pitch*0.55*weight)
+		elif stage == Stage.HIT:
+			var hit_age := clock-stage_start
+			follow_crunch = smootherstep(0.0,0.11,hit_age)*(1.0-smootherstep(0.14,0.32,hit_age))
+	var torso_pitch := pitch+deg_to_rad(18.0)*follow_crunch
+	author.rotate_world(pose,"spine_01",Vector3.RIGHT,torso_pitch*0.45*weight)
+	author.rotate_world(pose,"spine_02",Vector3.RIGHT,torso_pitch*0.55*weight)
 	var neck: Vector3 = author.point(pose,"neck_01")
 	var gaze := ball_target-neck
 	var flat_gaze := gaze.slide(Vector3.UP)
@@ -960,7 +965,7 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 	var ball_yaw := clampf(atan2(gaze.x,gaze.z),-0.85,0.85)
 	var yaw_weight := smoothstep(0.05,0.45,flat_gaze.length())
 	author.rotate_world(pose,"neck_01",Vector3.UP,(ball_yaw*0.5-chest_yaw*0.55)*yaw_weight*weight)
-	author.rotate_world(pose,"neck_01",Vector3.RIGHT,(-pitch*0.72-ball_pitch*0.32)*weight)
+	author.rotate_world(pose,"neck_01",Vector3.RIGHT,(-pitch*0.72-ball_pitch*0.32+deg_to_rad(10.0)*follow_crunch)*weight)
 	var line_weight := shot_line_weight(shot_aim,contact)
 	if stage == Stage.HIT and weight < 1.0 and not swing_finish_pose.is_empty():
 		if line_weight < 0.5:
@@ -978,6 +983,8 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 		var arm_weight := 1.0 if approach_practice and stage == Stage.SET else weight
 		swing_palm_roll = SpikeArm.apply(pose,author,ball_target,arm_weight,extension,follow,draw_progress,arm_lift,line_weight,palm_finish,elbow_clearance,swing_palm_roll,roll_step,shot_direction,compact_finish,backswing_reach*backswing_weight,approach_practice)
 		var guide_drop := maxf(smoothstep(0.07,0.83,extension),smoothstep(0.0,0.62,follow))
+		if approach_practice and stage == Stage.SET:
+			guide_drop = maxf(guide_drop,smootherstep(0.23,0.44,clock-swing_started))
 		SpikeArm.apply_guide_arm(pose,author,Vector3(0.06,0.43,0.64-backswing_reach*backswing_weight*0.6),Vector3(0.26,-0.55,0.15),guide_drop,arm_weight,172.0)
 		if stage == Stage.HIT and follow >= 0.90:
 			swing_finish_pose = pose.duplicate()
@@ -1003,7 +1010,7 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 				var elbow_pole := lerp_angle(0.0,PI*0.5,overhead)
 				var bend := forward*sin(elbow_pole)-up*cos(elbow_pole)-outward*0.10
 				author.limb(front_pose,upper,"lowerarm_"+side,"hand_"+side,target,bend,1.0,lerpf(155.0,174.0,overhead))
-				var front_weight := 1.0-smootherstep(0.20 if side == "r" else 0.21,0.34 if side == "r" else 0.43,handoff_age)
+				var front_weight := 1.0-smootherstep(0.20 if side == "r" else 0.21,0.34 if side == "r" else 0.37,handoff_age)
 				SpikeArm.blend_arm(pose,front_pose,author,front_weight,side)
 				var source_weight := 1.0-smootherstep(0.0,0.12,handoff_age)
 				SpikeArm.blend_arm(pose,approach_arm_transition,author,source_weight,side)
