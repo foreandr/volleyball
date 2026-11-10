@@ -21,7 +21,7 @@ const SWING_CHARGE_TIME := 0.65
 const SWING_REACH := 1.55
 const SWING_CONTACT_HEIGHT := 2.22
 const PALM_RADIUS := 0.065
-const SWING_FOLLOW_TIME := 0.32
+const SWING_FOLLOW_TIME := 0.49
 var stage := Stage.SERVE
 var swing_practice := true
 var practice_takeoff := PIN+Vector3(-0.70,RECEIVE_START.y-PIN.y,-0.98)
@@ -461,25 +461,26 @@ func play_spike(time: float, delta: float) -> void:
 	else:
 		ball.position = flight_point(pass_origin,pass_motion,minf(time,end))
 	if time < SWING_FOLLOW_TIME:
-		var follow := 1.0-pow(1.0-clampf(time/0.17,0.0,1.0),2.0)
-		pose_bow_draw(1.0-smoothstep(0.17,SWING_FOLLOW_TIME,time),swing_contact,swing_contact_extension,follow)
-	if time >= end+(0.22 if swing_practice else 0.48) and not jump.active: reset_feed()
+		var follow := 1.0-pow(1.0-clampf(time/0.19,0.0,1.0),2.0)
+		pose_bow_draw(1.0-smoothstep(0.19,SWING_FOLLOW_TIME,time),swing_contact,swing_contact_extension,follow)
+	if time >= maxf(SWING_FOLLOW_TIME,end+(0.22 if swing_practice else 0.48)) and not jump.active: reset_feed()
 
 func pose_bow_draw(weight: float, contact: Vector3, extension := 0.0, follow := 0.0, draw_progress := 1.0, arm_lift := 1.0) -> void:
 	var rig: Skeleton3D = setter.skeleton
 	var author: RefCounted = setter.get_pose_author()
 	var pose: Array[Transform3D] = []
 	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
-	var chest_turn := smoothstep(0.0,0.88,extension)
+	var drive_age := clock-swing_drive_started if is_finite(swing_drive_started) else 0.0
+	var rotation_phase := smoothstep(-0.04,swing_drive_duration+0.05,drive_age) if is_finite(swing_drive_started) else 0.0
 	var aim := rig.to_local(swing_aim)-rig.to_local(setter.global_position)
 	var aim_turn := clampf(atan2(aim.x,aim.z),-0.48,0.48)
 	var power := swing_power if stage == Stage.HIT else swing_charge()
 	var rotation_weight := weight*torso_rotation_scale*lerpf(0.48,1.22,power)
-	var drive_turn := lerpf(-0.57,0.42+aim_turn*0.52,chest_turn)
+	var drive_turn := lerpf(-0.57,0.42+aim_turn*0.52,rotation_phase)
 	var finish_turn := SpikeArm.follow_heading(swing_aim,setter.global_position,setter.global_rotation.y)*0.52
 	var turn := lerpf(drive_turn,finish_turn,follow)
 	var airborne := smoothstep(0.08,0.45,setter.position.y-jump.start.y)
-	var leg_release := smoothstep(0.32,1.0,extension)
+	var leg_release := smoothstep(0.0,1.0,rotation_phase)
 	var leg_turn := tanh(turn*rotation_weight*0.75)*0.32*leg_rotation_scale*airborne*leg_release
 	var straighten := 0.32*leg_release*smoothstep(0.0,1.5,leg_rotation_scale)
 	if not is_zero_approx(leg_turn):
@@ -487,7 +488,8 @@ func pose_bow_draw(weight: float, contact: Vector3, extension := 0.0, follow := 
 		var hips: Vector3 = author.point(pose,"pelvis")
 		author.rotate_world(pose,"pelvis",(spine.origin-hips).normalized(),leg_turn)
 		author.set_world_basis(pose,"spine_01",spine.basis)
-	var tuck := clampf(airborne*weight*(1.0-0.75*follow)*leg_kickback_scale,0.0,1.0)
+	var kick_load := smoothstep(0.0,0.30,clock-swing_charge_started)
+	var tuck := airborne*weight*kick_load*minf(leg_kickback_scale,1.0)*(1.0-0.75*follow)
 	if tuck > 0.0:
 		for side in ["l","r"]:
 			var thigh: String = "thigh_"+side

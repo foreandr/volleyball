@@ -59,6 +59,7 @@ var pass_timing_cue: Node3D
 var reception_review: VBoxContainer
 var setting_drill: Node3D
 var attack_position_panel: PanelContainer
+var attack_playback_speed := 1.0
 var setter_original_transform: Transform3D
 var setter_original_height: float
 var setter_animation_process: int
@@ -375,6 +376,26 @@ func show_attack_positions() -> void:
 	map.drill = setting_drill
 	positions.add_child(map)
 
+	var slow_motion := CheckButton.new()
+	slow_motion.name = "AttackSlowMotion"
+	positions.add_child(slow_motion)
+	var speed := HSlider.new()
+	speed.name = "AttackPlaybackSpeed"
+	speed.min_value = 0.1
+	speed.max_value = 0.8
+	speed.step = 0.01
+	speed.value = 0.4
+	speed.custom_minimum_size.y = 24
+	positions.add_child(speed)
+	var update_speed := func():
+		attack_playback_speed = speed.value if slow_motion.button_pressed else 1.0
+		slow_motion.text = "Slow motion  %.2f×" % speed.value
+	speed.value_changed.connect(func(_value: float):
+		slow_motion.set_pressed_no_signal(true)
+		update_speed.call())
+	slow_motion.toggled.connect(func(_enabled: bool): update_speed.call())
+	update_speed.call()
+
 func add_low_bow_controls() -> void:
 	content.add_child(label(setting_drill.SpikeArm.SWING_NAME,16))
 	var loop := button("Loop Low Bow",func():
@@ -428,6 +449,7 @@ func add_attack_pose_slider(caption: String, node_name: String, minimum: float, 
 	content.add_child(slider)
 
 func stop_setting_drill() -> void:
+	attack_playback_speed = 1.0
 	if not is_instance_valid(setting_drill): return
 	if is_instance_valid(attack_position_panel):
 		attack_position_panel.hide()
@@ -563,6 +585,7 @@ func reception_drill_active() -> bool:
 func _process(delta: float) -> void:
 	pass_timing_cue.hide()
 	if is_instance_valid(setting_drill):
+		delta *= attack_playback_speed
 		setting_drill.restore_torso_lean(preview_player)
 		player_controls.read_pace_input()
 		setting_drill.trace_input = player_controls.movement_input()

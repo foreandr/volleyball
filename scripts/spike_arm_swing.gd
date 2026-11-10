@@ -19,7 +19,11 @@ static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float,
 	var elbow_limit := lerpf(112.0,158.0,smoothstep(0.29,0.98,extension))
 	elbow_limit = lerpf(elbow_limit,172.0,finish)
 	elbow_pole = elbow_pole.lerp(Vector3(-0.85,0.04,-0.33),finish)
-	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",target,elbow_pole,weight,elbow_limit)
+	var base := pose
+	if finish > 0.0:
+		pose = base.duplicate()
+	var solve_weight := 1.0 if finish > 0.0 else weight
+	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",target,elbow_pole,solve_weight,elbow_limit)
 	drop_low_bow_elbow(pose,author,weight*draw_progress*(1.0-arm_lift)*(1.0-smoothstep(0.0,0.48,extension)))
 	var wrist: Vector3 = author.point(pose,"hand_r")
 	var axis: Vector3 = (author.point(pose,"middle_01_r")-wrist).normalized()
@@ -29,9 +33,19 @@ static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float,
 	var down := Vector3.DOWN.slide(axis)
 	var target_edge := down.normalized().rotated(axis,PI*(1.0-line_weight))
 	var roll := edge.signed_angle_to(target_edge,axis)
-	var roll_weight := weight*smoothstep(0.25,0.85,extension)*(1.0-0.65*follow)*smoothstep(0.0,0.30,down.length())
+	var roll_weight := solve_weight*smoothstep(0.25,0.85,extension)*(1.0-smoothstep(0.0,0.9,follow))*smoothstep(0.0,0.30,down.length())
 	author.rotate_world(pose,"hand_r",axis,roll*roll_weight)
-	align_finish_wrist(pose,author,finish*weight)
+	align_finish_wrist(pose,author,finish)
+	if finish > 0.0:
+		blend_right_arm(base,pose,author,weight)
+
+static func blend_right_arm(base: Array, target: Array, author: RefCounted, weight: float) -> void:
+	# Fade local joint rotations so the IK pole cannot twist the elbow as the wrist comes to rest.
+	for bone in ["upperarm_r","lowerarm_r","hand_r"]:
+		var index: int = author.rig.find_bone(bone)
+		var from: Quaternion = base[index].basis.get_rotation_quaternion()
+		var to: Quaternion = target[index].basis.get_rotation_quaternion()
+		base[index].basis = Basis(from.slerp(to,weight))
 
 static func hip_finish(pose: Array, author: RefCounted, crosscourt: bool, clearance := 0.06) -> Vector3:
 	var hip: Vector3 = author.point(pose,"thigh_r" if crosscourt else "thigh_l")

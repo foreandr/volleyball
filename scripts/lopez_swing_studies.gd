@@ -39,15 +39,16 @@ static func bake(base: Animation, actor: Node3D, index: int, crosscourt := false
 	feed.spike_outgoing = travel/flight_time+Vector3.UP*Flight.GRAVITY*flight_time*0.5
 	var shot_turn := SpikeArm.follow_heading(target,feed.aim)
 	var base_turn := SpikeArm.follow_heading(base.get_meta("study_base_aim"),feed.aim)
+	var duration := base.length+0.12
 	var sampler := func(time: float) -> Array:
-		var frame := time*session.frame_rate
+		var frame := minf(time,base.length)*session.frame_rate
 		var pose: Array[Transform3D] = []
 		for bone in rig.get_bone_count():
 			pose.append(Transform3D(Basis(session.source_rotation(bone,frame)),session.source_position(bone,frame)))
 		shape(pose,author,profile,ball,(time-prep)/(timing-prep),(time-timing)/(base.length-timing),crosscourt,shot_turn-base_turn)
 		return pose
 	var title: String = profile[0]+(" Crosscourt" if crosscourt else "")
-	var clip: Animation = author.bake({"name":title,"duration":base.length,"contact_time":timing},sampler)
+	var clip: Animation = author.bake({"name":title,"duration":duration,"contact_time":timing},sampler)
 	for key in ["editor_start","editor_group","editor_height_cm"]:
 		clip.set_meta(key,base.get_meta(key))
 	clip.set_meta("editor_feed",feed)
@@ -61,21 +62,21 @@ static func shape(pose: Array[Transform3D], author: RefCounted, profile: Array, 
 	var windup := rising*(1.0-drive)
 	var air := rising*(1.0-settle)
 	var sweep := 1.0-pow(1.0-clampf(landing/0.56,0.0,1.0),2.0)
-	var finish_hold := sweep*(1.0-smoothstep(0.59,0.95,landing))
+	var finish_hold := sweep*(1.0-smoothstep(0.59,1.22,landing))
 	var strike_wrist: Vector3 = author.point(pose,"hand_r")
 	var strike_palm: Vector3 = strike_wrist.lerp(author.point(pose,"middle_01_r"),0.75)
 	strike_wrist += (ball-strike_palm).limit_length(0.33)
 	var left_foot: Vector3 = author.point(pose,"foot_l")
 	var right_foot: Vector3 = author.point(pose,"foot_r")
 	# The pelvis starts to open before the shoulders unwind.
-	var hips_open := smoothstep(0.42,float(profile[7])+0.10,progress)
+	var hips_open := smoothstep(0.29,1.03,progress)
 	author.rotate_world(pose,"pelvis",Vector3.UP,float(profile[3])*0.40*air*(2.0*hips_open-1.0))
 	author.rotate_world(pose,"pelvis",Vector3.BACK,float(profile[4])*0.45*(windup+0.55*drive*air))
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,-0.19*windup+0.25*finish_hold)
 	author.rotate_world(pose,"spine_03",Vector3.UP,-float(profile[3])*windup+aim_turn*finish_hold)
 	author.rotate_world(pose,"spine_03",Vector3.BACK,float(profile[4])*0.55*(windup+0.42*drive*air))
 
-	var scissor := smoothstep(0.24,0.88,progress)*(1.0-settle)
+	var scissor := smoothstep(0.14,0.98,progress)*(1.0-settle)
 	var split: float = profile[5]
 	var kick: float = profile[6]
 	var lead_hip: Vector3 = author.point(pose,"thigh_l")
@@ -100,9 +101,9 @@ static func shape(pose: Array[Transform3D], author: RefCounted, profile: Array, 
 	var strike_target := SpikeArm.follow_through_target(shoulder,strike_wrist,finish_target,sweep)
 	pole = pole.lerp(Vector3(-0.85,0.04,-0.33),sweep)
 	var strike_pose := pose.duplicate()
-	var strike_weight := rising*(1.0-smoothstep(0.59,0.95,landing))
-	author.limb(strike_pose,"upperarm_r","lowerarm_r","hand_r",strike_target,pole,strike_weight,lerpf(148.0,172.0,sweep))
-	SpikeArm.align_finish_wrist(strike_pose,author,sweep*strike_weight)
+	var strike_weight := rising*(1.0-smoothstep(0.59,1.22,landing))
+	author.limb(strike_pose,"upperarm_r","lowerarm_r","hand_r",strike_target,pole,1.0,lerpf(148.0,172.0,sweep))
+	SpikeArm.align_finish_wrist(strike_pose,author,sweep)
 
 	# Lead with the elbow while the bent forearm trails behind it.
 	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",chamber,Vector3(-1.0,-0.12,-0.34),air,108.0)
@@ -116,8 +117,4 @@ static func shape(pose: Array[Transform3D], author: RefCounted, profile: Array, 
 	elbow = author.point(pose,"lowerarm_r")
 	var trailing := Vector3(-0.34,0.48,-0.92).normalized()
 	author.aim_joint(pose,"lowerarm_r","hand_r",elbow+forearm.slerp(trailing,lead_weight))
-	for bone in ["upperarm_r","lowerarm_r","hand_r"]:
-		var index: int = author.rig.find_bone(bone)
-		var load_rotation := pose[index].basis.get_rotation_quaternion()
-		var strike_rotation: Quaternion = strike_pose[index].basis.get_rotation_quaternion()
-		pose[index].basis = Basis(load_rotation.slerp(strike_rotation,hand_release))
+	SpikeArm.blend_right_arm(pose,strike_pose,author,hand_release*strike_weight)
