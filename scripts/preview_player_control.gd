@@ -1,5 +1,6 @@
 extends RefCounted
 const QUICK_STEP_RATE := 1.5
+const LowSave = preload("res://scripts/player_reception_save.gd")
 const PassDrive = preload("res://scripts/reception_pass_drive.gd")
 var page: Control
 var active := false
@@ -8,6 +9,8 @@ var animator_active := true
 var animation_process := 0
 var moving := false
 var receive_elapsed := 0.0
+var receive_pose_elapsed := 0.0
+var low_save := LowSave.new()
 var receive_queued := false
 var receive_camera_pan := Vector3.ZERO
 var receive_entry_pose: Array[Transform3D] = []
@@ -82,8 +85,7 @@ func set_active(value: bool) -> void:
 	if active==value: return
 	var actor: Node3D = page.preview_player
 	active = value
-	receive_elapsed = 0.0
-	receive_queued = false
+	reset_receive_attempt()
 	receive_camera_pan = Vector3.ZERO
 	clear_receive_transition()
 	reset_reach()
@@ -142,17 +144,33 @@ func step(delta: float) -> void:
 	var drill := reception_drill_active()
 	if drill and receive_elapsed > 0.0:
 		var ball = page.ball_preview
+		var time: float = page.preview_clock+delta-ball.contact_time
+		var path := func(t): return ball.practice_position(t)
+		if low_save.active or (ball.practice_grade == ball.Grade.WAITING and ball.incoming_net.is_empty() and low_save.plan(page.preview_player,path,time,ball.practice_floor_time,ball.clip)):
+			if not low_save.finished(time):
+				var release := float(ball.recovery.get("time",low_save.contact_time+0.07))
+				var actor: Node3D = page.preview_player
+				actor.animator.pause()
+				actor.model.rotation.y = 0.0
+				low_save.sample(actor,time,release)
+				receive_pose_elapsed += delta
+				ball.update_practice_platform()
+				follow_camera()
+				return
+			locomotion = ""
+			reset_receive_attempt()
 		var after_touch := 0.0
 		if ball.recovery.has("spread"):
 			after_touch = maxf(0.0,page.preview_clock-ball.contact_time-float(ball.recovery.time))
-		if receive_elapsed <= 0.44 and after_touch < 0.18:
-			var windup := 0.14*(1.0-smoothstep(0.0,0.085,receive_elapsed))
+		var approaching: bool = ball.practice_approach(page.preview_clock+delta,1.12) >= 0.0
+		if (ball.practice_grade == ball.Grade.WAITING and (approaching or receive_pose_elapsed > 0.0)) or (ball.recovery.has("spread") and after_touch < 0.18):
+			receive_pose_elapsed += delta
+			var windup := 0.14*(1.0-smoothstep(0.0,0.06,receive_pose_elapsed))
 			receive_camera_pan = (receive_camera_pan+page.camera_pan_delta(direction,delta,3.5)).limit_length(4.0)
 			play_receive_pose(delta,Vector3.INF,-windup+after_touch*1.4)
 			follow_camera()
 			return
-		if receive_elapsed > 0.44: ball.practice_early_attempt = true
-	receive_elapsed = 0.0
+		if ball.practice_grade != ball.Grade.WAITING: reset_receive_attempt()
 	receive_camera_pan = Vector3.ZERO
 	end_receive_pose()
 	reset_reach()
@@ -184,11 +202,20 @@ func movement_input() -> Vector2:
 			if stick.length()>0.15: direction += stick*((stick.length()-0.15)/0.85)/stick.length()
 	return direction.limit_length()
 
+func reset_receive_attempt() -> void:
+	if low_save.active: locomotion = ""
+	receive_elapsed = 0.0
+	receive_pose_elapsed = 0.0
+	low_save.active = false
+	receive_queued = false
+
 func queue_receive() -> bool:
 	if not active or not reception_drill_active(): return false
 	var focus := page.get_viewport().gui_get_focus_owner()
 	if focus is LineEdit or focus is TextEdit: return false
-	if receive_elapsed == 0.0: receive_queued = true
+	if receive_elapsed == 0.0 and page.ball_preview.practice_grade == page.ball_preview.Grade.WAITING:
+		receive_queued = true
+		page.ball_preview.practice_early_attempt = true
 	return true
 
 func play_receive_pose(delta: float, review_offset := Vector3.INF, pose_offset := 0.0, planted := false) -> void:

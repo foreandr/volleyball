@@ -122,7 +122,7 @@ func set_bump_mode(enabled: bool) -> void:
 	reset_feed()
 
 func queue_bump() -> void:
-	if bump_enabled and clock >= 0.45+SERVE_TIME:
+	if bump_enabled:
 		bump.queue_bump(clock-0.45-SERVE_TIME)
 
 func apply_setter_arms(phase: float, moving: bool, delta: float) -> void:

@@ -41,6 +41,7 @@ var practice_mode := false
 var review_feed := {}
 var practice_floor_time := 0.0
 enum Grade { WAITING, PERFECT, EARLY, LATE, MISS, BODY_DIG }
+const PANCAKE_ERROR_SCALE := 0.4
 const GREEN_START := 0.075
 const GREEN_END := 0.25
 const APPROACH_WINDOW := 0.38
@@ -348,7 +349,7 @@ func update_practice_platform() -> void:
 		(wrists[0]+wrists[1])*0.5+clearance,
 	])
 
-func practice_approach(time: float) -> float:
+func practice_approach(time: float, near_radius := METER_NEAR_RADIUS) -> float:
 	if not incoming_net.is_empty(): return -1.0
 	var elapsed := time-contact_time
 	if elapsed < -feed_duration or elapsed > practice_floor_time: return -1.0
@@ -367,7 +368,7 @@ func practice_approach(time: float) -> float:
 			nearest = distance
 			nearest_delay = delay
 		if delay >= practice_floor_time-elapsed: break
-	if nearest <= METER_NEAR_RADIUS and nearest_delay > 0.0:
+	if nearest <= near_radius:
 		return 1.0-nearest_delay/APPROACH_WINDOW
 	return -1.0
 
@@ -395,12 +396,12 @@ func try_practice_pass(previous_time: float, time: float, receive_elapsed: float
 	else:
 		practice_grade = Grade.PERFECT
 	var velocity := practice_pass_velocity(touch,timing_error)
-	recovery = {"time":last,"point":touch,"velocity":velocity,"spread":practice_spread(timing_error),"end_time":last+Flight.landing_time(touch,velocity)}
+	recovery = {"time":last,"point":touch,"velocity":velocity,"aim":actor.get_meta("pass_target",{}).position,"spread":practice_spread(timing_error),"end_time":last+Flight.landing_time(touch,velocity)}
 	recovery_net = Net.first_hit(func(t): return touch+velocity*(t-last)+Vector3.DOWN*4.905*pow(t-last,2),last,recovery.end_time)
 	update_guide()
 	return true
 
-func try_pancake(previous_time: float, time: float) -> bool:
+func try_pancake(previous_time: float, time: float, receive_elapsed := -1.0) -> bool:
 	if practice_grade != Grade.WAITING or not incoming_net.is_empty(): return false
 	var first := maxf(previous_time-contact_time,-feed_duration)
 	var last := minf(time-contact_time,practice_floor_time)
@@ -413,12 +414,28 @@ func try_pancake(previous_time: float, time: float) -> bool:
 	if touch.distance_to(palm+Vector3.UP*RADIUS) > 0.13: return false
 	var velocity: Vector3 = incoming+feed_info.acceleration*last
 	if velocity.y >= 0.0: return false
-	var pop := velocity.slide(Vector3.UP).limit_length(1.1)*0.65+Vector3.UP*clampf(-velocity.y*0.48,2.2,4.2)
+	var pop := pancake_pop(velocity)
 	practice_grade = Grade.PERFECT
-	recovery = {"time":last,"point":touch,"velocity":pop,"pancake":true,"end_time":last+Flight.landing_time(touch,pop)}
+	recovery = {"time":last,"point":touch,"velocity":pop,"pancake":true}
+	if receive_elapsed >= 0.0:
+		var error := practice_timing_error(receive_elapsed)*PANCAKE_ERROR_SCALE
+		var target := pancake_target(touch,pop)
+		practice_grade = Grade.LATE if receive_elapsed < GREEN_START else (Grade.EARLY if receive_elapsed > GREEN_END else Grade.PERFECT)
+		recovery.aim = target.position
+		recovery.spread = practice_spread(error)
+		if error > 0.0: pop = aimed_pass_velocity(touch,target,45.0,error)
+		recovery.velocity = pop
+	recovery.end_time = last+Flight.landing_time(touch,pop)
 	recovery_net.clear()
 	update_guide()
 	return true
+
+static func pancake_pop(incoming: Vector3) -> Vector3:
+	return incoming.slide(Vector3.UP).limit_length(1.1)*0.65+Vector3.UP*clampf(-incoming.y*0.48,2.2,4.2)
+
+static func pancake_target(touch: Vector3, pop: Vector3) -> Dictionary:
+	var landing := touch+pop*Flight.landing_time(touch,pop)
+	return {"position":Vector2(landing.x,landing.z),"height":touch.y+pop.y*pop.y/(2.0*Flight.GRAVITY),"fit":"height"}
 
 func try_body_dig(previous_time: float, time: float) -> bool:
 	if not recovery.is_empty() or not incoming_net.is_empty(): return false
@@ -489,7 +506,7 @@ static func practice_timing_error(receive_elapsed: float) -> float:
 	return clampf((receive_elapsed-GREEN_END)/0.30,0.0,1.0)
 
 static func practice_spread(timing_error: float) -> float:
-	return lerpf(0.18,2.10,timing_error) if timing_error > 0.0 else 0.0
+	return 2.10*clampf(timing_error,0.0,1.0)
 
 func update_practice_cone(show_timing: bool, receive_elapsed: float) -> void:
 	var target: Dictionary = actor.get_meta("pass_target",{})
@@ -497,7 +514,8 @@ func update_practice_cone(show_timing: bool, receive_elapsed: float) -> void:
 	if not show_timing or not target.has("position") or (practice_grade != Grade.WAITING and not has_touch):
 		spread_cone.hide()
 		return
-	var destination := Vector3(target.position.x,0.075,target.position.y)
+	var aim: Vector2 = recovery.get("aim",target.position)
+	var destination := Vector3(aim.x,0.075,aim.y)
 	var origin: Vector3 = recovery.point if has_touch else practice_platform_center()
 	var spread: float = recovery.spread if has_touch else practice_spread(practice_timing_error(receive_elapsed))
 	spread_cone.show_spread(origin,destination,spread)
@@ -538,7 +556,7 @@ static func aimed_pass_velocity(touch: Vector3, target: Dictionary, angle: float
 	var spread := practice_spread(timing_error)*randf_range(0.55,1.0)
 	var destination: Vector2 = target.position+direction*spread
 	var ideal_peak := touch.y+ideal.y*ideal.y/(2.0*Flight.GRAVITY)
-	var height_spread := lerpf(0.10,1.35,timing_error)
+	var height_spread := 1.35*timing_error
 	var height_error := height_spread*randf_range(0.45,1.0)
 	if randf()<0.5: height_error = -height_error
 	return Flight.target_velocity(touch,{"position":destination,"fit":"height","height":ideal_peak+height_error},angle)

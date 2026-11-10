@@ -455,22 +455,28 @@ func _process(delta: float) -> void:
 			reset_cpu_receive(not in_control)
 			if not in_control: player_controls.clear_receive_transition()
 			ball_preview.reset_practice_serve()
+			player_controls.reset_receive_attempt()
 			player_controls.reset_reach()
 			timing_meter.reset_serve()
 			if in_control: drill_status.text = "Next serve  |  Tap Q just before contact"
 			else: drill_status.text = "CPU receiving  |  F1 to take control"
 		elif in_control:
 			reset_cpu_receive(false)
-			ball_preview.try_practice_pass(previous,preview_clock,player_controls.receive_elapsed)
+			if player_controls.low_save.active and player_controls.low_save.pancake:
+				ball_preview.try_pancake(previous,preview_clock,player_controls.receive_elapsed)
+			elif player_controls.receive_pose_elapsed > 0.0:
+				ball_preview.try_practice_pass(previous,preview_clock,player_controls.receive_elapsed)
 			var floor_time: float = ball_preview.contact_time+ball_preview.practice_floor_time
 			if ball_preview.crossed(preview_clock,floor_time): ball_preview.finish_practice_serve()
 		else:
 			step_cpu_receive(previous,delta)
 		if preview_clock >= previous and ball_preview.try_body_dig(previous,preview_clock):
 			drill_status.text = body_dig_status()
-		var approach: float = ball_preview.practice_approach(preview_clock) if in_control and ball_preview.practice_grade == BallPreview.Grade.WAITING else -1.0
-		timing_meter.update_timing(in_control,approach,player_controls.receive_elapsed>0.0,ball_preview.practice_grade,delta)
-		ball_preview.update_practice_cone(timing_meter.visible,player_controls.receive_elapsed)
+		var approach: float = ball_preview.practice_approach(preview_clock,1.12) if in_control and ball_preview.practice_grade == BallPreview.Grade.WAITING else -1.0
+		timing_meter.update_timing(in_control,approach,player_controls.receive_pose_elapsed>0.0,ball_preview.practice_grade,delta)
+		var anticipated: float = player_controls.receive_elapsed
+		if approach >= 0.0: anticipated += (1.0-approach)*BallPreview.APPROACH_WINDOW
+		ball_preview.update_practice_cone(timing_meter.visible,anticipated)
 		ball_preview.update_practice_aim(true)
 		update_distance_status(in_control or cpu_start.is_finite())
 	else:
