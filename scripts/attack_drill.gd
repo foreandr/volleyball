@@ -431,9 +431,10 @@ func pose_bow_draw(weight: float, contact := Vector3.ZERO, extension := 0.0, fol
 			var hip: Vector3 = author.point(pose,thigh)
 			var knee: Vector3 = author.point(pose,calf)
 			var ankle: Vector3 = author.point(pose,foot)
-			var thigh_axis := (knee-hip).normalized().slerp(Vector3(0.0,-1.0,0.16).normalized(),tuck)
+			var outward := 1.0 if side == "l" else -1.0
+			var thigh_axis := (knee-hip).normalized().slerp(Vector3(0.18*outward,-1.0,0.16).normalized(),tuck)
 			var heel_lift := (0.24 if side == "r" else 0.10)+0.78*maxf(0.0,leg_kickback_scale-1.0)
-			var shin_axis := (ankle-knee).normalized().slerp(Vector3(0.0,heel_lift,-1.0).normalized(),tuck)
+			var shin_axis := (ankle-knee).normalized().slerp(Vector3(0.07*outward,heel_lift,-1.0).normalized(),tuck)
 			author.aim_joint(pose,thigh,calf,hip+thigh_axis)
 			knee = author.point(pose,calf)
 			author.aim_joint(pose,calf,foot,knee+shin_axis)
