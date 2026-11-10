@@ -25,6 +25,7 @@ const SWING_CHARGE_TIME := 0.65
 const SWING_REACH := 1.55
 const SWING_CONTACT_HEIGHT := 2.22
 const PALM_RADIUS := 0.065
+const ASSISTED_PALM_RADIUS := 0.24
 const SWING_FOLLOW_TIME := 0.49
 const DEFAULT_BOUNCINESS := 2.25
 const DEFAULT_BACKSWING_BEND := 85.0
@@ -706,11 +707,17 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 			swing_impact_speed = palm.distance_to(previous_palm)/maxf(delta,0.001)
 			swing_hand_speed = maxf(swing_hand_speed,swing_impact_speed)
 			var previous_ball := flight_point(pass_origin,pass_motion,previous)
-			var radius := 0.24 if approach_practice else PALM_RADIUS
-			var fraction := hand_contact_fraction(previous_ball-previous_palm,ball.position-palm,radius)
+			var before := previous_ball-previous_palm
+			var after := ball.position-palm
+			var fraction := hand_contact_fraction(before,after)
+			var palm_gap := Geometry3D.get_closest_point_to_segment(Vector3.ZERO,before,after).length()
+			# Give the real palm a chance to meet the ball before accepting an assisted hit.
+			var leaving_reach := after.dot(after-before) >= 0.0 or drive+delta > swing_drive_duration+0.12
+			if approach_practice and fraction < 0.0 and leaving_reach:
+				fraction = hand_contact_fraction(before,after,ASSISTED_PALM_RADIUS)
 			if fraction >= 0.0:
 				swing_contact_extension = extension
-				hit_spike(charge,previous_ball.lerp(ball.position,fraction))
+				hit_spike(charge,previous_ball.lerp(ball.position,fraction),palm_gap)
 				return
 		previous_palm = palm
 	if time >= flight_end:
@@ -739,7 +746,7 @@ func hand_contact_fraction(before: Vector3, after: Vector3, palm_radius := PALM_
 	var entry := (-projection-sqrt(discriminant))/length_squared
 	return entry if entry >= 0.0 and entry <= 1.0 else -1.0
 
-func hit_spike(charge: float, point: Vector3) -> void:
+func hit_spike(charge: float, point: Vector3, palm_gap := 0.0) -> void:
 	spike_bounce_speed = 0.0
 	if not ball_audio_muted: spike_audio.play()
 	swing_contact = point
@@ -752,7 +759,8 @@ func hit_spike(charge: float, point: Vector3) -> void:
 	var speed := clampf(swing_hand_speed*2.2,1.0,32.0)
 	if approach_practice:
 		var palm_bonus := lerpf(0.95,1.05,smoothstep(5.0,15.0,swing_hand_speed))
-		speed = lerpf(12.0,27.0,charge)*palm_bonus
+		var contact_bonus := lerpf(1.12,0.74,smoothstep(BallPreview.RADIUS,BallPreview.RADIUS+ASSISTED_PALM_RADIUS,palm_gap))
+		speed = lerpf(12.0,27.0,charge)*palm_bonus*contact_bonus
 	elif not swing_practice:
 		var completion := smoothstep(0.22,0.93,swing_contact_extension)
 		speed *= lerpf(0.56,1.0,charge)*lerpf(0.65,1.0,completion)
@@ -765,7 +773,7 @@ func hit_spike(charge: float, point: Vector3) -> void:
 	region.hide()
 	timing_cue.hide()
 	status.text = "Spike  |  %d%% power" % roundi(charge*100.0)
-	trace.write("spike",clock,{"point":swing_contact,"aim":swing_aim,"velocity":pass_motion,"power":charge,"swing":SpikeArm.SWING_NAME,"palm_speed":swing_impact_speed,"peak_palm_speed":swing_hand_speed,"topspin_rps":spike_topspin_rps,"net":not swing_net_hit.is_empty()},true)
+	trace.write("spike",clock,{"point":swing_contact,"aim":swing_aim,"velocity":pass_motion,"power":charge,"palm_gap":palm_gap,"swing":SpikeArm.SWING_NAME,"palm_speed":swing_impact_speed,"peak_palm_speed":swing_hand_speed,"topspin_rps":spike_topspin_rps,"net":not swing_net_hit.is_empty()},true)
 
 func play_spike(time: float, delta: float) -> void:
 	show_attack_net(swing_net_hit,time)
