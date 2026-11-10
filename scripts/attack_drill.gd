@@ -25,8 +25,7 @@ const SWING_FOLLOW_TIME := 0.30
 var stage := Stage.SERVE
 var swing_practice := true
 var practice_takeoff := PIN+Vector3(-0.70,RECEIVE_START.y-PIN.y,-0.48)
-var practice_ball_offset := Vector3.ZERO
-var practice_ball_start: Vector3
+var practice_set_target := PIN
 var swing_review := false
 var torso_rotation_scale := 2.0
 var leg_kickback_scale := 2.0
@@ -134,9 +133,8 @@ func start_swing_practice() -> void:
 	var velocity := set_toward_pin(source)
 	var lead := 0.72
 	var preroll := descending_time(source,velocity,PIN_HEIGHT)-lead
-	practice_ball_start = flight_point(source,velocity,preroll)+practice_ball_offset
-	pass_origin = practice_ball_start
-	pass_motion = velocity+Vector3.DOWN*Flight.GRAVITY*preroll-practice_ball_offset/lead
+	pass_origin = flight_point(source,velocity,preroll)
+	pass_motion = velocity+Vector3.DOWN*Flight.GRAVITY*preroll+(practice_set_target-PIN)/lead
 	pin_arrival = lead
 	flight_end = Flight.landing_time(pass_origin,pass_motion)
 	ball.position = pass_origin

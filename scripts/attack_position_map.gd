@@ -34,15 +34,15 @@ func _draw() -> void:
 	ball_marker = ball_marker.clamp(map_bounds.position,map_bounds.end)
 	if drag_marker == "start": start_marker = drag_start+drag_offset
 	if drill.swing_practice:
-		var source := court_point(drill.practice_ball_start)
-		if drag_marker == "ball": source = drag_start+drag_offset
-		draw_arc(source,7.0,0.0,TAU,24,BALL_COLOR,2.0,true)
+		var target := court_point(drill.practice_set_target)
+		if drag_marker == "target": target = drag_start+drag_offset
+		draw_arc(target,7.0,0.0,TAU,24,BALL_COLOR,2.0,true)
 	draw_circle(ball_marker,4.5,BALL_COLOR)
 	draw_arc(start_marker,8.0,0.0,TAU,24,START_COLOR,2.0,true)
 	var font := get_theme_default_font()
 	if drill.swing_practice:
 		draw_arc(Vector2(16,317),4.5,0.0,TAU,24,BALL_COLOR,1.5,true)
-		draw_string(font,Vector2(29,322),"Ball start",HORIZONTAL_ALIGNMENT_LEFT,-1,16,BALL_COLOR)
+		draw_string(font,Vector2(29,322),"Set target",HORIZONTAL_ALIGNMENT_LEFT,-1,16,BALL_COLOR)
 	draw_circle(Vector2(16,265),4.5,START_COLOR)
 	draw_string(font,Vector2(29,270),"Attacker start",HORIZONTAL_ALIGNMENT_LEFT,-1,16,START_COLOR)
 	draw_circle(Vector2(16,291),4.5,BALL_COLOR)
@@ -62,12 +62,12 @@ func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if event.pressed:
 			var start := court_point(drill.practice_takeoff)
-			var ball := court_point(drill.practice_ball_start)
+			var target := court_point(drill.practice_set_target)
 			var start_distance: float = event.position.distance_to(start)
-			var ball_distance: float = event.position.distance_to(ball)
-			if minf(start_distance,ball_distance) > 12.0: return
-			drag_marker = "ball" if ball_distance < start_distance else "start"
-			drag_start = ball if drag_marker == "ball" else start
+			var target_distance: float = event.position.distance_to(target)
+			if minf(start_distance,target_distance) > 12.0: return
+			drag_marker = "target" if target_distance < start_distance else "start"
+			drag_start = target if drag_marker == "target" else start
 			drag_offset = Vector2.ZERO
 		elif not drag_marker.is_empty():
 			var shift := Vector3(-drag_offset.x,0.0,-drag_offset.y)/court_scale()
@@ -75,9 +75,10 @@ func _gui_input(event: InputEvent) -> void:
 				if drag_marker == "start":
 					drill.practice_takeoff = drill.Court.clamp_setter(drill.practice_takeoff+shift,drill.ATTACK_FRONT_LIMIT)
 				else:
-					var source: Vector3 = drill.practice_ball_start
-					var target: Vector2 = drill.Court.clamp_set_aim(source+shift)
-					drill.practice_ball_offset += Vector3(target.x-source.x,0.0,target.y-source.z)
+					var point: Vector3 = drill.practice_set_target+shift
+					point.x = clampf(point.x,-4.5,4.5)
+					point.z = clampf(point.z,-5.0,4.0)
+					drill.practice_set_target = point
 				drill.reset_feed()
 			drag_marker = ""
 		accept_event()
