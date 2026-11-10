@@ -187,9 +187,6 @@ static func roll_finish_palm(pose: Array, author: RefCounted, amount: float, fol
 	author.rotate_world(pose,"hand_r",axis,applied)
 	return applied
 
-static func align_finish_wrist(pose: Array, author: RefCounted, progress: float) -> void:
-	align_wrist_to_forearm(pose,author,smoothstep(0.25,0.95,progress))
-
 static func align_wrist_to_forearm(pose: Array, author: RefCounted, amount: float) -> void:
 	if amount <= 0.0: return
 	var wrist: Vector3 = author.point(pose,"hand_r")
