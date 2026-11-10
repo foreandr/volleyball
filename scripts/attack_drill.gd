@@ -747,7 +747,7 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 		var arm_lift := smoothstep(lift_start,estimated_contact,time)
 		if approach_practice:
 			draw_progress = 1.0
-			arm_lift = smootherstep(minf(lift_start,estimated_contact-0.30),estimated_contact,time)
+			arm_lift = smootherstep(0.08,0.26,clock-swing_started)
 		if airborne:
 			var expected_contact := flight_point(pass_origin,pass_motion,estimated_contact)
 			var shot := swing_aim-expected_contact
@@ -949,7 +949,7 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 		pitch *= 0.38
 		if stage == Stage.SET:
 			var rise_age := clock-swing_started
-			var arch := smootherstep(0.12,0.23,rise_age)*(1.0-smootherstep(0.23,0.36,rise_age))
+			var arch := smootherstep(0.08,0.25,rise_age)*(1.0-smootherstep(0.25,0.43,rise_age))
 			pitch = lerpf(pitch,deg_to_rad(-40.0),arch)
 	author.rotate_world(pose,"spine_01",Vector3.RIGHT,pitch*0.45*weight)
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,pitch*0.55*weight)
@@ -976,14 +976,14 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 		var shot_direction := (rig.to_local(shot_aim)-ball_target).normalized()
 		var compact_finish := SpikeArm.compact_finish_weight(shot_aim,contact,line_weight < 0.5)
 		var arm_weight := 1.0 if approach_practice and stage == Stage.SET else weight
-		swing_palm_roll = SpikeArm.apply(pose,author,ball_target,arm_weight,extension,follow,draw_progress,arm_lift,line_weight,palm_finish,elbow_clearance,swing_palm_roll,roll_step,shot_direction,compact_finish,backswing_reach*backswing_weight)
+		swing_palm_roll = SpikeArm.apply(pose,author,ball_target,arm_weight,extension,follow,draw_progress,arm_lift,line_weight,palm_finish,elbow_clearance,swing_palm_roll,roll_step,shot_direction,compact_finish,backswing_reach*backswing_weight,approach_practice)
 		var guide_drop := maxf(smoothstep(0.07,0.83,extension),smoothstep(0.0,0.62,follow))
 		SpikeArm.apply_guide_arm(pose,author,Vector3(0.06,0.43,0.64-backswing_reach*backswing_weight*0.6),Vector3(0.26,-0.55,0.15),guide_drop,arm_weight,172.0)
 		if stage == Stage.HIT and follow >= 0.90:
 			swing_finish_pose = pose.duplicate()
 	if approach_practice and not approach_arm_transition.is_empty():
 		var handoff_age := clock-stage_start if stage == Stage.HIT else clock-swing_started
-		if stage == Stage.SET and handoff_age < 0.36:
+		if stage == Stage.SET and handoff_age < 0.43:
 			var front_pose := pose.duplicate()
 			var across: Vector3 = (author.point(pose,"upperarm_l")-author.point(pose,"upperarm_r")).normalized()
 			var up: Vector3 = (author.point(pose,"neck_01")-author.point(pose,"spine_01")).normalized()
@@ -995,12 +995,15 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 				var elbow: Vector3 = author.point(pose,"lowerarm_"+side)
 				var wrist: Vector3 = author.point(pose,"hand_"+side)
 				var arm_length := shoulder.distance_to(elbow)+elbow.distance_to(wrist)
-				var overhead := smootherstep(0.12,0.23,handoff_age)
+				var overhead := clampf((handoff_age-0.08)/0.18,0.0,1.0)
 				var front := (forward*sin(deg_to_rad(80.0))-up*cos(deg_to_rad(80.0))).normalized()
 				var lift_direction := front.slerp(Vector3.UP,overhead)
 				var target := shoulder+lift_direction*lerpf(0.54,arm_length*0.995,overhead)-outward*lerpf(0.07,0.02,overhead)
-				author.limb(front_pose,upper,"lowerarm_"+side,"hand_"+side,target,-up-outward*0.10,1.0,lerpf(155.0,179.0,overhead))
-				var front_weight := 1.0-smootherstep(0.23,0.36,handoff_age)
+				# Keep the elbow bend on the same side as the hand passes overhead.
+				var elbow_pole := lerp_angle(0.0,PI*0.5,overhead)
+				var bend := forward*sin(elbow_pole)-up*cos(elbow_pole)-outward*0.10
+				author.limb(front_pose,upper,"lowerarm_"+side,"hand_"+side,target,bend,1.0,lerpf(155.0,174.0,overhead))
+				var front_weight := 1.0-smootherstep(0.21,0.43,handoff_age)
 				SpikeArm.blend_arm(pose,front_pose,author,front_weight,side)
 				var source_weight := 1.0-smootherstep(0.0,0.12,handoff_age)
 				SpikeArm.blend_arm(pose,approach_arm_transition,author,source_weight,side)
