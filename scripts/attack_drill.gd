@@ -1,5 +1,7 @@
 extends "res://scripts/setting_drill.gd"
 
+signal shot_sequence_changed(playing: bool)
+
 const Court = preload("res://scripts/preview_court.gd")
 const SpikeArm = preload("res://scripts/spike_arm_swing.gd")
 const HandPose = preload("res://scripts/hand_setting_pose.gd")
@@ -20,12 +22,20 @@ const SWING_REACH := 1.55
 const SWING_CONTACT_HEIGHT := 2.22
 const PALM_RADIUS := 0.065
 const SWING_FOLLOW_TIME := 0.49
-const DEFAULT_BOUNCINESS := 1.75
+const DEFAULT_BOUNCINESS := 2.25
+const SEQUENCE_SET_X := [3.55,0.0,-3.55]
+const SEQUENCE_SHOT_X := [
+	[3.55,0.0,-3.55],
+	[2.0,0.0,-3.55],
+	[-3.55,0.0,3.55],
+]
 const SHOT_AIM_HALF_WIDTH := 7.5
 const SHOT_AIM_NEAR := 4.3
 const SHOT_AIM_FAR := 16.0
 var stage := Stage.SERVE
 var swing_practice := true
+var shot_sequence_index := -1
+var manual_shot_aim := Vector3.ZERO
 var practice_takeoff := PIN+Vector3(-0.70,RECEIVE_START.y-PIN.y,-0.98)
 var practice_set_target := PIN
 var practice_setup_path := "user://attack_practice.cfg"
@@ -135,6 +145,9 @@ func clamp_practice_target(point: Vector3) -> Vector3:
 func reset_feed() -> void:
 	if trace.feed > 0:
 		trace.write("feed_end",clock,{"result":status.text,"closest_check":trace.closest_check},true)
+	if shot_sequence_index >= 0 and stage in [Stage.HIT,Stage.MISS]:
+		shot_sequence_index += 1
+		if shot_sequence_index == 9: stop_shot_sequence()
 	clock = 0.0
 	stage_start = 0.0
 	stage = Stage.SERVE
@@ -191,21 +204,48 @@ func reset_feed() -> void:
 	status.text = "Receive  |  Q forearms, I / E hands"
 	trace.begin_feed({"mode":"attacking","source":ATTACK_SERVE_SOURCE,"serve_velocity":serve_velocity,"pin":PIN})
 
+func toggle_shot_sequence() -> void:
+	if shot_sequence_index >= 0:
+		stop_shot_sequence()
+	else:
+		manual_shot_aim = swing_aim
+		shot_sequence_index = 0
+		shot_sequence_changed.emit(true)
+	stage = Stage.SET
+	reset_feed()
+
+func stop_shot_sequence() -> void:
+	if shot_sequence_index < 0: return
+	shot_sequence_index = -1
+	aim_swing(manual_shot_aim)
+	shot_sequence_changed.emit(false)
+
 func set_swing_practice(enabled: bool) -> void:
+	stop_shot_sequence()
 	swing_practice = enabled
 	reset_feed()
 
 func start_swing_practice() -> void:
 	stage = Stage.SET
 	bump.hide()
-	setter.position = practice_takeoff
-	receiver.rotation.y = atan2(PIN.x-CPU_HOME.x,PIN.z-CPU_HOME.z)
+	var pin := PIN
+	var set_target := practice_set_target
+	var takeoff := practice_takeoff
+	if shot_sequence_index >= 0:
+		var lane := floori(shot_sequence_index/3.0)
+		pin.x = SEQUENCE_SET_X[lane]
+		set_target = pin
+		takeoff = pin+Vector3(-0.40,RECEIVE_START.y-PIN.y,-0.83)
+		aim_swing(Vector3(SEQUENCE_SHOT_X[lane][shot_sequence_index%3],Flight.FLOOR,9.5))
+	setter.position = takeoff
+	region.position = set_target
+	receiver.rotation.y = atan2(pin.x-CPU_HOME.x,pin.z-CPU_HOME.z)
 	var source := receiver.to_global(Vector3(0.0,HandPose.CONTACT_HEIGHT,HandPose.CONTACT_FORWARD))
-	var velocity := set_toward_pin(source)
+	var velocity := set_toward_pin(source,pin)
 	var lead := 0.72
 	var preroll := descending_time(source,velocity,PIN_HEIGHT)-lead
 	pass_origin = flight_point(source,velocity,preroll)
-	pass_motion = velocity+Vector3.DOWN*Flight.GRAVITY*preroll+(practice_set_target-PIN)/lead
+	pass_motion = velocity+Vector3.DOWN*Flight.GRAVITY*preroll+(set_target-pin)/lead
 	jump.begin(setter,Vector2(0.0,0.65))
 	for frame in range(16): jump.step(setter,1.0/60.0,Vector2.ZERO)
 	jump.release()
@@ -217,7 +257,7 @@ func start_swing_practice() -> void:
 	aim_swing(swing_aim)
 	swing_started = clock
 	status.text = ""
-	trace.begin_feed({"mode":"swing_practice","source":pass_origin,"velocity":pass_motion,"pin":practice_set_target,"takeoff":practice_takeoff})
+	trace.begin_feed({"mode":"swing_practice","source":pass_origin,"velocity":pass_motion,"pin":set_target,"takeoff":takeoff})
 
 func set_key() -> int:
 	return KEY_Q if stage == Stage.SERVE else KEY_NONE
@@ -703,10 +743,10 @@ func miss(message: String) -> void:
 	swing_target.hide()
 	trace.write("attack_miss",clock,{"ball":ball.position,"player":setter.position,"closest_check":trace.closest_check},true)
 
-func set_toward_pin(origin: Vector3) -> Vector3:
+func set_toward_pin(origin: Vector3, pin := PIN) -> Vector3:
 	var rise := sqrt(2.0*Flight.GRAVITY*(SET_APEX-origin.y))
 	var duration := (rise+sqrt(2.0*Flight.GRAVITY*(SET_APEX-PIN_HEIGHT)))/Flight.GRAVITY
-	return (PIN-origin).slide(Vector3.UP)/duration+Vector3.UP*rise
+	return (pin-origin).slide(Vector3.UP)/duration+Vector3.UP*rise
 
 func descending_time(origin: Vector3, velocity: Vector3, height: float) -> float:
 	var square := velocity.y*velocity.y+2.0*Flight.GRAVITY*(origin.y-height)

@@ -358,6 +358,14 @@ func start_setting_drill(attack := false) -> void:
 		show_attack_positions()
 		setting_drill.bump.set_custom_backward(load_custom_backward_clip())
 		add_low_bow_controls()
+		var play_shots := button("Play",func():
+			setting_drill.toggle_shot_sequence()
+			preview.grab_focus())
+		play_shots.name = "PlayAttackShots"
+		play_shots.visible = modes.selected == 0
+		content.add_child(play_shots)
+		setting_drill.shot_sequence_changed.connect(func(playing: bool): play_shots.text = "Stop" if playing else "Play")
+		modes.item_selected.connect(func(index: int): play_shots.visible = index == 0)
 		add_attack_tuning_slider(content,"Air turn speed","AttackAirTurnSpeed","°/s",0,720,10,setting_drill.air_turn_speed,
 			func(value: float): setting_drill.air_turn_speed = value)
 		add_attack_pose_slider("Torso rotation","TorsoRotation",50,setting_drill.torso_rotation_scale,

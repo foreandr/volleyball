@@ -36,7 +36,7 @@ func _draw() -> void:
 	ball_marker = ball_marker.clamp(map_bounds.position,map_bounds.end)
 	if drag_marker == "start": start_marker = drag_start+drag_offset
 	if drill.swing_practice:
-		var target := court_point(drill.practice_set_target)
+		var target := court_point(drill.region.position)
 		if drag_marker == "target": target = drag_start+drag_offset
 		draw_arc(target,7.0,0.0,TAU,24,BALL_COLOR,2.0,true)
 	draw_circle(ball_marker,4.5,BALL_COLOR)
@@ -79,7 +79,7 @@ func _gui_input(event: InputEvent) -> void:
 				drill.aim_swing(point)
 				accept_event()
 				return
-			if not drill.swing_practice: return
+			if not drill.swing_practice or drill.shot_sequence_index >= 0: return
 			var start := court_point(drill.practice_takeoff)
 			var target := court_point(drill.practice_set_target)
 			var start_distance: float = event.position.distance_to(start)
