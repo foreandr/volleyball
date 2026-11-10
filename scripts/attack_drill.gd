@@ -10,7 +10,11 @@ const CPU_HOME := Vector3(-0.55,0.04,1.15)
 const PIN_HEIGHT := 2.75
 const SET_APEX := 5.0
 
-enum Stage { SERVE, PASS, SET, CAUGHT, MISS }
+enum Stage { SERVE, PASS, SET, HIT, MISS }
+const SWING_CHARGE_TIME := 0.65
+const SWING_REACH := 1.55
+const SWING_CONTACT_HEIGHT := 2.45
+const SWING_FOLLOW_TIME := 0.30
 var stage := Stage.SERVE
 var stage_start := 0.0
 var serve_target: Vector3
@@ -23,6 +27,13 @@ var cpu_set: MeshInstance3D
 var cpu_feet: RefCounted
 var pin_arrival := 0.0
 var flight_end := 0.0
+var swing_started := -INF
+var swing_released := -INF
+var swing_aim := Vector3(0.0,Flight.FLOOR,9.5)
+var swing_contact: Vector3
+var swing_power := 0.0
+var swing_net_hit := {}
+var swing_target: MeshInstance3D
 
 func reset_feed() -> void:
 	if trace.feed > 0:
@@ -57,12 +68,19 @@ func reset_feed() -> void:
 	ball.position = ATTACK_SERVE_SOURCE
 	region.position = PIN
 	region.hide()
+	swing_started = -INF
+	swing_released = -INF
+	swing_net_hit.clear()
+	if swing_target == null:
+		swing_target = region.duplicate()
+		add_child(swing_target)
+	swing_target.hide()
 	timing_cue.hide()
 	status.text = "Receive  |  Q forearms, I / E hands"
-	trace.begin_feed({"mode":"attack_catch","source":ATTACK_SERVE_SOURCE,"serve_velocity":serve_velocity,"pin":PIN})
+	trace.begin_feed({"mode":"attacking","source":ATTACK_SERVE_SOURCE,"serve_velocity":serve_velocity,"pin":PIN})
 
 func set_key() -> int:
-	return KEY_Q if stage == Stage.SERVE else KEY_E
+	return KEY_Q if stage == Stage.SERVE else KEY_NONE
 
 func can_aim_set() -> bool:
 	return stage == Stage.SERVE and not is_finite(bump.touch_time)
@@ -97,11 +115,34 @@ func receive_cue_time() -> float:
 func court_facing_weight() -> float:
 	return 0.5 if stage == Stage.PASS or stage == Stage.SET else 0.0
 
-func queue_catch() -> void:
-	if stage == Stage.SET: queue_set()
+func can_aim_swing() -> bool:
+	return stage == Stage.SET
+
+func aim_swing(point: Vector3) -> void:
+	swing_aim = Vector3(clampf(point.x,-4.4,4.4),Flight.FLOOR,clampf(point.z,4.3,12.9))
+	swing_target.position = Vector3(swing_aim.x,0.065,swing_aim.z)
+
+func swing_input(pressed: bool, direction: Vector2) -> void:
+	if stage != Stage.SET: return
+	if not pressed:
+		if is_finite(swing_started) and not is_finite(swing_released): swing_released = clock
+		return
+	if is_finite(swing_started) and jump.active: return
+	swing_started = clock
+	swing_released = -INF
+	var approach := direction
+	if approach.is_zero_approx():
+		var toward_pin := PIN-setter.position
+		approach = Vector2(-toward_pin.x,toward_pin.z).limit_length()
+	queue_jump(approach)
+	status.text = "Charging swing"
+	trace.write("swing_start",clock,{"player":setter.position,"aim":swing_aim},true)
+
+func swing_charge() -> float:
+	return clampf((minf(clock,swing_released if is_finite(swing_released) else clock)-swing_started)/SWING_CHARGE_TIME,0.0,1.0)
 
 func queue_set() -> void:
-	if stage != Stage.SERVE and stage != Stage.SET: return
+	if stage != Stage.SERVE: return
 	bump.queue_bump(clock-stage_start)
 	trace.write("attack_input",clock,{"stage":stage,"technique":"hands" if bump.hand_setting else "forearms","aim":bump.destination,"height":bump.height,"position":setter.position,"ball":ball.position},true)
 
@@ -111,7 +152,7 @@ func setter_is_diving() -> bool:
 	return stage == Stage.PASS and not bump.low_save.finished(bump.touch_time+clock-stage_start)
 
 func queue_jump(direction: Vector2) -> void:
-	if jump.active or setter_is_diving() or stage == Stage.CAUGHT: return
+	if jump.active or setter_is_diving() or stage == Stage.HIT: return
 	jump.begin(setter,direction)
 	trace.write("jump",clock,{"position":setter.position,"direction":jump.heading},true)
 
@@ -137,11 +178,8 @@ func step(delta: float) -> void:
 			play_cpu_set(time,delta)
 		Stage.SET:
 			cpu_set.update_hand_push(cpu_set.release_time+time,cpu_set.release_time+time-cpu_set.touch_time)
-			play_pin_ball(time,previous,delta)
-		Stage.CAUGHT:
-			HandPose.apply(setter,setter.to_global(bump.hand_anchor),1.0)
-			ball.position = bump.platform_center()
-			if time >= 0.55 and not jump.active: reset_feed()
+			play_pin_ball(time)
+		Stage.HIT: play_spike(time)
 		Stage.MISS:
 			if time >= 0.85: reset_feed()
 	if stage == Stage.SERVE or stage == Stage.SET: trace.check_contact(bump.contact_check)
@@ -151,7 +189,7 @@ func trace_snapshot(time: float) -> Dictionary:
 	var velocity := Vector3.ZERO
 	match stage:
 		Stage.SERVE: velocity = serve_velocity+Vector3.DOWN*Flight.GRAVITY*time
-		Stage.PASS,Stage.SET: velocity = pass_motion+Vector3.DOWN*Flight.GRAVITY*time
+		Stage.PASS,Stage.SET,Stage.HIT: velocity = pass_motion+Vector3.DOWN*Flight.GRAVITY*time
 	var platform: Vector3 = bump.platform_center()
 	return {
 		"stage":stage,"result":status.text,"ball_position":ball.position,"ball_velocity":velocity,
@@ -209,12 +247,13 @@ func play_cpu_set(time: float, delta: float) -> void:
 			stage = Stage.SET
 			stage_start = clock
 			bump.reset()
-			bump.hand_setting = true
-			bump.catch_only = true
+			bump.hand_setting = false
 			trace.closest_check.clear()
 			trace.closest_margin = INF
-			status.text = "Jump at the pin  |  Space, then click or E"
+			status.text = "Hold left-click to jump and spike"
 			region.show()
+			aim_swing(swing_aim)
+			swing_target.show()
 			trace.write("cpu_set",clock,{"point":pass_origin,"velocity":pass_motion,"pin_arrival":pin_arrival},true)
 		return
 	ball.position = flight_point(pass_origin,pass_motion,minf(time,cpu_contact_time))
@@ -239,25 +278,84 @@ func play_cpu_set(time: float, delta: float) -> void:
 		cpu_set.destination = Vector2(target.x,target.z)
 		cpu_set.begin_hand_contact(cpu_contact_point,time)
 
-func play_pin_ball(time: float, previous: float, delta: float) -> void:
-	var path := func(t): return flight_point(pass_origin,pass_motion,t)
-	ball.position = path.call(minf(time,flight_end))
+func play_pin_ball(time: float) -> void:
+	ball.position = flight_point(pass_origin,pass_motion,minf(time,flight_end))
 	timing_cue.update_timing(time,pin_arrival,BumpSetting.GREEN_START,BumpSetting.GREEN_END)
-	bump.catch_airborne = setter.position.y > RECEIVE_START.y+0.08
-	bump.update_attempt(time,previous,flight_end,path,pass_motion+Vector3.DOWN*Flight.GRAVITY*time,delta,pin_arrival)
-	if is_finite(bump.touch_time):
-		stage = Stage.CAUGHT
-		stage_start = clock
-		status.text = "Caught at the pin"
-		timing_cue.show_result(bump.grade)
-		trace.write("pin_catch",clock,{"point":bump.touch,"grade":bump.grade,"contact":bump.contact_check},true)
-	elif time >= flight_end:
-		miss("Pin catch missed")
+	if is_finite(swing_started) and jump.active:
+		var charge := swing_charge()
+		status.text = "Swing power  |  %d%%" % roundi(charge*100.0)
+		var toward_ball := ball.position-setter.global_position
+		var airborne := setter.position.y > jump.start.y+0.08
+		var in_reach := toward_ball.slide(Vector3.UP).length() <= SWING_REACH and toward_ball.y >= 1.35 and toward_ball.y <= SWING_CONTACT_HEIGHT
+		if airborne and in_reach and time >= pin_arrival-0.24:
+			hit_spike(charge)
+			return
+		var load := smoothstep(0.0,0.20,clock-swing_started)
+		var near := 1.0-smoothstep(SWING_CONTACT_HEIGHT,SWING_CONTACT_HEIGHT+0.75,toward_ball.y)
+		var drive := 0.57*near*smoothstep(pin_arrival-0.42,pin_arrival-0.24,time) if airborne else 0.0
+		pose_swing(ball.position,drive,load)
+	if time >= flight_end: miss("Spike missed")
+
+func hit_spike(charge: float) -> void:
+	swing_contact = ball.position
+	swing_power = charge
+	pass_origin = swing_contact
+	var target := swing_aim-pass_origin
+	var duration := maxf(0.24,target.slide(Vector3.UP).length()/lerpf(11.0,29.0,charge))
+	pass_motion = target/duration+Vector3.UP*Flight.GRAVITY*duration*0.5
+	flight_end = duration
+	swing_net_hit = Net.first_hit(func(t): return flight_point(pass_origin,pass_motion,t),0.0,duration)
+	stage = Stage.HIT
+	stage_start = clock
+	region.hide()
+	timing_cue.hide()
+	status.text = "Spike  |  %d%% power" % roundi(charge*100.0)
+	pose_swing(swing_contact,0.57,1.0)
+	trace.write("spike",clock,{"point":swing_contact,"aim":swing_aim,"velocity":pass_motion,"power":charge,"net":not swing_net_hit.is_empty()},true)
+
+func play_spike(time: float) -> void:
+	var end := flight_end if swing_net_hit.is_empty() else float(swing_net_hit.end_time)
+	if not swing_net_hit.is_empty() and time >= swing_net_hit.time:
+		ball.position = Net.after_hit(swing_net_hit,minf(time,end))
+		status.text = "Spike hit the net"
+	else:
+		ball.position = flight_point(pass_origin,pass_motion,minf(time,end))
+	if time < SWING_FOLLOW_TIME:
+		pose_swing(swing_contact,lerpf(0.57,1.0,smoothstep(0.0,0.16,time)),1.0-smoothstep(0.11,SWING_FOLLOW_TIME,time))
+	if time >= end+0.48 and not jump.active: reset_feed()
+
+func pose_swing(contact: Vector3, phase: float, weight: float) -> void:
+	var rig: Skeleton3D = setter.skeleton
+	var author: RefCounted = setter.get_pose_author()
+	var pose: Array[Transform3D] = []
+	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
+	var side := "l" if setter.handedness == "Left" else "r"
+	var sign_ := 1.0 if side == "l" else -1.0
+	var upper := "upperarm_"+side
+	var forearm := "lowerarm_"+side
+	var wrist := "hand_"+side
+	author.rotate_world(pose,"spine_03",Vector3.UP,sign_*lerpf(-0.32,0.35,phase)*weight)
+	var shoulder: Vector3 = author.point(pose,upper)
+	var ball_target := rig.to_local(contact)
+	var windup := shoulder+Vector3(sign_*0.25,0.28,-0.34)
+	var direction := (rig.to_local(swing_aim)-ball_target).normalized()
+	var follow := shoulder+(direction+Vector3.DOWN*0.75+Vector3.LEFT*sign_*0.38).normalized()*0.51
+	var target := windup.lerp(ball_target,smoothstep(0.0,0.57,phase))
+	target = target.lerp(follow,smoothstep(0.57,1.0,phase))
+	author.limb(pose,upper,forearm,wrist,target,Vector3(sign_*0.85,-0.24,-0.35),weight,171.0)
+	var guide := "r" if side == "l" else "l"
+	var guide_shoulder: Vector3 = author.point(pose,"upperarm_"+guide)
+	var drop := smoothstep(0.12,0.75,phase)
+	var guide_target := guide_shoulder+Vector3(-sign_*0.18,lerpf(0.45,-0.28,drop),0.25)
+	author.limb(pose,"upperarm_"+guide,"lowerarm_"+guide,"hand_"+guide,guide_target,Vector3(-sign_*0.8,-0.28,0.3),weight,154.0)
+	for bone in rig.get_bone_count():
+		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
 
 func miss(message: String) -> void:
 	stage = Stage.MISS
 	stage_start = clock
 	status.text = message
+	swing_target.hide()
 	trace.write("attack_miss",clock,{"ball":ball.position,"player":setter.position,"closest_check":trace.closest_check},true)
 
 func set_toward_pin(origin: Vector3) -> Vector3:
