@@ -525,7 +525,8 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 	var ball_target := rig.to_local(contact)
 	# Twist the ribcage around its own axis so the lean stays independent.
 	var chest_axis: Vector3 = (author.point(pose,"neck_01")-author.point(pose,"spine_03")).normalized()
-	author.rotate_world(pose,"spine_03",chest_axis,clampf(turn*rotation_weight,-1.45,1.45))
+	var chest_yaw := clampf(turn*rotation_weight,-1.45,1.45)
+	author.rotate_world(pose,"spine_03",chest_axis,chest_yaw)
 	var load_back := 1.0-smoothstep(0.04,0.55,extension)
 	var contact_crunch := smoothstep(0.42,0.95,extension)
 	var pitch := deg_to_rad((-50.0-torso_lean_degrees)*load_back+11.5*contact_crunch)
@@ -536,7 +537,14 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 		pitch *= 1.0-smoothstep(0.10,0.27,hit_age)
 	author.rotate_world(pose,"spine_01",Vector3.RIGHT,pitch*0.45*weight)
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,pitch*0.55*weight)
-	author.rotate_world(pose,"neck_01",Vector3.RIGHT,0.045*contact_crunch*weight)
+	var neck: Vector3 = author.point(pose,"neck_01")
+	var gaze := ball_target-neck
+	var flat_gaze := gaze.slide(Vector3.UP)
+	var ball_pitch := clampf(atan2(gaze.y,flat_gaze.length()),-0.45,0.45)
+	var ball_yaw := clampf(atan2(gaze.x,gaze.z),-0.85,0.85)
+	var yaw_weight := smoothstep(0.05,0.45,flat_gaze.length())
+	author.rotate_world(pose,"neck_01",Vector3.UP,(ball_yaw*0.5-chest_yaw*0.55)*yaw_weight*weight)
+	author.rotate_world(pose,"neck_01",Vector3.RIGHT,(-pitch*0.72-ball_pitch*0.32)*weight)
 	var line_weight := shot_line_weight(shot_aim,contact)
 	if stage == Stage.HIT and weight < 1.0 and not swing_finish_pose.is_empty():
 		if line_weight < 0.5:

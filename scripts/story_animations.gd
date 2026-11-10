@@ -60,6 +60,10 @@ var reception_review: VBoxContainer
 var setting_drill: Node3D
 var attack_position_panel: PanelContainer
 var attack_playback_speed := 1.0
+var attack_study_clip: Animation
+var attack_study_clock := 0.0
+var attack_study_flight := 0.0
+var attack_study_play: Button
 var setting_camera_focus := SETTING_CAMERA_FOCUS
 var setter_original_transform: Transform3D
 var setter_original_height: float
@@ -318,7 +322,10 @@ func start_setting_drill(attack := false) -> void:
 	show_mode.call(modes.selected)
 	modes.item_selected.connect(func(index: int):
 		type_indices[mode_category] = index
-		if attack: setting_drill.set_swing_practice(index == 0)
+		if attack:
+			stop_attack_study(false)
+			setting_drill.set_swing_practice(index == 0)
+			attack_study_play.disabled = index != 0
 		else: setting_drill.set_bump_mode(index == 1)
 		show_mode.call(index)
 		preview.grab_focus())
@@ -437,7 +444,62 @@ func add_low_bow_controls() -> void:
 	studies.add_item("06 Low Bow")
 	for study in LopezStudies.STUDIES: studies.add_item(study[0])
 	content.add_child(studies)
+	attack_study_play = button("Play swing",func():
+		if attack_study_clip != null:
+			stop_attack_study()
+		elif studies.selected > 0:
+			play_attack_study(studies.selected-1)
+		else:
+			setting_drill.reset_feed()
+		preview.grab_focus())
+	attack_study_play.name = "PlayAttackSwing"
+	attack_study_play.disabled = not setting_drill.swing_practice
+	content.add_child(attack_study_play)
+	studies.item_selected.connect(func(index: int):
+		if attack_study_clip == null: return
+		if index == 0: stop_attack_study()
+		else: play_attack_study(index-1))
 	content.add_child(button("Open swing editor",func(): open_low_bow_editor(studies.selected-1)))
+
+func play_attack_study(study: int) -> void:
+	setting_drill.restore_torso_lean(preview_player)
+	var target: Vector3 = setting_drill.swing_aim
+	var crosscourt: bool = setting_drill.shot_line_weight(target,setting_drill.practice_set_target) < 0.5
+	attack_study_clip = build_attack_clip(study,target,crosscourt)
+	setting_drill.restore_torso_lean(preview_player)
+	setting_drill.jump.active = false
+	setting_drill.timing_cue.hide()
+	preview_player.position = attack_study_clip.get_meta("editor_start")
+	preview_player.install_custom(attack_study_clip,"attack_study",false)
+	preview_player.animator.play("custom_attack_study/clip",0)
+	preview_player.animator.advance(0)
+	attack_study_clock = 0.0
+	var feed: Dictionary = attack_study_clip.get_meta("editor_feed")
+	attack_study_flight = Flight.landing_time(feed.aim,feed.spike_outgoing)
+	attack_study_play.text = "Stop swing"
+	step_attack_study(0.0)
+
+func stop_attack_study(resume := true) -> void:
+	if attack_study_clip == null: return
+	attack_study_clip = null
+	attack_study_play.text = "Play swing"
+	if resume: setting_drill.reset_feed()
+
+func step_attack_study(delta: float) -> void:
+	if preview_player.animator.current_animation != "custom_attack_study/clip":
+		stop_attack_study(false)
+		return
+	var contact: float = attack_study_clip.get_meta("contact_time")
+	var length := maxf(attack_study_clip.length,contact+attack_study_flight)+0.15
+	attack_study_clock = fposmod(attack_study_clock+delta,length)
+	preview_player.animator.seek(minf(attack_study_clock,attack_study_clip.length-0.0001),true)
+	var feed: Dictionary = attack_study_clip.get_meta("editor_feed")
+	var elapsed := attack_study_clock-contact
+	if elapsed < 0.0:
+		setting_drill.ball.position = Flight.position(feed,feed.aim,maxf(-float(feed.duration),elapsed))
+	else:
+		setting_drill.ball.position = setting_drill.flight_point(feed.aim,feed.spike_outgoing,minf(elapsed,attack_study_flight))
+	setting_drill.update_ball_ring()
 
 func add_torso_lean_slider() -> void:
 	var readout := label("",16)
@@ -474,6 +536,7 @@ func add_attack_pose_slider(caption: String, node_name: String, minimum: float, 
 	content.add_child(slider)
 
 func stop_setting_drill() -> void:
+	stop_attack_study(false)
 	attack_playback_speed = 1.0
 	if not is_instance_valid(setting_drill): return
 	if is_instance_valid(attack_position_panel):
@@ -611,6 +674,9 @@ func _process(delta: float) -> void:
 	pass_timing_cue.hide()
 	if is_instance_valid(setting_drill):
 		delta *= attack_playback_speed
+		if attack_study_clip != null:
+			step_attack_study(delta)
+			return
 		setting_drill.restore_torso_lean(preview_player)
 		player_controls.read_pace_input()
 		setting_drill.trace_input = player_controls.movement_input()
@@ -1030,9 +1096,12 @@ func open_low_bow_editor(study := -1) -> void:
 	if StorySession.edit_entry.has("path"):
 		StorySession.edit_animation = Catalog.load_clip(StorySession.edit_entry,preview_player)
 	else:
-		var base := bake_low_bow_starter(study >= 0,shot_target)
-		StorySession.edit_animation = base if study < 0 else LopezStudies.bake(base,preview_player,study,crosscourt,shot_target)
+		StorySession.edit_animation = build_attack_clip(study,shot_target,crosscourt)
 	get_tree().change_scene_to_file("res://scenes/animation_editor.tscn")
+
+func build_attack_clip(study: int, shot_target: Vector3, crosscourt: bool) -> Animation:
+	var base := bake_low_bow_starter(study >= 0,shot_target)
+	return base if study < 0 else LopezStudies.bake(base,preview_player,study,crosscourt,shot_target)
 
 func bake_low_bow_starter(include_landing := false, shot_target := Vector3(2.0,0.0,10.5)) -> Animation:
 	var drill = setting_drill
