@@ -439,6 +439,9 @@ func show_attack_positions(modes: OptionButton) -> void:
 	var set_height := add_attack_tuning_slider(positions,"Set height","ApproachSetHeight","m",4.2,7.5,0.1,setting_drill.approach_set_apex,
 		func(value: float): setting_drill.approach_set_apex = value)
 
+	var tilt := add_attack_tuning_slider(positions,"Two-step torso tilt","ApproachTorsoTilt","°",1,90,1,setting_drill.two_step_tilt,
+		func(value: float): setting_drill.two_step_tilt = value)
+
 	var delay := add_attack_tuning_slider(positions,"Draw delay","LowBowDrawDelay","ms",-220,240,5,setting_drill.draw_delay*1000.0,
 		func(value: float): setting_drill.draw_delay = value/1000.0)
 	var clearance := add_attack_tuning_slider(positions,"Elbow clearance","AttackElbowClearance","cm",0,36,1,setting_drill.elbow_clearance*100.0,
@@ -454,10 +457,10 @@ func show_attack_positions(modes: OptionButton) -> void:
 	positions.add_child(reset)
 	var approach_controls := [slow_motion,speed]
 	approach_controls.append_array(positions.get_children().slice(bend.get_index()-1,reach.get_index()+1))
-	var height_controls := positions.get_children().slice(set_height.get_index()-1,set_height.get_index()+1)
+	var approach_only_controls := positions.get_children().slice(set_height.get_index()-1,tilt.get_index()+1)
 	var show_position_controls := func(index: int):
 		for control in positions.get_children():
-			control.visible = control in approach_controls or control in height_controls if index == 2 else control not in height_controls
+			control.visible = control in approach_controls or control in approach_only_controls if index == 2 else control not in approach_only_controls
 		update_speed.call()
 	modes.item_selected.connect(show_position_controls)
 	show_position_controls.call(modes.selected)
