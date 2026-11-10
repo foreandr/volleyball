@@ -13,7 +13,8 @@ const SET_APEX := 5.0
 enum Stage { SERVE, PASS, SET, HIT, MISS }
 const SWING_CHARGE_TIME := 0.65
 const SWING_REACH := 1.55
-const SWING_CONTACT_HEIGHT := 2.45
+const SWING_CONTACT_HEIGHT := 2.22
+const PALM_RADIUS := 0.065
 const SWING_FOLLOW_TIME := 0.30
 var stage := Stage.SERVE
 var swing_practice := true
@@ -31,6 +32,11 @@ var pin_arrival := 0.0
 var flight_end := 0.0
 var swing_started := -INF
 var swing_released := -INF
+var swing_drive_started := -INF
+var swing_drive_duration := 0.15
+var previous_palm := Vector3.INF
+var swing_hand_speed := 0.0
+var swing_impact_speed := 0.0
 var swing_aim := Vector3(0.0,Flight.FLOOR,9.5)
 var swing_contact: Vector3
 var swing_power := 0.0
@@ -72,6 +78,8 @@ func reset_feed() -> void:
 	region.hide()
 	swing_started = -INF
 	swing_released = -INF
+	swing_drive_started = -INF
+	previous_palm = Vector3.INF
 	swing_net_hit.clear()
 	if swing_target == null:
 		swing_target = region.duplicate()
@@ -94,7 +102,7 @@ func start_swing_practice() -> void:
 	bump.hide()
 	setter.position = PIN+Vector3(0.35,RECEIVE_START.y-PIN.y,-0.48)
 	jump.begin(setter,Vector2(0.0,0.65))
-	for frame in range(23): jump.step(setter,1.0/60.0,Vector2.ZERO)
+	for frame in range(18): jump.step(setter,1.0/60.0,Vector2.ZERO)
 	jump.release()
 	receiver.rotation.y = atan2(PIN.x-CPU_HOME.x,PIN.z-CPU_HOME.z)
 	var source := receiver.to_global(Vector3(0.0,HandPose.CONTACT_HEIGHT,HandPose.CONTACT_FORWARD))
@@ -165,6 +173,8 @@ func swing_input(pressed: bool) -> void:
 	if is_finite(swing_started) and not is_finite(swing_released): return
 	swing_started = clock
 	swing_released = -INF
+	swing_drive_started = -INF
+	previous_palm = Vector3.INF
 	status.text = "Charging swing"
 	trace.write("swing_start",clock,{"player":setter.position,"aim":swing_aim},true)
 
@@ -209,7 +219,7 @@ func step(delta: float) -> void:
 		Stage.SET:
 			if not swing_practice:
 				cpu_set.update_hand_push(cpu_set.release_time+time,cpu_set.release_time+time-cpu_set.touch_time)
-			play_pin_ball(time)
+			play_pin_ball(time,previous,delta)
 		Stage.HIT: play_spike(time)
 		Stage.MISS:
 			if time >= (0.26 if swing_practice else 0.85): reset_feed()
@@ -309,28 +319,68 @@ func play_cpu_set(time: float, delta: float) -> void:
 		cpu_set.destination = Vector2(target.x,target.z)
 		cpu_set.begin_hand_contact(cpu_contact_point,time)
 
-func play_pin_ball(time: float) -> void:
+func play_pin_ball(time: float, previous: float, delta: float) -> void:
 	ball.position = flight_point(pass_origin,pass_motion,minf(time,flight_end))
 	timing_cue.update_timing(time,pin_arrival,BumpSetting.GREEN_START,BumpSetting.GREEN_END)
 	if is_finite(swing_started) and jump.active:
 		var charge := swing_charge()
 		status.text = "Swing power  |  %d%%" % roundi(charge*100.0)
-		var toward_ball := ball.position-setter.global_position
 		var airborne := setter.position.y > jump.start.y+0.08
-		var in_reach := toward_ball.slide(Vector3.UP).length() <= SWING_REACH and toward_ball.y >= 1.35 and toward_ball.y <= SWING_CONTACT_HEIGHT
-		if airborne and in_reach and time >= pin_arrival-0.24:
-			hit_spike(charge)
-			return
+		var duration := lerpf(0.24,0.09,charge)
+		var predicted := flight_point(pass_origin,pass_motion,minf(time+duration,flight_end))
+		var toward_ball := predicted-setter.global_position
+		if not is_finite(swing_drive_started) and airborne and time >= pin_arrival-0.42:
+			if toward_ball.slide(Vector3.UP).length() <= SWING_REACH and toward_ball.y <= SWING_CONTACT_HEIGHT:
+				swing_drive_started = clock
+				swing_drive_duration = duration
+				swing_hand_speed = 0.0
 		var load := smoothstep(0.0,0.20,clock-swing_started)
-		pose_bow_draw(load)
+		var drive := clock-swing_drive_started if is_finite(swing_drive_started) else -INF
+		if drive < 0.0:
+			pose_bow_draw(load)
+		else:
+			var extension := smoothstep(0.0,swing_drive_duration,drive)
+			var follow := smoothstep(swing_drive_duration+0.035,swing_drive_duration+0.16,drive)
+			pose_bow_draw(load,ball.position,extension,follow)
+		var palm := right_palm()
+		if airborne and drive > 0.0 and drive <= swing_drive_duration+0.12 and previous_palm.is_finite():
+			swing_impact_speed = palm.distance_to(previous_palm)/maxf(delta,0.001)
+			swing_hand_speed = maxf(swing_hand_speed,swing_impact_speed)
+			var previous_ball := flight_point(pass_origin,pass_motion,previous)
+			var fraction := hand_contact_fraction(previous_ball-previous_palm,ball.position-palm)
+			if fraction >= 0.0:
+				hit_spike(charge,previous_ball.lerp(ball.position,fraction))
+				return
+		previous_palm = palm
 	if time >= flight_end: miss("Spike missed")
 
-func hit_spike(charge: float) -> void:
-	swing_contact = ball.position
+func right_palm() -> Vector3:
+	var rig: Skeleton3D = setter.skeleton
+	var wrist := rig.get_bone_global_pose(rig.find_bone("hand_r")).origin
+	var knuckle := rig.get_bone_global_pose(rig.find_bone("middle_01_r")).origin
+	return rig.to_global(wrist.lerp(knuckle,0.75))
+
+func hand_contact_fraction(before: Vector3, after: Vector3) -> float:
+	var radius := BallPreview.RADIUS+PALM_RADIUS
+	var gap := before.length_squared()-radius*radius
+	if gap <= 0.0: return 0.0
+	var relative := after-before
+	var length_squared := relative.length_squared()
+	if length_squared <= 0.000001: return -1.0
+	var projection := before.dot(relative)
+	var discriminant := projection*projection-length_squared*gap
+	if discriminant < 0.0: return -1.0
+	var entry := (-projection-sqrt(discriminant))/length_squared
+	return entry if entry >= 0.0 and entry <= 1.0 else -1.0
+
+func hit_spike(charge: float, point: Vector3) -> void:
+	swing_contact = point
+	ball.position = point
 	swing_power = charge
 	pass_origin = swing_contact
 	var target := swing_aim-pass_origin
-	var duration := maxf(0.24,target.slide(Vector3.UP).length()/lerpf(11.0,29.0,charge))
+	var speed := clampf(swing_hand_speed*2.2,1.0,32.0)
+	var duration := target.slide(Vector3.UP).length()/speed
 	pass_motion = target/duration+Vector3.UP*Flight.GRAVITY*duration*0.5
 	flight_end = duration
 	swing_net_hit = Net.first_hit(func(t): return flight_point(pass_origin,pass_motion,t),0.0,duration)
@@ -339,8 +389,7 @@ func hit_spike(charge: float) -> void:
 	region.hide()
 	timing_cue.hide()
 	status.text = "Spike  |  %d%% power" % roundi(charge*100.0)
-	pose_bow_draw(1.0)
-	trace.write("spike",clock,{"point":swing_contact,"aim":swing_aim,"velocity":pass_motion,"power":charge,"net":not swing_net_hit.is_empty()},true)
+	trace.write("spike",clock,{"point":swing_contact,"aim":swing_aim,"velocity":pass_motion,"power":charge,"palm_speed":swing_impact_speed,"peak_palm_speed":swing_hand_speed,"net":not swing_net_hit.is_empty()},true)
 
 func play_spike(time: float) -> void:
 	var end := flight_end if swing_net_hit.is_empty() else float(swing_net_hit.end_time)
@@ -350,21 +399,25 @@ func play_spike(time: float) -> void:
 	else:
 		ball.position = flight_point(pass_origin,pass_motion,minf(time,end))
 	if time < SWING_FOLLOW_TIME:
-		pose_bow_draw(1.0-smoothstep(0.11,SWING_FOLLOW_TIME,time))
+		pose_bow_draw(1.0-smoothstep(0.11,SWING_FOLLOW_TIME,time),swing_contact,1.0,smoothstep(0.0,0.16,time))
 	if time >= end+(0.22 if swing_practice else 0.48) and not jump.active: reset_feed()
 
-func pose_bow_draw(weight: float) -> void:
+func pose_bow_draw(weight: float, contact := Vector3.ZERO, extension := 0.0, follow := 0.0) -> void:
 	var rig: Skeleton3D = setter.skeleton
 	var author: RefCounted = setter.get_pose_author()
 	var pose: Array[Transform3D] = []
 	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
-	author.rotate_world(pose,"spine_03",Vector3.UP,-0.32*weight)
+	author.rotate_world(pose,"spine_03",Vector3.UP,lerpf(-0.32,0.25,extension)*weight)
 	var right_shoulder: Vector3 = author.point(pose,"upperarm_r")
 	var draw_hand := right_shoulder+Vector3(0.04,0.34,-0.15)
+	var ball_target := rig.to_local(contact)
+	var wrist_target := ball_target-(ball_target-right_shoulder).normalized()*0.06
+	var through := right_shoulder+Vector3(0.28,-0.28,0.43)
+	var target := draw_hand.lerp(wrist_target,extension).lerp(through,follow)
 	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",
-		draw_hand,Vector3(-0.85,0.52,-0.74),weight,108.0)
+		target,Vector3(-0.85,0.52,-0.74),weight,lerpf(108.0,175.0,extension))
 	var left_shoulder: Vector3 = author.point(pose,"upperarm_l")
-	var guide_hand := left_shoulder+Vector3(0.06,0.43,0.64)
+	var guide_hand := left_shoulder+Vector3(0.06,lerpf(0.43,-0.18,extension),lerpf(0.64,0.30,extension))
 	author.limb(pose,"upperarm_l","lowerarm_l","hand_l",
 		guide_hand,Vector3(0.26,-0.55,0.15),weight,174.0)
 	for bone in rig.get_bone_count():
