@@ -53,12 +53,12 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 		author.set_world_basis(pose,hand,hand_basis(target_fingers,target_across)*hand_basis(fingers,across).inverse()*base.basis)
 		shape_digit(author,pose,"index",side,diamond+Vector3(sign_*0.018,0.065,0.025))
 		shape_digit(author,pose,"thumb",side,diamond+Vector3(sign_*0.016,-0.047,0.045))
-		spread_outer_fingers(author,pose,side)
+		shape_outer_fingers(author,pose,side,diamond+Vector3(0,0.075,0.07))
 	for bone in rig.get_bone_count():
 		var before: Basis = original[bone].basis
 		rig.set_bone_pose_rotation(bone,before.slerp(pose[bone].basis,blend).get_rotation_quaternion())
 
-static func spread_outer_fingers(author: RefCounted, pose: Array, side: String) -> void:
+static func shape_outer_fingers(author: RefCounted, pose: Array, side: String, ball_center: Vector3) -> void:
 	var inside: Vector3 = author.point(pose,"index_01_"+side)
 	var outside: Vector3 = author.point(pose,"pinky_01_"+side)
 	var spread := (outside-inside).normalized()
@@ -67,8 +67,14 @@ static func spread_outer_fingers(author: RefCounted, pose: Array, side: String) 
 	for index in digits.size():
 		var first: String = digits[index]+"_01_"+side
 		var second: String = digits[index]+"_02_"+side
+		var third: String = digits[index]+"_03_"+side
 		var joint: Vector3 = author.point(pose,second)
 		author.aim_joint(pose,first,second,joint+spread*spacing[index])
+		joint = author.point(pose,second)
+		var tip: Vector3 = author.point(pose,third)
+		var direction := (tip-joint).normalized()
+		var curl := (ball_center-tip).slide(direction).normalized()
+		author.aim_joint(pose,second,third,tip+curl*0.014)
 
 static func shape_digit(author: RefCounted, pose: Array, digit: String, side: String, tip: Vector3) -> void:
 	var first := "%s_01_%s" % [digit,side]
