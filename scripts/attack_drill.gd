@@ -518,9 +518,11 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 	var turn := lerpf(drive_turn,aim_turn*0.70,follow)
 	var airborne := smoothstep(0.08,0.45,setter.position.y-jump.start.y)
 	var leg_release := smoothstep(0.0,1.0,rotation_phase)
-	var hip_follow := lerpf(0.78*(1.0-0.58*rotation_phase),0.46*(1.0-rotation_phase),release_alignment)
-	var hip_lead := early_aim*hip_follow*weight
-	var leg_turn := (hip_lead+tanh(turn*rotation_weight*0.75)*0.32*leg_release)*leg_rotation_scale*airborne
+	var hip_aim := aim_turn*shot_turn_lead*weight*(1.0-0.35*follow)
+	var hip_lead := hip_aim*1.10
+	var leg_turn := clampf((hip_lead+tanh(turn*rotation_weight*0.75)*0.32*leg_release)*leg_rotation_scale,-1.20,1.20)*airborne
+	# The heels trail behind the body, so counter-rotate their kick axis to sweep them toward the shot.
+	var heel_turn := lerpf(leg_turn,-hip_aim*1.35*minf(leg_rotation_scale,1.0),smoothstep(0.0,0.80,shot_turn_lead))
 	var kick_release := 0.32*leg_release*smoothstep(0.0,1.5,leg_rotation_scale)
 	var straighten := smoothstep(0.12,0.88,follow)*weight*smoothstep(0.03,0.22,setter.position.y-jump.start.y)
 	if not is_zero_approx(leg_turn):
@@ -543,7 +545,7 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 			var heel_lift := (0.24 if side == "r" else 0.10)+0.78*maxf(0.0,leg_kickback_scale-1.0)
 			var kick_axis := Vector3(0.07*outward,heel_lift,-1.0).normalized()
 			var release_axis := kick_axis.slerp(Vector3(0.07*outward,-1.0,-0.15).normalized(),kick_release)
-			var shin_axis := (ankle-knee).normalized().slerp(release_axis.rotated(Vector3.UP,leg_turn),tuck)
+			var shin_axis := (ankle-knee).normalized().slerp(release_axis.rotated(Vector3.UP,heel_turn),tuck)
 			author.aim_joint(pose,thigh,calf,hip+thigh_axis)
 			knee = author.point(pose,calf)
 			author.aim_joint(pose,calf,foot,knee+shin_axis.slerp(thigh_axis,straighten*0.98))
