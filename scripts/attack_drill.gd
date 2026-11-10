@@ -482,7 +482,8 @@ func pose_bow_draw(weight: float, contact: Vector3, extension := 0.0, follow := 
 	var airborne := smoothstep(0.08,0.45,setter.position.y-jump.start.y)
 	var leg_release := smoothstep(0.0,1.0,rotation_phase)
 	var leg_turn := tanh(turn*rotation_weight*0.75)*0.32*leg_rotation_scale*airborne*leg_release
-	var straighten := 0.32*leg_release*smoothstep(0.0,1.5,leg_rotation_scale)
+	var kick_release := 0.32*leg_release*smoothstep(0.0,1.5,leg_rotation_scale)
+	var straighten := smoothstep(0.12,0.88,follow)*weight*smoothstep(0.03,0.22,setter.position.y-jump.start.y)
 	if not is_zero_approx(leg_turn):
 		var spine: Transform3D = author.world_pose(pose,rig.find_bone("spine_01"))
 		var hips: Vector3 = author.point(pose,"pelvis")
@@ -490,7 +491,7 @@ func pose_bow_draw(weight: float, contact: Vector3, extension := 0.0, follow := 
 		author.set_world_basis(pose,"spine_01",spine.basis)
 	var kick_load := smoothstep(0.0,0.30,clock-swing_charge_started)
 	var tuck := airborne*weight*kick_load*minf(leg_kickback_scale,1.0)*(1.0-0.75*follow)
-	if tuck > 0.0:
+	if tuck > 0.0 or straighten > 0.0:
 		for side in ["l","r"]:
 			var thigh: String = "thigh_"+side
 			var calf: String = "calf_"+side
@@ -502,11 +503,11 @@ func pose_bow_draw(weight: float, contact: Vector3, extension := 0.0, follow := 
 			var thigh_axis := (knee-hip).normalized().slerp(Vector3(0.18*outward,-1.0,0.16).normalized().rotated(Vector3.UP,leg_turn),tuck)
 			var heel_lift := (0.24 if side == "r" else 0.10)+0.78*maxf(0.0,leg_kickback_scale-1.0)
 			var kick_axis := Vector3(0.07*outward,heel_lift,-1.0).normalized()
-			var release_axis := kick_axis.slerp(Vector3(0.07*outward,-1.0,-0.15).normalized(),straighten)
+			var release_axis := kick_axis.slerp(Vector3(0.07*outward,-1.0,-0.15).normalized(),kick_release)
 			var shin_axis := (ankle-knee).normalized().slerp(release_axis.rotated(Vector3.UP,leg_turn),tuck)
 			author.aim_joint(pose,thigh,calf,hip+thigh_axis)
 			knee = author.point(pose,calf)
-			author.aim_joint(pose,calf,foot,knee+shin_axis)
+			author.aim_joint(pose,calf,foot,knee+shin_axis.slerp(thigh_axis,straighten*0.98))
 	# Tilt after the leg solve so the hips carry the tucked legs into the reach.
 	var reach_weight := airborne*weight*maxf(0.72*arm_lift,extension)
 	reach_weight *= 1.0-smoothstep(0.0,0.85,follow)
@@ -519,11 +520,8 @@ func pose_bow_draw(weight: float, contact: Vector3, extension := 0.0, follow := 
 	author.rotate_world(pose,"spine_03",chest_axis,clampf(turn*rotation_weight,-1.45,1.45))
 	var line_weight := shot_line_weight(swing_aim,contact)
 	SpikeArm.apply(pose,author,ball_target,weight,extension,follow,draw_progress,arm_lift,line_weight)
-	var left_shoulder: Vector3 = author.point(pose,"upperarm_l")
-	var guide_drop := 0.78*smoothstep(0.07,1.0,extension)+0.22*follow
-	var guide_hand := left_shoulder+Vector3(0.06,0.43,0.64).lerp(Vector3(0.12,-0.46,0.12),guide_drop)
-	author.limb(pose,"upperarm_l","lowerarm_l","hand_l",
-		guide_hand,Vector3(0.26,-0.55,0.15),weight,lerpf(172.0,148.0,guide_drop))
+	var guide_drop := maxf(smoothstep(0.07,0.83,extension),smoothstep(0.0,0.62,follow))
+	SpikeArm.apply_guide_arm(pose,author,Vector3(0.06,0.43,0.64),Vector3(0.26,-0.55,0.15),guide_drop,weight,172.0)
 	for bone in rig.get_bone_count():
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
 

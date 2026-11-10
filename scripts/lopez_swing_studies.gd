@@ -76,7 +76,7 @@ static func shape(pose: Array[Transform3D], author: RefCounted, profile: Array, 
 	author.rotate_world(pose,"spine_03",Vector3.UP,-float(profile[3])*windup+aim_turn*finish_hold)
 	author.rotate_world(pose,"spine_03",Vector3.BACK,float(profile[4])*0.55*(windup+0.42*drive*air))
 
-	var scissor := smoothstep(0.14,0.98,progress)*(1.0-settle)
+	var scissor := smoothstep(0.14,0.98,progress)*(1.0-settle)*(1.0-smoothstep(0.0,0.80,sweep))
 	var split: float = profile[5]
 	var kick: float = profile[6]
 	var lead_hip: Vector3 = author.point(pose,"thigh_l")
@@ -86,10 +86,9 @@ static func shape(pose: Array[Transform3D], author: RefCounted, profile: Array, 
 	author.limb(pose,"thigh_l","calf_l","foot_l",left_foot.lerp(lead_leg,scissor),Vector3(0.24,0.05,1.0),scissor,167.0)
 	author.limb(pose,"thigh_r","calf_r","foot_r",right_foot.lerp(trail_leg,scissor),Vector3(-0.31,0.1,1.0),scissor,150.0)
 
-	var guide: Vector3 = author.point(pose,"upperarm_l")
 	var guide_drop := smoothstep(float(profile[7])-0.18,0.96,progress)
-	var guide_target := guide+Vector3(profile[10],profile[9],0.53).lerp(Vector3(0.09,-0.43,0.09),guide_drop)
-	author.limb(pose,"upperarm_l","lowerarm_l","hand_l",guide_target,Vector3(0.52,-0.48,-0.06),air,158.0)
+	var guide_reach := Vector3(profile[10],profile[9],0.53)
+	SpikeArm.apply_guide_arm(pose,author,guide_reach,Vector3(0.52,-0.48,-0.06),guide_drop,air,158.0)
 
 	var shoulder: Vector3 = author.point(pose,"upperarm_r")
 	var chamber := shoulder+Vector3(-float(profile[11]),float(profile[2]),-float(profile[1]))

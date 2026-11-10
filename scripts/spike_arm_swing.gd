@@ -39,6 +39,19 @@ static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float,
 	if finish > 0.0:
 		blend_right_arm(base,pose,author,weight)
 
+static func apply_guide_arm(pose: Array, author: RefCounted, reach: Vector3, reach_pole: Vector3, drop: float, weight: float, reach_limit: float) -> void:
+	if weight <= 0.0: return
+	var shoulder: Vector3 = author.point(pose,"upperarm_l")
+	var elbow: Vector3 = author.point(pose,"lowerarm_l")
+	var wrist: Vector3 = author.point(pose,"hand_l")
+	var outside: Vector3 = (shoulder-author.point(pose,"upperarm_r")).normalized()
+	var up: Vector3 = (author.point(pose,"neck_01")-author.point(pose,"spine_03")).normalized()
+	var forward := outside.cross(up).normalized()
+	var tuck_pole := (outside.cross(forward)+outside*0.10).normalized()
+	var tuck := tuck_pole*shoulder.distance_to(elbow)+forward*elbow.distance_to(wrist)
+	var target := shoulder+reach.lerp(tuck,drop)
+	author.limb(pose,"upperarm_l","lowerarm_l","hand_l",target,reach_pole.lerp(tuck_pole,drop),weight,lerpf(reach_limit,90.0,drop))
+
 static func blend_right_arm(base: Array, target: Array, author: RefCounted, weight: float) -> void:
 	# Fade local joint rotations so the IK pole cannot twist the elbow as the wrist comes to rest.
 	for bone in ["upperarm_r","lowerarm_r","hand_r"]:
