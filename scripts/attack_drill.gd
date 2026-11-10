@@ -444,10 +444,6 @@ func pose_bow_draw(weight: float, contact: Vector3, extension := 0.0, follow := 
 	var author: RefCounted = setter.get_pose_author()
 	var pose: Array[Transform3D] = []
 	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
-	var correction := hip_correction(contact)*smoothstep(0.05,0.38,setter.position.y-jump.start.y)*weight
-	correction *= 1.0-smoothstep(0.0,0.8,follow)
-	author.rotate_world(pose,"pelvis",Vector3.RIGHT,correction.x)
-	author.rotate_world(pose,"pelvis",Vector3.BACK,correction.y)
 	var chest_turn := smoothstep(0.0,0.88,extension)
 	var aim := rig.to_local(swing_aim)-rig.to_local(setter.global_position)
 	var aim_turn := clampf(atan2(aim.x,aim.z),-0.48,0.48)
@@ -481,16 +477,13 @@ func pose_bow_draw(weight: float, contact: Vector3, extension := 0.0, follow := 
 			author.aim_joint(pose,thigh,calf,hip+thigh_axis)
 			knee = author.point(pose,calf)
 			author.aim_joint(pose,calf,foot,knee+shin_axis)
+	# Tilt after the leg solve so the hips carry the tucked legs into the reach.
+	var reach_weight := airborne*weight*maxf(0.72*arm_lift,extension)
+	reach_weight *= 1.0-smoothstep(0.0,0.85,follow)
+	var lean := airborne_reach_lean(contact)*reach_weight
+	author.rotate_world(pose,"pelvis",Vector3.RIGHT,lean.x)
+	author.rotate_world(pose,"pelvis",Vector3.BACK,lean.y)
 	var ball_target := rig.to_local(contact)
-	var right_shoulder: Vector3 = author.point(pose,"upperarm_r")
-	var reach := ball_target-right_shoulder
-	var lean_weight := smoothstep(0.12,0.82,extension)*(1.0-smoothstep(0.0,0.72,follow))*weight
-	var pitch := clampf((reach.z-0.10)*0.60,-0.16,0.0)*lean_weight
-	var roll := clampf(-reach.x*0.54,-0.15,0.15)*lean_weight
-	author.rotate_world(pose,"spine_01",Vector3.RIGHT,pitch*0.62)
-	author.rotate_world(pose,"spine_02",Vector3.RIGHT,pitch*0.38)
-	author.rotate_world(pose,"spine_01",Vector3.BACK,roll*0.62)
-	author.rotate_world(pose,"spine_02",Vector3.BACK,roll*0.38)
 	# Twist the ribcage around its own axis so the lean stays independent.
 	var chest_axis: Vector3 = (author.point(pose,"neck_01")-author.point(pose,"spine_03")).normalized()
 	author.rotate_world(pose,"spine_03",chest_axis,clampf(turn*rotation_weight,-1.45,1.45))
@@ -505,12 +498,12 @@ func pose_bow_draw(weight: float, contact: Vector3, extension := 0.0, follow := 
 	for bone in rig.get_bone_count():
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
 
-func hip_correction(contact: Vector3) -> Vector2:
-	var drift: Vector3 = jump.horizontal_velocity()*0.16
+func airborne_reach_lean(contact: Vector3) -> Vector2:
+	var drift: Vector3 = jump.horizontal_velocity()*0.12
 	var reach := setter.to_local(contact-drift)-Vector3(-0.24,0.0,0.28)
-	var pitch := clampf(reach.z*0.43,-0.15,0.0)
-	var roll := clampf(-reach.x*0.40,-0.16,0.16)
-	return Vector2(pitch,roll)
+	var tilt := Vector2(reach.z,-reach.x)
+	var angle := clampf((tilt.length()-0.10)*1.20,0.0,0.68)
+	return tilt.normalized()*angle
 
 func miss(message: String) -> void:
 	stage = Stage.MISS
