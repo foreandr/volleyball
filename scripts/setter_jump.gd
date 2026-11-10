@@ -103,6 +103,9 @@ func step(actor: Node3D, delta: float, input: Vector2) -> void:
 	var pose_time := minf(maxf(0.0,elapsed-lead_time),load_time-lead_time)*LOAD_TIME/(load_time-lead_time)+maxf(0.0,elapsed-load_time)
 	var first := smoothstep(0.015,0.12,pose_time)
 	var second := smoothstep(0.12,0.225,pose_time)
+	if lead_time > 0.0:
+		first = smoothstep(0.045,0.135,pose_time)
+		second = smoothstep(0.135,0.21,pose_time)
 	var lead_progress := smoothstep(0.0,lead_time,elapsed) if lead_time > 0.0 else 0.0
 	var distance := lead_distance*lead_progress+stride*(0.34*first+0.66*second+AIR_TRAVEL_FRACTION*flight)
 	var base := start+heading*distance+Vector3.UP*(4.0*height*flight*(1.0-flight))
@@ -132,7 +135,10 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 	var parent := rig.get_bone_parent(pelvis)
 	var hips: Transform3D = author.world_pose(pose,parent)
 	var scale_: float = rig.global_basis.get_scale().y
-	pose[pelvis].origin -= hips.basis.inverse()*Vector3.UP*(0.15*load+0.14*impact)/scale_
+	var transfer_spring := 0.0
+	if lead_time > 0.0:
+		transfer_spring = 0.035*smoothstep(lead_time*0.82,lead_time,elapsed)*(1.0-smoothstep(0.0,0.105,pose_time))
+	pose[pelvis].origin -= hips.basis.inverse()*Vector3.UP*(0.15*load+0.14*impact-transfer_spring)/scale_
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,(0.16+load_bend_extra)*load+0.13*impact-0.22*arm_drive)
 	var travel := actor.basis.inverse()*heading*stride/scale_
 	var stagger := 0.34*(first-second)
@@ -145,6 +151,8 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 		var target := foot_pose.origin+travel*stagger*(1.0 if left else -1.0)+Vector3.UP*(0.085*lift+0.07*tuck)
 		if approach_plant and pose_time < LOAD_TIME+0.08:
 			var step_progress := smoothstep(0.105,0.21,pose_time) if left else smoothstep(0.015,0.105,pose_time)
+			if lead_time > 0.0:
+				step_progress = smoothstep(0.135,0.21,pose_time) if left else smoothstep(0.045,0.135,pose_time)
 			var plant_from := left_foot_start if left else right_foot_start
 			if left and lead_time > 0.0:
 				var lead_progress := smoothstep(0.0,lead_time*0.82,elapsed)
