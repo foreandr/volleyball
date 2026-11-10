@@ -45,6 +45,7 @@ var middle_dragged := false
 var drill_status: Label
 var distance_status: Label
 var timing_meter: Control
+var cpu_timing_meter: Control
 var reception_review: HBoxContainer
 var setting_drill: Node3D
 var setter_original_transform: Transform3D
@@ -62,6 +63,10 @@ func _ready() -> void:
 	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	preview.get_parent().add_child(overlay)
 	overlay.add_child(timing_meter)
+	timing_meter.follow_player(preview_player,preview_camera,preview)
+	cpu_timing_meter = preload("res://scripts/reception_timing_meter.gd").new()
+	cpu_timing_meter.cpu = true
+	overlay.add_child(cpu_timing_meter)
 	reception_review = preload("res://scripts/reception_review.gd").new(self)
 	var column := find_child("ScreenTitle",true,false).get_parent().get_parent()
 	column.add_child(reception_review)
@@ -280,12 +285,16 @@ func start_setting_drill() -> void:
 	preview_camera.look_at(Vector3(0,1.45,2.6))
 	setting_drill = preload("res://scripts/setting_drill.gd").new()
 	preview_player.get_parent().add_child(setting_drill)
-	setting_drill.configure(preview_player,drill_status,timing_meter,modes.selected == 1)
+	timing_meter.action_name = "SET"
+	setting_drill.configure(preview_player,drill_status,timing_meter,cpu_timing_meter,modes.selected == 1)
+	cpu_timing_meter.follow_player(setting_drill.receiver,preview_camera,preview)
 	preview.grab_focus()
 
 func stop_setting_drill() -> void:
 	if not is_instance_valid(setting_drill): return
 	timing_meter.reset_serve()
+	timing_meter.action_name = "PASS"
+	cpu_timing_meter.reset_serve()
 	setting_drill.queue_free()
 	setting_drill = null
 	preview_player.transform = setter_original_transform
@@ -416,6 +425,7 @@ func _process(delta: float) -> void:
 		player_controls.move_player(player_controls.movement_input(),delta,false,setting_drill.ball.global_position)
 		setting_drill.apply_setter_arms(player_controls.footwork.phase,player_controls.moving,delta)
 		setting_drill.step(delta)
+		setting_drill.update_ball_ring()
 		return
 	if reception_review.frozen:
 		var direction: Vector2 = player_controls.movement_input()

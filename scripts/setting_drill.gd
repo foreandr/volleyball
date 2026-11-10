@@ -31,6 +31,7 @@ const TARGETS := [Vector3(0.8,SET_HEIGHT,1.15),Vector3(-1.45,SET_HEIGHT,0.3),Vec
 var receiver: Node3D
 var setter: Node3D
 var status: Label
+var cpu_meter: Control
 var ball: MeshInstance3D
 var region: MeshInstance3D
 var region_style := StandardMaterial3D.new()
@@ -50,6 +51,7 @@ var dive_aim: Vector3
 var serve_velocity: Vector3
 var pass_velocity: Vector3
 var arrival: float
+var timing_arrival: float
 var landing: float
 var clock := 0.0
 var rep := 0
@@ -64,9 +66,10 @@ var timing_center: MeshInstance3D
 var timing_style := StandardMaterial3D.new()
 var arm_swing_weight := 0.0
 
-func configure(player: Node3D, readout: Label, meter: Control, use_bump: bool) -> void:
+func configure(player: Node3D, readout: Label, meter: Control, receiver_meter: Control, use_bump: bool) -> void:
 	setter = player
 	status = readout
+	cpu_meter = receiver_meter
 	receiver = Player.new()
 	receiver.name = "CPUReceiver"
 	receiver.player_number = 2
@@ -143,15 +146,18 @@ func build_timing_cue() -> void:
 	timing_center.material_override = timing_style
 	ready_range.add_child(timing_center)
 
-func update_timing_cue() -> void:
-	var lead: float = bump.cue_lead
-	var showing := bump_enabled and is_finite(lead)
+func update_timing_cue(after_pass := -INF) -> void:
+	var lead := timing_arrival-after_pass
+	var showing := lead <= BumpSetting.APPROACH_TIME and lead >= -0.10 and not (bump_enabled and is_finite(bump.touch_time))
 	timing_ring.visible = showing
 	timing_center.visible = showing
 	if not showing: return
 	var radius := lerpf(0.092,2.0,inverse_lerp(BumpSetting.IDEAL_LEAD,BumpSetting.APPROACH_TIME,clampf(lead,BumpSetting.IDEAL_LEAD,BumpSetting.APPROACH_TIME)))
 	timing_ring.scale = Vector3(radius,1.0,radius)
-	timing_style.albedo_color = Color("65ff94") if lead >= BumpSetting.GREEN_START and lead <= BumpSetting.GREEN_END else Color("ff9b52")
+	var color := Color("ffdb51")
+	if lead < BumpSetting.GREEN_START: color = Color("ff7855")
+	elif lead <= BumpSetting.GREEN_END: color = Color("65ff94")
+	timing_style.albedo_color = color
 
 
 func set_bump_mode(enabled: bool) -> void:
@@ -164,10 +170,13 @@ func queue_bump() -> void:
 	if bump_enabled:
 		bump.queue_bump(clock-0.45-SERVE_TIME)
 
+func update_ball_ring() -> void:
+	ready_range.position = Vector3(ball.position.x,0.058,ball.position.z)
+	var distance := (ball.position-setter.position).slide(Vector3.UP).length()
+	range_style.albedo_color = Color("6beeb3") if distance <= 2.0 else Color("657f9b")
+
 func apply_setter_arms(phase: float, moving: bool, delta: float) -> void:
 	var distance := (ball.position-setter.position).slide(Vector3.UP).length()
-	ready_range.position = Vector3(ball.position.x,0.058,ball.position.z)
-	range_style.albedo_color = Color("6beeb3") if distance <= 2.0 else Color("657f9b")
 	var weight := smoothstep(1.85,2.15,distance) if moving else 0.0
 	arm_swing_weight = move_toward(arm_swing_weight,weight,delta*7.0)
 	if arm_swing_weight <= 0.0: return
@@ -190,6 +199,7 @@ func reset_feed() -> void:
 	receiving = false
 	judged = false
 	bump.reset()
+	cpu_meter.reset_serve()
 	update_timing_cue()
 	var reception: Array = RECEPTIONS[rep % RECEPTIONS.size()]
 	receive_tier = reception[0]
@@ -214,8 +224,10 @@ func reset_feed() -> void:
 	pass_velocity = (target-contact).slide(Vector3.UP)/arrival+Vector3.UP*rise
 	landing = Flight.landing_time(contact,pass_velocity)
 	var stand := target
+	timing_arrival = arrival
 	if bump_enabled:
 		var bump_height: float = bump.ready_contact().y
+		timing_arrival = rise/Flight.GRAVITY+sqrt(2.0*(PASS_APEX-bump_height-BumpSetting.PLATFORM_RADIUS)/Flight.GRAVITY)
 		var bump_arrival := rise/Flight.GRAVITY+sqrt(2.0*(PASS_APEX-bump_height)/Flight.GRAVITY)
 		stand = flight_point(contact,pass_velocity,bump_arrival)+pass_velocity.slide(Vector3.UP).normalized()*0.62
 	region.position = Vector3(stand.x,0.065,stand.z)
@@ -247,6 +259,9 @@ func step(delta: float) -> void:
 		receiver.position = RECEIVER_START
 		receiver.rotation.y = receiver_yaw
 		receiver.play_action("idle")
+	var cpu_progress := 1.0+after_pass/BallPreview.APPROACH_WINDOW
+	var cpu_grade := BallPreview.Grade.PERFECT if after_pass >= 0.0 else BallPreview.Grade.WAITING
+	cpu_meter.update_timing(true,cpu_progress,receiving,cpu_grade,delta)
 	if after_pass < 0.0:
 		ball.position = flight_point(SOURCE,serve_velocity,elapsed)
 		return
@@ -257,6 +272,7 @@ func step(delta: float) -> void:
 	if bump_enabled:
 		step_bump(after_pass,maxf(0.0,previous),delta)
 		return
+	update_timing_cue(after_pass)
 	if not judged and after_pass >= arrival:
 		judged = true
 		var under := (setter.position-region.position).slide(Vector3.UP).length() <= REGION_RADIUS
@@ -270,7 +286,7 @@ func step_bump(time: float, previous: float, delta: float) -> void:
 	var path := func(t): return flight_point(contact,pass_velocity,minf(t,landing))
 	var incoming := pass_velocity+Vector3.DOWN*Flight.GRAVITY*time
 	bump.update_attempt(time,previous,landing,path,incoming,delta)
-	update_timing_cue()
+	update_timing_cue(time)
 	var reset_at := landing
 	if is_finite(bump.touch_time):
 		var after_touch: float = time-bump.touch_time

@@ -29,7 +29,6 @@ var reach_progress := 0.0
 var destination := Vector2(2.75,3.0)
 var height := 3.8
 var grade := Timing.Grade.WAITING
-var cue_lead := INF
 var pressed_at := -INF
 var low_save := LowSave.new()
 var pose_started_at := -INF
@@ -72,7 +71,6 @@ func configure(player: Node3D, animation: Animation, timing_meter: Control) -> v
 
 func reset() -> void:
 	grade = Timing.Grade.WAITING
-	cue_lead = INF
 	pressed_at = -INF
 	low_save.active = false
 	pose_started_at = -INF
@@ -211,7 +209,6 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 			apply_pose(contact_frame+follow,1.0-smoothstep(0.12,0.36,follow))
 			pose_reach(smoothstep(0.0,1.0,reach_progress)*(1.0-smoothstep(0.06,0.32,follow)),touch)
 			Drive.apply(setter.skeleton,setter.get_pose_author(),outgoing,Drive.effort(incoming,outgoing),follow,true,incoming,Drive.swing_effort(touch,outgoing))
-	cue_lead = (1.0-progress)*APPROACH_TIME if progress >= 0.0 and grade == Timing.Grade.WAITING else INF
 	meter.update_timing(true,progress,striking,grade,delta,1.0-GREEN_END/APPROACH_TIME)
 	if meter.visible and (grade == Timing.Grade.WAITING or is_finite(touch_time)):
 		var anticipated := (1.0-maxf(progress,0.0))*APPROACH_TIME
