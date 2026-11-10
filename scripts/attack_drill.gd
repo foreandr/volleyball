@@ -9,6 +9,7 @@ const Footwork = preload("res://scripts/directional_footwork.gd")
 const PIN := Vector3(3.55,0.065,3.35)
 const ATTACK_FRONT_LIMIT := 3.55
 const APPROACH_MIN_PLANT_TIME := 0.20
+const APPROACH_SET_TURN_RATE := 4.5
 const APPROACH_CHARGE_TIME := 0.85
 const APPROACH_START := Vector3(3.10,0.04,-0.05)
 const APPROACH_RADII := [1.85,2.4,3.4]
@@ -540,7 +541,7 @@ func step(delta: float) -> void:
 			follow_receive(time)
 			play_shank(time,previous)
 		Stage.SET:
-			if approach_practice: face_receiver(approach_set_target-receiver.position,delta*7.0)
+			if approach_practice: face_receiver(approach_set_target-receiver.position,delta*APPROACH_SET_TURN_RATE)
 			if not swing_practice:
 				cpu_set.update_hand_push(cpu_set.release_time+time,cpu_set.release_time+time-cpu_set.touch_time)
 			play_pin_ball(time,previous,delta)
@@ -639,8 +640,7 @@ func play_cpu_set(time: float, delta: float) -> void:
 		var push_time: float = time-cpu_set.touch_time
 		if approach_practice:
 			var anchor: Vector3 = receiver.to_global(cpu_set.hand_anchor)
-			var turn_weight := smoothstep(0.0,0.085,push_time)
-			face_receiver(approach_set_target-receiver.position,delta*7.0*turn_weight)
+			face_receiver(approach_set_target-receiver.position,delta*APPROACH_SET_TURN_RATE)
 			cpu_set.hand_anchor = receiver.to_local(anchor)
 		cpu_set.update_hand_push(time,push_time)
 		ball.position = cpu_set.platform_center()
@@ -666,9 +666,15 @@ func play_cpu_set(time: float, delta: float) -> void:
 	var toward_ball := (ball.position-receiver.position).slide(Vector3.UP)
 	if toward_ball.length_squared() < 0.09 and travel.is_zero_approx():
 		toward_ball = (pass_origin-cpu_contact_point).slide(Vector3.UP)
-	face_receiver(toward_ball,delta*9.0)
-	cpu_feet.step(receiver.basis.inverse()*travel/maxf(delta*3.2,0.001),delta,1.4,true)
 	var lead := cpu_contact_time-time
+	if approach_practice and lead < 0.22:
+		var target := approach_set_target-receiver.position
+		var preturn := 1.0-smoothstep(0.0,0.22,lead)
+		var yaw := lerp_angle(atan2(toward_ball.x,toward_ball.z),atan2(target.x,target.z),preturn*0.28)
+		face_receiver(Vector3(sin(yaw),0.0,cos(yaw)),delta*lerpf(9.0,APPROACH_SET_TURN_RATE,preturn))
+	else:
+		face_receiver(toward_ball,delta*9.0)
+	cpu_feet.step(receiver.basis.inverse()*travel/maxf(delta*3.2,0.001),delta,1.4,true)
 	if lead <= 0.22:
 		HandPose.apply(receiver,cpu_contact_point,1.0-smoothstep(0.0,0.22,lead))
 	if time >= cpu_contact_time:
