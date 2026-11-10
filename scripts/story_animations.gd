@@ -344,12 +344,24 @@ func start_setting_drill(attack := false) -> void:
 	setting_drill.configure(preview_player,drill_status,modes.selected == 1,build_label)
 	if attack:
 		setting_drill.bump.set_custom_backward(load_custom_backward_clip())
+		add_spike_swing_picker()
 		add_attack_pose_slider("Torso rotation","TorsoRotation",50,setting_drill.torso_rotation_scale,
 			func(value: float): setting_drill.torso_rotation_scale = value)
 		add_attack_pose_slider("Leg kickback","LegKickback",0,setting_drill.leg_kickback_scale,
 			func(value: float): setting_drill.leg_kickback_scale = value)
 	add_torso_lean_slider()
 	preview.grab_focus()
+
+func add_spike_swing_picker() -> void:
+	content.add_child(label("Right-arm swing",16))
+	var picker := OptionButton.new()
+	picker.name = "SpikeSwing"
+	for index in setting_drill.SpikeArm.VARIANTS.size():
+		picker.add_item("%02d  %s" % [index+1,setting_drill.SpikeArm.VARIANTS[index][0]])
+	picker.item_selected.connect(func(index: int):
+		setting_drill.swing_variant = index
+		preview.grab_focus())
+	content.add_child(picker)
 
 func add_torso_lean_slider() -> void:
 	var readout := label("",16)

@@ -1,6 +1,7 @@
 extends "res://scripts/setting_drill.gd"
 
 const Court = preload("res://scripts/preview_court.gd")
+const SpikeArm = preload("res://scripts/spike_arm_swing.gd")
 const HandPose = preload("res://scripts/hand_setting_pose.gd")
 const Footwork = preload("res://scripts/directional_footwork.gd")
 const PIN := Vector3(3.55,0.065,3.65)
@@ -20,6 +21,7 @@ const PALM_RADIUS := 0.065
 const SWING_FOLLOW_TIME := 0.30
 var stage := Stage.SERVE
 var swing_practice := true
+var swing_variant := 0
 var torso_rotation_scale := 2.0
 var leg_kickback_scale := 2.0
 var swing_button_down := false
@@ -404,7 +406,7 @@ func hit_spike(charge: float, point: Vector3) -> void:
 	region.hide()
 	timing_cue.hide()
 	status.text = "Spike  |  %d%% power" % roundi(charge*100.0)
-	trace.write("spike",clock,{"point":swing_contact,"aim":swing_aim,"velocity":pass_motion,"power":charge,"palm_speed":swing_impact_speed,"peak_palm_speed":swing_hand_speed,"net":not swing_net_hit.is_empty()},true)
+	trace.write("spike",clock,{"point":swing_contact,"aim":swing_aim,"velocity":pass_motion,"power":charge,"swing":SpikeArm.VARIANTS[swing_variant][0],"palm_speed":swing_impact_speed,"peak_palm_speed":swing_hand_speed,"net":not swing_net_hit.is_empty()},true)
 
 func play_spike(time: float) -> void:
 	var end := flight_end if swing_net_hit.is_empty() else float(swing_net_hit.end_time)
@@ -461,13 +463,7 @@ func pose_bow_draw(weight: float, contact: Vector3, extension := 0.0, follow := 
 	# Twist the ribcage around its own axis so the lean stays independent.
 	var chest_axis: Vector3 = (author.point(pose,"neck_01")-author.point(pose,"spine_03")).normalized()
 	author.rotate_world(pose,"spine_03",chest_axis,clampf(turn*rotation_weight,-1.45,1.45))
-	right_shoulder = author.point(pose,"upperarm_r")
-	var draw_hand := right_shoulder+Vector3(0.04,0.34,-0.15)
-	var wrist_target := ball_target-(ball_target-right_shoulder).normalized()*0.06
-	var through := right_shoulder+Vector3(0.28,-0.28,0.43)
-	var target := draw_hand.lerp(wrist_target,extension).lerp(through,follow)
-	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",
-		target,Vector3(-0.85,0.52,-0.74),weight,lerpf(108.0,175.0,extension))
+	SpikeArm.apply(pose,author,swing_variant,ball_target,weight,extension,follow,power)
 	var left_shoulder: Vector3 = author.point(pose,"upperarm_l")
 	var guide_drop := 0.78*smoothstep(0.07,1.0,extension)+0.22*follow
 	var guide_hand := left_shoulder+Vector3(0.06,0.43,0.64).lerp(Vector3(0.12,-0.46,0.12),guide_drop)
