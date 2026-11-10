@@ -1034,15 +1034,15 @@ func handle_preview_input(event: InputEvent) -> void:
 		if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
 			open_menu()
 		elif event is InputEventMouseMotion:
-			if selected_category == "Attacking" and setting_drill.approach_practice:
+			if event.button_mask & MOUSE_BUTTON_MASK_MIDDLE and (selected_category != "Attacking" or setting_drill.approach_setup_drag.is_empty()):
+				orbit_setting_camera(event.relative)
+			elif selected_category == "Attacking" and setting_drill.approach_practice:
 				if setting_drill.approach_setup_drag.is_empty():
 					aim_attack_shot(event.position)
 				else:
 					var hit: Variant = attack_floor_point(event.position)
 					if hit is Vector3:
 						setting_drill.place_approach_setup(hit+approach_drag_offset,setting_drill.approach_setup_drag == "set",false)
-			elif event.button_mask & MOUSE_BUTTON_MASK_MIDDLE:
-				orbit_setting_camera(event.relative)
 			elif selected_category == "Attacking" and event.button_mask & MOUSE_BUTTON_MASK_LEFT:
 				aim_attack_shot(event.position)
 			elif setting_drill.can_aim_set():
