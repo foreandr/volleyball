@@ -10,7 +10,6 @@ const PIN := Vector3(3.55,0.065,3.35)
 const ATTACK_FRONT_LIMIT := 3.55
 const APPROACH_MIN_PLANT_TIME := 0.20
 const APPROACH_SET_TURN_RATE := 3.1
-const APPROACH_CHARGE_TIME := 0.85
 const APPROACH_START := Vector3(3.10,0.04,-0.05)
 const APPROACH_RADII := [1.85,2.4,3.4]
 const RECEIVE_START := Vector3(3.05,0.04,-3.10)
@@ -54,6 +53,8 @@ var approach_setup_drag := ""
 var approach_rings: Node3D
 var approach_pressed_at := -INF
 var approach_released_at := INF
+var approach_set_touched_at := INF
+var approach_expected_hit_at := INF
 var approach_run_speed := 0.0
 var shot_sequence_index := -1
 var manual_shot_aim := Vector3.ZERO
@@ -226,6 +227,8 @@ func reset_feed() -> void:
 	approach_rings.visible = approach_practice
 	approach_pressed_at = -INF
 	approach_released_at = INF
+	approach_set_touched_at = INF
+	approach_expected_hit_at = INF
 	approach_run_speed = 0.0
 	jump.front_limit = ATTACK_FRONT_LIMIT
 	setter.position = RECEIVE_START
@@ -412,10 +415,16 @@ func start_attack_swing() -> void:
 
 func swing_charge() -> float:
 	if approach_practice:
-		if not is_finite(approach_pressed_at): return 0.0
-		var held_time := minf(clock,approach_released_at)-approach_pressed_at
-		return lerpf(0.15,1.0,clampf(held_time/APPROACH_CHARGE_TIME,0.0,1.0))
+		return approach_hold_charge(approach_expected_hit_at)
 	return clampf((minf(clock,swing_released if is_finite(swing_released) else clock)-swing_charge_started)/(0.48 if swing_practice else SWING_CHARGE_TIME),0.0,1.0)
+
+func approach_hold_charge(contact_clock: float) -> float:
+	if not is_finite(approach_pressed_at): return 0.0
+	if not is_finite(contact_clock) or not is_finite(approach_set_touched_at): return 0.15
+	var window := maxf(0.001,contact_clock-approach_set_touched_at)
+	var hold_start := maxf(approach_pressed_at,approach_set_touched_at)
+	var hold_end := minf(minf(clock,contact_clock),approach_released_at)
+	return lerpf(0.15,1.0,clampf((hold_end-hold_start)/window,0.0,1.0))
 
 func queue_set() -> void:
 	if stage != Stage.SERVE: return
@@ -497,6 +506,7 @@ func time_two_step_plant(delta: float) -> void:
 	var plant_time := lerpf(0.30,jump.APPROACH_LOAD_TIME,distance_weight)+0.15
 	if time_before_lift > plant_time+delta: return
 	approach_jump_queued = false
+	approach_expected_hit_at = stage_start+contact_at
 	approach_intercept = flight_point(pass_origin,pass_motion,contact_at)
 	var direction := (approach_intercept-setter.position).slide(Vector3.UP).normalized()
 	begin_attack_jump(Vector2(-direction.x,direction.z),clampf(time_before_lift,APPROACH_MIN_PLANT_TIME,plant_time),jump_height)
@@ -686,6 +696,7 @@ func play_cpu_set(time: float, delta: float) -> void:
 		var target := flight_point(cpu_contact_point,ideal,Flight.landing_time(cpu_contact_point,ideal))
 		cpu_set.destination = Vector2(target.x,target.z)
 		cpu_set.begin_hand_contact(cpu_contact_point,time)
+		if approach_practice: approach_set_touched_at = clock
 
 func play_pin_ball(time: float, previous: float, delta: float) -> void:
 	if approach_practice and not is_finite(approach_pressed_at):
@@ -761,7 +772,8 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 				fraction = hand_contact_fraction(before,after,ASSISTED_PALM_RADIUS)
 			if fraction >= 0.0:
 				swing_contact_extension = extension
-				hit_spike(charge,previous_ball.lerp(ball.position,fraction),palm_gap)
+				var contact_charge := approach_hold_charge(clock-(time-previous)*(1.0-fraction)) if approach_practice else charge
+				hit_spike(contact_charge,previous_ball.lerp(ball.position,fraction),palm_gap)
 				return
 		previous_palm = palm
 	if time >= flight_end:
