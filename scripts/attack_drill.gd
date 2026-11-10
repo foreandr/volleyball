@@ -25,6 +25,7 @@ var stage := Stage.SERVE
 var swing_practice := true
 var swing_variant := 0
 var swing_review := false
+var loop_selected_swing := false
 var torso_rotation_scale := 2.0
 var leg_kickback_scale := 2.0
 var swing_button_down := false
@@ -111,15 +112,16 @@ func set_swing_practice(enabled: bool) -> void:
 	swing_button_down = false
 	reset_feed()
 
-func set_swing_review(enabled: bool) -> void:
+func set_swing_review(enabled: bool, loop_selected := false) -> void:
 	swing_review = enabled and swing_practice
+	loop_selected_swing = swing_review and loop_selected
 	if swing_review:
-		swing_variant = 0
+		if not loop_selected_swing: swing_variant = 0
 		reset_feed()
 	swing_review_changed.emit()
 
 func finish_swing_rep() -> void:
-	if swing_review:
+	if swing_review and not loop_selected_swing:
 		swing_variant = (swing_variant+1)%SpikeArm.VARIANTS.size()
 		swing_review_changed.emit()
 	reset_feed()
