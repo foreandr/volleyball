@@ -51,6 +51,7 @@ var swing_aim := Vector3(0.0,Flight.FLOOR,9.5)
 var swing_contact: Vector3
 var swing_contact_extension := 1.0
 var swing_power := 0.0
+var spike_topspin_rps := 0.0
 var swing_net_hit := {}
 var swing_target: MeshInstance3D
 
@@ -243,7 +244,7 @@ func step(delta: float) -> void:
 			if not swing_practice:
 				cpu_set.update_hand_push(cpu_set.release_time+time,cpu_set.release_time+time-cpu_set.touch_time)
 			play_pin_ball(time,previous,delta)
-		Stage.HIT: play_spike(time)
+		Stage.HIT: play_spike(time,delta)
 		Stage.MISS:
 			if time >= (0.26 if swing_practice else 0.85): reset_feed()
 	if stage == Stage.SERVE or stage == Stage.SET: trace.check_contact(bump.contact_check)
@@ -407,6 +408,7 @@ func hit_spike(charge: float, point: Vector3) -> void:
 	swing_contact = point
 	ball.position = point
 	swing_power = charge
+	spike_topspin_rps = clampf(swing_impact_speed*0.55,4.0,10.0)
 	pass_origin = swing_contact
 	var target := swing_aim-pass_origin
 	var speed := clampf(swing_hand_speed*2.2,1.0,32.0)
@@ -419,9 +421,11 @@ func hit_spike(charge: float, point: Vector3) -> void:
 	region.hide()
 	timing_cue.hide()
 	status.text = "Spike  |  %d%% power" % roundi(charge*100.0)
-	trace.write("spike",clock,{"point":swing_contact,"aim":swing_aim,"velocity":pass_motion,"power":charge,"swing":SpikeArm.SWING_NAME,"palm_speed":swing_impact_speed,"peak_palm_speed":swing_hand_speed,"net":not swing_net_hit.is_empty()},true)
+	trace.write("spike",clock,{"point":swing_contact,"aim":swing_aim,"velocity":pass_motion,"power":charge,"swing":SpikeArm.SWING_NAME,"palm_speed":swing_impact_speed,"peak_palm_speed":swing_hand_speed,"topspin_rps":spike_topspin_rps,"net":not swing_net_hit.is_empty()},true)
 
-func play_spike(time: float) -> void:
+func play_spike(time: float, delta: float) -> void:
+	var spin_axis := Vector3.UP.cross(pass_motion).normalized()
+	if not spin_axis.is_zero_approx(): ball.rotate(spin_axis,TAU*spike_topspin_rps*delta)
 	var end := flight_end if swing_net_hit.is_empty() else float(swing_net_hit.end_time)
 	if not swing_net_hit.is_empty() and time >= swing_net_hit.time:
 		ball.position = Net.after_hit(swing_net_hit,minf(time,end))
