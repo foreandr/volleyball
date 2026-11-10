@@ -978,11 +978,26 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 			swing_finish_pose = pose.duplicate()
 	if approach_practice and not approach_arm_transition.is_empty():
 		var handoff_age := clock-stage_start if stage == Stage.HIT else clock-swing_started
-		var handoff_time := 0.09 if stage == Stage.HIT else 0.24
-		var source_weight := 1.0-smootherstep(0.0,handoff_time,handoff_age)
-		if source_weight > 0.0:
-			SpikeArm.blend_arm(pose,approach_arm_transition,author,source_weight)
-			SpikeArm.blend_arm(pose,approach_arm_transition,author,source_weight,"l")
+		if stage == Stage.SET and handoff_age < 0.28:
+			var front_pose := pose.duplicate()
+			var across: Vector3 = (author.point(pose,"upperarm_l")-author.point(pose,"upperarm_r")).normalized()
+			var up: Vector3 = (author.point(pose,"neck_01")-author.point(pose,"spine_01")).normalized()
+			var forward := across.cross(up).normalized()
+			for side in ["r","l"]:
+				var upper: String = "upperarm_"+side
+				var shoulder: Vector3 = author.point(pose,upper)
+				var outward := across*(1.0 if side == "l" else -1.0)
+				var target := shoulder+(forward*sin(deg_to_rad(80.0))-up*cos(deg_to_rad(80.0)))*0.54+outward*0.06
+				author.limb(front_pose,upper,"lowerarm_"+side,"hand_"+side,target,-up+outward*0.3,1.0,155.0)
+				var front_weight := 1.0-smootherstep(0.14,0.28,handoff_age)
+				SpikeArm.blend_arm(pose,front_pose,author,front_weight,side)
+				var source_weight := 1.0-smootherstep(0.0,0.14,handoff_age)
+				SpikeArm.blend_arm(pose,approach_arm_transition,author,source_weight,side)
+		elif stage == Stage.HIT:
+			var source_weight := 1.0-smootherstep(0.0,0.09,handoff_age)
+			if source_weight > 0.0:
+				SpikeArm.blend_arm(pose,approach_arm_transition,author,source_weight)
+				SpikeArm.blend_arm(pose,approach_arm_transition,author,source_weight,"l")
 	for bone in rig.get_bone_count():
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
 
