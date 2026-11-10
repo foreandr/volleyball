@@ -65,9 +65,7 @@ var bump: MeshInstance3D
 var bump_enabled := false
 var ready_range: MeshInstance3D
 var range_style := StandardMaterial3D.new()
-var timing_ring: MeshInstance3D
-var timing_center: MeshInstance3D
-var timing_style := StandardMaterial3D.new()
+var timing_cue: Node3D
 var arm_swing_weight := 0.0
 
 func configure(player: Node3D, readout: Label, meter: Control, receiver_meter: Control, use_bump: bool) -> void:
@@ -128,47 +126,12 @@ func configure(player: Node3D, readout: Label, meter: Control, receiver_meter: C
 	ready_range.material_override = range_style
 	ready_range.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(ready_range)
-	build_timing_cue()
+	timing_cue = preload("res://scripts/ball_timing_ring.gd").new()
+	ready_range.add_child(timing_cue)
 	reset_feed()
 
-func build_timing_cue() -> void:
-	timing_style.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	timing_ring = MeshInstance3D.new()
-	timing_ring.name = "BumpTimingRing"
-	var rim := TorusMesh.new()
-	rim.inner_radius = 0.93
-	rim.outer_radius = 1.0
-	timing_ring.mesh = rim
-	timing_ring.position.y = 0.018
-	timing_ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	timing_ring.material_override = timing_style
-	ready_range.add_child(timing_ring)
-	timing_center = MeshInstance3D.new()
-	timing_center.name = "BumpTimingCenter"
-	var dot := CylinderMesh.new()
-	dot.top_radius = 0.092
-	dot.bottom_radius = 0.092
-	dot.height = 0.008
-	timing_center.mesh = dot
-	timing_center.position.y = 0.023
-	timing_center.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	timing_center.material_override = timing_style
-	ready_range.add_child(timing_center)
-
 func update_timing_cue(after_pass := -INF) -> void:
-	var lead := timing_arrival-after_pass
-	var showing := after_pass >= 0.0 and lead >= -0.10 and not (bump_enabled and is_finite(bump.touch_time))
-	timing_ring.visible = showing
-	timing_center.visible = showing
-	if not showing: return
-	var remaining := clampf(inverse_lerp(BumpSetting.IDEAL_LEAD,timing_arrival,lead),0.0,1.0)
-	var radius := lerpf(0.092,2.0,remaining)
-	timing_ring.scale = Vector3(radius,1.0,radius)
-	var color := Color("ffdb51")
-	if lead < BumpSetting.GREEN_START: color = Color("ff7855")
-	elif lead <= BumpSetting.GREEN_END: color = Color("65ff94")
-	timing_style.albedo_color = color
-
+	timing_cue.update_timing(after_pass,timing_arrival,BumpSetting.GREEN_START,BumpSetting.GREEN_END,bump_enabled and is_finite(bump.touch_time))
 
 func set_bump_mode(enabled: bool) -> void:
 	if bump_enabled == enabled: return
@@ -276,6 +239,7 @@ func step(delta: float) -> void:
 	var cpu_grade := BallPreview.Grade.PERFECT if after_pass >= 0.0 else BallPreview.Grade.WAITING
 	cpu_meter.update_timing(true,cpu_progress,receiving,cpu_grade,delta)
 	if after_pass < 0.0:
+		timing_cue.update_timing(elapsed,SERVE_TIME,BallPreview.GREEN_START,BallPreview.GREEN_END)
 		ball.position = flight_point(SOURCE,serve_velocity,elapsed)
 		return
 	if not region.visible or status.text == "Serve incoming":

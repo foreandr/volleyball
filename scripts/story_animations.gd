@@ -46,6 +46,7 @@ var drill_status: Label
 var distance_status: Label
 var timing_meter: Control
 var cpu_timing_meter: Control
+var pass_timing_cue: Node3D
 var reception_review: HBoxContainer
 var setting_drill: Node3D
 var setter_original_transform: Transform3D
@@ -67,6 +68,8 @@ func _ready() -> void:
 	cpu_timing_meter = preload("res://scripts/reception_timing_meter.gd").new()
 	cpu_timing_meter.cpu = true
 	overlay.add_child(cpu_timing_meter)
+	pass_timing_cue = preload("res://scripts/ball_timing_ring.gd").new()
+	preview_player.get_parent().add_child(pass_timing_cue)
 	reception_review = preload("res://scripts/reception_review.gd").new(self)
 	var column := find_child("ScreenTitle",true,false).get_parent().get_parent()
 	column.add_child(reception_review)
@@ -145,6 +148,7 @@ func set_title(text: String) -> void:
 	if heading: heading.text = text+"  |  "+build_label
 
 func show_categories() -> void:
+	if is_instance_valid(pass_timing_cue): pass_timing_cue.hide()
 	stop_setting_drill()
 	if is_instance_valid(reception_review):
 		reception_review.stop(false)
@@ -420,6 +424,7 @@ func reception_drill_active() -> bool:
 	return is_instance_valid(ball_preview) and ball_preview.active and ball_preview.practice_mode
 
 func _process(delta: float) -> void:
+	pass_timing_cue.hide()
 	if is_instance_valid(setting_drill):
 		player_controls.read_pace_input()
 		player_controls.move_player(player_controls.movement_input(),delta,false,setting_drill.ball.global_position)
@@ -495,6 +500,11 @@ func _process(delta: float) -> void:
 		timing_meter.hide()
 		if not in_control: preview_player.animator.seek(ball_preview.animation_time(preview_clock),true)
 	ball_preview.tick(preview_clock,true)
+	if drill and ball_preview.ball.visible:
+		var source_time: float = ball_preview.contact_time-ball_preview.feed_duration
+		var point: Vector3 = ball_preview.global_position
+		pass_timing_cue.global_position = Vector3(point.x,0.058,point.z)
+		pass_timing_cue.update_timing(preview_clock-source_time,ball_preview.feed_duration,BallPreview.GREEN_START,BallPreview.GREEN_END,not ball_preview.recovery.is_empty() or not ball_preview.incoming_net.is_empty())
 
 func set_cpu_arrows_pinned(pinned: bool) -> void:
 	var arrows: MeshInstance3D = preview_player.get_node("DirectionArrows")

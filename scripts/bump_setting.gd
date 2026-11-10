@@ -13,7 +13,6 @@ const SpreadCone = preload("res://scripts/reception_spread_cone.gd")
 const GREEN_START := 0.035
 const GREEN_END := 0.37
 const APPROACH_TIME := 0.60
-const IDEAL_LEAD := (GREEN_START+GREEN_END)*0.5
 const PLATFORM_PREP_TIME := 0.26
 
 var setter: Node3D
