@@ -31,7 +31,7 @@ static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float,
 	wrist_alignment = lerpf(wrist_alignment,0.96,smoothstep(0.0,0.86,follow))
 	align_wrist_to_forearm(pose,author,wrist_alignment*solve_weight)
 	var release_turn := 0.38*smoothstep(0.35,0.98,extension)
-	if palm_finish > 0.0:
+	if line_weight >= 0.5:
 		# Start the across-body roll on forward extension, after the arm leaves the draw.
 		release_turn = 0.70*smoothstep(0.24,0.86,extension)
 	var palm_progress := maxf(release_turn,follow)
@@ -92,13 +92,13 @@ static func follow_through_target(pose: Array, author: RefCounted, shoulder: Vec
 	var offset := (direction*radius+chest_forward*clearance).normalized()*radius
 	return shoulder+offset
 
-static func finish_palm_direction(target: Vector3, origin: Vector3, cross_body: bool) -> float:
+static func finish_palm_weight(target: Vector3, origin: Vector3, cross_body: bool) -> float:
+	if cross_body: return 1.0
 	var lateral := absf(target.x-origin.x)/maxf(target.z-origin.z,0.1)
-	var turn := smoothstep(0.045,0.13,lateral)
-	return turn if cross_body else -turn
+	return smoothstep(0.045,0.13,lateral)
 
-static func roll_finish_palm(pose: Array, author: RefCounted, direction: float, follow: float) -> void:
-	var weight := absf(direction)*smoothstep(0.05,0.84,follow)
+static func roll_finish_palm(pose: Array, author: RefCounted, amount: float, follow: float) -> void:
+	var weight := amount*smoothstep(0.05,0.84,follow)
 	if weight <= 0.0: return
 	var wrist: Vector3 = author.point(pose,"hand_r")
 	var knuckle: Vector3 = author.point(pose,"middle_01_r")
@@ -106,10 +106,10 @@ static func roll_finish_palm(pose: Array, author: RefCounted, direction: float, 
 	var pinky: Vector3 = author.point(pose,"pinky_01_r")
 	var thumb: Vector3 = author.point(pose,"thumb_01_r")
 	var edge := (pinky-thumb).slide(axis).normalized()
-	var down := (Vector3.DOWN*signf(direction)).slide(axis)
-	var roll := edge.signed_angle_to(down.normalized(),axis)
+	var pinky_up := Vector3.UP.slide(axis)
+	var roll := edge.signed_angle_to(pinky_up.normalized(),axis)
 	# The two edges have no meaningful height difference when the hand points straight down.
-	var visibility := smoothstep(0.015,0.10,down.length()) if direction > 0.0 else smoothstep(0.10,0.34,down.length())
+	var visibility := smoothstep(0.10,0.34,pinky_up.length())
 	author.rotate_world(pose,"hand_r",axis,roll*weight*visibility)
 
 static func align_finish_wrist(pose: Array, author: RefCounted, progress: float) -> void:

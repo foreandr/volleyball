@@ -40,7 +40,7 @@ static func bake(base: Animation, actor: Node3D, index: int, crosscourt := false
 	var flight_time := travel.slide(Vector3.UP).length()/maxf(outgoing.slide(Vector3.UP).length(),0.1)
 	feed.spike_outgoing = travel/flight_time+Vector3.UP*Flight.GRAVITY*flight_time*0.5
 	var shot_turn := SpikeArm.follow_heading(target,feed.aim)
-	var palm_finish := SpikeArm.finish_palm_direction(target,feed.aim,not crosscourt)
+	var palm_finish := SpikeArm.finish_palm_weight(target,feed.aim,not crosscourt)
 	var base_turn := SpikeArm.follow_heading(base.get_meta("study_base_aim"),feed.aim)
 	var duration := base.length+0.12
 	var sampler := func(time: float) -> Array:
@@ -108,7 +108,7 @@ static func shape(pose: Array[Transform3D], author: RefCounted, profile: Array, 
 	var strike_weight := rising*(1.0-smoothstep(0.59,1.22,landing))
 	author.limb(strike_pose,"upperarm_r","lowerarm_r","hand_r",strike_target,pole,1.0,lerpf(148.0,172.0,sweep))
 	SpikeArm.align_finish_wrist(strike_pose,author,sweep)
-	var release_turn := (0.70 if palm_finish > 0.0 else 0.38)*hand_release
+	var release_turn := (0.38 if crosscourt else 0.70)*hand_release
 	SpikeArm.roll_finish_palm(strike_pose,author,palm_finish,maxf(release_turn,sweep))
 
 	# Lead with the elbow while the bent forearm trails behind it.

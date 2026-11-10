@@ -54,6 +54,7 @@ var swing_hand_speed := 0.0
 var swing_impact_speed := 0.0
 var swing_aim := Vector3(PIN.x,Flight.FLOOR,9.5)
 var swing_contact_aim: Vector3
+var swing_finish_pose: Array[Transform3D] = []
 var swing_contact: Vector3
 var swing_contact_extension := 1.0
 var swing_power := 0.0
@@ -122,6 +123,7 @@ func reset_feed() -> void:
 	swing_drive_started = -INF
 	previous_palm = Vector3.INF
 	swing_net_hit.clear()
+	swing_finish_pose.clear()
 	if swing_target == null:
 		swing_target = region.duplicate()
 		add_child(swing_target)
@@ -519,15 +521,26 @@ func pose_bow_draw(weight: float, contact: Vector3, extension := 0.0, follow := 
 	# Twist the ribcage around its own axis so the lean stays independent.
 	var chest_axis: Vector3 = (author.point(pose,"neck_01")-author.point(pose,"spine_03")).normalized()
 	author.rotate_world(pose,"spine_03",chest_axis,clampf(turn*rotation_weight,-1.45,1.45))
-	var ball_direction: Vector3 = (ball_target-author.point(pose,"pelvis")).slide(Vector3.UP)
-	if ball_direction.length_squared() > 0.0001:
-		var crunch_axis := Vector3.UP.cross(ball_direction.normalized())
-		var crunch := weight*smoothstep(0.42,0.95,extension)*(1.0-smoothstep(0.22,0.93,follow))
-		author.rotate_world(pose,"spine_02",crunch_axis,0.20*crunch)
-		author.rotate_world(pose,"neck_01",crunch_axis,0.045*crunch)
+	var load_back := 1.0-smoothstep(0.04,0.55,extension)
+	var contact_crunch := smoothstep(0.42,0.95,extension)
+	var pitch := deg_to_rad((-50.0-torso_lean_degrees)*load_back+11.5*contact_crunch)
+	if stage == Stage.HIT:
+		var hit_age := clock-stage_start
+		var forward_crunch := smoothstep(0.0,0.09,hit_age)
+		pitch = lerpf(pitch,deg_to_rad(30.0-torso_lean_degrees),forward_crunch)
+		pitch *= 1.0-smoothstep(0.10,0.27,hit_age)
+	author.rotate_world(pose,"spine_01",Vector3.RIGHT,pitch*0.45*weight)
+	author.rotate_world(pose,"spine_02",Vector3.RIGHT,pitch*0.55*weight)
+	author.rotate_world(pose,"neck_01",Vector3.RIGHT,0.045*contact_crunch*weight)
 	var line_weight := shot_line_weight(shot_aim,contact)
-	var palm_finish := SpikeArm.finish_palm_direction(shot_aim,contact,line_weight >= 0.5)
-	SpikeArm.apply(pose,author,ball_target,weight,extension,follow,draw_progress,arm_lift,line_weight,palm_finish,elbow_clearance)
+	if stage == Stage.HIT and weight < 1.0 and not swing_finish_pose.is_empty():
+		SpikeArm.blend_right_arm(pose,swing_finish_pose,author,weight)
+		SpikeArm.open_strike_hand(pose,author,0.94*weight)
+	else:
+		var palm_finish := SpikeArm.finish_palm_weight(shot_aim,contact,line_weight >= 0.5)
+		SpikeArm.apply(pose,author,ball_target,weight,extension,follow,draw_progress,arm_lift,line_weight,palm_finish,elbow_clearance)
+		if stage == Stage.HIT and follow >= 0.90:
+			swing_finish_pose = pose.duplicate()
 	var guide_drop := maxf(smoothstep(0.07,0.83,extension),smoothstep(0.0,0.62,follow))
 	SpikeArm.apply_guide_arm(pose,author,Vector3(0.06,0.43,0.64),Vector3(0.26,-0.55,0.15),guide_drop,weight,172.0)
 	for bone in rig.get_bone_count():
