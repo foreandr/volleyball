@@ -399,9 +399,9 @@ func show_attack_positions() -> void:
 	slow_motion.toggled.connect(func(_enabled: bool): update_speed.call())
 	update_speed.call()
 
-	add_attack_tuning_slider(positions,"Draw delay","LowBowDrawDelay","ms",140,5,setting_drill.draw_delay*1000.0,
+	add_attack_tuning_slider(positions,"Draw delay","LowBowDrawDelay","ms",180,5,setting_drill.draw_delay*1000.0,
 		func(value: float): setting_drill.draw_delay = value/1000.0)
-	add_attack_tuning_slider(positions,"Elbow clearance","AttackElbowClearance","cm",24,1,setting_drill.elbow_clearance*100.0,
+	add_attack_tuning_slider(positions,"Elbow clearance","AttackElbowClearance","cm",36,1,setting_drill.elbow_clearance*100.0,
 		func(value: float): setting_drill.elbow_clearance = value/100.0)
 
 func add_attack_tuning_slider(panel_content: VBoxContainer, caption: String, node_name: String, units: String, maximum: float, step: float, initial: float, apply: Callable) -> void:

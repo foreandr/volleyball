@@ -1,8 +1,10 @@
 extends RefCounted
 
 const SWING_NAME := "06 Low Bow"
-const DEFAULT_DRAW_DELAY := 0.05
-const DEFAULT_ELBOW_CLEARANCE := 0.12
+const BASE_DRAW_DELAY := 0.05
+const DEFAULT_DRAW_DELAY := 0.07
+const BASE_ELBOW_CLEARANCE := 0.12
+const DEFAULT_ELBOW_CLEARANCE := 0.16
 
 static func follow_heading(target: Vector3, origin: Vector3, facing := 0.0) -> float:
 	var direction := target-origin
@@ -12,7 +14,9 @@ static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float,
 	var shoulder: Vector3 = author.point(pose,"upperarm_r")
 	var draw := Vector3(-0.04,0.40,0.08).lerp(Vector3(0.02,0.05,-0.12),draw_progress)
 	var wrist_target := ball-(ball-shoulder).normalized()*0.06
-	var raised_draw := draw.lerp(Vector3(-0.08,0.40,0.22),arm_lift)
+	var outside: Vector3 = (shoulder-author.point(pose,"upperarm_l")).normalized()
+	var draw_offset := outside*(elbow_clearance-BASE_ELBOW_CLEARANCE)*0.55
+	var raised_draw := draw.lerp(Vector3(-0.08,0.40,0.22),arm_lift)+draw_offset
 	var target := (shoulder+raised_draw).lerp(wrist_target,extension)
 	target += Vector3(-0.05,0.14,-0.10)*sin(PI*extension)
 	var finish := follow
@@ -132,7 +136,7 @@ static func drop_low_bow_elbow(pose: Array, author: RefCounted, weight: float, c
 	elbow = author.point(pose,"lowerarm_r")
 	var wrist: Vector3 = author.point(pose,"hand_r")
 	var chest: Vector3 = author.point(pose,"spine_03")
-	var draw_target := chest+outside*(0.12+clearance*(0.19/DEFAULT_ELBOW_CLEARANCE))+forward*0.23+Vector3.UP*0.04
+	var draw_target := chest+outside*(0.12+clearance*(0.19/BASE_ELBOW_CLEARANCE))+forward*0.23+Vector3.UP*0.04
 	var forearm := (wrist-elbow).normalized()
 	var toward_chest := (draw_target-elbow).normalized()
 	author.aim_joint(pose,"lowerarm_r","hand_r",elbow+forearm.slerp(toward_chest,weight))

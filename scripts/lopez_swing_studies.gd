@@ -26,7 +26,7 @@ static func bake(base: Animation, actor: Node3D, index: int, crosscourt := false
 	var session := EditSession.new(base,rig)
 	var timing: float = base.get_meta("contact_time")
 	var prep: float = base.get_meta("study_prep_duration")
-	var draw_start := prep+float(base.get_meta("study_draw_delay",SpikeArm.DEFAULT_DRAW_DELAY))-SpikeArm.DEFAULT_DRAW_DELAY
+	var draw_start := prep+float(base.get_meta("study_draw_delay",SpikeArm.DEFAULT_DRAW_DELAY))-SpikeArm.BASE_DRAW_DELAY
 	var elbow_clearance: float = base.get_meta("study_elbow_clearance",SpikeArm.DEFAULT_ELBOW_CLEARANCE)
 	var profile: Array = STUDIES[index]
 	var ball: Vector3 = base.get_meta("study_ball_point")+OUTSIDE_CONTACT
@@ -95,7 +95,7 @@ static func shape(pose: Array[Transform3D], author: RefCounted, profile: Array, 
 
 	var shoulder: Vector3 = author.point(pose,"upperarm_r")
 	var outside: Vector3 = (shoulder-author.point(pose,"upperarm_l")).normalized()
-	var chamber_width := float(profile[11])+elbow_clearance-SpikeArm.DEFAULT_ELBOW_CLEARANCE
+	var chamber_width := float(profile[11])+elbow_clearance-SpikeArm.BASE_ELBOW_CLEARANCE
 	var chamber := shoulder+outside*chamber_width+Vector3(0.0,float(profile[2]),-float(profile[1]))
 	var release_start := float(profile[7])
 	var elbow_lead := smoothstep(release_start,lerpf(release_start,1.0,0.50),progress)
