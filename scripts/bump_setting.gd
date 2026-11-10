@@ -18,6 +18,7 @@ const GREEN_START := 0.035
 const GREEN_END := 0.37
 const APPROACH_TIME := 0.60
 const PLATFORM_PREP_TIME := 0.26
+const FOREARM_RECOVERY_TIME := 0.47
 
 var setter: Node3D
 var hand_setting := false
@@ -208,8 +209,8 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 		elif low_save.active:
 			low_save.sample(setter,time,low_save.contact_time+0.07)
 		else:
-			var windup := lerpf(-0.14,0.0,smoothstep(0.0,GREEN_START,elapsed))
-			apply_pose(contact_frame+windup,smoothstep(0.0,0.026,elapsed))
+			var windup := lerpf(-0.14,0.0,smoothstep(0.0,0.08,elapsed))
+			apply_pose(contact_frame+windup,smoothstep(0.0,0.09,elapsed))
 			if not setter_jumping:
 				var intercept := advance_reach(path,time,end,delta)
 				pose_reach(smoothstep(0.0,1.0,reach_progress),intercept)
@@ -277,11 +278,8 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 			HandPose.apply(setter,setter.to_global(hand_anchor),1.0)
 		elif hand_setting:
 			update_hand_push(time,follow)
-		elif not hand_setting and follow > 0.0 and follow < 0.36:
-			var blend := 1.0-smoothstep(0.12,0.36,follow)
-			apply_pose(contact_frame+follow,blend)
-			pose_reach(smoothstep(0.0,1.0,reach_progress)*(1.0-smoothstep(0.06,0.32,follow)),touch)
-			Drive.apply(setter.skeleton,setter.get_pose_author(),outgoing,Drive.effort(incoming,outgoing),follow,true,incoming,Drive.swing_effort(touch,outgoing))
+		else:
+			follow_forearm(time,incoming)
 	var recent_touch := is_finite(touch_time) and time-touch_time <= BallTimingRing.RESULT_DURATION
 	if not catch_only and ((grade == Timing.Grade.WAITING and progress >= 0.0) or recent_touch):
 		var anticipated := (1.0-maxf(progress,0.0))*APPROACH_TIME
@@ -374,6 +372,14 @@ func plan_reach(offset: Vector3) -> void:
 	}
 	var limit := 0.68 if side else (0.75 if tier == 2 else 0.46)
 	reach_step = horizontal.limit_length(limit)*(1.0 if back and tier == 2 else 0.78)
+
+func follow_forearm(time: float, incoming: Vector3) -> void:
+	var follow := time-touch_time
+	if follow <= 0.0 or follow >= FOREARM_RECOVERY_TIME: return
+	var blend := 1.0-smoothstep(0.13,FOREARM_RECOVERY_TIME,follow)
+	apply_pose(contact_frame+follow,blend)
+	pose_reach(smoothstep(0.0,1.0,reach_progress)*(1.0-smoothstep(0.10,0.40,follow)),touch)
+	Drive.apply(setter.skeleton,setter.get_pose_author(),outgoing,Drive.effort(incoming,outgoing),follow,true,incoming,Drive.swing_effort(touch,outgoing))
 
 func pose_reach(weight: float, intercept: Vector3) -> void:
 	if reach.is_empty() or weight <= 0.0: return

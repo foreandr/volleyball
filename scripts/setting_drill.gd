@@ -282,7 +282,7 @@ func step(delta: float) -> void:
 			receiver.play_action("forearm")
 			receiver.animator.pause()
 		pose_receive(after_pass)
-		if not is_forward_dive() and after_pass > 0.0: recover_receiver_arms(after_pass)
+		if not is_forward_dive() and not is_knee_slide() and after_pass > 0.0: recover_receiver_arms(after_pass)
 	elif receiving:
 		receiving = false
 		receiver.position = RECEIVER_START
@@ -406,7 +406,7 @@ func trace_snapshot(time: float) -> Dictionary:
 	}
 
 func recover_receiver_arms(time: float) -> void:
-	var weight := smoothstep(0.075,0.27,time)
+	var weight := smoothstep(0.13,0.40,time)
 	var rig: Skeleton3D = receiver.skeleton
 	for side in ["l","r"]:
 		for part in ["clavicle_","upperarm_","lowerarm_","hand_"]:

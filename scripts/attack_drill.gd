@@ -106,7 +106,9 @@ func queue_set() -> void:
 	trace.write("attack_input",clock,{"stage":stage,"technique":"hands" if bump.hand_setting else "forearms","aim":bump.destination,"height":bump.height,"position":setter.position,"ball":ball.position},true)
 
 func setter_is_diving() -> bool:
-	return stage == Stage.SERVE and bump.low_save.active and not bump.low_save.finished(clock-stage_start)
+	if not bump.low_save.active: return false
+	if stage == Stage.SERVE: return not bump.low_save.finished(clock-stage_start)
+	return stage == Stage.PASS and not bump.low_save.finished(bump.touch_time+clock-stage_start)
 
 func queue_jump(direction: Vector2) -> void:
 	if jump.active or setter_is_diving() or stage == Stage.CAUGHT: return
@@ -125,7 +127,14 @@ func step(delta: float) -> void:
 	receiver.animator.advance(delta)
 	match stage:
 		Stage.SERVE: play_serve(time,previous,delta)
-		Stage.PASS: play_cpu_set(time,delta)
+		Stage.PASS:
+			if not bump.hand_setting:
+				var receive_time: float = bump.touch_time+time
+				if setter_is_diving():
+					bump.low_save.sample(setter,receive_time,bump.touch_time)
+				elif not bump.low_save.active:
+					bump.follow_forearm(receive_time,serve_velocity+Vector3.DOWN*Flight.GRAVITY*bump.touch_time)
+			play_cpu_set(time,delta)
 		Stage.SET: play_pin_ball(time,previous,delta)
 		Stage.CAUGHT:
 			HandPose.apply(setter,setter.to_global(bump.hand_anchor),1.0)

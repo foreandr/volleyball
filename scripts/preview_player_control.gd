@@ -11,6 +11,8 @@ var animator_active := true
 var animation_process := 0
 var moving := false
 var receive_elapsed := 0.0
+const RECEIVE_FOLLOW_TIME := 0.25
+const RECEIVE_RECOVERY_BLEND := 0.29
 var receive_pose_elapsed := 0.0
 var low_save := LowSave.new()
 var receive_queued := false
@@ -165,9 +167,9 @@ func step(delta: float) -> void:
 		if ball.recovery.has("spread"):
 			after_touch = maxf(0.0,page.preview_clock-ball.contact_time-float(ball.recovery.time))
 		var approaching: bool = ball.practice_approach(page.preview_clock+delta,1.12) >= 0.0
-		if (ball.practice_grade == ball.Grade.WAITING and (approaching or receive_pose_elapsed > 0.0)) or (ball.recovery.has("spread") and after_touch < 0.18):
+		if (ball.practice_grade == ball.Grade.WAITING and (approaching or receive_pose_elapsed > 0.0)) or (ball.recovery.has("spread") and after_touch < RECEIVE_FOLLOW_TIME):
 			receive_pose_elapsed += delta
-			var windup := 0.14*(1.0-smoothstep(0.0,0.06,receive_pose_elapsed))
+			var windup := 0.14*(1.0-smoothstep(0.0,0.11,receive_pose_elapsed))
 			receive_camera_pan = (receive_camera_pan+page.camera_pan_delta(direction,delta,3.5)).limit_length(4.0)
 			play_receive_pose(delta,Vector3.INF,-windup+after_touch*1.4)
 			follow_camera()
@@ -264,9 +266,10 @@ func play_receive_pose(delta: float, review_offset := Vector3.INF, pose_offset :
 			if bone < 0: continue
 			rig.set_bone_pose_position(bone,receive_ready_pose[bone].origin)
 			rig.set_bone_pose_rotation(bone,receive_ready_pose[bone].basis.get_rotation_quaternion())
-	if receive_entry_elapsed < 0.10:
+	var entry_duration := 0.11 if planted else 0.15
+	if receive_entry_elapsed < entry_duration:
 		receive_entry_elapsed += delta
-		blend_pose_from(receive_entry_pose,smoothstep(0.0,0.10,receive_entry_elapsed))
+		blend_pose_from(receive_entry_pose,smoothstep(0.0,entry_duration,receive_entry_elapsed))
 		if not planted and (not reach_step.is_zero_approx() or reach_height != 0.0):
 			ball.update_practice_platform()
 	if planted: ball.update_practice_platform()
@@ -293,10 +296,10 @@ func end_receive_pose() -> void:
 func blend_receive_recovery(delta: float) -> void:
 	if receive_exit_pose.is_empty(): return
 	receive_exit_elapsed += delta
-	if receive_exit_elapsed >= 0.17:
+	if receive_exit_elapsed >= RECEIVE_RECOVERY_BLEND:
 		receive_exit_pose.clear()
 		return
-	blend_pose_from(receive_exit_pose,smoothstep(0.0,0.17,receive_exit_elapsed))
+	blend_pose_from(receive_exit_pose,smoothstep(0.0,RECEIVE_RECOVERY_BLEND,receive_exit_elapsed))
 
 func clear_receive_transition() -> void:
 	receive_entry_pose.clear()

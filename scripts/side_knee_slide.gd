@@ -3,7 +3,7 @@ extends RefCounted
 const PlatformPose = preload("res://scripts/reception_platform_pose.gd")
 const PassDrive = preload("res://scripts/reception_pass_drive.gd")
 
-const DURATION := 0.72
+const DURATION := 0.84
 
 static func sample(actor: Node3D, author: RefCounted, from_pose: Array[Transform3D], ready: Array[Transform3D], start: Vector3, side: String, time: float, contact: Dictionary) -> void:
 	var rig: Skeleton3D = actor.skeleton
@@ -12,7 +12,7 @@ static func sample(actor: Node3D, author: RefCounted, from_pose: Array[Transform
 	var slide := 0.28*smoothstep(0.0,0.32,time)
 	actor.position = start+lateral*slide
 	var down := smoothstep(0.0,0.24,time)
-	var recover := smoothstep(0.36,DURATION,time)
+	var recover := smoothstep(0.38,DURATION,time)
 	var pose := from_pose.duplicate()
 	var pelvis := rig.find_bone("pelvis")
 	var parent := rig.get_bone_parent(pelvis)
@@ -49,7 +49,7 @@ static func sample(actor: Node3D, author: RefCounted, from_pose: Array[Transform
 	for bone in rig.get_bone_count():
 		var sampled: Transform3D = pose[bone]
 		pose[bone] = sampled.interpolate_with(ready[bone],recover)
-	var joined := 1.0-smoothstep(0.36,0.68,time)
+	var joined := smoothstep(0.0,0.10,time)*(1.0-smoothstep(0.38,0.76,time))
 	if joined > 0.0:
 		var left: Vector3 = author.point(pose,"upperarm_l")
 		var right: Vector3 = author.point(pose,"upperarm_r")

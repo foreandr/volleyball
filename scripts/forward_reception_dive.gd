@@ -6,7 +6,8 @@ const LEG_KICK_OFFSET := -0.15
 const LEG_LOWER_DURATION := 0.42
 const CONTACT_POSE_TIME := 0.40
 const POSE_DURATION := 1.28
-const DURATION := POSE_DURATION-CONTACT_POSE_TIME+WINDUP
+const GET_UP_EXTENSION := 0.14
+const DURATION := POSE_DURATION-CONTACT_POSE_TIME+WINDUP+GET_UP_EXTENSION
 
 # Time from load, hip drop and body pitch, from the side-view reference.
 const KEYS := [
@@ -26,6 +27,7 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 	var kick := smoothstep(0.0,0.13,kick_time)*(1.0-smoothstep(0.22,0.22+LEG_LOWER_DURATION,kick_time))
 	# Start later while preserving the reach at the intended ball contact.
 	time = time*CONTACT_POSE_TIME/WINDUP if time < WINDUP else time-WINDUP+CONTACT_POSE_TIME
+	time -= GET_UP_EXTENSION*smoothstep(0.82,POSE_DURATION+GET_UP_EXTENSION,time)
 	var rig: Skeleton3D = actor.skeleton
 	var brace_start := maxf(0.41,release_time-WINDUP+CONTACT_POSE_TIME)
 	var since_brace := time-brace_start

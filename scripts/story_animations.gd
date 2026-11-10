@@ -652,8 +652,9 @@ func step_cpu_receive(previous: float, delta: float) -> void:
 	var after_touch := 0.0
 	if ball_preview.recovery.has("spread"):
 		after_touch = maxf(0.0,preview_clock-ball_preview.contact_time-float(ball_preview.recovery.time))
-	if elapsed <= 0.44 and after_touch < 0.18 and not ball_preview.recovery.has("body_touch"):
-		var windup := 0.14*(1.0-smoothstep(0.0,0.085,elapsed))
+	var continuing: bool = after_touch < player_controls.RECEIVE_FOLLOW_TIME if ball_preview.recovery.has("spread") else elapsed <= 0.44
+	if continuing and not ball_preview.recovery.has("body_touch"):
+		var windup := 0.14*(1.0-smoothstep(0.0,0.12,elapsed))
 		player_controls.play_receive_pose(delta,cpu_reach_offset,-windup+after_touch*1.4,short_back)
 		if ball_preview.try_practice_pass(previous,preview_clock,0.16):
 			drill_status.text = "CPU pass  |  F1 to take control"

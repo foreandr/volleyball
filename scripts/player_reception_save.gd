@@ -5,7 +5,7 @@ const Flight = preload("res://scripts/pass_flight.gd")
 const PANCAKE_HEIGHT := Flight.FLOOR+0.045
 const DIVE_HEIGHT := 0.46
 const MIN_WINDUP := 0.15
-const ENTRY_BLEND := 0.07
+const ENTRY_BLEND := 0.11
 var active := false
 var pancake := false
 var aim: Vector3
@@ -64,7 +64,7 @@ func sample(actor: Node3D, time: float, release: float) -> void:
 	if time < contact_time:
 		pose_time = Dive.WINDUP*clampf(inverse_lerp(start_time,contact_time,time),0.0,1.0)
 	actor.pose_reception_dive(ready,clasp,start,heading,pose_time,aim,release-contact_time+Dive.WINDUP,pancake)
-	var entry_weight := smoothstep(0.0,ENTRY_BLEND,time-start_time)
+	var entry_weight := smoothstep(0.0,minf(ENTRY_BLEND,contact_time-start_time),time-start_time)
 	if entry_weight < 1.0:
 		var rig: Skeleton3D = actor.skeleton
 		actor.rotation.y = lerp_angle(start_yaw,actor.rotation.y,entry_weight)

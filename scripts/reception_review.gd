@@ -265,6 +265,7 @@ func step(delta: float) -> void:
 	var rear_side_lunge := index in [BACK_RIGHT_LUNGE,BACK_LEFT_LUNGE]
 	var short_back := index == SHORT_BACK
 	var receive_start := -0.12 if short_back else -0.25
+	var follow_end: float = page.player_controls.RECEIVE_FOLLOW_TIME+0.06
 	if is_knee_slide():
 		if not released:
 			page.step_cpu_receive(previous,delta)
@@ -290,7 +291,7 @@ func step(delta: float) -> void:
 		page.player_controls.step_back_for_lunge(READY_POSITION,Vector3.BACK,delta,0.64)
 	elif index == BACK_LUNGE and elapsed >= -0.49 and elapsed < -0.25:
 		page.player_controls.step_back_for_lunge(READY_POSITION,Vector3.BACK,delta,0.28)
-	elif elapsed >= receive_start and elapsed < 0.28:
+	elif elapsed >= receive_start and elapsed < follow_end:
 		var pose_offset := minf(0.0,elapsed+0.15)*1.4+maxf(0.0,elapsed)*1.4
 		var animation_offset := offset
 		if rear_side_lunge:
@@ -298,7 +299,7 @@ func step(delta: float) -> void:
 		page.player_controls.play_receive_pose(delta,animation_offset,pose_offset,short_back)
 		if elapsed >= -0.03:
 			ball.try_practice_pass(previous,page.preview_clock,0.16)
-	elif elapsed >= 0.28 and not released:
+	elif elapsed >= follow_end and not released:
 		released = true
 		page.player_controls.end_receive_pose()
 		page.player_controls.reset_reach()
