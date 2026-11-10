@@ -379,7 +379,7 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 				swing_hand_speed = 0.0
 		var load := smoothstep(0.0,0.18,clock-swing_charge_started)
 		var estimated_contact := descending_time(pass_origin,pass_motion,PIN_HEIGHT+1.0)
-		var draw_end := estimated_contact-5.0*LOW_BOW_FRAME
+		var draw_end := estimated_contact-3.5*LOW_BOW_FRAME
 		var draw_progress := smoothstep(draw_end-7.0*LOW_BOW_FRAME,draw_end,time)
 		var arm_lift := smoothstep(draw_end-LOW_BOW_FRAME,estimated_contact,time)
 		var drive := clock-swing_drive_started if is_finite(swing_drive_started) else -INF
@@ -511,7 +511,8 @@ func pose_bow_draw(weight: float, contact: Vector3, extension := 0.0, follow := 
 	var chest_axis: Vector3 = (author.point(pose,"neck_01")-author.point(pose,"spine_03")).normalized()
 	author.rotate_world(pose,"spine_03",chest_axis,clampf(turn*rotation_weight,-1.45,1.45))
 	var line_weight := shot_line_weight(shot_aim,contact)
-	SpikeArm.apply(pose,author,ball_target,weight,extension,follow,draw_progress,arm_lift,line_weight)
+	var palm_finish := SpikeArm.finish_palm_direction(shot_aim,contact,line_weight >= 0.5)
+	SpikeArm.apply(pose,author,ball_target,weight,extension,follow,draw_progress,arm_lift,line_weight,palm_finish)
 	var guide_drop := maxf(smoothstep(0.07,0.83,extension),smoothstep(0.0,0.62,follow))
 	SpikeArm.apply_guide_arm(pose,author,Vector3(0.06,0.43,0.64),Vector3(0.26,-0.55,0.15),guide_drop,weight,172.0)
 	for bone in rig.get_bone_count():

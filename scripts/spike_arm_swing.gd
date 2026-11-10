@@ -6,11 +6,11 @@ static func follow_heading(target: Vector3, origin: Vector3, facing := 0.0) -> f
 	var direction := target-origin
 	return clampf(angle_difference(facing,atan2(direction.x,direction.z)),-0.95,0.95)
 
-static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float, extension: float, follow: float, draw_progress: float, arm_lift: float, line_weight: float) -> void:
+static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float, extension: float, follow: float, draw_progress: float, arm_lift: float, line_weight: float, palm_finish: float) -> void:
 	var shoulder: Vector3 = author.point(pose,"upperarm_r")
-	var draw := Vector3(0.04,0.40,0.08).lerp(Vector3(0.15,0.05,-0.12),draw_progress)
+	var draw := Vector3(-0.04,0.40,0.08).lerp(Vector3(0.02,0.05,-0.12),draw_progress)
 	var wrist_target := ball-(ball-shoulder).normalized()*0.06
-	var raised_draw := draw.lerp(Vector3(0.04,0.40,0.22),arm_lift)
+	var raised_draw := draw.lerp(Vector3(-0.08,0.40,0.22),arm_lift)
 	var target := (shoulder+raised_draw).lerp(wrist_target,extension)
 	target += Vector3(-0.05,0.14,-0.10)*sin(PI*extension)
 	var finish := follow
@@ -28,6 +28,8 @@ static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float,
 	var wrist_alignment := lerpf(0.90,0.68,smoothstep(0.04,0.70,extension))
 	wrist_alignment = lerpf(wrist_alignment,0.96,smoothstep(0.0,0.86,follow))
 	align_wrist_to_forearm(pose,author,wrist_alignment*solve_weight)
+	var palm_progress := maxf(0.38*smoothstep(0.35,0.98,extension),follow)
+	roll_finish_palm(pose,author,palm_finish,palm_progress)
 	if finish > 0.0:
 		blend_right_arm(base,pose,author,weight)
 	open_strike_hand(base,author,weight*lerpf(0.70,0.94,smoothstep(0.12,0.85,extension)))
@@ -84,6 +86,25 @@ static func follow_through_target(pose: Array, author: RefCounted, shoulder: Vec
 	var offset := (direction*radius+chest_forward*clearance).normalized()*radius
 	return shoulder+offset
 
+static func finish_palm_direction(target: Vector3, origin: Vector3, cross_body: bool) -> float:
+	var lateral := absf(target.x-origin.x)/maxf(target.z-origin.z,0.1)
+	var turn := smoothstep(0.045,0.13,lateral)
+	return turn if cross_body else -turn
+
+static func roll_finish_palm(pose: Array, author: RefCounted, direction: float, follow: float) -> void:
+	var weight := absf(direction)*smoothstep(0.05,0.84,follow)
+	if weight <= 0.0: return
+	var wrist: Vector3 = author.point(pose,"hand_r")
+	var knuckle: Vector3 = author.point(pose,"middle_01_r")
+	var axis := (knuckle-wrist).normalized()
+	var pinky: Vector3 = author.point(pose,"pinky_01_r")
+	var thumb: Vector3 = author.point(pose,"thumb_01_r")
+	var edge := (pinky-thumb).slide(axis).normalized()
+	var down := (Vector3.DOWN*signf(direction)).slide(axis)
+	var roll := edge.signed_angle_to(down.normalized(),axis)
+	# The two edges have no meaningful height difference when the hand points straight down.
+	author.rotate_world(pose,"hand_r",axis,roll*weight*smoothstep(0.10,0.34,down.length()))
+
 static func align_finish_wrist(pose: Array, author: RefCounted, progress: float) -> void:
 	align_wrist_to_forearm(pose,author,smoothstep(0.25,0.95,progress))
 
@@ -104,12 +125,12 @@ static func drop_low_bow_elbow(pose: Array, author: RefCounted, weight: float) -
 	var forward := Vector3.UP.cross(outside)
 	var elbow: Vector3 = author.point(pose,"lowerarm_r")
 	var upper := (elbow-shoulder).normalized()
-	var lowered := (outside*0.10+forward*0.03+Vector3.DOWN*0.30).normalized()
+	var lowered := (outside*0.22+forward*0.03+Vector3.DOWN*0.30).normalized()
 	author.aim_joint(pose,"upperarm_r","lowerarm_r",shoulder+upper.slerp(lowered,weight))
 	elbow = author.point(pose,"lowerarm_r")
 	var wrist: Vector3 = author.point(pose,"hand_r")
 	var chest: Vector3 = author.point(pose,"spine_03")
-	var draw_target := chest+outside*0.12+forward*0.20+Vector3.UP*0.04
+	var draw_target := chest+outside*0.31+forward*0.23+Vector3.UP*0.04
 	var forearm := (wrist-elbow).normalized()
 	var toward_chest := (draw_target-elbow).normalized()
 	author.aim_joint(pose,"lowerarm_r","hand_r",elbow+forearm.slerp(toward_chest,weight))

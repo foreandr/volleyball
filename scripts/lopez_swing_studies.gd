@@ -38,6 +38,7 @@ static func bake(base: Animation, actor: Node3D, index: int, crosscourt := false
 	var flight_time := travel.slide(Vector3.UP).length()/maxf(outgoing.slide(Vector3.UP).length(),0.1)
 	feed.spike_outgoing = travel/flight_time+Vector3.UP*Flight.GRAVITY*flight_time*0.5
 	var shot_turn := SpikeArm.follow_heading(target,feed.aim)
+	var palm_finish := SpikeArm.finish_palm_direction(target,feed.aim,not crosscourt)
 	var base_turn := SpikeArm.follow_heading(base.get_meta("study_base_aim"),feed.aim)
 	var duration := base.length+0.12
 	var sampler := func(time: float) -> Array:
@@ -45,7 +46,7 @@ static func bake(base: Animation, actor: Node3D, index: int, crosscourt := false
 		var pose: Array[Transform3D] = []
 		for bone in rig.get_bone_count():
 			pose.append(Transform3D(Basis(session.source_rotation(bone,frame)),session.source_position(bone,frame)))
-		shape(pose,author,profile,ball,(time-prep)/(timing-prep),(time-timing)/(base.length-timing),crosscourt,shot_turn-base_turn)
+		shape(pose,author,profile,ball,(time-prep)/(timing-prep),(time-timing)/(base.length-timing),crosscourt,shot_turn-base_turn,palm_finish)
 		return pose
 	var title: String = profile[0]+(" Crosscourt" if crosscourt else "")
 	var clip: Animation = author.bake({"name":title,"duration":duration,"contact_time":timing},sampler)
@@ -55,7 +56,7 @@ static func bake(base: Animation, actor: Node3D, index: int, crosscourt := false
 	clip.set_meta("editor_frame_count",25)
 	return clip
 
-static func shape(pose: Array[Transform3D], author: RefCounted, profile: Array, ball: Vector3, progress: float, landing: float, crosscourt: bool, aim_turn: float) -> void:
+static func shape(pose: Array[Transform3D], author: RefCounted, profile: Array, ball: Vector3, progress: float, landing: float, crosscourt: bool, aim_turn: float, palm_finish: float) -> void:
 	var rising := smoothstep(0.03,0.32,progress)
 	var drive := smoothstep(float(profile[7]),1.0,progress)
 	var settle := smoothstep(0.12,0.92,landing)
@@ -103,6 +104,7 @@ static func shape(pose: Array[Transform3D], author: RefCounted, profile: Array, 
 	var strike_weight := rising*(1.0-smoothstep(0.59,1.22,landing))
 	author.limb(strike_pose,"upperarm_r","lowerarm_r","hand_r",strike_target,pole,1.0,lerpf(148.0,172.0,sweep))
 	SpikeArm.align_finish_wrist(strike_pose,author,sweep)
+	SpikeArm.roll_finish_palm(strike_pose,author,palm_finish,maxf(0.38*hand_release,sweep))
 
 	# Lead with the elbow while the bent forearm trails behind it.
 	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",chamber,Vector3(-1.0,-0.12,-0.34),air,108.0)
