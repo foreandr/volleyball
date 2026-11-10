@@ -524,7 +524,7 @@ func _process(delta: float) -> void:
 		setting_drill.trace_move_scale = 0.0 if diving else setting_drill.setter_movement_scale()
 		var court_weight: float = setting_drill.court_facing_weight()
 		if not diving and not setting_drill.jump.active:
-			player_controls.move_player(setting_drill.trace_input,delta,false,setting_drill.ball.global_position,setting_drill.trace_move_scale,court_weight,not setting_drill.bump.backward_reach_active())
+			player_controls.move_player(setting_drill.trace_input,delta,false,setting_drill.ball.global_position,setting_drill.trace_move_scale,court_weight,not setting_drill.bump.backward_reach_active(),setting_drill.jump.front_limit)
 			setting_drill.apply_setter_arms(player_controls.footwork.phase,player_controls.moving,delta)
 		elif setting_drill.jump.active and court_weight > 0.0:
 			player_controls.track_setting_ball(preview_player,setting_drill.ball.global_position,delta,court_weight)

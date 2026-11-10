@@ -11,6 +11,7 @@ const AIR_TRAVEL_FRACTION := 0.38
 const AIR_STEER_SPEED := 1.00
 const AIR_STEER_ACCELERATION := 5.0
 var active := false
+var front_limit := 2.5
 var elapsed := 0.0
 var held := false
 var hold_time := 0.0
@@ -61,7 +62,7 @@ func step(actor: Node3D, delta: float, input: Vector2) -> void:
 	var distance := stride*(0.34*first+0.66*second+AIR_TRAVEL_FRACTION*flight)
 	var base := start+heading*distance+Vector3.UP*(4.0*height*flight*(1.0-flight))
 	var position := base+air_offset
-	actor.position = Court.clamp_setter(position)
+	actor.position = Court.clamp_setter(position,front_limit)
 	if air_delta > 0.0: air_offset += actor.position-position
 	actor.animator.advance(delta)
 	var landing := elapsed-LOAD_TIME-air_time

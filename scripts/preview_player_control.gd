@@ -489,7 +489,7 @@ func move_cpu_toward(travel: Vector3, delta: float, track_ball := true) -> void:
 	sprint_requested = distance>0.85
 	move_player(Vector2(direction.dot(forward.cross(Vector3.UP)),direction.dot(forward)),delta,track_ball)
 
-func move_player(direction: Vector2, delta: float, track_ball := true, setting_target := Vector3.INF, movement_scale := 1.0, court_weight := 0.0, turn_with_ball := true) -> void:
+func move_player(direction: Vector2, delta: float, track_ball := true, setting_target := Vector3.INF, movement_scale := 1.0, court_weight := 0.0, turn_with_ball := true, front_limit := 2.5) -> void:
 	var actor: Node3D = page.preview_player
 	var session = page.get_node("/root/StorySession")
 	var setting := setting_target.is_finite()
@@ -527,7 +527,7 @@ func move_player(direction: Vector2, delta: float, track_ball := true, setting_t
 		movement = shuffle_heading*distance_
 	else: side_steps.active = false
 	if setting:
-		actor.position = Court.clamp_setter(actor.position+movement)
+		actor.position = Court.clamp_setter(actor.position+movement,front_limit)
 	else:
 		actor.position.x = clampf(actor.position.x+movement.x,-4,4)
 		actor.position.z = clampf(actor.position.z+movement.z,-4.5,2.5)

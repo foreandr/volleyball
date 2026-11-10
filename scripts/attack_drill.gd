@@ -3,10 +3,11 @@ extends "res://scripts/setting_drill.gd"
 const Court = preload("res://scripts/preview_court.gd")
 const HandPose = preload("res://scripts/hand_setting_pose.gd")
 const Footwork = preload("res://scripts/directional_footwork.gd")
-const PIN := Vector3(3.55,0.065,2.85)
+const PIN := Vector3(3.55,0.065,3.65)
+const ATTACK_FRONT_LIMIT := 3.55
 const RECEIVE_START := Vector3(3.05,0.04,-3.10)
 const ATTACK_SERVE_SOURCE := Vector3(3.05,2.8,8.5)
-const CPU_HOME := Vector3(-0.55,0.04,1.65)
+const CPU_HOME := Vector3(-0.55,0.04,3.10)
 const PIN_HEIGHT := 2.75
 const SET_APEX := 5.0
 const SET_TOPSPIN_RPS := 2.2
@@ -66,6 +67,7 @@ func reset_feed() -> void:
 	receiver.rotation.y = PI
 	cpu_set.reset()
 	jump.active = false
+	jump.front_limit = ATTACK_FRONT_LIMIT
 	setter.position = RECEIVE_START
 	setter.rotation.y = 0.0
 	bump.reset()
@@ -73,7 +75,7 @@ func reset_feed() -> void:
 	bump.hand_setting = false
 	bump.quick_hand_receive = false
 	bump.catch_only = false
-	bump.destination = Vector2(-0.55,2.2)
+	bump.destination = Vector2(-0.55,3.0)
 	bump.height = 3.8
 	serve_target = RECEIVE_START+Vector3(0.0,1.13,-0.17)
 	serve_velocity = (serve_target-ATTACK_SERVE_SOURCE)/SERVE_TIME+Vector3.UP*Flight.GRAVITY*SERVE_TIME*0.5
@@ -276,7 +278,7 @@ func play_serve(time: float, previous: float, delta: float) -> void:
 			return
 		bump.hide()
 		var incoming := (pass_origin-cpu_contact_point).slide(Vector3.UP).normalized()
-		cpu_stand = Court.clamp_setter(Vector3(cpu_contact_point.x,CPU_HOME.y,cpu_contact_point.z)-incoming*HandPose.CONTACT_FORWARD*receiver.scale.z)
+		cpu_stand = Court.clamp_setter(Vector3(cpu_contact_point.x,CPU_HOME.y,cpu_contact_point.z)-incoming*HandPose.CONTACT_FORWARD*receiver.scale.z,ATTACK_FRONT_LIMIT)
 		stage = Stage.PASS
 		stage_start = clock
 		status.text = "CPU setting to the pin"

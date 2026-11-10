@@ -4,8 +4,8 @@ const RUNOFF_HALF_WIDTH := 6.5
 const RUNOFF_NEAR_BASELINE := -7.0
 const RUNOFF_FAR_BASELINE := 15.0
 
-static func clamp_setter(point: Vector3) -> Vector3:
-	return Vector3(clampf(point.x,-RUNOFF_HALF_WIDTH,RUNOFF_HALF_WIDTH),point.y,clampf(point.z,RUNOFF_NEAR_BASELINE,2.5))
+static func clamp_setter(point: Vector3, front_limit := 2.5) -> Vector3:
+	return Vector3(clampf(point.x,-RUNOFF_HALF_WIDTH,RUNOFF_HALF_WIDTH),point.y,clampf(point.z,RUNOFF_NEAR_BASELINE,front_limit))
 
 static func clamp_set_aim(point: Vector3) -> Vector2:
 	return Vector2(clampf(point.x,-RUNOFF_HALF_WIDTH,RUNOFF_HALF_WIDTH),clampf(point.z,RUNOFF_NEAR_BASELINE,RUNOFF_FAR_BASELINE))
