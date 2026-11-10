@@ -1,5 +1,7 @@
 extends RefCounted
 
+const OUTSIDE_CONTACT := Vector3(-0.32,-0.11,0.03)
+
 const EditSession = preload("res://scripts/animation_edit_session.gd")
 
 # title, draw depth, elbow height, chest coil, shoulder tilt, leg split, leg kick, drive start, finish width, guide height, guide width, elbow width
@@ -23,7 +25,7 @@ static func bake(base: Animation, actor: Node3D, index: int) -> Animation:
 	var timing: float = base.get_meta("contact_time")
 	var prep: float = base.get_meta("study_prep_duration")
 	var profile: Array = STUDIES[index]
-	var ball: Vector3 = base.get_meta("study_ball_point")
+	var ball: Vector3 = base.get_meta("study_ball_point")+OUTSIDE_CONTACT
 	var sampler := func(time: float) -> Array:
 		var frame := time*session.frame_rate
 		var pose: Array[Transform3D] = []
@@ -32,8 +34,13 @@ static func bake(base: Animation, actor: Node3D, index: int) -> Animation:
 		shape(pose,author,profile,ball,(time-prep)/(timing-prep),(time-timing)/(base.length-timing))
 		return pose
 	var clip: Animation = author.bake({"name":profile[0],"duration":base.length,"contact_time":timing},sampler)
-	for key in ["editor_start","editor_group","editor_feed","editor_height_cm"]:
+	for key in ["editor_start","editor_group","editor_height_cm"]:
 		clip.set_meta(key,base.get_meta(key))
+	var feed: Dictionary = base.get_meta("editor_feed").duplicate()
+	var offset := OUTSIDE_CONTACT*(float(base.get_meta("editor_height_cm"))/180.0)
+	feed.aim += offset
+	feed.incoming += offset/float(feed.duration)
+	clip.set_meta("editor_feed",feed)
 	clip.set_meta("editor_frame_count",25)
 	return clip
 
@@ -46,7 +53,7 @@ static func shape(pose: Array[Transform3D], author: RefCounted, profile: Array, 
 	var follow := smoothstep(0.0,0.45,landing)*(1.0-settle)
 	var strike_wrist: Vector3 = author.point(pose,"hand_r")
 	var strike_palm: Vector3 = strike_wrist.lerp(author.point(pose,"middle_01_r"),0.75)
-	strike_wrist += (ball-strike_palm).limit_length(0.12)
+	strike_wrist += (ball-strike_palm).limit_length(0.33)
 	var left_foot: Vector3 = author.point(pose,"foot_l")
 	var right_foot: Vector3 = author.point(pose,"foot_r")
 	# The pelvis starts to open before the shoulders unwind.
@@ -75,13 +82,13 @@ static func shape(pose: Array[Transform3D], author: RefCounted, profile: Array, 
 	var shoulder: Vector3 = author.point(pose,"upperarm_r")
 	var chamber := shoulder+Vector3(-float(profile[11]),float(profile[2]),-float(profile[1]))
 	var release_start := float(profile[7])
-	var elbow_lead := smoothstep(release_start,lerpf(release_start,1.0,0.58),progress)
-	var hand_release := smoothstep(lerpf(release_start,1.0,0.38),1.0,progress)
-	var pole := Vector3(-1.0,-0.12,-0.34).lerp(Vector3(-0.72,0.16,0.38),hand_release)
+	var elbow_lead := smoothstep(release_start,lerpf(release_start,1.0,0.50),progress)
+	var hand_release := smoothstep(lerpf(release_start,1.0,0.49),1.0,progress)
+	var pole := Vector3(-1.0,-0.12,-0.34).lerp(Vector3(-0.95,-0.08,0.48),hand_release)
 	var finish_target := shoulder+Vector3(float(profile[8]),-0.39,0.34)
 	var strike_pose := pose.duplicate()
 	var strike_target := strike_wrist.lerp(finish_target,follow)
-	author.limb(strike_pose,"upperarm_r","lowerarm_r","hand_r",strike_target,pole,air,lerpf(160.0,139.0,follow))
+	author.limb(strike_pose,"upperarm_r","lowerarm_r","hand_r",strike_target,pole,air,lerpf(148.0,132.0,follow))
 
 	# Lead with the elbow while the bent forearm trails behind it.
 	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",chamber,Vector3(-1.0,-0.12,-0.34),air,108.0)
@@ -90,10 +97,10 @@ static func shape(pose: Array[Transform3D], author: RefCounted, profile: Array, 
 	var upper := (elbow-shoulder).normalized()
 	var forearm := (wrist-elbow).normalized()
 	var lead_weight := elbow_lead*air
-	var elbow_forward := Vector3(-0.65,0.42,0.79).normalized()
+	var elbow_forward := Vector3(-0.95,0.20,0.96).normalized()
 	author.aim_joint(pose,"upperarm_r","lowerarm_r",shoulder+upper.slerp(elbow_forward,lead_weight))
 	elbow = author.point(pose,"lowerarm_r")
-	var trailing := Vector3(-0.18,0.64,-0.75).normalized()
+	var trailing := Vector3(-0.34,0.48,-0.92).normalized()
 	author.aim_joint(pose,"lowerarm_r","hand_r",elbow+forearm.slerp(trailing,lead_weight))
 	for bone in ["upperarm_r","lowerarm_r","hand_r"]:
 		var index: int = author.rig.find_bone(bone)
