@@ -1,5 +1,7 @@
 extends "res://scripts/setting_drill.gd"
 
+signal swing_review_changed
+
 const Court = preload("res://scripts/preview_court.gd")
 const SpikeArm = preload("res://scripts/spike_arm_swing.gd")
 const HandPose = preload("res://scripts/hand_setting_pose.gd")
@@ -22,6 +24,7 @@ const SWING_FOLLOW_TIME := 0.30
 var stage := Stage.SERVE
 var swing_practice := true
 var swing_variant := 0
+var swing_review := false
 var torso_rotation_scale := 2.0
 var leg_kickback_scale := 2.0
 var swing_button_down := false
@@ -104,7 +107,21 @@ func reset_feed() -> void:
 
 func set_swing_practice(enabled: bool) -> void:
 	swing_practice = enabled
+	set_swing_review(false)
 	swing_button_down = false
+	reset_feed()
+
+func set_swing_review(enabled: bool) -> void:
+	swing_review = enabled and swing_practice
+	if swing_review:
+		swing_variant = 0
+		reset_feed()
+	swing_review_changed.emit()
+
+func finish_swing_rep() -> void:
+	if swing_review:
+		swing_variant = (swing_variant+1)%SpikeArm.VARIANTS.size()
+		swing_review_changed.emit()
 	reset_feed()
 
 func start_swing_practice() -> void:
@@ -127,7 +144,7 @@ func start_swing_practice() -> void:
 	region.show()
 	aim_swing(swing_aim)
 	swing_target.show()
-	if swing_button_down: swing_started = clock
+	if swing_button_down or swing_review: swing_started = clock
 	status.text = "Hold left-click to swing"
 	trace.begin_feed({"mode":"swing_practice","source":pass_origin,"velocity":pass_motion,"pin":PIN})
 
@@ -235,7 +252,7 @@ func step(delta: float) -> void:
 			play_pin_ball(time,previous,delta)
 		Stage.HIT: play_spike(time)
 		Stage.MISS:
-			if time >= (0.26 if swing_practice else 0.85): reset_feed()
+			if time >= (0.26 if swing_practice else 0.85): finish_swing_rep()
 	if stage == Stage.SERVE or stage == Stage.SET: trace.check_contact(bump.contact_check)
 	if clock >= trace.next_sample: trace.sample(clock,trace_snapshot(clock-stage_start))
 
@@ -417,7 +434,7 @@ func play_spike(time: float) -> void:
 		ball.position = flight_point(pass_origin,pass_motion,minf(time,end))
 	if time < SWING_FOLLOW_TIME:
 		pose_bow_draw(1.0-smoothstep(0.11,SWING_FOLLOW_TIME,time),swing_contact,1.0,smoothstep(0.0,0.16,time))
-	if time >= end+(0.22 if swing_practice else 0.48) and not jump.active: reset_feed()
+	if time >= end+(0.22 if swing_practice else 0.48) and not jump.active: finish_swing_rep()
 
 func pose_bow_draw(weight: float, contact: Vector3, extension := 0.0, follow := 0.0) -> void:
 	var rig: Skeleton3D = setter.skeleton

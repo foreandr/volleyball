@@ -360,8 +360,18 @@ func add_spike_swing_picker() -> void:
 		picker.add_item("%02d  %s" % [index+1,setting_drill.SpikeArm.VARIANTS[index][0]])
 	picker.item_selected.connect(func(index: int):
 		setting_drill.swing_variant = index
+		setting_drill.set_swing_review(false)
 		preview.grab_focus())
 	content.add_child(picker)
+	var play_all := button("Play all swings",func():
+		setting_drill.set_swing_review(not setting_drill.swing_review)
+		preview.grab_focus())
+	play_all.name = "PlayAllSwings"
+	setting_drill.swing_review_changed.connect(func():
+		picker.select(setting_drill.swing_variant)
+		play_all.disabled = not setting_drill.swing_practice
+		play_all.text = "Stop swing review" if setting_drill.swing_review else "Play all swings")
+	content.add_child(play_all)
 
 func add_torso_lean_slider() -> void:
 	var readout := label("",16)
