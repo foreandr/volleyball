@@ -6,6 +6,18 @@ const NET_TOP := 2.505
 const NET_BOTTOM := 1.45
 const NET_HALF_WIDTH := 4.8
 
+static func contact_sound() -> AudioStreamPlayer:
+	var player := AudioStreamPlayer.new()
+	player.stream = AudioStreamWAV.load_from_file("res://assets/audio/pass_contact.wav")
+	player.volume_db = -12
+	player.pitch_scale = 0.65
+	return player
+
+static func squeeze(hit: Dictionary, time: float) -> float:
+	if hit.is_empty() or float(hit.contact_duration) <= 0.0: return 0.0
+	var compression := clampf((time-float(hit.time))/float(hit.contact_duration),0.0,1.0)
+	return sin(PI*compression)
+
 static func gap_squared(point: Vector3) -> float:
 	var offset := Vector3(maxf(0,absf(point.x)-NET_HALF_WIDTH),maxf(0,maxf(0.04-point.y,point.y-NET_TOP)),maxf(0,absf(point.z-NET_Z)-0.0125))
 	return offset.length_squared()

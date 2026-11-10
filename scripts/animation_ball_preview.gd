@@ -73,10 +73,7 @@ func _ready() -> void:
 	audio.stream = AudioStreamWAV.load_from_file("res://assets/audio/pass_contact.wav")
 	audio.volume_db = -7
 	add_child(audio)
-	net_audio = AudioStreamPlayer.new()
-	net_audio.stream = audio.stream
-	net_audio.volume_db = -12
-	net_audio.pitch_scale = 0.65
+	net_audio = Net.contact_sound()
 	add_child(net_audio)
 	guide = MeshInstance3D.new()
 	guide.top_level = true
@@ -698,10 +695,7 @@ func tick(time: float, audible: bool) -> void:
 	var net_hit: Dictionary = incoming_net if not incoming_net.is_empty() else outgoing_net
 	if not recovery_net.is_empty() and elapsed>=recovery_net.time: net_hit = recovery_net
 	if is_instance_valid(dynamic_net): dynamic_net.sample(net_hit,elapsed)
-	var net_squeeze := 0.0
-	if not net_hit.is_empty() and float(net_hit.contact_duration)>0:
-		var compression := clampf((elapsed-float(net_hit.time))/float(net_hit.contact_duration),0,1)
-		net_squeeze = sin(PI*compression)
+	var net_squeeze := Net.squeeze(net_hit,elapsed)
 	var axis: Vector3 = feed_info.get("spin_axis",Vector3.ZERO)
 	var rotation_time := clampf(elapsed+feed_duration,0,feed_duration)
 	if not net_hit.is_empty() and elapsed>net_hit.time:

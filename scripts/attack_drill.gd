@@ -61,10 +61,33 @@ var swing_contact_extension := 1.0
 var swing_power := 0.0
 var spike_topspin_rps := 0.0
 var swing_net_hit := {}
+var dynamic_net: Node3D
+var net_audio: AudioStreamPlayer
+var net_sound_played := false
+var mute_net := false
 var swing_target: MeshInstance3D
 
 func _ready() -> void:
+	dynamic_net = get_parent().get_node_or_null("VolleyballCourt/DynamicNet")
+	net_audio = Net.contact_sound()
+	add_child(net_audio)
 	load_practice_target()
+
+func _exit_tree() -> void:
+	show_attack_net({},0.0)
+	super._exit_tree()
+
+func show_attack_net(hit: Dictionary, elapsed: float) -> void:
+	if is_instance_valid(dynamic_net): dynamic_net.sample(hit,elapsed)
+	var squeeze := Net.squeeze(hit,elapsed)
+	if is_instance_valid(ball):
+		ball.scale = Vector3(1.0+0.04*squeeze,1.0+0.04*squeeze,1.0-0.12*squeeze)
+	if hit.is_empty() or elapsed < float(hit.time):
+		if net_sound_played and is_instance_valid(net_audio): net_audio.stop()
+		net_sound_played = false
+	elif not mute_net and not net_sound_played and is_instance_valid(net_audio):
+		net_sound_played = true
+		net_audio.play()
 
 func load_practice_target() -> void:
 	var config := ConfigFile.new()
@@ -124,6 +147,7 @@ func reset_feed() -> void:
 	swing_drive_started = -INF
 	previous_palm = Vector3.INF
 	swing_net_hit.clear()
+	show_attack_net({},0.0)
 	swing_finish_pose.clear()
 	swing_palm_roll = 0.0
 	if swing_target == null:
@@ -461,6 +485,7 @@ func hit_spike(charge: float, point: Vector3) -> void:
 	trace.write("spike",clock,{"point":swing_contact,"aim":swing_aim,"velocity":pass_motion,"power":charge,"swing":SpikeArm.SWING_NAME,"palm_speed":swing_impact_speed,"peak_palm_speed":swing_hand_speed,"topspin_rps":spike_topspin_rps,"net":not swing_net_hit.is_empty()},true)
 
 func play_spike(time: float, delta: float) -> void:
+	show_attack_net(swing_net_hit,time)
 	var spin_axis := Vector3.UP.cross(pass_motion).normalized()
 	if not spin_axis.is_zero_approx(): ball.rotate(spin_axis,TAU*spike_topspin_rps*delta)
 	var end := flight_end if swing_net_hit.is_empty() else float(swing_net_hit.end_time)

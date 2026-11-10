@@ -4,6 +4,7 @@ const Court = preload("res://scripts/preview_court.gd")
 const SETTING_CAMERA_FOCUS := Vector3(0,1.45,2.6)
 const BallTimingRing = preload("res://scripts/ball_timing_ring.gd")
 const Flight = preload("res://scripts/pass_flight.gd")
+const Net = preload("res://scripts/net_collision.gd")
 const SideKneeSlide = preload("res://scripts/side_knee_slide.gd")
 const ForwardDive = preload("res://scripts/forward_reception_dive.gd")
 const LopezStudies = preload("res://scripts/lopez_swing_studies.gd")
@@ -63,6 +64,7 @@ var attack_playback_speed := 1.0
 var attack_study_clip: Animation
 var attack_study_clock := 0.0
 var attack_study_flight := 0.0
+var attack_study_net_hit := {}
 var attack_study_play: Button
 var attack_study_selector: OptionButton
 var attack_cycle_button: Button
@@ -517,6 +519,10 @@ func play_attack_study(study: int) -> void:
 	attack_study_clock = 0.0
 	var feed: Dictionary = attack_study_clip.get_meta("editor_feed")
 	attack_study_flight = Flight.landing_time(feed.aim,feed.spike_outgoing)
+	attack_study_net_hit = Net.first_hit(func(t): return Flight.position(feed,feed.aim,t),-float(feed.duration),0.0)
+	if attack_study_net_hit.is_empty():
+		attack_study_net_hit = Net.first_hit(func(t): return setting_drill.flight_point(feed.aim,feed.spike_outgoing,t),0.0,attack_study_flight)
+	if not attack_study_net_hit.is_empty(): attack_study_flight = attack_study_net_hit.end_time
 	attack_study_play.text = "Stop swing" if attack_cycle_index < 0 else "Play swing"
 	attack_study_play.disabled = attack_cycle_index >= 0
 	step_attack_study(0.0)
@@ -524,6 +530,8 @@ func play_attack_study(study: int) -> void:
 func stop_attack_study(resume := true) -> void:
 	if attack_study_clip == null and attack_cycle_index < 0: return
 	attack_study_clip = null
+	attack_study_net_hit.clear()
+	setting_drill.show_attack_net({},0.0)
 	attack_cycle_base = null
 	attack_cycle_index = -1
 	attack_cycle_button.text = "Play all swings"
@@ -545,7 +553,10 @@ func step_attack_study(delta: float) -> void:
 	preview_player.animator.seek(minf(attack_study_clock,attack_study_clip.length-0.0001),true)
 	var feed: Dictionary = attack_study_clip.get_meta("editor_feed")
 	var elapsed := attack_study_clock-contact
-	if elapsed < 0.0:
+	setting_drill.show_attack_net(attack_study_net_hit,elapsed)
+	if not attack_study_net_hit.is_empty() and elapsed >= float(attack_study_net_hit.time):
+		setting_drill.ball.position = Net.after_hit(attack_study_net_hit,elapsed)
+	elif elapsed < 0.0:
 		setting_drill.ball.position = Flight.position(feed,feed.aim,maxf(-float(feed.duration),elapsed))
 	else:
 		setting_drill.ball.position = setting_drill.flight_point(feed.aim,feed.spike_outgoing,minf(elapsed,attack_study_flight))
@@ -1159,6 +1170,7 @@ func build_attack_clip(study: int, shot_target: Vector3, crosscourt: bool) -> An
 
 func bake_low_bow_starter(include_landing := false, shot_target := Vector3(2.0,0.0,10.5)) -> Animation:
 	var drill = setting_drill
+	drill.mute_net = true
 	drill.set_swing_practice(true)
 	drill.aim_swing(shot_target)
 	var start := preview_player.position
@@ -1217,6 +1229,7 @@ func bake_low_bow_starter(include_landing := false, shot_target := Vector3(2.0,0
 	clip.set_meta("editor_feed",{"aim":aim,"incoming":velocity+Vector3.DOWN*Flight.GRAVITY*contact,
 		"acceleration":Vector3.DOWN*Flight.GRAVITY,"duration":contact,"start":source,
 		"side":Vector3.RIGHT,"valid":true,"spike_outgoing":outgoing})
+	drill.mute_net = false
 	return clip
 
 func load_custom_backward_clip() -> Animation:
