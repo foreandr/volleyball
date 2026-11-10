@@ -58,6 +58,7 @@ var pass_timing_cue: Node3D
 var reception_review: VBoxContainer
 var setting_drill: Node3D
 var setter_original_transform: Transform3D
+var setter_original_height: float
 var setter_animation_process: int
 var setter_animator_active: bool
 
@@ -321,6 +322,8 @@ func start_setting_drill(attack := false) -> void:
 	drill_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(drill_status)
 	setter_original_transform = preview_player.transform
+	setter_original_height = preview_player.height_cm
+	if attack: preview_player.set_height_cm(setter_original_height+10.0)
 	setter_animation_process = preview_player.animator.callback_mode_process
 	setter_animator_active = preview_player.animator.active
 	preview_player.animator.active = true
@@ -340,7 +343,9 @@ func start_setting_drill(attack := false) -> void:
 	preview_camera.position = Vector3(0,7.5,-11.2)
 	preview_camera.look_at(SETTING_CAMERA_FOCUS)
 	setting_drill = preload("res://scripts/attack_drill.gd").new() if attack else preload("res://scripts/setting_drill.gd").new()
-	if attack: setting_drill.swing_practice = modes.selected == 0
+	if attack:
+		setting_drill.swing_practice = modes.selected == 0
+		setting_drill.jump.max_height += 5.0*0.0254
 	preview_player.get_parent().add_child(setting_drill)
 	setting_drill.configure(preview_player,drill_status,modes.selected == 1,build_label)
 	if attack:
@@ -410,6 +415,7 @@ func stop_setting_drill() -> void:
 	setting_drill.restore_torso_lean(preview_player)
 	setting_drill.queue_free()
 	setting_drill = null
+	preview_player.set_height_cm(setter_original_height)
 	preview_player.transform = setter_original_transform
 	preview_player.animator.callback_mode_process = setter_animation_process
 	preview_player.animator.active = setter_animator_active
@@ -641,7 +647,7 @@ func update_jump_height_meter() -> void:
 		return
 	var feet := Vector3(preview_player.global_position.x,jump.start.y,preview_player.global_position.z)
 	var projected := preview_camera.unproject_position(feet)*preview.size/Vector2(preview_camera.get_viewport().size)
-	jump_height_meter.show_height(projected,preview.size,jump.height,jump.FULL_HEIGHT)
+	jump_height_meter.show_height(projected,preview.size,jump.height,jump.max_height)
 
 func set_cpu_arrows_pinned(pinned: bool) -> void:
 	var arrows: MeshInstance3D = preview_player.get_node("DirectionArrows")

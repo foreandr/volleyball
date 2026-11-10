@@ -15,6 +15,7 @@ var front_limit := 2.5
 var elapsed := 0.0
 var held := false
 var hold_time := 0.0
+var max_height := FULL_HEIGHT
 var height := FULL_HEIGHT
 var air_time := FULL_AIR_TIME
 var start: Vector3
@@ -47,7 +48,7 @@ func horizontal_velocity() -> Vector3:
 func step(actor: Node3D, delta: float, input: Vector2) -> void:
 	if elapsed < LOAD_TIME:
 		if held: hold_time += minf(delta,LOAD_TIME-elapsed)
-		height = lerpf(TAP_HEIGHT,FULL_HEIGHT,clampf(hold_time/LOAD_TIME,0.0,1.0))
+		height = lerpf(TAP_HEIGHT,max_height,clampf(hold_time/LOAD_TIME,0.0,1.0))
 		air_time = FULL_AIR_TIME*sqrt(height/FULL_HEIGHT)
 	var previous_flight := clampf(elapsed-LOAD_TIME,0.0,air_time)
 	elapsed += delta
