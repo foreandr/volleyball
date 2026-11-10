@@ -416,16 +416,17 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 		# An early draw holds the low chamber until the lift window opens.
 		var lift_start := clampf(draw_end-LOW_BOW_FRAME,draw_reference+SpikeArm.DEFAULT_DRAW_DELAY-LOW_BOW_FRAME,estimated_contact-0.04)
 		var arm_lift := smoothstep(lift_start,estimated_contact,time)
+		var shot_turn_lead := smoothstep(estimated_contact-0.30,estimated_contact-0.08,time)
 		var drive := clock-swing_drive_started if is_finite(swing_drive_started) else -INF
 		var approach_point := flight_point(pass_origin,pass_motion,clampf(maxf(time+0.12,pin_arrival-0.14),0.0,flight_end))
 		var drive_phase := clampf(drive/swing_drive_duration,0.0,1.0)
 		var extension := smoothstep(0.0,1.0,drive_phase*(1.18-0.18*drive_phase))
 		if drive < 0.0:
-			pose_bow_draw(delta,load,approach_point,0.0,0.0,draw_progress,arm_lift)
+			pose_bow_draw(delta,load,approach_point,0.0,0.0,draw_progress,arm_lift,shot_turn_lead)
 		else:
 			var follow := smoothstep(swing_drive_duration+0.035,swing_drive_duration+0.16,drive)
 			var contact_target := approach_point.lerp(ball.position,smoothstep(0.0,0.50,extension))
-			pose_bow_draw(delta,load,contact_target,extension,follow,draw_progress,arm_lift)
+			pose_bow_draw(delta,load,contact_target,extension,follow,draw_progress,arm_lift,shot_turn_lead)
 		var palm := right_palm()
 		if airborne and drive > 0.0 and drive <= swing_drive_duration+0.12 and previous_palm.is_finite():
 			swing_impact_speed = palm.distance_to(previous_palm)/maxf(delta,0.001)
@@ -499,7 +500,7 @@ func play_spike(time: float, delta: float) -> void:
 		pose_bow_draw(delta,1.0-smoothstep(0.19,SWING_FOLLOW_TIME,time),swing_contact,swing_contact_extension,follow)
 	if time >= maxf(SWING_FOLLOW_TIME,end+(0.22 if swing_practice else 0.48)) and not jump.active: reset_feed()
 
-func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0.0, follow := 0.0, draw_progress := 1.0, arm_lift := 1.0) -> void:
+func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0.0, follow := 0.0, draw_progress := 1.0, arm_lift := 1.0, shot_turn_lead := 1.0) -> void:
 	var rig: Skeleton3D = setter.skeleton
 	var author: RefCounted = setter.get_pose_author()
 	var pose: Array[Transform3D] = []
@@ -510,11 +511,14 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 	var aim_turn := SpikeArm.follow_heading(shot_aim,contact,rig.global_rotation.y)
 	var power := swing_power if stage == Stage.HIT else swing_charge()
 	var rotation_weight := weight*torso_rotation_scale*lerpf(0.48,1.22,power)
-	var drive_turn := lerpf(-0.57,0.36+aim_turn*0.70,rotation_phase)
+	# Aim the coil while the arm is still loaded, then hand off to the release turn.
+	var early_aim := aim_turn*0.38*shot_turn_lead
+	var drive_turn := lerpf(-0.57+early_aim,0.36+aim_turn*0.70,rotation_phase)
 	var turn := lerpf(drive_turn,aim_turn*0.52,follow)
 	var airborne := smoothstep(0.08,0.45,setter.position.y-jump.start.y)
 	var leg_release := smoothstep(0.0,1.0,rotation_phase)
-	var leg_turn := tanh(turn*rotation_weight*0.75)*0.32*leg_rotation_scale*airborne*leg_release
+	var hip_lead := early_aim*0.46*weight*(1.0-rotation_phase)
+	var leg_turn := (hip_lead+tanh(turn*rotation_weight*0.75)*0.32*leg_release)*leg_rotation_scale*airborne
 	var kick_release := 0.32*leg_release*smoothstep(0.0,1.5,leg_rotation_scale)
 	var straighten := smoothstep(0.12,0.88,follow)*weight*smoothstep(0.03,0.22,setter.position.y-jump.start.y)
 	if not is_zero_approx(leg_turn):
