@@ -523,8 +523,8 @@ func pose_bow_draw(weight: float, contact: Vector3, extension := 0.0, follow := 
 	if ball_direction.length_squared() > 0.0001:
 		var crunch_axis := Vector3.UP.cross(ball_direction.normalized())
 		var crunch := weight*smoothstep(0.42,0.95,extension)*(1.0-smoothstep(0.22,0.93,follow))
-		author.rotate_world(pose,"spine_02",crunch_axis,0.11*crunch)
-		author.rotate_world(pose,"neck_01",crunch_axis,0.03*crunch)
+		author.rotate_world(pose,"spine_02",crunch_axis,0.20*crunch)
+		author.rotate_world(pose,"neck_01",crunch_axis,0.045*crunch)
 	var line_weight := shot_line_weight(shot_aim,contact)
 	var palm_finish := SpikeArm.finish_palm_direction(shot_aim,contact,line_weight >= 0.5)
 	SpikeArm.apply(pose,author,ball_target,weight,extension,follow,draw_progress,arm_lift,line_weight,palm_finish,elbow_clearance)
