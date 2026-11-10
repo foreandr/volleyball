@@ -14,6 +14,7 @@ const CPU_HOME := Vector3(-0.55,0.04,3.10)
 const PIN_HEIGHT := 2.75
 const SET_APEX := 5.0
 const SET_TOPSPIN_RPS := 2.2
+const LOW_BOW_FRAME := 1.0/30.0
 
 enum Stage { SERVE, PASS, SET, HIT, MISS }
 const SWING_CHARGE_TIME := 0.65
@@ -23,6 +24,9 @@ const PALM_RADIUS := 0.065
 const SWING_FOLLOW_TIME := 0.30
 var stage := Stage.SERVE
 var swing_practice := true
+var practice_takeoff := PIN+Vector3(-0.70,RECEIVE_START.y-PIN.y,-0.48)
+var practice_ball_offset := Vector3.ZERO
+var practice_ball_start: Vector3
 var swing_review := false
 var torso_rotation_scale := 2.0
 var leg_kickback_scale := 2.0
@@ -121,7 +125,7 @@ func set_swing_review(enabled: bool) -> void:
 func start_swing_practice() -> void:
 	stage = Stage.SET
 	bump.hide()
-	setter.position = PIN+Vector3(-0.70,RECEIVE_START.y-PIN.y,-0.48)
+	setter.position = practice_takeoff
 	jump.begin(setter,Vector2(0.0,0.65))
 	for frame in range(16): jump.step(setter,1.0/60.0,Vector2.ZERO)
 	jump.release()
@@ -130,8 +134,9 @@ func start_swing_practice() -> void:
 	var velocity := set_toward_pin(source)
 	var lead := 0.72
 	var preroll := descending_time(source,velocity,PIN_HEIGHT)-lead
-	pass_origin = flight_point(source,velocity,preroll)
-	pass_motion = velocity+Vector3.DOWN*Flight.GRAVITY*preroll
+	practice_ball_start = flight_point(source,velocity,preroll)+practice_ball_offset
+	pass_origin = practice_ball_start
+	pass_motion = velocity+Vector3.DOWN*Flight.GRAVITY*preroll-practice_ball_offset/lead
 	pin_arrival = lead
 	flight_end = Flight.landing_time(pass_origin,pass_motion)
 	ball.position = pass_origin
@@ -362,8 +367,10 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 				swing_drive_duration = duration
 				swing_hand_speed = 0.0
 		var load := smoothstep(0.0,0.18,clock-swing_charge_started)
-		var draw_progress := smoothstep(pin_arrival-0.86,pin_arrival-0.57,time)
-		var arm_lift := smoothstep(pin_arrival-0.61,pin_arrival-0.20,time)
+		var estimated_contact := descending_time(pass_origin,pass_motion,PIN_HEIGHT+1.0)
+		var draw_end := estimated_contact-5.0*LOW_BOW_FRAME
+		var draw_progress := smoothstep(draw_end-7.0*LOW_BOW_FRAME,draw_end,time)
+		var arm_lift := smoothstep(draw_end-LOW_BOW_FRAME,estimated_contact,time)
 		var drive := clock-swing_drive_started if is_finite(swing_drive_started) else -INF
 		var approach_point := flight_point(pass_origin,pass_motion,clampf(maxf(time+0.12,pin_arrival-0.14),0.0,flight_end))
 		var drive_phase := clampf(drive/swing_drive_duration,0.0,1.0)
