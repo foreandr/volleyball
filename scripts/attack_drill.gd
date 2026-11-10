@@ -31,6 +31,7 @@ var practice_setup_path := "user://attack_practice.cfg"
 var torso_rotation_scale := 2.0
 var leg_kickback_scale := 2.0
 var leg_rotation_scale := 1.0
+var hip_rotation_scale := 1.0
 var draw_delay := SpikeArm.DEFAULT_DRAW_DELAY
 var elbow_clearance := SpikeArm.DEFAULT_ELBOW_CLEARANCE
 var stage_start := 0.0
@@ -520,13 +521,15 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 	var leg_release := smoothstep(0.0,1.0,rotation_phase)
 	var hip_follow := lerpf(0.78*(1.0-0.58*rotation_phase),0.46*(1.0-rotation_phase),release_alignment)
 	var hip_lead := early_aim*hip_follow*weight
-	var leg_turn := (hip_lead+tanh(turn*rotation_weight*0.75)*0.32*leg_release)*leg_rotation_scale*airborne
+	var lower_body_turn := (hip_lead+tanh(turn*rotation_weight*0.75)*0.32*leg_release)*airborne
+	var hip_turn := lower_body_turn*hip_rotation_scale
+	var leg_turn := lower_body_turn*leg_rotation_scale
 	var kick_release := 0.32*leg_release*smoothstep(0.0,1.5,leg_rotation_scale)
 	var straighten := smoothstep(0.12,0.88,follow)*weight*smoothstep(0.03,0.22,setter.position.y-jump.start.y)
-	if not is_zero_approx(leg_turn):
+	if not is_zero_approx(hip_turn):
 		var spine: Transform3D = author.world_pose(pose,rig.find_bone("spine_01"))
 		var hips: Vector3 = author.point(pose,"pelvis")
-		author.rotate_world(pose,"pelvis",(spine.origin-hips).normalized(),leg_turn)
+		author.rotate_world(pose,"pelvis",(spine.origin-hips).normalized(),hip_turn)
 		author.set_world_basis(pose,"spine_01",spine.basis)
 	var kick_load := smoothstep(0.0,0.30,clock-swing_charge_started)
 	var tuck := airborne*weight*kick_load*minf(leg_kickback_scale,1.0)*(1.0-0.75*follow)

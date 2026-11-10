@@ -361,6 +361,8 @@ func start_setting_drill(attack := false) -> void:
 			func(value: float): setting_drill.torso_rotation_scale = value)
 		add_attack_pose_slider("Leg kickback","LegKickback",0,setting_drill.leg_kickback_scale,
 			func(value: float): setting_drill.leg_kickback_scale = value)
+		add_attack_pose_slider("Hip rotation","HipRotation",0,setting_drill.hip_rotation_scale,
+			func(value: float): setting_drill.hip_rotation_scale = value)
 		add_attack_pose_slider("Leg rotation","LegRotation",0,setting_drill.leg_rotation_scale,
 			func(value: float): setting_drill.leg_rotation_scale = value)
 	add_torso_lean_slider()
