@@ -8,10 +8,10 @@ static func follow_heading(target: Vector3, origin: Vector3, facing := 0.0) -> f
 	var direction := target-origin
 	return clampf(angle_difference(facing,atan2(direction.x,direction.z)),-0.95,0.95)
 
-static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float, extension: float, follow: float, draw_progress: float, arm_lift: float, line_weight: float, palm_finish: float, elbow_clearance: float, previous_roll: float, roll_step: float) -> float:
+static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float, extension: float, follow: float, draw_progress: float, arm_lift: float, line_weight: float, palm_finish: float, elbow_clearance: float, previous_roll: float, roll_step: float, shot_direction: Vector3) -> float:
 	var shoulder: Vector3 = author.point(pose,"upperarm_r")
 	var draw := Vector3(-0.04,0.40,0.08).lerp(Vector3(0.02,0.05,-0.12),draw_progress)
-	var wrist_target := ball-(ball-shoulder).normalized()*0.06
+	var wrist_target := ball-(ball-shoulder).normalized()*0.06-shot_direction*0.11
 	var raised_draw := draw.lerp(Vector3(-0.08,0.40,0.22),arm_lift)
 	var target := (shoulder+raised_draw).lerp(wrist_target,extension)
 	target += Vector3(-0.05,0.14,-0.10)*sin(PI*extension)
@@ -35,9 +35,10 @@ static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float,
 		# Start the across-body roll on forward extension, after the arm leaves the draw.
 		release_turn = 0.70*smoothstep(0.24,0.86,extension)
 	var palm_progress := maxf(release_turn,follow)
-	var roll := roll_finish_palm(pose,author,palm_finish,palm_progress,line_weight >= 0.5,previous_roll,roll_step)
+	var face_weight := smoothstep(0.07,0.48,extension)*(1.0-smoothstep(0.03,0.60,follow))
+	var roll := roll_finish_palm(pose,author,palm_finish,palm_progress,line_weight >= 0.5,previous_roll,roll_step,shot_direction,face_weight,ball)
 	if finish > 0.0:
-		blend_right_arm(base,pose,author,weight)
+		blend_arm(base,pose,author,weight)
 	open_strike_hand(base,author,weight*lerpf(0.70,0.94,smoothstep(0.12,0.85,extension)))
 	return roll
 
@@ -63,10 +64,10 @@ static func apply_guide_arm(pose: Array, author: RefCounted, reach: Vector3, rea
 	var target := shoulder+reach.lerp(tuck,drop)
 	author.limb(pose,"upperarm_l","lowerarm_l","hand_l",target,reach_pole.lerp(tuck_pole,drop),weight,lerpf(reach_limit,90.0,drop))
 
-static func blend_right_arm(base: Array, target: Array, author: RefCounted, weight: float) -> void:
+static func blend_arm(base: Array, target: Array, author: RefCounted, weight: float, side := "r") -> void:
 	# Fade local joint rotations so the IK pole cannot twist the elbow as the wrist comes to rest.
-	for bone in ["upperarm_r","lowerarm_r","hand_r"]:
-		var index: int = author.rig.find_bone(bone)
+	for joint in ["upperarm","lowerarm","hand"]:
+		var index: int = author.rig.find_bone(joint+"_"+side)
 		var from: Quaternion = base[index].basis.get_rotation_quaternion()
 		var to: Quaternion = target[index].basis.get_rotation_quaternion()
 		base[index].basis = Basis(from.slerp(to,weight))
@@ -98,9 +99,9 @@ static func finish_palm_weight(target: Vector3, origin: Vector3, cross_body: boo
 	var lateral := absf(target.x-origin.x)/maxf(target.z-origin.z,0.1)
 	return smoothstep(0.045,0.13,lateral)
 
-static func roll_finish_palm(pose: Array, author: RefCounted, amount: float, follow: float, cross_body: bool, previous_roll := 0.0, roll_step := INF) -> float:
+static func roll_finish_palm(pose: Array, author: RefCounted, amount: float, follow: float, cross_body: bool, previous_roll := 0.0, roll_step := INF, shot_direction := Vector3.ZERO, face_weight := 0.0, ball := Vector3.ZERO) -> float:
 	var weight := amount*smoothstep(0.05,0.84,follow)
-	if weight <= 0.0: return 0.0
+	if weight <= 0.0 and face_weight <= 0.0: return 0.0
 	var wrist: Vector3 = author.point(pose,"hand_r")
 	var knuckle: Vector3 = author.point(pose,"middle_01_r")
 	var axis := (knuckle-wrist).normalized()
@@ -112,6 +113,14 @@ static func roll_finish_palm(pose: Array, author: RefCounted, amount: float, fol
 	# The two edges have no meaningful height difference when the hand points straight down.
 	var visibility := smoothstep(0.015,0.10,pinky_target.length()) if cross_body else smoothstep(0.10,0.34,pinky_target.length())
 	var target_roll := roll*weight*visibility
+	if face_weight > 0.0:
+		var index: Vector3 = author.point(pose,"index_01_r")
+		var palm_normal := axis.cross(pinky-index).normalized()
+		var toward_ball := (ball-wrist.lerp(knuckle,0.75)).normalized().slide(axis)
+		var shot_normal := shot_direction.slide(axis)
+		var strike_normal := shot_normal.normalized().lerp(toward_ball.normalized(),smoothstep(0.06,0.24,toward_ball.length()))
+		var face_roll := palm_normal.signed_angle_to(strike_normal.normalized(),axis)
+		target_roll = lerp_angle(target_roll,face_roll,face_weight*smoothstep(0.04,0.25,strike_normal.length()))
 	var applied := rotate_toward(previous_roll,target_roll,roll_step) if is_finite(roll_step) else target_roll
 	author.rotate_world(pose,"hand_r",axis,applied)
 	return applied

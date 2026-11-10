@@ -419,7 +419,10 @@ func right_palm() -> Vector3:
 	var rig: Skeleton3D = setter.skeleton
 	var wrist := rig.get_bone_global_pose(rig.find_bone("hand_r")).origin
 	var knuckle := rig.get_bone_global_pose(rig.find_bone("middle_01_r")).origin
-	return rig.to_global(wrist.lerp(knuckle,0.75))
+	var index := rig.get_bone_global_pose(rig.find_bone("index_01_r")).origin
+	var pinky := rig.get_bone_global_pose(rig.find_bone("pinky_01_r")).origin
+	var palm_normal := (knuckle-wrist).cross(pinky-index).normalized()
+	return rig.to_global(wrist.lerp(knuckle,0.75)+palm_normal*0.018)
 
 func hand_contact_fraction(before: Vector3, after: Vector3) -> float:
 	var radius := BallPreview.RADIUS+PALM_RADIUS
@@ -536,17 +539,19 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 	author.rotate_world(pose,"neck_01",Vector3.RIGHT,0.045*contact_crunch*weight)
 	var line_weight := shot_line_weight(shot_aim,contact)
 	if stage == Stage.HIT and weight < 1.0 and not swing_finish_pose.is_empty():
-		SpikeArm.blend_right_arm(pose,swing_finish_pose,author,weight)
+		SpikeArm.blend_arm(pose,swing_finish_pose,author,weight)
+		SpikeArm.blend_arm(pose,swing_finish_pose,author,weight,"l")
 		SpikeArm.open_strike_hand(pose,author,0.94*weight)
 	else:
 		var palm_finish := SpikeArm.finish_palm_weight(shot_aim,contact,line_weight >= 0.5)
 		# Smooth the roll through the near-vertical hand angle using game time.
 		var roll_step := deg_to_rad(2700.0)*delta
-		swing_palm_roll = SpikeArm.apply(pose,author,ball_target,weight,extension,follow,draw_progress,arm_lift,line_weight,palm_finish,elbow_clearance,swing_palm_roll,roll_step)
+		var shot_direction := (rig.to_local(shot_aim)-ball_target).normalized()
+		swing_palm_roll = SpikeArm.apply(pose,author,ball_target,weight,extension,follow,draw_progress,arm_lift,line_weight,palm_finish,elbow_clearance,swing_palm_roll,roll_step,shot_direction)
+		var guide_drop := maxf(smoothstep(0.07,0.83,extension),smoothstep(0.0,0.62,follow))
+		SpikeArm.apply_guide_arm(pose,author,Vector3(0.06,0.43,0.64),Vector3(0.26,-0.55,0.15),guide_drop,weight,172.0)
 		if stage == Stage.HIT and follow >= 0.90:
 			swing_finish_pose = pose.duplicate()
-	var guide_drop := maxf(smoothstep(0.07,0.83,extension),smoothstep(0.0,0.62,follow))
-	SpikeArm.apply_guide_arm(pose,author,Vector3(0.06,0.43,0.64),Vector3(0.26,-0.55,0.15),guide_drop,weight,172.0)
 	for bone in rig.get_bone_count():
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
 

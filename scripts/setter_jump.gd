@@ -114,7 +114,11 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 			var outward := 1.0 if left else -1.0
 			var hand: String = "hand_"+side
 			var overhead := shoulder+Vector3(-outward*0.065,0.49,0.16)/scale_
-			author.limb(pose,upper_arm,forearm,hand,overhead,Vector3(outward*0.50,-0.42,0.52),arm_drive,151.0)
+			var raised := pose.duplicate()
+			author.limb(raised,upper_arm,forearm,hand,overhead,Vector3(outward*0.50,-0.42,0.52),1.0,151.0)
+			for joint in [upper_arm,forearm]:
+				var bone := rig.find_bone(joint)
+				pose[bone].basis = pose[bone].basis.slerp(raised[bone].basis,arm_drive)
 			var base: Transform3D = author.world_pose(pose,rig.find_bone(hand))
 			var fingers: Vector3 = author.point(pose,"middle_01_"+side)-base.origin
 			var across: Vector3 = author.point(pose,"index_01_"+side)-author.point(pose,"pinky_01_"+side)
