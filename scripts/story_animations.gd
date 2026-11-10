@@ -295,21 +295,26 @@ func start_setting_drill(attack := false) -> void:
 	angle_control.hide()
 	angle_control.pending = false
 	var modes := OptionButton.new()
-	modes.name = "SettingType"
-	for mode in MOVE_TYPES["Setting"]: modes.add_item(mode)
-	modes.select(type_indices.get("Setting",0))
+	modes.name = "AttackingType" if attack else "SettingType"
+	var mode_category := "Attacking" if attack else "Setting"
+	var mode_names: Array = ["Swing Practice","Full Rally"] if attack else MOVE_TYPES["Setting"]
+	for mode in mode_names: modes.add_item(mode)
+	modes.select(type_indices.get(mode_category,0))
 	content.add_child(modes)
-	modes.visible = not attack
 	var controls_hint := label("",16)
 	controls_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	var show_mode := func(index: int):
+		if attack:
+			controls_hint.text = "Hold left-click to swing\nAim on the far court" if index == 0 else "WASD to move  |  Q forearms  |  I / E hands\nMouse to aim  |  Scroll for pass height\nSpace to jump  |  Hold left-click to spike"
+			return
 		controls_hint.text = "WASD to move  |  Tap Q to bump set\nMouse to aim  |  Scroll to change height" if index == 1 else "WASD to move  |  Tap E to set\nMouse to aim  |  Scroll to change height\nSpace jump  |  7 to 40 in"
-	if attack: controls_hint.text = "WASD to move  |  Q forearms  |  I / E hands\nMouse to aim  |  Scroll for pass height\nSpace to jump  |  Hold left-click to spike\nAim the spike on the far court"
-	else: show_mode.call(modes.selected)
+	show_mode.call(modes.selected)
 	modes.item_selected.connect(func(index: int):
-		type_indices["Setting"] = index
-		setting_drill.set_bump_mode(index == 1)
-		show_mode.call(index))
+		type_indices[mode_category] = index
+		if attack: setting_drill.set_swing_practice(index == 0)
+		else: setting_drill.set_bump_mode(index == 1)
+		show_mode.call(index)
+		preview.grab_focus())
 	content.add_child(controls_hint)
 	drill_status = label("",16)
 	drill_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -334,6 +339,7 @@ func start_setting_drill(attack := false) -> void:
 	preview_camera.position = Vector3(0,7.5,-11.2)
 	preview_camera.look_at(SETTING_CAMERA_FOCUS)
 	setting_drill = preload("res://scripts/attack_drill.gd").new() if attack else preload("res://scripts/setting_drill.gd").new()
+	if attack: setting_drill.swing_practice = modes.selected == 0
 	preview_player.get_parent().add_child(setting_drill)
 	setting_drill.configure(preview_player,drill_status,modes.selected == 1,build_label)
 	if attack: setting_drill.bump.set_custom_backward(load_custom_backward_clip())

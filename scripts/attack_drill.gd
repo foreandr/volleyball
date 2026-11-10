@@ -16,6 +16,8 @@ const SWING_REACH := 1.55
 const SWING_CONTACT_HEIGHT := 2.45
 const SWING_FOLLOW_TIME := 0.30
 var stage := Stage.SERVE
+var swing_practice := true
+var swing_button_down := false
 var stage_start := 0.0
 var serve_target: Vector3
 var pass_origin: Vector3
@@ -76,8 +78,40 @@ func reset_feed() -> void:
 		add_child(swing_target)
 	swing_target.hide()
 	timing_cue.hide()
+	if swing_practice:
+		start_swing_practice()
+		return
 	status.text = "Receive  |  Q forearms, I / E hands"
 	trace.begin_feed({"mode":"attacking","source":ATTACK_SERVE_SOURCE,"serve_velocity":serve_velocity,"pin":PIN})
+
+func set_swing_practice(enabled: bool) -> void:
+	swing_practice = enabled
+	swing_button_down = false
+	reset_feed()
+
+func start_swing_practice() -> void:
+	stage = Stage.SET
+	bump.hide()
+	setter.position = PIN+Vector3(0.13,RECEIVE_START.y-PIN.y,-0.48)
+	jump.begin(setter,Vector2(0.0,0.65))
+	for frame in range(23): jump.step(setter,1.0/60.0,Vector2.ZERO)
+	jump.release()
+	receiver.rotation.y = atan2(PIN.x-CPU_HOME.x,PIN.z-CPU_HOME.z)
+	var source := receiver.to_global(Vector3(0.0,HandPose.CONTACT_HEIGHT,HandPose.CONTACT_FORWARD))
+	var velocity := set_toward_pin(source)
+	var lead := 0.62
+	var preroll := descending_time(source,velocity,PIN_HEIGHT)-lead
+	pass_origin = flight_point(source,velocity,preroll)
+	pass_motion = velocity+Vector3.DOWN*Flight.GRAVITY*preroll
+	pin_arrival = lead
+	flight_end = Flight.landing_time(pass_origin,pass_motion)
+	ball.position = pass_origin
+	region.show()
+	aim_swing(swing_aim)
+	swing_target.show()
+	if swing_button_down: swing_started = clock
+	status.text = "Hold left-click to swing"
+	trace.begin_feed({"mode":"swing_practice","source":pass_origin,"velocity":pass_motion,"pin":PIN})
 
 func set_key() -> int:
 	return KEY_Q if stage == Stage.SERVE else KEY_NONE
@@ -123,6 +157,7 @@ func aim_swing(point: Vector3) -> void:
 	swing_target.position = Vector3(swing_aim.x,0.065,swing_aim.z)
 
 func swing_input(pressed: bool) -> void:
+	swing_button_down = pressed
 	if stage != Stage.SET: return
 	if not pressed:
 		if is_finite(swing_started) and not is_finite(swing_released): swing_released = clock
@@ -134,7 +169,7 @@ func swing_input(pressed: bool) -> void:
 	trace.write("swing_start",clock,{"player":setter.position,"aim":swing_aim},true)
 
 func swing_charge() -> float:
-	return clampf((minf(clock,swing_released if is_finite(swing_released) else clock)-swing_started)/SWING_CHARGE_TIME,0.0,1.0)
+	return clampf((minf(clock,swing_released if is_finite(swing_released) else clock)-swing_started)/(0.36 if swing_practice else SWING_CHARGE_TIME),0.0,1.0)
 
 func queue_set() -> void:
 	if stage != Stage.SERVE: return
@@ -172,11 +207,12 @@ func step(delta: float) -> void:
 					bump.follow_forearm(receive_time,serve_velocity+Vector3.DOWN*Flight.GRAVITY*bump.touch_time)
 			play_cpu_set(time,delta)
 		Stage.SET:
-			cpu_set.update_hand_push(cpu_set.release_time+time,cpu_set.release_time+time-cpu_set.touch_time)
+			if not swing_practice:
+				cpu_set.update_hand_push(cpu_set.release_time+time,cpu_set.release_time+time-cpu_set.touch_time)
 			play_pin_ball(time)
 		Stage.HIT: play_spike(time)
 		Stage.MISS:
-			if time >= 0.85: reset_feed()
+			if time >= (0.26 if swing_practice else 0.85): reset_feed()
 	if stage == Stage.SERVE or stage == Stage.SET: trace.check_contact(bump.contact_check)
 	if clock >= trace.next_sample: trace.sample(clock,trace_snapshot(clock-stage_start))
 
@@ -315,7 +351,7 @@ func play_spike(time: float) -> void:
 		ball.position = flight_point(pass_origin,pass_motion,minf(time,end))
 	if time < SWING_FOLLOW_TIME:
 		pose_bow_draw(1.0-smoothstep(0.11,SWING_FOLLOW_TIME,time))
-	if time >= end+0.48 and not jump.active: reset_feed()
+	if time >= end+(0.22 if swing_practice else 0.48) and not jump.active: reset_feed()
 
 func pose_bow_draw(weight: float) -> void:
 	var rig: Skeleton3D = setter.skeleton
