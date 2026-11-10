@@ -968,9 +968,9 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 	author.rotate_world(pose,"spine_01",Vector3.RIGHT,torso_pitch*0.45*weight)
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,torso_pitch*0.55*weight)
 	if approach_practice and approach_steps == 2:
-		var tilt_weight := smootherstep(0.20,0.72,extension)
+		var tilt_weight := smoothstep(0.04,0.78,extension)
 		if stage == Stage.HIT:
-			tilt_weight *= 1.0-smootherstep(0.02,0.20,clock-stage_start)
+			tilt_weight *= 1.0-smootherstep(0.0,0.32,clock-stage_start)
 		var across: Vector3 = author.point(pose,"upperarm_l")-author.point(pose,"upperarm_r")
 		var torso_up: Vector3 = author.point(pose,"neck_01")-author.point(pose,"spine_01")
 		var chest_forward := across.cross(torso_up).normalized()
