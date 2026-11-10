@@ -21,6 +21,7 @@ const PLATFORM_PREP_TIME := 0.26
 
 var setter: Node3D
 var hand_setting := false
+var setter_jumping := false
 var clip: Animation
 var contact_frame: float
 var tracks: Array[Vector2i] = []
@@ -187,7 +188,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 	if attempted and grade == Timing.Grade.WAITING:
 		if not is_finite(pose_started_at) and progress >= 1.0-PLATFORM_PREP_TIME/APPROACH_TIME:
 			pose_started_at = maxf(pressed_at,time-delta)
-		if not hand_setting and reach.is_empty(): low_save.plan(setter,path,time,end,clip)
+		if not hand_setting and not setter_jumping and reach.is_empty(): low_save.plan(setter,path,time,end,clip)
 	var elapsed := time-pose_started_at
 	var striking := attempted and grade == Timing.Grade.WAITING and (low_save.active or is_finite(pose_started_at)) and time < end
 	if striking:
@@ -199,8 +200,9 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 		else:
 			var windup := lerpf(-0.14,0.0,smoothstep(0.0,GREEN_START,elapsed))
 			apply_pose(contact_frame+windup,smoothstep(0.0,0.026,elapsed))
-			var intercept := advance_reach(path,time,end,delta)
-			pose_reach(smoothstep(0.0,1.0,reach_progress),intercept)
+			if not setter_jumping:
+				var intercept := advance_reach(path,time,end,delta)
+				pose_reach(smoothstep(0.0,1.0,reach_progress),intercept)
 		var pancake := low_save.active and low_save.pancake
 		var center := LowSave.palm_center(setter) if pancake else platform_center()
 		var radius := 0.16 if pancake else contact_radius()

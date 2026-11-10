@@ -3,6 +3,7 @@ extends MeshInstance3D
 const SEGMENTS := 48
 const INNER := 0.47
 const OUTER := 0.54
+const FLOOR_OFFSET := 0.031
 var surface := ImmediateMesh.new()
 var style := StandardMaterial3D.new()
 var shown_fraction := -1.0
@@ -11,13 +12,16 @@ const TRACK_COLOR := Color("080a0d")
 
 func _ready() -> void:
 	name = "StaminaRing"
-	position.y = 0.031
+	position.y = FLOOR_OFFSET
 	cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	style.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	style.cull_mode = BaseMaterial3D.CULL_DISABLED
 	style.vertex_color_use_as_albedo = true
 	mesh = surface
 	set_fraction(1.0)
+
+func set_airborne_lift(lift: float) -> void:
+	position.y = FLOOR_OFFSET-lift/get_parent().scale.y
 
 func set_fraction(fraction: float) -> void:
 	if is_equal_approx(shown_fraction,fraction): return

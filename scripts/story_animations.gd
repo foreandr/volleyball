@@ -286,7 +286,7 @@ func start_setting_drill() -> void:
 	var controls_hint := label("",16)
 	controls_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	var show_mode := func(index: int):
-		controls_hint.text = "WASD to move  |  Tap Q to bump set\nMouse to aim  |  Scroll to change height" if index == 1 else "WASD to move  |  Tap E to catch"
+		controls_hint.text = "WASD to move  |  Tap Q to bump set\nMouse to aim  |  Scroll to change height" if index == 1 else "WASD to move  |  Tap E to catch\nSpace to jump"
 	show_mode.call(modes.selected)
 	modes.item_selected.connect(func(index: int):
 		type_indices["Setting"] = index
@@ -332,6 +332,7 @@ func stop_setting_drill() -> void:
 	preview_player.model.rotation.y = 0.0
 	preview_player.get_node("DirectionArrows").show()
 	player_controls.indicator.text = "Camera"
+	player_controls.stamina_ring.set_airborne_lift(0.0)
 	player_controls.show_stamina(false)
 	update_camera()
 
@@ -452,9 +453,12 @@ func _process(delta: float) -> void:
 		setting_drill.trace_sprint = player_controls.sprint_requested
 		var diving: bool = setting_drill.setter_is_diving()
 		setting_drill.trace_move_scale = 0.0 if diving else setting_drill.setter_movement_scale()
-		if not diving:
+		if not diving and not setting_drill.jump.active:
 			player_controls.move_player(setting_drill.trace_input,delta,false,setting_drill.ball.global_position,setting_drill.trace_move_scale)
 			setting_drill.apply_setter_arms(player_controls.footwork.phase,player_controls.moving,delta)
+		setting_drill.step_jump(delta)
+		var jump_lift: float = preview_player.position.y-setting_drill.jump.start.y if setting_drill.jump.active else 0.0
+		player_controls.stamina_ring.set_airborne_lift(jump_lift)
 		var was_diving: bool = setting_drill.bump.low_save.active
 		setting_drill.step(delta)
 		if not was_diving and setting_drill.bump.low_save.active:
@@ -820,6 +824,12 @@ func open_menu() -> void:
 	else: get_tree().change_scene_to_file("res://scenes/story.tscn")
 
 func _input(event: InputEvent) -> void:
+	if is_instance_valid(setting_drill) and event is InputEventKey and event.keycode == KEY_SPACE:
+		if event.pressed and not event.echo:
+			setting_drill.queue_jump(player_controls.movement_input())
+			player_controls.setter_travel = Vector3.ZERO
+		get_viewport().set_input_as_handled()
+		return
 	if is_instance_valid(setting_drill) and event is InputEventKey and event.keycode == KEY_F8 and event.pressed and not event.echo:
 		if setting_drill.mark_trace(): show_marker_popup()
 		get_viewport().set_input_as_handled()

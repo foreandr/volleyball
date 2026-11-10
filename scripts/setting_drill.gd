@@ -1,5 +1,6 @@
 extends Node3D
 
+const SetterJump = preload("res://scripts/setter_jump.gd")
 const Trace = preload("res://scripts/setting_trace.gd")
 const StaminaRing = preload("res://scripts/player_stamina_ring.gd")
 const Stamina = preload("res://scripts/player_stamina.gd")
@@ -64,6 +65,7 @@ var rep := 0
 var receiving := false
 var bump: MeshInstance3D
 var bump_enabled := false
+var jump := SetterJump.new()
 var ready_range: MeshInstance3D
 var range_style := StandardMaterial3D.new()
 var timing_cue: Node3D
@@ -149,6 +151,15 @@ func setter_movement_scale() -> float:
 func setter_is_diving() -> bool:
 	return bump.low_save.active and not bump.low_save.finished(clock-0.45-SERVE_TIME)
 
+func queue_jump(direction: Vector2) -> void:
+	if jump.active or setter_is_diving() or is_finite(bump.touch_time) and not bump_enabled: return
+	jump.begin(setter,direction)
+	trace.write("jump",clock,{"position":setter.position,"direction":jump.heading},true)
+
+func step_jump(delta: float) -> void:
+	if jump.active: jump.step(setter,delta)
+	bump.setter_jumping = jump.active
+
 func queue_set() -> void:
 	var previous_press: float = bump.pressed_at
 	bump.queue_bump(clock-0.45-SERVE_TIME)
@@ -224,7 +235,7 @@ func reset_feed() -> void:
 	arrival = rise/Flight.GRAVITY+sqrt(2.0*(PASS_APEX-SET_HEIGHT)/Flight.GRAVITY)
 	pass_velocity = (target-contact).slide(Vector3.UP)/arrival+Vector3.UP*rise
 	landing = Flight.landing_time(contact,pass_velocity)
-	var set_height: float = bump.ready_contact().y
+	var set_height: float = bump.ready_contact().y-setter.position.y+RECEIVER_START.y
 	timing_arrival = rise/Flight.GRAVITY+sqrt(2.0*(PASS_APEX-set_height-bump.contact_radius())/Flight.GRAVITY)
 	var set_arrival := rise/Flight.GRAVITY+sqrt(2.0*(PASS_APEX-set_height)/Flight.GRAVITY)
 	var stance_offset := 0.62 if bump_enabled else 0.21
@@ -368,7 +379,7 @@ func trace_snapshot(time: float) -> Dictionary:
 		"setter_platform":platform,"ball_to_platform":position_.distance_to(platform),
 		"receiver_platform":cpu_platform,"ball_to_receiver_platform":position_.distance_to(cpu_platform),
 		"move_input":trace_input,"sprint_requested":trace_sprint,"movement_scale":trace_move_scale,
-		"setter_move":setter_move_name(),"reach_step":bump.reach_step,
+		"setter_move":setter_move_name(),"jumping":jump.active,"reach_step":bump.reach_step,
 		"save_target":bump.low_save.aim if bump.low_save.active else null,
 		"save_contact_time":bump.low_save.contact_time if bump.low_save.active else null,
 		"aim":bump.destination,"aim_apex":bump.height,"grade":bump.grade,"result":status.text,
