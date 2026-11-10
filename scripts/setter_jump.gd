@@ -59,7 +59,7 @@ func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time
 	lead_distance = 0.0
 	if approach_plant:
 		var ball_offset := (ball_target-start).slide(Vector3.UP)
-		if three_step: lead_distance = clampf(ball_offset.length()-1.35,0.28,0.72)
+		if three_step: lead_distance = clampf(ball_offset.length()-1.24,0.34,0.82)
 		stride = minf(0.40,minf(stride,maxf(0.08,ball_offset.length()*0.60)))
 		var rig: Skeleton3D = actor.skeleton
 		right_foot_start = rig.to_global(rig.get_bone_global_pose(rig.find_bone("foot_r")).origin)
@@ -115,12 +115,14 @@ func step(actor: Node3D, delta: float, input: Vector2) -> void:
 	if landing >= LAND_TIME:
 		active = false
 		return
-	var load := smoothstep(0.02,0.19,pose_time)*(1.0-smoothstep(0.19,LOAD_TIME+0.055,pose_time))
+	var lead_load := 0.48*smoothstep(0.0,lead_time,elapsed) if lead_time > 0.0 else 0.0
+	var load_in := lerpf(lead_load,1.0,smoothstep(0.02,0.19,pose_time))
+	var load := load_in*(1.0-smoothstep(0.19,LOAD_TIME+0.055,pose_time))
 	var impact := smoothstep(-0.025,0.04,landing)*(1.0-smoothstep(0.04,LAND_TIME,landing))
 	var arm_drive := smoothstep(0.17,0.37,pose_time)*(1.0-smoothstep(LOAD_TIME+air_time*0.56,LOAD_TIME+air_time*0.93,pose_time))
-	pose_jump(actor,first,second,load,impact,arm_drive,pose_time,flight)
+	pose_jump(actor,first,second,load,impact,arm_drive,pose_time,flight,load_in)
 
-func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: float, arm_drive: float, pose_time: float, flight: float) -> void:
+func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: float, arm_drive: float, pose_time: float, flight: float, load_in: float) -> void:
 	var rig: Skeleton3D = actor.skeleton
 	var author: RefCounted = actor.get_pose_author()
 	var pose: Array = []
@@ -130,11 +132,8 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 	var parent := rig.get_bone_parent(pelvis)
 	var hips: Transform3D = author.world_pose(pose,parent)
 	var scale_: float = rig.global_basis.get_scale().y
-	var lead_load := 0.0
-	if lead_time > 0.0:
-		lead_load = smoothstep(0.0,lead_time*0.82,elapsed)*(1.0-smoothstep(0.0,0.11,pose_time))
-	pose[pelvis].origin -= hips.basis.inverse()*Vector3.UP*(0.15*load+0.14*impact+0.065*lead_load)/scale_
-	author.rotate_world(pose,"spine_02",Vector3.RIGHT,(0.16+load_bend_extra)*load+0.13*impact-0.22*arm_drive+0.14*lead_load)
+	pose[pelvis].origin -= hips.basis.inverse()*Vector3.UP*(0.15*load+0.14*impact)/scale_
+	author.rotate_world(pose,"spine_02",Vector3.RIGHT,(0.16+load_bend_extra)*load+0.13*impact-0.22*arm_drive)
 	var travel := actor.basis.inverse()*heading*stride/scale_
 	var stagger := 0.34*(first-second)
 	var tuck := sin(PI*flight)
@@ -162,7 +161,7 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 		var arm_load := load
 		if approach_plant:
 			# Carry the plant's backswing into the spike instead of pumping overhead first.
-			arm_load = smoothstep(0.02,0.19,pose_time)*(1.0-smoothstep(LOAD_TIME,LOAD_TIME+0.17,pose_time))
+			arm_load = load_in*(1.0-smoothstep(LOAD_TIME,LOAD_TIME+0.17,pose_time))
 		var jump_drive := 0.0 if approach_plant else arm_drive
 		author.rotate_world(pose,upper_arm,Vector3.RIGHT,(1.52+load_arm_extra)*arm_load)
 		author.rotate_world(pose,forearm,Vector3.RIGHT,-0.25*jump_drive)
