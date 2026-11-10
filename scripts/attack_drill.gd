@@ -6,7 +6,7 @@ const Court = preload("res://scripts/preview_court.gd")
 const SpikeArm = preload("res://scripts/spike_arm_swing.gd")
 const HandPose = preload("res://scripts/hand_setting_pose.gd")
 const Footwork = preload("res://scripts/directional_footwork.gd")
-const PIN := Vector3(3.55,0.065,3.47)
+const PIN := Vector3(3.55,0.065,3.35)
 const ATTACK_FRONT_LIMIT := 3.55
 const RECEIVE_START := Vector3(3.05,0.04,-3.10)
 const ATTACK_SERVE_SOURCE := Vector3(3.05,2.8,8.5)
@@ -366,7 +366,8 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 		var arm_lift := smoothstep(pin_arrival-0.61,pin_arrival-0.20,time)
 		var drive := clock-swing_drive_started if is_finite(swing_drive_started) else -INF
 		var approach_point := flight_point(pass_origin,pass_motion,clampf(maxf(time+0.12,pin_arrival-0.14),0.0,flight_end))
-		var extension := smoothstep(0.0,swing_drive_duration,drive)
+		var drive_phase := clampf(drive/swing_drive_duration,0.0,1.0)
+		var extension := smoothstep(0.0,1.0,drive_phase*(1.18-0.18*drive_phase))
 		if drive < 0.0:
 			pose_bow_draw(load,approach_point,0.0,0.0,draw_progress,arm_lift)
 		else:
@@ -434,8 +435,8 @@ func play_spike(time: float, delta: float) -> void:
 	else:
 		ball.position = flight_point(pass_origin,pass_motion,minf(time,end))
 	if time < SWING_FOLLOW_TIME:
-		var extension := lerpf(swing_contact_extension,1.0,smoothstep(0.0,0.07,time))
-		pose_bow_draw(1.0-smoothstep(0.11,SWING_FOLLOW_TIME,time),swing_contact,extension,smoothstep(0.0,0.16,time))
+		var follow := 1.0-pow(1.0-clampf(time/0.22,0.0,1.0),2.0)
+		pose_bow_draw(1.0-smoothstep(0.11,SWING_FOLLOW_TIME,time),swing_contact,swing_contact_extension,follow)
 	if time >= end+(0.22 if swing_practice else 0.48) and not jump.active: reset_feed()
 
 func pose_bow_draw(weight: float, contact: Vector3, extension := 0.0, follow := 0.0, draw_progress := 1.0, arm_lift := 1.0) -> void:
