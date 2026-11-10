@@ -32,6 +32,8 @@ static func apply(pose: Array, author: RefCounted, index: int, ball: Vector3, we
 	var arc: Vector3 = variant[3]
 	var through: Vector3 = variant[4]
 	var delay: float = variant[5]
+	if index == 5:
+		draw = Vector3(0.04,0.40,0.08).lerp(draw,smoothstep(0.25,1.0,weight))
 	if index >= 15:
 		# Lead into the loop during the charge instead of locking the wrist in a high draw.
 		draw += arc*lerpf(-0.42,0.34,charge)
@@ -47,24 +49,22 @@ static func apply(pose: Array, author: RefCounted, index: int, ball: Vector3, we
 	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",target,elbow_pole,weight,elbow_limit)
 
 	if index == 5:
-		tuck_low_bow_hand(pose,author,weight*(1.0-smoothstep(0.03,0.55,extension)))
+		drop_low_bow_elbow(pose,author,smoothstep(0.30,1.0,weight)*(1.0-smoothstep(0.04,0.60,extension)))
 
-static func tuck_low_bow_hand(pose: Array, author: RefCounted, weight: float) -> void:
+static func drop_low_bow_elbow(pose: Array, author: RefCounted, weight: float) -> void:
 	if weight <= 0.0: return
-	var rig: Skeleton3D = author.rig
+	var shoulder: Vector3 = author.point(pose,"upperarm_r")
+	var opposite: Vector3 = author.point(pose,"upperarm_l")
+	var outside := (shoulder-opposite).slide(Vector3.UP).normalized()
+	var forward := Vector3.UP.cross(outside)
 	var elbow: Vector3 = author.point(pose,"lowerarm_r")
+	var upper := (elbow-shoulder).normalized()
+	var lowered := (outside*0.10+forward*0.03+Vector3.DOWN*0.30).normalized()
+	author.aim_joint(pose,"upperarm_r","lowerarm_r",shoulder+upper.slerp(lowered,weight))
+	elbow = author.point(pose,"lowerarm_r")
 	var wrist: Vector3 = author.point(pose,"hand_r")
 	var chest: Vector3 = author.point(pose,"spine_03")
-	var draw_target := chest+Vector3(-0.11,-0.12,0.12)
+	var draw_target := chest+outside*0.12+forward*0.20+Vector3.UP*0.04
 	var forearm := (wrist-elbow).normalized()
-	var inward := (draw_target-elbow).normalized()
-	var forearm_basis: Basis = author.world_pose(pose,rig.find_bone("lowerarm_r")).basis
-	var forearm_turn := Quaternion.IDENTITY.slerp(Quaternion(forearm,inward),weight)
-	author.set_world_basis(pose,"lowerarm_r",Basis(forearm_turn)*forearm_basis)
-	wrist = author.point(pose,"hand_r")
-	var fingers: Vector3 = (author.point(pose,"middle_01_r")-wrist).normalized()
-	var target := (chest-wrist+Vector3.DOWN*0.18).normalized()
-	var basis: Basis = author.world_pose(pose,rig.find_bone("hand_r")).basis
-	var turn := Quaternion(fingers,target)
-	var amount := minf(1.0,deg_to_rad(65.0)/maxf(turn.get_angle(),0.001))*weight
-	author.set_world_basis(pose,"hand_r",Basis(Quaternion.IDENTITY.slerp(turn,amount))*basis)
+	var toward_chest := (draw_target-elbow).normalized()
+	author.aim_joint(pose,"lowerarm_r","hand_r",elbow+forearm.slerp(toward_chest,weight))
