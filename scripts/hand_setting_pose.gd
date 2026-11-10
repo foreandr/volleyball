@@ -19,6 +19,8 @@ static func apply(actor: Node3D, target: Vector3, blend: float) -> void:
 	var pose: Array = []
 	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
 	var original := pose.duplicate()
+	author.rotate_world(pose,"spine_01",Vector3.RIGHT,-0.14)
+	author.rotate_world(pose,"spine_02",Vector3.RIGHT,-0.06)
 	var head: Vector3 = author.point(pose,"Head")
 	var aim := rig.to_local(target)-head
 	var diamond := head+Vector3(clampf(aim.x,-0.12,0.12),clampf(aim.y-0.075,0.12,0.24),clampf(aim.z-0.07,0.13,0.26))

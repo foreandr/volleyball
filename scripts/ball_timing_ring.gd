@@ -33,13 +33,13 @@ func marker(shape: Mesh, lift: float) -> MeshInstance3D:
 	add_child(part)
 	return part
 
-func update_timing(elapsed: float, arrival: float, green_start: float, green_end: float, resolved := false) -> void:
+func update_timing(elapsed: float, arrival: float, green_start: float, green_end: float, resolved := false, outer_radius := OUTER_RADIUS) -> void:
 	var lead := arrival-elapsed
 	visible = elapsed >= 0.0 and lead >= -0.10 and not resolved
 	if not visible: return
 	var ideal := (green_start+green_end)*0.5
 	var remaining := clampf((lead-ideal)/maxf(arrival-ideal,0.001),0.0,1.0)
-	var radius := lerpf(CENTER_RADIUS,OUTER_RADIUS,remaining)
+	var radius := lerpf(CENTER_RADIUS,outer_radius,remaining)
 	timing_ring.scale = Vector3(radius,1.0,radius)
 	var color := EARLY
 	if lead < green_start: color = LATE

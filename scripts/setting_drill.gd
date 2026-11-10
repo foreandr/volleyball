@@ -8,6 +8,7 @@ const Flight = preload("res://scripts/pass_flight.gd")
 const Contact = preload("res://scripts/forearm_contact.gd")
 const Dive = preload("res://scripts/forward_reception_dive.gd")
 const KneeSlide = preload("res://scripts/side_knee_slide.gd")
+const HAND_RING_RADIUS := 0.65
 const BumpSetting = preload("res://scripts/bump_setting.gd")
 const Net = preload("res://scripts/net_collision.gd")
 const BallTimingRing = preload("res://scripts/ball_timing_ring.gd")
@@ -133,7 +134,7 @@ func configure(player: Node3D, readout: Label, use_bump: bool, build := "") -> v
 	reset_feed()
 
 func update_timing_cue(after_pass := -INF) -> void:
-	timing_cue.update_timing(after_pass,timing_arrival,BumpSetting.GREEN_START,BumpSetting.GREEN_END,is_finite(bump.touch_time))
+	timing_cue.update_timing(after_pass,timing_arrival,BumpSetting.GREEN_START,BumpSetting.GREEN_END,is_finite(bump.touch_time),BallTimingRing.OUTER_RADIUS if bump_enabled else HAND_RING_RADIUS)
 
 func set_bump_mode(enabled: bool) -> void:
 	if bump_enabled == enabled: return
@@ -167,8 +168,13 @@ func _exit_tree() -> void:
 
 func update_ball_ring() -> void:
 	ready_range.position = Vector3(ball.position.x,0.058,ball.position.z)
+	var radius := HAND_RING_RADIUS if not bump_enabled and clock >= 0.45+SERVE_TIME else BallTimingRing.OUTER_RADIUS
+	var outline := ready_range.mesh as TorusMesh
+	if not is_equal_approx(outline.outer_radius,radius):
+		outline.inner_radius = radius-0.035
+		outline.outer_radius = radius
 	var distance := (ball.position-setter.position).slide(Vector3.UP).length()
-	range_style.albedo_color = Color("6beeb3") if distance <= 2.0 else Color("657f9b")
+	range_style.albedo_color = Color("6beeb3") if distance <= radius else Color("657f9b")
 
 func apply_setter_arms(phase: float, moving: bool, delta: float) -> void:
 	var distance := (ball.position-setter.position).slide(Vector3.UP).length()
