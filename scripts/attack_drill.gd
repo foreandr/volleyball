@@ -959,7 +959,8 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 		pitch *= 0.38
 		if stage == Stage.SET:
 			var rise_age := clock-swing_started
-			var arch := smootherstep(0.08,0.25,rise_age)*(1.0-smootherstep(0.25,0.43,rise_age))
+			var arch_release := smoothstep(0.04,0.78,extension) if approach_steps == 2 else smootherstep(0.25,0.43,rise_age)
+			var arch := smootherstep(0.08,0.25,rise_age)*(1.0-arch_release)
 			pitch = lerpf(pitch,deg_to_rad(-40.0),arch)
 		elif stage == Stage.HIT:
 			var hit_age := clock-stage_start
