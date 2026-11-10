@@ -312,7 +312,7 @@ func start_setting_drill(attack := false) -> void:
 		if attack:
 			controls_hint.visible = index != 0
 			if index == 2:
-				controls_hint.text = "Move forward to start the set\nHold Space to jump  |  Hold left-click to spike"
+				controls_hint.text = "WASD to approach the high set\nHold Space to jump  |  Hold left-click to spike"
 				return
 			controls_hint.text = "WASD to move  |  Q forearms  |  I / E hands\nMouse to aim  |  Shift + scroll for pass height\nSpace to jump  |  Hold left-click to spike"
 			return
@@ -359,7 +359,8 @@ func start_setting_drill(attack := false) -> void:
 	setting_drill.configure(preview_player,drill_status,modes.selected == 1,build_label)
 	if attack:
 		setting_drill.set_ball_audio_muted(StorySession.attack_ball_audio_muted)
-		show_attack_positions()
+		show_attack_positions(modes)
+		var attack_tuning_start := content.get_child_count()
 		setting_drill.bump.set_custom_backward(load_custom_backward_clip())
 		add_low_bow_controls()
 		var play_shots := button("Play",func():
@@ -369,7 +370,6 @@ func start_setting_drill(attack := false) -> void:
 		play_shots.visible = modes.selected == 0
 		content.add_child(play_shots)
 		setting_drill.shot_sequence_changed.connect(func(playing: bool): play_shots.text = "Stop" if playing else "Play")
-		modes.item_selected.connect(func(index: int): play_shots.visible = index == 0)
 		add_attack_tuning_slider(content,"Air turn speed","AttackAirTurnSpeed","°/s",0,720,10,setting_drill.air_turn_speed,
 			func(value: float): setting_drill.air_turn_speed = value)
 		add_attack_pose_slider("Torso rotation","TorsoRotation",50,setting_drill.torso_rotation_scale,
@@ -378,10 +378,18 @@ func start_setting_drill(attack := false) -> void:
 			func(value: float): setting_drill.leg_kickback_scale = value)
 		add_attack_pose_slider("Leg rotation","LegRotation",0,setting_drill.leg_rotation_scale,
 			func(value: float): setting_drill.leg_rotation_scale = value)
-	add_torso_lean_slider()
+		add_torso_lean_slider()
+		var attack_tuning := content.get_children().slice(attack_tuning_start)
+		var show_attack_tuning := func(index: int):
+			for control in attack_tuning: control.visible = index != 2
+			play_shots.visible = index == 0
+		modes.item_selected.connect(show_attack_tuning)
+		show_attack_tuning.call(modes.selected)
+	else:
+		add_torso_lean_slider()
 	preview.grab_focus()
 
-func show_attack_positions() -> void:
+func show_attack_positions(modes: OptionButton) -> void:
 	attack_position_panel = panel()
 	attack_position_panel.name = "AttackPositions"
 	attack_position_panel.custom_minimum_size.x = 250
@@ -411,7 +419,7 @@ func show_attack_positions() -> void:
 	speed.custom_minimum_size.y = 24
 	positions.add_child(speed)
 	var update_speed := func():
-		attack_playback_speed = speed.value if slow_motion.button_pressed else 1.0
+		attack_playback_speed = speed.value if slow_motion.button_pressed and modes.selected != 2 else 1.0
 		slow_motion.text = "Slow motion  %.2f×" % speed.value
 	speed.value_changed.connect(func(_value: float):
 		slow_motion.set_pressed_no_signal(true)
@@ -440,6 +448,13 @@ func show_attack_positions() -> void:
 		preview.grab_focus())
 	reset.name = "ResetAttackTuning"
 	positions.add_child(reset)
+	var backswing_controls := positions.get_children().slice(bend.get_index()-1,reach.get_index()+1)
+	var show_position_controls := func(index: int):
+		for control in positions.get_children():
+			control.visible = index != 2 or control in backswing_controls
+		update_speed.call()
+	modes.item_selected.connect(show_position_controls)
+	show_position_controls.call(modes.selected)
 
 func add_attack_tuning_slider(panel_content: VBoxContainer, caption: String, node_name: String, units: String, minimum: float, maximum: float, step: float, initial: float, apply: Callable) -> HSlider:
 	var readout := label("",16)
@@ -644,7 +659,7 @@ func _process(delta: float) -> void:
 		setting_drill.trace_move_scale = 0.0 if diving else setting_drill.setter_movement_scale()
 		var court_weight: float = setting_drill.court_facing_weight()
 		if not diving and not setting_drill.jump.active:
-			var attacking_approach: bool = selected_category == "Attacking" and setting_drill.stage in [setting_drill.Stage.SET,setting_drill.Stage.APPROACH_READY]
+			var attacking_approach: bool = selected_category == "Attacking" and (setting_drill.stage == setting_drill.Stage.SET or setting_drill.approach_practice)
 			if attacking_approach:
 				var approach: Vector2 = setting_drill.trace_input
 				if approach.y > 0.05:
