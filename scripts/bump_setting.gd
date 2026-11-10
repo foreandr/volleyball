@@ -7,6 +7,7 @@ const PlatformPose = preload("res://scripts/reception_platform_pose.gd")
 const Net = preload("res://scripts/net_collision.gd")
 const Contact = preload("res://scripts/forearm_contact.gd")
 const PLATFORM_RADIUS := 0.31
+const DIVE_CONTACT_ALLOWANCE := 0.09
 const MAX_EARLY_ERROR_TIME := 0.66
 const BallTimingRing = preload("res://scripts/ball_timing_ring.gd")
 const LowSave = preload("res://scripts/player_reception_save.gd")
@@ -183,6 +184,9 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 		var pancake := low_save.active and low_save.pancake
 		var center := LowSave.palm_center(setter) if pancake else platform_center()
 		var radius := 0.16 if pancake else PLATFORM_RADIUS
+		var near_dive_contact := low_save.active and not pancake and absf(time-low_save.contact_time)<=0.12
+		var allowance := DIVE_CONTACT_ALLOWANCE if near_dive_contact else 0.0
+		var cutoff := radius+allowance
 		var first: Vector3 = path.call(previous)
 		var last: Vector3 = path.call(time)
 		if center.is_finite() and not first.is_equal_approx(last):
@@ -199,8 +203,9 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 			contact_check = {
 				"time":time,"surface":"palm" if pancake else "forearms","surface_center":center,
 				"ball_point":point,"gap_before_adjustment":gap,"gap":gap_after_adjustment,
-				"radius":radius,"margin":gap_after_adjustment-radius,"assist":assisted,
-				"accepted":assisted or gap_after_adjustment <= radius,
+				"radius":cutoff,"base_radius":radius,"dive_allowance":allowance,
+				"margin":gap_after_adjustment-cutoff,"assist":assisted,
+				"accepted":assisted or gap_after_adjustment <= cutoff,
 			}
 			if contact_check.accepted:
 				touch_time = lerpf(previous,time,first.distance_to(point)/first.distance_to(last))
