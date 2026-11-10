@@ -16,7 +16,7 @@ const SET_APEX := 5.0
 const SET_TOPSPIN_RPS := 2.2
 const LOW_BOW_FRAME := 1.0/30.0
 
-enum Stage { SERVE, PASS, SET, HIT, MISS, SHANK }
+enum Stage { SERVE, PASS, SET, HIT, MISS, SHANK, APPROACH_READY }
 const SWING_CHARGE_TIME := 0.65
 const SWING_REACH := 1.55
 const SWING_CONTACT_HEIGHT := 2.22
@@ -36,6 +36,7 @@ const SHOT_AIM_NEAR := 4.3
 const SHOT_AIM_FAR := 16.0
 var stage := Stage.SERVE
 var swing_practice := true
+var approach_practice := false
 var shot_sequence_index := -1
 var manual_shot_aim := Vector3.ZERO
 var practice_takeoff := PIN+Vector3(-0.70,RECEIVE_START.y-PIN.y,-0.98)
@@ -205,6 +206,17 @@ func reset_feed() -> void:
 	if swing_practice:
 		start_swing_practice()
 		return
+	if approach_practice:
+		stage = Stage.APPROACH_READY
+		bump.hide()
+		setter.position = PIN+Vector3(-0.45,RECEIVE_START.y-PIN.y,-3.4)
+		receiver.rotation.y = atan2(PIN.x-CPU_HOME.x,PIN.z-CPU_HOME.z)
+		ball.position = receiver.to_global(Vector3(0.0,HandPose.CONTACT_HEIGHT,HandPose.CONTACT_FORWARD))
+		region.show()
+		aim_swing(swing_aim)
+		status.text = "Ready for approach"
+		trace.begin_feed({"mode":"approach_practice","source":ball.position,"pin":PIN,"start":setter.position})
+		return
 	status.text = "Receive  |  Q forearms, I / E hands"
 	trace.begin_feed({"mode":"attacking","source":ATTACK_SERVE_SOURCE,"serve_velocity":serve_velocity,"pin":PIN})
 
@@ -224,10 +236,21 @@ func stop_shot_sequence() -> void:
 	aim_swing(manual_shot_aim)
 	shot_sequence_changed.emit(false)
 
-func set_swing_practice(enabled: bool) -> void:
+func set_swing_practice(enabled: bool, approach := false) -> void:
 	stop_shot_sequence()
 	swing_practice = enabled
+	approach_practice = approach
 	reset_feed()
+
+func start_approach_set() -> void:
+	stage = Stage.SET
+	stage_start = clock
+	pass_origin = ball.position
+	pass_motion = set_toward_pin(pass_origin)
+	pin_arrival = descending_time(pass_origin,pass_motion,PIN_HEIGHT)
+	flight_end = Flight.landing_time(pass_origin,pass_motion)
+	status.text = "Space to jump  |  Hold left-click to spike"
+	trace.write("approach_set",clock,{"point":pass_origin,"velocity":pass_motion,"pin_arrival":pin_arrival},true)
 
 func start_swing_practice() -> void:
 	stage = Stage.SET
@@ -345,6 +368,11 @@ func queue_jump(direction: Vector2) -> void:
 	jump.begin(setter,direction)
 	trace.write("jump",clock,{"position":setter.position,"direction":jump.heading},true)
 
+func step_jump(delta: float) -> void:
+	jump.load_bend_extra = deg_to_rad(backswing_bend)*0.36 if approach_practice else 0.0
+	jump.load_arm_extra = backswing_reach*0.85 if approach_practice else 0.0
+	super.step_jump(delta)
+
 func setter_movement_scale() -> float:
 	if stage == Stage.SERVE:
 		return bump.movement_scale(clock-stage_start,receive_cue_time(),ball.position)
@@ -358,6 +386,8 @@ func step(delta: float) -> void:
 	receiver.animator.advance(delta)
 	apply_torso_lean(receiver)
 	match stage:
+		Stage.APPROACH_READY:
+			if trace_input.y > 0.05: start_approach_set()
 		Stage.SERVE: play_serve(time,previous,delta)
 		Stage.PASS:
 			follow_receive(time)
@@ -366,7 +396,7 @@ func step(delta: float) -> void:
 			follow_receive(time)
 			play_shank(time,previous)
 		Stage.SET:
-			if not swing_practice:
+			if not swing_practice and not approach_practice:
 				cpu_set.update_hand_push(cpu_set.release_time+time,cpu_set.release_time+time-cpu_set.touch_time)
 			play_pin_ball(time,previous,delta)
 		Stage.HIT: play_spike(time,delta)

@@ -302,7 +302,7 @@ func start_setting_drill(attack := false) -> void:
 	var modes := OptionButton.new()
 	modes.name = "AttackingType" if attack else "SettingType"
 	var mode_category := "Attacking" if attack else "Setting"
-	var mode_names: Array = ["Swing Practice","Full Rally"] if attack else MOVE_TYPES["Setting"]
+	var mode_names: Array = ["Swing Practice","Full Rally","Approach Practice"] if attack else MOVE_TYPES["Setting"]
 	for mode in mode_names: modes.add_item(mode)
 	modes.select(type_indices.get(mode_category,0))
 	content.add_child(modes)
@@ -311,13 +311,16 @@ func start_setting_drill(attack := false) -> void:
 	var show_mode := func(index: int):
 		if attack:
 			controls_hint.visible = index != 0
+			if index == 2:
+				controls_hint.text = "Move forward to start the set\nHold Space to jump  |  Hold left-click to spike"
+				return
 			controls_hint.text = "WASD to move  |  Q forearms  |  I / E hands\nMouse to aim  |  Shift + scroll for pass height\nSpace to jump  |  Hold left-click to spike"
 			return
 		controls_hint.text = "WASD to move  |  Tap Q to bump set\nMouse to aim  |  Scroll to change height" if index == 1 else "WASD to move  |  Tap E to set\nMouse to aim  |  Scroll to change height\nSpace jump  |  7 to 50 in"
 	show_mode.call(modes.selected)
 	modes.item_selected.connect(func(index: int):
 		type_indices[mode_category] = index
-		if attack: setting_drill.set_swing_practice(index == 0)
+		if attack: setting_drill.set_swing_practice(index == 0,index == 2)
 		else: setting_drill.set_bump_mode(index == 1)
 		show_mode.call(index)
 		preview.grab_focus())
@@ -350,6 +353,7 @@ func start_setting_drill(attack := false) -> void:
 	setting_drill = preload("res://scripts/attack_drill.gd").new() if attack else preload("res://scripts/setting_drill.gd").new()
 	if attack:
 		setting_drill.swing_practice = modes.selected == 0
+		setting_drill.approach_practice = modes.selected == 2
 		setting_drill.jump.max_height += 5.0*0.0254
 	preview_player.get_parent().add_child(setting_drill)
 	setting_drill.configure(preview_player,drill_status,modes.selected == 1,build_label)
@@ -640,7 +644,7 @@ func _process(delta: float) -> void:
 		setting_drill.trace_move_scale = 0.0 if diving else setting_drill.setter_movement_scale()
 		var court_weight: float = setting_drill.court_facing_weight()
 		if not diving and not setting_drill.jump.active:
-			var attacking_approach: bool = selected_category == "Attacking" and setting_drill.stage == setting_drill.Stage.SET
+			var attacking_approach: bool = selected_category == "Attacking" and setting_drill.stage in [setting_drill.Stage.SET,setting_drill.Stage.APPROACH_READY]
 			if attacking_approach:
 				var approach: Vector2 = setting_drill.trace_input
 				if approach.y > 0.05:

@@ -11,6 +11,8 @@ const AIR_TRAVEL_FRACTION := 0.38
 const AIR_STEER_SPEED := 1.00
 const AIR_STEER_ACCELERATION := 5.0
 var active := false
+var load_bend_extra := 0.0
+var load_arm_extra := 0.0
 var front_limit := 2.5
 var elapsed := 0.0
 var held := false
@@ -86,7 +88,7 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 	var hips: Transform3D = author.world_pose(pose,parent)
 	var scale_: float = rig.global_basis.get_scale().y
 	pose[pelvis].origin -= hips.basis.inverse()*Vector3.UP*(0.15*load+0.14*impact)/scale_
-	author.rotate_world(pose,"spine_02",Vector3.RIGHT,0.16*load+0.13*impact-0.22*arm_drive)
+	author.rotate_world(pose,"spine_02",Vector3.RIGHT,(0.16+load_bend_extra)*load+0.13*impact-0.22*arm_drive)
 	var travel := actor.basis.inverse()*heading*stride/scale_
 	var stagger := 0.34*(first-second)
 	var tuck := sin(PI*clampf((elapsed-LOAD_TIME)/air_time,0.0,1.0))
@@ -100,7 +102,7 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 		author.set_world_basis(pose,foot,foot_pose.basis)
 		var upper_arm: String = "upperarm_"+side
 		var forearm: String = "lowerarm_"+side
-		author.rotate_world(pose,upper_arm,Vector3.RIGHT,1.52*load)
+		author.rotate_world(pose,upper_arm,Vector3.RIGHT,(1.52+load_arm_extra)*load)
 		author.rotate_world(pose,forearm,Vector3.RIGHT,-0.25*arm_drive)
 		var shoulder: Vector3 = author.point(pose,upper_arm)
 		var elbow: Vector3 = author.point(pose,forearm)
