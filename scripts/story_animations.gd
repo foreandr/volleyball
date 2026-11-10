@@ -57,6 +57,7 @@ var marker_fade: Tween
 var pass_timing_cue: Node3D
 var reception_review: VBoxContainer
 var setting_drill: Node3D
+var attack_position_panel: PanelContainer
 var setter_original_transform: Transform3D
 var setter_original_height: float
 var setter_animation_process: int
@@ -349,6 +350,7 @@ func start_setting_drill(attack := false) -> void:
 	preview_player.get_parent().add_child(setting_drill)
 	setting_drill.configure(preview_player,drill_status,modes.selected == 1,build_label)
 	if attack:
+		show_attack_positions()
 		setting_drill.bump.set_custom_backward(load_custom_backward_clip())
 		add_low_bow_controls()
 		add_attack_pose_slider("Torso rotation","TorsoRotation",50,setting_drill.torso_rotation_scale,
@@ -359,6 +361,18 @@ func start_setting_drill(attack := false) -> void:
 			func(value: float): setting_drill.leg_rotation_scale = value)
 	add_torso_lean_slider()
 	preview.grab_focus()
+
+func show_attack_positions() -> void:
+	attack_position_panel = panel()
+	attack_position_panel.name = "AttackPositions"
+	attack_position_panel.custom_minimum_size.x = 250
+	right_panel.get_parent().add_child(attack_position_panel)
+	var positions := VBoxContainer.new()
+	attack_position_panel.add_child(positions)
+	positions.add_child(label("Court positions",18))
+	var map := preload("res://scripts/attack_position_map.gd").new()
+	map.drill = setting_drill
+	positions.add_child(map)
 
 func add_low_bow_controls() -> void:
 	content.add_child(label(setting_drill.SpikeArm.SWING_NAME,16))
@@ -409,6 +423,10 @@ func add_attack_pose_slider(caption: String, node_name: String, minimum: float, 
 
 func stop_setting_drill() -> void:
 	if not is_instance_valid(setting_drill): return
+	if is_instance_valid(attack_position_panel):
+		attack_position_panel.hide()
+		attack_position_panel.queue_free()
+		attack_position_panel = null
 	if marker_fade != null: marker_fade.kill()
 	marker_popup.hide()
 	jump_height_meter.hide()
