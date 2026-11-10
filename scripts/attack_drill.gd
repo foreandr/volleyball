@@ -615,6 +615,9 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 		# An early draw holds the low chamber until the lift window opens.
 		var lift_start := clampf(draw_end-LOW_BOW_FRAME,draw_reference+SpikeArm.DEFAULT_DRAW_DELAY-LOW_BOW_FRAME,estimated_contact-0.04)
 		var arm_lift := smoothstep(lift_start,estimated_contact,time)
+		if approach_practice:
+			draw_progress = 1.0
+			arm_lift = smoothstep(minf(lift_start,estimated_contact-0.20),estimated_contact,time)
 		if airborne:
 			var expected_contact := flight_point(pass_origin,pass_motion,estimated_contact)
 			var shot := swing_aim-expected_contact

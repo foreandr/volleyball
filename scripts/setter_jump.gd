@@ -137,8 +137,13 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 		author.set_world_basis(pose,foot,foot_pose.basis)
 		var upper_arm: String = "upperarm_"+side
 		var forearm: String = "lowerarm_"+side
-		author.rotate_world(pose,upper_arm,Vector3.RIGHT,(1.52+load_arm_extra)*load)
-		author.rotate_world(pose,forearm,Vector3.RIGHT,-0.25*arm_drive)
+		var arm_load := load
+		if approach_plant:
+			# Carry the plant's backswing into the spike instead of pumping overhead first.
+			arm_load = smoothstep(0.02,0.19,pose_time)*(1.0-smoothstep(LOAD_TIME,LOAD_TIME+0.17,pose_time))
+		var jump_drive := 0.0 if approach_plant else arm_drive
+		author.rotate_world(pose,upper_arm,Vector3.RIGHT,(1.52+load_arm_extra)*arm_load)
+		author.rotate_world(pose,forearm,Vector3.RIGHT,-0.25*jump_drive)
 		var shoulder: Vector3 = author.point(pose,upper_arm)
 		var elbow: Vector3 = author.point(pose,forearm)
 		var wrist: Vector3 = author.point(pose,"hand_"+side)
@@ -147,7 +152,7 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 			var forearm_pose: Transform3D = author.world_pose(pose,rig.find_bone(forearm))
 			var straighten := Quaternion((wrist-elbow).normalized(),(elbow-shoulder).normalized())
 			author.set_world_basis(pose,forearm,Basis(Quaternion.IDENTITY.slerp(straighten,extension))*forearm_pose.basis)
-		if arm_drive > 0.0:
+		if jump_drive > 0.0:
 			var outward := 1.0 if left else -1.0
 			var hand: String = "hand_"+side
 			var overhead := shoulder+Vector3(-outward*0.065,0.49,0.16)/scale_
@@ -155,13 +160,13 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 			author.limb(raised,upper_arm,forearm,hand,overhead,Vector3(outward*0.50,-0.42,0.52),1.0,151.0)
 			for joint in [upper_arm,forearm]:
 				var bone := rig.find_bone(joint)
-				pose[bone].basis = pose[bone].basis.slerp(raised[bone].basis,arm_drive)
+				pose[bone].basis = pose[bone].basis.slerp(raised[bone].basis,jump_drive)
 			var base: Transform3D = author.world_pose(pose,rig.find_bone(hand))
 			var fingers: Vector3 = author.point(pose,"middle_01_"+side)-base.origin
 			var across: Vector3 = author.point(pose,"index_01_"+side)-author.point(pose,"pinky_01_"+side)
 			var hand_orientation := HandPose.hand_basis(Vector3(-outward*0.24,0.85,0.34),Vector3(-outward*0.72,-0.24,-0.52))
 			var rotation := hand_orientation*HandPose.hand_basis(fingers,across).inverse()
-			author.set_world_basis(pose,hand,Basis(Quaternion.IDENTITY.slerp(rotation.get_rotation_quaternion(),arm_drive*0.75))*base.basis)
+			author.set_world_basis(pose,hand,Basis(Quaternion.IDENTITY.slerp(rotation.get_rotation_quaternion(),jump_drive*0.75))*base.basis)
 	rig.set_bone_pose_position(pelvis,pose[pelvis].origin)
 	for bone in rig.get_bone_count():
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
