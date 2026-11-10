@@ -9,6 +9,7 @@ const Dive = preload("res://scripts/forward_reception_dive.gd")
 const KneeSlide = preload("res://scripts/side_knee_slide.gd")
 const BumpSetting = preload("res://scripts/bump_setting.gd")
 const Net = preload("res://scripts/net_collision.gd")
+const BallTimingRing = preload("res://scripts/ball_timing_ring.gd")
 const BallPreview = preload("res://scripts/animation_ball_preview.gd")
 const RECEIVER_START := Vector3(-1.8,0.04,-2.85)
 # Distance and local offset of the serve from the ready platform.
@@ -33,7 +34,6 @@ const TARGETS := [Vector3(0.8,SET_HEIGHT,1.15),Vector3(-1.45,SET_HEIGHT,0.3),Vec
 var receiver: Node3D
 var setter: Node3D
 var status: Label
-var cpu_meter: Control
 var cpu_stamina_ring: MeshInstance3D
 var cpu_stamina := 100.0
 var ball: MeshInstance3D
@@ -68,10 +68,9 @@ var range_style := StandardMaterial3D.new()
 var timing_cue: Node3D
 var arm_swing_weight := 0.0
 
-func configure(player: Node3D, readout: Label, meter: Control, receiver_meter: Control, use_bump: bool) -> void:
+func configure(player: Node3D, readout: Label, use_bump: bool) -> void:
 	setter = player
 	status = readout
-	cpu_meter = receiver_meter
 	receiver = Player.new()
 	receiver.name = "CPUReceiver"
 	receiver.player_number = 2
@@ -114,7 +113,7 @@ func configure(player: Node3D, readout: Label, meter: Control, receiver_meter: C
 	add_child(region)
 	bump = BumpSetting.new()
 	add_child(bump)
-	bump.configure(setter,clip,meter)
+	bump.configure(setter,clip)
 	bump_enabled = use_bump
 	bump.visible = use_bump
 	ready_range = MeshInstance3D.new()
@@ -126,7 +125,7 @@ func configure(player: Node3D, readout: Label, meter: Control, receiver_meter: C
 	ready_range.material_override = range_style
 	ready_range.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(ready_range)
-	timing_cue = preload("res://scripts/ball_timing_ring.gd").new()
+	timing_cue = BallTimingRing.new()
 	ready_range.add_child(timing_cue)
 	reset_feed()
 
@@ -172,7 +171,6 @@ func reset_feed() -> void:
 	receiving = false
 	judged = false
 	bump.reset()
-	cpu_meter.reset_serve()
 	update_timing_cue()
 	var reception: Array = RECEPTIONS[rep % RECEPTIONS.size()]
 	receive_tier = reception[0]
@@ -235,9 +233,6 @@ func step(delta: float) -> void:
 		receiver.play_action("idle")
 	if not receiving or after_pass >= 0.32: cpu_stamina = minf(100.0,cpu_stamina+17.0*delta)
 	cpu_stamina_ring.set_fraction(cpu_stamina/100.0)
-	var cpu_progress := 1.0+after_pass/BallPreview.APPROACH_WINDOW
-	var cpu_grade := BallPreview.Grade.PERFECT if after_pass >= 0.0 else BallPreview.Grade.WAITING
-	cpu_meter.update_timing(true,cpu_progress,receiving,cpu_grade,delta)
 	if after_pass < 0.0:
 		timing_cue.update_timing(elapsed,SERVE_TIME,BallPreview.GREEN_START,BallPreview.GREEN_END)
 		ball.position = flight_point(SOURCE,serve_velocity,elapsed)
@@ -272,7 +267,10 @@ func step_bump(time: float, previous: float, delta: float) -> void:
 			ball.position = Net.after_hit(bump.net_hit,after_touch)
 		else:
 			ball.position = flight_point(bump.touch,bump.outgoing,minf(after_touch,bump.floor_time))
-		status.text = "Bump set"
+		status.text = BallTimingRing.result_text(bump.grade,"set")
+		if after_touch <= BallTimingRing.RESULT_DURATION: timing_cue.show_result(bump.grade)
+	elif bump.grade != BallPreview.Grade.WAITING:
+		status.text = BallTimingRing.result_text(bump.grade,"set")
 	if time >= reset_at+0.85:
 		rep += 1
 		reset_feed()

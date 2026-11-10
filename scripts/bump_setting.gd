@@ -8,6 +8,7 @@ const Net = preload("res://scripts/net_collision.gd")
 const Contact = preload("res://scripts/forearm_contact.gd")
 const PLATFORM_RADIUS := 0.31
 const MAX_EARLY_ERROR_TIME := 0.66
+const BallTimingRing = preload("res://scripts/ball_timing_ring.gd")
 const LowSave = preload("res://scripts/player_reception_save.gd")
 const SpreadCone = preload("res://scripts/reception_spread_cone.gd")
 const GREEN_START := 0.035
@@ -18,7 +19,6 @@ const PLATFORM_PREP_TIME := 0.26
 var setter: Node3D
 var clip: Animation
 var contact_frame: float
-var meter: Control
 var tracks: Array[Vector2i] = []
 var ready_pose: Array[Transform3D] = []
 var reach := {}
@@ -46,11 +46,10 @@ var last_origin := Vector3.INF
 var last_destination := Vector2.INF
 var last_height := -INF
 
-func configure(player: Node3D, animation: Animation, timing_meter: Control) -> void:
+func configure(player: Node3D, animation: Animation) -> void:
 	setter = player
 	clip = animation
 	contact_frame = float(clip.get_meta("contact_time"))
-	meter = timing_meter
 	var rig: Skeleton3D = setter.skeleton
 	for bone in rig.get_bone_count():
 		var path := NodePath("Armature/Skeleton3D:"+rig.get_bone_name(bone))
@@ -78,7 +77,6 @@ func reset() -> void:
 	touch_time = -INF
 	net_hit.clear()
 	clear_reach()
-	meter.reset_serve()
 
 func queue_bump(time: float) -> void:
 	if grade == Timing.Grade.WAITING and not is_finite(pressed_at):
@@ -208,8 +206,8 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 			apply_pose(contact_frame+follow,1.0-smoothstep(0.12,0.36,follow))
 			pose_reach(smoothstep(0.0,1.0,reach_progress)*(1.0-smoothstep(0.06,0.32,follow)),touch)
 			Drive.apply(setter.skeleton,setter.get_pose_author(),outgoing,Drive.effort(incoming,outgoing),follow,true,incoming,Drive.swing_effort(touch,outgoing))
-	meter.update_timing(true,progress,striking,grade,delta,1.0-GREEN_END/APPROACH_TIME)
-	if meter.visible and (grade == Timing.Grade.WAITING or is_finite(touch_time)):
+	var recent_touch := is_finite(touch_time) and time-touch_time <= BallTimingRing.RESULT_DURATION
+	if (grade == Timing.Grade.WAITING and progress >= 0.0) or recent_touch:
 		var anticipated := (1.0-maxf(progress,0.0))*APPROACH_TIME
 		if is_finite(pressed_at): anticipated += time-pressed_at
 		var spread := contact_spread if is_finite(touch_time) else Timing.practice_spread(timing_error(anticipated))

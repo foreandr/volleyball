@@ -1,5 +1,10 @@
 extends Node3D
 
+const Timing = preload("res://scripts/animation_ball_preview.gd")
+const RESULT_DURATION := 0.65
+const EARLY := Color("ffdb51")
+const PERFECT := Color("65ff94")
+const LATE := Color("ff7855")
 const OUTER_RADIUS := 2.0
 const CENTER_RADIUS := 0.092
 var timing_ring: MeshInstance3D
@@ -36,7 +41,24 @@ func update_timing(elapsed: float, arrival: float, green_start: float, green_end
 	var remaining := clampf((lead-ideal)/maxf(arrival-ideal,0.001),0.0,1.0)
 	var radius := lerpf(CENTER_RADIUS,OUTER_RADIUS,remaining)
 	timing_ring.scale = Vector3(radius,1.0,radius)
-	var color := Color("ffdb51")
-	if lead < green_start: color = Color("ff7855")
-	elif lead <= green_end: color = Color("65ff94")
+	var color := EARLY
+	if lead < green_start: color = LATE
+	elif lead <= green_end: color = PERFECT
 	timing_style.albedo_color = color
+
+
+func show_result(grade: int) -> void:
+	show()
+	timing_ring.scale = Vector3(0.29,1.0,0.29)
+	match grade:
+		Timing.Grade.PERFECT: timing_style.albedo_color = PERFECT
+		Timing.Grade.EARLY: timing_style.albedo_color = EARLY
+		_: timing_style.albedo_color = LATE
+
+static func result_text(grade: int, action: String) -> String:
+	match grade:
+		Timing.Grade.PERFECT: return "Perfect "+action
+		Timing.Grade.EARLY: return "Too early"
+		Timing.Grade.LATE: return "Too late"
+		Timing.Grade.MISS: return "Out of reach"
+		_: return ""

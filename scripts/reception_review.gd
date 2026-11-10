@@ -96,7 +96,7 @@ func _init(host: Control) -> void:
 func build_title_card() -> void:
 	title_card = PanelContainer.new()
 	title_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	page.timing_meter.get_parent().add_child(title_card)
+	page.preview_overlay.add_child(title_card)
 	title_card.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
 	title_card.offset_left = -142
 	title_card.offset_right = 142
@@ -211,7 +211,6 @@ func load_case(next_index: int) -> void:
 	var ball = page.ball_preview
 	page.player_controls.clear_receive_transition()
 	page.player_controls.reset_reach()
-	page.timing_meter.reset_serve()
 	actor.transform = original_transform
 	actor.position = READY_POSITION
 	actor.rotation.y = 0.0

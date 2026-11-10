@@ -1,5 +1,6 @@
 extends "res://scripts/create.gd"
 const BallPreview = preload("res://scripts/animation_ball_preview.gd")
+const BallTimingRing = preload("res://scripts/ball_timing_ring.gd")
 const Flight = preload("res://scripts/pass_flight.gd")
 const SideKneeSlide = preload("res://scripts/side_knee_slide.gd")
 const ForwardDive = preload("res://scripts/forward_reception_dive.gd")
@@ -44,8 +45,7 @@ var middle_press := Vector2.ZERO
 var middle_dragged := false
 var drill_status: Label
 var distance_status: Label
-var timing_meter: Control
-var cpu_timing_meter: Control
+var preview_overlay: Control
 var pass_timing_cue: Node3D
 var reception_review: HBoxContainer
 var setting_drill: Node3D
@@ -59,16 +59,10 @@ func _ready() -> void:
 	if DisplayServer.get_name() != "headless":
 		DisplayServer.window_set_title("Volleyball | "+build_label)
 	super._ready()
-	timing_meter = preload("res://scripts/reception_timing_meter.gd").new()
-	var overlay := Control.new()
-	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	preview.get_parent().add_child(overlay)
-	overlay.add_child(timing_meter)
-	timing_meter.follow_player(preview_player,preview_camera,preview)
-	cpu_timing_meter = preload("res://scripts/reception_timing_meter.gd").new()
-	cpu_timing_meter.cpu = true
-	overlay.add_child(cpu_timing_meter)
-	pass_timing_cue = preload("res://scripts/ball_timing_ring.gd").new()
+	preview_overlay = Control.new()
+	preview_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	preview.get_parent().add_child(preview_overlay)
+	pass_timing_cue = BallTimingRing.new()
 	preview_player.get_parent().add_child(pass_timing_cue)
 	reception_review = preload("res://scripts/reception_review.gd").new(self)
 	var column := find_child("ScreenTitle",true,false).get_parent().get_parent()
@@ -289,16 +283,11 @@ func start_setting_drill() -> void:
 	preview_camera.look_at(Vector3(0,1.45,2.6))
 	setting_drill = preload("res://scripts/setting_drill.gd").new()
 	preview_player.get_parent().add_child(setting_drill)
-	timing_meter.action_name = "SET"
-	setting_drill.configure(preview_player,drill_status,timing_meter,cpu_timing_meter,modes.selected == 1)
-	cpu_timing_meter.follow_player(setting_drill.receiver,preview_camera,preview)
+	setting_drill.configure(preview_player,drill_status,modes.selected == 1)
 	preview.grab_focus()
 
 func stop_setting_drill() -> void:
 	if not is_instance_valid(setting_drill): return
-	timing_meter.reset_serve()
-	timing_meter.action_name = "PASS"
-	cpu_timing_meter.reset_serve()
 	setting_drill.queue_free()
 	setting_drill = null
 	preview_player.transform = setter_original_transform
@@ -361,7 +350,6 @@ func preview_entry(entry: Dictionary) -> void:
 		preview_player.get_parent().add_child(ball_preview)
 	ball_preview.practice_mode = selected_category == "Forearm reception"
 	reset_cpu_receive(false)
-	timing_meter.reset_serve()
 	player_controls.clear_receive_transition()
 	ball_preview.configure(preview_player,render_clip)
 	preview_clock = minf(0,ball_preview.contact_time-ball_preview.feed_duration)
@@ -387,7 +375,6 @@ func apply_output_angle(value: float) -> void:
 	preview_player.animator.advance(0)
 	preview_player.animator.pause()
 	reset_cpu_receive(false)
-	timing_meter.reset_serve()
 	player_controls.clear_receive_transition()
 	ball_preview.configure(preview_player,render_clip)
 	ball_preview.tick(preview_clock,false)
@@ -405,7 +392,6 @@ func update_feed_aim() -> void:
 		preview_player.animator.seek(0.0,true)
 		preview_player.animator.pause()
 	angle_control.apply_feed_aim(preview_player)
-	timing_meter.reset_serve()
 	ball_preview.recalculate()
 	preview_clock = minf(0.0,ball_preview.contact_time-ball_preview.feed_duration)
 	ball_preview.tick(preview_clock,false)
@@ -444,7 +430,6 @@ func _process(delta: float) -> void:
 	super._process(delta)
 	var in_control: bool = player_controls!=null and player_controls.active
 	if not is_instance_valid(ball_preview) or not ball_preview.active:
-		timing_meter.hide()
 		return
 	var drill := reception_drill_active()
 	set_cpu_arrows_pinned(drill and not in_control)
@@ -472,39 +457,43 @@ func _process(delta: float) -> void:
 			ball_preview.reset_practice_serve()
 			player_controls.reset_receive_attempt()
 			player_controls.reset_reach()
-			timing_meter.reset_serve()
 			if in_control: drill_status.text = "Next serve  |  Tap Q just before contact"
 			else: drill_status.text = "CPU receiving  |  F1 to take control"
 		elif in_control:
 			reset_cpu_receive(false)
+			var hit := false
 			if player_controls.low_save.active and player_controls.low_save.pancake:
-				ball_preview.try_pancake(previous,preview_clock,player_controls.receive_elapsed)
+				hit = ball_preview.try_pancake(previous,preview_clock,player_controls.receive_elapsed)
 			elif player_controls.receive_pose_elapsed > 0.0:
-				ball_preview.try_practice_pass(previous,preview_clock,player_controls.receive_elapsed)
+				hit = ball_preview.try_practice_pass(previous,preview_clock,player_controls.receive_elapsed)
+			if hit: drill_status.text = BallTimingRing.result_text(ball_preview.practice_grade,"pass")
 			var floor_time: float = ball_preview.contact_time+ball_preview.practice_floor_time
 			if ball_preview.practice_early_attempt and ball_preview.crossed(preview_clock,floor_time):
 				ball_preview.finish_practice_serve()
+				drill_status.text = BallTimingRing.result_text(ball_preview.practice_grade,"pass")
 		else:
 			step_cpu_receive(previous,delta)
 		var attempted: bool = ball_preview.practice_early_attempt
 		if preview_clock >= previous and ball_preview.try_body_dig(previous,preview_clock) and (not in_control or attempted):
 			drill_status.text = body_dig_status()
 		var approach: float = ball_preview.practice_approach(preview_clock,1.12) if in_control and ball_preview.practice_grade == BallPreview.Grade.WAITING else -1.0
-		timing_meter.update_timing(in_control and (attempted or ball_preview.practice_grade == BallPreview.Grade.WAITING),approach,player_controls.receive_pose_elapsed>0.0,ball_preview.practice_grade,delta)
 		var anticipated: float = player_controls.receive_elapsed
 		if approach >= 0.0: anticipated += (1.0-approach)*BallPreview.APPROACH_WINDOW
-		ball_preview.update_practice_cone(timing_meter.visible,anticipated)
+		var recent_touch: bool = ball_preview.recovery.has("spread") and preview_clock-ball_preview.contact_time-float(ball_preview.recovery.time) <= BallTimingRing.RESULT_DURATION
+		ball_preview.update_practice_cone(in_control and (approach >= 0.0 or recent_touch),anticipated)
 		ball_preview.update_practice_aim(true)
 		update_distance_status(in_control or cpu_start.is_finite())
 	else:
-		timing_meter.hide()
 		if not in_control: preview_player.animator.seek(ball_preview.animation_time(preview_clock),true)
 	ball_preview.tick(preview_clock,true)
 	if drill and ball_preview.ball.visible:
 		var source_time: float = ball_preview.contact_time-ball_preview.feed_duration
 		var point: Vector3 = ball_preview.global_position
 		pass_timing_cue.global_position = Vector3(point.x,0.058,point.z)
-		pass_timing_cue.update_timing(preview_clock-source_time,ball_preview.feed_duration,BallPreview.GREEN_START,BallPreview.GREEN_END,not ball_preview.recovery.is_empty() or not ball_preview.incoming_net.is_empty())
+		if ball_preview.recovery.has("spread") and preview_clock-ball_preview.contact_time-float(ball_preview.recovery.time) <= BallTimingRing.RESULT_DURATION:
+			pass_timing_cue.show_result(ball_preview.practice_grade)
+		else:
+			pass_timing_cue.update_timing(preview_clock-source_time,ball_preview.feed_duration,BallPreview.GREEN_START,BallPreview.GREEN_END,not ball_preview.recovery.is_empty() or not ball_preview.incoming_net.is_empty())
 
 func set_cpu_arrows_pinned(pinned: bool) -> void:
 	var arrows: MeshInstance3D = preview_player.get_node("DirectionArrows")
