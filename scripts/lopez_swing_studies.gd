@@ -28,17 +28,6 @@ static func bake(base: Animation, actor: Node3D, index: int, crosscourt := false
 	var prep: float = base.get_meta("study_prep_duration")
 	var profile: Array = STUDIES[index]
 	var ball: Vector3 = base.get_meta("study_ball_point")+OUTSIDE_CONTACT
-	var sampler := func(time: float) -> Array:
-		var frame := time*session.frame_rate
-		var pose: Array[Transform3D] = []
-		for bone in rig.get_bone_count():
-			pose.append(Transform3D(Basis(session.source_rotation(bone,frame)),session.source_position(bone,frame)))
-		shape(pose,author,profile,ball,(time-prep)/(timing-prep),(time-timing)/(base.length-timing),crosscourt)
-		return pose
-	var title: String = profile[0]+(" Crosscourt" if crosscourt else "")
-	var clip: Animation = author.bake({"name":title,"duration":base.length,"contact_time":timing},sampler)
-	for key in ["editor_start","editor_group","editor_height_cm"]:
-		clip.set_meta(key,base.get_meta(key))
 	var feed: Dictionary = base.get_meta("editor_feed").duplicate()
 	var offset := OUTSIDE_CONTACT*(float(base.get_meta("editor_height_cm"))/180.0)
 	feed.aim += offset
@@ -48,11 +37,24 @@ static func bake(base: Animation, actor: Node3D, index: int, crosscourt := false
 	var travel: Vector3 = target-feed.aim
 	var flight_time := travel.slide(Vector3.UP).length()/maxf(outgoing.slide(Vector3.UP).length(),0.1)
 	feed.spike_outgoing = travel/flight_time+Vector3.UP*Flight.GRAVITY*flight_time*0.5
+	var shot_turn := SpikeArm.follow_heading(target,feed.aim)
+	var base_turn := SpikeArm.follow_heading(base.get_meta("study_base_aim"),feed.aim)
+	var sampler := func(time: float) -> Array:
+		var frame := time*session.frame_rate
+		var pose: Array[Transform3D] = []
+		for bone in rig.get_bone_count():
+			pose.append(Transform3D(Basis(session.source_rotation(bone,frame)),session.source_position(bone,frame)))
+		shape(pose,author,profile,ball,(time-prep)/(timing-prep),(time-timing)/(base.length-timing),crosscourt,shot_turn-base_turn)
+		return pose
+	var title: String = profile[0]+(" Crosscourt" if crosscourt else "")
+	var clip: Animation = author.bake({"name":title,"duration":base.length,"contact_time":timing},sampler)
+	for key in ["editor_start","editor_group","editor_height_cm"]:
+		clip.set_meta(key,base.get_meta(key))
 	clip.set_meta("editor_feed",feed)
 	clip.set_meta("editor_frame_count",25)
 	return clip
 
-static func shape(pose: Array[Transform3D], author: RefCounted, profile: Array, ball: Vector3, progress: float, landing: float, crosscourt: bool) -> void:
+static func shape(pose: Array[Transform3D], author: RefCounted, profile: Array, ball: Vector3, progress: float, landing: float, crosscourt: bool, aim_turn: float) -> void:
 	var rising := smoothstep(0.03,0.32,progress)
 	var drive := smoothstep(float(profile[7]),1.0,progress)
 	var settle := smoothstep(0.12,0.92,landing)
@@ -70,7 +72,7 @@ static func shape(pose: Array[Transform3D], author: RefCounted, profile: Array, 
 	author.rotate_world(pose,"pelvis",Vector3.UP,float(profile[3])*0.40*air*(2.0*hips_open-1.0))
 	author.rotate_world(pose,"pelvis",Vector3.BACK,float(profile[4])*0.45*(windup+0.55*drive*air))
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,-0.19*windup+0.25*finish_hold)
-	author.rotate_world(pose,"spine_03",Vector3.UP,-float(profile[3])*windup+(0.13 if crosscourt else 0.50)*finish_hold)
+	author.rotate_world(pose,"spine_03",Vector3.UP,-float(profile[3])*windup+aim_turn*finish_hold)
 	author.rotate_world(pose,"spine_03",Vector3.BACK,float(profile[4])*0.55*(windup+0.42*drive*air))
 
 	var scissor := smoothstep(0.24,0.88,progress)*(1.0-settle)
@@ -95,12 +97,12 @@ static func shape(pose: Array[Transform3D], author: RefCounted, profile: Array, 
 	var hand_release := smoothstep(lerpf(release_start,1.0,0.49),1.0,progress)
 	var pole := Vector3(-1.0,-0.12,-0.34).lerp(Vector3(-0.95,-0.08,0.48),hand_release)
 	var finish_target := SpikeArm.hip_finish(pose,author,crosscourt,float(profile[8])*0.19)
-	var strike_target := strike_wrist.lerp(finish_target,sweep)
-	strike_target += Vector3(-0.08,0.0,0.36)*sin(PI*sweep)
-	pole = pole.lerp(Vector3(-0.80,-0.15,0.64),sweep)
+	var strike_target := SpikeArm.follow_through_target(shoulder,strike_wrist,finish_target,sweep)
+	pole = pole.lerp(Vector3(-0.85,0.04,-0.33),sweep)
 	var strike_pose := pose.duplicate()
 	var strike_weight := rising*(1.0-smoothstep(0.59,0.95,landing))
-	author.limb(strike_pose,"upperarm_r","lowerarm_r","hand_r",strike_target,pole,strike_weight,lerpf(148.0,152.0,sweep))
+	author.limb(strike_pose,"upperarm_r","lowerarm_r","hand_r",strike_target,pole,strike_weight,lerpf(148.0,172.0,sweep))
+	SpikeArm.align_finish_wrist(strike_pose,author,sweep*strike_weight)
 
 	# Lead with the elbow while the bent forearm trails behind it.
 	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",chamber,Vector3(-1.0,-0.12,-0.34),air,108.0)

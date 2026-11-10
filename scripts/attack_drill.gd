@@ -475,7 +475,9 @@ func pose_bow_draw(weight: float, contact: Vector3, extension := 0.0, follow := 
 	var aim_turn := clampf(atan2(aim.x,aim.z),-0.48,0.48)
 	var power := swing_power if stage == Stage.HIT else swing_charge()
 	var rotation_weight := weight*torso_rotation_scale*lerpf(0.48,1.22,power)
-	var turn := lerpf(-0.57,0.42+aim_turn*0.52,chest_turn)+(0.34+aim_turn*0.38)*follow
+	var drive_turn := lerpf(-0.57,0.42+aim_turn*0.52,chest_turn)
+	var finish_turn := SpikeArm.follow_heading(swing_aim,setter.global_position,setter.global_rotation.y)*0.52
+	var turn := lerpf(drive_turn,finish_turn,follow)
 	var airborne := smoothstep(0.08,0.45,setter.position.y-jump.start.y)
 	var leg_release := smoothstep(0.32,1.0,extension)
 	var leg_turn := tanh(turn*rotation_weight*0.75)*0.32*leg_rotation_scale*airborne*leg_release

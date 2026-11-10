@@ -2,6 +2,10 @@ extends RefCounted
 
 const SWING_NAME := "06 Low Bow"
 
+static func follow_heading(target: Vector3, origin: Vector3, facing := 0.0) -> float:
+	var direction := target.lerp(Vector3(0.0,target.y,8.5),0.18)-origin
+	return clampf(angle_difference(facing,atan2(direction.x,direction.z)),-0.95,0.95)
+
 static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float, extension: float, follow: float, draw_progress: float, arm_lift: float, line_weight: float) -> void:
 	var shoulder: Vector3 = author.point(pose,"upperarm_r")
 	var draw := Vector3(0.04,0.40,0.08).lerp(Vector3(0.15,0.05,-0.12),draw_progress)
@@ -10,11 +14,11 @@ static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float,
 	var target := (shoulder+raised_draw).lerp(wrist_target,extension)
 	target += Vector3(-0.05,0.14,-0.10)*sin(PI*extension)
 	var finish := follow
-	target = target.lerp(hip_finish(pose,author,line_weight < 0.5),finish)
-	target += Vector3(-0.06,0.0,0.32)*sin(PI*finish)
+	target = follow_through_target(shoulder,target,hip_finish(pose,author,line_weight < 0.5),finish)
 	var elbow_pole := Vector3(-1.0,0.16,-0.84).lerp(Vector3(-0.75,0.38,-0.28),smoothstep(0.62,1.0,extension))
 	var elbow_limit := lerpf(112.0,158.0,smoothstep(0.29,0.98,extension))
-	elbow_limit = lerpf(elbow_limit,152.0,finish)
+	elbow_limit = lerpf(elbow_limit,172.0,finish)
+	elbow_pole = elbow_pole.lerp(Vector3(-0.85,0.04,-0.33),finish)
 	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",target,elbow_pole,weight,elbow_limit)
 	drop_low_bow_elbow(pose,author,weight*draw_progress*(1.0-arm_lift)*(1.0-smoothstep(0.0,0.48,extension)))
 	var wrist: Vector3 = author.point(pose,"hand_r")
@@ -27,11 +31,33 @@ static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float,
 	var roll := edge.signed_angle_to(target_edge,axis)
 	var roll_weight := weight*smoothstep(0.25,0.85,extension)*(1.0-0.65*follow)*smoothstep(0.0,0.30,down.length())
 	author.rotate_world(pose,"hand_r",axis,roll*roll_weight)
+	align_finish_wrist(pose,author,finish*weight)
 
 static func hip_finish(pose: Array, author: RefCounted, crosscourt: bool, clearance := 0.06) -> Vector3:
 	var hip: Vector3 = author.point(pose,"thigh_r" if crosscourt else "thigh_l")
 	var side := -1.0 if crosscourt else 1.0
-	return hip+Vector3(side*clearance,0.10,0.09)
+	return hip+Vector3(side*clearance,0.02,0.09)
+
+static func follow_through_target(shoulder: Vector3, contact: Vector3, hip: Vector3, progress: float) -> Vector3:
+	var start := contact-shoulder
+	var end := hip-shoulder
+	var forward := Vector3(-0.10,-0.12,1.0).normalized()
+	# Carry the wrist around the shoulder instead of cutting across its reach.
+	var from := start.normalized().slerp(forward,progress)
+	var toward := forward.slerp(end.normalized(),progress)
+	var direction := from.slerp(toward,progress)
+	var radius := lerpf(start.length(),end.length(),progress)+0.06*sin(PI*progress)
+	return shoulder+direction*radius
+
+static func align_finish_wrist(pose: Array, author: RefCounted, progress: float) -> void:
+	var amount := smoothstep(0.25,0.95,progress)
+	if amount <= 0.0: return
+	var wrist: Vector3 = author.point(pose,"hand_r")
+	var fingers: Vector3 = author.point(pose,"middle_01_r")
+	var elbow: Vector3 = author.point(pose,"lowerarm_r")
+	var relaxed := (wrist-elbow).normalized()
+	var direction := (fingers-wrist).normalized().slerp(relaxed,amount)
+	author.aim_joint(pose,"hand_r","middle_01_r",wrist+direction)
 
 static func drop_low_bow_elbow(pose: Array, author: RefCounted, weight: float) -> void:
 	if weight <= 0.0: return

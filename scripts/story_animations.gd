@@ -1023,6 +1023,7 @@ func bake_low_bow_starter(include_landing := false) -> Animation:
 		clip.set_meta("editor_height_cm",preview_player.height_cm)
 		clip.set_meta("study_ball_point",start_inverse*aim)
 		clip.set_meta("study_prep_duration",prep_duration)
+		clip.set_meta("study_base_aim",drill.swing_aim)
 	clip.set_meta("editor_start",start)
 	clip.set_meta("editor_group","Right Arm")
 	clip.set_meta("editor_frame_count",15)
