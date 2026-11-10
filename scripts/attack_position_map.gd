@@ -4,6 +4,7 @@ const START_COLOR := Color("62d9f0")
 const BALL_COLOR := Color("ffd477")
 const SHOT_COLOR := Color("ec9eff")
 const COURT_COLOR := Color("8caebc")
+const COURT_CENTER_Y := 101.0
 
 var drill: Node3D
 var drag_marker := ""
@@ -11,7 +12,7 @@ var drag_start := Vector2.ZERO
 var drag_offset := Vector2.ZERO
 
 func _ready() -> void:
-	custom_minimum_size.y = 358
+	custom_minimum_size.y = 262
 	mouse_filter = Control.MOUSE_FILTER_STOP
 
 func _process(_delta: float) -> void:
@@ -20,7 +21,7 @@ func _process(_delta: float) -> void:
 func _draw() -> void:
 	if not is_instance_valid(drill): return
 	var scale_ := court_scale()
-	var center := Vector2(size.x*0.5,126.0)
+	var center := Vector2(size.x*0.5,COURT_CENTER_Y)
 	var bounds := Rect2(center-Vector2(4.5,9.0)*scale_,Vector2(9.0,18.0)*scale_)
 	draw_rect(bounds,Color("243b49"))
 	draw_rect(bounds,COURT_COLOR,false,1.0)
@@ -44,21 +45,21 @@ func _draw() -> void:
 	draw_arc(shot,6.0,0.0,TAU,24,SHOT_COLOR,2.0,true)
 	draw_circle(shot,2.0,SHOT_COLOR)
 	var font := get_theme_default_font()
-	draw_arc(Vector2(16,343),4.5,0.0,TAU,24,SHOT_COLOR,1.5,true)
-	draw_string(font,Vector2(29,348),"Shot target",HORIZONTAL_ALIGNMENT_LEFT,-1,16,SHOT_COLOR)
+	draw_arc(Vector2(16,246),4.5,0.0,TAU,24,SHOT_COLOR,1.5,true)
+	draw_string(font,Vector2(29,251),"Shot target",HORIZONTAL_ALIGNMENT_LEFT,-1,16,SHOT_COLOR)
 	if drill.swing_practice:
-		draw_arc(Vector2(16,317),4.5,0.0,TAU,24,BALL_COLOR,1.5,true)
-		draw_string(font,Vector2(29,322),"Set target",HORIZONTAL_ALIGNMENT_LEFT,-1,16,BALL_COLOR)
-	draw_circle(Vector2(16,265),4.5,START_COLOR)
-	draw_string(font,Vector2(29,270),"Attacker start",HORIZONTAL_ALIGNMENT_LEFT,-1,16,START_COLOR)
-	draw_circle(Vector2(16,291),4.5,BALL_COLOR)
-	draw_string(font,Vector2(29,296),"Ball   %.2f m high" % ball.y,HORIZONTAL_ALIGNMENT_LEFT,-1,16,BALL_COLOR)
+		draw_arc(Vector2(16,226),4.5,0.0,TAU,24,BALL_COLOR,1.5,true)
+		draw_string(font,Vector2(29,231),"Set target",HORIZONTAL_ALIGNMENT_LEFT,-1,16,BALL_COLOR)
+	draw_circle(Vector2(16,186),4.5,START_COLOR)
+	draw_string(font,Vector2(29,191),"Attacker start",HORIZONTAL_ALIGNMENT_LEFT,-1,16,START_COLOR)
+	draw_circle(Vector2(16,206),4.5,BALL_COLOR)
+	draw_string(font,Vector2(29,211),"Ball   %.2f m high" % ball.y,HORIZONTAL_ALIGNMENT_LEFT,-1,16,BALL_COLOR)
 
 func court_scale() -> float:
-	return minf((size.x-24.0)/13.5,10.0)
+	return minf((size.x-24.0)/13.5,7.6)
 
 func court_point(point: Vector3) -> Vector2:
-	return Vector2(size.x*0.5,126.0)+Vector2(-point.x,4.0-point.z)*court_scale()
+	return Vector2(size.x*0.5,COURT_CENTER_Y)+Vector2(-point.x,4.0-point.z)*court_scale()
 
 func _gui_input(event: InputEvent) -> void:
 	if not is_instance_valid(drill): return

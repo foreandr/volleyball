@@ -373,8 +373,14 @@ func show_attack_positions() -> void:
 	attack_position_panel.name = "AttackPositions"
 	attack_position_panel.custom_minimum_size.x = 250
 	right_panel.get_parent().add_child(attack_position_panel)
+	var scroll := ScrollContainer.new()
+	scroll.name = "AttackPositionScroll"
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.follow_focus = true
+	attack_position_panel.add_child(scroll)
 	var positions := VBoxContainer.new()
-	attack_position_panel.add_child(positions)
+	positions.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(positions)
 	positions.add_child(label("Court positions",18))
 	var map := preload("res://scripts/attack_position_map.gd").new()
 	map.drill = setting_drill
