@@ -6,7 +6,7 @@ const BallTimingRing = preload("res://scripts/ball_timing_ring.gd")
 const Flight = preload("res://scripts/pass_flight.gd")
 const SideKneeSlide = preload("res://scripts/side_knee_slide.gd")
 const ForwardDive = preload("res://scripts/forward_reception_dive.gd")
-const BACKWARD_EDIT_ID := "d2_backward_starter"
+const BACKWARD_EDIT_ID := "d2_backward_from_d1"
 const Catalog = preload("res://scripts/volleyball_animations.gd")
 const MOVE_TYPES := {
 	"Forearm reception":["Forearm"],
@@ -848,40 +848,29 @@ func open_backward_editor() -> void:
 	get_tree().change_scene_to_file("res://scenes/animation_editor.tscn")
 
 func bake_backward_starter() -> Animation:
-	var start := Vector3(0.0,0.04,-3.4)
-	var target := start-Vector3.BACK*0.28
-	var contact := 29.0/60.0
-	var step_end := 0.25
+	reception_review.toggle_play()
+	reception_review.load_case(reception_review.SHORT_BACK)
 	var actor := preview_player
-	player_controls.set_active(false)
-	player_controls.clear_receive_transition()
-	actor.position = start
-	actor.rotation.y = 0.0
-	actor.model.rotation.y = 0.0
-	actor.animator.play("custom_preview/clip",0)
-	actor.animator.seek(0.0,true)
-	var ready: Array[Transform3D] = player_controls.snapshot_receive_pose()
-	var step_pose := ready.duplicate()
+	var start := actor.position
 	var rig: Skeleton3D = actor.skeleton
-	var sample := func(time: float) -> Array[Transform3D]:
-		var pose: Array[Transform3D] = ready.duplicate()
-		if time > 0.0 and time <= step_end:
-			player_controls.move_cpu_toward(target-actor.position,1.0/60.0,false)
-			pose = player_controls.snapshot_receive_pose()
-			step_pose.assign(pose)
-		elif time > step_end:
-			var settle := smoothstep(step_end,0.40,time)
-			for bone in pose.size(): pose[bone] = step_pose[bone].interpolate_with(ready[bone],settle)
-		var root_pose := pose[0]
-		root_pose.origin += rig.global_basis.inverse()*(actor.position-start)
-		pose[0] = root_pose
-		return pose
-	var clip: Animation = actor.get_pose_author().bake({"name":"D2 backward lunge","duration":1.0,"contact_time":contact},sample)
+	var start_inverse := rig.global_transform.affine_inverse()
 	var chest := rig.find_bone("spine_03")
-	var aim := rig.to_global(rig.get_bone_global_pose(chest).origin)+Vector3(0.0,0.12,0.24)
+	var contact: float = reception_review.FEED_TIME
+	var contact_point := [Vector3.ZERO]
+	var sample := func(time: float) -> Array[Transform3D]:
+		if time > 0.0: reception_review.step(1.0/60.0)
+		if is_equal_approx(time,contact):
+			contact_point[0] = rig.to_global(rig.get_bone_global_pose(chest).origin)+Vector3(0.0,0.12,0.24)
+		var pose: Array[Transform3D] = player_controls.snapshot_receive_pose()
+		# Preserve the D1 shuffle's root travel and facing in the editor timeline.
+		pose[0] = start_inverse*rig.global_transform*pose[0]
+		return pose
+	var clip: Animation = actor.get_pose_author().bake({"name":"D2 backward lunge","duration":1.4,"contact_time":contact},sample)
+	reception_review.stop(false)
 	var incoming := Vector3(0.0,-4.6,-5.0)
 	var acceleration := Vector3.DOWN*Flight.GRAVITY
 	var duration := 0.55
+	var aim: Vector3 = contact_point[0]
 	clip.set_meta("editor_start",start)
 	clip.set_meta("editor_feed",{"aim":aim,"incoming":incoming,"acceleration":acceleration,"duration":duration,
 		"start":aim-incoming*duration+acceleration*0.5*duration*duration,"side":Vector3.RIGHT,"valid":true,"require_platform":true})
