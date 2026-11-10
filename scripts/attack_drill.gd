@@ -432,9 +432,6 @@ func pose_bow_draw(weight: float, contact: Vector3, extension := 0.0, follow := 
 	var power := swing_power if stage == Stage.HIT else swing_charge()
 	var rotation_weight := weight*torso_rotation_scale*lerpf(0.48,1.22,power)
 	var turn := lerpf(-0.57,0.42+aim_turn*0.52,chest_turn)+(0.34+aim_turn*0.38)*follow
-	author.rotate_world(pose,"spine_01",Vector3.UP,turn*0.20*rotation_weight)
-	author.rotate_world(pose,"spine_02",Vector3.UP,turn*0.34*rotation_weight)
-	author.rotate_world(pose,"spine_03",Vector3.UP,turn*0.46*rotation_weight)
 	var tuck := clampf(smoothstep(0.08,0.45,setter.position.y-jump.start.y)*weight*(1.0-0.75*follow)*leg_kickback_scale,0.0,1.0)
 	if tuck > 0.0:
 		for side in ["l","r"]:
@@ -461,6 +458,9 @@ func pose_bow_draw(weight: float, contact: Vector3, extension := 0.0, follow := 
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,pitch*0.38)
 	author.rotate_world(pose,"spine_01",Vector3.BACK,roll*0.62)
 	author.rotate_world(pose,"spine_02",Vector3.BACK,roll*0.38)
+	# Twist the ribcage around its own axis so the lean stays independent.
+	var chest_axis: Vector3 = (author.point(pose,"neck_01")-author.point(pose,"spine_03")).normalized()
+	author.rotate_world(pose,"spine_03",chest_axis,clampf(turn*rotation_weight,-1.45,1.45))
 	right_shoulder = author.point(pose,"upperarm_r")
 	var draw_hand := right_shoulder+Vector3(0.04,0.34,-0.15)
 	var wrist_target := ball_target-(ball_target-right_shoulder).normalized()*0.06
