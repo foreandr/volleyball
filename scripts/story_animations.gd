@@ -949,6 +949,11 @@ func handle_middle_arrow(event: InputEvent) -> bool:
 		return true
 	return false
 
+func aim_attack_shot(screen_position: Vector2) -> void:
+	var point: Vector2 = setup_drag.screen_position(screen_position)
+	var hit: Variant = Plane(Vector3.UP,0.055).intersects_ray(preview_camera.project_ray_origin(point),preview_camera.project_ray_normal(point))
+	if hit is Vector3 and hit.z >= setting_drill.SHOT_AIM_NEAR: setting_drill.aim_swing(hit)
+
 func handle_preview_input(event: InputEvent) -> void:
 	if is_instance_valid(setting_drill):
 		if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
@@ -956,6 +961,8 @@ func handle_preview_input(event: InputEvent) -> void:
 		elif event is InputEventMouseMotion:
 			if event.button_mask & MOUSE_BUTTON_MASK_MIDDLE:
 				orbit_setting_camera(event.relative)
+			elif selected_category == "Attacking" and event.button_mask & MOUSE_BUTTON_MASK_LEFT:
+				aim_attack_shot(event.position)
 			elif setting_drill.can_aim_set():
 				var point: Vector2 = setup_drag.screen_position(event.position)
 				var hit: Variant = Plane(Vector3.UP,0.055).intersects_ray(preview_camera.project_ray_origin(point),preview_camera.project_ray_normal(point))
@@ -964,9 +971,7 @@ func handle_preview_input(event: InputEvent) -> void:
 					else: setting_drill.bump.destination = Court.clamp_set_aim(hit)
 		elif event is InputEventMouseButton and event.pressed:
 			if event.button_index == MOUSE_BUTTON_LEFT and selected_category == "Attacking":
-				var point: Vector2 = setup_drag.screen_position(event.position)
-				var hit: Variant = Plane(Vector3.UP,0.055).intersects_ray(preview_camera.project_ray_origin(point),preview_camera.project_ray_normal(point))
-				if hit is Vector3 and hit.z >= setting_drill.SHOT_AIM_NEAR: setting_drill.aim_swing(hit)
+				aim_attack_shot(event.position)
 				setting_drill.swing_input(true)
 			elif event.button_index in [MOUSE_BUTTON_WHEEL_UP,MOUSE_BUTTON_WHEEL_DOWN]:
 				var wheel := (1.0 if event.button_index == MOUSE_BUTTON_WHEEL_UP else -1.0)*maxf(0.1,event.factor)

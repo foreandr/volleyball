@@ -61,16 +61,21 @@ func court_scale() -> float:
 func court_point(point: Vector3) -> Vector2:
 	return Vector2(size.x*0.5,COURT_CENTER_Y)+Vector2(-point.x,4.0-point.z)*court_scale()
 
+func map_to_court(position_: Vector2) -> Vector3:
+	var offset := (position_-court_point(Vector3.ZERO))/court_scale()
+	return Vector3(-offset.x,0.0,-offset.y)
+
 func _gui_input(event: InputEvent) -> void:
 	if not is_instance_valid(drill): return
 	if event is InputEventMouseMotion and not drag_marker.is_empty():
-		drag_offset += event.relative
+		if drag_marker == "shot": drill.aim_swing(map_to_court(event.position))
+		else: drag_offset += event.relative
 		accept_event()
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if event.pressed:
-			var offset: Vector2 = (event.position-court_point(Vector3.ZERO))/court_scale()
-			var point := Vector3(-offset.x,0.0,-offset.y)
+			var point := map_to_court(event.position)
 			if absf(point.x) <= drill.SHOT_AIM_HALF_WIDTH and point.z >= drill.SHOT_AIM_NEAR and point.z <= drill.SHOT_AIM_FAR:
+				drag_marker = "shot"
 				drill.aim_swing(point)
 				accept_event()
 				return
@@ -83,6 +88,9 @@ func _gui_input(event: InputEvent) -> void:
 			drag_marker = "target" if target_distance < start_distance else "start"
 			drag_start = target if drag_marker == "target" else start
 			drag_offset = Vector2.ZERO
+		elif drag_marker == "shot":
+			drag_marker = ""
+			accept_event()
 		elif not drag_marker.is_empty():
 			var shift := Vector3(-drag_offset.x,0.0,-drag_offset.y)/court_scale()
 			if shift.length_squared() > 0.0001:
