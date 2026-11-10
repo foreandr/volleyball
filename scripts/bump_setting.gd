@@ -35,6 +35,7 @@ var reach_step := Vector3.ZERO
 var reach_travel := Vector3.ZERO
 var rear_setup := Vector3.ZERO
 var rear_setup_travel := Vector3.ZERO
+var rear_follow := 0.0
 var reach_progress := 0.0
 var destination := Vector2(2.75,3.0)
 var height := 3.8
@@ -312,8 +313,10 @@ func update_hand_push(time: float, follow: float) -> void:
 	var extension := smoothstep(0.045*scale_,delay,follow)
 	var force := smoothstep(4.0,10.0,outgoing.length())
 	var push := outgoing.normalized()*lerpf(0.12,0.33,force)*extension
-	var blend := 1.0-smoothstep(0.17,0.32,follow)
-	HandPose.apply(setter,setter.to_global(hand_anchor),blend,push,cushion)
+	var blend := 1.0-smoothstep(0.22,0.32,follow)
+	var after_release := time-release_time if is_finite(release_time) else 0.0
+	var torso_follow := smoothstep(0.0,0.10,after_release)
+	HandPose.apply(setter,setter.to_global(hand_anchor),blend,push,cushion,torso_follow)
 	if follow >= delay and not is_finite(release_time):
 		release_time = time
 		release_point = platform_center()
@@ -338,6 +341,7 @@ func clear_reach() -> void:
 	reach_progress = 0.0
 	rear_setup = Vector3.ZERO
 	rear_setup_travel = Vector3.ZERO
+	rear_follow = 0.0
 
 func advance_reach(path: Callable, time: float, end: float, delta: float) -> Vector3:
 	var intercept := Vector3.INF
@@ -350,7 +354,7 @@ func advance_reach(path: Callable, time: float, end: float, delta: float) -> Vec
 			plan_reach(intercept-ready_contact())
 	if not reach.is_empty():
 		var before := reach_progress
-		var duration := 0.27 if not rear_setup.is_zero_approx() else (0.19 if reach.tier == 2 else 0.15)
+		var duration := 0.27 if reach.side_lunge and not rear_setup.is_zero_approx() else (0.19 if reach.tier == 2 else 0.15)
 		reach_progress = minf(1.0,reach_progress+delta/duration)
 		var origin := setter.position
 		var setup := rear_setup*(smoothstep(0.0,0.50,reach_progress)-smoothstep(0.0,0.50,before))
@@ -388,12 +392,16 @@ func plan_reach(offset: Vector3) -> void:
 		var forward_axis := setter.basis.z.normalized()
 		rear_setup = forward_axis*clampf(horizontal.dot(forward_axis),-0.48,0.0)
 		reach_step = horizontal.slide(forward_axis).limit_length(0.68)
+	elif straight_back and tier == 2:
+		rear_setup = reach_step.normalized()*minf(0.28,reach_step.length()*0.52)
+		reach_step -= rear_setup
 
 func backward_reach_active() -> bool:
-	return reach.get("backward",false) and grade == Timing.Grade.WAITING
+	return reach.get("backward",false) and (grade == Timing.Grade.WAITING or (is_finite(touch_time) and rear_follow < 0.25))
 
 func follow_forearm(time: float, incoming: Vector3) -> void:
 	var follow := time-touch_time
+	rear_follow = follow
 	if follow <= 0.0 or follow >= FOREARM_RECOVERY_TIME: return
 	var blend := 1.0-smoothstep(0.13,FOREARM_RECOVERY_TIME,follow)
 	apply_pose(contact_frame+follow,blend)
@@ -414,7 +422,9 @@ func pose_reach(weight: float, intercept: Vector3) -> void:
 				clampf(reach_progress/0.50,0.0,1.0),ready_pose,shuffle,false,0,intercept)
 		weight *= smoothstep(0.0,0.65,pose_progress)
 	if weight > 0.0:
-		setter.pose_reception_reach(local*reach_step,local*reach_travel,weight,pose_progress,ready_pose,reach,false,0,intercept)
+		var planted_travel := reach_travel
+		if is_finite(touch_time): planted_travel *= 1.0-smoothstep(0.10,0.40,rear_follow)
+		setter.pose_reception_reach(local*reach_step,local*planted_travel,weight,pose_progress,ready_pose,reach,false,0,intercept)
 
 func reach_platform(offset: Vector3) -> void:
 	var rig: Skeleton3D = setter.skeleton

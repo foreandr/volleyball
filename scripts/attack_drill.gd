@@ -221,10 +221,11 @@ func play_cpu_set(time: float, delta: float) -> void:
 	var travel := (cpu_stand-receiver.position).limit_length(3.2*delta)
 	receiver.position += travel
 	var toward_ball := (ball.position-receiver.position).slide(Vector3.UP)
-	var turn_rate := 7.0*smoothstep(0.25,0.95,toward_ball.length())
-	if turn_rate > 0.0:
-		receiver.rotation.y = rotate_toward(receiver.rotation.y,atan2(toward_ball.x,toward_ball.z),delta*turn_rate)
-	cpu_feet.step(receiver.basis.inverse()*travel/maxf(delta*3.2,0.001),delta,1.4)
+	if toward_ball.length_squared() < 0.09 and travel.is_zero_approx():
+		toward_ball = (pass_origin-cpu_contact_point).slide(Vector3.UP)
+	if not toward_ball.is_zero_approx():
+		receiver.rotation.y = rotate_toward(receiver.rotation.y,atan2(toward_ball.x,toward_ball.z),delta*9.0)
+	cpu_feet.step(receiver.basis.inverse()*travel/maxf(delta*3.2,0.001),delta,1.4,true)
 	var lead := cpu_contact_time-time
 	if lead <= 0.22:
 		HandPose.apply(receiver,cpu_contact_point,1.0-smoothstep(0.0,0.22,lead))
