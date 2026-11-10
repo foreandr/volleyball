@@ -345,7 +345,7 @@ func start_setting_drill(attack := false) -> void:
 	setting_drill.configure(preview_player,drill_status,modes.selected == 1,build_label)
 	if attack:
 		setting_drill.bump.set_custom_backward(load_custom_backward_clip())
-		add_spike_swing_picker()
+		add_low_bow_controls()
 		add_attack_pose_slider("Torso rotation","TorsoRotation",50,setting_drill.torso_rotation_scale,
 			func(value: float): setting_drill.torso_rotation_scale = value)
 		add_attack_pose_slider("Leg kickback","LegKickback",0,setting_drill.leg_kickback_scale,
@@ -353,33 +353,17 @@ func start_setting_drill(attack := false) -> void:
 	add_torso_lean_slider()
 	preview.grab_focus()
 
-func add_spike_swing_picker() -> void:
-	content.add_child(label("Right-arm swing",16))
-	var picker := OptionButton.new()
-	picker.name = "SpikeSwing"
-	for index in setting_drill.SpikeArm.VARIANTS.size():
-		picker.add_item("%02d  %s" % [index+1,setting_drill.SpikeArm.VARIANTS[index][0]])
-	picker.item_selected.connect(func(index: int):
-		setting_drill.swing_variant = index
-		if setting_drill.swing_review: setting_drill.set_swing_review(true,true)
+func add_low_bow_controls() -> void:
+	content.add_child(label(setting_drill.SpikeArm.SWING_NAME,16))
+	var loop := button("Loop Low Bow",func():
+		setting_drill.set_swing_review(not setting_drill.swing_review)
 		preview.grab_focus())
-	content.add_child(picker)
-	var play_all := button("Play all swings",func():
-		setting_drill.set_swing_review(not setting_drill.swing_review or setting_drill.loop_selected_swing)
-		preview.grab_focus())
-	play_all.name = "PlayAllSwings"
-	var loop_selected := button("Loop selected swing",func():
-		setting_drill.set_swing_review(not setting_drill.loop_selected_swing,true)
-		preview.grab_focus())
-	loop_selected.name = "LoopSelectedSwing"
+	loop.name = "LoopLowBow"
 	setting_drill.swing_review_changed.connect(func():
-		picker.select(setting_drill.swing_variant)
-		play_all.disabled = not setting_drill.swing_practice
-		play_all.text = "Stop swing review" if setting_drill.swing_review and not setting_drill.loop_selected_swing else "Play all swings"
-		loop_selected.disabled = not setting_drill.swing_practice
-		loop_selected.text = "Stop looping swing" if setting_drill.loop_selected_swing else "Loop selected swing")
-	content.add_child(play_all)
-	content.add_child(loop_selected)
+		loop.disabled = not setting_drill.swing_practice
+		loop.text = "Stop looping" if setting_drill.swing_review else "Loop Low Bow")
+	loop.disabled = not setting_drill.swing_practice
+	content.add_child(loop)
 	content.add_child(button("Edit 06 Low Bow",open_low_bow_editor))
 
 func add_torso_lean_slider() -> void:
@@ -950,7 +934,6 @@ func open_low_bow_editor() -> void:
 func bake_low_bow_starter() -> Animation:
 	var drill = setting_drill
 	drill.set_swing_practice(true)
-	drill.swing_variant = 5
 	drill.aim_swing(Vector3(2.0,0.0,10.5))
 	drill.swing_input(true)
 	var start := preview_player.position

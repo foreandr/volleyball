@@ -73,7 +73,7 @@ var arm_swing_weight := 0.0
 var trace := Trace.new()
 var trace_input := Vector2.ZERO
 var trace_sprint := false
-var torso_lean_degrees := -10.0
+var torso_lean_degrees := -30.0
 var torso_before_lean := {}
 var trace_move_scale := 1.0
 

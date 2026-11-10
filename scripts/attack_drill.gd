@@ -23,9 +23,7 @@ const PALM_RADIUS := 0.065
 const SWING_FOLLOW_TIME := 0.30
 var stage := Stage.SERVE
 var swing_practice := true
-var swing_variant := 0
 var swing_review := false
-var loop_selected_swing := false
 var torso_rotation_scale := 2.0
 var leg_kickback_scale := 2.0
 var swing_button_down := false
@@ -112,19 +110,10 @@ func set_swing_practice(enabled: bool) -> void:
 	swing_button_down = false
 	reset_feed()
 
-func set_swing_review(enabled: bool, loop_selected := false) -> void:
+func set_swing_review(enabled: bool) -> void:
 	swing_review = enabled and swing_practice
-	loop_selected_swing = swing_review and loop_selected
-	if swing_review:
-		if not loop_selected_swing: swing_variant = 0
-		reset_feed()
+	if swing_review: reset_feed()
 	swing_review_changed.emit()
-
-func finish_swing_rep() -> void:
-	if swing_review and not loop_selected_swing:
-		swing_variant = (swing_variant+1)%SpikeArm.VARIANTS.size()
-		swing_review_changed.emit()
-	reset_feed()
 
 func start_swing_practice() -> void:
 	stage = Stage.SET
@@ -254,7 +243,7 @@ func step(delta: float) -> void:
 			play_pin_ball(time,previous,delta)
 		Stage.HIT: play_spike(time)
 		Stage.MISS:
-			if time >= (0.26 if swing_practice else 0.85): finish_swing_rep()
+			if time >= (0.26 if swing_practice else 0.85): reset_feed()
 	if stage == Stage.SERVE or stage == Stage.SET: trace.check_contact(bump.contact_check)
 	if clock >= trace.next_sample: trace.sample(clock,trace_snapshot(clock-stage_start))
 
@@ -425,7 +414,7 @@ func hit_spike(charge: float, point: Vector3) -> void:
 	region.hide()
 	timing_cue.hide()
 	status.text = "Spike  |  %d%% power" % roundi(charge*100.0)
-	trace.write("spike",clock,{"point":swing_contact,"aim":swing_aim,"velocity":pass_motion,"power":charge,"swing":SpikeArm.VARIANTS[swing_variant][0],"palm_speed":swing_impact_speed,"peak_palm_speed":swing_hand_speed,"net":not swing_net_hit.is_empty()},true)
+	trace.write("spike",clock,{"point":swing_contact,"aim":swing_aim,"velocity":pass_motion,"power":charge,"swing":SpikeArm.SWING_NAME,"palm_speed":swing_impact_speed,"peak_palm_speed":swing_hand_speed,"net":not swing_net_hit.is_empty()},true)
 
 func play_spike(time: float) -> void:
 	var end := flight_end if swing_net_hit.is_empty() else float(swing_net_hit.end_time)
@@ -436,7 +425,7 @@ func play_spike(time: float) -> void:
 		ball.position = flight_point(pass_origin,pass_motion,minf(time,end))
 	if time < SWING_FOLLOW_TIME:
 		pose_bow_draw(1.0-smoothstep(0.11,SWING_FOLLOW_TIME,time),swing_contact,1.0,smoothstep(0.0,0.16,time))
-	if time >= end+(0.22 if swing_practice else 0.48) and not jump.active: finish_swing_rep()
+	if time >= end+(0.22 if swing_practice else 0.48) and not jump.active: reset_feed()
 
 func pose_bow_draw(weight: float, contact: Vector3, extension := 0.0, follow := 0.0) -> void:
 	var rig: Skeleton3D = setter.skeleton
@@ -489,7 +478,7 @@ func pose_bow_draw(weight: float, contact: Vector3, extension := 0.0, follow := 
 	# Twist the ribcage around its own axis so the lean stays independent.
 	var chest_axis: Vector3 = (author.point(pose,"neck_01")-author.point(pose,"spine_03")).normalized()
 	author.rotate_world(pose,"spine_03",chest_axis,clampf(turn*rotation_weight,-1.45,1.45))
-	SpikeArm.apply(pose,author,swing_variant,ball_target,weight,extension,follow,power)
+	SpikeArm.apply(pose,author,ball_target,weight,extension,follow)
 	var left_shoulder: Vector3 = author.point(pose,"upperarm_l")
 	var guide_drop := 0.78*smoothstep(0.07,1.0,extension)+0.22*follow
 	var guide_hand := left_shoulder+Vector3(0.06,0.43,0.64).lerp(Vector3(0.12,-0.46,0.12),guide_drop)
