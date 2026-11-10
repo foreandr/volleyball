@@ -1,7 +1,5 @@
 extends "res://scripts/setting_drill.gd"
 
-signal swing_review_changed
-
 const Court = preload("res://scripts/preview_court.gd")
 const SpikeArm = preload("res://scripts/spike_arm_swing.gd")
 const HandPose = preload("res://scripts/hand_setting_pose.gd")
@@ -30,11 +28,9 @@ var swing_practice := true
 var practice_takeoff := PIN+Vector3(-0.70,RECEIVE_START.y-PIN.y,-0.98)
 var practice_set_target := PIN
 var practice_setup_path := "user://attack_practice.cfg"
-var swing_review := false
 var torso_rotation_scale := 2.0
 var leg_kickback_scale := 2.0
 var leg_rotation_scale := 1.0
-var swing_button_down := false
 var stage_start := 0.0
 var serve_target: Vector3
 var pass_origin: Vector3
@@ -137,14 +133,7 @@ func reset_feed() -> void:
 
 func set_swing_practice(enabled: bool) -> void:
 	swing_practice = enabled
-	set_swing_review(false)
-	swing_button_down = false
 	reset_feed()
-
-func set_swing_review(enabled: bool) -> void:
-	swing_review = enabled and swing_practice
-	if swing_review: reset_feed()
-	swing_review_changed.emit()
 
 func start_swing_practice() -> void:
 	stage = Stage.SET
@@ -166,8 +155,8 @@ func start_swing_practice() -> void:
 	region.show()
 	aim_swing(swing_aim)
 	swing_target.show()
-	if swing_button_down or swing_review: swing_started = clock
-	status.text = "Hold left-click to swing"
+	swing_started = clock
+	status.text = ""
 	trace.begin_feed({"mode":"swing_practice","source":pass_origin,"velocity":pass_motion,"pin":practice_set_target,"takeoff":practice_takeoff})
 
 func set_key() -> int:
@@ -214,8 +203,7 @@ func aim_swing(point: Vector3) -> void:
 	swing_target.position = Vector3(swing_aim.x,0.065,swing_aim.z)
 
 func swing_input(pressed: bool) -> void:
-	swing_button_down = pressed
-	if stage != Stage.SET: return
+	if swing_practice or stage != Stage.SET: return
 	if not pressed:
 		if is_finite(swing_started) and not is_finite(swing_released): swing_released = clock
 		return

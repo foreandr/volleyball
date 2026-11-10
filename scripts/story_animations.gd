@@ -311,7 +311,8 @@ func start_setting_drill(attack := false) -> void:
 	controls_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	var show_mode := func(index: int):
 		if attack:
-			controls_hint.text = "Hold left-click to swing\nAim on the far court" if index == 0 else "WASD to move  |  Q forearms  |  I / E hands\nMouse to aim  |  Scroll for pass height\nSpace to jump  |  Hold left-click to spike"
+			controls_hint.visible = index != 0
+			controls_hint.text = "WASD to move  |  Q forearms  |  I / E hands\nMouse to aim  |  Shift + scroll for pass height\nSpace to jump  |  Hold left-click to spike"
 			return
 		controls_hint.text = "WASD to move  |  Tap Q to bump set\nMouse to aim  |  Scroll to change height" if index == 1 else "WASD to move  |  Tap E to set\nMouse to aim  |  Scroll to change height\nSpace jump  |  7 to 50 in"
 	show_mode.call(modes.selected)
@@ -400,15 +401,6 @@ func show_attack_positions() -> void:
 
 func add_low_bow_controls() -> void:
 	content.add_child(label(setting_drill.SpikeArm.SWING_NAME,16))
-	var loop := button("Loop Low Bow",func():
-		setting_drill.set_swing_review(not setting_drill.swing_review)
-		preview.grab_focus())
-	loop.name = "LoopLowBow"
-	setting_drill.swing_review_changed.connect(func():
-		loop.disabled = not setting_drill.swing_practice
-		loop.text = "Stop looping" if setting_drill.swing_review else "Loop Low Bow")
-	loop.disabled = not setting_drill.swing_practice
-	content.add_child(loop)
 	var studies := OptionButton.new()
 	studies.name = "SwingStudies"
 	studies.add_item("06 Low Bow")
@@ -1015,7 +1007,6 @@ func bake_low_bow_starter(include_landing := false, shot_target := Vector3(2.0,0
 	var drill = setting_drill
 	drill.set_swing_practice(true)
 	drill.aim_swing(shot_target)
-	drill.swing_input(true)
 	var start := preview_player.position
 	var rig: Skeleton3D = preview_player.skeleton
 	var start_inverse := rig.global_transform.affine_inverse()
