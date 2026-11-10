@@ -399,12 +399,19 @@ func show_attack_positions() -> void:
 	slow_motion.toggled.connect(func(_enabled: bool): update_speed.call())
 	update_speed.call()
 
-	add_attack_tuning_slider(positions,"Draw delay","LowBowDrawDelay","ms",180,5,setting_drill.draw_delay*1000.0,
+	var delay := add_attack_tuning_slider(positions,"Draw delay","LowBowDrawDelay","ms",180,5,setting_drill.draw_delay*1000.0,
 		func(value: float): setting_drill.draw_delay = value/1000.0)
-	add_attack_tuning_slider(positions,"Elbow clearance","AttackElbowClearance","cm",36,1,setting_drill.elbow_clearance*100.0,
+	var clearance := add_attack_tuning_slider(positions,"Elbow clearance","AttackElbowClearance","cm",36,1,setting_drill.elbow_clearance*100.0,
 		func(value: float): setting_drill.elbow_clearance = value/100.0)
 
-func add_attack_tuning_slider(panel_content: VBoxContainer, caption: String, node_name: String, units: String, maximum: float, step: float, initial: float, apply: Callable) -> void:
+	var reset := button("Reset swing tuning",func():
+		delay.value = setting_drill.SpikeArm.DEFAULT_DRAW_DELAY*1000.0
+		clearance.value = setting_drill.SpikeArm.DEFAULT_ELBOW_CLEARANCE*100.0
+		preview.grab_focus())
+	reset.name = "ResetAttackTuning"
+	positions.add_child(reset)
+
+func add_attack_tuning_slider(panel_content: VBoxContainer, caption: String, node_name: String, units: String, maximum: float, step: float, initial: float, apply: Callable) -> HSlider:
 	var readout := label("",16)
 	panel_content.add_child(readout)
 	var slider := HSlider.new()
@@ -420,6 +427,7 @@ func add_attack_tuning_slider(panel_content: VBoxContainer, caption: String, nod
 		readout.text = "%s  %d %s" % [caption,roundi(value),units]
 	slider.value_changed.connect(update)
 	update.call(slider.value)
+	return slider
 
 func add_low_bow_controls() -> void:
 	content.add_child(label(setting_drill.SpikeArm.SWING_NAME,16))
