@@ -5,7 +5,7 @@ const LOAD_TIME := 0.24
 const FULL_AIR_TIME := 0.91
 const LAND_TIME := 0.16
 const FULL_HEIGHT := 1.016
-const TAP_HEIGHT := 0.34
+const TAP_HEIGHT := 0.18
 const AIR_STEER_SPEED := 1.00
 const AIR_STEER_ACCELERATION := 5.0
 var active := false
@@ -25,6 +25,7 @@ func begin(actor: Node3D, input: Vector2) -> void:
 	active = true
 	held = true
 	hold_time = 0.0
+	height = TAP_HEIGHT
 	elapsed = 0.0
 	air_velocity = Vector3.ZERO
 	air_offset = Vector3.ZERO

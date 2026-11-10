@@ -47,6 +47,7 @@ var middle_dragged := false
 var drill_status: Label
 var distance_status: Label
 var preview_overlay: Control
+var jump_height_meter: Control
 var marker_popup: Label
 var marker_fade: Tween
 var pass_timing_cue: Node3D
@@ -66,6 +67,8 @@ func _ready() -> void:
 	preview_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	preview.get_parent().add_child(preview_overlay)
 	build_marker_popup()
+	jump_height_meter = preload("res://scripts/jump_height_meter.gd").new()
+	preview_overlay.add_child(jump_height_meter)
 	pass_timing_cue = BallTimingRing.new()
 	preview_player.get_parent().add_child(pass_timing_cue)
 	reception_review = preload("res://scripts/reception_review.gd").new(self)
@@ -286,7 +289,7 @@ func start_setting_drill() -> void:
 	var controls_hint := label("",16)
 	controls_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	var show_mode := func(index: int):
-		controls_hint.text = "WASD to move  |  Tap Q to bump set\nMouse to aim  |  Scroll to change height" if index == 1 else "WASD to move  |  Tap E to catch\nHold Space to jump higher"
+		controls_hint.text = "WASD to move  |  Tap Q to bump set\nMouse to aim  |  Scroll to change height" if index == 1 else "WASD to move  |  Tap E to catch\nSpace jump  |  7 to 40 in"
 	show_mode.call(modes.selected)
 	modes.item_selected.connect(func(index: int):
 		type_indices["Setting"] = index
@@ -323,6 +326,7 @@ func stop_setting_drill() -> void:
 	if not is_instance_valid(setting_drill): return
 	if marker_fade != null: marker_fade.kill()
 	marker_popup.hide()
+	jump_height_meter.hide()
 	setting_drill.queue_free()
 	setting_drill = null
 	preview_player.transform = setter_original_transform
@@ -457,6 +461,7 @@ func _process(delta: float) -> void:
 			player_controls.move_player(setting_drill.trace_input,delta,false,setting_drill.ball.global_position,setting_drill.trace_move_scale)
 			setting_drill.apply_setter_arms(player_controls.footwork.phase,player_controls.moving,delta)
 		setting_drill.step_jump(delta)
+		update_jump_height_meter()
 		var jump_lift: float = preview_player.position.y-setting_drill.jump.start.y if setting_drill.jump.active else 0.0
 		player_controls.stamina_ring.set_airborne_lift(jump_lift)
 		var was_diving: bool = setting_drill.bump.low_save.active
@@ -542,6 +547,15 @@ func _process(delta: float) -> void:
 			pass_timing_cue.show_result(ball_preview.practice_grade)
 		else:
 			pass_timing_cue.update_timing(preview_clock-source_time,ball_preview.feed_duration,BallPreview.GREEN_START,BallPreview.GREEN_END,not ball_preview.recovery.is_empty() or not ball_preview.incoming_net.is_empty())
+
+func update_jump_height_meter() -> void:
+	var jump = setting_drill.jump
+	if not jump.active:
+		jump_height_meter.hide()
+		return
+	var feet := Vector3(preview_player.global_position.x,jump.start.y,preview_player.global_position.z)
+	var projected := preview_camera.unproject_position(feet)*preview.size/Vector2(preview_camera.get_viewport().size)
+	jump_height_meter.show_height(projected,preview.size,jump.height,jump.FULL_HEIGHT)
 
 func set_cpu_arrows_pinned(pinned: bool) -> void:
 	var arrows: MeshInstance3D = preview_player.get_node("DirectionArrows")
