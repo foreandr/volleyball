@@ -306,7 +306,7 @@ func step_bump(time: float, previous: float, delta: float) -> void:
 		if not bump_enabled:
 			if after_touch <= bump.floor_time:
 				var caught: Vector3 = bump.touch
-				ball.position = caught.lerp(bump.platform_center(),smoothstep(0.0,0.075,after_touch))
+				ball.position = caught.lerp(bump.platform_center(),smoothstep(0.0,0.115,after_touch))
 			else:
 				rep += 1
 				reset_feed()

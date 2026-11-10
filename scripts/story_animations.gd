@@ -1,6 +1,7 @@
 extends "res://scripts/create.gd"
 const BallPreview = preload("res://scripts/animation_ball_preview.gd")
 const Court = preload("res://scripts/preview_court.gd")
+const SETTING_CAMERA_FOCUS := Vector3(0,1.45,2.6)
 const BallTimingRing = preload("res://scripts/ball_timing_ring.gd")
 const Flight = preload("res://scripts/pass_flight.gd")
 const SideKneeSlide = preload("res://scripts/side_knee_slide.gd")
@@ -316,7 +317,7 @@ func start_setting_drill() -> void:
 	player_controls.side_steps.active = false
 	player_controls.indicator.text = "Setter"
 	preview_camera.position = Vector3(0,7.5,-11.2)
-	preview_camera.look_at(Vector3(0,1.45,2.6))
+	preview_camera.look_at(SETTING_CAMERA_FOCUS)
 	setting_drill = preload("res://scripts/setting_drill.gd").new()
 	preview_player.get_parent().add_child(setting_drill)
 	setting_drill.configure(preview_player,drill_status,modes.selected == 1,build_label)
@@ -768,16 +769,16 @@ func handle_preview_input(event: InputEvent) -> void:
 	if is_instance_valid(setting_drill):
 		if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
 			open_menu()
-		elif setting_drill.bump_enabled:
-			if event is InputEventMouseMotion:
-				if event.button_mask & MOUSE_BUTTON_MASK_MIDDLE:
-					adjust_bump_height(-event.relative.y*0.018)
-				else:
-					var point: Vector2 = setup_drag.screen_position(event.position)
-					var hit: Variant = Plane(Vector3.UP,0.055).intersects_ray(preview_camera.project_ray_origin(point),preview_camera.project_ray_normal(point))
-					if hit is Vector3:
-						setting_drill.bump.destination = Court.clamp_set_aim(hit)
-			elif event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_WHEEL_UP,MOUSE_BUTTON_WHEEL_DOWN]:
+		elif event is InputEventMouseMotion:
+			if event.button_mask & MOUSE_BUTTON_MASK_MIDDLE:
+				orbit_setting_camera(event.relative)
+			elif setting_drill.bump_enabled:
+				var point: Vector2 = setup_drag.screen_position(event.position)
+				var hit: Variant = Plane(Vector3.UP,0.055).intersects_ray(preview_camera.project_ray_origin(point),preview_camera.project_ray_normal(point))
+				if hit is Vector3:
+					setting_drill.bump.destination = Court.clamp_set_aim(hit)
+		elif setting_drill.bump_enabled and event is InputEventMouseButton and event.pressed:
+			if event.button_index in [MOUSE_BUTTON_WHEEL_UP,MOUSE_BUTTON_WHEEL_DOWN]:
 				adjust_bump_height((0.25 if event.button_index == MOUSE_BUTTON_WHEEL_UP else -0.25)*maxf(0.1,event.factor))
 		return
 	if reception_review.active:
@@ -811,6 +812,14 @@ func handle_preview_input(event: InputEvent) -> void:
 		preview.accept_event()
 		return
 	super.handle_preview_input(event)
+
+func orbit_setting_camera(pixels: Vector2) -> void:
+	var offset := preview_camera.position-SETTING_CAMERA_FOCUS
+	var distance := offset.length()
+	var yaw := atan2(offset.x,offset.z)-pixels.x*0.008
+	var pitch := clampf(asin(offset.y/distance)+pixels.y*0.006,0.08,1.22)
+	preview_camera.position = SETTING_CAMERA_FOCUS+Vector3(sin(yaw)*cos(pitch),sin(pitch),cos(yaw)*cos(pitch))*distance
+	preview_camera.look_at(SETTING_CAMERA_FOCUS)
 
 func adjust_bump_height(amount: float) -> void:
 	setting_drill.bump.height = clampf(setting_drill.bump.height+amount,1.25,20.0)

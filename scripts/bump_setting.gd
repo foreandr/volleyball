@@ -125,7 +125,7 @@ func hand_intercept(path: Callable, time: float, end: float) -> Vector3:
 	var center := ready_contact()
 	if current.is_equal_approx(next): return center
 	var nearest := Geometry3D.get_closest_point_to_segment(center,current,next)
-	return center+(nearest-center).limit_length(0.32)
+	return center+(nearest-center).limit_length(0.50)
 
 func aim_velocity(origin: Vector3, error := 0.0) -> Vector3:
 	return Timing.aimed_pass_velocity(origin,{"position":destination,"fit":"height","height":height},45.0,error)
@@ -226,8 +226,8 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 			var hand_assisted := (
 				hand_setting and green and gap_after_adjustment > radius
 				and gap_after_adjustment <= radius+HandPose.GREEN_CONTACT_ALLOWANCE
-				and from_setter.slide(Vector3.UP).length() <= 0.62
-				and absf(point.y-center.y) <= 0.23
+				and from_setter.slide(Vector3.UP).length() <= 0.80
+				and absf(point.y-center.y) <= 0.32
 			)
 			contact_check = {
 				"time":time,"surface":"hands" if hand_setting else ("palm" if pancake else "forearms"),"surface_center":center,

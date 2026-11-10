@@ -2,8 +2,8 @@ extends RefCounted
 
 const CONTACT_HEIGHT := 1.83
 const CONTACT_FORWARD := 0.23
-const CONTACT_RADIUS := 0.30
-const GREEN_CONTACT_ALLOWANCE := 0.08
+const CONTACT_RADIUS := 0.42
+const GREEN_CONTACT_ALLOWANCE := 0.17
 const HOLD_TIME := 0.58
 
 static func contact_center(actor: Node3D) -> Vector3:
@@ -22,9 +22,17 @@ static func apply(actor: Node3D, target: Vector3, blend: float) -> void:
 	var original := pose.duplicate()
 	author.rotate_world(pose,"spine_01",Vector3.RIGHT,-0.14)
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,-0.06)
+	var target_local := rig.to_local(target)
 	var head: Vector3 = author.point(pose,"Head")
-	var aim := rig.to_local(target)-head
-	var diamond := head+Vector3(clampf(aim.x,-0.12,0.12),clampf(aim.y-0.075,0.12,0.24),clampf(aim.z-0.07,0.13,0.26))
+	var offset := target_local-head
+	var side_lean := clampf(offset.x/0.48,-1.0,1.0)
+	var forward_lean := clampf((offset.z-0.24)/0.42,-1.0,1.0)
+	author.rotate_world(pose,"spine_01",Vector3.BACK,-side_lean*0.17)
+	author.rotate_world(pose,"spine_02",Vector3.BACK,-side_lean*0.13)
+	author.rotate_world(pose,"spine_02",Vector3.RIGHT,forward_lean*0.19)
+	head = author.point(pose,"Head")
+	var aim := target_local-head
+	var diamond := head+Vector3(clampf(aim.x,-0.22,0.22),clampf(aim.y-0.075,0.12,0.27),clampf(aim.z-0.07,0.09,0.35))
 	for side in ["l","r"]:
 		var sign_ := 1.0 if side == "l" else -1.0
 		var hand: String = "hand_"+side
