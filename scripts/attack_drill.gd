@@ -426,8 +426,11 @@ func queue_jump(direction: Vector2) -> void:
 	if jump.active or setter_is_diving() or stage in [Stage.HIT,Stage.SHANK]: return
 	if approach_practice:
 		if stage not in [Stage.PASS,Stage.SET] or is_finite(approach_pressed_at): return
-		var to_set := (approach_ball_target()-setter.position).slide(Vector3.UP)
-		if to_set.length() > APPROACH_RADII[0]: return
+		var distance := approach_set_distance()
+		if distance > APPROACH_RADII[0]:
+			status.text = "Set target outside green ring"
+			trace.write("approach_rejected",clock,{"distance":distance,"range":APPROACH_RADII[0]},true)
+			return
 		approach_pressed_at = clock
 		approach_jump_queued = true
 		trace.write("approach_press",clock,{"stage":stage,"position":setter.position,"two_step":true},true)
@@ -438,6 +441,9 @@ func release_approach_jump() -> void:
 	if is_finite(approach_pressed_at) and not is_finite(approach_released_at):
 		approach_released_at = clock
 		trace.write("approach_release",clock,{"held":clock-approach_pressed_at},true)
+
+func approach_set_distance() -> float:
+	return (approach_set_target-setter.position).slide(Vector3.UP).length()
 
 func approach_ball_target() -> Vector3:
 	return flight_point(pass_origin,pass_motion,pin_arrival) if stage == Stage.SET else approach_set_target
@@ -619,7 +625,7 @@ func play_cpu_set(time: float, delta: float) -> void:
 			bump.hand_setting = false
 			trace.closest_check.clear()
 			trace.closest_margin = INF
-			status.text = "Hold Space to charge the spike" if approach_practice else "Space to jump  |  Hold left-click to spike"
+			status.text = "Space to jump  |  Hold left-click to spike"
 			region.show()
 			aim_swing(swing_aim)
 			trace.write("cpu_set",clock,{"point":pass_origin,"velocity":pass_motion,"pin_arrival":pin_arrival},true)
@@ -646,6 +652,8 @@ func play_cpu_set(time: float, delta: float) -> void:
 		cpu_set.begin_hand_contact(cpu_contact_point,time)
 
 func play_pin_ball(time: float, previous: float, delta: float) -> void:
+	if approach_practice and not is_finite(approach_pressed_at):
+		status.text = "Set target outside green ring" if approach_set_distance() > APPROACH_RADII[0] else "Hold Space to charge the spike"
 	var spin_axis := Vector3.UP.cross(pass_motion).normalized()
 	if not spin_axis.is_zero_approx(): ball.rotate(spin_axis,TAU*SET_TOPSPIN_RPS*delta)
 	ball.position = flight_point(pass_origin,pass_motion,minf(time,flight_end))
@@ -722,7 +730,10 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 		previous_palm = palm
 	if time >= flight_end:
 		play_floor_sound()
-		miss("Spike missed")
+		var result := "Spike missed"
+		if approach_practice and not is_finite(approach_pressed_at):
+			result = "Set target outside green ring" if approach_set_distance() > APPROACH_RADII[0] else "Set went untouched"
+		miss(result)
 
 func right_palm() -> Vector3:
 	var rig: Skeleton3D = setter.skeleton
