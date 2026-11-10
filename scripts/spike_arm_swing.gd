@@ -52,9 +52,17 @@ static func apply(pose: Array, author: RefCounted, index: int, ball: Vector3, we
 static func tuck_low_bow_hand(pose: Array, author: RefCounted, weight: float) -> void:
 	if weight <= 0.0: return
 	var rig: Skeleton3D = author.rig
+	var elbow: Vector3 = author.point(pose,"lowerarm_r")
 	var wrist: Vector3 = author.point(pose,"hand_r")
-	var fingers: Vector3 = (author.point(pose,"middle_01_r")-wrist).normalized()
 	var chest: Vector3 = author.point(pose,"spine_03")
+	var draw_target := chest+Vector3(-0.11,-0.12,0.12)
+	var forearm := (wrist-elbow).normalized()
+	var inward := (draw_target-elbow).normalized()
+	var forearm_basis: Basis = author.world_pose(pose,rig.find_bone("lowerarm_r")).basis
+	var forearm_turn := Quaternion.IDENTITY.slerp(Quaternion(forearm,inward),weight)
+	author.set_world_basis(pose,"lowerarm_r",Basis(forearm_turn)*forearm_basis)
+	wrist = author.point(pose,"hand_r")
+	var fingers: Vector3 = (author.point(pose,"middle_01_r")-wrist).normalized()
 	var target := (chest-wrist+Vector3.DOWN*0.18).normalized()
 	var basis: Basis = author.world_pose(pose,rig.find_bone("hand_r")).basis
 	var turn := Quaternion(fingers,target)
