@@ -148,11 +148,12 @@ func build_timing_cue() -> void:
 
 func update_timing_cue(after_pass := -INF) -> void:
 	var lead := timing_arrival-after_pass
-	var showing := lead <= BumpSetting.APPROACH_TIME and lead >= -0.10 and not (bump_enabled and is_finite(bump.touch_time))
+	var showing := after_pass >= 0.0 and lead >= -0.10 and not (bump_enabled and is_finite(bump.touch_time))
 	timing_ring.visible = showing
 	timing_center.visible = showing
 	if not showing: return
-	var radius := lerpf(0.092,2.0,inverse_lerp(BumpSetting.IDEAL_LEAD,BumpSetting.APPROACH_TIME,clampf(lead,BumpSetting.IDEAL_LEAD,BumpSetting.APPROACH_TIME)))
+	var remaining := clampf(inverse_lerp(BumpSetting.IDEAL_LEAD,timing_arrival,lead),0.0,1.0)
+	var radius := lerpf(0.092,2.0,remaining)
 	timing_ring.scale = Vector3(radius,1.0,radius)
 	var color := Color("ffdb51")
 	if lead < BumpSetting.GREEN_START: color = Color("ff7855")
