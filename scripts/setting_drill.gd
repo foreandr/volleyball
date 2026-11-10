@@ -157,7 +157,7 @@ func queue_jump(direction: Vector2) -> void:
 	trace.write("jump",clock,{"position":setter.position,"direction":jump.heading},true)
 
 func step_jump(delta: float) -> void:
-	if jump.active: jump.step(setter,delta)
+	if jump.active: jump.step(setter,delta,trace_input)
 	bump.setter_jumping = jump.active
 
 func queue_set() -> void:

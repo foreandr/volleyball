@@ -5,29 +5,44 @@ const LOAD_TIME := 0.24
 const AIR_TIME := 0.91
 const LAND_TIME := 0.16
 const HEIGHT := 1.016
+const AIR_STEER_SPEED := 0.85
+const AIR_STEER_ACCELERATION := 5.0
 var active := false
 var elapsed := 0.0
 var start: Vector3
 var heading: Vector3
 var stride := 0.0
+var air_velocity := Vector3.ZERO
+var air_offset := Vector3.ZERO
 
 func begin(actor: Node3D, input: Vector2) -> void:
 	if active: return
 	active = true
 	elapsed = 0.0
+	air_velocity = Vector3.ZERO
+	air_offset = Vector3.ZERO
 	start = actor.position
 	var travel := Vector3(-input.x,0,input.y)
 	stride = 0.17+0.31*travel.length()
 	heading = travel.normalized() if not travel.is_zero_approx() else actor.basis.z.normalized()
 	actor.play_action("idle")
 
-func step(actor: Node3D, delta: float) -> void:
+func step(actor: Node3D, delta: float, input: Vector2) -> void:
+	var previous_flight := clampf(elapsed-LOAD_TIME,0.0,AIR_TIME)
 	elapsed += delta
+	var air_delta := clampf(elapsed-LOAD_TIME,0.0,AIR_TIME)-previous_flight
+	if air_delta > 0.0:
+		var steering := Vector3(-input.x,0.0,input.y).limit_length()*AIR_STEER_SPEED
+		air_velocity = air_velocity.move_toward(steering,AIR_STEER_ACCELERATION*air_delta)
+		air_offset += air_velocity*air_delta
 	var flight := clampf((elapsed-LOAD_TIME)/AIR_TIME,0.0,1.0)
 	var first := smoothstep(0.015,0.12,elapsed)
 	var second := smoothstep(0.12,0.225,elapsed)
 	var distance := stride*(0.34*first+0.66*second+0.38*flight)
-	actor.position = Court.clamp_setter(start+heading*distance+Vector3.UP*(4.0*HEIGHT*flight*(1.0-flight)))
+	var base := start+heading*distance+Vector3.UP*(4.0*HEIGHT*flight*(1.0-flight))
+	var position := base+air_offset
+	actor.position = Court.clamp_setter(position)
+	if air_delta > 0.0: air_offset += actor.position-position
 	actor.animator.advance(delta)
 	var landing := elapsed-LOAD_TIME-AIR_TIME
 	if landing >= LAND_TIME:
