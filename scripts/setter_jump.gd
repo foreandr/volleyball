@@ -61,7 +61,7 @@ func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time
 		right_plant = right_foot_start+heading.slide(Vector3.UP).normalized()*stride*0.68
 		var toward_ball := (ball_target-right_plant).slide(Vector3.UP).normalized()
 		var reach := (ball_target-start-heading*stride).slide(Vector3.UP)
-		approach_lunge = reach.normalized()*clampf(reach.length()-0.16,0.0,1.10)
+		approach_lunge = reach.normalized()*clampf(reach.length()-0.055,0.0,1.30)
 		if toward_ball.is_zero_approx(): toward_ball = heading.slide(Vector3.UP).normalized()
 		left_plant = right_plant+toward_ball*0.43+Vector3.UP.cross(toward_ball)*0.19
 		right_plant.y = minf(right_foot_start.y,left_foot_start.y)
@@ -78,7 +78,7 @@ func load_duration() -> float:
 	return assisted_load_time if approach_plant else LOAD_TIME
 
 func flight_duration(jump_height: float, assisted: bool) -> float:
-	return FULL_AIR_TIME*sqrt(jump_height/FULL_HEIGHT)*(1.18 if assisted else 1.0)
+	return FULL_AIR_TIME*sqrt(jump_height/FULL_HEIGHT)*(1.09 if assisted else 1.0)
 
 func step(actor: Node3D, delta: float, input: Vector2) -> void:
 	var load_time := load_duration()

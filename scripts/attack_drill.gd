@@ -488,7 +488,7 @@ func time_two_step_plant(delta: float) -> void:
 	var distance_weight := smoothstep(0.15,APPROACH_RADII[0],toward.length())
 	var set_apex := pass_origin.y+pass_motion.y*pass_motion.y/(2.0*Flight.GRAVITY)
 	var height_weight := smoothstep(4.2,5.0,set_apex)
-	var jump_height := jump.max_height*lerpf(0.94,1.0,maxf(distance_weight,height_weight))
+	var jump_height := jump.max_height*lerpf(0.94,1.0,maxf(distance_weight,height_weight))-0.2032
 	var air_time := jump.flight_duration(jump_height,true)
 	var contact_height := minf(ball_target.y,2.32+jump_height*0.91)
 	var contact_at := descending_time(pass_origin,pass_motion,contact_height)
@@ -496,8 +496,8 @@ func time_two_step_plant(delta: float) -> void:
 	var plant_time := lerpf(0.30,jump.APPROACH_LOAD_TIME,distance_weight)+0.15
 	if time_before_lift > plant_time+delta: return
 	approach_jump_queued = false
-	approach_intercept = ball_target
-	var direction := toward.normalized()
+	approach_intercept = flight_point(pass_origin,pass_motion,contact_at)
+	var direction := (approach_intercept-setter.position).slide(Vector3.UP).normalized()
 	begin_attack_jump(Vector2(-direction.x,direction.z),clampf(time_before_lift,APPROACH_MIN_PLANT_TIME,plant_time),jump_height)
 
 func begin_attack_jump(direction: Vector2, plant_time := 0.36, jump_height := 0.0) -> void:
@@ -636,7 +636,13 @@ func face_receiver(direction: Vector3, max_turn: float) -> void:
 
 func play_cpu_set(time: float, delta: float) -> void:
 	if is_finite(cpu_set.touch_time):
-		cpu_set.update_hand_push(time,time-cpu_set.touch_time)
+		var push_time: float = time-cpu_set.touch_time
+		if approach_practice:
+			var anchor: Vector3 = receiver.to_global(cpu_set.hand_anchor)
+			var turn_weight := smoothstep(0.0,0.085,push_time)
+			face_receiver(approach_set_target-receiver.position,delta*7.0*turn_weight)
+			cpu_set.hand_anchor = receiver.to_local(anchor)
+		cpu_set.update_hand_push(time,push_time)
 		ball.position = cpu_set.platform_center()
 		if is_finite(cpu_set.release_time):
 			pass_origin = cpu_set.release_point
