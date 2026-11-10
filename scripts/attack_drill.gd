@@ -18,8 +18,8 @@ const PALM_RADIUS := 0.065
 const SWING_FOLLOW_TIME := 0.30
 var stage := Stage.SERVE
 var swing_practice := true
-var torso_rotation_scale := 1.50
-var leg_kickback_scale := 1.0
+var torso_rotation_scale := 2.0
+var leg_kickback_scale := 2.0
 var swing_button_down := false
 var stage_start := 0.0
 var serve_target: Vector3
@@ -343,7 +343,8 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 		var load := smoothstep(0.0,0.14,clock-swing_charge_started)
 		var drive := clock-swing_drive_started if is_finite(swing_drive_started) else -INF
 		if drive < 0.0:
-			pose_bow_draw(load)
+			var approach_point := flight_point(pass_origin,pass_motion,clampf(maxf(time+0.12,pin_arrival-0.14),0.0,flight_end))
+			pose_bow_draw(load,approach_point)
 		else:
 			var extension := smoothstep(0.0,swing_drive_duration,drive)
 			var follow := smoothstep(swing_drive_duration+0.035,swing_drive_duration+0.16,drive)
@@ -408,11 +409,15 @@ func play_spike(time: float) -> void:
 		pose_bow_draw(1.0-smoothstep(0.11,SWING_FOLLOW_TIME,time),swing_contact,1.0,smoothstep(0.0,0.16,time))
 	if time >= end+(0.22 if swing_practice else 0.48) and not jump.active: reset_feed()
 
-func pose_bow_draw(weight: float, contact := Vector3.ZERO, extension := 0.0, follow := 0.0) -> void:
+func pose_bow_draw(weight: float, contact: Vector3, extension := 0.0, follow := 0.0) -> void:
 	var rig: Skeleton3D = setter.skeleton
 	var author: RefCounted = setter.get_pose_author()
 	var pose: Array[Transform3D] = []
 	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
+	var correction := hip_correction(contact)*smoothstep(0.05,0.38,setter.position.y-jump.start.y)*weight
+	correction *= 1.0-smoothstep(0.0,0.8,follow)
+	author.rotate_world(pose,"pelvis",Vector3.RIGHT,correction.x)
+	author.rotate_world(pose,"pelvis",Vector3.BACK,correction.y)
 	var chest_turn := smoothstep(0.0,0.88,extension)
 	var aim := rig.to_local(swing_aim)-rig.to_local(setter.global_position)
 	var aim_turn := clampf(atan2(aim.x,aim.z),-0.48,0.48)
@@ -462,6 +467,13 @@ func pose_bow_draw(weight: float, contact := Vector3.ZERO, extension := 0.0, fol
 		guide_hand,Vector3(0.26,-0.55,0.15),weight,lerpf(172.0,148.0,guide_drop))
 	for bone in rig.get_bone_count():
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
+
+func hip_correction(contact: Vector3) -> Vector2:
+	var drift: Vector3 = jump.horizontal_velocity()*0.16
+	var reach := setter.to_local(contact-drift)-Vector3(-0.24,0.0,0.28)
+	var pitch := clampf(reach.z*0.43,-0.20,0.20)
+	var roll := clampf(-reach.x*0.46,-0.22,0.22)
+	return Vector2(pitch,roll)
 
 func miss(message: String) -> void:
 	stage = Stage.MISS

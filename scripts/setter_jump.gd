@@ -7,6 +7,7 @@ const FULL_AIR_TIME := 1.02
 const LAND_TIME := 0.16
 const FULL_HEIGHT := 1.27
 const TAP_HEIGHT := 0.18
+const AIR_TRAVEL_FRACTION := 0.38
 const AIR_STEER_SPEED := 1.00
 const AIR_STEER_ACCELERATION := 5.0
 var active := false
@@ -39,6 +40,9 @@ func begin(actor: Node3D, input: Vector2) -> void:
 func release() -> void:
 	held = false
 
+func horizontal_velocity() -> Vector3:
+	return air_velocity+heading*(stride*AIR_TRAVEL_FRACTION/air_time)
+
 func step(actor: Node3D, delta: float, input: Vector2) -> void:
 	if elapsed < LOAD_TIME:
 		if held: hold_time += minf(delta,LOAD_TIME-elapsed)
@@ -54,7 +58,7 @@ func step(actor: Node3D, delta: float, input: Vector2) -> void:
 	var flight := clampf((elapsed-LOAD_TIME)/air_time,0.0,1.0)
 	var first := smoothstep(0.015,0.12,elapsed)
 	var second := smoothstep(0.12,0.225,elapsed)
-	var distance := stride*(0.34*first+0.66*second+0.38*flight)
+	var distance := stride*(0.34*first+0.66*second+AIR_TRAVEL_FRACTION*flight)
 	var base := start+heading*distance+Vector3.UP*(4.0*height*flight*(1.0-flight))
 	var position := base+air_offset
 	actor.position = Court.clamp_setter(position)
