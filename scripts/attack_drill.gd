@@ -67,6 +67,9 @@ var spike_bounce_speed := 0.0
 var swing_net_hit := {}
 var dynamic_net: Node3D
 var net_audio: AudioStreamPlayer
+var spike_audio: AudioStreamPlayer
+var floor_audio: AudioStreamPlayer
+var ball_audio_muted := false
 var net_sound_played := false
 var mute_net := false
 var swing_target: MeshInstance3D
@@ -75,7 +78,26 @@ func _ready() -> void:
 	dynamic_net = get_parent().get_node_or_null("VolleyballCourt/DynamicNet")
 	net_audio = Net.contact_sound()
 	add_child(net_audio)
+	spike_audio = create_ball_sound(preload("res://assets/audio/spike_smack.wav"),-6.0)
+	floor_audio = create_ball_sound(preload("res://assets/audio/ball_floor.wav"),-9.0)
 	load_practice_target()
+
+func create_ball_sound(stream: AudioStream, volume: float) -> AudioStreamPlayer:
+	var player := AudioStreamPlayer.new()
+	player.stream = stream
+	player.volume_db = volume
+	add_child(player)
+	return player
+
+func set_ball_audio_muted(muted: bool) -> void:
+	ball_audio_muted = muted
+	if muted:
+		spike_audio.stop()
+		floor_audio.stop()
+		net_audio.stop()
+
+func play_floor_sound() -> void:
+	if not ball_audio_muted: floor_audio.play()
 
 func _exit_tree() -> void:
 	show_attack_net({},0.0)
@@ -91,7 +113,7 @@ func show_attack_net(hit: Dictionary, elapsed: float) -> void:
 		net_sound_played = false
 	elif not mute_net and not net_sound_played and is_instance_valid(net_audio):
 		net_sound_played = true
-		net_audio.play()
+		if not ball_audio_muted: net_audio.play()
 
 func load_practice_target() -> void:
 	var config := ConfigFile.new()
@@ -360,6 +382,7 @@ func play_serve(time: float, previous: float, delta: float) -> void:
 		trace.write("player_pass",clock,{"point":pass_origin,"velocity":pass_motion,"cpu_contact":cpu_contact_point,
 			"grade":bump.grade,"reach":bump.reach,"contact":bump.contact_check},true)
 	elif time >= end:
+		play_floor_sound()
 		miss("Serve missed")
 
 func follow_receive(time: float) -> void:
@@ -385,6 +408,7 @@ func play_shank(time: float, previous: float) -> void:
 		ball.position = Net.after_hit(hit,minf(time,end))
 	else:
 		ball.position = flight_point(pass_origin,pass_motion,minf(time,end))
+	if previous < end and time >= end: play_floor_sound()
 	if previous >= end: reset_feed()
 
 func play_cpu_set(time: float, delta: float) -> void:
@@ -489,7 +513,9 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 				hit_spike(charge,previous_ball.lerp(ball.position,fraction))
 				return
 		previous_palm = palm
-	if time >= flight_end: miss("Spike missed")
+	if time >= flight_end:
+		play_floor_sound()
+		miss("Spike missed")
 
 func right_palm() -> Vector3:
 	var rig: Skeleton3D = setter.skeleton
@@ -515,6 +541,7 @@ func hand_contact_fraction(before: Vector3, after: Vector3) -> float:
 
 func hit_spike(charge: float, point: Vector3) -> void:
 	spike_bounce_speed = 0.0
+	if not ball_audio_muted: spike_audio.play()
 	swing_contact = point
 	ball.position = point
 	swing_power = charge
@@ -555,10 +582,12 @@ func play_spike(time: float, delta: float) -> void:
 		var landing_velocity: Vector3 = swing_net_hit.velocity if hit_net else pass_motion
 		landing_velocity += Vector3.DOWN*Flight.GRAVITY*fall_time
 		if spike_bounce_speed == 0.0:
+			play_floor_sound()
 			spike_bounce_speed = clampf(-landing_velocity.y*0.58,3.8,6.5)*sqrt(ball_bounciness)
 		var bounce_velocity := landing_velocity.slide(Vector3.UP)*0.25+Vector3.UP*spike_bounce_speed
 		var bounce_time := Flight.landing_time(ground,bounce_velocity)
 		bounce_end += bounce_time
+		if time-delta < bounce_end and time >= bounce_end: play_floor_sound()
 		ball.position = flight_point(ground,bounce_velocity,minf(time-landing_time,bounce_time))
 	if time < SWING_FOLLOW_TIME:
 		var follow := 1.0-pow(1.0-clampf(time/0.19,0.0,1.0),2.0)

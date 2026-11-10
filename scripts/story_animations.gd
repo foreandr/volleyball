@@ -354,6 +354,7 @@ func start_setting_drill(attack := false) -> void:
 	preview_player.get_parent().add_child(setting_drill)
 	setting_drill.configure(preview_player,drill_status,modes.selected == 1,build_label)
 	if attack:
+		setting_drill.set_ball_audio_muted(StorySession.attack_ball_audio_muted)
 		show_attack_positions()
 		setting_drill.bump.set_custom_backward(load_custom_backward_clip())
 		add_low_bow_controls()
@@ -1169,6 +1170,11 @@ func open_menu() -> void:
 	else: get_tree().change_scene_to_file("res://scenes/story.tscn")
 
 func _input(event: InputEvent) -> void:
+	if is_instance_valid(setting_drill) and selected_category == "Attacking" and event is InputEventKey and event.keycode == KEY_M and event.pressed and not event.echo:
+		StorySession.attack_ball_audio_muted = not StorySession.attack_ball_audio_muted
+		setting_drill.set_ball_audio_muted(StorySession.attack_ball_audio_muted)
+		get_viewport().set_input_as_handled()
+		return
 	if is_instance_valid(setting_drill) and selected_category == "Attacking" and event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and not event.pressed:
 		setting_drill.swing_input(false)
 	if is_instance_valid(setting_drill) and selected_category == "Attacking" and event is InputEventKey and event.keycode == KEY_I:

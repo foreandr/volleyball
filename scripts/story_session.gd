@@ -8,6 +8,7 @@ var edit_entry: Dictionary = {}
 var animation_draft: Dictionary = {}
 var animation_return: Dictionary = {}
 var attack_swing_tuning: Dictionary = {}
+var attack_ball_audio_muted := false
 
 func begin_new() -> void:
 	creating_story = true
