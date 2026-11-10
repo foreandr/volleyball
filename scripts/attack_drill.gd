@@ -49,6 +49,7 @@ var swing_hand_speed := 0.0
 var swing_impact_speed := 0.0
 var swing_aim := Vector3(0.0,Flight.FLOOR,9.5)
 var swing_contact: Vector3
+var swing_contact_extension := 1.0
 var swing_power := 0.0
 var swing_net_hit := {}
 var swing_target: MeshInstance3D
@@ -351,23 +352,25 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 		var charge := swing_charge()
 		status.text = "Swing power  |  %d%%" % roundi(charge*100.0)
 		var airborne := setter.position.y > jump.start.y+0.08
-		var duration := lerpf(0.24,0.09,charge)
+		var duration := lerpf(0.21,0.09,charge)
 		var predicted := flight_point(pass_origin,pass_motion,minf(time+duration,flight_end))
 		var toward_ball := predicted-setter.global_position
-		if not is_finite(swing_drive_started) and airborne and time >= pin_arrival-0.42:
+		if not is_finite(swing_drive_started) and airborne and time >= pin_arrival-0.46:
 			if toward_ball.slide(Vector3.UP).length() <= SWING_REACH and toward_ball.y <= SWING_CONTACT_HEIGHT:
 				swing_drive_started = clock
 				swing_drive_duration = duration
 				swing_hand_speed = 0.0
-		var load := smoothstep(0.0,0.14,clock-swing_charge_started)
+		var load := smoothstep(0.0,0.18,clock-swing_charge_started)
+		var draw_progress := smoothstep(pin_arrival-0.82,pin_arrival-0.38,time)
 		var drive := clock-swing_drive_started if is_finite(swing_drive_started) else -INF
+		var approach_point := flight_point(pass_origin,pass_motion,clampf(maxf(time+0.12,pin_arrival-0.14),0.0,flight_end))
+		var extension := smoothstep(0.0,swing_drive_duration,drive)
 		if drive < 0.0:
-			var approach_point := flight_point(pass_origin,pass_motion,clampf(maxf(time+0.12,pin_arrival-0.14),0.0,flight_end))
-			pose_bow_draw(load,approach_point)
+			pose_bow_draw(load,approach_point,0.0,0.0,draw_progress)
 		else:
-			var extension := smoothstep(0.0,swing_drive_duration,drive)
 			var follow := smoothstep(swing_drive_duration+0.035,swing_drive_duration+0.16,drive)
-			pose_bow_draw(load,ball.position,extension,follow)
+			var contact_target := approach_point.lerp(ball.position,smoothstep(0.0,0.50,extension))
+			pose_bow_draw(load,contact_target,extension,follow,draw_progress)
 		var palm := right_palm()
 		if airborne and drive > 0.0 and drive <= swing_drive_duration+0.12 and previous_palm.is_finite():
 			swing_impact_speed = palm.distance_to(previous_palm)/maxf(delta,0.001)
@@ -375,6 +378,7 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 			var previous_ball := flight_point(pass_origin,pass_motion,previous)
 			var fraction := hand_contact_fraction(previous_ball-previous_palm,ball.position-palm)
 			if fraction >= 0.0:
+				swing_contact_extension = extension
 				hit_spike(charge,previous_ball.lerp(ball.position,fraction))
 				return
 		previous_palm = palm
@@ -425,10 +429,11 @@ func play_spike(time: float) -> void:
 	else:
 		ball.position = flight_point(pass_origin,pass_motion,minf(time,end))
 	if time < SWING_FOLLOW_TIME:
-		pose_bow_draw(1.0-smoothstep(0.11,SWING_FOLLOW_TIME,time),swing_contact,1.0,smoothstep(0.0,0.16,time))
+		var extension := lerpf(swing_contact_extension,1.0,smoothstep(0.0,0.07,time))
+		pose_bow_draw(1.0-smoothstep(0.11,SWING_FOLLOW_TIME,time),swing_contact,extension,smoothstep(0.0,0.16,time))
 	if time >= end+(0.22 if swing_practice else 0.48) and not jump.active: reset_feed()
 
-func pose_bow_draw(weight: float, contact: Vector3, extension := 0.0, follow := 0.0) -> void:
+func pose_bow_draw(weight: float, contact: Vector3, extension := 0.0, follow := 0.0, draw_progress := 1.0) -> void:
 	var rig: Skeleton3D = setter.skeleton
 	var author: RefCounted = setter.get_pose_author()
 	var pose: Array[Transform3D] = []
@@ -444,7 +449,9 @@ func pose_bow_draw(weight: float, contact: Vector3, extension := 0.0, follow := 
 	var rotation_weight := weight*torso_rotation_scale*lerpf(0.48,1.22,power)
 	var turn := lerpf(-0.57,0.42+aim_turn*0.52,chest_turn)+(0.34+aim_turn*0.38)*follow
 	var airborne := smoothstep(0.08,0.45,setter.position.y-jump.start.y)
-	var leg_turn := clampf(turn*rotation_weight*0.24,-0.32,0.32)*leg_rotation_scale*airborne*smoothstep(0.50,0.95,extension)
+	var leg_release := smoothstep(0.32,1.0,extension)
+	var leg_turn := tanh(turn*rotation_weight*0.75)*0.32*leg_rotation_scale*airborne*leg_release
+	var straighten := 0.32*leg_release*smoothstep(0.0,1.5,leg_rotation_scale)
 	if not is_zero_approx(leg_turn):
 		var spine: Transform3D = author.world_pose(pose,rig.find_bone("spine_01"))
 		var hips: Vector3 = author.point(pose,"pelvis")
@@ -463,7 +470,6 @@ func pose_bow_draw(weight: float, contact: Vector3, extension := 0.0, follow := 
 			var thigh_axis := (knee-hip).normalized().slerp(Vector3(0.18*outward,-1.0,0.16).normalized().rotated(Vector3.UP,leg_turn),tuck)
 			var heel_lift := (0.24 if side == "r" else 0.10)+0.78*maxf(0.0,leg_kickback_scale-1.0)
 			var kick_axis := Vector3(0.07*outward,heel_lift,-1.0).normalized()
-			var straighten := 0.32*smoothstep(0.0,0.34,absf(leg_turn))
 			var release_axis := kick_axis.slerp(Vector3(0.07*outward,-1.0,-0.15).normalized(),straighten)
 			var shin_axis := (ankle-knee).normalized().slerp(release_axis.rotated(Vector3.UP,leg_turn),tuck)
 			author.aim_joint(pose,thigh,calf,hip+thigh_axis)
@@ -482,7 +488,7 @@ func pose_bow_draw(weight: float, contact: Vector3, extension := 0.0, follow := 
 	# Twist the ribcage around its own axis so the lean stays independent.
 	var chest_axis: Vector3 = (author.point(pose,"neck_01")-author.point(pose,"spine_03")).normalized()
 	author.rotate_world(pose,"spine_03",chest_axis,clampf(turn*rotation_weight,-1.45,1.45))
-	SpikeArm.apply(pose,author,ball_target,weight,extension,follow)
+	SpikeArm.apply(pose,author,ball_target,weight,extension,follow,draw_progress)
 	var left_shoulder: Vector3 = author.point(pose,"upperarm_l")
 	var guide_drop := 0.78*smoothstep(0.07,1.0,extension)+0.22*follow
 	var guide_hand := left_shoulder+Vector3(0.06,0.43,0.64).lerp(Vector3(0.12,-0.46,0.12),guide_drop)
