@@ -286,7 +286,7 @@ func start_setting_drill() -> void:
 	var controls_hint := label("",16)
 	controls_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	var show_mode := func(index: int):
-		controls_hint.text = "WASD to move  |  Tap Q to bump set\nMouse to aim  |  Scroll to change height" if index == 1 else "WASD to move  |  Tap E to catch\nSpace to jump"
+		controls_hint.text = "WASD to move  |  Tap Q to bump set\nMouse to aim  |  Scroll to change height" if index == 1 else "WASD to move  |  Tap E to catch\nHold Space to jump higher"
 	show_mode.call(modes.selected)
 	modes.item_selected.connect(func(index: int):
 		type_indices["Setting"] = index
@@ -828,6 +828,8 @@ func _input(event: InputEvent) -> void:
 		if event.pressed and not event.echo:
 			setting_drill.queue_jump(player_controls.movement_input())
 			player_controls.setter_travel = Vector3.ZERO
+		elif not event.pressed:
+			setting_drill.jump.release()
 		get_viewport().set_input_as_handled()
 		return
 	if is_instance_valid(setting_drill) and event is InputEventKey and event.keycode == KEY_F8 and event.pressed and not event.echo:

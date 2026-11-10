@@ -2,13 +2,18 @@ extends RefCounted
 
 const Court = preload("res://scripts/preview_court.gd")
 const LOAD_TIME := 0.24
-const AIR_TIME := 0.91
+const FULL_AIR_TIME := 0.91
 const LAND_TIME := 0.16
-const HEIGHT := 1.016
+const FULL_HEIGHT := 1.016
+const TAP_HEIGHT := 0.34
 const AIR_STEER_SPEED := 1.00
 const AIR_STEER_ACCELERATION := 5.0
 var active := false
 var elapsed := 0.0
+var held := false
+var hold_time := 0.0
+var height := FULL_HEIGHT
+var air_time := FULL_AIR_TIME
 var start: Vector3
 var heading: Vector3
 var stride := 0.0
@@ -18,6 +23,8 @@ var air_offset := Vector3.ZERO
 func begin(actor: Node3D, input: Vector2) -> void:
 	if active: return
 	active = true
+	held = true
+	hold_time = 0.0
 	elapsed = 0.0
 	air_velocity = Vector3.ZERO
 	air_offset = Vector3.ZERO
@@ -27,30 +34,37 @@ func begin(actor: Node3D, input: Vector2) -> void:
 	heading = travel.normalized() if not travel.is_zero_approx() else actor.basis.z.normalized()
 	actor.play_action("idle")
 
+func release() -> void:
+	held = false
+
 func step(actor: Node3D, delta: float, input: Vector2) -> void:
-	var previous_flight := clampf(elapsed-LOAD_TIME,0.0,AIR_TIME)
+	if elapsed < LOAD_TIME:
+		if held: hold_time += minf(delta,LOAD_TIME-elapsed)
+		height = lerpf(TAP_HEIGHT,FULL_HEIGHT,clampf(hold_time/LOAD_TIME,0.0,1.0))
+		air_time = FULL_AIR_TIME*sqrt(height/FULL_HEIGHT)
+	var previous_flight := clampf(elapsed-LOAD_TIME,0.0,air_time)
 	elapsed += delta
-	var air_delta := clampf(elapsed-LOAD_TIME,0.0,AIR_TIME)-previous_flight
+	var air_delta := clampf(elapsed-LOAD_TIME,0.0,air_time)-previous_flight
 	if air_delta > 0.0:
 		var steering := Vector3(-input.x,0.0,input.y).limit_length()*AIR_STEER_SPEED
 		air_velocity = air_velocity.move_toward(steering,AIR_STEER_ACCELERATION*air_delta)
 		air_offset += air_velocity*air_delta
-	var flight := clampf((elapsed-LOAD_TIME)/AIR_TIME,0.0,1.0)
+	var flight := clampf((elapsed-LOAD_TIME)/air_time,0.0,1.0)
 	var first := smoothstep(0.015,0.12,elapsed)
 	var second := smoothstep(0.12,0.225,elapsed)
 	var distance := stride*(0.34*first+0.66*second+0.38*flight)
-	var base := start+heading*distance+Vector3.UP*(4.0*HEIGHT*flight*(1.0-flight))
+	var base := start+heading*distance+Vector3.UP*(4.0*height*flight*(1.0-flight))
 	var position := base+air_offset
 	actor.position = Court.clamp_setter(position)
 	if air_delta > 0.0: air_offset += actor.position-position
 	actor.animator.advance(delta)
-	var landing := elapsed-LOAD_TIME-AIR_TIME
+	var landing := elapsed-LOAD_TIME-air_time
 	if landing >= LAND_TIME:
 		active = false
 		return
 	var load := smoothstep(0.02,0.19,elapsed)*(1.0-smoothstep(0.19,LOAD_TIME+0.055,elapsed))
 	var impact := smoothstep(-0.025,0.04,landing)*(1.0-smoothstep(0.04,LAND_TIME,landing))
-	var arm_drive := smoothstep(0.17,0.34,elapsed)*(1.0-smoothstep(0.40,LOAD_TIME+AIR_TIME,elapsed))
+	var arm_drive := smoothstep(0.17,0.34,elapsed)*(1.0-smoothstep(0.40,LOAD_TIME+air_time,elapsed))
 	pose_jump(actor,first,second,load,impact,arm_drive)
 
 func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: float, arm_drive: float) -> void:
@@ -67,7 +81,7 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,0.16*load+0.13*impact-0.10*arm_drive)
 	var travel := actor.basis.inverse()*heading*stride/scale_
 	var stagger := 0.34*(first-second)
-	var tuck := sin(PI*clampf((elapsed-LOAD_TIME)/AIR_TIME,0.0,1.0))
+	var tuck := sin(PI*clampf((elapsed-LOAD_TIME)/air_time,0.0,1.0))
 	for side in ["l","r"]:
 		var left: bool = side == "l"
 		var foot: String = "foot_"+side
