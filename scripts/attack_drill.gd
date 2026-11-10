@@ -416,7 +416,7 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 		# An early draw holds the low chamber until the lift window opens.
 		var lift_start := clampf(draw_end-LOW_BOW_FRAME,draw_reference+SpikeArm.DEFAULT_DRAW_DELAY-LOW_BOW_FRAME,estimated_contact-0.04)
 		var arm_lift := smoothstep(lift_start,estimated_contact,time)
-		var shot_turn_lead := smoothstep(estimated_contact-0.30,estimated_contact-0.08,time)
+		var shot_turn_lead := smoothstep(estimated_contact-0.36,estimated_contact-0.10,time)
 		var drive := clock-swing_drive_started if is_finite(swing_drive_started) else -INF
 		var approach_point := flight_point(pass_origin,pass_motion,clampf(maxf(time+0.12,pin_arrival-0.14),0.0,flight_end))
 		var drive_phase := clampf(drive/swing_drive_duration,0.0,1.0)
@@ -512,12 +512,14 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 	var power := swing_power if stage == Stage.HIT else swing_charge()
 	var rotation_weight := weight*torso_rotation_scale*lerpf(0.48,1.22,power)
 	# Aim the coil while the arm is still loaded, then hand off to the release turn.
-	var early_aim := aim_turn*0.38*shot_turn_lead
+	var release_alignment := smoothstep(0.20,0.65,extension)
+	var early_aim := aim_turn*lerpf(0.64,0.38,release_alignment)*shot_turn_lead
 	var drive_turn := lerpf(-0.57+early_aim,0.36+aim_turn*0.70,rotation_phase)
-	var turn := lerpf(drive_turn,aim_turn*0.52,follow)
+	var turn := lerpf(drive_turn,aim_turn*0.70,follow)
 	var airborne := smoothstep(0.08,0.45,setter.position.y-jump.start.y)
 	var leg_release := smoothstep(0.0,1.0,rotation_phase)
-	var hip_lead := early_aim*0.46*weight*(1.0-rotation_phase)
+	var hip_follow := lerpf(0.78*(1.0-0.58*rotation_phase),0.46*(1.0-rotation_phase),release_alignment)
+	var hip_lead := early_aim*hip_follow*weight
 	var leg_turn := (hip_lead+tanh(turn*rotation_weight*0.75)*0.32*leg_release)*leg_rotation_scale*airborne
 	var kick_release := 0.32*leg_release*smoothstep(0.0,1.5,leg_rotation_scale)
 	var straighten := smoothstep(0.12,0.88,follow)*weight*smoothstep(0.03,0.22,setter.position.y-jump.start.y)
