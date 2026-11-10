@@ -382,7 +382,8 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 		var load := smoothstep(0.0,0.18,clock-swing_charge_started)
 		var estimated_contact := descending_time(pass_origin,pass_motion,PIN_HEIGHT+1.0)
 		var draw_reference := estimated_contact-5.0*LOW_BOW_FRAME
-		var draw_end := draw_reference+draw_delay
+		var hold_delay := 0.0 if swing_practice else minf(0.12,0.24-draw_delay)*charge
+		var draw_end := draw_reference+draw_delay+hold_delay
 		var draw_progress := smoothstep(draw_end-7.0*LOW_BOW_FRAME,draw_end,time)
 		# An early draw holds the low chamber until the lift window opens.
 		var lift_start := clampf(draw_end-LOW_BOW_FRAME,draw_reference+SpikeArm.DEFAULT_DRAW_DELAY-LOW_BOW_FRAME,estimated_contact-0.04)
@@ -438,6 +439,9 @@ func hit_spike(charge: float, point: Vector3) -> void:
 	swing_contact_aim = swing_aim
 	var target := swing_contact_aim-pass_origin
 	var speed := clampf(swing_hand_speed*2.2,1.0,32.0)
+	if not swing_practice:
+		var completion := smoothstep(0.22,0.93,swing_contact_extension)
+		speed *= lerpf(0.56,1.0,charge)*lerpf(0.65,1.0,completion)
 	var duration := target.slide(Vector3.UP).length()/speed
 	pass_motion = target/duration+Vector3.UP*Flight.GRAVITY*duration*0.5
 	flight_end = duration
@@ -515,6 +519,12 @@ func pose_bow_draw(weight: float, contact: Vector3, extension := 0.0, follow := 
 	# Twist the ribcage around its own axis so the lean stays independent.
 	var chest_axis: Vector3 = (author.point(pose,"neck_01")-author.point(pose,"spine_03")).normalized()
 	author.rotate_world(pose,"spine_03",chest_axis,clampf(turn*rotation_weight,-1.45,1.45))
+	var ball_direction: Vector3 = (ball_target-author.point(pose,"pelvis")).slide(Vector3.UP)
+	if ball_direction.length_squared() > 0.0001:
+		var crunch_axis := Vector3.UP.cross(ball_direction.normalized())
+		var crunch := weight*smoothstep(0.42,0.95,extension)*(1.0-smoothstep(0.22,0.93,follow))
+		author.rotate_world(pose,"spine_02",crunch_axis,0.11*crunch)
+		author.rotate_world(pose,"neck_01",crunch_axis,0.03*crunch)
 	var line_weight := shot_line_weight(shot_aim,contact)
 	var palm_finish := SpikeArm.finish_palm_direction(shot_aim,contact,line_weight >= 0.5)
 	SpikeArm.apply(pose,author,ball_target,weight,extension,follow,draw_progress,arm_lift,line_weight,palm_finish,elbow_clearance)
