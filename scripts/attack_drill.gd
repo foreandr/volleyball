@@ -11,6 +11,7 @@ const ATTACK_FRONT_LIMIT := 3.55
 const APPROACH_JUMP_LEAD := 0.82
 const APPROACH_CHARGE_TIME := 0.85
 const APPROACH_START := Vector3(3.10,0.04,-0.05)
+const APPROACH_RADII := [1.45,2.4,3.4]
 const RECEIVE_START := Vector3(3.05,0.04,-3.10)
 const ATTACK_SERVE_SOURCE := Vector3(3.05,2.8,8.5)
 const CPU_HOME := Vector3(-0.55,0.04,3.10)
@@ -42,6 +43,11 @@ var swing_practice := true
 var approach_practice := false
 var takeoff_yaw := 0.0
 var approach_jump_queued := false
+var approach_two_step := false
+var approach_heading := Vector3.BACK
+var approach_start := APPROACH_START
+var approach_set_target := PIN
+var approach_rings: Node3D
 var approach_pressed_at := -INF
 var approach_released_at := INF
 var approach_run_speed := 0.0
@@ -106,6 +112,35 @@ func _ready() -> void:
 	spike_audio = create_ball_sound(preload("res://assets/audio/spike_smack.wav"),-6.0)
 	floor_audio = create_ball_sound(preload("res://assets/audio/ball_floor.wav"),-9.0)
 	load_practice_target()
+	build_approach_rings()
+
+func build_approach_rings() -> void:
+	approach_rings = Node3D.new()
+	add_child(approach_rings)
+	approach_rings.hide()
+	for i in APPROACH_RADII.size():
+		var radius: float = APPROACH_RADII[i]
+		var mesh := TorusMesh.new()
+		mesh.inner_radius = radius-0.023
+		mesh.outer_radius = radius
+		mesh.rings = 48
+		mesh.ring_segments = 8
+		var ring := MeshInstance3D.new()
+		ring.mesh = mesh
+		ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var material := StandardMaterial3D.new()
+		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		material.albedo_color = Color("64edba") if i == 0 else Color("8ba1bd")
+		ring.material_override = material
+		approach_rings.add_child(ring)
+
+func place_approach_setup(point: Vector3, place_set: bool) -> void:
+	var position := Court.clamp_setter(Vector3(point.x,0.04,point.z),ATTACK_FRONT_LIMIT)
+	if place_set:
+		approach_set_target = Vector3(position.x,PIN.y,position.z)
+	else:
+		approach_start = position
+	reset_feed()
 
 func create_ball_sound(stream: AudioStream, volume: float) -> AudioStreamPlayer:
 	var player := AudioStreamPlayer.new()
@@ -180,6 +215,8 @@ func reset_feed() -> void:
 	cpu_set.reset()
 	jump.active = false
 	approach_jump_queued = false
+	approach_two_step = false
+	approach_rings.visible = approach_practice
 	approach_pressed_at = -INF
 	approach_released_at = INF
 	approach_run_steps = 0
@@ -224,7 +261,8 @@ func reset_feed() -> void:
 	if approach_practice:
 		stage = Stage.PASS
 		bump.hide()
-		setter.position = APPROACH_START
+		setter.position = approach_start
+		region.position = approach_set_target
 		pass_origin = Vector3(-2.0,1.25,-1.0)
 		face_receiver(pass_origin-receiver.position,PI)
 		cpu_stand = CPU_HOME
@@ -237,7 +275,7 @@ func reset_feed() -> void:
 		region.show()
 		aim_swing(swing_aim)
 		status.text = "Setter receiving pass"
-		trace.begin_feed({"mode":"approach_practice","source":pass_origin,"velocity":pass_motion,"pin":PIN,"start":setter.position})
+		trace.begin_feed({"mode":"approach_practice","source":pass_origin,"velocity":pass_motion,"pin":approach_set_target,"start":setter.position})
 		return
 	status.text = "Receive  |  Q forearms, I / E hands"
 	trace.begin_feed({"mode":"attacking","source":ATTACK_SERVE_SOURCE,"serve_velocity":serve_velocity,"pin":PIN})
@@ -386,8 +424,12 @@ func queue_jump(direction: Vector2) -> void:
 	if jump.active or setter_is_diving() or stage in [Stage.HIT,Stage.SHANK]: return
 	if approach_practice:
 		if stage not in [Stage.PASS,Stage.SET] or is_finite(approach_pressed_at): return
+		var to_set := (approach_ball_target()-setter.position).slide(Vector3.UP)
+		approach_two_step = to_set.length() <= APPROACH_RADII[0]
+		approach_heading = to_set.normalized() if not to_set.is_zero_approx() else setter.basis.z.normalized()
+		direction = Vector2(-approach_heading.x,approach_heading.z)
 		approach_pressed_at = clock
-		trace.write("approach_press",clock,{"stage":stage,"position":setter.position},true)
+		trace.write("approach_press",clock,{"stage":stage,"position":setter.position,"two_step":approach_two_step},true)
 		if stage == Stage.PASS or approach_time_to_plant() > 0.0:
 			approach_jump_queued = true
 			return
@@ -398,9 +440,12 @@ func release_approach_jump() -> void:
 		approach_released_at = clock
 		trace.write("approach_release",clock,{"held":clock-approach_pressed_at},true)
 
+func approach_ball_target() -> Vector3:
+	return flight_point(pass_origin,pass_motion,pin_arrival) if stage == Stage.SET else approach_set_target
+
 func approach_time_to_plant() -> float:
 	if stage == Stage.PASS:
-		var set_flight := set_toward_pin(cpu_contact_point)
+		var set_flight := set_toward_pin(cpu_contact_point,approach_set_target)
 		var set_arrival := descending_time(cpu_contact_point,set_flight,PIN_HEIGHT)
 		return stage_start+cpu_contact_time+cpu_set.hand_release_delay()+set_arrival-APPROACH_JUMP_LEAD-clock
 	return stage_start+pin_arrival-APPROACH_JUMP_LEAD-clock
@@ -408,22 +453,23 @@ func approach_time_to_plant() -> float:
 func queued_approach_input(delta: float) -> Vector2:
 	approach_run_speed = 0.0
 	if stage == Stage.APPROACH_RETURN:
-		var offset := (APPROACH_START-setter.position).slide(Vector3.UP)
+		var offset := (approach_start-setter.position).slide(Vector3.UP)
 		approach_run_speed = minf(3.2,offset.length()/delta)
 		approach_run_rate = 1.45
 		return Vector2(-offset.x,offset.z).normalized()
 	if not approach_jump_queued or stage not in [Stage.PASS,Stage.SET]: return trace_input
 	var remaining := approach_time_to_plant()
-	var ball_target := flight_point(pass_origin,pass_motion,pin_arrival) if stage == Stage.SET else PIN
+	var ball_target := approach_ball_target()
 	var direction := (ball_target-setter.position).slide(Vector3.UP).normalized()
 	if stage == Stage.SET and remaining <= delta:
 		approach_jump_queued = false
 		begin_attack_jump(Vector2(-direction.x,direction.z))
 		return Vector2.ZERO
+	if approach_two_step: return Vector2.ZERO
 	if approach_run_steps == 0:
 		approach_run_steps = clampi(ceili(remaining/0.34),1,4)
 		approach_run_rate = approach_run_steps/(2.0*float(Footwork.recipe.cadence)*remaining)
-	var plant_start := ball_target+Vector3(0.22,0.0,-0.95)
+	var plant_start := ball_target-approach_heading*0.95+Vector3.UP.cross(approach_heading)*0.22
 	var offset := (plant_start-setter.position).slide(Vector3.UP)
 	approach_run_speed = minf(4.8,offset.length()/maxf(remaining,delta))
 	var travel := offset.normalized()
@@ -433,13 +479,17 @@ func begin_attack_jump(direction: Vector2) -> void:
 	takeoff_yaw = setter.rotation.y
 	var ball_target := Vector3.INF
 	if approach_practice:
-		ball_target = flight_point(pass_origin,pass_motion,pin_arrival) if stage == Stage.SET else PIN
+		ball_target = approach_ball_target()
 	jump.begin(setter,direction,ball_target)
 	trace.write("jump",clock,{"position":setter.position,"direction":jump.heading,"lead_in_steps":approach_run_steps},true)
 
 func step_jump(delta: float) -> void:
 	jump.load_bend_extra = deg_to_rad(backswing_bend)*0.36 if approach_practice else 0.0
 	jump.load_arm_extra = backswing_reach*0.85 if approach_practice else 0.0
+	if approach_practice and jump.active and jump.elapsed < jump.load_duration():
+		var yaw := atan2(jump.heading.x,jump.heading.z)
+		setter.rotation.y = rotate_toward(setter.rotation.y,yaw,delta*12.0)
+		takeoff_yaw = setter.rotation.y
 	super.step_jump(delta)
 
 func setter_movement_scale() -> float:
@@ -448,6 +498,8 @@ func setter_movement_scale() -> float:
 	return 1.0
 
 func step(delta: float) -> void:
+	if approach_practice:
+		approach_rings.position = Vector3(setter.position.x,0.061,setter.position.z)
 	clock += delta
 	var time := clock-stage_start
 	var previous := maxf(0.0,time-delta)
@@ -463,7 +515,7 @@ func step(delta: float) -> void:
 			follow_receive(time)
 			play_shank(time,previous)
 		Stage.SET:
-			if approach_practice: face_receiver(PIN-receiver.position,delta*7.0)
+			if approach_practice: face_receiver(approach_set_target-receiver.position,delta*7.0)
 			if not swing_practice:
 				cpu_set.update_hand_push(cpu_set.release_time+time,cpu_set.release_time+time-cpu_set.touch_time)
 			play_pin_ball(time,previous,delta)
@@ -471,7 +523,7 @@ func step(delta: float) -> void:
 		Stage.MISS:
 			if time >= (0.26 if swing_practice else 0.85) and (not approach_practice or not jump.active): finish_attack_rep()
 		Stage.APPROACH_RETURN:
-			if setter.position.distance_to(APPROACH_START) < 0.04: reset_feed()
+			if setter.position.distance_to(approach_start) < 0.04: reset_feed()
 	if stage == Stage.SERVE or stage == Stage.SET: trace.check_contact(bump.contact_check)
 	if clock >= trace.next_sample: trace.sample(clock,trace_snapshot(clock-stage_start))
 
@@ -593,7 +645,7 @@ func play_cpu_set(time: float, delta: float) -> void:
 			shank("CPU could not reach the pass",time)
 			return
 		cpu_set.height = SET_APEX
-		var ideal := set_toward_pin(cpu_contact_point)
+		var ideal := set_toward_pin(cpu_contact_point,approach_set_target if approach_practice else PIN)
 		var target := flight_point(cpu_contact_point,ideal,Flight.landing_time(cpu_contact_point,ideal))
 		cpu_set.destination = Vector2(target.x,target.z)
 		cpu_set.begin_hand_contact(cpu_contact_point,time)
@@ -660,7 +712,8 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 			swing_impact_speed = palm.distance_to(previous_palm)/maxf(delta,0.001)
 			swing_hand_speed = maxf(swing_hand_speed,swing_impact_speed)
 			var previous_ball := flight_point(pass_origin,pass_motion,previous)
-			var fraction := hand_contact_fraction(previous_ball-previous_palm,ball.position-palm)
+			var radius := 0.24 if approach_practice and approach_two_step else PALM_RADIUS
+			var fraction := hand_contact_fraction(previous_ball-previous_palm,ball.position-palm,radius)
 			if fraction >= 0.0:
 				swing_contact_extension = extension
 				hit_spike(charge,previous_ball.lerp(ball.position,fraction))
@@ -679,8 +732,8 @@ func right_palm() -> Vector3:
 	var palm_normal := (knuckle-wrist).cross(pinky-index).normalized()
 	return rig.to_global(wrist.lerp(knuckle,0.75)+palm_normal*0.018)
 
-func hand_contact_fraction(before: Vector3, after: Vector3) -> float:
-	var radius := BallPreview.RADIUS+PALM_RADIUS
+func hand_contact_fraction(before: Vector3, after: Vector3, palm_radius := PALM_RADIUS) -> float:
+	var radius := BallPreview.RADIUS+palm_radius
 	var gap := before.length_squared()-radius*radius
 	if gap <= 0.0: return 0.0
 	var relative := after-before

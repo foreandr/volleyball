@@ -312,7 +312,7 @@ func start_setting_drill(attack := false) -> void:
 		if attack:
 			controls_hint.visible = index != 0
 			if index == 2:
-				controls_hint.text = "WASD to approach  |  Hold Space to approach and charge\nMove mouse to aim  |  Automatic spike"
+				controls_hint.text = "WASD to approach  |  Hold Space to approach and charge\nMove mouse to aim  |  Automatic spike\nCtrl-click start  |  Shift-click set"
 				return
 			controls_hint.text = "WASD to move  |  Q forearms  |  I / E hands\nMouse to aim  |  Shift + scroll for pass height\nSpace to jump  |  Hold left-click to spike"
 			return
@@ -1019,6 +1019,12 @@ func handle_preview_input(event: InputEvent) -> void:
 					else: setting_drill.bump.destination = Court.clamp_set_aim(hit)
 		elif event is InputEventMouseButton and event.pressed:
 			if event.button_index == MOUSE_BUTTON_LEFT and selected_category == "Attacking":
+				if setting_drill.approach_practice and (event.ctrl_pressed or event.shift_pressed):
+					var point: Vector2 = setup_drag.screen_position(event.position)
+					var hit: Variant = Plane(Vector3.UP,0.055).intersects_ray(preview_camera.project_ray_origin(point),preview_camera.project_ray_normal(point))
+					if hit is Vector3 and hit.z < setting_drill.SHOT_AIM_NEAR:
+						setting_drill.place_approach_setup(hit,event.shift_pressed)
+					return
 				aim_attack_shot(event.position)
 				setting_drill.swing_input(true)
 			elif event.button_index in [MOUSE_BUTTON_WHEEL_UP,MOUSE_BUTTON_WHEEL_DOWN]:
