@@ -130,6 +130,8 @@ func reset_feed() -> void:
 	setter.position = RECEIVE_START
 	setter.rotation.y = 0.0
 	bump.reset()
+	bump.green_start = 0.01
+	bump.green_end = 0.60
 	bump.show()
 	bump.hand_setting = false
 	bump.quick_hand_receive = false
@@ -177,10 +179,10 @@ func start_swing_practice() -> void:
 	var preroll := descending_time(source,velocity,PIN_HEIGHT)-lead
 	pass_origin = flight_point(source,velocity,preroll)
 	pass_motion = velocity+Vector3.DOWN*Flight.GRAVITY*preroll+(practice_set_target-PIN)/lead
-	setter.rotation.y = incoming_set_heading()
 	jump.begin(setter,Vector2(0.0,0.65))
 	for frame in range(16): jump.step(setter,1.0/60.0,Vector2.ZERO)
 	jump.release()
+	setter.rotation.y = incoming_set_heading()
 	pin_arrival = lead
 	flight_end = Flight.landing_time(pass_origin,pass_motion)
 	ball.position = pass_origin
@@ -269,7 +271,6 @@ func setter_is_diving() -> bool:
 func queue_jump(direction: Vector2) -> void:
 	if jump.active or setter_is_diving() or stage == Stage.HIT: return
 	jump.begin(setter,direction)
-	if stage == Stage.SET: setter.rotation.y = incoming_set_heading()
 	trace.write("jump",clock,{"position":setter.position,"direction":jump.heading},true)
 
 func setter_movement_scale() -> float:
@@ -325,7 +326,7 @@ func play_serve(time: float, previous: float, delta: float) -> void:
 	var end := Flight.landing_time(ATTACK_SERVE_SOURCE,serve_velocity)
 	ball.position = path.call(minf(time,end))
 	var cue := receive_cue_time()
-	timing_cue.update_timing(time,cue,BumpSetting.GREEN_START,BumpSetting.GREEN_END)
+	timing_cue.update_timing(time,cue,bump.green_start,bump.green_end)
 	bump.update_aim()
 	bump.update_attempt(time,previous,end,path,serve_velocity+Vector3.DOWN*Flight.GRAVITY*time,delta,cue)
 	if is_finite(bump.touch_time):
@@ -402,9 +403,11 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 	if not spin_axis.is_zero_approx(): ball.rotate(spin_axis,TAU*SET_TOPSPIN_RPS*delta)
 	ball.position = flight_point(pass_origin,pass_motion,minf(time,flight_end))
 	timing_cue.update_timing(time,pin_arrival,BumpSetting.GREEN_START,BumpSetting.GREEN_END)
-	if jump.active and not is_finite(swing_started):
-		setter.rotation.y = rotate_toward(setter.rotation.y,incoming_set_heading(),8.0*delta)
-	if is_finite(swing_started) and jump.active and setter.position.y > jump.start.y+0.02:
+	var in_air := jump.active and setter.position.y > jump.start.y+0.02
+	var air_age := maxf(0.0,jump.elapsed-jump.LOAD_TIME)
+	if in_air and not swing_practice and (air_age < 0.10 or not is_finite(swing_started)):
+		setter.rotation.y = rotate_toward(setter.rotation.y,incoming_set_heading(),deg_to_rad(720.0)*delta)
+	if is_finite(swing_started) and in_air:
 		if not is_finite(swing_charge_started): swing_charge_started = clock
 		var charge := swing_charge()
 		status.text = "Swing power  |  %d%%" % roundi(charge*100.0)
@@ -431,6 +434,7 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 			var shot := swing_aim-expected_contact
 			var target_yaw := atan2(shot.x,shot.z)
 			var turn_weight := smoothstep(0.0,0.12,clock-swing_charge_started)
+			if not swing_practice: turn_weight *= smoothstep(0.10,0.22,air_age)
 			setter.rotation.y = rotate_toward(setter.rotation.y,target_yaw,deg_to_rad(air_turn_speed)*turn_weight*delta)
 		var drive := clock-swing_drive_started if is_finite(swing_drive_started) else -INF
 		var approach_point := flight_point(pass_origin,pass_motion,clampf(maxf(time+0.12,pin_arrival-0.14),0.0,flight_end))
@@ -504,16 +508,28 @@ func play_spike(time: float, delta: float) -> void:
 	show_attack_net(swing_net_hit,time)
 	var spin_axis := Vector3.UP.cross(pass_motion).normalized()
 	if not spin_axis.is_zero_approx(): ball.rotate(spin_axis,TAU*spike_topspin_rps*delta)
-	var end := flight_end if swing_net_hit.is_empty() else float(swing_net_hit.end_time)
-	if not swing_net_hit.is_empty() and time >= swing_net_hit.time:
-		ball.position = Net.after_hit(swing_net_hit,minf(time,end))
+	var hit_net := not swing_net_hit.is_empty()
+	var landing_time := float(swing_net_hit.end_time) if hit_net else flight_end
+	var bounce_end := landing_time
+	if hit_net and time >= swing_net_hit.time:
+		ball.position = Net.after_hit(swing_net_hit,minf(time,landing_time))
 		status.text = "Spike hit the net"
 	else:
-		ball.position = flight_point(pass_origin,pass_motion,minf(time,end))
+		ball.position = flight_point(pass_origin,pass_motion,minf(time,landing_time))
+	if time >= landing_time:
+		var ground := Vector3(ball.position.x,Flight.FLOOR,ball.position.z)
+		var fall_time := float(swing_net_hit.drop_time) if hit_net else landing_time
+		var landing_velocity: Vector3 = swing_net_hit.velocity if hit_net else pass_motion
+		landing_velocity += Vector3.DOWN*Flight.GRAVITY*fall_time
+		var bounce_speed := clampf(-landing_velocity.y*0.32,0.55,2.8)
+		var bounce_velocity := landing_velocity.slide(Vector3.UP)*0.38+Vector3.UP*bounce_speed
+		var bounce_time := Flight.landing_time(ground,bounce_velocity)
+		bounce_end += bounce_time
+		ball.position = flight_point(ground,bounce_velocity,minf(time-landing_time,bounce_time))
 	if time < SWING_FOLLOW_TIME:
 		var follow := 1.0-pow(1.0-clampf(time/0.19,0.0,1.0),2.0)
 		pose_bow_draw(delta,1.0-smoothstep(0.19,SWING_FOLLOW_TIME,time),swing_contact,swing_contact_extension,follow)
-	if time >= maxf(SWING_FOLLOW_TIME,end+(0.22 if swing_practice else 0.48)) and not jump.active: reset_feed()
+	if time >= maxf(SWING_FOLLOW_TIME,bounce_end) and not jump.active: reset_feed()
 
 func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0.0, follow := 0.0, draw_progress := 1.0, arm_lift := 1.0) -> void:
 	var rig: Skeleton3D = setter.skeleton

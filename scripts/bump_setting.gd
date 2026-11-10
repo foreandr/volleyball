@@ -42,6 +42,8 @@ var rear_follow := 0.0
 var reach_progress := 0.0
 var destination := Vector2(2.75,3.0)
 var height := 3.8
+var green_start := GREEN_START
+var green_end := GREEN_END
 var grade := Timing.Grade.WAITING
 var pressed_at := -INF
 var low_save := LowSave.new()
@@ -252,7 +254,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 				center = platform_center()
 				point = Geometry3D.get_closest_point_to_segment(center,first,last)
 			var timing := (cue_arrival if is_finite(cue_arrival) and not low_save.active else time)-pressed_at
-			var green := timing >= GREEN_START and timing <= GREEN_END
+			var green := timing >= green_start and timing <= green_end
 			var assisted := green and not hand_setting and not low_save.active and point.distance_to(center) > radius and close_body_contact(point,center)
 			var gap_after_adjustment := point.distance_to(center)
 			var from_setter := point-setter.global_position
@@ -274,7 +276,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 				touch = point
 				if not is_finite(cue_arrival) or low_save.active: timing = touch_time-pressed_at
 				if assisted: reach_platform(point-center)
-				grade = Timing.Grade.LATE if timing < GREEN_START else (Timing.Grade.EARLY if timing > GREEN_END else Timing.Grade.PERFECT)
+				grade = Timing.Grade.LATE if timing < green_start else (Timing.Grade.EARLY if timing > green_end else Timing.Grade.PERFECT)
 				var error := timing_error(timing)*(Timing.PANCAKE_ERROR_SCALE if pancake else 1.0)
 				contact_spread = Timing.practice_spread(error)
 				contact_destination = destination
@@ -350,8 +352,8 @@ func close_body_contact(point: Vector3, platform: Vector3) -> bool:
 	return from_body.slide(Vector3.UP).length() <= 0.42 and absf(point.y-platform.y) <= 0.23 and point.distance_to(platform) <= 0.78
 
 func timing_error(elapsed: float) -> float:
-	if elapsed < GREEN_START: return clampf((GREEN_START-elapsed)/GREEN_START,0.0,1.0)
-	return clampf((elapsed-GREEN_END)/(MAX_EARLY_ERROR_TIME-GREEN_END),0.0,1.0)
+	if elapsed < green_start: return clampf((green_start-elapsed)/green_start,0.0,1.0)
+	return clampf((elapsed-green_end)/(MAX_EARLY_ERROR_TIME-green_end),0.0,1.0)
 
 func clear_reach() -> void:
 	reach.clear()
