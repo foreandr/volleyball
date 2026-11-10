@@ -312,7 +312,7 @@ func start_setting_drill() -> void:
 	player_controls.side_weight = 0.0
 	player_controls.side_steps.active = false
 	player_controls.indicator.text = "Setter"
-	preview_camera.position = Vector3(0,9.2,-18.2)
+	preview_camera.position = Vector3(0,7.5,-11.2)
 	preview_camera.look_at(Vector3(0,1.45,2.6))
 	setting_drill = preload("res://scripts/setting_drill.gd").new()
 	preview_player.get_parent().add_child(setting_drill)
