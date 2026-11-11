@@ -626,7 +626,7 @@ func step(delta: float) -> void:
 					cpu_set.follow_forearm(cpu_set.touch_time+time,Vector3.DOWN*5.0)
 				else:
 					cpu_set.update_hand_push(cpu_set.release_time+time,cpu_set.release_time+time-cpu_set.touch_time)
-				if active_cpu_set_style == 2:
+				if active_cpu_set_style >= 2:
 					receiver.position.y = CPU_HOME.y+cpu_jump_set_lift()*(1.0-smoothstep(0.0,0.33,time))
 			play_pin_ball(time,previous,delta)
 		Stage.HIT: play_spike(time,delta)
@@ -732,7 +732,7 @@ func cpu_jump_set_rise(lead: float) -> float:
 func cpu_set_contact_height() -> float:
 	if active_cpu_set_style == 1: return CPU_HOME.y+1.0
 	var height := CPU_HOME.y+HandPose.CONTACT_HEIGHT*receiver.scale.y
-	return height+cpu_jump_set_lift() if active_cpu_set_style == 2 else height
+	return height+cpu_jump_set_lift() if active_cpu_set_style >= 2 else height
 
 func cpu_set_apex() -> float:
 	return approach_set_apex if approach_practice else SET_APEX
@@ -742,6 +742,12 @@ func cpu_set_launch(origin: Vector3) -> Vector3:
 
 func set_requested() -> bool:
 	return true
+
+func prepare_cpu_set(lead: float) -> void:
+	if lead > 0.22: return
+	var weight := 1.0-smoothstep(0.0,0.22,lead)
+	if active_cpu_set_style == 1: cpu_set.apply_pose(cpu_set.contact_frame,weight)
+	else: HandPose.apply(receiver,cpu_contact_point,weight)
 
 func cpu_set_move_speed(_distance: float) -> float:
 	return 3.2
@@ -795,13 +801,11 @@ func play_cpu_set(time: float, delta: float) -> void:
 	if not running:
 		receiver.play_action("idle")
 		cpu_feet.step(receiver.basis.inverse()*travel/maxf(delta*move_speed,0.001),delta,1.4,true)
-	if active_cpu_set_style == 2 and set_requested():
+	if active_cpu_set_style >= 2 and set_requested():
 		receiver.position.y = CPU_HOME.y+cpu_jump_set_rise(lead)
-	if lead <= 0.22 and set_requested():
-		if running: receiver.play_action("idle",0.0)
-		var prepare := 1.0-smoothstep(0.0,0.22,lead)
-		if active_cpu_set_style == 1: cpu_set.apply_pose(cpu_set.contact_frame,prepare)
-		else: HandPose.apply(receiver,cpu_contact_point,prepare)
+	if lead <= 0.34 and set_requested():
+		if running and lead <= 0.22: receiver.play_action("idle",0.0)
+		prepare_cpu_set(lead)
 	if time >= cpu_contact_time:
 		if (receiver.position-cpu_stand).slide(Vector3.UP).length()>0.60:
 			shank("CPU could not reach the pass",time)

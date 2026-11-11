@@ -163,7 +163,9 @@ func cpu_jump_set_lift() -> float:
 	return carried_jump_lift if carried_jump_lift > 0.0 else super.cpu_jump_set_lift()
 
 func cpu_jump_set_rise(lead: float) -> float:
-	return carried_jump_lift if carried_jump_lift > 0.0 else super.cpu_jump_set_rise(lead)
+	if carried_jump_lift > 0.0: return carried_jump_lift
+	if active_cpu_set_style == 3: return cpu_jump_set_lift()*(1.0-smoothstep(0.0,0.34,lead))
+	return super.cpu_jump_set_rise(lead)
 
 func cpu_set_apex() -> float:
 	return manual_set_apex if partner_receiving else SET_APEX
@@ -217,6 +219,23 @@ func call_rally_set(passer: Vector3) -> void:
 	if is_instance_valid(rally_set_call):
 		if not partner_receiving: rally_set_call.text = "Set to Zone %d" % ((rally_set_index+1)*10)
 		rally_set_call.show()
+
+func prepare_cpu_set(lead: float) -> void:
+	super.prepare_cpu_set(lead)
+	if active_cpu_set_style != 3: return
+	var fake := (1.0-smoothstep(0.19,0.34,lead))*smoothstep(0.025,0.18,lead)
+	if fake <= 0.0: return
+	var rig: Skeleton3D = receiver.skeleton
+	var author: RefCounted = receiver.get_pose_author()
+	var pose: Array = []
+	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
+	var shoulder: Vector3 = author.point(pose,"upperarm_r")
+	var scale_: float = rig.global_basis.get_scale().y
+	var cocked_wrist := shoulder+Vector3(-0.20,0.27,-0.21)/scale_
+	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",cocked_wrist,Vector3(-0.85,-0.15,0.4),fake)
+	for joint in ["upperarm_r","lowerarm_r"]:
+		var bone := rig.find_bone(joint)
+		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
 
 func cpu_set_move_speed(distance: float) -> float:
 	return 5.0 if distance > 0.85 else 3.2

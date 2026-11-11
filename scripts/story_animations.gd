@@ -328,7 +328,7 @@ func start_serve_bump_set_spike() -> void:
 	content.add_child(call)
 	setting_drill.rally_set_call = call
 	var technique := OptionButton.new()
-	for title in ["Hands set","Forearm set","Jump set"]: technique.add_item(title)
+	for title in ["Hands set","Forearm set","Jump set","Jump set with spike fake"]: technique.add_item(title)
 	technique.item_selected.connect(func(index: int): setting_drill.cpu_set_style = index)
 	content.add_child(technique)
 	var serve_side := OptionButton.new()
@@ -337,7 +337,7 @@ func start_serve_bump_set_spike() -> void:
 	serve_side.item_selected.connect(func(index: int):
 		setting_drill.serve_to_partner = index == 1
 		technique.disabled = index == 1
-		controls_hint.text = "Aim the set with the cursor\nScroll to change set height\nQ forearms  |  E / I hands\nHold Space to spike\nShift + Space to jump set" if index == 1 else "WASD to move  |  Q forearms  |  E / I hands\nCursor aims  |  Scroll for pass height\nShift + W to run  |  Hold Space to spike"
+		controls_hint.text = "Aim the set with the cursor\nScroll to change set height\nQ forearms  |  E / I hands\nHold Space to spike\nF to jump set" if index == 1 else "WASD to move  |  Q forearms  |  E / I hands\nCursor aims  |  Scroll for pass height\nShift + W to run  |  Hold Space to spike"
 		setting_drill.reset_feed())
 	content.add_child(serve_side)
 	content.add_child(button("Replay",setting_drill.reset_feed))
@@ -1405,9 +1405,10 @@ func _input(event: InputEvent) -> void:
 						if event.pressed: setting_drill.request_manual_set(1)
 					KEY_E, KEY_I:
 						if event.pressed: setting_drill.request_manual_set(0)
+					KEY_F:
+						if event.pressed: setting_drill.request_manual_set(2)
 					KEY_SPACE:
-						if event.shift_pressed and event.pressed: setting_drill.request_manual_set(2)
-						else: setting_drill.second_ball_spike_held = event.pressed
+						setting_drill.second_ball_spike_held = event.pressed
 				return
 			if event.keycode == KEY_Q and event.pressed: setting_drill.queue_set()
 			elif event.keycode in [KEY_E,KEY_I] and event.pressed: setting_drill.queue_hand_receive()
