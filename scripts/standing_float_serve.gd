@@ -70,9 +70,10 @@ func serve_curve_offset(time: float, duration: float) -> Vector3:
 	var vertical := offset.y*(1.0-smoothstep(0.78,1.0,progress))
 	return (side*offset.x+Vector3.UP*vertical)*DRIFT_RADIUS*progress
 
-func float_approach(time: float, plant_time: float, land_time: float, jump_height: float, stride_scale: float, lead_time := 0.0) -> Array:
+func float_approach(time: float, plant_time: float, land_time: float, jump_height: float, stride_scale: float, lead_time := 0.0, lead_plant_time := 0.0) -> Array:
 	var phase := (time-lead_time)/(plant_time-lead_time)
-	var lead := smoothstep(0.035,lead_time,time) if lead_time > 0.0 else 0.0
+	var lead_end := lead_plant_time if lead_plant_time > 0.0 else lead_time
+	var lead := smoothstep(0.035,lead_end,time) if lead_time > 0.0 else 0.0
 	var left_lead := smoothstep(0.09,0.38,phase)
 	var right_step := smoothstep(0.40,0.72,phase)
 	var left_plant := smoothstep(0.72,0.96,phase)

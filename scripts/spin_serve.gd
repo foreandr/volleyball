@@ -1,9 +1,10 @@
 extends "res://scripts/jump_float_serve.gd"
 
 const TOSS_STEP := 0.36
-const SPIN_TAKEOFF := 1.13
-const SPIN_CONTACT := 1.55
-const SPIN_LAND := 2.01
+const APPROACH_START := TOSS_STEP+0.15
+const SPIN_TAKEOFF := APPROACH_START+0.91
+const SPIN_CONTACT := SPIN_TAKEOFF+0.43
+const SPIN_LAND := SPIN_TAKEOFF+0.89
 
 var sidespin := 0.0
 var released_sidespin := 0.0
@@ -26,7 +27,7 @@ func front_start_limit() -> float:
 	return -7.70
 
 func recovery_end() -> float:
-	return 2.12
+	return SPIN_LAND+0.11
 
 func can_run_after_contact() -> bool:
 	return is_finite(contact_clock) and swing_time >= SPIN_LAND
@@ -35,10 +36,23 @@ func float_body_scale() -> float:
 	return 1.62
 
 func float_step_pose(time: float) -> Array:
-	return float_approach(time,SPIN_TAKEOFF,SPIN_LAND,1.12,1.17,TOSS_STEP)
+	return float_approach(time,SPIN_TAKEOFF,SPIN_LAND,1.12,1.17,APPROACH_START,TOSS_STEP)
 
 func toss_curve_height() -> float:
-	return 1.84
+	var air_time := SPIN_CONTACT-TOSS_STEP
+	return Flight.GRAVITY*air_time*air_time/8.0
+
+func serve_swing_rate(_launch_speed: float) -> float:
+	return 1.0
+
+func reset() -> void:
+	super.reset()
+	ball.rotation = Vector3.ZERO
+
+func spin_toss_ball(previous: float, time: float, rate: float) -> void:
+	var air_time := maxf(0.0,time-maxf(previous,TOSS_STEP))/rate
+	if air_time > 0.0:
+		ball.rotate(Vector3.UP.cross(forward).normalized(),TAU*3.5*air_time)
 
 func toss_palm(pose: Array, _rig: Skeleton3D, author: RefCounted, _time: float) -> Vector3:
 	return author.point(pose,"hand_r").lerp(author.point(pose,"middle_01_r"),0.72)
@@ -50,6 +64,8 @@ func position_toss_hands(pose: Array, rig: Skeleton3D, author: RefCounted, time:
 	var wrist := shoulder+Vector3(0.07,-0.37+0.61*rise,0.37+0.07*rise)/scale_
 	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",wrist,Vector3(-0.55,-0.65,0.13),weight)
 	orient_palm(pose,rig,author,"r",Vector3.BACK,Vector3.RIGHT,0.72*weight)
+	var roll := smoothstep(TOSS_STEP-0.08,TOSS_STEP+0.05,time)
+	author.rotate_world(pose,"hand_r",Vector3.RIGHT,deg_to_rad(-20.0)*roll*weight)
 	var left_shoulder: Vector3 = author.point(pose,"upperarm_l")
 	var off_hand := left_shoulder+Vector3(0.11,-0.51,0.07)/scale_
 	author.limb(pose,"upperarm_l","lowerarm_l","hand_l",off_hand,Vector3(0.60,-0.20,0.25),weight)

@@ -186,12 +186,13 @@ func step(delta: float) -> void:
 	var contact := contact_time()
 	var previous := swing_time
 	var launch_speed := launch_velocity(preview_origin,flight_duration(preview_origin)).length()
-	var swing_rate := clampf(launch_speed/12.0,0.65,1.45)
+	var swing_rate := serve_swing_rate(launch_speed)
 	elapsed += delta
 	swing_time += delta*swing_rate if not is_finite(contact_clock) else delta
 	var striking := previous < contact and swing_time >= contact
 	if not moved_after_contact and swing_time <= recovery_end(): pose(contact if striking else swing_time)
 	elif not running: player.animator.advance(delta)
+	if not is_finite(contact_clock): spin_toss_ball(previous,minf(swing_time,contact),swing_rate)
 	if striking:
 		contact_clock = elapsed-(swing_time-contact)/swing_rate
 		origin = ball.position
@@ -209,6 +210,12 @@ func step(delta: float) -> void:
 		var time := minf(flight_time,landing_time)
 		ball.position = Net.after_hit(net_hit,time) if not net_hit.is_empty() and time >= net_hit.time else flight_point(time)
 	if flight_time >= landing_time+0.55 and not external_rally: reset()
+
+func serve_swing_rate(launch_speed: float) -> float:
+	return clampf(launch_speed/12.0,0.65,1.45)
+
+func spin_toss_ball(_previous: float, _time: float, _rate: float) -> void:
+	pass
 
 func spin_serve_ball(_delta: float) -> void:
 	pass
