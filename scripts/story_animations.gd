@@ -21,6 +21,7 @@ const CATEGORIES := ["Forearm reception","Setting","Attacking","Serving","Blocki
 var content: VBoxContainer
 var category_buttons: Dictionary = {}
 var selected_category := ""
+var underhand_serve: Node3D
 var type_indices: Dictionary = {}
 var type_label: Label
 var animation_list
@@ -177,6 +178,7 @@ func build_controls(controls: VBoxContainer) -> void:
 	show_categories()
 
 func clear_content() -> void:
+	stop_underhand_serve()
 	for child in content.get_children():
 		content.remove_child(child)
 		child.queue_free()
@@ -274,6 +276,9 @@ Scroll to set pass height",16)
 		refresh_type()
 		preview.grab_focus()
 		return
+	if category == "Serving":
+		drill_status = label("Space to serve",16)
+		content.add_child(drill_status)
 	var list := ItemList.new()
 	list.name = "AnimationList"
 	list.allow_reselect = true
@@ -555,7 +560,13 @@ func stop_setting_drill() -> void:
 	player_controls.show_stamina(false)
 	update_camera()
 
+func stop_underhand_serve() -> void:
+	if not is_instance_valid(underhand_serve): return
+	underhand_serve.stop()
+	underhand_serve = null
+
 func refresh_type() -> void:
+	stop_underhand_serve()
 	right_panel.hide()
 	angle_control.hide()
 	type_label.text = current_type()
@@ -566,6 +577,17 @@ func refresh_type() -> void:
 				preview_entry(entry)
 				return
 		if is_instance_valid(ball_preview): ball_preview.stop()
+		return
+	var underhand := selected_category == "Serving" and current_type() == "Underhand"
+	animation_list.visible = not underhand
+	edit_button.visible = not underhand
+	if is_instance_valid(drill_status): drill_status.visible = underhand
+	if underhand:
+		if is_instance_valid(ball_preview): ball_preview.stop()
+		underhand_serve = preload("res://scripts/underhand_serve.gd").new()
+		preview_player.get_parent().add_child(underhand_serve)
+		underhand_serve.configure(preview_player)
+		preview.grab_focus()
 		return
 	animation_list.clear()
 	if is_instance_valid(edit_button): edit_button.disabled = true
@@ -666,6 +688,9 @@ func reception_drill_active() -> bool:
 
 func _process(delta: float) -> void:
 	pass_timing_cue.hide()
+	if is_instance_valid(underhand_serve):
+		underhand_serve.step(delta)
+		return
 	if is_instance_valid(setting_drill):
 		if selected_category == "Attacking" and not setting_drill.approach_setup_drag.is_empty(): return
 		delta *= attack_playback_speed
@@ -1276,6 +1301,10 @@ func open_menu() -> void:
 	else: get_tree().change_scene_to_file("res://scenes/story.tscn")
 
 func _input(event: InputEvent) -> void:
+	if is_instance_valid(underhand_serve) and event is InputEventKey and event.keycode == KEY_SPACE:
+		if event.pressed and not event.echo: underhand_serve.serve()
+		get_viewport().set_input_as_handled()
+		return
 	if is_instance_valid(setting_drill) and selected_category == "Attacking" and event is InputEventKey and event.keycode == KEY_M and event.pressed and not event.echo:
 		StorySession.attack_ball_audio_muted = not StorySession.attack_ball_audio_muted
 		setting_drill.set_ball_audio_muted(StorySession.attack_ball_audio_muted)
