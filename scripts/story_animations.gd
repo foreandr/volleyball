@@ -395,6 +395,9 @@ func show_block_positions() -> void:
 	positions.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(positions)
 	positions.add_child(label("Court setup",18))
+	var map := preload("res://scripts/blocking_position_map.gd").new()
+	map.drill = blocking_practice
+	positions.add_child(map)
 	var vertical_readout := label("Blocker vertical  +0 in",16)
 	positions.add_child(vertical_readout)
 	var vertical := HSlider.new()
@@ -408,18 +411,6 @@ func show_block_positions() -> void:
 		vertical_readout.text = "Blocker vertical  %+.0f in" % value)
 	positions.add_child(vertical)
 
-	add_block_position_slider(positions,"Attacker sideways",-2.5,2.5,0.0,
-		func(value: float): blocking_practice.attacker_offset.x = value)
-	add_block_position_slider(positions,"Attacker back / forward",-1.2,1.8,0.0,
-		func(value: float): blocking_practice.attacker_offset.y = value)
-	add_block_position_slider(positions,"Blocker sideways",-2.0,2.0,0.0,
-		func(value: float): blocking_practice.blocker_offset.x = value)
-	add_block_position_slider(positions,"Blocker back / forward",-0.25,1.25,0.0,
-		func(value: float): blocking_practice.blocker_offset.y = value)
-	add_block_position_slider(positions,"Set sideways",-2.0,2.0,0.0,
-		func(value: float): blocking_practice.set_offset.x = value)
-	add_block_position_slider(positions,"Set off the net",-0.35,1.8,0.0,
-		func(value: float): blocking_practice.set_offset.y = value)
 	add_block_position_slider(positions,"Set height",3.8,6.5,4.75,
 		func(value: float): blocking_practice.set_apex = value)
 

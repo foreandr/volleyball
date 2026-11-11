@@ -85,6 +85,28 @@ func set_player_attacks(value: bool) -> void:
 func apply_position_setup() -> void:
 	repeat_setup_feed = true
 	restart_block_feed()
+	blocker.position.x = to_global(setup_marker("blocker")).x
+
+func setup_marker(marker: String) -> Vector3:
+	match marker:
+		"attacker":
+			return Vector3(clampf(current_pin*0.78-attacker_offset.x,-5.5,5.5),0.04,1.67-attacker_offset.y)
+		"blocker":
+			var lane := rally_set_target.x if player_attacks else 0.0
+			return Vector3(clampf(lane-blocker_offset.x,-5.5,5.5),0.04,2.0*Net.NET_Z-BLOCK_START.z+blocker_offset.y)
+		_:
+			return Vector3(clampf(current_pin-set_offset.x,-4.4,4.4),0.065,3.34-set_offset.y)
+
+func move_setup_marker(marker: String, point: Vector3) -> void:
+	match marker:
+		"attacker":
+			attacker_offset = Vector2(current_pin*0.78-point.x,1.67-point.z)
+		"blocker":
+			var lane := rally_set_target.x if player_attacks else 0.0
+			blocker_offset = Vector2(lane-point.x,point.z-(2.0*Net.NET_Z-BLOCK_START.z))
+		"set":
+			set_offset = Vector2(current_pin-point.x,3.34-point.z)
+	apply_position_setup()
 
 func restart_block_feed() -> void:
 	release_approach_jump()
@@ -137,9 +159,9 @@ func reset_feed() -> void:
 			2: pin_x = -PIN.x
 	current_pin = pin_x
 	repeat_setup_feed = false
-	setter.position = Vector3(clampf(pin_x*0.78-attacker_offset.x,-5.5,5.5),0.04,1.67-attacker_offset.y)
+	setter.position = setup_marker("attacker")
 	setter.rotation.y = 0.0
-	rally_set_target = Vector3(clampf(pin_x-set_offset.x,-4.4,4.4),0.065,3.34-set_offset.y)
+	rally_set_target = setup_marker("set")
 	if block_elapsed < 0.0:
 		blocker.position.z = BLOCK_START.z-blocker_offset.y
 		if not player_attacks: blocker.position.x = blocker_offset.x
@@ -184,8 +206,8 @@ func queue_kong(hand_index: int) -> void:
 
 func tick_block(delta: float) -> void:
 	if player_attacks and stage == Stage.SET and block_elapsed < 0.0:
-		var pin_world := to_global(rally_set_target)
-		blocker.position.x = move_toward(blocker.position.x,pin_world.x+blocker_offset.x,delta*8.0)
+		var target := to_global(setup_marker("blocker"))
+		blocker.position.x = move_toward(blocker.position.x,target.x,delta*8.0)
 	if player_attacks and not cpu_block_queued and block_elapsed < 0.0:
 		if stage == Stage.SET and is_finite(swing_started) and clock-swing_started >= 0.20:
 			cpu_block_queued = true
