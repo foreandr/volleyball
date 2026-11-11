@@ -15,6 +15,9 @@ var user_player: Node3D
 var teammate: Node3D
 var manual_set_requested := false
 var carried_jump_lift := 0.0
+var swing_to_set_pose: Array[Quaternion] = []
+var swing_to_set_started := 0.0
+var swing_to_set_duration := 0.14
 var second_ball_spike_held := false
 var player_second_ball_attack := false
 var manual_set_apex := SET_APEX
@@ -63,6 +66,7 @@ func reset_feed() -> void:
 	set_preview.clear_surfaces()
 	manual_set_requested = false
 	carried_jump_lift = 0.0
+	swing_to_set_pose.clear()
 	second_ball_spike_held = false
 	player_second_ball_attack = false
 	manual_set_target = Vector3.INF
@@ -112,6 +116,10 @@ func request_manual_set(technique: int) -> void:
 		var lift := maxf(0.0,user_player.position.y-BACK_LEFT.y)
 		if technique == 0 and jump.active and lift > 0.03:
 			carried_jump_lift = lift
+			var rig: Skeleton3D = user_player.skeleton
+			for bone in rig.get_bone_count():
+				swing_to_set_pose.append(rig.get_bone_pose_rotation(bone))
+			swing_to_set_started = clock
 			technique = 2
 		jump.active = false
 		if carried_jump_lift == 0.0: user_player.position.y = BACK_LEFT.y
@@ -130,12 +138,26 @@ func request_manual_set(technique: int) -> void:
 	status.text = ["Hands set queued","Forearm set queued","Jump set queued"][technique]
 	cpu_contact_time = maxf(clock-stage_start,descending_time(pass_origin,pass_motion,cpu_set_contact_height()))
 	cpu_contact_point = flight_point(pass_origin,pass_motion,cpu_contact_time)
+	if not swing_to_set_pose.is_empty():
+		swing_to_set_duration = clampf(cpu_contact_time-(clock-stage_start)+0.055,0.075,0.16)
 	var incoming := (pass_origin-cpu_contact_point).slide(Vector3.UP).normalized()
 	cpu_stand = Court.clamp_setter(Vector3(cpu_contact_point.x,CPU_HOME.y,cpu_contact_point.z)-incoming*HandPose.CONTACT_FORWARD*receiver.scale.z,ATTACK_FRONT_LIMIT)
 	update_manual_set_target()
 
 func set_requested() -> bool:
 	return not partner_receiving or manual_set_requested
+
+func blend_swing_to_set() -> void:
+	if swing_to_set_pose.is_empty(): return
+	var age := clock-swing_to_set_started
+	if age >= swing_to_set_duration or stage not in [Stage.PASS,Stage.SET]:
+		swing_to_set_pose.clear()
+		return
+	var weight := smoothstep(0.0,swing_to_set_duration,age)
+	var rig: Skeleton3D = user_player.skeleton
+	for bone in rig.get_bone_count():
+		var set_rotation := rig.get_bone_pose_rotation(bone)
+		rig.set_bone_pose_rotation(bone,swing_to_set_pose[bone].slerp(set_rotation,weight))
 
 func cpu_jump_set_lift() -> float:
 	return carried_jump_lift if carried_jump_lift > 0.0 else super.cpu_jump_set_lift()
@@ -292,6 +314,7 @@ func tick_demo(delta: float, controls: RefCounted) -> void:
 		step_jump(delta)
 		var previous_stage := stage
 		step(delta)
+		blend_swing_to_set()
 		if previous_stage == Stage.PASS and stage != Stage.PASS: set_preview.clear_surfaces()
 		if previous_stage == Stage.PASS and stage == Stage.SET:
 			aim_swing(Vector3(randf_range(-3.35,3.35),Flight.FLOOR,randf_range(8.5,11.8)))
