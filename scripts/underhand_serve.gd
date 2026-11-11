@@ -149,7 +149,7 @@ func pose(time: float) -> void:
 	var scale_: float = rig.global_basis.get_scale().y
 	for side in ["l","r"]:
 		var foot: Vector3 = foot_starts[side]
-		if side == "r": foot += Vector3.BACK*STEP_DISTANCE*step+Vector3.UP*0.11*sin(PI*step)
+		if side == "l": foot += Vector3.BACK*STEP_DISTANCE*step+Vector3.UP*0.11*sin(PI*step)
 		author.limb(bones,"thigh_"+side,"calf_"+side,"foot_"+side,rig.to_local(foot),Vector3(0.1 if side == "l" else -0.1,0.2,1.0))
 	var back := smoothstep(0.0,0.32,time)*(1.0-smoothstep(0.32,CONTACT_TIME,time))
 	var follow := smoothstep(CONTACT_TIME,0.78,time)*(1.0-smoothstep(0.78,1.22,time))

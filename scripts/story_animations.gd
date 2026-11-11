@@ -277,7 +277,7 @@ Scroll to set pass height",16)
 		preview.grab_focus()
 		return
 	if category == "Serving":
-		drill_status = label("Space to serve\nMove cursor to aim\nMiddle drag to rotate\nScroll to zoom  |  Shift + scroll for arc",16)
+		drill_status = label("Space to serve\nMove cursor to aim\nWASD to move camera\nMiddle drag to rotate\nScroll to zoom  |  Shift + scroll for arc",16)
 		content.add_child(drill_status)
 	var list := ItemList.new()
 	list.name = "AnimationList"
@@ -692,6 +692,7 @@ func reception_drill_active() -> bool:
 func _process(delta: float) -> void:
 	pass_timing_cue.hide()
 	if is_instance_valid(underhand_serve):
+		pan_serve_camera(player_controls.movement_input(),delta)
 		underhand_serve.step(delta)
 		return
 	if is_instance_valid(setting_drill):
@@ -1155,6 +1156,11 @@ func handle_preview_input(event: InputEvent) -> void:
 		return
 	super.handle_preview_input(event)
 
+func pan_serve_camera(direction: Vector2, delta: float) -> void:
+	var offset := camera_pan_delta(direction,delta,5.0)
+	setting_camera_focus += offset
+	preview_camera.position += offset
+
 func orbit_setting_camera(pixels: Vector2) -> void:
 	var offset := preview_camera.position-setting_camera_focus
 	var distance := offset.length()
@@ -1169,7 +1175,8 @@ func zoom_attack_camera(wheel: float) -> void:
 	var actor_focus := preview_player.position+Vector3.UP*2.0
 	if is_instance_valid(setting_drill) and setting_drill.jump.active:
 		actor_focus = setting_drill.jump.start+Vector3(0.0,2.0,0.45)
-	setting_camera_focus = SETTING_CAMERA_FOCUS.lerp(actor_focus,1.0-smoothstep(4.0,14.0,distance))
+	if not is_instance_valid(underhand_serve):
+		setting_camera_focus = SETTING_CAMERA_FOCUS.lerp(actor_focus,1.0-smoothstep(4.0,14.0,distance))
 	preview_camera.position = setting_camera_focus+offset.normalized()*distance
 	preview_camera.look_at(setting_camera_focus)
 
