@@ -150,7 +150,10 @@ func request_manual_set(technique: int) -> void:
 	var incoming := (pass_origin-cpu_contact_point).slide(Vector3.UP).normalized()
 	cpu_stand = Court.clamp_setter(Vector3(cpu_contact_point.x,CPU_HOME.y,cpu_contact_point.z)-incoming*HandPose.CONTACT_FORWARD*receiver.scale.z,ATTACK_FRONT_LIMIT)
 	if partner_receiving: update_manual_set_target()
-	else: cpu_set_launch(cpu_contact_point)
+	else:
+		cpu_set_launch(cpu_contact_point)
+		if is_instance_valid(rally_set_call):
+			rally_set_call.text = "Setting Zone %d" % ((rally_set_index+1)*10)
 
 func set_requested() -> bool:
 	return not partner_receiving or manual_set_requested
@@ -225,7 +228,9 @@ func call_rally_set(passer: Vector3) -> void:
 	else: cpu_set_launch(cpu_contact_point)
 	region.show()
 	if is_instance_valid(rally_set_call):
-		if not partner_receiving: rally_set_call.text = "Set to Zone %d" % ((rally_set_index+1)*10)
+		if not partner_receiving:
+			var call := "If set, Zone %d" if active_cpu_set_style == 3 else "Set to Zone %d"
+			rally_set_call.text = call % ((rally_set_index+1)*10)
 		rally_set_call.show()
 
 func cpu_set_move_speed(distance: float) -> float:
@@ -283,7 +288,7 @@ func try_second_ball_attack() -> void:
 	pin_arrival = height_time
 	flight_end = Flight.landing_time(pass_origin,pass_motion)
 	set_preview.clear_surfaces()
-	region.hide()
+	if not cpu_attempt: region.hide()
 	status.text = "Second-ball attack"
 
 func tick_demo(delta: float, controls: RefCounted) -> void:
@@ -308,6 +313,8 @@ func tick_demo(delta: float, controls: RefCounted) -> void:
 		if stage == Stage.SET and approach_jump_queued: time_approach_plant(delta)
 		step_jump(delta)
 		step(delta)
+		if cpu_second_ball_attack and stage == Stage.HIT and is_instance_valid(rally_set_call):
+			rally_set_call.hide()
 		return
 	if partner_receiving:
 		if stage == Stage.SERVE and clock-stage_start >= serve_contact-0.20 and not is_finite(bump.pressed_at):
