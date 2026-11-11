@@ -663,14 +663,15 @@ func refresh_type() -> void:
 				return
 		if is_instance_valid(ball_preview): ball_preview.stop()
 		return
-	var underhand := selected_category == "Serving" and current_type() == "Underhand"
-	animation_list.visible = not underhand
-	edit_button.visible = not underhand
+	var serving_practice := selected_category == "Serving" and current_type() in ["Underhand","Standing Float"]
+	animation_list.visible = not serving_practice
+	edit_button.visible = not serving_practice
 	if selected_category == "Serving" and is_instance_valid(drill_status):
-		drill_status.text = "Space to serve\nMove cursor to aim\nWASD to run\nMiddle drag to rotate\nScroll for arc  |  Shift + scroll to zoom" if underhand else "WASD to run"
-	if underhand:
+		drill_status.text = "Space to serve\nMove cursor to aim\nWASD to run\nMiddle drag to rotate\nScroll for arc  |  Shift + scroll to zoom" if serving_practice else "WASD to run"
+	if serving_practice:
 		if is_instance_valid(ball_preview): ball_preview.stop()
-		underhand_serve = preload("res://scripts/underhand_serve.gd").new()
+		var serve_script := preload("res://scripts/standing_float_serve.gd") if current_type() == "Standing Float" else preload("res://scripts/underhand_serve.gd")
+		underhand_serve = serve_script.new()
 		preview_player.get_parent().add_child(underhand_serve)
 		underhand_serve.configure(preview_player,serving_position)
 		serve_opponent_frame = Node3D.new()

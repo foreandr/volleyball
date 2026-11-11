@@ -109,7 +109,7 @@ func reset() -> void:
 	var rig: Skeleton3D = player.skeleton
 	for side in ["l","r"]:
 		foot_starts[side] = rig.to_global(rig.get_bone_global_pose(rig.find_bone("foot_"+side)).origin)
-	pose(CONTACT_TIME)
+	pose(contact_time())
 	preview_origin = ball.position
 	pose(0.0)
 	update_path_preview()
@@ -159,18 +159,22 @@ func serve() -> void:
 	swing_time = 0.0
 	contact_clock = INF
 
+func contact_time() -> float:
+	return CONTACT_TIME
+
 func step(delta: float) -> void:
 	if elapsed < 0.0: return
+	var contact := contact_time()
 	var previous := swing_time
 	var launch_speed := launch_velocity(preview_origin,flight_duration(preview_origin)).length()
 	var swing_rate := clampf(launch_speed/12.0,0.65,1.45)
 	elapsed += delta
 	swing_time += delta*swing_rate if not is_finite(contact_clock) else delta
-	var striking := previous < CONTACT_TIME and swing_time >= CONTACT_TIME
-	if not moved_after_contact and swing_time <= 1.23: pose(CONTACT_TIME if striking else swing_time)
+	var striking := previous < contact and swing_time >= contact
+	if not moved_after_contact and swing_time <= 1.23: pose(contact if striking else swing_time)
 	elif not running: player.animator.advance(delta)
 	if striking:
-		contact_clock = elapsed-(swing_time-CONTACT_TIME)/swing_rate
+		contact_clock = elapsed-(swing_time-contact)/swing_rate
 		origin = ball.position
 		landing_time = flight_duration(origin)
 		velocity = launch_velocity(origin,landing_time)
@@ -185,21 +189,28 @@ func step(delta: float) -> void:
 func flight_point(time: float) -> Vector3:
 	return origin+velocity*time+Vector3.DOWN*0.5*Flight.GRAVITY*time*time
 
-func pose(time: float) -> void:
-	var step := smoothstep(0.14,0.50,time)
-	var transfer := smoothstep(0.20,CONTACT_TIME,time)
-	player.position = serve_start+Vector3.BACK*STEP_DISTANCE*0.55*transfer
-	player.position.y -= 0.12*transfer*(1.0-smoothstep(0.55,1.05,time))
+func prepare_serve_pose(time: float, plant: float, distance: float, sink: float, step_begin := 0.14, step_end := 0.50) -> Array:
+	var step := smoothstep(step_begin,step_end,time)
+	var transfer := smoothstep(0.20,plant,time)
+	player.position = serve_start+forward*distance*0.55*transfer
+	player.position.y -= sink*transfer*(1.0-smoothstep(plant,plant+0.50,time))
 	player.animator.seek(0.0,true)
 	var rig: Skeleton3D = player.skeleton
 	var author: RefCounted = player.get_pose_author()
 	var bones: Array = []
 	for bone in rig.get_bone_count(): bones.append(rig.get_bone_pose(bone))
-	var scale_: float = rig.global_basis.get_scale().y
 	for side in ["l","r"]:
 		var foot: Vector3 = foot_starts[side]
-		if side == "l": foot += forward*STEP_DISTANCE*step+Vector3.UP*0.15*sin(PI*step)
+		if side == "l": foot += forward*distance*step+Vector3.UP*0.15*sin(PI*step)
 		author.limb(bones,"thigh_"+side,"calf_"+side,"foot_"+side,rig.to_local(foot),Vector3(0.1 if side == "l" else -0.1,0.2,1.0))
+	return bones
+
+func pose(time: float) -> void:
+	var transfer := smoothstep(0.20,CONTACT_TIME,time)
+	var bones := prepare_serve_pose(time,CONTACT_TIME,STEP_DISTANCE,0.12)
+	var rig: Skeleton3D = player.skeleton
+	var author: RefCounted = player.get_pose_author()
+	var scale_: float = rig.global_basis.get_scale().y
 	var back := smoothstep(0.0,0.32,time)*(1.0-smoothstep(0.32,CONTACT_TIME,time))
 	var follow := smoothstep(CONTACT_TIME,0.78,time)*(1.0-smoothstep(0.78,1.22,time))
 	var right_shoulder: Vector3 = author.point(bones,"upperarm_r")
