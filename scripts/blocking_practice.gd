@@ -71,10 +71,7 @@ func queue_block() -> void:
 	blocker.animator.advance(0.0)
 	block_elapsed = 0.0
 
-func tick_block(delta: float, controls: RefCounted) -> void:
-	if block_elapsed < 0.0:
-		controls.read_pace_input()
-		controls.move_player(controls.movement_input(),delta,false,ball.global_position,1.0,0.0,false,3.72)
+func tick_block(delta: float) -> void:
 	step_blocker(delta)
 	if stage == Stage.SET: queued_approach_input(delta)
 	step_jump(delta)

@@ -329,7 +329,7 @@ func start_blocking_practice() -> void:
 	if is_instance_valid(ball_preview): ball_preview.stop()
 	right_panel.hide()
 	angle_control.hide()
-	content.add_child(label("WASD to move\nSpace to jump",18))
+	content.add_child(label("WASD to move camera\nSpace to jump",18))
 	drill_status = label("",16)
 	drill_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(drill_status)
@@ -839,7 +839,8 @@ func reception_drill_active() -> bool:
 func _process(delta: float) -> void:
 	pass_timing_cue.hide()
 	if is_instance_valid(blocking_practice):
-		blocking_practice.tick_block(delta,player_controls)
+		preview_camera.position += camera_pan_delta(player_controls.movement_input(),delta,5.0)
+		blocking_practice.tick_block(delta)
 		return
 	if selected_category == "Serving":
 		move_server(player_controls.movement_input(),delta)
