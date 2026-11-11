@@ -34,7 +34,7 @@ func reset_feed() -> void:
 	blocker.position = defender_position
 	stage = Stage.PASS
 	approach_space_held = false
-	setter.position = Vector3(1.78,0.04,1.82)
+	setter.position = Vector3(5.0,0.04,1.42)
 	rally_set_target = Vector3(PIN.x,0.065,PIN.z)
 	active_cpu_set_style = 2
 	cpu_stand = Vector3(0.15,0.04,2.62)
