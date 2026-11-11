@@ -16,6 +16,8 @@ const APPROACH_RADII := [1.15,1.8,2.5]
 const RECEIVE_START := Vector3(3.05,0.04,-3.10)
 const ATTACK_SERVE_SOURCE := Vector3(3.05,2.8,8.5)
 const CPU_HOME := Vector3(-0.55,0.04,3.10)
+const RALLY_SET_TARGETS := [PIN, Vector3(0.0,0.065,3.05), Vector3(-3.55,0.065,3.35)]
+const RALLY_SET_CALLS := ["Left pin", "Middle", "Right pin"]
 const PIN_HEIGHT := 2.75
 const SET_APEX := 5.0
 const SET_TOPSPIN_RPS := 2.2
@@ -49,6 +51,8 @@ var approach_steps := 2
 var approach_space_held := false
 var approach_intercept := Vector3.INF
 var approach_start := APPROACH_START
+var rally_set_index := -1
+var rally_set_target := PIN
 var approach_set_target := PIN
 var approach_set_apex := SET_APEX
 var approach_setup_drag := ""
@@ -249,7 +253,7 @@ func reset_feed() -> void:
 	bump.green_start = 0.01
 	bump.green_end = 0.60
 	bump.green_forearm_allowance = 0.30
-	bump.green_hand_allowance = 0.15
+	bump.green_hand_allowance = 0.45
 	bump.show()
 	bump.hand_setting = false
 	bump.quick_hand_receive = false
@@ -300,8 +304,12 @@ func reset_feed() -> void:
 		status.text = "Setter receiving pass"
 		trace.begin_feed({"mode":"approach_practice","source":pass_origin,"velocity":pass_motion,"pin":approach_set_target,"start":setter.position})
 		return
-	status.text = "Receive  |  Q forearms, I / E hands"
-	trace.begin_feed({"mode":"attacking","source":ATTACK_SERVE_SOURCE,"serve_velocity":serve_velocity,"pin":PIN})
+	rally_set_index = (rally_set_index+1)%RALLY_SET_TARGETS.size()
+	rally_set_target = RALLY_SET_TARGETS[rally_set_index]
+	region.position = rally_set_target
+	region.show()
+	status.text = "Setter calls %s  |  Receive" % RALLY_SET_CALLS[rally_set_index]
+	trace.begin_feed({"mode":"attacking","source":ATTACK_SERVE_SOURCE,"serve_velocity":serve_velocity,"pin":rally_set_target})
 
 func toggle_shot_sequence() -> void:
 	if shot_sequence_index >= 0:
@@ -479,7 +487,7 @@ func try_queue_approach(log_rejection: bool) -> void:
 	if not intercept.is_finite():
 		if log_rejection:
 			status.text = unavailable_approach_status()
-			trace.write("approach_rejected",clock,{"target":approach_set_target,"range":APPROACH_RADII.back()+REGION_RADIUS,"reason":status.text},true)
+			trace.write("approach_rejected",clock,{"target":called_set_target(),"range":APPROACH_RADII.back()+REGION_RADIUS,"reason":status.text},true)
 		return
 	approach_pressed_at = clock
 	approach_jump_queued = true
@@ -584,7 +592,7 @@ func step(delta: float) -> void:
 			follow_receive(time)
 			play_shank(time,previous)
 		Stage.SET:
-			if approach_practice: face_receiver(approach_set_target-receiver.position,delta*APPROACH_SET_TURN_RATE)
+			if uses_assisted_approach(): face_receiver(called_set_target()-receiver.position,delta*APPROACH_SET_TURN_RATE)
 			if not swing_practice:
 				cpu_set.update_hand_push(cpu_set.release_time+time,cpu_set.release_time+time-cpu_set.touch_time)
 			play_pin_ball(time,previous,delta)
@@ -640,7 +648,7 @@ func play_serve(time: float, previous: float, delta: float) -> void:
 		cpu_stand = Court.clamp_setter(Vector3(cpu_contact_point.x,CPU_HOME.y,cpu_contact_point.z)-incoming*HandPose.CONTACT_FORWARD*receiver.scale.z,ATTACK_FRONT_LIMIT)
 		stage = Stage.PASS
 		stage_start = clock
-		status.text = "CPU setting to the pin"
+		status.text = "Setting %s" % RALLY_SET_CALLS[rally_set_index]
 		trace.write("player_pass",clock,{"point":pass_origin,"velocity":pass_motion,"cpu_contact":cpu_contact_point,
 			"grade":bump.grade,"reach":bump.reach,"contact":bump.contact_check},true)
 	elif time >= end:
@@ -678,12 +686,15 @@ func face_receiver(direction: Vector3, max_turn: float) -> void:
 		var yaw := atan2(direction.x,direction.z)
 		receiver.rotation.y = rotate_toward(receiver.rotation.y,yaw,max_turn)
 
+func called_set_target() -> Vector3:
+	return approach_set_target if approach_practice else rally_set_target
+
 func play_cpu_set(time: float, delta: float) -> void:
 	if is_finite(cpu_set.touch_time):
 		var push_time: float = time-cpu_set.touch_time
-		if approach_practice:
+		if uses_assisted_approach():
 			var anchor: Vector3 = receiver.to_global(cpu_set.hand_anchor)
-			face_receiver(approach_set_target-receiver.position,delta*APPROACH_SET_TURN_RATE)
+			face_receiver(called_set_target()-receiver.position,delta*APPROACH_SET_TURN_RATE)
 			cpu_set.hand_anchor = receiver.to_local(anchor)
 		cpu_set.update_hand_push(time,push_time)
 		ball.position = cpu_set.platform_center()
@@ -710,8 +721,8 @@ func play_cpu_set(time: float, delta: float) -> void:
 	if toward_ball.length_squared() < 0.09 and travel.is_zero_approx():
 		toward_ball = (pass_origin-cpu_contact_point).slide(Vector3.UP)
 	var lead := cpu_contact_time-time
-	if approach_practice and lead < 0.30:
-		var target := approach_set_target-receiver.position
+	if uses_assisted_approach() and lead < 0.30:
+		var target := called_set_target()-receiver.position
 		var preturn := 1.0-smoothstep(0.0,0.30,lead)
 		var yaw := lerp_angle(atan2(toward_ball.x,toward_ball.z),atan2(target.x,target.z),preturn*0.28)
 		face_receiver(Vector3(sin(yaw),0.0,cos(yaw)),delta*lerpf(9.0,APPROACH_SET_TURN_RATE,preturn))
@@ -725,7 +736,7 @@ func play_cpu_set(time: float, delta: float) -> void:
 			shank("CPU could not reach the pass",time)
 			return
 		cpu_set.height = approach_set_apex if approach_practice else SET_APEX
-		var ideal := set_toward_pin(cpu_contact_point,approach_set_target if approach_practice else PIN,cpu_set.height)
+		var ideal := set_toward_pin(cpu_contact_point,called_set_target(),cpu_set.height)
 		var target := flight_point(cpu_contact_point,ideal,Flight.landing_time(cpu_contact_point,ideal))
 		cpu_set.destination = Vector2(target.x,target.z)
 		cpu_set.begin_hand_contact(cpu_contact_point,time)
