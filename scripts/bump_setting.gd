@@ -23,6 +23,7 @@ const FOREARM_RECOVERY_TIME := 0.47
 var setter: Node3D
 var hand_setting := false
 var quick_hand_receive := false
+var defensive_hand_dig := false
 var catch_only := false
 var catch_airborne := false
 var setter_jumping := false
@@ -56,6 +57,7 @@ var approach_progress := -1.0
 var contact_spread := Vector2.ZERO
 var forearm_setting := false
 var knee_bend_depth := 0.0
+var ready_knee_bend_depth := 0.0
 var lunge_bend_depth := 0.0
 var knee_bend_source := {}
 var contact_destination := Vector2.ZERO
@@ -148,7 +150,16 @@ func platform_center() -> Vector3:
 		wrists.append(rig.to_global(rig.get_bone_global_pose(rig.find_bone("hand_"+side)).origin))
 	return to_local(Contact.surface(elbows,wrists,0.055).ball)
 
+func hand_dig_face() -> Vector3:
+	var rig: Skeleton3D = setter.skeleton
+	var head := rig.to_global(rig.get_bone_global_pose(rig.find_bone("Head")).origin)
+	return to_local(head+Vector3.UP*0.07)
+
+func hand_dig_height(origin: Vector3, speed: float) -> float:
+	return maxf(height+0.55*smoothstep(10.0,28.0,speed),origin.y+0.72)
+
 func ready_contact() -> Vector3:
+	if hand_setting and defensive_hand_dig: return hand_dig_face()+global_basis.inverse()*setter.global_basis.z.normalized()*0.30
 	if hand_setting: return to_local(setter.to_global(Vector3(0,HandPose.CONTACT_HEIGHT,HandPose.CONTACT_FORWARD)))
 	return to_local(setter.to_global(Vector3(0,1.04,0.62)))
 
@@ -169,7 +180,9 @@ func aim_velocity(origin: Vector3, spread := Vector2.ZERO) -> Vector3:
 func accuracy_bounds(error: float, incoming: Vector3, spin_rps: float) -> Vector2:
 	var setting := forearm_setting or (hand_setting and not quick_hand_receive)
 	var skill := StorySession.setting_skill if setting else (StorySession.hand_reception_skill if hand_setting else StorySession.forearm_reception_skill)
-	return Accuracy.spread(error,incoming.length(),spin_rps,skill,setting)
+	var bounds := Accuracy.spread(error,incoming.length(),spin_rps,skill,setting)
+	if hand_setting and defensive_hand_dig: bounds = bounds*1.32+Vector2(0.30,0.25)
+	return bounds
 
 func update_aim() -> void:
 	var origin := ready_contact()
@@ -239,7 +252,7 @@ func apply_knee_bend(time := INF) -> void:
 	var knee_poles: Array[Vector3] = []
 	var requested_depth := knee_bend_depth
 	if reach.get("tier",0) == 2:
-		var recovery := 1.0-smoothstep(0.04,0.35,time-touch_time) if is_finite(touch_time) else clampf(knee_bend_depth/0.095,0.0,1.0)
+		var recovery := 1.0-smoothstep(0.04,0.35,time-touch_time) if is_finite(touch_time) else clampf(knee_bend_depth/maxf(0.001,ready_knee_bend_depth),0.0,1.0)
 		requested_depth += lunge_bend_depth*smoothstep(0.28,0.88,reach_progress)*recovery
 	var depth := requested_depth
 	for side in ["l","r"]:
@@ -254,7 +267,7 @@ func apply_knee_bend(time := INF) -> void:
 		var world_hip := rig.to_global(hip)
 		var world_foot := rig.to_global(foot.origin)
 		# Limit the extra drop for a leg already deeply compressed by the directional clip.
-		depth = minf(depth,maxf(0.0,world_hip.y-world_foot.y-0.42))
+		depth = minf(depth,maxf(0.0,world_hip.y-world_foot.y-0.40))
 	if depth <= 0.001: return
 	knee_bend_source[pelvis] = pose[pelvis]
 	pose[pelvis].origin += parent.basis.inverse()*rig.global_basis.inverse()*(Vector3.DOWN*depth)
@@ -275,6 +288,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 	var progress := approach(path,time,end) if grade == Timing.Grade.WAITING else -1.0
 	approach_progress = progress
 	var attempted := is_finite(pressed_at)
+	var face_dig := hand_setting and defensive_hand_dig
 	if attempted and grade == Timing.Grade.WAITING:
 		if not is_finite(pose_started_at) and progress >= 1.0-PLATFORM_PREP_TIME/APPROACH_TIME:
 			pose_started_at = maxf(pressed_at,time-delta)
@@ -285,7 +299,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 		if hand_setting:
 			apply_knee_bend(time)
 			var target := hand_intercept(path,time,end)
-			HandPose.apply(setter,to_global(target),smoothstep(0.0,0.062 if quick_hand_receive else 0.105,elapsed))
+			HandPose.apply(setter,to_global(target),smoothstep(0.0,0.048 if face_dig else (0.062 if quick_hand_receive else 0.105),elapsed),Vector3.ZERO,0.0,0.0,face_dig)
 		elif low_save.active:
 			low_save.sample(setter,time,low_save.contact_time+0.07)
 		else:
@@ -302,7 +316,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 		if not hand_setting: apply_knee_bend(time)
 		var pancake := low_save.active and low_save.pancake
 		var center := to_local(LowSave.palm_center(setter)) if pancake else platform_center()
-		var radius := 0.16 if pancake else contact_radius()
+		var radius := 0.16 if pancake else (0.33 if face_dig else contact_radius())
 		var near_dive_contact := low_save.active and not pancake and absf(time-low_save.contact_time)<=0.12
 		var allowance := DIVE_CONTACT_ALLOWANCE if near_dive_contact else 0.0
 		var cutoff := radius+allowance
@@ -318,24 +332,30 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 			var timing := (cue_arrival if is_finite(cue_arrival) and not low_save.active else time)-pressed_at
 			var green := timing >= green_start and timing <= green_end
 			var gap_after_adjustment := point.distance_to(center)
-			var receive_allowance := green_hand_allowance if hand_setting else green_forearm_allowance
+			var receive_allowance := (0.0 if face_dig else green_hand_allowance) if hand_setting else green_forearm_allowance
 			var near_receive := green and not low_save.active and receive_allowance > 0.0 and gap_after_adjustment <= radius+receive_allowance
 			var assisted := green and not hand_setting and not low_save.active and gap_after_adjustment > radius and (near_receive or close_body_contact(point,center))
 			var from_setter := point-to_local(setter.global_position)
 			var hand_assisted := (
-				hand_setting and green and gap_after_adjustment > radius
+				hand_setting and not face_dig and green and gap_after_adjustment > radius
 				and (near_receive or (
 					gap_after_adjustment <= radius+HandPose.GREEN_CONTACT_ALLOWANCE
 					and from_setter.slide(Vector3.UP).length() <= 0.80
 					and absf(point.y-center.y) <= 0.32
 				))
 			)
+			var face_aligned := true
+			if face_dig:
+				var facing := setter.global_basis.orthonormalized()
+				var offset := facing.inverse()*global_basis*(point-hand_dig_face())
+				var approach_velocity := facing.inverse()*global_basis*incoming
+				face_aligned = absf(offset.x) <= 0.29 and absf(offset.y) <= 0.28 and offset.z >= 0.05 and offset.z <= 0.68 and approach_velocity.z < -0.2
 			contact_check = {
 				"time":time,"surface":"hands" if hand_setting else ("palm" if pancake else "forearms"),"surface_center":center,
 				"ball_point":point,"gap_before_adjustment":gap,"gap":gap_after_adjustment,
 				"radius":cutoff,"base_radius":radius,"dive_allowance":allowance,
 				"margin":gap_after_adjustment-cutoff,"assist":assisted or hand_assisted,"hand_assist":hand_assisted,
-				"accepted":assisted or hand_assisted or gap_after_adjustment <= cutoff,
+				"accepted":face_aligned and (assisted or hand_assisted or gap_after_adjustment <= cutoff),
 			}
 			if contact_check.accepted:
 				touch_time = lerpf(previous,time,first.distance_to(point)/first.distance_to(last))
@@ -346,7 +366,13 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 				var error := timing_error(timing)*(Timing.PANCAKE_ERROR_SCALE if pancake else 1.0)
 				contact_spread = accuracy_bounds(error,incoming,spin_rps)
 				contact_destination = destination
-				if hand_setting:
+				if face_dig:
+					hand_anchor = setter.to_local(to_global(touch))
+					release_time = touch_time
+					release_point = touch
+					outgoing = Accuracy.pass_velocity(touch,{"position":destination,"fit":"height",
+						"height":hand_dig_height(touch,incoming.length()),"minimum_height":touch.y+0.32},45.0,contact_spread)
+				elif hand_setting:
 					begin_hand_contact(touch,touch_time,contact_spread)
 				elif pancake:
 					outgoing = Timing.pancake_pop(incoming)
@@ -354,7 +380,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 					contact_destination = target.position
 					outgoing = Accuracy.pass_velocity(touch,target,45.0,contact_spread)
 				else: outgoing = aim_velocity(touch,contact_spread)
-				if not hand_setting:
+				if not hand_setting or face_dig:
 					floor_time = Flight.landing_time(touch,outgoing)
 					net_hit = Net.first_hit(func(t): return flight_point(touch,outgoing,t),0.0,floor_time)
 					if not net_hit.is_empty(): floor_time = net_hit.end_time
@@ -366,6 +392,12 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 		var follow := time-touch_time
 		if catch_only:
 			HandPose.apply(setter,setter.to_global(hand_anchor),1.0)
+		elif face_dig:
+			if follow >= 0.0 and follow < 0.22:
+				var relax := 1.0-smoothstep(0.035,0.22,follow)
+				var recoil := smoothstep(0.0,0.035,follow)*(1.0-smoothstep(0.035,0.13,follow))
+				var push := (global_basis*outgoing).normalized()*0.08*recoil
+				HandPose.apply(setter,setter.to_global(hand_anchor),relax,push,recoil,0.0,true)
 		elif hand_setting:
 			update_hand_push(time,follow)
 		else:
@@ -379,7 +411,8 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 		var spread := contact_spread if is_finite(touch_time) else accuracy_bounds(timing_error(anticipated),incoming,spin_rps)
 		var target := contact_destination if is_finite(touch_time) else destination
 		var source := touch if is_finite(touch_time) else ready_contact()
-		var ideal := Flight.target_velocity(source,{"position":target,"fit":"height","height":height},45.0)
+		var apex := hand_dig_height(source,incoming.length()) if face_dig else height
+		var ideal := Flight.target_velocity(source,{"position":target,"fit":"height","height":apex},45.0)
 		var peak := flight_point(source,ideal,ideal.y/Flight.GRAVITY)
 		cone.show_spread(to_global(source),to_global(Vector3(target.x,0.075,target.y)),spread.x,to_global(peak),spread.y)
 	else:

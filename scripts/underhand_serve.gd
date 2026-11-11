@@ -8,7 +8,7 @@ const START := Vector3(0.0,0.04,-6.20)
 const TARGET := Vector3(0.0,Flight.FLOOR,10.5)
 const CONTACT_TIME := 0.55
 const STEP_DISTANCE := 0.98
-const SERVE_CONTACT_LEAD := 0.12
+const SERVE_CONTACT_LEAD := 0.16
 const PREVIEW_DOTS := 42
 
 var player: Node3D

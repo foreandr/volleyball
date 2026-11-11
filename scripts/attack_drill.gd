@@ -31,7 +31,7 @@ const SWING_CONTACT_HEIGHT := 2.22
 const PALM_RADIUS := 0.065
 const ASSISTED_PALM_RADIUS := 0.24
 const SWING_FOLLOW_TIME := 0.49
-const CONTACT_FORWARD_SPACE := 0.34
+const CONTACT_FORWARD_SPACE := 0.44
 const DEFAULT_BOUNCINESS := 2.25
 const DEFAULT_BACKSWING_BEND := 85.0
 const DEFAULT_BACKSWING_REACH := 0.48
@@ -381,7 +381,7 @@ func start_swing_practice() -> void:
 	pass_origin = flight_point(source,velocity,preroll)
 	pass_motion = velocity+Vector3.DOWN*Flight.GRAVITY*preroll+(set_target-pin)/lead
 	jump.begin(setter,Vector2(0.0,0.65))
-	jump.approach_lunge = spike_body_target(set_target)-set_target
+	jump.approach_lunge = (spike_body_target(set_target)-set_target).limit_length(0.38)
 	for frame in range(16): jump.step(setter,1.0/60.0,Vector2.ZERO)
 	jump.release()
 	setter.rotation.y = incoming_set_heading()

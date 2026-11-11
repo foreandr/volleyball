@@ -27,4 +27,5 @@ static func pass_velocity(touch: Vector3, target: Dictionary, angle: float, boun
 	var offset := sample_offset(bounds)
 	var destination: Vector2 = target.position+Vector2(offset.x,offset.z)
 	var peak := touch.y+ideal.y*ideal.y/(2.0*Flight.GRAVITY)
-	return Flight.target_velocity(touch,{"position":destination,"fit":"height","height":peak+offset.y},angle)
+	var minimum := float(target.get("minimum_height",touch.y+0.05))
+	return Flight.target_velocity(touch,{"position":destination,"fit":"height","height":maxf(minimum,peak+offset.y)},angle)

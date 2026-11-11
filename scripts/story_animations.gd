@@ -351,7 +351,7 @@ func start_blocking_practice(defense := false) -> void:
 	blocking_practice.configure_block(preview_player,drill_status,build_label)
 	blocking_practice.set_ball_audio_muted(StorySession.attack_ball_audio_muted)
 	if defense:
-		content.add_child(label("WASD to move  |  Shift to sprint\nQ to dig  |  E to receive with hands\nMove mouse to aim your pass",18))
+		content.add_child(label("WASD to move  |  Shift to sprint\nQ to dig  |  E for face-height saves\nMove mouse to aim your pass",18))
 		add_skill_slider("Forearm reception","forearm_reception_skill")
 		add_skill_slider("Hand reception","hand_reception_skill")
 		content.add_child(button("Back to Blocking",open_blocking_mode.bind(false)))

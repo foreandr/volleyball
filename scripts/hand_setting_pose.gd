@@ -14,25 +14,26 @@ static func contact_center(actor: Node3D) -> Vector3:
 		center += rig.get_bone_global_pose(rig.find_bone("thumb_03_"+side)).origin
 	return rig.to_global(center*0.25+Vector3(0,0.075,0.07))
 
-static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.ZERO, cushion := 0.0, torso_follow := 0.0) -> void:
+static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.ZERO, cushion := 0.0, torso_follow := 0.0, face_save := false) -> void:
 	var rig: Skeleton3D = actor.skeleton
 	var author: RefCounted = actor.get_pose_author()
 	var pose: Array = []
 	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
 	var original := pose.duplicate()
-	author.rotate_world(pose,"spine_01",Vector3.RIGHT,-0.18)
-	author.rotate_world(pose,"spine_02",Vector3.RIGHT,-0.075)
+	var lean_weight := 0.35 if face_save else 1.0
+	author.rotate_world(pose,"spine_01",Vector3.RIGHT,-0.18*lean_weight)
+	author.rotate_world(pose,"spine_02",Vector3.RIGHT,-0.075*lean_weight)
 	var target_local := rig.to_local(target)
 	var head: Vector3 = author.point(pose,"Head")
 	var offset := target_local-head
 	var side_lean := clampf(offset.x/0.48,-1.0,1.0)
 	var forward_lean := clampf((offset.z-0.24)/0.42,-1.0,1.0)
-	author.rotate_world(pose,"spine_01",Vector3.BACK,-side_lean*0.17)
-	author.rotate_world(pose,"spine_02",Vector3.BACK,-side_lean*0.13)
-	author.rotate_world(pose,"spine_02",Vector3.RIGHT,forward_lean*0.19)
+	author.rotate_world(pose,"spine_01",Vector3.BACK,-side_lean*0.17*lean_weight)
+	author.rotate_world(pose,"spine_02",Vector3.BACK,-side_lean*0.13*lean_weight)
+	author.rotate_world(pose,"spine_02",Vector3.RIGHT,forward_lean*0.19*lean_weight)
 	head = author.point(pose,"Head")
 	var aim := target_local-head
-	var diamond := head+Vector3(clampf(aim.x,-0.22,0.22),clampf(aim.y-0.075,0.12,0.27),clampf(aim.z-0.07,0.09,0.35))
+	var diamond := head+Vector3(clampf(aim.x,-0.22,0.22),clampf(aim.y-0.075,0.00 if face_save else 0.12,0.15 if face_save else 0.27),clampf(aim.z-0.07,0.09,0.35))
 	var local_push := rig.global_basis.inverse()*push
 	var horizontal_push := local_push.slide(Vector3.UP)
 	var turn := 0.0

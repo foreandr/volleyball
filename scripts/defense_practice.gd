@@ -1,5 +1,6 @@
 extends "res://scripts/blocking_practice.gd"
 
+const DIG_SQUAT_DEPTH := 0.22
 const DEFENSE_START := Vector3(2.15,0.04,-1.30)
 const ZONE_FIVE_TARGETS := [Vector2(-4.2,10.4),Vector2(-3.7,10.9),Vector2(-4.35,10.0)]
 
@@ -19,9 +20,11 @@ func configure_block(actor: Node3D, readout: Label, build: String) -> void:
 	add_child(dig)
 	dig.global_transform = Transform3D.IDENTITY
 	dig.configure(actor,bump.clip)
+	dig.defensive_hand_dig = true
 	dig.destination = Vector2(0.0,1.8)
 	dig.height = 3.4
-	dig.lunge_bend_depth = 0.14
+	dig.lunge_bend_depth = 0.18
+	dig.ready_knee_bend_depth = DIG_SQUAT_DEPTH
 	dig.green_start = 0.01
 	dig.green_end = 0.50
 	dig.green_forearm_allowance = 0.30
@@ -100,13 +103,13 @@ func stop_block() -> void:
 func update_defense_knee_bend(delta: float) -> void:
 	var weight := 0.0
 	if stage == Stage.SET and jump.active and is_finite(swing_started):
-		weight = smootherstep(0.12,0.39,clock-swing_started)
+		weight = smootherstep(0.05,0.32,clock-swing_started)
 	elif stage == Stage.HIT:
 		var time := clock-stage_start
 		var recovery_at := float(dig.touch_time) if is_finite(dig.touch_time) else flight_end-0.06
-		weight = 1.0-smootherstep(0.04,0.33,time-recovery_at)
+		weight = 1.0-smootherstep(0.09,0.40,time-recovery_at)
 	if dig.low_save.active: weight = 0.0
-	dig.knee_bend_depth = lerpf(dig.knee_bend_depth,0.095*weight,1.0-exp(-delta*15.0))
+	dig.knee_bend_depth = lerpf(dig.knee_bend_depth,DIG_SQUAT_DEPTH*weight,1.0-exp(-delta*15.0))
 	if stage != Stage.HIT: dig.apply_knee_bend()
 
 func tick_block(delta: float) -> void:
