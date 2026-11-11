@@ -258,7 +258,7 @@ func start_demo_match() -> void:
 	var status := label("",17)
 	status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(status)
-	content.add_child(label("WASD to move | Shift to sprint\nQ forearms | E hands | F jump set\nSpace serves, attacks, or blocks\nMouse aims | Scroll zooms\nShift + scroll changes height\nLeft-click or E to set the second ball\nB switches blocker | M mutes sound",16))
+	content.add_child(label("WASD to move | Shift to sprint\nQ forearms | E hands | F jump set | C kick\nSpace serves, attacks, or blocks\nMouse aims | Scroll zooms\nShift + scroll changes height\nLeft-click or E to set the second ball\nB switches blocker | M mutes sound",16))
 	var styles := OptionButton.new()
 	for title in ["Underhand","Standing float","Jump float","Spin serve"]: styles.add_item(title)
 	styles.focus_mode = Control.FOCUS_NONE
@@ -1974,7 +1974,7 @@ func _input(event: InputEvent) -> void:
 			toggle_match_replay()
 			get_viewport().set_input_as_handled()
 			return
-		if demo_match.replay.active and event.keycode in [KEY_Q,KEY_E,KEY_I,KEY_F,KEY_B,KEY_SPACE]:
+		if demo_match.replay.active and event.keycode in [KEY_Q,KEY_E,KEY_I,KEY_F,KEY_C,KEY_B,KEY_SPACE]:
 			if event.keycode == KEY_SPACE and event.pressed: toggle_match_replay_playback()
 			get_viewport().set_input_as_handled()
 			return
@@ -1986,6 +1986,7 @@ func _input(event: InputEvent) -> void:
 				KEY_Q: demo_match.input_receive(0)
 				KEY_E, KEY_I: demo_match.input_receive(1)
 				KEY_F: demo_match.input_receive(2)
+				KEY_C: demo_match.input_kick()
 				KEY_B:
 					var index := 0 if demo_match.player_blocks else 1
 					match_block_choice.select(index)
@@ -1994,7 +1995,7 @@ func _input(event: InputEvent) -> void:
 				KEY_F8:
 					if demo_match.mark_trace(): show_marker_popup()
 				KEY_ESCAPE: open_menu()
-		if event.keycode in [KEY_Q,KEY_E,KEY_I,KEY_F,KEY_B,KEY_M,KEY_F8,KEY_ESCAPE]:
+		if event.keycode in [KEY_Q,KEY_E,KEY_I,KEY_F,KEY_C,KEY_B,KEY_M,KEY_F8,KEY_ESCAPE]:
 			get_viewport().set_input_as_handled()
 		return
 	if is_instance_valid(blocking_practice) and event is InputEventKey:

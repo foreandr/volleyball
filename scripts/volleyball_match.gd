@@ -116,6 +116,7 @@ var touches := 0
 var last_player := -1
 var last_was_block := false
 var expected_hitter := -1
+var kick_pressed_until := -INF
 var space_held := false
 var requested := -1
 var request_age := -INF
@@ -281,6 +282,7 @@ func set_player_blocks(value: bool) -> void:
 func begin_point() -> void:
 	replay.finish_point()
 	last_input_at = -INF
+	kick_pressed_until = -INF
 	last_input_technique = -1
 	bounce_end = 0.0
 	bounce_start = 0.0
@@ -1311,6 +1313,73 @@ func tick_receive(delta: float, previous: float) -> void:
 			var result := Bump.Accuracy.pass_velocity(frame.to_local(catch_point),target,45.0,spread)
 			receive_contact(index,catch_point,frame.global_basis*result,technique)
 
+func input_kick() -> void:
+	if spectator or phase != Phase.LIVE or receiving_team != 0 or not can_play_forearms(0): return
+	kick_pressed_until = match_clock+0.20
+
+func try_foot_save(previous: float) -> void:
+	if flight_kind == "serve" or held_ball or elapsed > flight_end()+0.05: return
+	var end := flight_end()
+	var first := path_point(previous)
+	var last := path_point(minf(elapsed,end))
+	var lookahead := path_point(minf(end,elapsed+0.060))
+	if minf(last.y,lookahead.y) > 0.42 or maxf(first.y,last.y) < Flight.FLOOR: return
+	var side := receiving_team
+	for index in range(side*2,side*2+2):
+		if is_human(index) and match_clock > kick_pressed_until: continue
+		if index == last_player and not last_was_block: continue
+		if not can_play_forearms(index) or owns_action(index) or recoveries.has(index): continue
+		var bump := platforms[index]
+		if bump.low_save.active or is_finite(bump.touch_time): continue
+		if is_finite(bump.pose_started_at):
+			var reachable: PackedVector3Array = bump.dig_contact_segment(bump.to_local(last),bump.to_local(lookahead))
+			if reachable[0].distance_to(reachable[1]) <= Net.RADIUS+0.055: continue
+		var actor := players[index]
+		if actor.global_position.slide(Vector3.UP).distance_to(last.slide(Vector3.UP)) > 0.95: continue
+		var rig: Skeleton3D = actor.skeleton
+		var foot_side := ""
+		var goal := Vector3.ZERO
+		var gap := 0.35
+		for suffix in ["l","r"]:
+			var toe := rig.to_global(rig.get_bone_global_pose(rig.find_bone("ball_"+suffix)).origin)
+			var aim := Geometry3D.get_closest_point_to_segment(toe,last,lookahead)
+			var distance := toe.distance_to(aim)
+			if distance < gap and aim.y <= 0.42:
+				gap = distance
+				goal = aim
+				foot_side = suffix
+		if foot_side.is_empty(): continue
+		var foot := "foot_"+foot_side
+		var toe_bone := "ball_"+foot_side
+		var author: RefCounted = actor.get_pose_author()
+		var pose: Array[Transform3D] = []
+		for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
+		var ankle: Vector3 = author.point(pose,foot)
+		var toe: Vector3 = author.point(pose,toe_bone)
+		var shift := (rig.to_local(goal-Vector3.UP*0.055)-toe).limit_length(0.30)
+		var lift := 1.0-smoothstep(0.16,0.35,gap)
+		author.limb(pose,"thigh_"+foot_side,"calf_"+foot_side,foot,ankle+shift*lift,Vector3(0.10 if foot_side == "l" else -0.10,0.12,1.0),1.0,174.0)
+		for name_ in ["thigh_"+foot_side,"calf_"+foot_side,foot]:
+			var bone := rig.find_bone(name_)
+			rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
+		animated[index] = true
+		var a := rig.to_global(rig.get_bone_global_pose(rig.find_bone(foot)).origin)
+		var b := rig.to_global(rig.get_bone_global_pose(rig.find_bone(toe_bone)).origin)
+		var pair := Geometry3D.get_closest_points_between_segments(first,last,a,b)
+		var contact := pair[0]
+		if contact.y > 0.42 or frames[side].to_local(contact).z > Net.NET_Z+0.07 or contact.distance_to(pair[1]) > Net.RADIUS+0.055: continue
+		if not can_touch(index): return
+		kick_pressed_until = -INF
+		show_key(index,"C | Kick")
+		begin_recovery(index)
+		var heading := Vector3.BACK.rotated(Vector3.UP,randf_range(-PI,PI))
+		var rebound := heading*randf_range(1.8,6.0)+Vector3.UP*randf_range(3.2,6.0)
+		trace.write("foot_save",match_clock,{"player":index,"foot":foot_side,"point":contact,"rebound":rebound},true)
+		stroke = "Kick save"
+		play_touch()
+		launch(contact,rebound,"pass",index)
+		return
+
 func deflect_defender_body(previous: float) -> void:
 	if flight_kind not in ["spike","dump","block"] or held_ball: return
 	var first := path_point(previous)
@@ -1830,6 +1899,8 @@ func step_match(delta: float, controls: RefCounted) -> void:
 	if flight_number != current_flight or phase != Phase.LIVE: return
 	held_ball = false
 	tick_receive(delta,previous)
+	if flight_number != current_flight or phase != Phase.LIVE: return
+	try_foot_save(previous)
 	if flight_number != current_flight or phase != Phase.LIVE: return
 	deflect_defender_body(previous)
 	if flight_number != current_flight or phase != Phase.LIVE: return
