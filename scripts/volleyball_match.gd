@@ -1500,6 +1500,33 @@ func position_defense(delta: float) -> void:
 	var driver := attackers[hitter_side]
 	var tracking_set := flight_kind == "set" and expected_hitter >= 0
 	var threat := frames[hitter_side].to_global(driver.rally_set_target) if tracking_set else path_point(arrival(2.0))
+	var second_ball := flight_kind == "pass" and possession_team == hitter_side and touches == 1
+	var second_ball_eta := INF
+	if second_ball:
+		var setter := last_player^1
+		var attack_frame := frames[hitter_side]
+		var setter_approaching: bool = driver.enabled and driver.setter == players[setter] and (driver.approach_jump_queued or driver.jump.active)
+		var jump_setting: bool = set_jumps[setter].active
+		var contact_time := arrival(2.35) if jump_setting else arrival(driver.set_contact_height())
+		var contact := path_point(contact_time)
+		var contact_depth := attack_frame.to_local(contact).z
+		if setter_approaching:
+			threat = attack_frame.to_global(driver.rally_set_target)
+			second_ball_eta = contact_time-elapsed
+			if is_finite(driver.approach_expected_hit_at):
+				second_ball_eta = driver.approach_expected_hit_at-driver.clock
+		elif jump_setting and contact_depth >= 2.55 and contact_depth <= Net.NET_Z:
+			threat = contact
+			second_ball_eta = contact_time-elapsed
+		else:
+			var hitter_x := players[last_player].position.x
+			if not is_human(setter):
+				hitter_x = move_toward(hitter_x,set_pin_for(setter).x,0.65)
+			threat = attack_frame.to_global(Vector3(hitter_x,0.04,3.20))
+	var net_time := (Net.NET_Z-origin.z)/velocity.z if absf(velocity.z) > 0.01 else -1.0
+	var net_point := path_point(maxf(0.0,net_time))
+	var overpass_ready := flight_kind in ["pass","set"] and net_hit.is_empty() and net_time >= elapsed and net_time-elapsed <= 0.33 and net_point.y >= Net.NET_TOP and net_point.y <= 3.33 and absf(net_point.x) < Net.NET_HALF_WIDTH
+	if overpass_ready: threat = net_point
 	var x := frame.to_local(threat).x
 	var first := defense_side*2
 	var near: int = defender_assignment[defense_side]
@@ -1512,7 +1539,7 @@ func position_defense(delta: float) -> void:
 	var depth := -2.15
 	var cover := -x*0.48
 	var remaining := INF
-	if tracking_set:
+	if tracking_set and not overpass_ready:
 		var attack := frame.to_local(threat)
 		var line_goal := Vector3(attack.x,0.0,depth)
 		var cross_goal := Vector3(clampf(-attack.x*0.80,-3.7,3.7),0.0,depth)
@@ -1565,13 +1592,10 @@ func position_defense(delta: float) -> void:
 		var target := frame.to_global(Vector3(clampf(x,-4.15,4.15),0.04,3.42))
 		move_cpu(near,target,delta,7.6 if players[near].position.z < 2.7 else 6.8)
 		var attack_ready := remaining <= 0.37
-		var dump_ready := (cpu_dump or cpu_fake_dump) and flight_kind == "pass" and is_finite(next_touch_cue) and next_touch_cue-elapsed <= 0.32
-		var net_time := (Net.NET_Z-origin.z)/velocity.z if absf(velocity.z) > 0.01 else -1.0
-		var net_point := path_point(maxf(0.0,net_time))
-		var overpass_ready := flight_kind in ["pass","set"] and net_hit.is_empty() and net_time >= elapsed and net_time-elapsed <= 0.33 and net_point.y >= Net.NET_TOP and net_point.y <= 3.33 and absf(net_point.x) < Net.NET_HALF_WIDTH
+		var dump_ready := second_ball_eta >= -0.06 and second_ball_eta <= 0.30
 		if absf(players[near].position.x-x) < 0.70 and (attack_ready or dump_ready or overpass_ready):
-			var timing := remaining if attack_ready else (net_time-elapsed+0.10 if overpass_ready else next_touch_cue-elapsed+0.035)
-			start_block(near,timing,dump_ready)
+			var timing := remaining if attack_ready else (net_time-elapsed+0.10 if overpass_ready else second_ball_eta+0.035)
+			start_block(near,timing,dump_ready and not overpass_ready)
 	if not is_human(deep) and not blocks.has(deep) and not set_jumps[deep].active:
 		move_cpu(deep,frame.to_global(Vector3(clampf(cover,-4.05,4.05),0.04,depth)),delta)
 
