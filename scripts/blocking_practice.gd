@@ -4,6 +4,8 @@ const BLOCK_START := Vector3(0.0,0.04,3.25)
 const BLOCK_LOAD := 0.16
 const BLOCK_AIR := 0.86
 const BLOCK_HEIGHT := 1.12
+const BLOCK_AIM_HALF_WIDTH := 18.0
+const BLOCK_AIM_FAR := 29.0
 const SHOT_LANES := [3.35,0.0,-3.35]
 
 var next_shot_lane := 0
@@ -18,6 +20,9 @@ var blocker_animation_mode: int
 var block_elapsed := -1.0
 var block_base := BLOCK_START
 var block_tracking := 0.0
+var arm_tracking := 1.0
+var high_hands_held := false
+var last_block_surface := ""
 var block_lift := 0.0
 var vertical_inches := 0.0
 const PALM_ANGLE_DEGREES := 30.0
@@ -81,12 +86,21 @@ func set_feed_lane(value: int) -> void:
 	feed_lane = value
 	if player_attacks: set_player_attacks(true)
 
-func aim_player_spike(world_point: Vector3) -> void:
+func aim_player_spike(ray_origin: Vector3, ray_direction: Vector3) -> void:
 	if not player_attacks or stage != Stage.SET: return
-	var point := to_local(world_point)
+	var origin := to_local(ray_origin)
+	var direction := global_basis.inverse()*ray_direction
+	var far_time := maxf(0.0,(BLOCK_AIM_FAR-origin.z)/maxf(direction.z,0.01))
+	var floor_time := (origin.y-Flight.FLOOR)/maxf(-direction.y,0.0001)
+	var point := origin+direction*minf(floor_time,far_time)
 	if point.z < SHOT_AIM_NEAR: return
-	player_shot_aim = point
-	aim_swing(point)
+	player_shot_aim = Vector3(clampf(point.x,-BLOCK_AIM_HALF_WIDTH,BLOCK_AIM_HALF_WIDTH),Flight.FLOOR,clampf(point.z,SHOT_AIM_NEAR,BLOCK_AIM_FAR))
+	show_player_spike_aim()
+
+func show_player_spike_aim() -> void:
+	swing_aim = player_shot_aim
+	swing_target.position = Vector3(swing_aim.x,0.065,swing_aim.z)
+	swing_target.show()
 
 func reset_feed() -> void:
 	var space_held := approach_space_held
@@ -95,6 +109,7 @@ func reset_feed() -> void:
 	block_contact_at = INF
 	last_block_gap = INF
 	last_block_hand = ""
+	last_block_surface = ""
 	approach_space_held = space_held if player_attacks else true
 	cpu_block_queued = false
 	var pin_x := 0.0
@@ -116,7 +131,7 @@ func reset_feed() -> void:
 	bump.hide()
 	region.hide()
 	if player_attacks:
-		aim_swing(player_shot_aim)
+		show_player_spike_aim()
 	else:
 		aim_swing(Vector3(SHOT_LANES[next_shot_lane],Flight.FLOOR,10.5))
 		next_shot_lane = (next_shot_lane+1)%SHOT_LANES.size()
@@ -206,7 +221,7 @@ func step_blocker(delta: float) -> void:
 		if is_finite(kong_pressed_at[hand_index]):
 			kong = smoothstep(0.0,0.115,block_elapsed-kong_pressed_at[hand_index])
 			kong *= 1.0-smoothstep(BLOCK_LOAD+0.61,BLOCK_LOAD+BLOCK_AIR+0.12,pose_time)
-		var wrist_offset := Vector3(-sign_*0.105+block_tracking*press*2.0,0.64-0.25*high_fold,0.20+0.34*press)
+		var wrist_offset := Vector3(-sign_*0.105+block_tracking*press*arm_tracking*2.0,0.64-0.25*high_fold,0.20+0.34*press)
 		if kong > 0.0 and stage == Stage.HIT and not is_finite(block_contact_at):
 			var shoulder_world := rig.to_global(shoulder)
 			var local_depth := Net.NET_Z-0.12*press
@@ -215,7 +230,7 @@ func step_blocker(delta: float) -> void:
 			var reach := clampf((intercept.x-shoulder_world.x)*sign_+0.04,0.16,0.86)
 			var height := clampf(intercept.y-shoulder_world.y-0.07,0.35,0.66)
 			kong_tracking[hand_index] = kong_tracking[hand_index].lerp(Vector2(reach,height),1.0-exp(-delta*33.0))
-		var tracked := kong_tracking[hand_index]
+		var tracked := Vector2(0.83,0.43).lerp(kong_tracking[hand_index],arm_tracking)
 		wrist_offset = wrist_offset.lerp(Vector3(sign_*tracked.x,tracked.y,0.29+0.27*press),kong)
 		var wrist := shoulder+wrist_offset/scale_
 		author.limb(pose,"upperarm_"+side,"lowerarm_"+side,"hand_"+side,wrist,Vector3(sign_*lerpf(0.31,0.78,kong),-0.52,0.34),raise,176.0)
@@ -270,6 +285,7 @@ func block_net_retreat(pose: Array, rig: Skeleton3D, author: RefCounted) -> floa
 	return furthest-(Net.NET_Z-0.035)
 
 func update_block_hand(pose: Array, rig: Skeleton3D, author: RefCounted, side: String, index: int, delta: float) -> void:
+	var elbow := to_local(rig.to_global(author.point(pose,"lowerarm_"+side)))
 	var wrist: Vector3 = author.point(pose,"hand_"+side)
 	var middle: Vector3 = author.point(pose,"middle_01_"+side)
 	var fingertip: Vector3 = author.point(pose,"middle_03_"+side)
@@ -282,6 +298,8 @@ func update_block_hand(pose: Array, rig: Skeleton3D, author: RefCounted, side: S
 	var tip := to_local(rig.to_global(fingertip))
 	block_hands[index] = {
 		"wrist":wrist_point,
+		"elbow":elbow,
+		"previous_elbow":block_hands[index].get("elbow",elbow),
 		"tip":tip,
 		"previous_wrist":block_hands[index].get("wrist",wrist_point),
 		"previous_tip":block_hands[index].get("tip",tip),
@@ -300,7 +318,17 @@ func rebound_from_hand(incoming: Vector3, hit: Vector3, hand: Dictionary) -> Vec
 	var edge := (hit-center).slide(normal).limit_length(0.23)
 	normal = (normal+edge*2.0).normalized()
 	var normal_speed := minf(relative.dot(normal),0.0)
-	return relative.slide(normal)*0.69-normal*normal_speed*0.42+motion*0.52
+	var give := float(hand.get("give",0.0))
+	var rebound := relative.slide(normal)*lerpf(0.69,0.80,give)-normal*normal_speed*lerpf(0.42,0.14,give)
+	# A glancing fingertip touch can carry through and roll upward off the block.
+	var top_edge := float(hand.get("top_edge",0.0))
+	var side_edge := float(hand.get("side_edge",0.0))
+	var edge_speed := relative.length()
+	var carry := relative*0.78
+	carry.x += side_edge*minf(7.0,edge_speed*0.35)
+	carry.y = lerpf(carry.y,minf(4.5,edge_speed*0.22),top_edge)
+	rebound = rebound.lerp(carry,maxf(top_edge,absf(side_edge))*0.82)
+	return rebound+motion*0.52
 
 func spread_block_fingers(pose: Array, rig: Skeleton3D, author: RefCounted, side: String, weight: float) -> void:
 	var digits: Array[String] = ["index","middle","ring","pinky"]
@@ -330,6 +358,19 @@ func spread_block_fingers(pose: Array, rig: Skeleton3D, author: RefCounted, side
 	var direction := (forward*0.52+across*0.85).normalized()
 	author.aim_joint(pose,thumb,thumb_joint,next.lerp(root+direction*root.distance_to(next),weight))
 
+func hit_spike(charge: float, point: Vector3, palm_gap := 0.0) -> void:
+	super.hit_spike(charge,point,palm_gap)
+	if not player_attacks or not high_hands_held or pass_motion.z <= 0.0: return
+	var top := Vector3.ZERO
+	for hand in block_hands:
+		if not hand.is_empty() and hand.tip.y > top.y: top = hand.tip
+	var depth := top.z if top.z > point.z+0.18 else Net.NET_Z+0.12
+	var time_to_hands := (depth-point.z)/pass_motion.z
+	var height := maxf(Net.NET_TOP+0.30,top.y+0.07)
+	pass_motion.y = (height-point.y)/time_to_hands+Flight.GRAVITY*time_to_hands*0.5
+	flight_end = Flight.landing_time(pass_origin,pass_motion)
+	swing_net_hit = Net.first_hit(func(t): return flight_point(pass_origin,pass_motion,t),0.0,flight_end)
+
 func play_spike(time: float, delta: float) -> void:
 	if is_finite(block_contact_at):
 		var elapsed := time-block_contact_at
@@ -341,25 +382,44 @@ func play_spike(time: float, delta: float) -> void:
 		if elapsed >= end and elapsed-delta < end: play_floor_sound()
 		if elapsed >= end+0.40 and not jump.active: reset_feed()
 		return
-	if time <= flight_end:
+	if time <= flight_end and (swing_net_hit.is_empty() or time-delta < swing_net_hit.time):
 		var before := flight_point(pass_origin,pass_motion,maxf(0.0,time-delta))
-		var after := flight_point(pass_origin,pass_motion,time)
+		var sweep_end := time if swing_net_hit.is_empty() else minf(time,float(swing_net_hit.time))
+		var after := flight_point(pass_origin,pass_motion,sweep_end)
 		var hit_hand: Dictionary = {}
 		for sample in 9:
-			var best_gap := BallPreview.RADIUS+0.19
+			var best_gap := INF
 			var progress := sample/8.0
 			var point := before.lerp(after,progress)
 			for hand in block_hands:
 				if block_lift <= 0.10 or hand.is_empty(): continue
 				var wrist: Vector3 = hand.previous_wrist.lerp(hand.wrist,progress)
 				var tip: Vector3 = hand.previous_tip.lerp(hand.tip,progress)
-				var surface := Geometry3D.get_closest_point_to_segment(point,wrist,tip)
-				var gap := point.distance_to(surface)
-				last_block_gap = minf(last_block_gap,gap)
-				if surface.y >= Net.NET_TOP and gap <= best_gap:
-					best_gap = gap
+				var elbow: Vector3 = hand.previous_elbow.lerp(hand.elbow,progress)
+				for is_hand in [true,false]:
+					var start := wrist if is_hand else elbow
+					var finish := tip if is_hand else wrist
+					var surface := Geometry3D.get_closest_point_to_segment(point,start,finish)
+					var gap := point.distance_to(surface)
+					last_block_gap = minf(last_block_gap,gap)
+					var reach := BallPreview.RADIUS+(0.12 if is_hand else 0.075)
+					if gap > reach or gap/reach >= best_gap: continue
+					if surface.y < Net.NET_TOP and surface.z <= Net.NET_Z: continue
+					best_gap = gap/reach
 					block_contact = point
-					hit_hand = hand
+					hit_hand = hand.duplicate()
+					hit_hand.surface = "forearm"
+					if is_hand:
+						var axis := (tip-wrist).normalized()
+						var along := (point-wrist).dot(axis)/maxf(wrist.distance_to(tip),0.001)
+						hit_hand.surface = "fingers" if along >= 0.73 else "palm"
+						hit_hand.give = lerpf(0.35,1.0,smoothstep(0.50,1.05,along))
+						hit_hand.top_edge = smoothstep(0.64,1.12,along)
+						var lateral := point.x-surface.x
+						hit_hand.side_edge = signf(lateral)*smoothstep(0.035,0.15,absf(lateral))
+					else:
+						hit_hand.center = surface
+						hit_hand.normal = (point-surface).normalized()
 			if not hit_hand.is_empty(): break
 			var torso := Geometry3D.get_closest_point_to_segment(point,previous_chest_bottom.lerp(chest_bottom,progress),previous_chest_top.lerp(chest_top,progress))
 			if not chest_bottom.is_zero_approx() and point.distance_to(torso) <= BallPreview.RADIUS+0.18:
@@ -370,10 +430,11 @@ func play_spike(time: float, delta: float) -> void:
 		if not hit_hand.is_empty():
 			block_contact_at = time
 			last_block_hand = hit_hand.side
+			last_block_surface = hit_hand.get("surface","chest")
 			var incoming := pass_motion+Vector3.DOWN*Flight.GRAVITY*time
 			block_velocity = rebound_from_hand(incoming,block_contact,hit_hand)
 			ball.position = block_contact
-			status.text = "Chest deflection" if last_block_hand == "chest" else "Block!"
+			status.text = "Chest deflection" if last_block_hand == "chest" else ("High hands!" if last_block_surface == "fingers" else "Block!")
 			if not ball_audio_muted: spike_audio.play()
 			return
 	super.play_spike(time,delta)
@@ -383,6 +444,6 @@ func trace_snapshot(time: float) -> Dictionary:
 	snapshot["block"] = {
 		"jump_elapsed":block_elapsed,"lift":block_lift,"kong":kong_pressed_at,
 		"hands":block_hands,"closest_gap":last_block_gap,
-		"contact_at":block_contact_at,"contact_hand":last_block_hand,"outgoing":block_velocity
+		"contact_at":block_contact_at,"contact_hand":last_block_hand,"surface":last_block_surface,"outgoing":block_velocity
 	}
 	return snapshot

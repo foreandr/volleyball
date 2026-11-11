@@ -364,6 +364,18 @@ func start_blocking_practice() -> void:
 		vertical_readout.text = "Vertical jump  %+.0f in" % value)
 	content.add_child(vertical)
 
+	var tracking_readout := label("Arm tracking  100%",16)
+	content.add_child(tracking_readout)
+	var tracking := HSlider.new()
+	tracking.max_value = 100.0
+	tracking.step = 1.0
+	tracking.value = 100.0
+	tracking.focus_mode = Control.FOCUS_NONE
+	tracking.value_changed.connect(func(value: float):
+		blocking_practice.arm_tracking = value/100.0
+		tracking_readout.text = "Arm tracking  %.0f%%" % value)
+	content.add_child(tracking)
+
 	var feed := OptionButton.new()
 	for title in ["Alternate pins","Left pin","Right pin","Middle"]:
 		feed.add_item(title)
@@ -372,7 +384,7 @@ func start_blocking_practice() -> void:
 	content.add_child(feed)
 	content.move_child(feed,1)
 	var update_role := func(attacking: bool):
-		controls.text = ("Hold Space to approach and spike\nMove mouse to aim" if attacking else "Space to jump\nQ / E to open left / right arm")+"\nWASD to move camera\nMiddle drag to rotate"
+		controls.text = ("Hold Space to approach and spike\nMove mouse to aim\nHold Shift at contact for high hands" if attacking else "Space to jump\nQ / E to open left / right arm")+"\nWASD to move camera\nMiddle drag to rotate"
 		feed.visible = attacking
 		vertical_readout.visible = not attacking
 		vertical.visible = not attacking
@@ -882,6 +894,7 @@ func _process(delta: float) -> void:
 		var camera_motion := camera_pan_delta(player_controls.movement_input(),delta,5.0)
 		preview_camera.position += camera_motion
 		setting_camera_focus += camera_motion
+		blocking_practice.high_hands_held = Input.is_physical_key_pressed(KEY_SHIFT)
 		blocking_practice.tick_block(delta)
 		return
 	if selected_category == "Serving":
@@ -1278,8 +1291,8 @@ func handle_preview_input(event: InputEvent) -> void:
 			orbit_setting_camera(event.relative)
 			preview.accept_event()
 		elif event is InputEventMouseMotion and blocking_practice.player_attacks:
-			var hit: Variant = attack_floor_point(event.position)
-			if hit is Vector3: blocking_practice.aim_player_spike(hit)
+			var cursor: Vector2 = setup_drag.screen_position(event.position)
+			blocking_practice.aim_player_spike(preview_camera.project_ray_origin(cursor),preview_camera.project_ray_normal(cursor))
 		elif event is InputEventMouseButton:
 			if event.button_index == MOUSE_BUTTON_MIDDLE:
 				preview.grab_focus()
