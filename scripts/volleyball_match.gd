@@ -1053,12 +1053,12 @@ func position_defense(delta: float) -> void:
 		var line_goal := Vector3(attack.x,0.0,-2.9)
 		var cross_goal := Vector3(clampf(-attack.x*0.80,-3.7,3.7),0.0,depth)
 		var sideline := signf(attack.x) if absf(attack.x) > 0.20 else (1.0 if players[near].position.x >= 0.0 else -1.0)
-		var line_x := clampf(lane_at_depth(attack,line_goal,3.42)+sideline*0.46,-4.15,4.15)
+		var line_x := clampf(lane_at_depth(attack,line_goal,3.42)+sideline*0.25,-4.15,4.15)
 		var cross_x := lane_at_depth(attack,cross_goal,3.42)-sideline*0.22
 		if block_lane_flight[defense_side] != flight_number:
 			var line_cost := absf(players[near].position.x-line_x)+0.35*absf(players[deep].position.x-cross_goal.x)
 			var cross_cost := absf(players[near].position.x-cross_x)+0.35*absf(players[deep].position.x-line_goal.x)
-			var prefer_line: bool = (block_calls[defense_side]+defense_side)%2 == 0
+			var prefer_line: bool = (block_calls[defense_side]+defense_side)%3 == 0
 			var preferred_cost := line_cost if prefer_line else cross_cost
 			var alternate_cost := cross_cost if prefer_line else line_cost
 			block_line[defense_side] = prefer_line if preferred_cost <= alternate_cost+1.8 else not prefer_line
