@@ -57,7 +57,9 @@ func run_match(match_seed: int, review_point: int, output_dir: String) -> Dictio
 	var previous_flight := -1
 	var previous_rally := 0
 	var rally_started := 0.0
-	var minimum_gap := INF
+	var closest_attempt := {}
+	var closest_unattempted := {}
+	var deflection := {}
 	var stuck_frames := 0
 	var last_ball := Vector3.INF
 	var flags := []
@@ -67,6 +69,12 @@ func run_match(match_seed: int, review_point: int, output_dir: String) -> Dictio
 			if review_point == game.rallies+1 and DisplayServer.get_name() != "headless":
 				review_frames.append(game.replay.capture(game))
 			if game.flight_number != previous_flight:
+				if game.stroke == "Body deflection" and (not closest_attempt.is_empty() or not closest_unattempted.is_empty()):
+					deflection = closest_attempt if not closest_attempt.is_empty() else closest_unattempted
+				else:
+					deflection = {}
+				closest_attempt = {}
+				closest_unattempted = {}
 				previous_flight = game.flight_number
 				var kind: String = game.flight_kind
 				counts[kind] = int(counts.get(kind,0))+1
@@ -78,19 +86,41 @@ func run_match(match_seed: int, review_point: int, output_dir: String) -> Dictio
 			else:
 				stuck_frames = 0
 			last_ball = game.ball.global_position
-			for platform in game.platforms:
-				var check: Dictionary = platform.contact_check
-				if not check.is_empty() and not bool(check.accepted):
-					minimum_gap = minf(minimum_gap,float(check.margin))
+			if game.flight_kind in ["spike","dump","block"]:
+				var side: int = game.receiving_team
+				var ball: Vector3 = game.ball.global_position
+				if game.frames[side].to_local(ball).z <= game.Net.NET_Z+0.07:
+					for index in range(side*2,side*2+2):
+						if index == game.last_player: continue
+						var platform: Node3D = game.platforms[index]
+						var check: Dictionary = platform.contact_check
+						if not check.is_empty() and not bool(check.accepted):
+							var margin := float(check.margin)
+							if margin > 0.0 and margin <= 0.16 and margin < float(closest_attempt.get("margin_m",INF)):
+								closest_attempt = {"type":"close attempted dig","player":index,"time":game.match_clock,
+									"surface":check.surface,"margin_m":margin}
+						elif not is_finite(platform.pressed_at) and not game.owns_action(index) and ball.y >= 0.35 and ball.y <= 1.75:
+							var ready: Vector3 = platform.to_global(platform.ready_contact())
+							var distance := ball.distance_to(ready)
+							if distance <= 0.80 and distance < float(closest_unattempted.get("distance_m",INF)):
+								closest_unattempted = {"type":"ball near a defender without an attempt","player":index,
+									"time":game.match_clock,"distance_m":distance}
 		if game.rallies != previous_rally:
 			previous_rally = game.rallies
 			var reason: String = game.last_point.reason
 			rallies.append({"point":previous_rally,"score":game.score.duplicate(),"reason":reason,
 				"seconds":snappedf(game.match_clock-rally_started,0.001),
 				"floor_rebound_m":snappedf(game.bounce_velocity.y**2/(2.0*game.Flight.GRAVITY),0.0001) if game.bounce_end > 0.0 else null})
-			if reason == "Ball down" and minimum_gap > 0.0 and minimum_gap <= 0.09:
-				flags.append({"point":previous_rally,"type":"near contact before ball down","margin_m":snappedf(minimum_gap,0.001)})
-			minimum_gap = INF
+			if reason == "Ball down":
+				var opportunity := closest_attempt if not closest_attempt.is_empty() else closest_unattempted
+				if opportunity.is_empty(): opportunity = deflection
+				if not opportunity.is_empty():
+					opportunity["point"] = previous_rally
+					opportunity["outcome"] = "body deflection" if opportunity == deflection else "untouched ball down"
+					flags.append(opportunity)
+			closest_attempt = {}
+			closest_unattempted = {}
+			deflection = {}
 			rally_started = game.match_clock
 			if review_point == game.rallies and not review_frames.is_empty():
 				review_deadline = game.match_clock+clampf(game.bounce_end+0.12,0.45,1.60)
