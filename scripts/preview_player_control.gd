@@ -489,7 +489,7 @@ func move_cpu_toward(travel: Vector3, delta: float, track_ball := true) -> void:
 	sprint_requested = distance>0.85
 	move_player(Vector2(direction.dot(forward.cross(Vector3.UP)),direction.dot(forward)),delta,track_ball)
 
-func move_player(direction: Vector2, delta: float, track_ball := true, setting_target := Vector3.INF, movement_scale := 1.0, court_weight := 0.0, turn_with_ball := true, front_limit := 2.5, approach_speed := 0.0, approach_rate := 0.0) -> void:
+func move_player(direction: Vector2, delta: float, track_ball := true, setting_target := Vector3.INF, movement_scale := 1.0, court_weight := 0.0, turn_with_ball := true, front_limit := 2.5, approach_speed := 0.0, approach_rate := 0.0, run_after_pass := false) -> void:
 	var actor: Node3D = page.preview_player
 	var session = page.get_node("/root/StorySession")
 	var setting := setting_target.is_finite()
@@ -509,7 +509,7 @@ func move_player(direction: Vector2, delta: float, track_ball := true, setting_t
 		var facing := actor.basis.z.normalized()
 		step_direction = Vector2(travel.dot(facing.cross(Vector3.UP)),travel.dot(facing))
 	var quick_pace := sprint_requested and direction.length()>0.1 and stamina.can_sprint()
-	sprinting = not setting and quick_pace and step_direction.y>0.3
+	sprinting = quick_pace and ((not setting and step_direction.y>0.3) or (run_after_pass and direction.y>0.3))
 	var step_rate := QUICK_STEP_RATE if quick_pace else 1.0
 	if setting:
 		setter_step_rate = move_toward(setter_step_rate,QUICK_STEP_RATE*step_rate,delta*7.0)

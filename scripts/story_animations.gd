@@ -683,8 +683,10 @@ func _process(delta: float) -> void:
 		setting_drill.trace_move_scale = 0.0 if diving else setting_drill.setter_movement_scale()
 		var court_weight: float = setting_drill.court_facing_weight()
 		if not diving and not setting_drill.jump.active:
+			var run_after_pass: bool = selected_category == "Attacking" and setting_drill.uses_assisted_approach() and not setting_drill.approach_practice and setting_drill.stage in [setting_drill.Stage.PASS,setting_drill.Stage.SET]
+			var running_forward: bool = run_after_pass and player_controls.sprint_requested and player_controls.stamina.can_sprint() and setting_drill.trace_input.y > 0.3
 			var attacking_approach: bool = selected_category == "Attacking" and (setting_drill.stage == setting_drill.Stage.SET or setting_drill.approach_practice)
-			if attacking_approach:
+			if attacking_approach or running_forward:
 				var approach: Vector2 = setting_drill.trace_input
 				if setting_drill.approach_practice:
 					var heading := atan2(-approach.x,maxf(0.65,approach.y)) if approach.y > 0.05 else 0.0
@@ -692,9 +694,9 @@ func _process(delta: float) -> void:
 				elif approach.y > 0.05:
 					var heading := atan2(-approach.x,approach.y)
 					preview_player.rotation.y = rotate_toward(preview_player.rotation.y,heading,delta*8.0)
-			var track_ball: bool = not attacking_approach and not setting_drill.bump.backward_reach_active()
-			player_controls.move_player(setting_drill.trace_input,delta,false,setting_drill.ball.global_position,setting_drill.trace_move_scale,court_weight,track_ball,setting_drill.jump.front_limit,approach_speed,approach_rate)
-			setting_drill.apply_setter_arms(player_controls.footwork.phase,player_controls.moving,delta)
+			var track_ball: bool = not running_forward and not attacking_approach and not setting_drill.bump.backward_reach_active()
+			player_controls.move_player(setting_drill.trace_input,delta,false,setting_drill.ball.global_position,setting_drill.trace_move_scale,court_weight,track_ball,setting_drill.jump.front_limit,approach_speed,approach_rate,run_after_pass)
+			if not player_controls.sprinting: setting_drill.apply_setter_arms(player_controls.footwork.phase,player_controls.moving,delta)
 		elif setting_drill.jump.active and court_weight > 0.0:
 			player_controls.track_setting_ball(preview_player,setting_drill.ball.global_position,delta,court_weight)
 		setting_drill.step_jump(delta)

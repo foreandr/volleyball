@@ -262,8 +262,6 @@ func reset_feed() -> void:
 	bump.catch_only = false
 	bump.destination = Vector2(-0.55,3.0)
 	bump.height = 3.8
-	serve_target = RECEIVE_START+Vector3(0.0,1.13,-0.17)
-	serve_velocity = (serve_target-ATTACK_SERVE_SOURCE)/SERVE_TIME+Vector3.UP*Flight.GRAVITY*SERVE_TIME*0.5
 	ball.position = ATTACK_SERVE_SOURCE
 	ball.rotation = Vector3.ZERO
 	region.position = PIN
@@ -307,8 +305,12 @@ func reset_feed() -> void:
 		status.text = "Setter receiving pass"
 		trace.begin_feed({"mode":"approach_practice","source":pass_origin,"velocity":pass_motion,"pin":approach_set_target,"start":setter.position})
 		return
+	setter.position = Vector3(randf_range(-3.0,3.0),RECEIVE_START.y,randf_range(-3.7,0.0))
+	var offset := Vector2.from_angle(randf_range(0.0,TAU))*randf_range(0.85,1.90)
+	serve_target = Vector3(clampf(setter.position.x+offset.x,-4.15,4.15),1.17,clampf(setter.position.z+offset.y,-4.65,1.25))
+	serve_velocity = (serve_target-ATTACK_SERVE_SOURCE)/SERVE_TIME+Vector3.UP*Flight.GRAVITY*SERVE_TIME*0.5
 	status.text = "Receive  |  Q forearms, I / E hands"
-	trace.begin_feed({"mode":"attacking","source":ATTACK_SERVE_SOURCE,"serve_velocity":serve_velocity})
+	trace.begin_feed({"mode":"attacking","source":ATTACK_SERVE_SOURCE,"serve_velocity":serve_velocity,"serve_target":serve_target,"receiver_start":setter.position})
 
 func call_rally_set(passer: Vector3) -> void:
 	# Number the lanes from left to right as seen from the receiving end.
@@ -604,7 +606,7 @@ func step(delta: float) -> void:
 	match stage:
 		Stage.SERVE: play_serve(time,previous,delta)
 		Stage.PASS:
-			if not approach_practice: follow_receive(time)
+			if not approach_practice and not (trace_sprint and trace_input.y > 0.3): follow_receive(time)
 			play_cpu_set(time,delta)
 		Stage.SHANK:
 			follow_receive(time)
