@@ -372,7 +372,7 @@ func start_swing_practice() -> void:
 	setter.position = takeoff
 	region.position = set_target
 	receiver.rotation.y = atan2(pin.x-CPU_HOME.x,pin.z-CPU_HOME.z)
-	var source := receiver.to_global(Vector3(0.0,HandPose.CONTACT_HEIGHT,HandPose.CONTACT_FORWARD))
+	var source := to_local(receiver.to_global(Vector3(0.0,HandPose.CONTACT_HEIGHT,HandPose.CONTACT_FORWARD)))
 	var velocity := set_toward_pin(source,pin)
 	var lead := 0.72
 	var preroll := descending_time(source,velocity,PIN_HEIGHT)-lead

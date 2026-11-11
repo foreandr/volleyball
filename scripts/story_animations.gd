@@ -23,6 +23,8 @@ const CATEGORIES := ["Forearm reception","Setting","Attacking","Serving","Blocki
 var content: VBoxContainer
 var category_buttons: Dictionary = {}
 var selected_category := ""
+var blocking_practice: Node3D
+var blocking_frame: Node3D
 var underhand_serve: Node3D
 var serve_opponents: Node3D
 var serve_opponent_frame: Node3D
@@ -203,6 +205,7 @@ func set_title(text: String) -> void:
 	if heading: heading.text = text
 
 func show_categories() -> void:
+	stop_blocking_practice()
 	stop_serving_session()
 	if is_instance_valid(pass_timing_cue): pass_timing_cue.hide()
 	stop_setting_drill()
@@ -228,6 +231,7 @@ func show_categories() -> void:
 func select_category(category: String) -> void:
 	category = Catalog.category_name(category)
 	if not MOVE_TYPES.has(category): return
+	stop_blocking_practice()
 	stop_serving_session()
 	reception_review.stop(false)
 	reception_review.visible = category == "Forearm reception"
@@ -246,6 +250,9 @@ func select_category(category: String) -> void:
 	set_title(category.to_upper())
 	if category in ["Setting","Attacking"]:
 		start_setting_drill(category == "Attacking")
+		return
+	if category == "Blocking":
+		start_blocking_practice()
 		return
 	var row := HBoxContainer.new()
 	row.visible = MOVE_TYPES[category].size()>1
@@ -316,6 +323,34 @@ Scroll to set pass height",16)
 	content.add_child(edit_button)
 	refresh_type()
 	animation_list.grab_focus()
+
+func start_blocking_practice() -> void:
+	if player_controls.active: player_controls.set_active(false)
+	if is_instance_valid(ball_preview): ball_preview.stop()
+	right_panel.hide()
+	angle_control.hide()
+	content.add_child(label("Space to jump",18))
+	drill_status = label("",16)
+	drill_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	content.add_child(drill_status)
+	blocking_frame = Node3D.new()
+	blocking_frame.position.z = 8.0
+	blocking_frame.rotation.y = PI
+	preview_player.get_parent().add_child(blocking_frame)
+	blocking_practice = preload("res://scripts/blocking_practice.gd").new()
+	blocking_frame.add_child(blocking_practice)
+	blocking_practice.configure_block(preview_player,drill_status,build_label)
+	blocking_practice.set_ball_audio_muted(StorySession.attack_ball_audio_muted)
+	preview_camera.position = Vector3(0.0,4.9,-5.2)
+	preview_camera.look_at(Vector3(0.0,2.1,4.6))
+	preview.grab_focus()
+
+func stop_blocking_practice() -> void:
+	if not is_instance_valid(blocking_practice): return
+	blocking_practice.stop_block()
+	blocking_frame.queue_free()
+	blocking_practice = null
+	blocking_frame = null
 
 func start_serve_bump_set_spike() -> void:
 	if player_controls.active: player_controls.set_active(false)
@@ -803,6 +838,9 @@ func reception_drill_active() -> bool:
 
 func _process(delta: float) -> void:
 	pass_timing_cue.hide()
+	if is_instance_valid(blocking_practice):
+		blocking_practice.tick_block(delta)
+		return
 	if selected_category == "Serving":
 		move_server(player_controls.movement_input(),delta)
 		if is_instance_valid(underhand_serve):
@@ -1549,7 +1587,7 @@ func open_editor(index := -1) -> void:
 	get_tree().change_scene_to_file("res://scenes/animation_editor.tscn")
 
 func cycle_type(direction: int) -> void:
-	if is_instance_valid(setting_drill) or selected_category.is_empty() or selected_category in ["Setting","Attacking"]: return
+	if is_instance_valid(blocking_practice) or is_instance_valid(setting_drill) or selected_category.is_empty() or selected_category in ["Setting","Attacking"]: return
 	type_indices[selected_category] = posmod(int(type_indices.get(selected_category,0))+direction,MOVE_TYPES[selected_category].size())
 	refresh_type()
 
@@ -1561,6 +1599,11 @@ func open_menu() -> void:
 	else: get_tree().change_scene_to_file("res://scenes/story.tscn")
 
 func _input(event: InputEvent) -> void:
+	if is_instance_valid(blocking_practice) and event is InputEventKey:
+		if event.pressed and not event.echo:
+			if event.keycode == KEY_SPACE: blocking_practice.queue_block()
+			elif event.keycode == KEY_ESCAPE: open_menu()
+		return
 	if selected_category == "Chasing" and is_instance_valid(setting_drill):
 		if event.is_action_pressed("ui_cancel"): open_menu()
 		elif event is InputEventKey and not event.echo:
