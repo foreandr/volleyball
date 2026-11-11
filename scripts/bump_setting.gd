@@ -61,7 +61,7 @@ var forearm_setting := false
 var knee_bend_depth := 0.0
 var ready_knee_bend_depth := 0.0
 var lunge_bend_depth := 0.0
-var knee_bend_source := {}
+var defense_ground_y := 0.0
 var contact_destination := Vector2.ZERO
 var touch_time := -INF
 var touch: Vector3
@@ -251,12 +251,6 @@ func approach(path: Callable, time: float, end: float) -> float:
 			delay = ahead
 	return 1.0-delay/APPROACH_TIME if delay >= 0.0 else -1.0
 
-func restore_knee_bend() -> void:
-	if knee_bend_source.is_empty(): return
-	var rig: Skeleton3D = setter.skeleton
-	for bone in knee_bend_source: rig.set_bone_pose(bone,knee_bend_source[bone])
-	knee_bend_source.clear()
-
 func apply_knee_bend(time := INF) -> void:
 	if knee_bend_depth <= 0.001 or low_save.active: return
 	var rig: Skeleton3D = setter.skeleton
@@ -266,6 +260,7 @@ func apply_knee_bend(time := INF) -> void:
 	var pelvis := rig.find_bone("pelvis")
 	var parent: Transform3D = author.world_pose(pose,rig.get_bone_parent(pelvis))
 	var feet: Array[Transform3D] = []
+	var floor_targets: Array[Vector3] = []
 	var knee_poles: Array[Vector3] = []
 	var hips_across: Vector3 = (author.point(pose,"thigh_l")-author.point(pose,"thigh_r")).normalized()
 	var requested_depth := knee_bend_depth
@@ -278,16 +273,26 @@ func apply_knee_bend(time := INF) -> void:
 		var hip: Vector3 = author.point(pose,"thigh_"+side)
 		var knee: Vector3 = author.point(pose,"calf_"+side)
 		feet.append(foot)
+		var world_foot := rig.to_global(foot.origin)
+		if defensive_hand_dig:
+			var is_lead: bool = not reach.is_empty() and side == reach.lead
+			var step_lift := 0.08*sin(PI*reach_progress) if is_lead else 0.0
+			world_foot.y = clampf(world_foot.y,defense_ground_y,defense_ground_y+step_lift)
+		floor_targets.append(rig.to_local(world_foot))
 		var axis := (foot.origin-hip).normalized()
 		var pole := (knee-hip).slide(axis)
 		var forward := Vector3(0.16 if side == "l" else -0.16,0.0,1.0)
 		knee_poles.append(forward if pole.length_squared() < 0.0004 else pole.normalized())
 		var world_hip := rig.to_global(hip)
-		var world_foot := rig.to_global(foot.origin)
 		# Limit the extra drop for a leg already deeply compressed by the directional clip.
 		depth = minf(depth,maxf(0.0,world_hip.y-world_foot.y-0.40))
 	if depth <= 0.001: return
-	knee_bend_source[pelvis] = pose[pelvis]
+	if defensive_hand_dig:
+		var separation := (floor_targets[0]-floor_targets[1]).dot(hips_across)
+		var correction := maxf(0.0,0.16-separation)*0.5
+		floor_targets[0] += hips_across*correction
+		floor_targets[1] -= hips_across*correction
+	var changed_bones: Array[int] = [pelvis]
 	pose[pelvis].origin += parent.basis.inverse()*rig.global_basis.inverse()*(Vector3.DOWN*depth)
 	for index in 2:
 		var side := "l" if index == 0 else "r"
@@ -296,9 +301,17 @@ func apply_knee_bend(time := INF) -> void:
 		var foot := "foot_"+side
 		for joint in [thigh,calf,foot]:
 			var bone := rig.find_bone(joint)
-			knee_bend_source[bone] = pose[bone]
+			changed_bones.append(bone)
 		var hip: Vector3 = author.point(pose,thigh)
-		var axis := (feet[index].origin-hip).normalized()
+		var target := floor_targets[index]
+		if defensive_hand_dig:
+			var knee: Vector3 = author.point(pose,calf)
+			var ankle: Vector3 = author.point(pose,foot)
+			var length := hip.distance_to(knee)+knee.distance_to(ankle)-0.002
+			var height := target.y-hip.y
+			var span := sqrt(maxf(0.0,length*length-height*height))
+			target = hip+(target-hip).slide(Vector3.UP).limit_length(span)+Vector3.UP*height
+		var axis := (target-hip).normalized()
 		var out := (hips_across if index == 0 else -hips_across).slide(axis).normalized()
 		var pole := knee_poles[index].slide(axis).normalized()
 		var lateral := pole.dot(out)
@@ -308,9 +321,11 @@ func apply_knee_bend(time := INF) -> void:
 				bend = out.cross(axis)
 				if bend.z < 0.0: bend = -bend
 			pole = bend.normalized()*sqrt(1.0-0.32*0.32)+out*0.32
-		author.limb(pose,thigh,calf,foot,feet[index].origin,pole)
+		author.limb(pose,thigh,calf,foot,target,pole)
 		author.set_world_basis(pose,foot,feet[index].basis)
-	for bone in knee_bend_source: rig.set_bone_pose(bone,pose[bone])
+	for bone in changed_bones:
+		rig.set_bone_pose_position(bone,pose[bone].origin)
+		rig.set_bone_pose_rotation(bone,pose[bone].basis.orthonormalized().get_rotation_quaternion().normalized())
 
 func update_attempt(time: float, previous: float, end: float, path: Callable, incoming: Vector3, delta: float, cue_arrival := INF, spin_rps := 0.0) -> void:
 	contact_check.clear()
@@ -607,6 +622,7 @@ func sample_pose(animation: Animation, pose_tracks: Array[Vector2i], time: float
 	time = clampf(time,0.0,animation.length)
 	for bone in pose_tracks.size():
 		var track := pose_tracks[bone]
+		if defensive_hand_dig and bone == 0: continue
 		if track.x >= 0 and (not in_place or bone != 0):
 			rig.set_bone_pose_position(bone,rig.get_bone_pose_position(bone).lerp(animation.position_track_interpolate(track.x,time),weight))
 		if track.y >= 0:

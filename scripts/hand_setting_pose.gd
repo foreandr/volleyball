@@ -33,7 +33,7 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,forward_lean*0.19*lean_weight)
 	head = author.point(pose,"Head")
 	var aim := target_local-head
-	var diamond := head+Vector3(clampf(aim.x,-0.28 if face_save else -0.22,0.28 if face_save else 0.22),clampf(aim.y-0.075,-0.10 if face_save else 0.12,0.20 if face_save else 0.27),clampf(aim.z-0.07,0.09,0.35))
+	var diamond := head+Vector3(clampf(aim.x,-0.28 if face_save else -0.22,0.28 if face_save else 0.22),clampf(aim.y-0.075,-0.10 if face_save else 0.12,0.20 if face_save else 0.27),clampf(aim.z-0.07,0.16 if face_save else 0.09,0.35))
 	var local_push := rig.global_basis.inverse()*push
 	var horizontal_push := local_push.slide(Vector3.UP)
 	var turn := 0.0
@@ -74,8 +74,9 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 		shape_digit(author,pose,"thumb",side,diamond+Vector3(sign_*0.016,-0.047,0.045))
 		shape_outer_fingers(author,pose,side,diamond+Vector3(0,0.075,0.07))
 	for bone in rig.get_bone_count():
-		var before: Basis = original[bone].basis
-		rig.set_bone_pose_rotation(bone,before.slerp(pose[bone].basis,blend).orthonormalized().get_rotation_quaternion())
+		var before: Quaternion = original[bone].basis.orthonormalized().get_rotation_quaternion().normalized()
+		var after: Quaternion = pose[bone].basis.orthonormalized().get_rotation_quaternion().normalized()
+		rig.set_bone_pose_rotation(bone,before.slerp(after,blend).normalized())
 
 static func shape_outer_fingers(author: RefCounted, pose: Array, side: String, ball_center: Vector3) -> void:
 	var inside: Vector3 = author.point(pose,"index_01_"+side)

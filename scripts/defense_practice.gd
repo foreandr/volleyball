@@ -8,6 +8,7 @@ var dig: MeshInstance3D
 var next_dig_lane := 0
 var dig_pressed_at := -INF
 var dig_sound_played := false
+var movement_pose: Array[Transform3D] = []
 
 func load_setup() -> void:
 	player_attacks = false
@@ -32,6 +33,11 @@ func configure_block(actor: Node3D, readout: Label, build: String) -> void:
 	dig.green_hand_allowance = 0.45
 	actor.position = DEFENSE_START
 	actor.rotation.y = 0.0
+	actor.animator.seek(0.0,true)
+	var rig: Skeleton3D = actor.skeleton
+	var left := rig.to_global(rig.get_bone_global_pose(rig.find_bone("foot_l")).origin)
+	var right := rig.to_global(rig.get_bone_global_pose(rig.find_bone("foot_r")).origin)
+	dig.defense_ground_y = minf(left.y,right.y)
 
 func reset_feed() -> void:
 	var defender_position: Vector3 = blocker.position
@@ -110,8 +116,21 @@ func defense_move_scale() -> float:
 	if dig.low_save.active and not dig.low_save.finished(time): return 0.0
 	return dig.movement_scale(time,flight_end,dig.to_local(ball.global_position))
 
+func restore_movement_pose() -> void:
+	if movement_pose.is_empty(): return
+	var rig: Skeleton3D = blocker.skeleton
+	for bone in rig.get_bone_count():
+		rig.set_bone_pose_position(bone,movement_pose[bone].origin)
+		rig.set_bone_pose_rotation(bone,movement_pose[bone].basis.orthonormalized().get_rotation_quaternion().normalized())
+	movement_pose.clear()
+
+func capture_movement_pose() -> void:
+	var rig: Skeleton3D = blocker.skeleton
+	movement_pose.clear()
+	for bone in rig.get_bone_count(): movement_pose.append(rig.get_bone_pose(bone))
+
 func stop_block() -> void:
-	if is_instance_valid(dig): dig.restore_knee_bend()
+	restore_movement_pose()
 	super.stop_block()
 
 func update_defense_knee_bend(delta: float) -> void:
@@ -127,6 +146,7 @@ func update_defense_knee_bend(delta: float) -> void:
 	if stage != Stage.HIT: dig.apply_knee_bend()
 
 func tick_block(delta: float) -> void:
+	capture_movement_pose()
 	update_defense_knee_bend(delta)
 	if stage == Stage.SET: queued_approach_input(delta)
 	step_jump(delta)
@@ -174,3 +194,22 @@ func play_spike(time: float, delta: float) -> void:
 		ball.global_position = flight_point(origin,dig.outgoing,minf(age,dig.floor_time))
 	if age >= dig.floor_time and age-delta < dig.floor_time: play_floor_sound()
 	if age >= dig.floor_time+0.55 and not jump.active: reset_feed()
+
+func trace_snapshot(time: float) -> Dictionary:
+	var snapshot := super.trace_snapshot(time)
+	if not is_instance_valid(dig): return snapshot
+	var rig: Skeleton3D = blocker.skeleton
+	snapshot["defense"] = {
+		"position":blocker.global_position,"yaw":blocker.rotation.y,
+		"technique":"hands" if dig.hand_setting else "forearms",
+		"pressed_at":dig.pressed_at,"contact_at":dig.touch_time,"release_at":dig.release_time,
+		"contact":dig.contact_check,"reach":dig.reach,"knee_depth":dig.knee_bend_depth,
+		"left_foot":rig.to_global(rig.get_bone_global_pose(rig.find_bone("foot_l")).origin),
+		"right_foot":rig.to_global(rig.get_bone_global_pose(rig.find_bone("foot_r")).origin)
+	}
+	return snapshot
+
+func mark_trace() -> bool:
+	if trace.file == null: return false
+	trace.write("player_marker",clock,{"snapshot":trace_snapshot(clock-stage_start),"previous_feed":trace.feed-1},true)
+	return true

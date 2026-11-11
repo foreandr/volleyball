@@ -975,7 +975,7 @@ func _process(delta: float) -> void:
 	pass_timing_cue.hide()
 	if is_instance_valid(blocking_practice):
 		if defense_active:
-			blocking_practice.dig.restore_knee_bend()
+			blocking_practice.restore_movement_pose()
 			blocking_practice.update_defense_facing(delta)
 			player_controls.read_pace_input()
 			player_controls.move_player(player_controls.movement_input(),delta,false,blocking_practice.ball.global_position,blocking_practice.defense_move_scale(),0.80,false,3.20,0.0,0.0,true)
@@ -1772,6 +1772,8 @@ func _input(event: InputEvent) -> void:
 				match event.keycode:
 					KEY_Q: blocking_practice.queue_dig(false)
 					KEY_E, KEY_I: blocking_practice.queue_dig(true)
+					KEY_F8:
+						if blocking_practice.mark_trace(): show_marker_popup()
 					KEY_ESCAPE: open_blocking_mode(false)
 			return
 		if event.keycode == KEY_SPACE and blocking_practice.player_attacks:
