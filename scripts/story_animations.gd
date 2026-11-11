@@ -22,6 +22,9 @@ var content: VBoxContainer
 var category_buttons: Dictionary = {}
 var selected_category := ""
 var underhand_serve: Node3D
+var serving_original_transform: Transform3D
+var serving_position := Vector3(0.0,0.04,-6.20)
+var serving_running := false
 var type_indices: Dictionary = {}
 var type_label: Label
 var animation_list
@@ -194,6 +197,7 @@ func set_title(text: String) -> void:
 	if heading: heading.text = text
 
 func show_categories() -> void:
+	stop_serving_session()
 	if is_instance_valid(pass_timing_cue): pass_timing_cue.hide()
 	stop_setting_drill()
 	if is_instance_valid(reception_review):
@@ -218,9 +222,16 @@ func show_categories() -> void:
 func select_category(category: String) -> void:
 	category = Catalog.category_name(category)
 	if not MOVE_TYPES.has(category): return
+	stop_serving_session()
 	reception_review.stop(false)
 	reception_review.visible = category == "Forearm reception"
 	selected_category = category
+	if category == "Serving":
+		if player_controls.active: player_controls.set_active(false)
+		serving_original_transform = preview_player.transform
+		serving_position = Vector3(0.0,0.04,-6.20)
+		type_indices["Serving"] = MOVE_TYPES["Serving"].find("Underhand")
+		preview_player.get_node("DirectionArrows").hide()
 	preview_player.get_node("DirectionArrows").show_dive_ring = category == "Forearm reception"
 	clear_content()
 	set_title(category.to_upper())
@@ -279,7 +290,7 @@ Scroll to set pass height",16)
 	if category == "Chasing":
 		content.add_child(button("Serve Bump Set Spike",start_serve_bump_set_spike))
 	if category == "Serving":
-		drill_status = label("Space to serve\nMove cursor to aim\nWASD to move camera\nMiddle drag to rotate\nScroll for arc  |  Shift + scroll to zoom",16)
+		drill_status = label("Space to serve\nMove cursor to aim\nWASD to run\nMiddle drag to rotate\nScroll for arc  |  Shift + scroll to zoom",16)
 		content.add_child(drill_status)
 	var list := ItemList.new()
 	list.name = "AnimationList"
@@ -611,6 +622,13 @@ func stop_setting_drill() -> void:
 	player_controls.show_stamina(false)
 	update_camera()
 
+func stop_serving_session() -> void:
+	if selected_category != "Serving" or not is_instance_valid(preview_player): return
+	stop_underhand_serve()
+	preview_player.transform = serving_original_transform
+	preview_player.get_node("DirectionArrows").show()
+	serving_running = false
+
 func stop_underhand_serve() -> void:
 	if not is_instance_valid(underhand_serve): return
 	underhand_serve.stop()
@@ -632,17 +650,22 @@ func refresh_type() -> void:
 	var underhand := selected_category == "Serving" and current_type() == "Underhand"
 	animation_list.visible = not underhand
 	edit_button.visible = not underhand
-	if is_instance_valid(drill_status): drill_status.visible = underhand
+	if selected_category == "Serving" and is_instance_valid(drill_status):
+		drill_status.text = "Space to serve\nMove cursor to aim\nWASD to run\nMiddle drag to rotate\nScroll for arc  |  Shift + scroll to zoom" if underhand else "WASD to run"
 	if underhand:
 		if is_instance_valid(ball_preview): ball_preview.stop()
 		underhand_serve = preload("res://scripts/underhand_serve.gd").new()
 		preview_player.get_parent().add_child(underhand_serve)
-		underhand_serve.configure(preview_player)
+		underhand_serve.configure(preview_player,serving_position)
 		setting_camera_focus = SETTING_CAMERA_FOCUS
 		preview_camera.position = Vector3(0.0,7.5,-11.2)
 		preview_camera.look_at(setting_camera_focus)
 		preview.grab_focus()
 		return
+	if selected_category == "Serving":
+		serving_running = false
+		preview_player.position = serving_position
+		preview_player.rotation.y = 0.0
 	animation_list.clear()
 	if is_instance_valid(edit_button): edit_button.disabled = true
 	for entry in Catalog.entries(selected_category,current_type()):
@@ -742,10 +765,12 @@ func reception_drill_active() -> bool:
 
 func _process(delta: float) -> void:
 	pass_timing_cue.hide()
-	if is_instance_valid(underhand_serve):
-		pan_serve_camera(player_controls.movement_input(),delta)
-		underhand_serve.step(delta)
-		return
+	if selected_category == "Serving":
+		move_server(player_controls.movement_input(),delta)
+		if is_instance_valid(underhand_serve):
+			underhand_serve.step(delta)
+			return
+		if serving_running or selected_entry.is_empty(): return
 	if is_instance_valid(setting_drill) and selected_category == "Chasing":
 		setting_drill.tick_demo(delta,player_controls)
 		return
@@ -1231,10 +1256,28 @@ func handle_preview_input(event: InputEvent) -> void:
 		return
 	super.handle_preview_input(event)
 
-func pan_serve_camera(direction: Vector2, delta: float) -> void:
-	var offset := camera_pan_delta(direction,delta,5.0)
-	setting_camera_focus += offset
-	preview_camera.position += offset
+func move_server(direction: Vector2, delta: float) -> void:
+	if is_instance_valid(underhand_serve) and underhand_serve.elapsed >= 0.0: return
+	var next := serving_position+Vector3(-direction.x,0.0,direction.y)*4.5*delta
+	next.x = clampf(next.x,-6.5,6.5)
+	next.z = clampf(next.z,-10.0,-5.20)
+	var moving := not next.is_equal_approx(serving_position)
+	if moving:
+		var travel := next-serving_position
+		serving_position = next
+		var yaw := atan2(travel.x,travel.z)
+		if is_instance_valid(underhand_serve):
+			underhand_serve.run_to(next,yaw,delta)
+		else:
+			preview_player.position = next
+			preview_player.rotation.y = yaw
+			preview_player.play_action("run")
+	elif serving_running:
+		if is_instance_valid(underhand_serve): underhand_serve.settle_run()
+		else:
+			preview_player.rotation.y = 0.0
+			preview_player.play_action("idle")
+	serving_running = moving
 
 func orbit_setting_camera(pixels: Vector2) -> void:
 	var offset := preview_camera.position-setting_camera_focus

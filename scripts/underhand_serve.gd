@@ -12,6 +12,8 @@ const PREVIEW_DOTS := 42
 
 var player: Node3D
 var serve_start := START
+var serve_yaw := 0.0
+var running := false
 var forward := Vector3.BACK
 var ball: MeshInstance3D
 var aim_ring: MeshInstance3D
@@ -43,6 +45,7 @@ func configure(actor: Node3D, start := START, yaw := 0.0) -> void:
 	original_transform = player.transform
 	original_animation_mode = player.animator.callback_mode_process
 	serve_start = start
+	serve_yaw = yaw
 	player.position = serve_start
 	player.rotation.y = yaw
 	forward = player.basis.z.normalized()
@@ -94,6 +97,7 @@ func reset() -> void:
 	net_hit.clear()
 	player.play_action("idle",0.0)
 	player.position = serve_start
+	player.rotation.y = serve_yaw
 	player.animator.seek(0.0,true)
 	var rig: Skeleton3D = player.skeleton
 	for side in ["l","r"]:
@@ -119,8 +123,27 @@ func flight_duration(start: Vector3) -> float:
 func launch_velocity(start: Vector3, duration: float) -> Vector3:
 	return (target-start).slide(Vector3.UP)/duration+Vector3.UP*sqrt(2.0*Flight.GRAVITY*(apex-start.y))
 
+func run_to(point: Vector3, yaw: float, delta: float) -> void:
+	preview_origin += point-serve_start
+	serve_start = point
+	player.position = point
+	player.rotation.y = rotate_toward(player.rotation.y,yaw,delta*16.0)
+	player.play_action("run")
+	player.animator.advance(delta)
+	running = true
+	var rig: Skeleton3D = player.skeleton
+	var palm := rig.get_bone_global_pose(rig.find_bone("middle_01_l")).origin
+	ball.position = to_local(rig.to_global(palm))+Vector3.UP*(BallPreview.RADIUS+0.012)
+	update_path_preview()
+
+func settle_run() -> void:
+	if not running: return
+	running = false
+	reset()
+
 func serve() -> void:
 	if elapsed >= 0.0: return
+	settle_run()
 	elapsed = 0.0
 	swing_time = 0.0
 	contact_clock = INF
