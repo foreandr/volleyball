@@ -102,7 +102,7 @@ func receive_cue_time() -> float:
 
 func set_pass_aim(point: Vector3) -> void:
 	if partner_receiving: return
-	bump.destination = Vector2(clampf(point.x,-4.35,4.35),clampf(point.z,-4.8,3.45))
+	bump.destination = Vector2(point.x,point.z)
 
 func can_adjust_manual_set() -> bool:
 	return partner_receiving and stage in [Stage.SERVE,Stage.PASS] and not is_finite(cpu_set.release_time)
@@ -198,8 +198,6 @@ func show_teammate_set_call(format: String) -> void:
 	rally_set_call.show()
 
 func update_manual_set_target() -> void:
-	if manual_set_target.is_finite():
-		rally_set_target.x = clampf(manual_set_target.x,-5.5,5.5)
 	var origin := Vector3(receiver.position.x,cpu_set_contact_height(),receiver.position.z+0.45)
 	if stage == Stage.PASS:
 		origin = cpu_set.platform_center() if is_finite(cpu_set.touch_time) else cpu_contact_point
@@ -220,13 +218,15 @@ func draw_set_preview(origin: Vector3, launch: Vector3) -> void:
 
 func cpu_set_launch(origin: Vector3) -> Vector3:
 	var apex := cpu_set_apex()
-	var contact := descending_time(origin,Vector3.UP*sqrt(2.0*Flight.GRAVITY*(apex-origin.y)),RALLY_SET_CONTACT_HEIGHT)
-	var floor_time := Flight.landing_time(origin,Vector3.UP*sqrt(2.0*Flight.GRAVITY*(apex-origin.y)))
-	var target_depth := Net.NET_Z-RALLY_SET_NET_CLEARANCE
 	if partner_receiving and manual_set_target.is_finite():
-		target_depth = clampf(manual_set_target.z,-4.75,target_depth)
-	var safe_floor := Net.NET_Z-0.16
-	rally_set_target.z = minf(target_depth,lerpf(origin.z,safe_floor,contact/floor_time))
+		rally_set_target = Vector3(manual_set_target.x,PIN.y,manual_set_target.z)
+	else:
+		var vertical_launch := Vector3.UP*sqrt(2.0*Flight.GRAVITY*(apex-origin.y))
+		var contact := descending_time(origin,vertical_launch,RALLY_SET_CONTACT_HEIGHT)
+		var floor_time := Flight.landing_time(origin,vertical_launch)
+		var target_depth := Net.NET_Z-RALLY_SET_NET_CLEARANCE
+		var safe_floor := Net.NET_Z-0.16
+		rally_set_target.z = minf(target_depth,lerpf(origin.z,safe_floor,contact/floor_time))
 	region.position = rally_set_target
 	return set_toward_pin(origin,rally_set_target,apex,RALLY_SET_CONTACT_HEIGHT)
 
