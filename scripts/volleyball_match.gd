@@ -1662,7 +1662,7 @@ func begin_ball_bounce() -> void:
 	var before_impact := path_point(maxf(0.0,flight_end()-0.015))
 	var impact_velocity := (bounce_origin-before_impact)/0.015
 	bounce_velocity = impact_velocity.slide(Vector3.UP)*0.37
-	bounce_velocity.y = clampf(absf(impact_velocity.y)*0.55,1.85,6.35)
+	bounce_velocity.y = clampf(absf(impact_velocity.y)*0.55,1.85,6.35)*sqrt(1.25)
 	bounce_end = Flight.landing_time(bounce_origin,bounce_velocity)
 
 func check_floor(previous: float) -> void:
