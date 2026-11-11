@@ -63,9 +63,9 @@ func reset_feed() -> void:
 	setter.rotation.y = 0.0
 	receiver.position = BACK_LEFT if partner_receiving else BACK_RIGHT
 	receiver.rotation.y = 0.0
-	bump.destination = Vector2(receiver.position.x,-1.9)
+	bump.destination = Vector2(receiver.position.x,3.65 if partner_receiving else -1.9)
 	serve_demo.target = Vector3(setter.position.x,Flight.FLOOR,-4.15)
-	bump.height = 4.6
+	bump.height = 5.8 if partner_receiving else 4.6
 	serve_demo.reset()
 	serve_demo.ball.show()
 	serve_demo.serve()
@@ -169,7 +169,7 @@ func call_rally_set(passer: Vector3) -> void:
 		rally_set_call.show()
 
 func cpu_set_move_speed(distance: float) -> float:
-	return 5.0 if not partner_receiving and distance > 0.85 else 3.2
+	return 5.0 if distance > 0.85 else 3.2
 
 func tick_demo(delta: float, controls: RefCounted) -> void:
 	if can_adjust_manual_set():

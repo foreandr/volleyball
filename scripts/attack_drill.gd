@@ -789,9 +789,9 @@ func play_cpu_set(time: float, delta: float) -> void:
 	if not running:
 		receiver.play_action("idle")
 		cpu_feet.step(receiver.basis.inverse()*travel/maxf(delta*move_speed,0.001),delta,1.4,true)
-	if active_cpu_set_style == 2:
+	if active_cpu_set_style == 2 and set_requested():
 		receiver.position.y = CPU_HOME.y+0.44*(1.0-smoothstep(0.0,0.24,lead))
-	if lead <= 0.22:
+	if lead <= 0.22 and set_requested():
 		if running: receiver.play_action("idle",0.0)
 		var prepare := 1.0-smoothstep(0.0,0.22,lead)
 		if active_cpu_set_style == 1: cpu_set.apply_pose(cpu_set.contact_frame,prepare)
