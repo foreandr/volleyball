@@ -66,6 +66,18 @@ func tick_attack(delta: float) -> void:
 	elif not jump.active:
 		enabled = false
 
+func uses_front_right_lift() -> bool:
+	return true
+
+func keeps_strike_palm_presented() -> bool:
+	return true
+
+func spike_assist_radius() -> float:
+	return 0.19
+
+func attack_arm_turn_rate() -> float:
+	return deg_to_rad(1580.0)
+
 func spike_speed_multiplier() -> float:
 	return spike_strength
 

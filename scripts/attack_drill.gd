@@ -950,7 +950,7 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 			# Give the real palm a chance to meet the ball before accepting an assisted hit.
 			var leaving_reach := after.dot(after-before) >= 0.0 or drive+delta > swing_drive_duration+0.12
 			if uses_assisted_approach() and fraction < 0.0 and leaving_reach:
-				fraction = hand_contact_fraction(before,after,ASSISTED_PALM_RADIUS)
+				fraction = hand_contact_fraction(before,after,spike_assist_radius())
 			if fraction >= 0.0:
 				swing_contact_extension = extension
 				var contact_charge := approach_hold_charge(clock-(time-previous)*(1.0-fraction)) if uses_assisted_approach() else charge
@@ -989,6 +989,12 @@ func hand_contact_fraction(before: Vector3, after: Vector3, palm_radius := PALM_
 	if discriminant < 0.0: return -1.0
 	var entry := (-projection-sqrt(discriminant))/length_squared
 	return entry if entry >= 0.0 and entry <= 1.0 else -1.0
+
+func spike_assist_radius() -> float:
+	return ASSISTED_PALM_RADIUS
+
+func keeps_strike_palm_presented() -> bool:
+	return false
 
 func spike_speed_multiplier() -> float:
 	return 1.0
@@ -1201,7 +1207,7 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 		var shot_direction := (rig.to_local(frame.to_global(shot_aim))-ball_target).normalized()
 		var compact_finish := SpikeArm.compact_finish_weight(shot_aim,contact,line_weight < 0.5)
 		var arm_weight := 1.0 if uses_assisted_approach() and stage == Stage.SET else weight
-		swing_palm_roll = SpikeArm.apply(pose,author,ball_target,arm_weight,extension,follow,draw_progress,arm_lift,line_weight,elbow_clearance,swing_palm_roll,roll_step,shot_direction,compact_finish,backswing_reach*backswing_weight,uses_assisted_approach())
+		swing_palm_roll = SpikeArm.apply(pose,author,ball_target,arm_weight,extension,follow,draw_progress,arm_lift,line_weight,elbow_clearance,swing_palm_roll,roll_step,shot_direction,compact_finish,backswing_reach*backswing_weight,uses_assisted_approach(),keeps_strike_palm_presented())
 		var guide_drop := maxf(smoothstep(0.07,0.83,extension),smoothstep(0.0,0.62,follow))
 		if uses_assisted_approach() and stage == Stage.SET:
 			guide_drop = maxf(guide_drop*0.75,0.72*smootherstep(0.28,0.49,clock-swing_started))
@@ -1251,6 +1257,8 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 					author.limb(front_pose,upper,"lowerarm_r","hand_r",target,pole,1.0,lerpf(165.0,174.0,rise))
 					SpikeArm.align_wrist_to_forearm(front_pose,author,entry*0.65)
 					front_weight = 1.0-smootherstep(0.24,0.42,handoff_age)
+					if keeps_strike_palm_presented():
+						front_weight *= 1.0-smootherstep(0.18,0.67,extension)
 					source_weight = 0.0
 				else:
 					author.limb(front_pose,upper,"lowerarm_"+side,"hand_"+side,target,bend,1.0,lerpf(155.0,174.0,overhead))

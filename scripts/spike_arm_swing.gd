@@ -8,7 +8,7 @@ static func follow_heading(target: Vector3, origin: Vector3, facing := 0.0) -> f
 	var direction := target-origin
 	return clampf(angle_difference(facing,atan2(direction.x,direction.z)),-0.95,0.95)
 
-static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float, extension: float, follow: float, draw_progress: float, arm_lift: float, line_weight: float, elbow_clearance: float, previous_roll: float, roll_step: float, shot_direction: Vector3, compact_finish: float, backswing_reach: float, overhead_entry := false) -> float:
+static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float, extension: float, follow: float, draw_progress: float, arm_lift: float, line_weight: float, elbow_clearance: float, previous_roll: float, roll_step: float, shot_direction: Vector3, compact_finish: float, backswing_reach: float, overhead_entry := false, contact_palm := false) -> float:
 	var shoulder: Vector3 = author.point(pose,"upperarm_r")
 	var draw := Vector3(-0.04,0.40,0.08).lerp(Vector3(0.02,0.05,-0.12),draw_progress)
 	var wrist_target := ball-(ball-shoulder).normalized()*0.06-shot_direction*0.11
@@ -26,7 +26,9 @@ static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float,
 	target = follow_through_target(pose,author,shoulder,target,finish_point,finish,same_side,compact_finish)
 	var elbow_pole := Vector3(-1.0,0.16,-0.84).lerp(Vector3(-0.75,0.38,-0.28),smoothstep(0.62,1.0,extension))
 	var draw_elbow_limit := 112.0+42.0*smoothstep(0.0,0.60,backswing_reach)
-	var elbow_limit := lerpf(draw_elbow_limit,158.0,smoothstep(0.29,0.98,extension))
+	var elbow_limit := lerpf(draw_elbow_limit,168.0 if contact_palm else 158.0,smoothstep(0.29,0.98,extension))
+	if contact_palm:
+		elbow_pole = elbow_pole.lerp(Vector3(-0.78,0.22,0.32),smoothstep(0.16,0.78,extension))
 	elbow_limit = lerpf(elbow_limit,164.0 if same_side else 172.0,finish)
 	elbow_pole = elbow_pole.lerp(finish_elbow_pole(same_side),finish)
 	var base := pose
@@ -40,6 +42,10 @@ static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float,
 	align_wrist_to_forearm(pose,author,wrist_alignment*solve_weight)
 	var palm_progress := maxf(smoothstep(0.20,0.74,extension),follow)
 	var face_weight := smoothstep(0.07,0.35,extension)*(1.0-smoothstep(0.35,0.72,extension))*(1.0-smoothstep(0.03,0.60,follow))
+	if contact_palm:
+		var at_strike := smoothstep(0.36,0.79,extension)*(1.0-smoothstep(0.015,0.38,follow))
+		face_weight = maxf(face_weight,at_strike)
+		palm_progress = lerpf(palm_progress,follow,at_strike)
 	var roll := roll_finish_palm(pose,author,1.0,palm_progress,cross_body,previous_roll,roll_step,shot_direction,face_weight,ball)
 	if finish > 0.0:
 		blend_arm(base,pose,author,weight)
