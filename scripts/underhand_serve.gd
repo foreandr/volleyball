@@ -157,10 +157,10 @@ func pose(time: float) -> void:
 	var right_shoulder: Vector3 = author.point(bones,"upperarm_r")
 	var left_shoulder: Vector3 = author.point(bones,"upperarm_l")
 	var right_wrist := right_shoulder+Vector3(-0.055-0.08*back,-0.59+0.28*back+0.34*follow,0.015-0.66*back+0.51*follow)/scale_
-	var left_wrist := Vector3(right_shoulder.x,left_shoulder.y,left_shoulder.z)+Vector3(-0.015,-0.27,0.29)/scale_
+	var left_wrist := Vector3(right_shoulder.x,left_shoulder.y,left_shoulder.z)+Vector3(-0.015,-0.27-0.12*transfer,0.29+0.13*transfer)/scale_
 	var hold := 1.0-smoothstep(CONTACT_TIME,0.85,time)
 	var left_ready: Vector3 = author.point(bones,"hand_l")
-	author.limb(bones,"upperarm_l","lowerarm_l","hand_l",left_ready.lerp(left_wrist,hold),Vector3(0.65,-0.6,0.15))
+	author.limb(bones,"upperarm_l","lowerarm_l","hand_l",left_ready.lerp(left_wrist,hold),Vector3(0.22,-1.0,-0.25))
 	var left_basis: Transform3D = author.world_pose(bones,rig.find_bone("hand_l"))
 	var fingers: Vector3 = author.point(bones,"middle_01_l")-left_basis.origin
 	var palm_width: Vector3 = author.point(bones,"index_01_l")-author.point(bones,"pinky_01_l")
@@ -175,8 +175,13 @@ func pose(time: float) -> void:
 	var knuckles: Vector3 = author.point(bones,"middle_01_l")
 	var ball_center := left_basis.origin.lerp(knuckles,0.72)+Vector3.UP*(BallPreview.RADIUS+0.012)/scale_
 	var strike := smoothstep(0.32,CONTACT_TIME,time)*(1.0-smoothstep(CONTACT_TIME,0.78,time))
-	right_wrist = right_wrist.lerp(ball_center+Vector3(-0.02,-0.13,-0.13)/scale_,strike)
-	author.limb(bones,"upperarm_r","lowerarm_r","hand_r",right_wrist,Vector3(-0.55,-0.4,0.45))
+	right_wrist = right_wrist.lerp(ball_center+Vector3(-0.02,-0.11,-0.05)/scale_,strike)
+	var right_elbow: Vector3 = author.point(bones,"lowerarm_r")
+	var right_hand: Vector3 = author.point(bones,"hand_r")
+	var arm_length := right_shoulder.distance_to(right_elbow)+right_elbow.distance_to(right_hand)
+	var swing_direction := (right_wrist-right_shoulder).normalized()
+	right_wrist = right_shoulder+swing_direction*arm_length
+	author.limb(bones,"upperarm_r","lowerarm_r","hand_r",right_wrist,Vector3(-0.35,0.15,-1.0),1.0,173.0)
 	var across: Vector3 = (author.point(bones,"index_01_r")-author.point(bones,"pinky_01_r")).normalized()
 	var fist := smoothstep(0.0,0.13,time)*(1.0-smoothstep(0.85,1.20,time))
 	for digit in ["index","middle","ring","pinky"]:
