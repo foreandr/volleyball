@@ -3,7 +3,7 @@ extends "res://scripts/jump_float_serve.gd"
 const AttackDrill = preload("res://scripts/attack_drill.gd")
 const SetterJump = preload("res://scripts/setter_jump.gd")
 
-const TOSS_STEP := 0.36
+const TOSS_STEP := 0.42
 const APPROACH_START := TOSS_STEP+0.36
 const SPIN_TAKEOFF := APPROACH_START+0.56
 const SPIN_CONTACT := SPIN_TAKEOFF+0.55
@@ -12,7 +12,8 @@ const SPIN_LAND := SPIN_TAKEOFF+SetterJump.FULL_AIR_TIME*sqrt(JUMP_HEIGHT/Setter
 const APPROACH_SAMPLE_RATE := 120.0
 
 var sidespin := 0.0
-var forward_lean_degrees := 0.0
+const DEFAULT_FORWARD_LEAN := -15.0
+var forward_lean_degrees := DEFAULT_FORWARD_LEAN
 var active_forward_lean_degrees := 0.0
 var released_sidespin := 0.0
 var released_lift := 0.0
@@ -113,21 +114,23 @@ func spin_toss_ball(previous: float, time: float, rate: float) -> void:
 	if air_time > 0.0:
 		ball.rotate(Vector3.UP.cross(forward).normalized(),TAU*3.5*air_time)
 
-func toss_palm(pose: Array, _rig: Skeleton3D, author: RefCounted, _time: float) -> Vector3:
-	return author.point(pose,"hand_r").lerp(author.point(pose,"middle_01_r"),0.72)
+func toss_palm(pose: Array, rig: Skeleton3D, author: RefCounted, _time: float) -> Vector3:
+	var wrist: Vector3 = author.point(pose,"hand_r")
+	var scale_: float = rig.global_basis.get_scale().y
+	return wrist+Vector3.BACK*0.06/scale_
 
 func position_toss_hands(pose: Array, rig: Skeleton3D, author: RefCounted, time: float, weight: float) -> void:
-	var rise := smoothstep(0.14,TOSS_STEP,time)
-	var draw := smoothstep(0.0,0.13,time)*(1.0-smoothstep(0.13,TOSS_STEP,time))
+	var draw := smoothstep(0.0,0.16,time)*(1.0-smoothstep(0.16,TOSS_STEP,time))
+	var rise := pow(clampf(inverse_lerp(0.15,TOSS_STEP,time),0.0,1.0),1.65)
 	var scale_: float = rig.global_basis.get_scale().y
 	var shoulder: Vector3 = author.point(pose,"upperarm_r")
 	var left_shoulder: Vector3 = author.point(pose,"upperarm_l")
 	var outside := (shoulder-left_shoulder).slide(Vector3.UP).normalized()
-	var wrist := shoulder+(Vector3(0.0,-0.37+0.61*rise,0.31+0.13*rise-0.77*draw)+outside*(0.08+0.30*draw))/scale_
-	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",wrist,Vector3(-0.80,-0.42,-0.12),weight)
-	orient_palm(pose,rig,author,"r",Vector3.BACK,Vector3.RIGHT,0.72*weight)
-	var roll := smoothstep(TOSS_STEP-0.08,TOSS_STEP+0.05,time)
-	author.rotate_world(pose,"hand_r",Vector3.RIGHT,deg_to_rad(-20.0)*roll*weight)
+	var wrist := shoulder+(Vector3(0.0,-0.39+0.63*rise,0.26+0.16*rise-0.70*draw)+outside*(0.13+0.28*draw))/scale_
+	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",wrist,Vector3(-1.0,0.22,0.05),weight)
+	orient_palm(pose,rig,author,"r",Vector3.BACK,Vector3.RIGHT,weight)
+	var roll := smoothstep(TOSS_STEP-0.07,TOSS_STEP+0.05,time)
+	author.rotate_world(pose,"hand_r",Vector3.RIGHT,deg_to_rad(-12.0)*roll*weight)
 	var off_hand := left_shoulder+Vector3(0.11,-0.51,0.07)/scale_
 	author.limb(pose,"upperarm_l","lowerarm_l","hand_l",off_hand,Vector3(0.60,-0.20,0.25),weight)
 

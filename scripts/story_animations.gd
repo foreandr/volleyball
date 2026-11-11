@@ -1309,13 +1309,13 @@ func add_serve_spin_controls() -> void:
 		underhand_serve.set_sidespin(value/100.0)
 		readout.text = "Sidespin  %+.0f%%" % value)
 	serving_spin_controls.add_child(slider)
-	var lean_readout := label("Torso forward lean  0 deg",16)
+	var lean_readout := label("Torso forward lean  %+.0f deg" % underhand_serve.forward_lean_degrees,16)
 	serving_spin_controls.add_child(lean_readout)
 	var lean_slider := HSlider.new()
 	lean_slider.min_value = -20.0
 	lean_slider.max_value = 40.0
 	lean_slider.step = 1.0
-	lean_slider.value = 0.0
+	lean_slider.value = underhand_serve.forward_lean_degrees
 	lean_slider.focus_mode = Control.FOCUS_NONE
 	lean_slider.value_changed.connect(func(value: float):
 		underhand_serve.set_forward_lean(value)
