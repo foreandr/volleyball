@@ -32,35 +32,10 @@ var block_contact: Vector3
 var block_velocity: Vector3
 
 func attack_pose_smoothing_time() -> float:
-	return 0.036
+	return 0.026
 
-func attack_arm_turn_rate() -> float:
-	return deg_to_rad(760.0)
-
-func stabilize_bow_draw_pose(pose: Array[Transform3D]) -> void:
-	if stage != Stage.SET: return
-	var lift_age := clock-swing_started
-	var guard := smootherstep(0.0,0.045,lift_age)*(1.0-smootherstep(0.26,0.39,lift_age))
-	if guard <= 0.0: return
-	var author: RefCounted = setter.get_pose_author()
-	var shoulder: Vector3 = author.point(pose,"upperarm_r")
-	var left: Vector3 = author.point(pose,"upperarm_l")
-	var outside := (shoulder-left).normalized()
-	var center := (shoulder+left)*0.5
-	# Keep the lift in the right shoulder lane while the chest turns underneath it.
-	for joint: String in ["lowerarm_r","hand_r"]:
-		var pivot_name := "upperarm_r" if joint == "lowerarm_r" else "lowerarm_r"
-		var pivot: Vector3 = author.point(pose,pivot_name)
-		var point: Vector3 = author.point(pose,joint)
-		var offset := point-pivot
-		var minimum := 0.065-(pivot-center).dot(outside)
-		var lateral := offset.dot(outside)
-		if lateral >= minimum: continue
-		var length := offset.length()
-		var side := clampf(minimum,-length,length)
-		var plane := offset.slide(outside).normalized()
-		var target := pivot+outside*side+plane*sqrt(maxf(0.0,length*length-side*side))
-		author.aim_joint(pose,pivot_name,joint,point.lerp(target,guard))
+func uses_front_right_lift() -> bool:
+	return true
 
 func configure_block(actor: Node3D, readout: Label, build: String) -> void:
 	blocker = actor
