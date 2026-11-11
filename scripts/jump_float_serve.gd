@@ -11,6 +11,9 @@ func contact_time() -> float:
 func toss_release_time() -> float:
 	return TOSS
 
+func takeoff_time() -> float:
+	return TAKEOFF
+
 func front_start_limit() -> float:
 	return -7.12
 
@@ -33,12 +36,14 @@ func toss_palm(pose: Array, _rig: Skeleton3D, author: RefCounted, _time: float) 
 	return (author.point(pose,"middle_01_l")+author.point(pose,"middle_01_r"))*0.5
 
 func prepare_toss_hands(pose: Array, rig: Skeleton3D, author: RefCounted, time: float) -> void:
-	var weight := 1.0-smoothstep(TOSS,TOSS+0.21,time)
+	var toss := toss_release_time()
+	var takeoff := takeoff_time()
+	var weight := 1.0-smoothstep(toss,toss+0.21,time)
 	if weight > 0.0: position_toss_hands(pose,rig,author,time,weight)
-	var drive_weight := smoothstep(TOSS+0.07,0.47,time)*(1.0-smoothstep(TAKEOFF+0.015,TAKEOFF+0.19,time))
+	var drive_weight := smoothstep(toss+0.07,lerpf(toss,takeoff,0.42),time)*(1.0-smoothstep(takeoff+0.015,takeoff+0.19,time))
 	if drive_weight <= 0.0: return
 	var scale_: float = rig.global_basis.get_scale().y
-	var lift := smoothstep(0.59,TAKEOFF+0.055,time)
+	var lift := smoothstep(takeoff-0.18,takeoff+0.055,time)
 	for side in ["l","r"]:
 		var outward := 1.0 if side == "l" else -1.0
 		var shoulder: Vector3 = author.point(pose,"upperarm_"+side)
@@ -63,7 +68,7 @@ func shape_float_strike(pose: Array, rig: Skeleton3D, author: RefCounted, time: 
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,-0.17*straighten)
 
 func position_toss_hands(pose: Array, rig: Skeleton3D, author: RefCounted, time: float, weight: float) -> void:
-	var lift := smoothstep(0.08,TOSS,time)
+	var lift := smoothstep(0.08,toss_release_time(),time)
 	var scale_: float = rig.global_basis.get_scale().y
 	var chest: Vector3 = author.point(pose,"spine_03")
 	var center := chest+Vector3(0.0,-0.24+0.60*lift,0.47)/scale_

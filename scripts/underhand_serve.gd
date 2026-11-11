@@ -205,9 +205,13 @@ func step(delta: float) -> void:
 	var flight_time := elapsed-contact_clock
 	if flight_time >= 0.0:
 		advance_serve_curve(minf(flight_time,planned_duration))
+		spin_serve_ball(delta)
 		var time := minf(flight_time,landing_time)
 		ball.position = Net.after_hit(net_hit,time) if not net_hit.is_empty() and time >= net_hit.time else flight_point(time)
 	if flight_time >= landing_time+0.55 and not external_rally: reset()
+
+func spin_serve_ball(_delta: float) -> void:
+	pass
 
 func begin_serve_curve() -> void:
 	pass

@@ -27,6 +27,7 @@ var underhand_serve: Node3D
 var serve_opponents: Node3D
 var serve_opponent_frame: Node3D
 var serving_rally_status: Label
+var serving_spin_controls: VBoxContainer
 var serving_original_transform: Transform3D
 var serving_position := Vector3(0.0,0.04,-6.20)
 var serving_running := false
@@ -638,6 +639,10 @@ func stop_serving_session() -> void:
 	serving_running = false
 
 func stop_underhand_serve() -> void:
+	if is_instance_valid(serving_spin_controls):
+		content.remove_child(serving_spin_controls)
+		serving_spin_controls.queue_free()
+		serving_spin_controls = null
 	if is_instance_valid(serving_rally_status):
 		content.remove_child(serving_rally_status)
 		serving_rally_status.queue_free()
@@ -663,7 +668,7 @@ func refresh_type() -> void:
 				return
 		if is_instance_valid(ball_preview): ball_preview.stop()
 		return
-	var serving_practice := selected_category == "Serving" and current_type() in ["Underhand","Standing Float","Jump Float"]
+	var serving_practice := selected_category == "Serving" and current_type() in ["Underhand","Standing Float","Jump Float","Spin"]
 	animation_list.visible = not serving_practice
 	edit_button.visible = not serving_practice
 	if selected_category == "Serving" and is_instance_valid(drill_status):
@@ -674,10 +679,12 @@ func refresh_type() -> void:
 		match current_type():
 			"Standing Float": serve_script = preload("res://scripts/standing_float_serve.gd")
 			"Jump Float": serve_script = preload("res://scripts/jump_float_serve.gd")
+			"Spin": serve_script = preload("res://scripts/spin_serve.gd")
 		underhand_serve = serve_script.new()
 		serving_position.z = minf(serving_position.z,underhand_serve.front_start_limit())
 		preview_player.get_parent().add_child(underhand_serve)
 		underhand_serve.configure(preview_player,serving_position)
+		if current_type() == "Spin": add_serve_spin_controls()
 		serve_opponent_frame = Node3D.new()
 		serve_opponent_frame.position.z = 8.0
 		serve_opponent_frame.rotation.y = PI
@@ -1286,6 +1293,23 @@ func handle_preview_input(event: InputEvent) -> void:
 		return
 	super.handle_preview_input(event)
 
+func add_serve_spin_controls() -> void:
+	serving_spin_controls = VBoxContainer.new()
+	content.add_child(serving_spin_controls)
+	var readout := label("Sidespin  0%",16)
+	serving_spin_controls.add_child(readout)
+	var slider := HSlider.new()
+	slider.min_value = -100.0
+	slider.max_value = 100.0
+	slider.step = 1.0
+	slider.value = 0.0
+	slider.focus_mode = Control.FOCUS_NONE
+	slider.tooltip_text = "Left to right curve"
+	slider.value_changed.connect(func(value: float):
+		underhand_serve.set_sidespin(value/100.0)
+		readout.text = "Sidespin  %+.0f%%" % value)
+	serving_spin_controls.add_child(slider)
+
 func step_underhand_rally(delta: float) -> void:
 	var was_ready: bool = underhand_serve.elapsed < 0.0
 	underhand_serve.step(delta)
@@ -1299,6 +1323,8 @@ func step_underhand_rally(delta: float) -> void:
 			serving_rally_status.text = "Serve out"
 	if underhand_serve.external_rally:
 		serve_opponents.tick_opponents(delta)
+		if serve_opponents.rally_active and serve_opponents.stage == serve_opponents.Stage.SERVE:
+			serve_opponents.ball.global_rotation = underhand_serve.ball.global_rotation
 		if not serve_opponents.rally_active: underhand_serve.reset()
 	if not was_ready and underhand_serve.elapsed < 0.0:
 		serving_rally_status.text = "Space to serve"

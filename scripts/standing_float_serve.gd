@@ -70,8 +70,9 @@ func serve_curve_offset(time: float, duration: float) -> Vector3:
 	var vertical := offset.y*(1.0-smoothstep(0.78,1.0,progress))
 	return (side*offset.x+Vector3.UP*vertical)*DRIFT_RADIUS*progress
 
-func float_approach(time: float, plant_time: float, land_time: float, jump_height: float, stride_scale: float) -> Array:
-	var phase := time/plant_time
+func float_approach(time: float, plant_time: float, land_time: float, jump_height: float, stride_scale: float, lead_time := 0.0) -> Array:
+	var phase := (time-lead_time)/(plant_time-lead_time)
+	var lead := smoothstep(0.035,lead_time,time) if lead_time > 0.0 else 0.0
 	var left_lead := smoothstep(0.09,0.38,phase)
 	var right_step := smoothstep(0.40,0.72,phase)
 	var left_plant := smoothstep(0.72,0.96,phase)
@@ -85,7 +86,7 @@ func float_approach(time: float, plant_time: float, land_time: float, jump_heigh
 	if jumping:
 		var run := clampf((phase-0.05)/0.95,0.0,1.0)
 		ground_travel = 1.14*stride_scale*pow(run,1.53)
-	player.position = serve_start+forward*(ground_travel+drift+(0.20*recovery if not jumping else 0.0))+Vector3.UP*(lift-(0.23 if jumping else 0.13)*load)
+	player.position = serve_start+forward*(0.32*lead+ground_travel+drift+(0.20*recovery if not jumping else 0.0))+Vector3.UP*(lift-(0.23 if jumping else 0.13)*load)
 	player.animator.seek(0.0,true)
 	var rig: Skeleton3D = player.skeleton
 	var author: RefCounted = player.get_pose_author()
@@ -102,10 +103,13 @@ func float_approach(time: float, plant_time: float, land_time: float, jump_heigh
 		var foot: Vector3 = foot_starts[side]
 		var advance := (0.49*left_lead+0.93*left_plant if left else 1.12*right_step)*stride_scale
 		var step_height := 0.13*(sin(PI*left_lead)+sin(PI*left_plant)) if left else 0.15*sin(PI*right_step)
+		if lead_time > 0.0:
+			advance += 0.48*(left_lead if left else lead)
+			if not left: step_height += 0.10*sin(PI*lead)
 		if not left:
 			var kick := sin(PI*flight)*(1.0-smoothstep(0.02,0.24,time-contact_time())) if jumping else sin(PI*recovery)*0.45
-			advance += (0.38*recovery if jump_height == 0.0 else 0.0)-0.33*kick
-			step_height += 0.25*kick
+			advance += (0.38*recovery if jump_height == 0.0 else 0.0)-0.33*kick*float_body_scale()
+			step_height += 0.25*kick*float_body_scale()
 		var tuck := 0.09*sin(PI*flight)*(1.0-smoothstep(0.02,0.22,time-contact_time()))
 		foot += forward*(advance+drift)+Vector3.UP*(lift+step_height+tuck)
 		author.limb(bones,"thigh_"+side,"calf_"+side,"foot_"+side,rig.to_local(foot),Vector3(0.12 if left else -0.12,0.2,1.0))
