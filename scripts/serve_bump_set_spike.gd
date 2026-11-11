@@ -14,6 +14,7 @@ var partner_receiving := false
 var user_player: Node3D
 var teammate: Node3D
 var manual_set_requested := false
+var carried_jump_lift := 0.0
 var second_ball_spike_held := false
 var player_second_ball_attack := false
 var manual_set_apex := SET_APEX
@@ -61,6 +62,7 @@ func reset_feed() -> void:
 	release_approach_jump()
 	set_preview.clear_surfaces()
 	manual_set_requested = false
+	carried_jump_lift = 0.0
 	second_ball_spike_held = false
 	player_second_ball_attack = false
 	manual_set_target = Vector3.INF
@@ -107,8 +109,12 @@ func adjust_manual_set_height(amount: float) -> void:
 
 func request_manual_set(technique: int) -> void:
 	if player_second_ball_attack and stage == Stage.SET:
+		var lift := maxf(0.0,user_player.position.y-BACK_LEFT.y)
+		if technique == 0 and jump.active and lift > 0.03:
+			carried_jump_lift = lift
+			technique = 2
 		jump.active = false
-		user_player.position.y = BACK_LEFT.y
+		if carried_jump_lift == 0.0: user_player.position.y = BACK_LEFT.y
 		user_player.play_action("idle",0.0)
 		setter = teammate
 		receiver = user_player
@@ -121,6 +127,7 @@ func request_manual_set(technique: int) -> void:
 	manual_set_requested = true
 	second_ball_spike_held = false
 	active_cpu_set_style = technique
+	status.text = ["Hands set queued","Forearm set queued","Jump set queued"][technique]
 	cpu_contact_time = maxf(clock-stage_start,descending_time(pass_origin,pass_motion,cpu_set_contact_height()))
 	cpu_contact_point = flight_point(pass_origin,pass_motion,cpu_contact_time)
 	var incoming := (pass_origin-cpu_contact_point).slide(Vector3.UP).normalized()
@@ -129,6 +136,12 @@ func request_manual_set(technique: int) -> void:
 
 func set_requested() -> bool:
 	return not partner_receiving or manual_set_requested
+
+func cpu_jump_set_lift() -> float:
+	return carried_jump_lift if carried_jump_lift > 0.0 else super.cpu_jump_set_lift()
+
+func cpu_jump_set_rise(lead: float) -> float:
+	return carried_jump_lift if carried_jump_lift > 0.0 else super.cpu_jump_set_rise(lead)
 
 func cpu_set_apex() -> float:
 	return manual_set_apex if partner_receiving else SET_APEX

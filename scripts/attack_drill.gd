@@ -627,7 +627,7 @@ func step(delta: float) -> void:
 				else:
 					cpu_set.update_hand_push(cpu_set.release_time+time,cpu_set.release_time+time-cpu_set.touch_time)
 				if active_cpu_set_style == 2:
-					receiver.position.y = CPU_HOME.y+0.44*(1.0-smoothstep(0.0,0.33,time))
+					receiver.position.y = CPU_HOME.y+cpu_jump_set_lift()*(1.0-smoothstep(0.0,0.33,time))
 			play_pin_ball(time,previous,delta)
 		Stage.HIT: play_spike(time,delta)
 		Stage.MISS:
@@ -723,10 +723,16 @@ func face_receiver(direction: Vector3, max_turn: float) -> void:
 func called_set_target() -> Vector3:
 	return approach_set_target if approach_practice else rally_set_target
 
+func cpu_jump_set_lift() -> float:
+	return 0.44
+
+func cpu_jump_set_rise(lead: float) -> float:
+	return cpu_jump_set_lift()*(1.0-smoothstep(0.0,0.24,lead))
+
 func cpu_set_contact_height() -> float:
 	if active_cpu_set_style == 1: return CPU_HOME.y+1.0
 	var height := CPU_HOME.y+HandPose.CONTACT_HEIGHT*receiver.scale.y
-	return height+0.44 if active_cpu_set_style == 2 else height
+	return height+cpu_jump_set_lift() if active_cpu_set_style == 2 else height
 
 func cpu_set_apex() -> float:
 	return approach_set_apex if approach_practice else SET_APEX
@@ -790,7 +796,7 @@ func play_cpu_set(time: float, delta: float) -> void:
 		receiver.play_action("idle")
 		cpu_feet.step(receiver.basis.inverse()*travel/maxf(delta*move_speed,0.001),delta,1.4,true)
 	if active_cpu_set_style == 2 and set_requested():
-		receiver.position.y = CPU_HOME.y+0.44*(1.0-smoothstep(0.0,0.24,lead))
+		receiver.position.y = CPU_HOME.y+cpu_jump_set_rise(lead)
 	if lead <= 0.22 and set_requested():
 		if running: receiver.play_action("idle",0.0)
 		var prepare := 1.0-smoothstep(0.0,0.22,lead)
