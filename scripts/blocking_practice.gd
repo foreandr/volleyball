@@ -23,6 +23,10 @@ var kong_tracking: Array[Vector2] = [Vector2(0.83,0.43),Vector2(0.83,0.43)]
 var active_block_height := BLOCK_HEIGHT
 var hand_normals: Array[Vector3] = [Vector3.BACK,Vector3.BACK]
 var block_hands: Array[Dictionary] = [{},{}]
+var chest_top := Vector3.ZERO
+var chest_bottom := Vector3.ZERO
+var previous_chest_top := Vector3.ZERO
+var previous_chest_bottom := Vector3.ZERO
 var block_contact_at := INF
 var block_contact: Vector3
 var block_velocity: Vector3
@@ -105,6 +109,7 @@ func queue_kong(hand_index: int) -> void:
 
 func tick_block(delta: float) -> void:
 	step_blocker(delta)
+	update_chest_contact()
 	if stage == Stage.SET: queued_approach_input(delta)
 	step_jump(delta)
 	step(delta)
@@ -141,9 +146,10 @@ func step_blocker(delta: float) -> void:
 	var clearance := smoothstep(0.58,BLOCK_HEIGHT,block_lift)
 	var extra_height := smoothstep(BLOCK_HEIGHT,BLOCK_HEIGHT+0.508,block_lift)
 	var body_press := clearance*(1.0+0.70*extra_height)
+	var high_fold := extra_height*crunch*smoothstep(0.0,0.65,blocker.position.y+1.90-shot.y)
 	blocker.position.z += 0.12*extra_height*press
-	author.rotate_world(pose,"spine_01",Vector3.RIGHT,(0.12*press+0.085*crunch)*body_press)
-	author.rotate_world(pose,"spine_02",Vector3.RIGHT,(0.10*press+0.10*crunch)*body_press)
+	author.rotate_world(pose,"spine_01",Vector3.RIGHT,(0.12*press+0.085*crunch)*body_press+0.24*high_fold)
+	author.rotate_world(pose,"spine_02",Vector3.RIGHT,(0.10*press+0.10*crunch)*body_press+0.22*high_fold)
 	var track := clampf(shot.x-blocker.position.x,-0.23,0.23)
 	block_tracking = lerpf(block_tracking,track,1.0-exp(-delta*17.0))
 	for hand_index in 2:
@@ -154,7 +160,7 @@ func step_blocker(delta: float) -> void:
 		if is_finite(kong_pressed_at[hand_index]):
 			kong = smoothstep(0.0,0.115,block_elapsed-kong_pressed_at[hand_index])
 			kong *= 1.0-smoothstep(BLOCK_LOAD+0.61,BLOCK_LOAD+BLOCK_AIR+0.12,pose_time)
-		var wrist_offset := Vector3(-sign_*0.105+block_tracking*press*2.0,0.64,0.20+0.34*press)
+		var wrist_offset := Vector3(-sign_*0.105+block_tracking*press*2.0,0.64-0.25*high_fold,0.20+0.34*press)
 		if kong > 0.0 and stage == Stage.HIT and not is_finite(block_contact_at):
 			var shoulder_world := rig.to_global(shoulder)
 			var local_depth := Net.NET_Z-0.12*press
@@ -190,6 +196,18 @@ func step_blocker(delta: float) -> void:
 		block_lift = 0.0
 		blocker.position = block_base
 		blocker.animator.seek(0.0,true)
+
+func update_chest_contact() -> void:
+	var rig: Skeleton3D = blocker.skeleton
+	var spine := rig.to_global(rig.get_bone_global_pose(rig.find_bone("spine_01")).origin)
+	var neck := rig.to_global(rig.get_bone_global_pose(rig.find_bone("neck_01")).origin)
+	previous_chest_bottom = chest_bottom
+	previous_chest_top = chest_top
+	chest_bottom = to_local(spine.lerp(neck,0.18)+Vector3.BACK*0.035)
+	chest_top = to_local(spine.lerp(neck,0.78)+Vector3.BACK*0.035)
+	if previous_chest_bottom.is_zero_approx():
+		previous_chest_bottom = chest_bottom
+		previous_chest_top = chest_top
 
 func block_net_retreat(pose: Array, rig: Skeleton3D, author: RefCounted) -> float:
 	var furthest := Net.NET_Z-0.035
@@ -277,7 +295,7 @@ func play_spike(time: float, delta: float) -> void:
 		if elapsed >= end and elapsed-delta < end: play_floor_sound()
 		if elapsed >= end+0.40 and not jump.active: reset_feed()
 		return
-	if block_lift > 0.10 and time <= flight_end:
+	if time <= flight_end:
 		var before := flight_point(pass_origin,pass_motion,maxf(0.0,time-delta))
 		var after := flight_point(pass_origin,pass_motion,time)
 		var hit_hand: Dictionary = {}
@@ -286,7 +304,7 @@ func play_spike(time: float, delta: float) -> void:
 			var progress := sample/8.0
 			var point := before.lerp(after,progress)
 			for hand in block_hands:
-				if hand.is_empty(): continue
+				if block_lift <= 0.10 or hand.is_empty(): continue
 				var wrist: Vector3 = hand.previous_wrist.lerp(hand.wrist,progress)
 				var tip: Vector3 = hand.previous_tip.lerp(hand.tip,progress)
 				var surface := Geometry3D.get_closest_point_to_segment(point,wrist,tip)
@@ -297,13 +315,19 @@ func play_spike(time: float, delta: float) -> void:
 					block_contact = point
 					hit_hand = hand
 			if not hit_hand.is_empty(): break
+			var torso := Geometry3D.get_closest_point_to_segment(point,previous_chest_bottom.lerp(chest_bottom,progress),previous_chest_top.lerp(chest_top,progress))
+			if not chest_bottom.is_zero_approx() and point.distance_to(torso) <= BallPreview.RADIUS+0.18:
+				block_contact = point
+				hit_hand = {"side":"chest","center":torso,"normal":(point-torso).normalized(),
+					"velocity":((chest_bottom-previous_chest_bottom)/maxf(delta,0.001)).limit_length(5.0)}
+				break
 		if not hit_hand.is_empty():
 			block_contact_at = time
 			last_block_hand = hit_hand.side
 			var incoming := pass_motion+Vector3.DOWN*Flight.GRAVITY*time
 			block_velocity = rebound_from_hand(incoming,block_contact,hit_hand)
 			ball.position = block_contact
-			status.text = "Block!"
+			status.text = "Chest deflection" if last_block_hand == "chest" else "Block!"
 			if not ball_audio_muted: spike_audio.play()
 			return
 	super.play_spike(time,delta)
