@@ -329,7 +329,7 @@ func start_blocking_practice() -> void:
 	if is_instance_valid(ball_preview): ball_preview.stop()
 	right_panel.hide()
 	angle_control.hide()
-	content.add_child(label("WASD to move camera\nMiddle drag to rotate\nSpace to jump\nQ / E to open left / right arm",18))
+
 	drill_status = label("",16)
 	drill_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(drill_status)
@@ -341,6 +341,16 @@ func start_blocking_practice() -> void:
 	blocking_frame.add_child(blocking_practice)
 	blocking_practice.configure_block(preview_player,drill_status,build_label)
 	blocking_practice.set_ball_audio_muted(StorySession.attack_ball_audio_muted)
+	var role := OptionButton.new()
+	role.add_item("Attack against CPU blocker")
+	role.add_item("Block against CPU attacker")
+	role.focus_mode = Control.FOCUS_NONE
+	content.move_child(drill_status,0)
+	content.add_child(role)
+	content.move_child(role,0)
+	var controls := label("",18)
+	content.add_child(controls)
+	content.move_child(controls,1)
 	var vertical_readout := label("Vertical jump  +0 in",16)
 	content.add_child(vertical_readout)
 	var vertical := HSlider.new()
@@ -354,10 +364,18 @@ func start_blocking_practice() -> void:
 		vertical_readout.text = "Vertical jump  %+.0f in" % value)
 	content.add_child(vertical)
 
-	preview_camera.position = Vector3(0.0,4.9,-5.2)
-	setting_camera_focus = Vector3(0.0,2.1,4.6)
-	preview_camera.look_at(setting_camera_focus)
-	preview.grab_focus()
+	var update_role := func(attacking: bool):
+		controls.text = ("Hold Space to approach and spike\nMove mouse to aim" if attacking else "Space to jump\nQ / E to open left / right arm")+"\nWASD to move camera\nMiddle drag to rotate"
+		vertical_readout.visible = not attacking
+		vertical.visible = not attacking
+		preview_camera.position = Vector3(0.0,4.9,13.2 if attacking else -5.2)
+		setting_camera_focus = Vector3(0.0,2.1,3.4 if attacking else 4.6)
+		preview_camera.look_at(setting_camera_focus)
+		preview.grab_focus()
+	role.item_selected.connect(func(index: int):
+		blocking_practice.set_player_attacks(index == 0)
+		update_role.call(index == 0))
+	update_role.call(true)
 
 func stop_blocking_practice() -> void:
 	if not is_instance_valid(blocking_practice): return
@@ -1251,6 +1269,9 @@ func handle_preview_input(event: InputEvent) -> void:
 		if event is InputEventMouseMotion and event.button_mask & MOUSE_BUTTON_MASK_MIDDLE:
 			orbit_setting_camera(event.relative)
 			preview.accept_event()
+		elif event is InputEventMouseMotion and blocking_practice.player_attacks:
+			var hit: Variant = attack_floor_point(event.position)
+			if hit is Vector3: blocking_practice.aim_player_spike(hit)
 		elif event is InputEventMouseButton:
 			if event.button_index == MOUSE_BUTTON_MIDDLE:
 				preview.grab_focus()
@@ -1631,10 +1652,15 @@ func open_menu() -> void:
 
 func _input(event: InputEvent) -> void:
 	if is_instance_valid(blocking_practice) and event is InputEventKey:
-		if event.pressed and not event.echo:
+		if event.echo: return
+		if event.keycode == KEY_SPACE and blocking_practice.player_attacks:
+			if event.pressed: blocking_practice.queue_jump(Vector2.ZERO)
+			else: blocking_practice.release_approach_jump()
+			get_viewport().set_input_as_handled()
+		elif event.pressed:
 			if event.keycode == KEY_SPACE: blocking_practice.queue_block()
-			elif event.keycode == KEY_Q: blocking_practice.queue_kong(0)
-			elif event.keycode == KEY_E: blocking_practice.queue_kong(1)
+			elif event.keycode == KEY_Q and not blocking_practice.player_attacks: blocking_practice.queue_kong(0)
+			elif event.keycode == KEY_E and not blocking_practice.player_attacks: blocking_practice.queue_kong(1)
 			elif event.keycode == KEY_F8:
 				if blocking_practice.mark_trace(): show_marker_popup()
 			elif event.keycode == KEY_ESCAPE: open_menu()

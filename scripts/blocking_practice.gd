@@ -7,6 +7,9 @@ const BLOCK_HEIGHT := 1.12
 const SHOT_LANES := [3.35,0.0,-3.35]
 
 var next_shot_lane := 0
+var player_attacks := true
+var cpu_block_queued := false
+var player_shot_aim := Vector3(0.0,0.065,10.5)
 var blocker: Node3D
 var blocker_start: Transform3D
 var blocker_animation_mode: int
@@ -62,13 +65,32 @@ func stop_block() -> void:
 	blocker.animator.callback_mode_process = blocker_animation_mode
 	blocker.get_node("DirectionArrows").show()
 
+func set_player_attacks(value: bool) -> void:
+	player_attacks = value
+	release_approach_jump()
+	block_elapsed = -1.0
+	block_lift = 0.0
+	block_hands = [{},{}]
+	blocker.position = BLOCK_START
+	blocker.animator.seek(0.0,true)
+	reset_feed()
+
+func aim_player_spike(world_point: Vector3) -> void:
+	if not player_attacks or stage != Stage.SET: return
+	var point := to_local(world_point)
+	if point.z < SHOT_AIM_NEAR: return
+	player_shot_aim = point
+	aim_swing(point)
+
 func reset_feed() -> void:
+	var space_held := approach_space_held
 	super.reset_feed()
 	stage = Stage.SET
 	block_contact_at = INF
 	last_block_gap = INF
 	last_block_hand = ""
-	approach_space_held = true
+	approach_space_held = space_held if player_attacks else true
+	cpu_block_queued = false
 	setter.position = Vector3(0.0,0.04,1.67)
 	setter.rotation.y = 0.0
 	rally_set_target = Vector3(0.0,0.065,3.34)
@@ -79,11 +101,14 @@ func reset_feed() -> void:
 	ball.position = pass_origin
 	bump.hide()
 	region.hide()
-	aim_swing(Vector3(SHOT_LANES[next_shot_lane],Flight.FLOOR,10.5))
-	next_shot_lane = (next_shot_lane+1)%SHOT_LANES.size()
-	swing_target.hide()
+	if player_attacks:
+		aim_swing(player_shot_aim)
+	else:
+		aim_swing(Vector3(SHOT_LANES[next_shot_lane],Flight.FLOOR,10.5))
+		next_shot_lane = (next_shot_lane+1)%SHOT_LANES.size()
+		swing_target.hide()
 	approach_set_touched_at = clock
-	status.text = "Time your jump"
+	status.text = "Hold Space to approach" if player_attacks else "Time your jump"
 
 func set_vertical_inches(value: float) -> void:
 	vertical_inches = clampf(value,-20.0,20.0)
@@ -108,6 +133,10 @@ func queue_kong(hand_index: int) -> void:
 		kong_pressed_at[hand_index] = block_elapsed
 
 func tick_block(delta: float) -> void:
+	if player_attacks and not cpu_block_queued and block_elapsed < 0.0:
+		if stage == Stage.SET and is_finite(swing_started) and clock-swing_started >= 0.20:
+			cpu_block_queued = true
+			queue_block()
 	step_blocker(delta)
 	update_chest_contact()
 	if stage == Stage.SET: queued_approach_input(delta)
