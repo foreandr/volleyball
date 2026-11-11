@@ -1029,6 +1029,12 @@ func finish_attack_rep() -> void:
 		return
 	reset_feed()
 
+func attack_pose_smoothing_time() -> float:
+	return 0.016
+
+func attack_arm_turn_rate() -> float:
+	return INF
+
 func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0.0, follow := 0.0, draw_progress := 1.0, arm_lift := 1.0) -> void:
 	var rig: Skeleton3D = setter.skeleton
 	var pose: Array[Transform3D] = []
@@ -1039,11 +1045,16 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 		if approach_render_rotations.is_empty():
 			for source in approach_arm_transition:
 				approach_render_rotations.append(source.basis.get_rotation_quaternion())
-		smoothing = exp(-delta/0.016)*smoothstep(0.0,0.32,weight)
+		smoothing = exp(-delta/attack_pose_smoothing_time())*smoothstep(0.0,0.32,weight)
 	for bone in rig.get_bone_count():
 		var rotation := pose[bone].basis.get_rotation_quaternion()
 		if smoothing > 0.0:
-			rotation = rotation.slerp(approach_render_rotations[bone],smoothing)
+			var previous := approach_render_rotations[bone]
+			rotation = rotation.slerp(previous,smoothing)
+			var rate := attack_arm_turn_rate()
+			if is_finite(rate) and rig.get_bone_name(bone) in ["upperarm_r","lowerarm_r","hand_r"]:
+				var angle := previous.angle_to(rotation)
+				if angle > rate*delta: rotation = previous.slerp(rotation,rate*delta/angle)
 			approach_render_rotations[bone] = rotation
 		rig.set_bone_pose_rotation(bone,rotation)
 

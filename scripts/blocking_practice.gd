@@ -15,7 +15,7 @@ var block_base := BLOCK_START
 var block_tracking := 0.0
 var block_lift := 0.0
 var vertical_inches := 0.0
-var palm_angle_degrees := 0.0
+var palm_angle_degrees := 30.0
 var kong_pressed_at: Array[float] = [INF,INF]
 var active_block_height := BLOCK_HEIGHT
 var hand_normals: Array[Vector3] = [Vector3.BACK,Vector3.BACK]
@@ -23,6 +23,12 @@ var block_hands: Array[Dictionary] = [{},{}]
 var block_contact_at := INF
 var block_contact: Vector3
 var block_velocity: Vector3
+
+func attack_pose_smoothing_time() -> float:
+	return 0.036
+
+func attack_arm_turn_rate() -> float:
+	return deg_to_rad(1500.0)
 
 func configure_block(actor: Node3D, readout: Label, build: String) -> void:
 	blocker = actor
