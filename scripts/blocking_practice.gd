@@ -15,7 +15,6 @@ var block_base := BLOCK_START
 var block_tracking := 0.0
 var block_lift := 0.0
 var vertical_inches := 0.0
-var arm_tracking := 0.25
 var active_block_height := BLOCK_HEIGHT
 var hand_normals: Array[Vector3] = [Vector3.BACK,Vector3.BACK]
 var block_hands: Array[Dictionary] = [{},{}]
@@ -131,14 +130,14 @@ func step_blocker(delta: float) -> void:
 		var side := "l" if hand_index == 0 else "r"
 		var sign_ := 1.0 if side == "l" else -1.0
 		var shoulder: Vector3 = author.point(pose,"upperarm_"+side)
-		var wrist := shoulder+Vector3(-sign_*0.105+block_tracking*press*arm_tracking*2.0,0.64,0.20+0.34*press)/scale_
+		var wrist := shoulder+Vector3(-sign_*0.105+block_tracking*press*2.0,0.64,0.20+0.34*press)/scale_
 		author.limb(pose,"upperarm_"+side,"lowerarm_"+side,"hand_"+side,wrist,Vector3(sign_*0.31,-0.52,0.34),raise,176.0)
 		var base: Transform3D = author.world_pose(pose,rig.find_bone("hand_"+side))
 		var fingers: Vector3 = author.point(pose,"middle_01_"+side)-base.origin
 		var across: Vector3 = author.point(pose,"index_01_"+side)-author.point(pose,"pinky_01_"+side)
 		var ball_direction := (rig.to_local(ball.global_position)-base.origin).normalized()
 		if ball_direction.z > 0.04 and not is_finite(block_contact_at):
-			var desired := Vector3(clampf(ball_direction.x,-0.28,0.28),clampf(ball_direction.y,-0.34,0.15),1.0).normalized()
+			var desired := Vector3(clampf(ball_direction.x,-0.16,0.16),clampf(ball_direction.y,-0.14,0.09),1.0).normalized()
 			hand_normals[hand_index] = hand_normals[hand_index].slerp(desired,1.0-exp(-delta*28.0))
 		var toward_ball := hand_normals[hand_index]
 		var finger_direction := Vector3.UP.slide(toward_ball).normalized()
