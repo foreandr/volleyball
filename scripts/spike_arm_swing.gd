@@ -168,7 +168,7 @@ static func roll_finish_palm(pose: Array, author: RefCounted, amount: float, fol
 	if not cross_body:
 		# Carry the pinky out as the hand approaches vertical so the thumb does not flip.
 		var outside: Vector3 = (author.point(pose,"upperarm_r")-author.point(pose,"upperarm_l")).normalized()
-		pinky_target += outside.slide(axis)*0.40*(1.0-smoothstep(0.18,0.52,pinky_target.length()))
+		pinky_target += outside.slide(axis)*lerpf(0.48,0.20,smoothstep(0.12,0.78,pinky_target.length()))
 	var roll := edge.signed_angle_to(pinky_target.normalized(),axis)
 	# The two edges have no meaningful height difference when the hand points straight down.
 	var visibility := smoothstep(0.015,0.10,pinky_target.length()) if cross_body else smoothstep(0.10,0.34,pinky_target.length())
@@ -181,7 +181,14 @@ static func roll_finish_palm(pose: Array, author: RefCounted, amount: float, fol
 		var strike_normal := shot_normal.normalized().lerp(toward_ball.normalized(),smoothstep(0.06,0.24,toward_ball.length()))
 		var face_roll := palm_normal.signed_angle_to(strike_normal.normalized(),axis)
 		target_roll = lerp_angle(target_roll,face_roll,face_weight*smoothstep(0.04,0.25,strike_normal.length()))
-	var applied := rotate_toward(previous_roll,target_roll,roll_step) if is_finite(roll_step) else target_roll
+	var applied := target_roll
+	if is_finite(roll_step):
+		if not cross_body:
+			var limit := roll_step*lerpf(0.76,0.43,smoothstep(0.22,0.80,follow))
+			var turn := angle_difference(previous_roll,target_roll)
+			applied = previous_roll+clampf(turn*0.72,-limit,limit)
+		else:
+			applied = rotate_toward(previous_roll,target_roll,roll_step)
 	author.rotate_world(pose,"hand_r",axis,applied)
 	return applied
 

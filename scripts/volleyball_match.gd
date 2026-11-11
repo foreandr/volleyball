@@ -1263,6 +1263,13 @@ func soft_block_rebound(rebound: Vector3, power: float) -> Vector3:
 	horizontal *= randf_range(0.58,1.52)
 	return horizontal+Vector3.UP*(rebound.y+randf_range(-0.65,0.85)*looseness)
 
+func block_contact_power(palm_gap: float, along: float, square: float, attack_depth: float) -> float:
+	var power := (1.0-smoothstep(0.09,0.24,palm_gap))*(1.0-smoothstep(0.72,1.22,along))*smoothstep(0.18,0.66,square)
+	var tight := 1.0-smoothstep(0.30,0.92,attack_depth)
+	var palm := (1.0-smoothstep(0.10,0.22,palm_gap))*(1.0-smoothstep(0.78,1.04,along))
+	var press := tight*palm*smoothstep(0.16,0.48,square)
+	return lerpf(power,1.0,0.58*press)
+
 func tick_blocks(delta: float, previous: float) -> void:
 	var incoming_spike := phase == Phase.LIVE and (flight_kind in ["spike","dump"] or overpass_flight == flight_number)
 	for index in blocks.keys():
@@ -1293,11 +1300,18 @@ func tick_blocks(delta: float, previous: float) -> void:
 				var impact := point+incoming*clampf(travel,0.0,0.29)
 				var palm_gap := impact.distance_to(Geometry3D.get_closest_point_to_segment(impact,wrist,tip))
 				var along := (impact-wrist).dot(axis)/maxf(0.01,wrist.distance_to(tip))
-				var power := (1.0-smoothstep(0.09,0.24,palm_gap))*(1.0-smoothstep(0.72,1.22,along))*smoothstep(0.18,0.66,square)
+				var attack_depth := absf(origin.z-Net.NET_Z)
+				var power := block_contact_power(palm_gap,along,square,attack_depth)
+				var tight := 1.0-smoothstep(0.30,0.92,attack_depth)
 				var speed := velocity.length()
+				var firm := smoothstep(0.35,0.77,power)*tight
 				var rebound := backward*lerpf(-speed*0.16,speed*0.69,power)+Vector3.UP*lerpf(3.1,-6.0,power)
+				rebound += backward*speed*0.24*firm+Vector3.DOWN*2.7*firm
 				rebound.x += (point.x-center.x)*10.0
 				rebound = soft_block_rebound(rebound,power)
+				if power <= 0.56:
+					rebound += backward*signf(rebound.dot(backward))*speed*0.10*tight*(1.0-firm)
+				trace.write("block_contact",match_clock,{"power":power,"palm_gap":palm_gap,"along":along,"tight":tight,"point":point,"rebound":rebound})
 				stroke = "Stuff block" if power > 0.56 else "Block"
 				play_touch()
 				var over := rebound.dot(backward) > 0.0
