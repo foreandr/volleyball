@@ -16,8 +16,8 @@ const APPROACH_RADII := [1.15,1.8,2.5]
 const RECEIVE_START := Vector3(3.05,0.04,-3.10)
 const ATTACK_SERVE_SOURCE := Vector3(3.05,2.8,8.5)
 const CPU_HOME := Vector3(-0.55,0.04,3.10)
-const RALLY_SET_TARGETS := [PIN, Vector3(0.0,0.065,3.05), Vector3(-3.55,0.065,3.35)]
-const RALLY_SET_CALLS := ["Left pin", "Middle", "Right pin"]
+const RALLY_SET_ZONES := 7
+const RALLY_SET_REACH := 2.75
 const PIN_HEIGHT := 2.75
 const SET_APEX := 5.0
 const SET_TOPSPIN_RPS := 2.2
@@ -53,6 +53,7 @@ var approach_intercept := Vector3.INF
 var approach_start := APPROACH_START
 var rally_set_index := -1
 var rally_set_target := PIN
+var rally_set_call: Label
 var approach_set_target := PIN
 var approach_set_apex := SET_APEX
 var approach_setup_drag := ""
@@ -266,6 +267,7 @@ func reset_feed() -> void:
 	ball.rotation = Vector3.ZERO
 	region.position = PIN
 	region.hide()
+	if is_instance_valid(rally_set_call): rally_set_call.hide()
 	swing_started = -INF
 	swing_charge_started = -INF
 	swing_released = -INF
@@ -304,12 +306,32 @@ func reset_feed() -> void:
 		status.text = "Setter receiving pass"
 		trace.begin_feed({"mode":"approach_practice","source":pass_origin,"velocity":pass_motion,"pin":approach_set_target,"start":setter.position})
 		return
-	rally_set_index = (rally_set_index+1)%RALLY_SET_TARGETS.size()
-	rally_set_target = RALLY_SET_TARGETS[rally_set_index]
+	status.text = "Receive  |  Q forearms, I / E hands"
+	trace.begin_feed({"mode":"attacking","source":ATTACK_SERVE_SOURCE,"serve_velocity":serve_velocity})
+
+func call_rally_set(passer: Vector3) -> void:
+	# Number the lanes from left to right as seen from the receiving end.
+	var depth := minf(PIN.z,passer.z+2.25)
+	var candidates: Array[int] = []
+	var nearest := 0
+	for zone in RALLY_SET_ZONES:
+		var x := rally_zone_x(zone)
+		if absf(x-passer.x) < absf(rally_zone_x(nearest)-passer.x): nearest = zone
+		if Vector2(x-passer.x,depth-passer.z).length() <= RALLY_SET_REACH: candidates.append(zone)
+	if candidates.size() > 1: candidates.erase(rally_set_index)
+	rally_set_index = nearest if candidates.is_empty() else candidates.pick_random()
+	var lateral := absf(rally_zone_x(rally_set_index)-passer.x)
+	depth = minf(depth,passer.z+sqrt(maxf(0.0,RALLY_SET_REACH*RALLY_SET_REACH-lateral*lateral)))
+	rally_set_target = Vector3(rally_zone_x(rally_set_index),PIN.y,depth)
 	region.position = rally_set_target
 	region.show()
-	status.text = "Setter calls %s  |  Receive" % RALLY_SET_CALLS[rally_set_index]
-	trace.begin_feed({"mode":"attacking","source":ATTACK_SERVE_SOURCE,"serve_velocity":serve_velocity,"pin":rally_set_target})
+	if is_instance_valid(rally_set_call):
+		rally_set_call.text = "Setter calls Zone %d" % (rally_set_index+1)
+		rally_set_call.show()
+	trace.write("setter_call",clock,{"zone":rally_set_index+1,"target":rally_set_target,"passer":passer},true)
+
+func rally_zone_x(zone: int) -> float:
+	return (3-zone)*9.0/RALLY_SET_ZONES
 
 func toggle_shot_sequence() -> void:
 	if shot_sequence_index >= 0:
@@ -648,7 +670,8 @@ func play_serve(time: float, previous: float, delta: float) -> void:
 		cpu_stand = Court.clamp_setter(Vector3(cpu_contact_point.x,CPU_HOME.y,cpu_contact_point.z)-incoming*HandPose.CONTACT_FORWARD*receiver.scale.z,ATTACK_FRONT_LIMIT)
 		stage = Stage.PASS
 		stage_start = clock
-		status.text = "Setting %s" % RALLY_SET_CALLS[rally_set_index]
+		call_rally_set(setter.position)
+		status.text = "Move into range  |  Hold Space"
 		trace.write("player_pass",clock,{"point":pass_origin,"velocity":pass_motion,"cpu_contact":cpu_contact_point,
 			"grade":bump.grade,"reach":bump.reach,"contact":bump.contact_check},true)
 	elif time >= end:

@@ -326,6 +326,12 @@ func start_setting_drill(attack := false) -> void:
 		show_mode.call(index)
 		preview.grab_focus())
 	content.add_child(controls_hint)
+	var setter_call: Label
+	if attack:
+		setter_call = label("",20)
+		setter_call.add_theme_color_override("font_color",Color("ffd278"))
+		setter_call.hide()
+		content.add_child(setter_call)
 	drill_status = label("",16)
 	drill_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(drill_status)
@@ -353,6 +359,7 @@ func start_setting_drill(attack := false) -> void:
 	preview_camera.look_at(setting_camera_focus)
 	setting_drill = preload("res://scripts/attack_drill.gd").new() if attack else preload("res://scripts/setting_drill.gd").new()
 	if attack:
+		setting_drill.rally_set_call = setter_call
 		setting_drill.swing_practice = modes.selected == 0
 		setting_drill.approach_practice = modes.selected == 2
 		setting_drill.jump.max_height += 5.0*0.0254
