@@ -18,6 +18,7 @@ var repeat_setup_feed := false
 var attacker_offset := Vector2.ZERO
 var blocker_offset := Vector2.ZERO
 var set_offset := Vector2.ZERO
+var ball_source_offset := Vector2.ZERO
 var set_apex := 4.75
 var player_shot_aim := Vector3(0.0,0.065,10.5)
 var blocker: Node3D
@@ -94,6 +95,8 @@ func setup_marker(marker: String) -> Vector3:
 		"blocker":
 			var lane := rally_set_target.x if player_attacks else 0.0
 			return Vector3(clampf(lane-blocker_offset.x,-5.5,5.5),0.04,2.0*Net.NET_Z-BLOCK_START.z+blocker_offset.y)
+		"ball":
+			return Vector3((0.0 if player_attacks else -0.65)+ball_source_offset.x,2.12,2.35+ball_source_offset.y)
 		_:
 			return Vector3(clampf(current_pin-set_offset.x,-4.4,4.4),0.065,3.34-set_offset.y)
 
@@ -106,6 +109,8 @@ func move_setup_marker(marker: String, point: Vector3) -> void:
 			blocker_offset = Vector2(lane-point.x,point.z-(2.0*Net.NET_Z-BLOCK_START.z))
 		"set":
 			set_offset = Vector2(current_pin-point.x,3.34-point.z)
+		"ball":
+			ball_source_offset = Vector2(point.x-(0.0 if player_attacks else -0.65),point.z-2.35)
 	apply_position_setup()
 
 func restart_block_feed() -> void:
@@ -165,7 +170,7 @@ func reset_feed() -> void:
 	if block_elapsed < 0.0:
 		blocker.position.z = BLOCK_START.z-blocker_offset.y
 		if not player_attacks: blocker.position.x = blocker_offset.x
-	pass_origin = Vector3(0.0 if player_attacks else -0.65,2.12,2.35)
+	pass_origin = setup_marker("ball")
 	pass_motion = set_toward_pin(pass_origin,rally_set_target,set_apex,3.38)
 	pin_arrival = descending_time(pass_origin,pass_motion,3.38)
 	flight_end = Flight.landing_time(pass_origin,pass_motion)

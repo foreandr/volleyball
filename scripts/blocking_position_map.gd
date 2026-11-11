@@ -1,14 +1,14 @@
 extends "res://scripts/attack_position_map.gd"
 
-const MARKERS := ["attacker","blocker","set"]
-const MARKER_COLORS := [START_COLOR,Color("ec9eff"),BALL_COLOR]
-const MARKER_LABELS := ["Attacker start","Blocker","Set target"]
+const MARKERS := ["attacker","blocker","set","ball"]
+const MARKER_COLORS := [START_COLOR,Color("ec9eff"),BALL_COLOR,Color("9ee5a7")]
+const MARKER_LABELS := ["Attacker start","Blocker","Set target","Ball start"]
 const MAP_CENTER_Y := 104.0
 var preview_point := Vector3.ZERO
 
 func _ready() -> void:
 	super._ready()
-	custom_minimum_size.y = 250
+	custom_minimum_size.y = 271
 	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 
 func court_scale() -> float:
@@ -70,4 +70,5 @@ func update_drag(cursor: Vector2) -> void:
 		"attacker": point = point.clamp(Vector3(-5.5,0.0,-4.8),Vector3(5.5,0.0,3.45))
 		"blocker": point = point.clamp(Vector3(-5.5,0.0,4.50),Vector3(5.5,0.0,6.0))
 		"set": point = point.clamp(Vector3(-4.4,0.0,0.8),Vector3(4.4,0.0,3.69))
+		"ball": point = point.clamp(Vector3(-5.5,0.0,-4.8),Vector3(5.5,0.0,3.69))
 	preview_point = point
