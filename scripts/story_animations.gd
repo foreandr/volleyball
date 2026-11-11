@@ -329,7 +329,7 @@ func start_blocking_practice() -> void:
 	if is_instance_valid(ball_preview): ball_preview.stop()
 	right_panel.hide()
 	angle_control.hide()
-	content.add_child(label("WASD to move camera\nMiddle drag to rotate\nSpace to jump",18))
+	content.add_child(label("WASD to move camera\nMiddle drag to rotate\nSpace to jump\nQ / E to open left / right arm",18))
 	drill_status = label("",16)
 	drill_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(drill_status)
@@ -1645,6 +1645,8 @@ func _input(event: InputEvent) -> void:
 	if is_instance_valid(blocking_practice) and event is InputEventKey:
 		if event.pressed and not event.echo:
 			if event.keycode == KEY_SPACE: blocking_practice.queue_block()
+			elif event.keycode == KEY_Q: blocking_practice.queue_kong(0)
+			elif event.keycode == KEY_E: blocking_practice.queue_kong(1)
 			elif event.keycode == KEY_ESCAPE: open_menu()
 		return
 	if selected_category == "Chasing" and is_instance_valid(setting_drill):
