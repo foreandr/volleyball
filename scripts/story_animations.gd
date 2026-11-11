@@ -329,7 +329,7 @@ func start_blocking_practice() -> void:
 	if is_instance_valid(ball_preview): ball_preview.stop()
 	right_panel.hide()
 	angle_control.hide()
-	content.add_child(label("WASD to move camera\nSpace to jump",18))
+	content.add_child(label("WASD to move camera\nMiddle drag to rotate\nSpace to jump",18))
 	drill_status = label("",16)
 	drill_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(drill_status)
@@ -342,7 +342,8 @@ func start_blocking_practice() -> void:
 	blocking_practice.configure_block(preview_player,drill_status,build_label)
 	blocking_practice.set_ball_audio_muted(StorySession.attack_ball_audio_muted)
 	preview_camera.position = Vector3(0.0,4.9,-5.2)
-	preview_camera.look_at(Vector3(0.0,2.1,4.6))
+	setting_camera_focus = Vector3(0.0,2.1,4.6)
+	preview_camera.look_at(setting_camera_focus)
 	preview.grab_focus()
 
 func stop_blocking_practice() -> void:
@@ -839,7 +840,9 @@ func reception_drill_active() -> bool:
 func _process(delta: float) -> void:
 	pass_timing_cue.hide()
 	if is_instance_valid(blocking_practice):
-		preview_camera.position += camera_pan_delta(player_controls.movement_input(),delta,5.0)
+		var camera_motion := camera_pan_delta(player_controls.movement_input(),delta,5.0)
+		preview_camera.position += camera_motion
+		setting_camera_focus += camera_motion
 		blocking_practice.tick_block(delta)
 		return
 	if selected_category == "Serving":
@@ -1231,6 +1234,20 @@ func begin_approach_setup_drag(event: InputEventMouseButton) -> bool:
 	return true
 
 func handle_preview_input(event: InputEvent) -> void:
+	if is_instance_valid(blocking_practice):
+		if event is InputEventMouseMotion and event.button_mask & MOUSE_BUTTON_MASK_MIDDLE:
+			orbit_setting_camera(event.relative)
+			preview.accept_event()
+		elif event is InputEventMouseButton:
+			if event.button_index == MOUSE_BUTTON_MIDDLE:
+				preview.grab_focus()
+				preview.accept_event()
+			elif event.pressed and event.button_index in [MOUSE_BUTTON_WHEEL_UP,MOUSE_BUTTON_WHEEL_DOWN]:
+				var offset := preview_camera.position-setting_camera_focus
+				var factor := 0.90 if event.button_index == MOUSE_BUTTON_WHEEL_UP else 1.1
+				preview_camera.position = setting_camera_focus+offset.normalized()*clampf(offset.length()*factor,2.8,24.0)
+				preview.accept_event()
+		return
 	if is_instance_valid(underhand_serve):
 		if event is InputEventMouseMotion:
 			if event.button_mask & MOUSE_BUTTON_MASK_MIDDLE:
