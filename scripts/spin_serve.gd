@@ -81,6 +81,7 @@ func prepare_serve_reset() -> void:
 	var intercept := player.position+forward*2.14+Vector3.UP*3.0
 	approach.begin(player,Vector2(-forward.x,forward.z),intercept,SPIN_TAKEOFF-APPROACH_START-SetterJump.LEAD_STEP_TIME,active_jump_height,3)
 	if active_jump_carry: approach.approach_lunge += forward*maxf(0.0,active_jump_height-0.75)*0.90
+	approach.approach_lunge -= forward*SERVE_CONTACT_LEAD
 	var sample_count := ceili((recovery_end()-APPROACH_START)*APPROACH_SAMPLE_RATE)
 	for index in range(sample_count+1):
 		if index > 0: approach.step(player,1.0/APPROACH_SAMPLE_RATE,Vector2.ZERO)
@@ -159,7 +160,7 @@ func shape_float_strike(pose: Array, rig: Skeleton3D, author: RefCounted, time: 
 	var follow := 1.0-pow(1.0-clampf(hit_age/0.19,0.0,1.0),2.0)
 	var scale_: float = rig.global_basis.get_scale().y
 	var shoulder: Vector3 = author.point(pose,"upperarm_r")
-	var contact := to_local(rig.to_global(shoulder+Vector3(-0.05,0.67,0.33)/scale_))
+	var contact := to_local(rig.to_global(shoulder+Vector3(-0.05,0.67,0.33+SERVE_CONTACT_LEAD)/scale_))
 	var source_index := roundi((swing_start-APPROACH_START)*APPROACH_SAMPLE_RATE)
 	spike_pose_driver.setter = player
 	spike_pose_driver.jump = approach
@@ -257,6 +258,9 @@ func spin_lift(start: Vector3, launch: Vector3, duration: float, curve: float) -
 	var height := start.y+launch.y*time-0.5*Flight.GRAVITY*time*time
 	var shape := 4.0*crossing*(1.0-crossing)*(0.55+0.45*crossing)
 	return maxf(0.0,(Net.NET_TOP+BallPreview.RADIUS+0.18-height)/maxf(shape,0.02))
+
+func reception_spin_rps() -> float:
+	return 8.0*Vector2(1.0,released_sidespin).length()
 
 func spin_serve_ball(delta: float) -> void:
 	var axis := Vector3.UP.cross(velocity.slide(Vector3.UP).normalized())+Vector3.UP*released_sidespin

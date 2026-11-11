@@ -10,9 +10,9 @@ const Net = preload("res://scripts/net_collision.gd")
 const Contact = preload("res://scripts/forearm_contact.gd")
 const PLATFORM_RADIUS := 0.31
 const DIVE_CONTACT_ALLOWANCE := 0.09
-const MAX_EARLY_ERROR_TIME := 0.66
 const BallTimingRing = preload("res://scripts/ball_timing_ring.gd")
 const LowSave = preload("res://scripts/player_reception_save.gd")
+const Accuracy = preload("res://scripts/reception_accuracy.gd")
 const SpreadCone = preload("res://scripts/reception_spread_cone.gd")
 const GREEN_START := 0.035
 const GREEN_END := 0.37
@@ -53,7 +53,11 @@ var pose_started_at := -INF
 var cone: MeshInstance3D
 var contact_check := {}
 var approach_progress := -1.0
-var contact_spread := 0.0
+var contact_spread := Vector2.ZERO
+var forearm_setting := false
+var knee_bend_depth := 0.0
+var lunge_bend_depth := 0.0
+var knee_bend_source := {}
 var contact_destination := Vector2.ZERO
 var touch_time := -INF
 var touch: Vector3
@@ -159,8 +163,13 @@ func hand_intercept(path: Callable, time: float, end: float) -> Vector3:
 	var nearest := Geometry3D.get_closest_point_to_segment(center,current,next)
 	return center+(nearest-center).limit_length(0.50)
 
-func aim_velocity(origin: Vector3, error := 0.0) -> Vector3:
-	return Timing.aimed_pass_velocity(origin,{"position":destination,"fit":"height","height":height},45.0,error)
+func aim_velocity(origin: Vector3, spread := Vector2.ZERO) -> Vector3:
+	return Accuracy.pass_velocity(origin,{"position":destination,"fit":"height","height":height},45.0,spread)
+
+func accuracy_bounds(error: float, incoming: Vector3, spin_rps: float) -> Vector2:
+	var setting := forearm_setting or (hand_setting and not quick_hand_receive)
+	var skill := StorySession.setting_skill if setting else (StorySession.hand_reception_skill if hand_setting else StorySession.forearm_reception_skill)
+	return Accuracy.spread(error,incoming.length(),spin_rps,skill,setting)
 
 func update_aim() -> void:
 	var origin := ready_contact()
@@ -212,7 +221,56 @@ func approach(path: Callable, time: float, end: float) -> float:
 			delay = ahead
 	return 1.0-delay/APPROACH_TIME if delay >= 0.0 else -1.0
 
-func update_attempt(time: float, previous: float, end: float, path: Callable, incoming: Vector3, delta: float, cue_arrival := INF) -> void:
+func restore_knee_bend() -> void:
+	if knee_bend_source.is_empty(): return
+	var rig: Skeleton3D = setter.skeleton
+	for bone in knee_bend_source: rig.set_bone_pose(bone,knee_bend_source[bone])
+	knee_bend_source.clear()
+
+func apply_knee_bend(time := INF) -> void:
+	if knee_bend_depth <= 0.001 or low_save.active: return
+	var rig: Skeleton3D = setter.skeleton
+	var author: RefCounted = setter.get_pose_author()
+	var pose: Array[Transform3D] = []
+	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
+	var pelvis := rig.find_bone("pelvis")
+	var parent: Transform3D = author.world_pose(pose,rig.get_bone_parent(pelvis))
+	var feet: Array[Transform3D] = []
+	var knee_poles: Array[Vector3] = []
+	var requested_depth := knee_bend_depth
+	if reach.get("tier",0) == 2:
+		var recovery := 1.0-smoothstep(0.04,0.35,time-touch_time) if is_finite(touch_time) else clampf(knee_bend_depth/0.095,0.0,1.0)
+		requested_depth += lunge_bend_depth*smoothstep(0.28,0.88,reach_progress)*recovery
+	var depth := requested_depth
+	for side in ["l","r"]:
+		var foot: Transform3D = author.world_pose(pose,rig.find_bone("foot_"+side))
+		var hip: Vector3 = author.point(pose,"thigh_"+side)
+		var knee: Vector3 = author.point(pose,"calf_"+side)
+		feet.append(foot)
+		var axis := (foot.origin-hip).normalized()
+		var pole := (knee-hip).slide(axis)
+		var forward := Vector3(0.16 if side == "l" else -0.16,0.0,1.0)
+		knee_poles.append(forward if pole.length_squared() < 0.0004 else pole.normalized())
+		var world_hip := rig.to_global(hip)
+		var world_foot := rig.to_global(foot.origin)
+		# Limit the extra drop for a leg already deeply compressed by the directional clip.
+		depth = minf(depth,maxf(0.0,world_hip.y-world_foot.y-0.42))
+	if depth <= 0.001: return
+	knee_bend_source[pelvis] = pose[pelvis]
+	pose[pelvis].origin += parent.basis.inverse()*rig.global_basis.inverse()*(Vector3.DOWN*depth)
+	for index in 2:
+		var side := "l" if index == 0 else "r"
+		var thigh := "thigh_"+side
+		var calf := "calf_"+side
+		var foot := "foot_"+side
+		for joint in [thigh,calf,foot]:
+			var bone := rig.find_bone(joint)
+			knee_bend_source[bone] = pose[bone]
+		author.limb(pose,thigh,calf,foot,feet[index].origin,knee_poles[index])
+		author.set_world_basis(pose,foot,feet[index].basis)
+	for bone in knee_bend_source: rig.set_bone_pose(bone,pose[bone])
+
+func update_attempt(time: float, previous: float, end: float, path: Callable, incoming: Vector3, delta: float, cue_arrival := INF, spin_rps := 0.0) -> void:
 	contact_check.clear()
 	var progress := approach(path,time,end) if grade == Timing.Grade.WAITING else -1.0
 	approach_progress = progress
@@ -225,6 +283,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 	var striking := attempted and grade == Timing.Grade.WAITING and (low_save.active or is_finite(pose_started_at)) and time < end and (not catch_only or catch_airborne)
 	if striking:
 		if hand_setting:
+			apply_knee_bend(time)
 			var target := hand_intercept(path,time,end)
 			HandPose.apply(setter,to_global(target),smoothstep(0.0,0.062 if quick_hand_receive else 0.105,elapsed))
 		elif low_save.active:
@@ -240,6 +299,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 					apply_custom_backward(custom_backward_time,smoothstep(0.0,0.32,reach_progress))
 				else:
 					pose_reach(smoothstep(0.0,1.0,reach_progress),intercept)
+		if not hand_setting: apply_knee_bend(time)
 		var pancake := low_save.active and low_save.pancake
 		var center := to_local(LowSave.palm_center(setter)) if pancake else platform_center()
 		var radius := 0.16 if pancake else contact_radius()
@@ -284,16 +344,16 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 				if assisted: reach_platform(point-center)
 				grade = Timing.Grade.LATE if timing < green_start else (Timing.Grade.EARLY if timing > green_end else Timing.Grade.PERFECT)
 				var error := timing_error(timing)*(Timing.PANCAKE_ERROR_SCALE if pancake else 1.0)
-				contact_spread = Timing.practice_spread(error)
+				contact_spread = accuracy_bounds(error,incoming,spin_rps)
 				contact_destination = destination
 				if hand_setting:
-					begin_hand_contact(touch,touch_time,error)
+					begin_hand_contact(touch,touch_time,contact_spread)
 				elif pancake:
 					outgoing = Timing.pancake_pop(incoming)
 					var target := Timing.pancake_target(touch,outgoing)
 					contact_destination = target.position
-					if error > 0.0: outgoing = Timing.aimed_pass_velocity(touch,target,45.0,error)
-				else: outgoing = aim_velocity(touch,error)
+					outgoing = Accuracy.pass_velocity(touch,target,45.0,contact_spread)
+				else: outgoing = aim_velocity(touch,contact_spread)
 				if not hand_setting:
 					floor_time = Flight.landing_time(touch,outgoing)
 					net_hit = Net.first_hit(func(t): return flight_point(touch,outgoing,t),0.0,floor_time)
@@ -310,22 +370,27 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 			update_hand_push(time,follow)
 		else:
 			follow_forearm(time,incoming)
+	if not striking: apply_knee_bend(time)
 	var recent_touch := is_finite(touch_time) and time-touch_time <= BallTimingRing.RESULT_DURATION
 	if not catch_only and ((grade == Timing.Grade.WAITING and progress >= 0.0) or recent_touch):
 		var anticipated := (1.0-maxf(progress,0.0))*APPROACH_TIME
-		if is_finite(pressed_at): anticipated += time-pressed_at
-		var spread := contact_spread if is_finite(touch_time) else Timing.practice_spread(timing_error(anticipated))
+		if attempted:
+			anticipated = cue_arrival-pressed_at if is_finite(cue_arrival) and not low_save.active else anticipated+time-pressed_at
+		var spread := contact_spread if is_finite(touch_time) else accuracy_bounds(timing_error(anticipated),incoming,spin_rps)
 		var target := contact_destination if is_finite(touch_time) else destination
-		cone.show_spread(touch if is_finite(touch_time) else ready_contact(),Vector3(target.x,0.075,target.y),spread)
+		var source := touch if is_finite(touch_time) else ready_contact()
+		var ideal := Flight.target_velocity(source,{"position":target,"fit":"height","height":height},45.0)
+		var peak := flight_point(source,ideal,ideal.y/Flight.GRAVITY)
+		cone.show_spread(to_global(source),to_global(Vector3(target.x,0.075,target.y)),spread.x,to_global(peak),spread.y)
 	else:
 		cone.hide()
 
-func begin_hand_contact(point: Vector3, time: float, error := 0.0) -> void:
+func begin_hand_contact(point: Vector3, time: float, spread := Vector2.ZERO) -> void:
 	touch = point
 	touch_time = time
 	hand_anchor = setter.to_local(to_global(point))
 	if catch_only: return
-	outgoing = aim_velocity(touch,error)
+	outgoing = aim_velocity(touch,spread)
 	var endpoint := flight_point(touch,outgoing,Flight.landing_time(touch,outgoing))
 	hand_target = {"position":Vector2(endpoint.x,endpoint.z),"height":touch.y+outgoing.y*outgoing.y/(2.0*Flight.GRAVITY),"fit":"height"}
 
@@ -358,8 +423,7 @@ func close_body_contact(point: Vector3, platform: Vector3) -> bool:
 	return from_body.slide(Vector3.UP).length() <= 0.42 and absf(point.y-platform.y) <= 0.23 and point.distance_to(platform) <= 0.78
 
 func timing_error(elapsed: float) -> float:
-	if elapsed < green_start: return clampf((green_start-elapsed)/green_start,0.0,1.0)
-	return clampf((elapsed-green_end)/(MAX_EARLY_ERROR_TIME-green_end),0.0,1.0)
+	return Accuracy.timing_error(elapsed,green_start,green_end)
 
 func clear_reach() -> void:
 	reach.clear()

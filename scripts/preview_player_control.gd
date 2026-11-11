@@ -256,7 +256,7 @@ func play_receive_pose(delta: float, review_offset := Vector3.INF, pose_offset :
 	actor.animator.pause()
 	if not planted: step_into_receive(delta,review_offset)
 	var struck: bool = ball.recovery.has("spread")
-	var outgoing: Vector3 = ball.recovery.velocity if struck else ball.practice_pass_velocity(ball.practice_platform_center(),0.0)
+	var outgoing: Vector3 = ball.recovery.velocity if struck else ball.practice_pass_velocity(ball.practice_platform_center())
 	var incoming: Vector3 = ball.incoming
 	if struck: incoming += ball.feed_info.acceleration*float(ball.recovery.time)
 	var power := PassDrive.effort(incoming,outgoing)

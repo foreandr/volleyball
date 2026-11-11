@@ -33,6 +33,7 @@ var last_aim_velocity := Vector3.INF
 var source_ball: MeshInstance3D
 var source_ground: MeshInstance3D
 var feed_valid := true
+const Accuracy = preload("res://scripts/reception_accuracy.gd")
 var feed_info := {}
 var incoming_net := {}
 var outgoing_net := {}
@@ -401,8 +402,11 @@ func try_practice_pass(previous_time: float, time: float, receive_elapsed: float
 		practice_grade = Grade.EARLY
 	else:
 		practice_grade = Grade.PERFECT
-	var velocity := practice_pass_velocity(touch,timing_error)
-	recovery = {"time":last,"point":touch,"velocity":velocity,"aim":actor.get_meta("pass_target",{}).position,"spread":practice_spread(timing_error),"end_time":last+Flight.landing_time(touch,velocity)}
+	var bounds := practice_accuracy_bounds(timing_error,last)
+	var target: Dictionary = actor.get_meta("pass_target",{})
+	var angle := float(clip.get_meta("desired_output_angle",45.0))
+	var velocity := Accuracy.pass_velocity(touch,target,angle,bounds)
+	recovery = {"time":last,"point":touch,"velocity":velocity,"aim":target.position,"spread":bounds,"end_time":last+Flight.landing_time(touch,velocity)}
 	recovery_net = Net.first_hit(func(t): return touch+velocity*(t-last)+Vector3.DOWN*4.905*pow(t-last,2),last,recovery.end_time)
 	update_guide()
 	return true
@@ -428,8 +432,8 @@ func try_pancake(previous_time: float, time: float, receive_elapsed := -1.0) -> 
 		var target := pancake_target(touch,pop)
 		practice_grade = Grade.LATE if receive_elapsed < GREEN_START else (Grade.EARLY if receive_elapsed > GREEN_END else Grade.PERFECT)
 		recovery.aim = target.position
-		recovery.spread = practice_spread(error)
-		if error > 0.0: pop = aimed_pass_velocity(touch,target,45.0,error)
+		recovery.spread = practice_accuracy_bounds(error,last)
+		pop = Accuracy.pass_velocity(touch,target,45.0,recovery.spread)
 		recovery.velocity = pop
 	recovery.end_time = last+Flight.landing_time(touch,pop)
 	recovery_net.clear()
@@ -508,11 +512,12 @@ func try_body_dig(previous_time: float, time: float) -> bool:
 	return true
 
 static func practice_timing_error(receive_elapsed: float) -> float:
-	if receive_elapsed < GREEN_START: return (GREEN_START-receive_elapsed)/GREEN_START
-	return clampf((receive_elapsed-GREEN_END)/0.30,0.0,1.0)
+	return Accuracy.timing_error(receive_elapsed,GREEN_START,GREEN_END)
 
-static func practice_spread(timing_error: float) -> float:
-	return 2.10*clampf(timing_error,0.0,1.0)
+func practice_accuracy_bounds(error: float, time: float) -> Vector2:
+	var speed := (practice_position(time+0.001)-practice_position(time-0.001)).length()/0.002
+	var spin_rps := float(feed_info.get("spin_rate",0.0))/TAU
+	return Accuracy.spread(error,speed,spin_rps,StorySession.forearm_reception_skill,false)
 
 func update_practice_cone(show_timing: bool, receive_elapsed: float) -> void:
 	var target: Dictionary = actor.get_meta("pass_target",{})
@@ -523,8 +528,10 @@ func update_practice_cone(show_timing: bool, receive_elapsed: float) -> void:
 	var aim: Vector2 = recovery.get("aim",target.position)
 	var destination := Vector3(aim.x,0.075,aim.y)
 	var origin: Vector3 = recovery.point if has_touch else practice_platform_center()
-	var spread: float = recovery.spread if has_touch else practice_spread(practice_timing_error(receive_elapsed))
-	spread_cone.show_spread(origin,destination,spread)
+	var bounds: Vector2 = recovery.spread if has_touch else practice_accuracy_bounds(practice_timing_error(receive_elapsed),0.0)
+	var ideal := Flight.target_velocity(origin,target,float(clip.get_meta("desired_output_angle",45.0)))
+	var peak := origin+ideal*(ideal.y/Flight.GRAVITY)-Vector3.UP*ideal.y*ideal.y/(2.0*Flight.GRAVITY)
+	spread_cone.show_spread(origin,destination,bounds.x,peak,bounds.y)
 
 func update_practice_aim(show_aim: bool) -> void:
 	var target: Dictionary = actor.get_meta("pass_target",{})
@@ -549,23 +556,9 @@ func update_practice_aim(show_aim: bool) -> void:
 			path.surface_add_vertex(origin+velocity*time+Vector3.DOWN*0.5*Flight.GRAVITY*time*time)
 	path.surface_end()
 
-func practice_pass_velocity(touch: Vector3, timing_error: float) -> Vector3:
+func practice_pass_velocity(touch: Vector3) -> Vector3:
 	var target: Dictionary = actor.get_meta("pass_target",{})
-	var angle := float(clip.get_meta("desired_output_angle",45.0))
-	return aimed_pass_velocity(touch,target,angle,timing_error)
-
-static func aimed_pass_velocity(touch: Vector3, target: Dictionary, angle: float, timing_error: float) -> Vector3:
-	var ideal := Flight.target_velocity(touch,target,angle)
-	if timing_error <= 0.0: return ideal
-
-	var direction := Vector2.from_angle(randf()*TAU)
-	var spread := practice_spread(timing_error)*randf_range(0.55,1.0)
-	var destination: Vector2 = target.position+direction*spread
-	var ideal_peak := touch.y+ideal.y*ideal.y/(2.0*Flight.GRAVITY)
-	var height_spread := 1.35*timing_error
-	var height_error := height_spread*randf_range(0.45,1.0)
-	if randf()<0.5: height_error = -height_error
-	return Flight.target_velocity(touch,{"position":destination,"fit":"height","height":ideal_peak+height_error},angle)
+	return Flight.target_velocity(touch,target,float(clip.get_meta("desired_output_angle",45.0)))
 
 func finish_practice_serve() -> void:
 	if practice_grade != Grade.WAITING: return

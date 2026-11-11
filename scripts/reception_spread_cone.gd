@@ -1,12 +1,13 @@
 extends MeshInstance3D
 
 const SEGMENTS := 32
-const TARGET_RING := 0.20
 var shape := ImmediateMesh.new()
 var tint := StandardMaterial3D.new()
 var previous_origin := Vector3.INF
 var previous_target := Vector3.INF
 var previous_spread := -1.0
+var previous_peak := Vector3.INF
+var previous_height_spread := -1.0
 
 func _ready() -> void:
 	top_level = true
@@ -19,14 +20,16 @@ func _ready() -> void:
 	mesh = shape
 	hide()
 
-func show_spread(origin: Vector3, target: Vector3, spread: float) -> void:
+func show_spread(origin: Vector3, target: Vector3, spread: float, peak := Vector3.ZERO, height_spread := 0.0) -> void:
 	show()
-	if origin.is_equal_approx(previous_origin) and target.is_equal_approx(previous_target) and is_equal_approx(spread,previous_spread):
+	if origin.is_equal_approx(previous_origin) and target.is_equal_approx(previous_target) and is_equal_approx(spread,previous_spread) and peak.is_equal_approx(previous_peak) and is_equal_approx(height_spread,previous_height_spread):
 		return
 	previous_origin = origin
 	previous_target = target
 	previous_spread = spread
-	var radius := maxf(TARGET_RING,spread)
+	previous_peak = peak
+	previous_height_spread = height_spread
+	var radius := maxf(0.04,spread)
 	var color := Color("65ff94") if spread <= 0.0 else Color("b447df")
 	shape.clear_surfaces()
 	shape.surface_begin(Mesh.PRIMITIVE_TRIANGLES,tint)
@@ -42,6 +45,16 @@ func show_spread(origin: Vector3, target: Vector3, spread: float) -> void:
 	for segment in range(SEGMENTS+1):
 		shape.surface_add_vertex(rim(target,radius,segment))
 	shape.surface_end()
+	if height_spread > 0.001:
+		shape.surface_begin(Mesh.PRIMITIVE_LINES,tint)
+		shape.surface_set_color(Color(color,0.85))
+		shape.surface_add_vertex(peak-Vector3.UP*height_spread)
+		shape.surface_add_vertex(peak+Vector3.UP*height_spread)
+		for sign_ in [-1.0,1.0]:
+			var cap: Vector3 = peak+Vector3.UP*height_spread*sign_
+			shape.surface_add_vertex(cap-Vector3.RIGHT*0.12)
+			shape.surface_add_vertex(cap+Vector3.RIGHT*0.12)
+		shape.surface_end()
 
 func rim(center: Vector3, radius: float, segment: int) -> Vector3:
 	var angle := TAU*segment/SEGMENTS

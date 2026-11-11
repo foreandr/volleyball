@@ -9,6 +9,9 @@ var animation_draft: Dictionary = {}
 var animation_return: Dictionary = {}
 var attack_swing_tuning: Dictionary = {}
 var attack_ball_audio_muted := false
+var forearm_reception_skill := 100.0
+var hand_reception_skill := 100.0
+var setting_skill := 100.0
 
 func begin_new() -> void:
 	creating_story = true

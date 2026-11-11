@@ -21,6 +21,7 @@ func configure_block(actor: Node3D, readout: Label, build: String) -> void:
 	dig.configure(actor,bump.clip)
 	dig.destination = Vector2(0.0,1.8)
 	dig.height = 3.4
+	dig.lunge_bend_depth = 0.14
 	dig.green_start = 0.01
 	dig.green_end = 0.50
 	dig.green_forearm_allowance = 0.30
@@ -92,7 +93,24 @@ func defense_move_scale() -> float:
 	if dig.low_save.active and not dig.low_save.finished(time): return 0.0
 	return dig.movement_scale(time,flight_end,dig.to_local(ball.global_position))
 
+func stop_block() -> void:
+	if is_instance_valid(dig): dig.restore_knee_bend()
+	super.stop_block()
+
+func update_defense_knee_bend(delta: float) -> void:
+	var weight := 0.0
+	if stage == Stage.SET and jump.active and is_finite(swing_started):
+		weight = smootherstep(0.12,0.39,clock-swing_started)
+	elif stage == Stage.HIT:
+		var time := clock-stage_start
+		var recovery_at := float(dig.touch_time) if is_finite(dig.touch_time) else flight_end-0.06
+		weight = 1.0-smootherstep(0.04,0.33,time-recovery_at)
+	if dig.low_save.active: weight = 0.0
+	dig.knee_bend_depth = lerpf(dig.knee_bend_depth,0.095*weight,1.0-exp(-delta*15.0))
+	if stage != Stage.HIT: dig.apply_knee_bend()
+
 func tick_block(delta: float) -> void:
+	update_defense_knee_bend(delta)
 	if stage == Stage.SET: queued_approach_input(delta)
 	step_jump(delta)
 	step(delta)
@@ -103,6 +121,7 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 
 func play_spike(time: float, delta: float) -> void:
 	if not swing_net_hit.is_empty():
+		dig.apply_knee_bend()
 		super.play_spike(time,delta)
 		return
 	if is_finite(dig_pressed_at) and not is_finite(dig.pressed_at):
@@ -114,7 +133,7 @@ func play_spike(time: float, delta: float) -> void:
 	var incoming := global_basis*(pass_motion+Vector3.DOWN*Flight.GRAVITY*time)
 	dig.show()
 	dig.update_aim()
-	dig.update_attempt(time,maxf(0.0,time-delta),flight_end,path,incoming,delta)
+	dig.update_attempt(time,maxf(0.0,time-delta),flight_end,path,incoming,delta,INF,spike_topspin_rps)
 	if not is_finite(dig.touch_time):
 		super.play_spike(time,delta)
 		if stage == Stage.HIT and time >= flight_end: status.text = "Spike down"

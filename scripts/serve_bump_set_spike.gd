@@ -8,6 +8,7 @@ const QUICK_SET_APEX := 4.1
 
 var server: Node3D
 var serve_demo: Node3D
+var manual_set_cone: MeshInstance3D
 var serve_contact := 0.0
 var serve_to_partner := false
 var partner_receiving := false
@@ -57,6 +58,7 @@ func make_demo_player(role: String, color: Color) -> Node3D:
 	return actor
 
 func reset_feed() -> void:
+	if is_instance_valid(manual_set_cone): manual_set_cone.hide()
 	if is_instance_valid(serve_demo):
 		partner_receiving = serve_to_partner
 		setter = teammate if partner_receiving else user_player
@@ -203,6 +205,12 @@ func update_manual_set_target() -> void:
 		origin = cpu_set.platform_center() if is_finite(cpu_set.touch_time) else cpu_contact_point
 	var launch := cpu_set_launch(origin)
 	draw_set_preview(origin,launch)
+	if not is_instance_valid(manual_set_cone):
+		manual_set_cone = BumpSetting.SpreadCone.new()
+		add_child(manual_set_cone)
+	var bounds := manual_set_spread()
+	var peak := flight_point(origin,launch,launch.y/Flight.GRAVITY)
+	manual_set_cone.show_spread(to_global(origin),to_global(rally_set_target),bounds.x,to_global(peak),bounds.y)
 	if is_instance_valid(rally_set_call):
 		rally_set_call.text = "Set height %.1f m" % manual_set_apex
 		rally_set_call.show()
@@ -218,6 +226,21 @@ func draw_set_preview(origin: Vector3, launch: Vector3) -> void:
 
 func cpu_set_target_depth() -> float:
 	return Net.NET_Z-RALLY_SET_NET_CLEARANCE
+
+func manual_set_spread() -> Vector2:
+	var pace := (pass_motion+Vector3.DOWN*Flight.GRAVITY*cpu_contact_time).length() if stage == Stage.PASS else 0.0
+	return BumpSetting.Accuracy.spread(0.0,pace,0.0,StorySession.setting_skill,true)
+
+func released_set_velocity(origin: Vector3) -> Vector3:
+	if is_instance_valid(manual_set_cone): manual_set_cone.hide()
+	var ideal := super.released_set_velocity(origin)
+	if not partner_receiving or not manual_set_requested: return ideal
+	var spread := manual_set_spread()
+	if spread.is_zero_approx(): return ideal
+	var error := BumpSetting.Accuracy.sample_offset(spread)
+	rally_set_target += error.slide(Vector3.UP)
+	var apex := maxf(cpu_set_apex()+error.y,maxf(origin.y,RALLY_SET_CONTACT_HEIGHT)+0.08)
+	return set_toward_pin(origin,rally_set_target,apex,RALLY_SET_CONTACT_HEIGHT)
 
 func cpu_set_launch(origin: Vector3) -> Vector3:
 	var apex := cpu_set_apex()

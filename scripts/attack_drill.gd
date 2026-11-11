@@ -31,6 +31,7 @@ const SWING_CONTACT_HEIGHT := 2.22
 const PALM_RADIUS := 0.065
 const ASSISTED_PALM_RADIUS := 0.24
 const SWING_FOLLOW_TIME := 0.49
+const CONTACT_FORWARD_SPACE := 0.34
 const DEFAULT_BOUNCINESS := 2.25
 const DEFAULT_BACKSWING_BEND := 85.0
 const DEFAULT_BACKSWING_REACH := 0.48
@@ -226,6 +227,7 @@ func reset_feed() -> void:
 	clock = 0.0
 	stage_start = 0.0
 	stage = Stage.SERVE
+	bump.forearm_setting = false
 	if cpu_set == null:
 		cpu_set = BumpSetting.new()
 		add_child(cpu_set)
@@ -379,6 +381,7 @@ func start_swing_practice() -> void:
 	pass_origin = flight_point(source,velocity,preroll)
 	pass_motion = velocity+Vector3.DOWN*Flight.GRAVITY*preroll+(set_target-pin)/lead
 	jump.begin(setter,Vector2(0.0,0.65))
+	jump.approach_lunge = spike_body_target(set_target)-set_target
 	for frame in range(16): jump.step(setter,1.0/60.0,Vector2.ZERO)
 	jump.release()
 	setter.rotation.y = incoming_set_heading()
@@ -598,11 +601,17 @@ func time_approach_plant(delta: float) -> void:
 	var direction := (approach_intercept-setter.position).slide(Vector3.UP).normalized()
 	begin_attack_jump(Vector2(-direction.x,direction.z),clampf(time_before_lift-lead_time,minimum_plant,plant_time),jump_height,lead_scale)
 
+func spike_body_target(ball_target: Vector3) -> Vector3:
+	var shot := (swing_aim-ball_target).slide(Vector3.UP).normalized()
+	return ball_target-shot*CONTACT_FORWARD_SPACE
+
 func begin_attack_jump(direction: Vector2, plant_time := 0.36, jump_height := 0.0, tempo := 1.0) -> void:
 	takeoff_yaw = setter.rotation.y
 	var ball_target := Vector3.INF
 	if uses_assisted_approach():
-		ball_target = approach_intercept
+		ball_target = spike_body_target(approach_intercept)
+		var toward := (ball_target-setter.position).slide(Vector3.UP).normalized()
+		direction = Vector2(-toward.x,toward.z)
 	jump.begin(setter,direction,ball_target,plant_time,jump_height,approach_steps if uses_assisted_approach() else 2,approach_from_sprint,tempo)
 	trace.write("jump",clock,{"position":setter.position,"direction":jump.heading,"plant_time":jump.load_duration(),"assisted_height":jump_height},true)
 
@@ -677,6 +686,9 @@ func trace_snapshot(time: float) -> Dictionary:
 func serve_flight_point(time: float) -> Vector3:
 	return flight_point(serve_origin,serve_velocity,time)
 
+func incoming_serve_spin() -> float:
+	return 0.0
+
 func play_serve(time: float, previous: float, delta: float) -> void:
 	var path := serve_flight_point
 	var end := Flight.landing_time(serve_origin,serve_velocity)
@@ -684,7 +696,10 @@ func play_serve(time: float, previous: float, delta: float) -> void:
 	var cue := receive_cue_time()
 	timing_cue.update_timing(time,cue,bump.green_start,bump.green_end)
 	bump.update_aim()
-	bump.update_attempt(time,previous,end,path,serve_velocity+Vector3.DOWN*Flight.GRAVITY*time,delta,cue)
+	var sample_start := maxf(0.0,time-0.001)
+	var sample_end := time+0.001
+	var incoming_ball: Vector3 = (path.call(sample_end)-path.call(sample_start))/(sample_end-sample_start)
+	bump.update_attempt(time,previous,end,path,incoming_ball,delta,cue,incoming_serve_spin())
 	if is_finite(bump.touch_time):
 		if bump.hand_setting and not is_finite(bump.release_time):
 			ball.position = bump.touch.lerp(bump.platform_center(),smoothstep(0.0,0.05,time-bump.touch_time))
@@ -764,6 +779,9 @@ func cpu_set_apex() -> float:
 func cpu_set_launch(origin: Vector3) -> Vector3:
 	return set_toward_pin(origin,called_set_target(),cpu_set_apex(),PIN_HEIGHT if approach_practice else RALLY_SET_CONTACT_HEIGHT)
 
+func released_set_velocity(origin: Vector3) -> Vector3:
+	return cpu_set.outgoing if approach_practice else cpu_set_launch(origin)
+
 func set_requested() -> bool:
 	return true
 
@@ -788,7 +806,7 @@ func play_cpu_set(time: float, delta: float) -> void:
 			ball.position = cpu_set.platform_center()
 		if is_finite(cpu_set.release_time):
 			pass_origin = cpu_set.release_point
-			pass_motion = cpu_set.outgoing if approach_practice else cpu_set_launch(pass_origin)
+			pass_motion = released_set_velocity(pass_origin)
 			pin_arrival = descending_time(pass_origin,pass_motion,PIN_HEIGHT if approach_practice else RALLY_SET_CONTACT_HEIGHT)
 			flight_end = Flight.landing_time(pass_origin,pass_motion)
 			stage = Stage.SET

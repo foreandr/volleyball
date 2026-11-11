@@ -121,6 +121,7 @@ func configure(player: Node3D, readout: Label, use_bump: bool, build := "") -> v
 	add_child(bump)
 	bump.configure(setter,clip)
 	bump_enabled = use_bump
+	bump.forearm_setting = true
 	bump.hand_setting = not use_bump
 	ready_range = MeshInstance3D.new()
 	var outline := TorusMesh.new()

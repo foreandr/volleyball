@@ -43,6 +43,9 @@ func reset_feed() -> void:
 	approach_rings.hide()
 	status.text = "Space to serve"
 
+func incoming_serve_spin() -> float:
+	return serve_source.reception_spin_rps() if is_instance_valid(serve_source) else 0.0
+
 func receive_serve(world_origin: Vector3, world_velocity: Vector3, source: Node3D = null) -> void:
 	serve_source = source
 	rally_number += 1

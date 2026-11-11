@@ -59,7 +59,7 @@ func shape_float_strike(pose: Array, rig: Skeleton3D, author: RefCounted, time: 
 	var follow := 0.64*smoothstep(STRIKE,STRIKE+0.26,time)
 	var scale_: float = rig.global_basis.get_scale().y
 	var shoulder: Vector3 = author.point(pose,"upperarm_r")
-	var contact := shoulder+Vector3(-0.04,0.61,0.36)/scale_
+	var contact := shoulder+Vector3(-0.04,0.61,0.36+SERVE_CONTACT_LEAD)/scale_
 	var shot_direction := Vector3.BACK
 	SpikeArm.apply(pose,author,contact,weight,extension,follow,1.0,0.80,0.8,0.09,0.0,0.0,shot_direction,0.86,0.14/scale_,true)
 	var guide_drop := smoothstep(STRIKE-0.12,STRIKE+0.12,time)

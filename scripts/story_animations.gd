@@ -352,6 +352,8 @@ func start_blocking_practice(defense := false) -> void:
 	blocking_practice.set_ball_audio_muted(StorySession.attack_ball_audio_muted)
 	if defense:
 		content.add_child(label("WASD to move  |  Shift to sprint\nQ to dig  |  E to receive with hands\nMove mouse to aim your pass",18))
+		add_skill_slider("Forearm reception","forearm_reception_skill")
+		add_skill_slider("Hand reception","hand_reception_skill")
 		content.add_child(button("Back to Blocking",open_blocking_mode.bind(false)))
 		preview_camera.position = Vector3(0.0,5.0,-8.8)
 		setting_camera_focus = Vector3(0.0,1.65,3.0)
@@ -407,6 +409,20 @@ func start_blocking_practice(defense := false) -> void:
 		update_role.call(index == 0))
 	update_role.call(blocking_practice.player_attacks)
 	show_block_positions()
+
+func add_skill_slider(caption: String, property: String) -> void:
+	var value: float = StorySession.get(property)
+	var readout := label("%s  %.0f" % [caption,value],16)
+	content.add_child(readout)
+	var slider := HSlider.new()
+	slider.max_value = 100.0
+	slider.step = 1.0
+	slider.value = value
+	slider.focus_mode = Control.FOCUS_NONE
+	content.add_child(slider)
+	slider.value_changed.connect(func(skill: float):
+		StorySession.set(property,skill)
+		readout.text = "%s  %.0f" % [caption,skill])
 
 func show_block_positions() -> void:
 	attack_position_panel = panel()
@@ -512,6 +528,7 @@ func start_serve_bump_set_spike() -> void:
 		controls_hint.text = "Aim the set with the cursor\nScroll to change set height\nQ forearms  |  E / I hands\nHold Space to spike\nF to jump set" if index == 1 else "WASD to move  |  Q forearms  |  E / I hands\nCursor aims  |  Scroll for pass or set height\nShift + W to run  |  Hold Space to spike"
 		setting_drill.reset_feed())
 	content.add_child(serve_side)
+	add_skill_slider("Setting","setting_skill")
 	content.add_child(button("Replay",setting_drill.reset_feed))
 	setting_camera_focus = SETTING_CAMERA_FOCUS
 	preview_camera.position = Vector3(0.0,8.0,-14.0)
@@ -554,6 +571,7 @@ func start_setting_drill(attack := false) -> void:
 		show_mode.call(index)
 		preview.grab_focus())
 	content.add_child(controls_hint)
+	if not attack: add_skill_slider("Setting","setting_skill")
 	var setter_call: Label
 	if attack:
 		setter_call = label("",20)
@@ -957,6 +975,7 @@ func _process(delta: float) -> void:
 	pass_timing_cue.hide()
 	if is_instance_valid(blocking_practice):
 		if defense_active:
+			blocking_practice.dig.restore_knee_bend()
 			player_controls.read_pace_input()
 			player_controls.move_player(player_controls.movement_input(),delta,false,blocking_practice.ball.global_position,blocking_practice.defense_move_scale(),0.80,true,3.20,0.0,0.0,true)
 			blocking_practice.tick_block(delta)

@@ -82,12 +82,13 @@ func float_approach(time: float, plant_time: float, land_time: float, jump_heigh
 	var lift := 4.0*jump_height*flight*(1.0-flight)
 	var jumping := jump_height > 0.0
 	var drift := (0.78 if jumping else 0.58)*flight
+	var contact_space := SERVE_CONTACT_LEAD*smoothstep(toss_release_time(),contact_time(),time)
 	var recovery := smoothstep(contact_time()-0.02,contact_time()+0.31,time)
 	var ground_travel := (0.30*left_lead+0.41*right_step+0.43*left_plant)*stride_scale
 	if jumping:
 		var run := clampf((phase-0.05)/0.95,0.0,1.0)
 		ground_travel = 1.14*stride_scale*pow(run,1.53)
-	player.position = serve_start+forward*(0.32*lead+ground_travel+drift+(0.20*recovery if not jumping else 0.0))+Vector3.UP*(lift-(0.23 if jumping else 0.13)*load)
+	player.position = serve_start+forward*(0.32*lead+ground_travel+drift-contact_space+(0.20*recovery if not jumping else 0.0))+Vector3.UP*(lift-(0.23 if jumping else 0.13)*load)
 	player.animator.seek(0.0,true)
 	var rig: Skeleton3D = player.skeleton
 	var author: RefCounted = player.get_pose_author()
@@ -112,7 +113,7 @@ func float_approach(time: float, plant_time: float, land_time: float, jump_heigh
 			advance += (0.38*recovery if jump_height == 0.0 else 0.0)-0.33*kick*float_body_scale()
 			step_height += 0.25*kick*float_body_scale()
 		var tuck := 0.09*sin(PI*flight)*(1.0-smoothstep(0.02,0.22,time-contact_time()))
-		foot += forward*(advance+drift)+Vector3.UP*(lift+step_height+tuck)
+		foot += forward*(advance+drift-contact_space)+Vector3.UP*(lift+step_height+tuck)
 		author.limb(bones,"thigh_"+side,"calf_"+side,"foot_"+side,rig.to_local(foot),Vector3(0.12 if left else -0.12,0.2,1.0))
 	return bones
 
@@ -142,7 +143,7 @@ func pose(time: float) -> void:
 		orient_palm(bones,rig,author,"l",Vector3.BACK,Vector3.LEFT,1.0-left_drop)
 		var low_right := right_shoulder+Vector3(-0.08,-0.53,0.03)/scale_
 		var drawn_right := right_shoulder+Vector3(-0.24,0.34,-0.47)/scale_
-		var contact_right := right_shoulder+Vector3(-0.045,0.53,0.28)/scale_
+		var contact_right := right_shoulder+Vector3(-0.045,0.53,0.28+SERVE_CONTACT_LEAD)/scale_
 		var follow_right := right_shoulder+Vector3(0.36,-0.42,0.30)/scale_
 		var right_wrist := low_right.lerp(drawn_right,windup).lerp(contact_right,drive).lerp(follow_right,follow)
 		author.limb(bones,"upperarm_r","lowerarm_r","hand_r",right_wrist,Vector3(-0.62,0.12,-0.91).lerp(Vector3(-0.35,-0.3,0.6),drive),1.0,176.0)

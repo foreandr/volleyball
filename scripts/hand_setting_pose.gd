@@ -69,7 +69,7 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 		shape_outer_fingers(author,pose,side,diamond+Vector3(0,0.075,0.07))
 	for bone in rig.get_bone_count():
 		var before: Basis = original[bone].basis
-		rig.set_bone_pose_rotation(bone,before.slerp(pose[bone].basis,blend).get_rotation_quaternion())
+		rig.set_bone_pose_rotation(bone,before.slerp(pose[bone].basis,blend).orthonormalized().get_rotation_quaternion())
 
 static func shape_outer_fingers(author: RefCounted, pose: Array, side: String, ball_center: Vector3) -> void:
 	var inside: Vector3 = author.point(pose,"index_01_"+side)
