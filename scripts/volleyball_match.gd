@@ -571,7 +571,7 @@ func set_pin_for(index: int) -> Vector3:
 	return called_pin
 
 func defensive_ball() -> bool:
-	return flight_kind in ["spike","dump","block"] or (flight_kind == "free" and last_was_block)
+	return flight_kind in ["spike","dump","block","free"]
 
 func queue_receive(index: int, technique: int) -> void:
 	var bump := platforms[index]
@@ -584,6 +584,7 @@ func queue_receive(index: int, technique: int) -> void:
 	bump.green_start = 0.0 if is_human(index) else 0.01
 	bump.green_end = 0.78 if is_human(index) else 0.55
 	bump.defensive_hand_dig = defensive_ball() and technique == 1
+	bump.quick_low_save = technique == 0 and not is_human(index)
 	bump.allow_auto_dive = technique == 0 and (not is_human(index) or not defensive_ball())
 	bump.queue_bump(elapsed)
 	show_key(index,["Q","E","F"][technique])
@@ -780,10 +781,21 @@ func select_receiver() -> void:
 	var side := receiving_team
 	var point := path_point(arrival(1.10))
 	var first := side*2
-	if side == possession_team and touches > 0:
+	if side == possession_team and touches > 0 and not last_was_block:
 		cpu_choice = last_player^1
-	elif flight_kind in ["spike","dump"] and defender_assignment[side] >= 0:
-		cpu_choice = int(defender_assignment[side])^1
+	elif defensive_ball():
+		var best_cost := INF
+		for index in range(first,first+2):
+			var at := dig_intercept(index)
+			var contact := path_point(at)
+			var distance := (contact-players[index].global_position).slide(Vector3.UP).length()
+			var cost := distance-maxf(0.0,at-elapsed)*3.5
+			if blocks.has(index): cost += 2.0
+			if recoveries.has(index) and recoveries[index].has("save"): cost += 2.4
+			if index == defender_assignment[side]: cost += 0.30
+			if cost < best_cost:
+				cpu_choice = index
+				best_cost = cost
 	elif point.distance_squared_to(players[first].global_position) <= point.distance_squared_to(players[first+1].global_position):
 		cpu_choice = first
 	else: cpu_choice = first+1
@@ -885,7 +897,7 @@ func tick_receive(delta: float, previous: float) -> void:
 			elif is_finite(bump.pressed_at):
 				speed = minf(speed,2.0)
 			move_cpu(index,target,delta,speed,face,cpu_dig or flight_kind == "serve")
-		var prep := 0.39 if technique == 2 else (0.35 if cpu_dig else 0.24)
+		var prep := 0.39 if technique == 2 else (0.40 if cpu_dig else 0.27)
 		if elapsed >= cue-prep: queue_receive(index,technique)
 	if not is_finite(bump.pressed_at): return
 	if recovering: recoveries.erase(index)
@@ -908,7 +920,12 @@ func tick_receive(delta: float, previous: float) -> void:
 		bump.ready_knee_bend_depth = 0.16
 		bump.lunge_bend_depth = 0.12
 		bump.knee_bend_depth = bump.ready_knee_bend_depth*smoothstep(cue-0.20,cue-0.035,elapsed)
+	var was_diving: bool = bump.low_save.active
 	bump.update_attempt(elapsed,previous,end,path,frame.global_basis.inverse()*motion,delta,timing_cue,spin,cue if is_dig else INF)
+	if bump.low_save.active and not was_diving:
+		var save := "Pancake" if bump.low_save.pancake else "Dive"
+		show_key(index,"Q | "+save)
+		trace.write("low_save",match_clock,{"player":index,"type":save,"target":frame.to_global(bump.low_save.aim),"flight":flight_kind})
 	animated[index] = true
 	if cpu_fake_dump and not is_human(index) and technique == 2 and not is_finite(bump.touch_time):
 		pose_fake_dump(actor,cue-elapsed)

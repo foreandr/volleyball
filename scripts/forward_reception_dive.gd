@@ -22,7 +22,7 @@ const KEYS := [
 	[1.28,0.00,0.0],
 ]
 
-static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D], clasp: Array[Transform3D], start: Vector3, heading: Vector3, time: float, ball_point: Vector3, release_time: float, pancake := false) -> void:
+static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D], clasp: Array[Transform3D], start: Vector3, heading: Vector3, time: float, ball_point: Vector3, release_time: float, pancake := false, travel_scale := 1.0) -> void:
 	var kick_time := time-WINDUP-LEG_KICK_OFFSET
 	var kick := smoothstep(0.0,0.13,kick_time)*(1.0-smoothstep(0.22,0.22+LEG_LOWER_DURATION,kick_time))
 	# Start later while preserving the reach at the intended ball contact.
@@ -50,6 +50,7 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 		var lunge := smoothstep(0.16,0.39,time)*(1.0-smoothstep(0.0,0.15,since_brace))
 		pitch -= deg_to_rad(29.0)*lunge
 		drop += 0.09*lunge
+	travel *= travel_scale
 	actor.position = start+heading*travel
 	actor.rotation.y = atan2(heading.x,heading.z)
 	var pose := ready.duplicate()

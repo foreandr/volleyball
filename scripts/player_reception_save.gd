@@ -14,11 +14,13 @@ var heading: Vector3
 var contact_time: float
 var start_time: float
 var start_yaw: float
+var travel_scale := 1.0
+var entry_blend := ENTRY_BLEND
 var entry_pose: Array[Transform3D] = []
 var ready: Array[Transform3D] = []
 var clasp: Array[Transform3D] = []
 
-func plan(actor: Node3D, path: Callable, time: float, end: float, clip: Animation) -> bool:
+func plan(actor: Node3D, path: Callable, time: float, end: float, clip: Animation, quick_save := false) -> bool:
 	if active: return true
 	var lookahead := minf(time+Dive.WINDUP,end)
 	if lookahead <= time: return false
@@ -34,15 +36,15 @@ func plan(actor: Node3D, path: Callable, time: float, end: float, clip: Animatio
 			var point: Vector3 = path.call(middle)
 			if point.y > height: low = middle
 			else: high = middle
-		if high-time < MIN_WINDUP: continue
+		if high-time < (0.085 if quick_save else MIN_WINDUP): continue
 		var point: Vector3 = path.call(high)
 		var offset := (point-actor.position).slide(Vector3.UP)
 		var distance := offset.length()
-		var minimum := 1.80 if low_save else 1.28
+		var minimum := (0.58 if low_save else 0.72) if quick_save else (1.80 if low_save else 1.28)
 		var toward_speed := (first-point).dot(offset.normalized())/maxf(high-time,0.001)
 		var extra := clampf(toward_speed*0.035,0.0,0.32)
 		var maximum := (2.55 if low_save else 1.88)+extra
-		if distance < minimum or distance > maximum or offset.normalized().dot(actor.basis.z)<0.62: continue
+		if distance < minimum or distance > maximum or offset.normalized().dot(actor.basis.z)<(0.30 if quick_save else 0.62): continue
 		pancake = low_save
 		active = true
 		aim = point
@@ -51,6 +53,8 @@ func plan(actor: Node3D, path: Callable, time: float, end: float, clip: Animatio
 		contact_time = high
 		start_time = time
 		start_yaw = actor.rotation.y
+		travel_scale = clampf((distance-0.40)/(1.22 if low_save else 0.74),0.18,1.18) if quick_save else 1.0
+		entry_blend = 0.075 if quick_save else ENTRY_BLEND
 		entry_pose.clear()
 		var rig: Skeleton3D = actor.skeleton
 		for bone in rig.get_bone_count(): entry_pose.append(rig.get_bone_pose(bone))
@@ -63,8 +67,8 @@ func sample(actor: Node3D, time: float, release: float) -> void:
 	var pose_time := Dive.WINDUP+(time-contact_time)
 	if time < contact_time:
 		pose_time = Dive.WINDUP*clampf(inverse_lerp(start_time,contact_time,time),0.0,1.0)
-	actor.pose_reception_dive(ready,clasp,start,heading,pose_time,aim,release-contact_time+Dive.WINDUP,pancake)
-	var entry_weight := smoothstep(0.0,minf(ENTRY_BLEND,contact_time-start_time),time-start_time)
+	actor.pose_reception_dive(ready,clasp,start,heading,pose_time,aim,release-contact_time+Dive.WINDUP,pancake,travel_scale)
+	var entry_weight := smoothstep(0.0,minf(entry_blend,contact_time-start_time),time-start_time)
 	if entry_weight < 1.0:
 		var rig: Skeleton3D = actor.skeleton
 		actor.rotation.y = lerp_angle(start_yaw,actor.rotation.y,entry_weight)

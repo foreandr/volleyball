@@ -55,6 +55,7 @@ var grade := Timing.Grade.WAITING
 var pressed_at := -INF
 var low_save := LowSave.new()
 var previous_dig_pose := PackedVector3Array()
+var quick_low_save := false
 var pose_started_at := -INF
 var cone: MeshInstance3D
 var contact_check := {}
@@ -380,7 +381,8 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 		var start_dig := strict_dig and (not hand_setting or time >= dig_cue-0.19)
 		if not is_finite(pose_started_at) and (start_dig or progress >= 1.0-PLATFORM_PREP_TIME/APPROACH_TIME):
 			pose_started_at = maxf(pressed_at,time-delta)
-		if allow_auto_dive and not hand_setting and not setter_jumping and reach.is_empty(): low_save.plan(setter,path,time,end,clip)
+		if allow_auto_dive and not hand_setting and not setter_jumping and (reach.is_empty() or quick_low_save):
+			low_save.plan(setter,path,time,end,clip,quick_low_save)
 	var elapsed := time-pose_started_at
 	var striking := attempted and grade == Timing.Grade.WAITING and (low_save.active or is_finite(pose_started_at)) and (time < end or (strict_dig and previous < end)) and (not catch_only or catch_airborne)
 	if striking:
