@@ -52,6 +52,7 @@ func run_match(match_seed: int, review_point: int, output_dir: String) -> Dictio
 	var counts := {}
 	var rallies := []
 	var review_frames := []
+	var review_deadline := INF
 	var previous_flight := -1
 	var previous_rally := 0
 	var rally_started := 0.0
@@ -91,8 +92,13 @@ func run_match(match_seed: int, review_point: int, output_dir: String) -> Dictio
 			minimum_gap = INF
 			rally_started = game.match_clock
 			if review_point == game.rallies and not review_frames.is_empty():
+				review_deadline = game.match_clock+clampf(game.bounce_end+0.12,0.45,1.60)
+		if is_finite(review_deadline):
+			review_frames.append(game.replay.capture(game))
+			if game.match_clock >= review_deadline or game.phase == game.Phase.READY:
 				await render_review(page,game,review_frames,output_dir,match_seed,review_point)
-		if game.phase == game.Phase.FINISHED: break
+				review_deadline = INF
+		if game.phase == game.Phase.FINISHED and not is_finite(review_deadline): break
 	return {"seed":match_seed,"score":game.score.duplicate(),"finished":game.phase == game.Phase.FINISHED,
 		"counts":counts,"rallies":rallies,"review_flags":flags}
 
