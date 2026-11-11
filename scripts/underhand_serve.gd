@@ -4,10 +4,10 @@ const HandPose = preload("res://scripts/hand_setting_pose.gd")
 const BallPreview = preload("res://scripts/animation_ball_preview.gd")
 const Net = preload("res://scripts/net_collision.gd")
 const Flight = preload("res://scripts/pass_flight.gd")
-const START := Vector3(0.0,0.04,-5.95)
+const START := Vector3(0.0,0.04,-6.20)
 const TARGET := Vector3(0.0,Flight.FLOOR,10.5)
 const CONTACT_TIME := 0.55
-const STEP_DISTANCE := 0.70
+const STEP_DISTANCE := 0.98
 const PREVIEW_DOTS := 42
 
 var player: Node3D
@@ -150,21 +150,21 @@ func pose(time: float) -> void:
 	var scale_: float = rig.global_basis.get_scale().y
 	for side in ["l","r"]:
 		var foot: Vector3 = foot_starts[side]
-		if side == "l": foot += Vector3.BACK*STEP_DISTANCE*step+Vector3.UP*0.11*sin(PI*step)
+		if side == "l": foot += Vector3.BACK*STEP_DISTANCE*step+Vector3.UP*0.15*sin(PI*step)
 		author.limb(bones,"thigh_"+side,"calf_"+side,"foot_"+side,rig.to_local(foot),Vector3(0.1 if side == "l" else -0.1,0.2,1.0))
 	var back := smoothstep(0.0,0.32,time)*(1.0-smoothstep(0.32,CONTACT_TIME,time))
 	var follow := smoothstep(CONTACT_TIME,0.78,time)*(1.0-smoothstep(0.78,1.22,time))
 	var right_shoulder: Vector3 = author.point(bones,"upperarm_r")
 	var left_shoulder: Vector3 = author.point(bones,"upperarm_l")
-	var right_wrist := right_shoulder+Vector3(-0.055-0.08*back,-0.59+0.34*follow,0.015-0.36*back+0.51*follow)/scale_
-	var left_wrist := left_shoulder+Vector3(-0.13,-0.40,0.38)/scale_
+	var right_wrist := right_shoulder+Vector3(-0.055-0.08*back,-0.59+0.28*back+0.34*follow,0.015-0.66*back+0.51*follow)/scale_
+	var left_wrist := Vector3(right_shoulder.x,left_shoulder.y,left_shoulder.z)+Vector3(-0.015,-0.27,0.29)/scale_
 	var hold := 1.0-smoothstep(CONTACT_TIME,0.85,time)
 	var left_ready: Vector3 = author.point(bones,"hand_l")
 	author.limb(bones,"upperarm_l","lowerarm_l","hand_l",left_ready.lerp(left_wrist,hold),Vector3(0.65,-0.6,0.15))
 	var left_basis: Transform3D = author.world_pose(bones,rig.find_bone("hand_l"))
 	var fingers: Vector3 = author.point(bones,"middle_01_l")-left_basis.origin
 	var palm_width: Vector3 = author.point(bones,"index_01_l")-author.point(bones,"pinky_01_l")
-	var palm_up := HandPose.hand_basis(Vector3.BACK,Vector3.RIGHT)*HandPose.hand_basis(fingers,palm_width).inverse()*left_basis.basis
+	var palm_up := HandPose.hand_basis(Vector3(0.0,0.10,1.0),Vector3.LEFT)*HandPose.hand_basis(fingers,palm_width).inverse()*left_basis.basis
 	author.set_world_basis(bones,"hand_l",left_basis.basis.slerp(palm_up,hold))
 	for digit in ["thumb","index","middle","ring","pinky"]:
 		for joint in ["01","02","03"]:
