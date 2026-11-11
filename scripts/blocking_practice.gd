@@ -4,7 +4,9 @@ const BLOCK_START := Vector3(0.0,0.04,3.25)
 const BLOCK_LOAD := 0.16
 const BLOCK_AIR := 0.86
 const BLOCK_HEIGHT := 1.12
+const SHOT_LANES := [3.35,0.0,-3.35]
 
+var next_shot_lane := 0
 var blocker: Node3D
 var blocker_start: Transform3D
 var blocker_animation_mode: int
@@ -61,7 +63,8 @@ func reset_feed() -> void:
 	ball.position = pass_origin
 	bump.hide()
 	region.hide()
-	aim_swing(Vector3(0.0,Flight.FLOOR,10.5))
+	aim_swing(Vector3(SHOT_LANES[next_shot_lane],Flight.FLOOR,10.5))
+	next_shot_lane = (next_shot_lane+1)%SHOT_LANES.size()
 	swing_target.hide()
 	approach_set_touched_at = clock
 	status.text = "Time your jump"
