@@ -46,7 +46,13 @@ replay_speed=0.5
 "@ | Set-Content -LiteralPath (Join-Path $preferences 'match_settings.cfg')
     try {
         if (-not (Test-Path (Join-Path $Project '.godot/global_script_class_cache.cfg'))) {
+            $originalStatus = @(Invoke-Git -C $Project status --porcelain)
             $import = Start-Process -FilePath $GodotPath -ArgumentList @('--headless','--editor','--import','--path',('"' + $Project + '"')) -WindowStyle Hidden -Wait -PassThru -RedirectStandardOutput (Join-Path $output 'import.txt') -RedirectStandardError (Join-Path $output 'import-errors.txt')
+            $importChanges = @(Invoke-Git -C $Project status --porcelain | Where-Object { $_ -notin $originalStatus })
+            $imports = @($importChanges | Where-Object { $_ -match '^ M .*\.import$' } | ForEach-Object { $_.Substring(3) })
+            $uids = @($importChanges | Where-Object { $_ -match '^\?\? [a-zA-Z0-9_./-]+\.gd\.uid$' } | ForEach-Object { $_.Substring(3) })
+            if ($imports.Count) { Invoke-Git -C $Project restore -- $imports }
+            foreach ($uid in $uids) { Remove-Item -LiteralPath (Join-Path $Project $uid) }
             if ($import.ExitCode -ne 0) { throw "Godot import failed. See $output." }
         }
         $arguments = @('--path',('"' + $Project + '"'),'--script',('"' + $runner + '"'),'--',('"' + $Result + '"'),$Seed,$Count,$ReviewPoint)
@@ -130,16 +136,45 @@ Invoke-Git merge-base --is-ancestor $entry.base $revision
 
 if ($Action -eq 'Accept') {
     if ($entry.status -ne 'pending' -or $entry.candidate -ne $revision) { throw 'Review this exact revision before accepting.' }
-    if ((Invoke-Git status --porcelain) -or (Invoke-Git rev-parse HEAD) -ne $entry.base) {
-        throw 'The live branch has changed. Create a new proposal from the current build and review it again.'
+    if (Invoke-Git status --porcelain) { throw 'Finish or save the local edits before accepting.' }
+    $live = Invoke-Git rev-parse HEAD
+    if ($live -eq $entry.base) {
+        Invoke-Git merge --ff-only $revision
+    } else {
+        $changed = @(Invoke-Git diff --name-only $entry.base $live)
+        $overlap = @(Invoke-Git diff --name-only $entry.base $revision | Where-Object { $_ -in $changed })
+        if ($overlap.Count) { throw 'The live build changed in the same files. Run Review again to test this proposal against the latest build.' }
+        Invoke-Git cherry-pick "$($entry.base)..$revision"
     }
-    Invoke-Git merge --ff-only $revision
     $entry.status = 'accepted'
     if ($Note) { $entry.note = $Note }
     Write-Entry
     return
 }
 
+if ($Action -eq 'Review') {
+    $live = Invoke-Git rev-parse HEAD
+    $changed = @(Invoke-Git diff --name-only $entry.base $live)
+    $overlap = @(Invoke-Git diff --name-only $entry.base $revision | Where-Object { $_ -in $changed })
+    if ($live -ne $entry.base -and $overlap.Count) {
+        try {
+            Invoke-Git -C $candidate rebase --onto $live $entry.base
+        } catch {
+            Invoke-Git -C $candidate rebase --abort
+            throw 'The proposal conflicts with the live build and needs to be updated before review.'
+        }
+        $entry.base = $live
+        $entry.candidate = $null
+        $entry.status = 'draft'
+        $revision = Invoke-Git -C $candidate rev-parse HEAD
+        Write-Entry
+    }
+}
+if (Test-Path -LiteralPath $baseline) {
+    if ((Invoke-Git -C $baseline rev-parse HEAD) -ne $entry.base) {
+        $baseline = Join-Path $directory ('baseline-' + $entry.base.Substring(0,12))
+    }
+}
 if (-not (Test-Path -LiteralPath $baseline)) { Invoke-Git worktree add --detach $baseline $entry.base }
 if ($Action -eq 'Clip') {
     $clip = Join-Path $directory "clips/seed-$Seed-point-$Point"
