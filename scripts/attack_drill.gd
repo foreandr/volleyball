@@ -677,8 +677,11 @@ func trace_snapshot(time: float) -> Dictionary:
 		"reach":bump.reach,"reach_step":bump.reach_step,"rear_setup":bump.rear_setup,"reach_progress":bump.reach_progress,
 	}
 
+func serve_flight_point(time: float) -> Vector3:
+	return flight_point(serve_origin,serve_velocity,time)
+
 func play_serve(time: float, previous: float, delta: float) -> void:
-	var path := func(t): return flight_point(serve_origin,serve_velocity,t)
+	var path := serve_flight_point
 	var end := Flight.landing_time(serve_origin,serve_velocity)
 	ball.position = path.call(minf(time,end))
 	var cue := receive_cue_time()

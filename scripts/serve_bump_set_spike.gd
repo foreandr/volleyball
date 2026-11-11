@@ -216,6 +216,9 @@ func draw_set_preview(origin: Vector3, launch: Vector3) -> void:
 		set_preview.surface_add_vertex(flight_point(origin,launch,duration*(segment+0.55)/28.0))
 	set_preview.surface_end()
 
+func cpu_set_target_depth() -> float:
+	return Net.NET_Z-RALLY_SET_NET_CLEARANCE
+
 func cpu_set_launch(origin: Vector3) -> Vector3:
 	var apex := cpu_set_apex()
 	if partner_receiving and manual_set_target.is_finite():
@@ -224,7 +227,7 @@ func cpu_set_launch(origin: Vector3) -> Vector3:
 		var vertical_launch := Vector3.UP*sqrt(2.0*Flight.GRAVITY*(apex-origin.y))
 		var contact := descending_time(origin,vertical_launch,RALLY_SET_CONTACT_HEIGHT)
 		var floor_time := Flight.landing_time(origin,vertical_launch)
-		var target_depth := Net.NET_Z-RALLY_SET_NET_CLEARANCE
+		var target_depth := cpu_set_target_depth()
 		var safe_floor := Net.NET_Z-0.16
 		rally_set_target.z = minf(target_depth,lerpf(origin.z,safe_floor,contact/floor_time))
 	region.position = rally_set_target

@@ -20,29 +20,11 @@ func recovery_end() -> float:
 func can_run_after_contact() -> bool:
 	return is_finite(contact_clock) and swing_time >= LAND
 
-func prepare_serve_pose(time: float, _plant: float, _distance: float, _sink: float, _step_begin := 0.14, _step_end := 0.50, _carry := 0.55, _rear_step := 0.0) -> Array:
-	var left_lead := smoothstep(0.06,0.24,time)
-	var right_step := smoothstep(0.26,0.46,time)
-	var left_plant := smoothstep(0.46,0.61,time)
-	var flight := clampf((time-TAKEOFF)/(LAND-TAKEOFF),0.0,1.0)
-	var load := smoothstep(0.42,0.57,time)*(1.0-smoothstep(0.57,TAKEOFF,time))
-	var lift := 4.0*0.69*flight*(1.0-flight)
-	var drift := 0.58*flight
-	var ground_travel := 0.30*left_lead+0.41*right_step+0.43*left_plant
-	player.position = serve_start+forward*(ground_travel+drift)+Vector3.UP*(lift-0.14*load)
-	player.animator.seek(0.0,true)
-	var rig: Skeleton3D = player.skeleton
-	var author: RefCounted = player.get_pose_author()
-	var bones: Array = []
-	for bone in rig.get_bone_count(): bones.append(rig.get_bone_pose(bone))
-	for side in ["l","r"]:
-		var left: bool = side == "l"
-		var foot: Vector3 = foot_starts[side]
-		var advance := 0.49*left_lead+0.93*left_plant if left else 1.12*right_step
-		var step_height := 0.13*(sin(PI*left_lead)+sin(PI*left_plant)) if left else 0.15*sin(PI*right_step)
-		foot += forward*(advance+drift)+Vector3.UP*(lift+step_height+0.10*sin(PI*flight))
-		author.limb(bones,"thigh_"+side,"calf_"+side,"foot_"+side,rig.to_local(foot),Vector3(0.12 if left else -0.12,0.2,1.0))
-	return bones
+func float_body_scale() -> float:
+	return 1.0
+
+func float_step_pose(time: float) -> Array:
+	return float_approach(time,TAKEOFF,LAND,0.69,1.0)
 
 func toss_curve_height() -> float:
 	return 0.49

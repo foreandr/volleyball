@@ -29,12 +29,13 @@ var contact_clock := INF
 var origin: Vector3
 var velocity: Vector3
 var landing_time := 0.0
+var planned_duration := 0.0
 var target := TARGET
 var apex := 5.6
 var foot_starts: Dictionary = {}
 
 func aim(point: Vector3) -> void:
-	target = Vector3(clampf(point.x,-4.35,4.35),Flight.FLOOR,clampf(point.z,4.4,12.85))
+	target = Vector3(point.x,Flight.FLOOR,maxf(point.z,4.4))
 	aim_ring.position = Vector3(target.x,0.062,target.z)
 	update_path_preview()
 
@@ -121,7 +122,7 @@ func update_path_preview() -> void:
 	var launch := launch_velocity(preview_origin,duration)
 	for i in PREVIEW_DOTS:
 		var time := duration*(i+1)/float(PREVIEW_DOTS)
-		var point := preview_origin+launch*time+Vector3.DOWN*0.5*Flight.GRAVITY*time*time
+		var point := preview_origin+launch*time+Vector3.DOWN*0.5*Flight.GRAVITY*time*time+serve_curve_offset(time,duration)
 		path_preview.multimesh.set_instance_transform(i,Transform3D(Basis.IDENTITY,point))
 
 func flight_duration(start: Vector3) -> float:
@@ -186,6 +187,7 @@ func step(delta: float) -> void:
 		contact_clock = elapsed-(swing_time-contact)/swing_rate
 		origin = ball.position
 		landing_time = flight_duration(origin)
+		planned_duration = landing_time
 		velocity = launch_velocity(origin,landing_time)
 		net_hit = Net.first_hit(flight_point,0.0,landing_time)
 		if not net_hit.is_empty(): landing_time = net_hit.end_time
@@ -195,14 +197,17 @@ func step(delta: float) -> void:
 		ball.position = Net.after_hit(net_hit,time) if not net_hit.is_empty() and time >= net_hit.time else flight_point(time)
 	if flight_time >= landing_time+0.55 and not external_rally: reset()
 
-func flight_point(time: float) -> Vector3:
-	return origin+velocity*time+Vector3.DOWN*0.5*Flight.GRAVITY*time*time
+func serve_curve_offset(_time: float, _duration: float) -> Vector3:
+	return Vector3.ZERO
 
-func prepare_serve_pose(time: float, plant: float, distance: float, sink: float, step_begin := 0.14, step_end := 0.50, carry := 0.55, rear_step := 0.0) -> Array:
-	var step := smoothstep(step_begin,step_end,time)
-	var transfer := smoothstep(0.20,plant,time)
-	player.position = serve_start+forward*distance*carry*transfer
-	player.position.y -= sink*transfer*(1.0-smoothstep(plant,plant+0.50,time))
+func flight_point(time: float) -> Vector3:
+	return origin+velocity*time+Vector3.DOWN*0.5*Flight.GRAVITY*time*time+serve_curve_offset(time,planned_duration)
+
+func prepare_serve_pose(time: float) -> Array:
+	var step := smoothstep(0.14,0.50,time)
+	var transfer := smoothstep(0.20,CONTACT_TIME,time)
+	player.position = serve_start+forward*STEP_DISTANCE*0.55*transfer
+	player.position.y -= 0.12*transfer*(1.0-smoothstep(CONTACT_TIME,1.05,time))
 	player.animator.seek(0.0,true)
 	var rig: Skeleton3D = player.skeleton
 	var author: RefCounted = player.get_pose_author()
@@ -210,16 +215,13 @@ func prepare_serve_pose(time: float, plant: float, distance: float, sink: float,
 	for bone in rig.get_bone_count(): bones.append(rig.get_bone_pose(bone))
 	for side in ["l","r"]:
 		var foot: Vector3 = foot_starts[side]
-		if side == "l": foot += forward*distance*step+Vector3.UP*0.15*sin(PI*step)
-		elif rear_step > 0.0:
-			var recovery := smoothstep(plant-0.13,plant+0.26,time)
-			foot += forward*rear_step*recovery+Vector3.UP*0.08*sin(PI*recovery)
+		if side == "l": foot += forward*STEP_DISTANCE*step+Vector3.UP*0.15*sin(PI*step)
 		author.limb(bones,"thigh_"+side,"calf_"+side,"foot_"+side,rig.to_local(foot),Vector3(0.1 if side == "l" else -0.1,0.2,1.0))
 	return bones
 
 func pose(time: float) -> void:
 	var transfer := smoothstep(0.20,CONTACT_TIME,time)
-	var bones := prepare_serve_pose(time,CONTACT_TIME,STEP_DISTANCE,0.12)
+	var bones := prepare_serve_pose(time)
 	var rig: Skeleton3D = player.skeleton
 	var author: RefCounted = player.get_pose_author()
 	var scale_: float = rig.global_basis.get_scale().y

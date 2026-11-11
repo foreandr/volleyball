@@ -1290,13 +1290,18 @@ func step_underhand_rally(delta: float) -> void:
 	var was_ready: bool = underhand_serve.elapsed < 0.0
 	underhand_serve.step(delta)
 	if is_finite(underhand_serve.contact_clock) and not underhand_serve.external_rally and underhand_serve.net_hit.is_empty():
-		underhand_serve.external_rally = true
-		underhand_serve.ball.hide()
-		serve_opponents.receive_serve(underhand_serve.to_global(underhand_serve.origin),underhand_serve.global_basis*underhand_serve.velocity)
+		var target: Vector3 = underhand_serve.flight_point(underhand_serve.planned_duration)
+		if absf(target.x) <= 4.5001 and target.z <= 13.0001:
+			underhand_serve.external_rally = true
+			underhand_serve.ball.hide()
+			serve_opponents.receive_serve(underhand_serve.to_global(underhand_serve.origin),underhand_serve.global_basis*underhand_serve.velocity,underhand_serve)
+		elif underhand_serve.elapsed >= underhand_serve.contact_clock+underhand_serve.landing_time:
+			serving_rally_status.text = "Serve out"
 	if underhand_serve.external_rally:
 		serve_opponents.tick_opponents(delta)
 		if not serve_opponents.rally_active: underhand_serve.reset()
 	if not was_ready and underhand_serve.elapsed < 0.0:
+		serving_rally_status.text = "Space to serve"
 		serving_position = underhand_serve.serve_start
 		serving_running = false
 

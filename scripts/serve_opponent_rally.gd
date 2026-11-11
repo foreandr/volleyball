@@ -6,6 +6,7 @@ var far_partner: Node3D
 const TEAMMATE_READY := Vector3(2.35,0.04,10.25)
 var rally_active := false
 var incoming_cue := 0.0
+var serve_source: Node3D
 var receive_with_hands := false
 var rally_number := 0
 
@@ -42,14 +43,15 @@ func reset_feed() -> void:
 	approach_rings.hide()
 	status.text = "Space to serve"
 
-func receive_serve(world_origin: Vector3, world_velocity: Vector3) -> void:
+func receive_serve(world_origin: Vector3, world_velocity: Vector3, source: Node3D = null) -> void:
+	serve_source = source
 	rally_number += 1
 	serve_origin = to_local(world_origin)
 	serve_velocity = global_basis.inverse()*world_velocity
 	incoming_cue = descending_time(serve_origin,serve_velocity,1.13)
 	receive_with_hands = rally_number%3 == 2
 	if receive_with_hands: incoming_cue = descending_time(serve_origin,serve_velocity,2.05)
-	var catch_point := flight_point(serve_origin,serve_velocity,incoming_cue).slide(Vector3.UP)
+	var catch_point := serve_flight_point(incoming_cue).slide(Vector3.UP)
 	if catch_point.distance_squared_to(receiver.position.slide(Vector3.UP)) < catch_point.distance_squared_to(passer.position.slide(Vector3.UP)):
 		var other := receiver
 		receiver = passer
@@ -71,19 +73,29 @@ func receive_serve(world_origin: Vector3, world_velocity: Vector3) -> void:
 	ball.show()
 	status.text = "Opponents receiving"
 
+func serve_flight_point(time: float) -> Vector3:
+	var point := super.serve_flight_point(time)
+	if is_instance_valid(serve_source):
+		var drift: Vector3 = serve_source.serve_curve_offset(time,serve_source.planned_duration)
+		point += global_basis.inverse()*serve_source.global_basis*drift
+	return point
+
 func receive_cue_time() -> float:
 	return incoming_cue
 
+func cpu_set_target_depth() -> float:
+	return super.cpu_set_target_depth()-0.60
+
 func call_rally_set(_point: Vector3) -> void:
 	var lane: float = [-3.3,0.0,3.3][rally_number%3]
-	rally_set_target = Vector3(lane,PIN.y,Net.NET_Z-RALLY_SET_NET_CLEARANCE)
+	rally_set_target = Vector3(lane,PIN.y,cpu_set_target_depth())
 
 func tick_opponents(delta: float) -> void:
 	if not rally_active: return
 	trace_input = Vector2.ZERO
 	if stage == Stage.SERVE:
 		var time := clock-stage_start
-		var point := flight_point(serve_origin,serve_velocity,incoming_cue)
+		var point := serve_flight_point(incoming_cue)
 		var incoming := (serve_origin-point).slide(Vector3.UP).normalized()
 		var offset := 0.40 if receive_with_hands else 0.50
 		if not bump.low_save.active:

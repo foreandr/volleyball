@@ -23,17 +23,68 @@ func reset() -> void:
 	toss_origin = ball.position
 	pose(0.0)
 
+func front_start_limit() -> float:
+	return -6.55
+
+func float_body_scale() -> float:
+	return 0.73
+
+func serve_curve_offset(time: float, duration: float) -> Vector3:
+	var progress := clampf(time/maxf(duration,0.001),0.0,1.0)
+	var envelope := sin(PI*progress)
+	var flutter := 0.29*sin(TAU*(1.85*progress+0.23*progress*progress))*envelope
+	var drift := 0.10*sin(TAU*2.8*progress)*envelope
+	return Vector3(flutter,0.0,drift)
+
+func float_approach(time: float, plant_time: float, land_time: float, jump_height: float, stride_scale: float) -> Array:
+	var phase := time/plant_time
+	var left_lead := smoothstep(0.09,0.38,phase)
+	var right_step := smoothstep(0.40,0.72,phase)
+	var left_plant := smoothstep(0.72,0.96,phase)
+	var flight := clampf((time-plant_time)/(land_time-plant_time),0.0,1.0) if jump_height > 0.0 else 0.0
+	var load := smoothstep(0.65,0.90,phase)*(1.0-smoothstep(0.90,1.04,phase))
+	var lift := 4.0*jump_height*flight*(1.0-flight)
+	var drift := 0.58*flight
+	var recovery := smoothstep(contact_time()-0.02,contact_time()+0.31,time)
+	var ground_travel := (0.30*left_lead+0.41*right_step+0.43*left_plant)*stride_scale
+	player.position = serve_start+forward*(ground_travel+drift+(0.20*recovery if jump_height == 0.0 else 0.0))+Vector3.UP*(lift-0.13*load)
+	player.animator.seek(0.0,true)
+	var rig: Skeleton3D = player.skeleton
+	var author: RefCounted = player.get_pose_author()
+	var bones: Array = []
+	for bone in rig.get_bone_count(): bones.append(rig.get_bone_pose(bone))
+	var coil := smoothstep(0.25,contact_time()-0.23,time)
+	var unwind := smoothstep(contact_time()-0.22,contact_time(),time)
+	var settle := smoothstep(contact_time(),contact_time()+0.36,time)
+	var hip_turn := (-0.40*coil*(1.0-unwind)+0.44*unwind*(1.0-settle))*float_body_scale()
+	author.rotate_world(bones,"pelvis",Vector3.UP,hip_turn)
+	for side in ["l","r"]:
+		var left: bool = side == "l"
+		var foot: Vector3 = foot_starts[side]
+		var advance := (0.49*left_lead+0.93*left_plant if left else 1.12*right_step)*stride_scale
+		var step_height := 0.13*(sin(PI*left_lead)+sin(PI*left_plant)) if left else 0.15*sin(PI*right_step)
+		if not left:
+			var kick := sin(PI*flight) if jump_height > 0.0 else sin(PI*recovery)*0.45
+			advance += (0.38*recovery if jump_height == 0.0 else 0.0)-0.33*kick
+			step_height += 0.25*kick
+		foot += forward*(advance+drift)+Vector3.UP*(lift+step_height+0.09*sin(PI*flight))
+		author.limb(bones,"thigh_"+side,"calf_"+side,"foot_"+side,rig.to_local(foot),Vector3(0.12 if left else -0.12,0.2,1.0))
+	return bones
+
+func float_step_pose(time: float) -> Array:
+	return float_approach(time,0.70,1.20,0.0,0.78)
+
 func pose(time: float) -> void:
 	var contact := contact_time()
 	var toss_release := toss_release_time()
-	var bones := prepare_serve_pose(time,0.88,1.02,0.075,0.07,0.52,0.91,0.48)
+	var bones := float_step_pose(time)
 	var rig: Skeleton3D = player.skeleton
 	var author: RefCounted = player.get_pose_author()
 	var scale_: float = rig.global_basis.get_scale().y
 	var windup := smoothstep(0.09,contact-0.21,time)
 	var drive := smoothstep(contact-0.22,contact,time)
 	var follow := smoothstep(contact,contact+0.40,time)
-	author.rotate_world(bones,"spine_03",Vector3.UP,-0.34*windup*(1.0-drive)+0.30*drive*(1.0-0.60*follow))
+	author.rotate_world(bones,"spine_03",Vector3.UP,(-0.48*windup*(1.0-drive)+0.39*drive*(1.0-0.60*follow))*float_body_scale())
 	author.rotate_world(bones,"spine_02",Vector3.RIGHT,-0.17*windup*(1.0-drive)+0.22*follow)
 	var left_shoulder: Vector3 = author.point(bones,"upperarm_l")
 	var right_shoulder: Vector3 = author.point(bones,"upperarm_r")
@@ -44,11 +95,11 @@ func pose(time: float) -> void:
 	author.limb(bones,"upperarm_l","lowerarm_l","hand_l",left_wrist.lerp(left_ready,left_drop),Vector3(0.30,-0.9,-0.15))
 	orient_palm(bones,rig,author,"l",Vector3.BACK,Vector3.LEFT,1.0-left_drop)
 	var low_right := right_shoulder+Vector3(-0.08,-0.53,0.03)/scale_
-	var drawn_right := right_shoulder+Vector3(-0.24,0.34,-0.35)/scale_
+	var drawn_right := right_shoulder+Vector3(-0.24,0.34,-0.47)/scale_
 	var contact_right := right_shoulder+Vector3(-0.045,0.53,0.28)/scale_
 	var follow_right := right_shoulder+Vector3(0.36,-0.42,0.30)/scale_
 	var right_wrist := low_right.lerp(drawn_right,windup).lerp(contact_right,drive).lerp(follow_right,follow)
-	author.limb(bones,"upperarm_r","lowerarm_r","hand_r",right_wrist,Vector3(-0.85,0.05,-0.25).lerp(Vector3(-0.35,-0.3,0.6),drive),1.0,176.0)
+	author.limb(bones,"upperarm_r","lowerarm_r","hand_r",right_wrist,Vector3(-0.62,0.12,-0.91).lerp(Vector3(-0.35,-0.3,0.6),drive),1.0,176.0)
 	orient_palm(bones,rig,author,"r",Vector3(0.0,1.0,0.10),Vector3.RIGHT,windup*(1.0-0.75*follow))
 	prepare_toss_hands(bones,rig,author,time)
 	for bone in rig.get_bone_count(): rig.set_bone_pose_rotation(bone,bones[bone].basis.get_rotation_quaternion())
