@@ -277,7 +277,7 @@ Scroll to set pass height",16)
 		preview.grab_focus()
 		return
 	if category == "Serving":
-		drill_status = label("Space to serve\nMove cursor to aim\nScroll wheel to change arc",16)
+		drill_status = label("Space to serve\nMove cursor to aim\nMiddle drag to rotate\nScroll to zoom  |  Shift + scroll for arc",16)
 		content.add_child(drill_status)
 	var list := ItemList.new()
 	list.name = "AnimationList"
@@ -587,6 +587,9 @@ func refresh_type() -> void:
 		underhand_serve = preload("res://scripts/underhand_serve.gd").new()
 		preview_player.get_parent().add_child(underhand_serve)
 		underhand_serve.configure(preview_player)
+		setting_camera_focus = SETTING_CAMERA_FOCUS
+		preview_camera.position = Vector3(0.0,7.5,-11.2)
+		preview_camera.look_at(setting_camera_focus)
 		preview.grab_focus()
 		return
 	animation_list.clear()
@@ -1073,10 +1076,15 @@ func begin_approach_setup_drag(event: InputEventMouseButton) -> bool:
 func handle_preview_input(event: InputEvent) -> void:
 	if is_instance_valid(underhand_serve):
 		if event is InputEventMouseMotion:
-			var point: Variant = attack_floor_point(event.position)
-			if point is Vector3: underhand_serve.aim(point)
+			if event.button_mask & MOUSE_BUTTON_MASK_MIDDLE:
+				orbit_setting_camera(event.relative)
+			else:
+				var point: Variant = attack_floor_point(event.position)
+				if point is Vector3: underhand_serve.aim(point)
 		elif event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_WHEEL_UP,MOUSE_BUTTON_WHEEL_DOWN]:
-			underhand_serve.change_arc(0.35 if event.button_index == MOUSE_BUTTON_WHEEL_UP else -0.35)
+			var wheel := 1.0 if event.button_index == MOUSE_BUTTON_WHEEL_UP else -1.0
+			if event.shift_pressed: underhand_serve.change_arc(wheel*0.35)
+			else: zoom_attack_camera(wheel)
 			preview.accept_event()
 		return
 	if is_instance_valid(setting_drill):
@@ -1159,7 +1167,7 @@ func zoom_attack_camera(wheel: float) -> void:
 	var offset := preview_camera.position-setting_camera_focus
 	var distance := clampf(offset.length()*exp(-wheel*0.17),2.8,24.0)
 	var actor_focus := preview_player.position+Vector3.UP*2.0
-	if setting_drill.jump.active:
+	if is_instance_valid(setting_drill) and setting_drill.jump.active:
 		actor_focus = setting_drill.jump.start+Vector3(0.0,2.0,0.45)
 	setting_camera_focus = SETTING_CAMERA_FOCUS.lerp(actor_focus,1.0-smoothstep(4.0,14.0,distance))
 	preview_camera.position = setting_camera_focus+offset.normalized()*distance

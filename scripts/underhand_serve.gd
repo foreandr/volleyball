@@ -7,10 +7,12 @@ const START := Vector3(0.0,0.04,-5.95)
 const TARGET := Vector3(0.0,Flight.FLOOR,10.5)
 const CONTACT_TIME := 0.55
 const STEP_DISTANCE := 0.70
+const PREVIEW_DOTS := 42
 
 var player: Node3D
 var ball: MeshInstance3D
 var aim_ring: MeshInstance3D
+var path_preview: MultiMeshInstance3D
 var net_hit: Dictionary = {}
 var original_transform: Transform3D
 var original_animation_mode: int
@@ -25,9 +27,11 @@ var foot_starts: Dictionary = {}
 func aim(point: Vector3) -> void:
 	target = Vector3(clampf(point.x,-4.35,4.35),Flight.FLOOR,clampf(point.z,4.4,12.85))
 	aim_ring.position = Vector3(target.x,0.062,target.z)
+	update_path_preview()
 
 func change_arc(amount: float) -> void:
 	apex = clampf(apex+amount,3.5,9.0)
+	update_path_preview()
 
 func configure(actor: Node3D) -> void:
 	player = actor
@@ -53,8 +57,25 @@ func configure(actor: Node3D) -> void:
 	marker_style.albedo_color = Color("ffd278")
 	aim_ring.material_override = marker_style
 	add_child(aim_ring)
-	aim(TARGET)
+	path_preview = MultiMeshInstance3D.new()
+	var dots := MultiMesh.new()
+	dots.transform_format = MultiMesh.TRANSFORM_3D
+	var dot := SphereMesh.new()
+	dot.radius = 0.037
+	dot.height = 0.074
+	dot.radial_segments = 8
+	dot.rings = 4
+	var dot_style := StandardMaterial3D.new()
+	dot_style.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	dot_style.albedo_color = Color("64cfff")
+	dot.material = dot_style
+	dots.mesh = dot
+	dots.instance_count = PREVIEW_DOTS
+	path_preview.multimesh = dots
+	path_preview.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(path_preview)
 	reset()
+	aim(TARGET)
 
 func stop() -> void:
 	player.transform = original_transform
@@ -70,7 +91,26 @@ func reset() -> void:
 	var rig: Skeleton3D = player.skeleton
 	for side in ["l","r"]:
 		foot_starts[side] = rig.to_global(rig.get_bone_global_pose(rig.find_bone("foot_"+side)).origin)
+	pose(CONTACT_TIME)
+	preview_origin = ball.position
 	pose(0.0)
+	update_path_preview()
+
+var preview_origin: Vector3
+
+func update_path_preview() -> void:
+	var duration := flight_duration(preview_origin)
+	var launch := launch_velocity(preview_origin,duration)
+	for i in PREVIEW_DOTS:
+		var time := duration*(i+1)/float(PREVIEW_DOTS)
+		var point := preview_origin+launch*time+Vector3.DOWN*0.5*Flight.GRAVITY*time*time
+		path_preview.multimesh.set_instance_transform(i,Transform3D(Basis.IDENTITY,point))
+
+func flight_duration(start: Vector3) -> float:
+	return (sqrt(2.0*Flight.GRAVITY*(apex-start.y))+sqrt(2.0*Flight.GRAVITY*(apex-Flight.FLOOR)))/Flight.GRAVITY
+
+func launch_velocity(start: Vector3, duration: float) -> Vector3:
+	return (target-start).slide(Vector3.UP)/duration+Vector3.UP*sqrt(2.0*Flight.GRAVITY*(apex-start.y))
 
 func serve() -> void:
 	if elapsed >= 0.0: return
@@ -83,9 +123,8 @@ func step(delta: float) -> void:
 	pose(CONTACT_TIME if previous < CONTACT_TIME and elapsed >= CONTACT_TIME else elapsed)
 	if previous < CONTACT_TIME and elapsed >= CONTACT_TIME:
 		origin = ball.position
-		var lift := sqrt(2.0*Flight.GRAVITY*(apex-origin.y))
-		landing_time = (lift+sqrt(2.0*Flight.GRAVITY*(apex-Flight.FLOOR)))/Flight.GRAVITY
-		velocity = (target-origin).slide(Vector3.UP)/landing_time+Vector3.UP*lift
+		landing_time = flight_duration(origin)
+		velocity = launch_velocity(origin,landing_time)
 		net_hit = Net.first_hit(flight_point,0.0,landing_time)
 		if not net_hit.is_empty(): landing_time = net_hit.end_time
 	var flight_time := elapsed-CONTACT_TIME
