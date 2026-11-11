@@ -104,6 +104,7 @@ func reset() -> void:
 	running = false
 	ball.show()
 	net_hit.clear()
+	player.animator.speed_scale = 1.0
 	player.play_action("idle",0.0)
 	player.position = serve_start
 	player.rotation.y = serve_yaw
@@ -144,13 +145,14 @@ func flight_duration(start: Vector3) -> float:
 func launch_velocity(start: Vector3, duration: float) -> Vector3:
 	return (target-start).slide(Vector3.UP)/duration+Vector3.UP*sqrt(2.0*Flight.GRAVITY*(apex-start.y))
 
-func run_to(point: Vector3, yaw: float, delta: float) -> void:
+func run_to(point: Vector3, yaw: float, delta: float, animation_speed := 1.0) -> void:
 	if elapsed < 0.0:
 		preview_origin += point-serve_start
 		serve_start = point
 	else: moved_after_contact = true
 	player.position = point
 	player.rotation.y = rotate_toward(player.rotation.y,yaw,delta*16.0)
+	player.animator.speed_scale = animation_speed
 	player.play_action("run")
 	player.animator.advance(delta)
 	running = true
@@ -163,6 +165,7 @@ func run_to(point: Vector3, yaw: float, delta: float) -> void:
 func settle_run() -> void:
 	if not running: return
 	running = false
+	player.animator.speed_scale = 1.0
 	if elapsed < 0.0: reset()
 	else: player.play_action("idle")
 

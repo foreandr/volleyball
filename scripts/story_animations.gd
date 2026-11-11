@@ -635,6 +635,7 @@ func stop_serving_session() -> void:
 	if selected_category != "Serving" or not is_instance_valid(preview_player): return
 	stop_underhand_serve()
 	preview_player.transform = serving_original_transform
+	preview_player.animator.speed_scale = 1.0
 	preview_player.get_node("DirectionArrows").show()
 	serving_running = false
 
@@ -1372,7 +1373,8 @@ func move_server(direction: Vector2, delta: float) -> void:
 	var after_contact: bool = is_instance_valid(underhand_serve) and underhand_serve.can_run_after_contact()
 	if is_instance_valid(underhand_serve) and underhand_serve.elapsed >= 0.0 and not after_contact: return
 	if after_contact: serving_position = preview_player.position
-	var next := serving_position+Vector3(-direction.x,0.0,direction.y)*4.5*delta
+	var run_speed := 7.0 if after_contact else 5.7
+	var next := serving_position+Vector3(-direction.x,0.0,direction.y)*run_speed*delta
 	next.x = clampf(next.x,-6.5,6.5)
 	var start_limit: float = underhand_serve.front_start_limit() if is_instance_valid(underhand_serve) else -5.20
 	next.z = clampf(next.z,-10.0,3.50 if after_contact else start_limit)
@@ -1382,15 +1384,17 @@ func move_server(direction: Vector2, delta: float) -> void:
 		serving_position = next
 		var yaw := atan2(travel.x,travel.z)
 		if is_instance_valid(underhand_serve):
-			underhand_serve.run_to(next,yaw,delta)
+			underhand_serve.run_to(next,yaw,delta,1.48 if after_contact else 1.26)
 		else:
 			preview_player.position = next
 			preview_player.rotation.y = yaw
+			preview_player.animator.speed_scale = 1.26
 			preview_player.play_action("run")
 	elif serving_running:
 		if is_instance_valid(underhand_serve): underhand_serve.settle_run()
 		else:
 			preview_player.rotation.y = 0.0
+			preview_player.animator.speed_scale = 1.0
 			preview_player.play_action("idle")
 	serving_running = moving
 

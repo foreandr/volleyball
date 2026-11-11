@@ -1,5 +1,8 @@
 extends RefCounted
 const QUICK_STEP_RATE := 1.5
+const SHUFFLE_SPEED := 2.06
+const RUN_SPEED := 5.85
+const SHUFFLE_CLIP_RATE := 1.25
 const Court = preload("res://scripts/preview_court.gd")
 const Stamina = preload("res://scripts/player_stamina.gd")
 const LowSave = preload("res://scripts/player_reception_save.gd")
@@ -514,7 +517,7 @@ func move_player(direction: Vector2, delta: float, track_ball := true, setting_t
 	if setting:
 		setter_step_rate = move_toward(setter_step_rate,QUICK_STEP_RATE*step_rate,delta*7.0)
 		step_rate = setter_step_rate
-	var speed := 4.5 if sprinting else 1.65*step_rate
+	var speed := RUN_SPEED if sprinting else SHUFFLE_SPEED*step_rate
 	if approach_speed > 0.0:
 		speed = approach_speed
 		step_rate = approach_rate
@@ -526,7 +529,7 @@ func move_player(direction: Vector2, delta: float, track_ball := true, setting_t
 	side_steps.sampled = false
 	if shuffle_step:
 		if lateral: shuffle_heading = travel.normalized()
-		var distance_: float = side_steps.advance(step_direction,delta*step_rate)*actor.scale.y
+		var distance_: float = side_steps.advance(step_direction,delta*step_rate*SHUFFLE_CLIP_RATE)*actor.scale.y
 		movement = shuffle_heading*distance_
 	else: side_steps.active = false
 	if setting:
@@ -552,7 +555,7 @@ func move_player(direction: Vector2, delta: float, track_ball := true, setting_t
 		locomotion = action
 		actor.play_action(action)
 	moving = now_moving
-	actor.animator.speed_scale = 1.35 if sprinting else 1.0
+	actor.animator.speed_scale = 1.67 if sprinting else 1.0
 	actor.animator.advance(delta)
 	var local_velocity: Vector3 = actor.basis.inverse()*velocity
 	var model_yaw := atan2(local_velocity.x,local_velocity.z) if sprinting and not drill else 0.0
@@ -561,7 +564,7 @@ func move_player(direction: Vector2, delta: float, track_ball := true, setting_t
 	if shuffle_step or sprinting:
 		footwork.weight = 0
 	else:
-		footwork.step(local_velocity/(speed if approach_speed > 0.0 else 1.65*step_rate) if moving else Vector3.ZERO,delta,step_rate,setting)
+		footwork.step(local_velocity/speed if moving else Vector3.ZERO,delta,step_rate*(1.0 if approach_speed > 0.0 else SHUFFLE_CLIP_RATE),setting)
 	if side_weight>0: side_steps.apply_pose(side_weight)
 	if active: follow_camera()
 
