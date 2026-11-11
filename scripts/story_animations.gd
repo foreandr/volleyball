@@ -25,6 +25,7 @@ var category_buttons: Dictionary = {}
 var selected_category := ""
 var blocking_practice: Node3D
 var defense_active := false
+var demo_match: Node3D
 var blocking_frame: Node3D
 var underhand_serve: Node3D
 var serve_opponents: Node3D
@@ -206,6 +207,7 @@ func set_title(text: String) -> void:
 	if heading: heading.text = text
 
 func show_categories() -> void:
+	stop_demo_match()
 	stop_blocking_practice()
 	stop_serving_session()
 	if is_instance_valid(pass_timing_cue): pass_timing_cue.hide()
@@ -228,10 +230,54 @@ func show_categories() -> void:
 		entry.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		content.add_child(entry)
 		category_buttons[category] = entry
+	var match_button := button("Demo Match | 2v2",start_demo_match)
+	match_button.custom_minimum_size.y = 52
+	content.add_child(match_button)
+
+func start_demo_match() -> void:
+	stop_blocking_practice()
+	stop_serving_session()
+	stop_setting_drill()
+	if player_controls.active: player_controls.set_active(false)
+	if is_instance_valid(ball_preview): ball_preview.stop()
+	reception_review.stop(false)
+	reception_review.hide()
+	right_panel.hide()
+	angle_control.hide()
+	clear_content()
+	set_title("DEMO MATCH")
+	selected_category = "Demo Match"
+	var board := label("",26)
+	content.add_child(board)
+	var status := label("",17)
+	status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	content.add_child(status)
+	content.add_child(label("WASD to move | Shift to sprint\nQ forearms | E hands | F jump set\nSpace serves, attacks, or blocks\nMouse aims | Scroll changes height",16))
+	var styles := OptionButton.new()
+	for title in ["Underhand","Standing float","Jump float","Spin serve"]: styles.add_item(title)
+	styles.focus_mode = Control.FOCUS_NONE
+	content.add_child(styles)
+	demo_match = preload("res://scripts/volleyball_match.gd").new()
+	preview_player.get_parent().add_child(demo_match)
+	demo_match.configure(preview_player,board,status)
+	styles.item_selected.connect(func(index: int): demo_match.set_serve_style(index))
+	player_controls.locomotion = ""
+	player_controls.setter_travel = Vector3.ZERO
+	player_controls.indicator.text = "You"
+	preview_camera.position = Vector3(0.0,8.2,-12.2)
+	setting_camera_focus = Vector3(0.0,1.55,3.9)
+	preview_camera.look_at(setting_camera_focus)
+	preview.grab_focus()
+
+func stop_demo_match() -> void:
+	if not is_instance_valid(demo_match): return
+	demo_match.stop()
+	demo_match = null
 
 func select_category(category: String) -> void:
 	category = Catalog.category_name(category)
 	if not MOVE_TYPES.has(category): return
+	stop_demo_match()
 	stop_blocking_practice()
 	stop_serving_session()
 	reception_review.stop(false)
@@ -973,6 +1019,9 @@ func reception_drill_active() -> bool:
 
 func _process(delta: float) -> void:
 	pass_timing_cue.hide()
+	if is_instance_valid(demo_match):
+		demo_match.tick_match(delta,player_controls)
+		return
 	if is_instance_valid(blocking_practice):
 		if defense_active:
 			blocking_practice.restore_movement_pose()
@@ -1376,6 +1425,16 @@ func begin_approach_setup_drag(event: InputEventMouseButton) -> bool:
 	return true
 
 func handle_preview_input(event: InputEvent) -> void:
+	if is_instance_valid(demo_match):
+		if event is InputEventMouseMotion:
+			if event.button_mask & MOUSE_BUTTON_MASK_MIDDLE:
+				orbit_setting_camera(event.relative)
+			else:
+				var hit: Variant = attack_floor_point(event.position)
+				if hit is Vector3: demo_match.set_aim(hit)
+		elif event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_WHEEL_UP,MOUSE_BUTTON_WHEEL_DOWN]:
+			demo_match.change_arc(0.20 if event.button_index == MOUSE_BUTTON_WHEEL_UP else -0.20)
+		return
 	if is_instance_valid(blocking_practice):
 		if event is InputEventMouseMotion and event.button_mask & MOUSE_BUTTON_MASK_MIDDLE:
 			orbit_setting_camera(event.relative)
@@ -1753,7 +1812,7 @@ func open_editor(index := -1) -> void:
 	get_tree().change_scene_to_file("res://scenes/animation_editor.tscn")
 
 func cycle_type(direction: int) -> void:
-	if is_instance_valid(blocking_practice) or is_instance_valid(setting_drill) or selected_category.is_empty() or selected_category in ["Setting","Attacking"]: return
+	if is_instance_valid(demo_match) or is_instance_valid(blocking_practice) or is_instance_valid(setting_drill) or selected_category.is_empty() or selected_category in ["Setting","Attacking"]: return
 	type_indices[selected_category] = posmod(int(type_indices.get(selected_category,0))+direction,MOVE_TYPES[selected_category].size())
 	refresh_type()
 
@@ -1761,10 +1820,23 @@ func open_menu() -> void:
 	if not selected_category.is_empty():
 		var previous := selected_category
 		show_categories()
-		category_buttons[previous].grab_focus()
+		if category_buttons.has(previous): category_buttons[previous].grab_focus()
 	else: get_tree().change_scene_to_file("res://scenes/story.tscn")
 
 func _input(event: InputEvent) -> void:
+	if is_instance_valid(demo_match) and event is InputEventKey:
+		if event.echo: return
+		if event.keycode == KEY_SPACE:
+			demo_match.input_space(event.pressed)
+			get_viewport().set_input_as_handled()
+		elif event.pressed:
+			match event.keycode:
+				KEY_Q: demo_match.input_receive(0)
+				KEY_E, KEY_I: demo_match.input_receive(1)
+				KEY_F: demo_match.input_receive(2)
+				KEY_M: StorySession.attack_ball_audio_muted = not StorySession.attack_ball_audio_muted
+				KEY_ESCAPE: open_menu()
+		return
 	if is_instance_valid(blocking_practice) and event is InputEventKey:
 		if event.echo: return
 		if defense_active:
