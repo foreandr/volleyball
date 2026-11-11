@@ -28,6 +28,11 @@ const PLAYER_GROUND_Y := 0.04
 const CPU_SPRINT_SPEED := 8.4
 const HAND_DIG_REACH := 0.46
 const FOREARM_DIG_REACH := 0.66
+const BODY_CONTACT_SEGMENTS := [
+	["pelvis","spine_02",0.15],["spine_02","neck_01",0.17],["neck_01","Head",0.105],
+	["thigh_l","calf_l",0.095],["thigh_r","calf_r",0.095],["calf_l","foot_l",0.070],["calf_r","foot_r",0.070],
+	["upperarm_l","lowerarm_l",0.063],["upperarm_r","lowerarm_r",0.063],
+]
 enum Phase { READY, LIVE, DEAD, FINISHED }
 
 var phase := Phase.READY
@@ -663,7 +668,7 @@ func play_touch(strong := false) -> void:
 	var player := spike_audio if strong else touch_audio
 	player.play()
 
-func set_pin_for(index: int) -> Vector3:
+func set_pin_for(index: int, setter_x := INF) -> Vector3:
 	var side := team(index)
 	var frame := frames[side]
 	if is_human(index) and aim_point.is_finite():
@@ -672,7 +677,11 @@ func set_pin_for(index: int) -> Vector3:
 	var hitter := players[index^1]
 	if is_human(index) or (flight_kind != "pass" and not defensive_ball()):
 		return Vector3(clampf(hitter.position.x,-3.75,3.75),0.065,3.20)
-	if called_pin_flight == flight_number: return called_pin
+	if called_pin_flight == flight_number and (not is_finite(setter_x) or absf(called_pin.x-setter_x) >= 1.0):
+		return called_pin
+	if not is_finite(setter_x):
+		var meet := path_point(arrival(1.92))
+		setter_x = frame.to_local(meet).x
 	var transition: bool = transition_possession[side] or defensive_ball()
 	var preparation := maxf(0.0,arrival(1.92)-elapsed-0.26)
 	var reach := (3.25 if transition else 2.65)+preparation*3.6
@@ -683,6 +692,7 @@ func set_pin_for(index: int) -> Vector3:
 	var opposition := 1-team(index)
 	var blocker: int = defender_assignment[opposition]
 	var best_cost := INF
+	var best_is_wide := false
 	for x in SET_ZONES:
 		var candidate := Vector3(x,0.065,3.20)
 		var staging := candidate-Vector3.BACK*2.02
@@ -697,8 +707,10 @@ func set_pin_for(index: int) -> Vector3:
 			repeat = (1.0-smoothstep(0.35,2.05,absf(x-last_called_set_x[side])))*(1.70 if transition else 0.75)
 		var same_lane := (1.0-smoothstep(0.45,1.85,absf(x-hitter.position.x)))*0.88 if transition else 0.0
 		var cost := 0.34*maxf(0.0,gap-1.8)+0.39*absf(x-preferred)-0.49*minf(blocker_gap,3.6)+repeat+same_lane
-		if cost < best_cost:
+		var is_wide := absf(x-setter_x) >= 1.0
+		if (is_wide and not best_is_wide) or (is_wide == best_is_wide and cost < best_cost):
 			best_cost = cost
+			best_is_wide = is_wide
 			called_pin = candidate
 	called_pin_flight = flight_number
 	return called_pin
@@ -748,18 +760,19 @@ func aim_receive(index: int) -> void:
 
 func cpu_set_apex(index: int, point: Vector3, pin: Vector3, pace: float) -> float:
 	var hitter := players[index^1]
-	var tight := smoothstep(0.85,3.10,point.z)
+	var tight := smoothstep(0.40,1.35,point.z)
 	var distance := (pin-hitter.position).slide(Vector3.UP).length()
-	var ready := 1.0-smoothstep(1.65,3.40,distance)
+	var ready := 1.0-smoothstep(2.15,3.80,distance)
 	var controlled := 1.0-smoothstep(8.0,15.0,pace)*0.38
 	var variety := float(posmod(second_ball_options+index+rallies,4))/3.0
-	var quick := lerpf(3.62,4.20,variety)
+	var quick := lerpf(2.98,3.30,variety)
 	var high := lerpf(5.50,7.28,maxf(variety*0.69,1.0-ready))
-	var apex := lerpf(high,quick,tight*lerpf(0.48,1.0,ready)*controlled)
+	var apex := lerpf(high,quick,tight*ready*controlled)
 	if transition_possession[team(index)]:
 		var peel := smoothstep(1.50,3.10,hitter.position.z)*smoothstep(0.16,0.9,hitter.position.z-(pin.z-1.85))
 		var lateral := smoothstep(0.8,3.45,absf(pin.x-hitter.position.x))
-		apex = maxf(apex,lerpf(4.35,6.15,maxf(peel*0.86,lateral)))
+		var transition_load := maxf(peel,lateral)
+		apex = maxf(apex,lerpf(2.98,6.15,transition_load))
 	return maxf(point.y+0.18,apex)
 
 func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, technique: int) -> void:
@@ -779,16 +792,20 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 		if technique != 0 and not transition: set_audio.play()
 		else: play_touch()
 	if touches == 2 and not (cpu_dump and index == cpu_choice) and (bump.destination.y < 4.0 or (is_human(index) and technique != 0)):
-		var pin := set_pin_for(index)
+		var setter_x := players[index].position.x
+		var pin := set_pin_for(index,setter_x)
 		last_called_set_x[side] = pin.x
 		var incoming := velocity+Vector3.DOWN*Flight.GRAVITY*elapsed
 		var driver := attackers[side]
-		var contact_height: float = driver.set_contact_height()
-		var minimum := maxf(contact_height+0.22,point.y+0.18)
-		var apex := maxf(minimum,bump.height) if is_human(index) else cpu_set_apex(index,point,pin,incoming.length())
+		var minimum := maxf((driver.set_contact_height()+0.22) if is_human(index) else 2.96,point.y+0.18)
+		var apex: float = bump.height if is_human(index) else cpu_set_apex(index,point,pin,incoming.length())
 		var error := Bump.Accuracy.sample_offset(Bump.Accuracy.spread(0.0,incoming.length(),spin,setting_skill,true))
+		var set_width := pin.x-setter_x
 		pin += error.slide(Vector3.UP)
+		if not is_human(index) and absf(set_width) >= 1.0 and (pin.x-setter_x)*signf(set_width) < 1.0:
+			pin.x = setter_x+signf(set_width)
 		apex = maxf(minimum,apex+error.y)
+		var contact_height: float = driver.set_contact_height(apex)
 		last_set_apex = apex
 		var motion: Vector3 = driver.set_toward_pin(point,pin,apex,contact_height)
 		launch(world_point,frame.global_basis*motion,"set",index,1.0,index^1,frame.to_global(pin))
@@ -1082,7 +1099,8 @@ func tick_receive(delta: float, previous: float) -> void:
 			var remaining: float = driver.pin_arrival-(driver.clock-driver.stage_start)
 			var forecast: Vector3 = frames[team(hitter)].to_local(path_point(clampf(driver.pin_arrival,elapsed,flight_end())))
 			var safe_lane := cpu_spike_has_lane(forecast)
-			if safe_lane and driver.enabled and remaining > 0.54:
+			var approach_window := 0.28 if last_set_apex < 3.65 else 0.54
+			if safe_lane and driver.enabled and remaining > approach_window:
 				prepare_cpu_approach(hitter,driver,delta)
 				return
 			if safe_lane and driver.approach_jump_queued: return
@@ -1243,6 +1261,55 @@ func tick_receive(delta: float, previous: float) -> void:
 			var spread: Vector2 = bump.accuracy_bounds(0.0,frame.global_basis.inverse()*motion,spin)
 			var result := Bump.Accuracy.pass_velocity(frame.to_local(catch_point),target,45.0,spread)
 			receive_contact(index,catch_point,frame.global_basis*result,technique)
+
+func deflect_defender_body(previous: float) -> void:
+	if flight_kind not in ["spike","dump","block"] or held_ball: return
+	var first := path_point(previous)
+	var last := path_point(minf(elapsed,flight_end()))
+	var travel := last-first
+	if travel.length_squared() < 0.000001: return
+	var player := -1
+	var contact := Vector3.ZERO
+	var surface := Vector3.ZERO
+	var first_fraction := INF
+	for index in range(receiving_team*2,receiving_team*2+2):
+		if index == last_player: continue
+		var actor := players[index]
+		if actor.global_position.slide(Vector3.UP).distance_to(last.slide(Vector3.UP)) > 1.1+travel.length(): continue
+		var rig: Skeleton3D = actor.skeleton
+		for segment in BODY_CONTACT_SEGMENTS:
+			var a := rig.to_global(rig.get_bone_global_pose(rig.find_bone(segment[0])).origin)
+			var b := rig.to_global(rig.get_bone_global_pose(rig.find_bone(segment[1])).origin)
+			var pair := Geometry3D.get_closest_points_between_segments(first,last,a,b)
+			var radius := Net.RADIUS+float(segment[2])
+			if pair[0].distance_squared_to(pair[1]) > radius*radius: continue
+			var enter := 0.0
+			var inside := clampf((pair[0]-first).dot(travel)/travel.length_squared(),0.0,1.0)
+			for refinement in 6:
+				var middle := (enter+inside)*0.5
+				var sample := first+travel*middle
+				var axis_point := Geometry3D.get_closest_point_to_segment(sample,a,b)
+				if sample.distance_squared_to(axis_point) <= radius*radius: inside = middle
+				else: enter = middle
+			if inside >= first_fraction: continue
+			var point := first+travel*inside
+			if frames[receiving_team].to_local(point).z > Net.NET_Z+0.07: continue
+			var normal := (point-Geometry3D.get_closest_point_to_segment(point,a,b)).normalized()
+			if travel.dot(normal) > 0.0: continue
+			first_fraction = inside
+			player = index
+			contact = point
+			surface = normal
+	if player < 0 or not can_touch(player): return
+	var incoming := travel/maxf(0.001,minf(elapsed,flight_end())-previous)
+	if surface.is_zero_approx(): surface = -incoming.normalized()
+	var rebound := incoming.slide(surface)*0.48-surface*incoming.dot(surface)*0.46
+	trace.write("body_contact",match_clock,{"player":player,"point":contact,"rebound":rebound})
+	stroke = "Body deflection"
+	transition_possession[team(player)] = true
+	play_touch()
+	launch(contact,rebound,"pass",player)
+
 func pose_fake_dump(actor: Node3D, lead: float) -> void:
 	var weight := (1.0-smoothstep(0.15,0.28,lead))*smoothstep(0.045,0.12,lead)
 	if weight <= 0.001: return
@@ -1684,6 +1751,8 @@ func step_match(delta: float, controls: RefCounted) -> void:
 	held_ball = false
 	tick_receive(delta,previous)
 	if flight_number != current_flight or phase != Phase.LIVE: return
+	deflect_defender_body(previous)
+	if flight_number != current_flight or phase != Phase.LIVE: return
 	advance_idle_players(delta)
 	check_floor(previous)
 	if phase == Phase.LIVE:
@@ -1708,9 +1777,11 @@ func trace_snapshot() -> Dictionary:
 
 func mark_trace() -> bool:
 	if trace.file == null: return false
-	var snapshot := trace_snapshot()
+	var snapshot: Dictionary = replay.frames[replay.index].trace.duplicate(true) if replay.active else trace_snapshot()
 	snapshot["last_point"] = last_point
-	if replay.active: snapshot["replay_time"] = replay.clock
+	if replay.active:
+		snapshot["replay_time"] = replay.clock
+		snapshot["recorded_at"] = replay.frames[replay.index].time
 	trace.write("player_marker",match_clock,snapshot,true)
 	return true
 

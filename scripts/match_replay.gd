@@ -24,7 +24,9 @@ func capture(match_: Node3D) -> Dictionary:
 		"score":match_.score_label.text,"info":match_.info.text,"keys":keys,"aim":match_.aim_ring.visible,"guide":match_.trajectory_node.visible}
 
 func record(match_: Node3D) -> void:
-	current.append(capture(match_))
+	var sample := capture(match_)
+	sample["trace"] = match_.trace_snapshot()
+	current.append(sample)
 
 func finish_point() -> void:
 	if not current.is_empty(): previous = current

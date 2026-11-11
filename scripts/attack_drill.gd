@@ -546,7 +546,7 @@ func find_approach_intercept(respect_timing := true, tier := 2) -> Vector3:
 	var apex := origin.y+velocity.y*velocity.y/(2.0*Flight.GRAVITY)
 	var reach_height := approach_reach_height()
 	var earliest := descending_time(origin,velocity,minf(apex-0.15,minf(3.59,reach_height)))
-	var latest := descending_time(origin,velocity,minf(3.10,reach_height-0.23))
+	var latest := descending_time(origin,velocity,minf(apex-0.06,minf(3.10,reach_height-0.23)))
 	if respect_timing and stage == Stage.SET:
 		var minimum_plant := 0.115 if adaptive_approach_timing() else APPROACH_MIN_PLANT_TIME
 		var minimum_step := jump.LEAD_STEP_TIME*(0.55 if adaptive_approach_timing() else 1.0)
@@ -1078,6 +1078,9 @@ func uses_air_reach_assist() -> bool:
 func attack_pose_smoothing_time() -> float:
 	return 0.016
 
+func sync_approach_arm_lift() -> bool:
+	return false
+
 func attack_arm_turn_rate() -> float:
 	return INF
 
@@ -1260,8 +1263,11 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 					var rise := smootherstep(0.015,0.35,handoff_age)
 					var angle := lerpf(-0.48,PI*0.5,rise)
 					var arc := (forward*cos(angle)+up*sin(angle)).normalized()
+					if sync_approach_arm_lift():
+						rise = overhead
+						arc = lift_direction
 					var reach := lerpf(0.43,arm_length*0.96,rise)
-					var entry := smootherstep(0.0,0.17,handoff_age)
+					var entry := smootherstep(0.0,0.12 if sync_approach_arm_lift() else 0.17,handoff_age)
 					target = source_wrist.lerp(shoulder+arc*reach+outward*0.015,entry)
 					var pole := source_pole.lerp((forward*0.30-up*(1.0-rise)+outward*0.55).normalized(),entry)
 					author.limb(front_pose,upper,"lowerarm_r","hand_r",target,pole,1.0,lerpf(165.0,174.0,rise))

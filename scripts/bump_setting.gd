@@ -455,10 +455,8 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 			if not center.is_finite(): center = first
 			var point := Geometry3D.get_closest_point_to_segment(center,first,last)
 			var gap := point.distance_to(center)
-			var adjustment_threshold := 0.08 if strict_dig else PLATFORM_RADIUS
-			if not hand_setting and not low_save.active and gap > adjustment_threshold and gap <= 0.58:
-				var reach_weight := smoothstep(0.0,0.045,elapsed) if strict_dig else 1.0
-				reach_platform(point-center,reach_weight)
+			if not strict_dig and not hand_setting and not low_save.active and gap > PLATFORM_RADIUS and gap <= 0.58:
+				reach_platform(point-center)
 				center = platform_center()
 				point = Geometry3D.get_closest_point_to_segment(center,first,last)
 			var timing := (cue_arrival if is_finite(cue_arrival) and not low_save.active else time)-pressed_at
@@ -469,6 +467,18 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 				point = contact[0]
 				center = contact[1]
 				cutoff = Net.RADIUS+(0.04 if hand_setting or pancake else 0.05)
+				if not hand_setting and not low_save.active:
+					# Bring the platform toward the approaching ball, then test the posed bones again.
+					var preview: Vector3 = path.call(minf(end,sweep_end+0.025))
+					var live_contact := dig_contact_segment(first,preview,false,previous_dig_pose,previous_dig_pose)
+					var offset := live_contact[0]-live_contact[1]
+					var steer := (1.0-smoothstep(0.28,0.51,offset.length()))*smoothstep(0.0,0.055,elapsed)
+					if steer > 0.0 and offset.length() > 0.07:
+						reach_platform(offset*1.25,steer)
+						previous_dig_pose = dig_bones()
+						contact = dig_contact_segment(first,last,false,initial_pose,previous_dig_pose)
+						point = contact[0]
+						center = contact[1]
 			var gap_after_adjustment := point.distance_to(center)
 			var receive_allowance := (0.0 if face_dig else green_hand_allowance) if hand_setting else green_forearm_allowance
 			var near_receive := green and not low_save.active and receive_allowance > 0.0 and gap_after_adjustment <= radius+receive_allowance

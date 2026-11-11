@@ -28,7 +28,8 @@ func start_set(actor: Node3D, origin: Vector3, velocity: Vector3, target: Vector
 	stage_start = clock-age
 	pass_origin = origin
 	pass_motion = velocity
-	pin_arrival = descending_time(origin,velocity,set_contact_height())
+	var apex := origin.y+maxf(0.0,velocity.y)**2/(2.0*Flight.GRAVITY)
+	pin_arrival = descending_time(origin,velocity,set_contact_height(apex))
 	flight_end = Flight.landing_time(origin,velocity)
 	rally_set_target = target
 	swing_aim = shot
@@ -46,8 +47,8 @@ func approach_hand_height() -> float:
 func approach_reach_height() -> float:
 	return approach_hand_height()+(jump.max_height-0.2032)*0.91
 
-func set_contact_height() -> float:
-	return clampf(approach_reach_height(),2.70,3.38)
+func set_contact_height(apex := INF) -> float:
+	return minf(clampf(approach_reach_height(),2.70,3.38),maxf(2.62,apex-0.22))
 
 func adaptive_approach_timing() -> bool:
 	return true
@@ -97,7 +98,11 @@ func keeps_strike_palm_presented() -> bool:
 func spike_assist_radius() -> float:
 	return 0.19
 
+func sync_approach_arm_lift() -> bool:
+	return true
+
 func attack_arm_turn_rate() -> float:
+	if stage == Stage.SET and clock-swing_started <= 0.26: return INF
 	return deg_to_rad(1580.0)
 
 func spike_speed_multiplier() -> float:

@@ -51,7 +51,7 @@ static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float,
 		var at_strike := smoothstep(0.36,0.79,extension)*(1.0-smoothstep(0.015,0.38,follow))
 		face_weight = maxf(face_weight,at_strike)
 		palm_progress = lerpf(palm_progress,follow,at_strike)
-	var roll := roll_finish_palm(pose,author,1.0,palm_progress,cross_body,previous_roll,roll_step,shot_direction,face_weight,ball)
+	var roll := roll_finish_palm(pose,author,1.0,palm_progress,cross_body,previous_roll,roll_step,shot_direction,face_weight,ball,0.72*smoothstep(0.015,0.25,follow) if contact_palm else 0.0)
 	if finish > 0.0:
 		blend_arm(base,pose,author,weight)
 	open_strike_hand(base,author,weight*lerpf(0.70,0.94,smoothstep(0.12,0.85,extension)))
@@ -166,7 +166,7 @@ static func compact_finish_weight(target: Vector3, origin: Vector3, same_side: b
 	var slope := absf(target.x-origin.x)/maxf(target.z-origin.z,0.1)
 	return 1.0-smoothstep(0.30,0.55,slope) if same_side else 1.0-smoothstep(0.065,0.27,slope)
 
-static func roll_finish_palm(pose: Array, author: RefCounted, amount: float, follow: float, cross_body: bool, previous_roll := 0.0, roll_step := INF, shot_direction := Vector3.ZERO, face_weight := 0.0, ball := Vector3.ZERO) -> float:
+static func roll_finish_palm(pose: Array, author: RefCounted, amount: float, follow: float, cross_body: bool, previous_roll := 0.0, roll_step := INF, shot_direction := Vector3.ZERO, face_weight := 0.0, ball := Vector3.ZERO, forearm_turn := 0.0) -> float:
 	var weight := amount*smoothstep(0.05,0.84,follow)
 	if weight <= 0.0 and face_weight <= 0.0: return 0.0
 	var wrist: Vector3 = author.point(pose,"hand_r")
@@ -200,7 +200,20 @@ static func roll_finish_palm(pose: Array, author: RefCounted, amount: float, fol
 			applied = previous_roll+clampf(turn*0.72,-limit,limit)
 		else:
 			applied = rotate_toward(previous_roll,target_roll,roll_step)
-	author.rotate_world(pose,"hand_r",axis,applied)
+	if forearm_turn > 0.0:
+		var elbow: Vector3 = author.point(pose,"lowerarm_r")
+		var shoulder: Vector3 = author.point(pose,"upperarm_r")
+		var lowerarm_basis: Basis = author.world_pose(pose,author.rig.find_bone("lowerarm_r")).basis
+		author.rotate_world(pose,"upperarm_r",(elbow-shoulder).normalized(),applied*forearm_turn*0.20)
+		author.set_world_basis(pose,"lowerarm_r",lowerarm_basis)
+		var forearm_axis := (wrist-elbow).normalized()
+		author.rotate_world(pose,"lowerarm_r",forearm_axis,applied*forearm_turn)
+		# Correct the residual around the new hand axis while keeping the wrist on its swing path.
+		var rolled_knuckle: Vector3 = author.point(pose,"middle_01_r")
+		var rolled_axis := (rolled_knuckle-wrist).normalized()
+		author.rotate_world(pose,"hand_r",rolled_axis,applied*(1.0-forearm_turn))
+	else:
+		author.rotate_world(pose,"hand_r",axis,applied)
 	return applied
 
 static func align_wrist_to_forearm(pose: Array, author: RefCounted, amount: float) -> void:
