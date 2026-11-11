@@ -1,24 +1,25 @@
 extends "res://scripts/serve_bump_set_spike.gd"
 
 var passer: Node3D
-var hitter: Node3D
+var near_teammate: Node3D
+var far_partner: Node3D
+const TEAMMATE_READY := Vector3(2.35,0.04,10.25)
 var rally_active := false
 var incoming_cue := 0.0
 var receive_with_hands := false
 var rally_number := 0
-var serve_reception_side := 1.0
 
 func configure_team(readout: Label, build: String) -> void:
 	passer = make_demo_player("OpponentPasser",Color("d9874e"))
-	hitter = make_demo_player("OpponentHitter",Color("d9874e"))
 	configure(passer,readout,true,build)
-	user_player = passer
-	teammate = receiver
+	far_partner = receiver
+	near_teammate = make_demo_player("YourTeammate",Color("2c8fe5"))
 	reset_feed()
 
 func reset_feed() -> void:
 	if not is_instance_valid(passer): return
 	setter = passer
+	if is_instance_valid(far_partner): receiver = far_partner
 	super.reset_feed()
 	rally_active = false
 	cpu_second_ball_attack = false
@@ -27,12 +28,12 @@ func reset_feed() -> void:
 	approach_space_held = false
 	carried_jump_lift = 0.0
 	swing_to_set_pose.clear()
-	serve_reception_side = 1.0 if rally_number%2 == 0 else -1.0
-	passer.position = Vector3(serve_reception_side*2.1,0.04,-2.85)
-	receiver.position = Vector3(0.0,0.04,0.85)
-	hitter.position = Vector3(-serve_reception_side*2.65,0.04,0.25)
-	for actor in [passer,receiver,hitter]:
-		actor.rotation.y = 0.0
+	passer.position = Vector3(2.1,0.04,-2.85)
+	receiver.position = Vector3(-2.1,0.04,-2.85)
+	if is_instance_valid(near_teammate): near_teammate.position = TEAMMATE_READY
+	for actor in [passer,receiver,near_teammate]:
+		if not is_instance_valid(actor): continue
+		actor.rotation.y = PI if actor == near_teammate else 0.0
 		actor.play_action("idle",0.0)
 		actor.animator.advance(0.0)
 	ball.hide()
@@ -48,10 +49,21 @@ func receive_serve(world_origin: Vector3, world_velocity: Vector3) -> void:
 	incoming_cue = descending_time(serve_origin,serve_velocity,1.13)
 	receive_with_hands = rally_number%3 == 2
 	if receive_with_hands: incoming_cue = descending_time(serve_origin,serve_velocity,2.05)
+	var catch_point := flight_point(serve_origin,serve_velocity,incoming_cue).slide(Vector3.UP)
+	if catch_point.distance_squared_to(receiver.position.slide(Vector3.UP)) < catch_point.distance_squared_to(passer.position.slide(Vector3.UP)):
+		var other := receiver
+		receiver = passer
+		passer = other
+	setter = passer
+	bump.setter = passer
+	cpu_set.setter = receiver
+	cpu_feet = Footwork.new(receiver)
+	far_partner = receiver
 	cpu_set_style = (rally_number-1)%4
 	cpu_commits_to_spike = randf() < 0.35
 	bump.destination = Vector2(randf_range(-1.35,1.35),randf_range(1.7,3.0))
-	bump.height = randf_range(4.8,5.7)
+	bump.height = [4.8,6.25,5.45,5.85][(rally_number-1)%4]
+	teammate_set_apex = [4.65,5.85,5.25,6.35][(rally_number-1)%4]
 	bump.green_forearm_allowance = 0.42
 	bump.green_hand_allowance = 0.42
 	rally_active = true
@@ -91,11 +103,11 @@ func tick_opponents(delta: float) -> void:
 			step_jump(delta)
 			step(delta)
 			return
-	if stage in [Stage.PASS,Stage.SET] and not jump.active:
+	if not jump.active and (stage == Stage.SET or (stage == Stage.PASS and clock-stage_start > 0.22)):
 		var target := rally_set_target-Vector3.BACK*1.45
-		move_opponent(hitter,target,5.0,delta)
-		face_actor(hitter,Vector3.BACK,delta)
-	if stage == Stage.SET and setter == hitter and not jump.active:
+		move_opponent(passer,target,5.2,delta)
+		face_actor(passer,Vector3.BACK,delta)
+	if stage == Stage.SET and setter == passer and not jump.active:
 		approach_space_held = true
 		queued_approach_input(delta)
 	step_jump(delta)
@@ -103,7 +115,7 @@ func tick_opponents(delta: float) -> void:
 	step(delta)
 	blend_swing_to_set()
 	if previous == Stage.PASS and stage == Stage.SET:
-		setter = hitter
+		setter = passer
 		approach_pressed_at = -INF
 		approach_released_at = INF
 		approach_jump_queued = false
