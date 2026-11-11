@@ -24,6 +24,7 @@ const SERVES := [
 const SERVICE_START := [-6.40,-6.40,-7.4,-8.15]
 const WIN_SCORE := 7
 const RECOVERY_TIME := 0.32
+const PLAYER_GROUND_Y := 0.04
 const CPU_SPRINT_SPEED := 8.4
 const HAND_DIG_REACH := 0.46
 const FOREARM_DIG_REACH := 0.66
@@ -908,8 +909,10 @@ func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_f
 	actor.rotation.y = rotate_toward(actor.rotation.y,yaw,delta*(turn_rate if turn_to_travel else 8.0))
 	var pace := clampf(speed*1.24,5.85,CPU_SPRINT_SPEED) if sprint else minf(speed,4.35)
 	var before := actor.position
-	actor.position = Court.clamp_setter(before+offset.limit_length(delta*pace),3.43)
-	var movement := actor.basis.inverse()*(actor.position-before)
+	var grounded := Court.clamp_setter(before+offset.limit_length(delta*pace),3.43)
+	grounded.y = move_toward(before.y,PLAYER_GROUND_Y,delta*1.25)
+	actor.position = grounded
+	var movement := actor.basis.inverse()*(actor.position-before).slide(Vector3.UP)
 	actor.animator.speed_scale = lerpf(1.60,1.92,smoothstep(5.85,CPU_SPRINT_SPEED,pace)) if sprint else 1.0
 	actor.play_action("run" if sprint else "idle",0.10)
 	actor.animator.advance(delta)
@@ -1659,7 +1662,10 @@ func step_match(delta: float, controls: RefCounted) -> void:
 	if not spectator and not blocks.has(0) and not player_attacking and not serving_human and not set_jumps[0].active and not diving and not recoveries.has(0):
 		controls.read_pace_input()
 		var motion: Vector2 = controls.movement_input()
-		if serve.player == human and motion.length() > 0.05: serve.moved_after_contact = true
+		if serve.player == human:
+			if motion.length() > 0.05: serve.moved_after_contact = true
+			if serve.moved_after_contact:
+				human.position.y = move_toward(human.position.y,PLAYER_GROUND_Y,delta*1.25)
 		var bump := platforms[0]
 		var mobility: float = bump.movement_scale(elapsed,next_touch_cue,ball.global_position)
 		if is_finite(bump.pressed_at) and (is_finite(bump.pose_started_at) or next_touch_cue-elapsed <= 0.18):
