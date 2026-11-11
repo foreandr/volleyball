@@ -18,6 +18,7 @@ const ATTACK_SERVE_SOURCE := Vector3(3.05,2.8,8.5)
 const CPU_HOME := Vector3(-0.55,0.04,3.10)
 const RALLY_SET_ZONES := 7
 const RALLY_SET_NET_CLEARANCE := 0.3048
+const RALLY_SET_CONTACT_HEIGHT := 3.40
 const PIN_HEIGHT := 2.75
 const SET_APEX := 5.0
 const SET_TOPSPIN_RPS := 2.2
@@ -718,8 +719,8 @@ func play_cpu_set(time: float, delta: float) -> void:
 		ball.position = cpu_set.platform_center()
 		if is_finite(cpu_set.release_time):
 			pass_origin = cpu_set.release_point
-			pass_motion = cpu_set.outgoing
-			pin_arrival = descending_time(pass_origin,pass_motion,PIN_HEIGHT)
+			pass_motion = cpu_set.outgoing if approach_practice else set_toward_pin(pass_origin,rally_set_target,SET_APEX,RALLY_SET_CONTACT_HEIGHT)
+			pin_arrival = descending_time(pass_origin,pass_motion,PIN_HEIGHT if approach_practice else RALLY_SET_CONTACT_HEIGHT)
 			flight_end = Flight.landing_time(pass_origin,pass_motion)
 			stage = Stage.SET
 			stage_start = clock
@@ -754,7 +755,7 @@ func play_cpu_set(time: float, delta: float) -> void:
 			shank("CPU could not reach the pass",time)
 			return
 		cpu_set.height = approach_set_apex if approach_practice else SET_APEX
-		var ideal := set_toward_pin(cpu_contact_point,called_set_target(),cpu_set.height)
+		var ideal := set_toward_pin(cpu_contact_point,called_set_target(),cpu_set.height,PIN_HEIGHT if approach_practice else RALLY_SET_CONTACT_HEIGHT)
 		var target := flight_point(cpu_contact_point,ideal,Flight.landing_time(cpu_contact_point,ideal))
 		cpu_set.destination = Vector2(target.x,target.z)
 		cpu_set.begin_hand_contact(cpu_contact_point,time)
@@ -1117,9 +1118,9 @@ func miss(message: String) -> void:
 	swing_target.hide()
 	trace.write("attack_miss",clock,{"ball":ball.position,"player":setter.position,"closest_check":trace.closest_check},true)
 
-func set_toward_pin(origin: Vector3, pin := PIN, apex := SET_APEX) -> Vector3:
+func set_toward_pin(origin: Vector3, pin := PIN, apex := SET_APEX, contact_height := PIN_HEIGHT) -> Vector3:
 	var rise := sqrt(2.0*Flight.GRAVITY*(apex-origin.y))
-	var duration := (rise+sqrt(2.0*Flight.GRAVITY*(apex-PIN_HEIGHT)))/Flight.GRAVITY
+	var duration := (rise+sqrt(2.0*Flight.GRAVITY*(apex-contact_height)))/Flight.GRAVITY
 	return (pin-origin).slide(Vector3.UP)/duration+Vector3.UP*rise
 
 func descending_time(origin: Vector3, velocity: Vector3, height: float) -> float:
