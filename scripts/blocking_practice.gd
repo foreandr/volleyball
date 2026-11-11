@@ -281,7 +281,8 @@ func step_blocker(delta: float) -> void:
 	var raise := smoothstep(0.06,BLOCK_LOAD+0.14,pose_time)*(1.0-smoothstep(BLOCK_LOAD+0.63,BLOCK_LOAD+BLOCK_AIR+0.13,pose_time))
 	var press := smoothstep(BLOCK_LOAD+0.025,BLOCK_LOAD+0.24,pose_time)*(1.0-smoothstep(BLOCK_LOAD+0.58,BLOCK_LOAD+0.76,pose_time))
 	var low_clearance := 0.40*smoothstep(0.0,0.09,pose_time)*(1.0-smoothstep(BLOCK_LOAD+BLOCK_AIR+0.09,BLOCK_LOAD+BLOCK_AIR+0.20,pose_time))
-	blocker.position.z -= 0.26*maxf(raise,low_clearance)*(1.0-smoothstep(0.66,0.97,block_lift))
+	if not player_attacks:
+		blocker.position.z -= 0.26*maxf(raise,low_clearance)*(1.0-smoothstep(0.66,0.97,block_lift))
 	var shot: Vector3 = ball.global_position
 	var crunch := 0.0
 	if stage == Stage.HIT and pass_motion.z > 0.1:
@@ -294,7 +295,7 @@ func step_blocker(delta: float) -> void:
 	var extra_height := smoothstep(BLOCK_HEIGHT,BLOCK_HEIGHT+0.508,block_lift)
 	var body_press := clearance*(1.0+0.70*extra_height)
 	var high_fold := extra_height*crunch*smoothstep(0.0,0.65,blocker.position.y+1.90-shot.y)
-	blocker.position.z += 0.12*extra_height*press
+	if not player_attacks: blocker.position.z += 0.12*extra_height*press
 	author.rotate_world(pose,"spine_01",Vector3.RIGHT,(0.12*press+0.085*crunch)*body_press+0.24*high_fold)
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,(0.10*press+0.10*crunch)*body_press+0.22*high_fold)
 	var track := clampf(shot.x-blocker.position.x,-0.23,0.23)
@@ -318,6 +319,13 @@ func step_blocker(delta: float) -> void:
 			kong_tracking[hand_index] = kong_tracking[hand_index].lerp(Vector2(reach,height),1.0-exp(-delta*33.0))
 		var tracked := Vector2(0.83,0.43).lerp(kong_tracking[hand_index],arm_tracking)
 		wrist_offset = wrist_offset.lerp(Vector3(sign_*tracked.x,tracked.y,0.29+0.27*press),kong)
+		if player_attacks:
+			wrist_offset.y += 0.035*press
+			var clearance_height := rig.to_global(shoulder).y+wrist_offset.y
+			var safe_depth := Net.NET_Z-0.16-blocker.position.z
+			var pressed_depth := maxf(wrist_offset.z,Net.NET_Z+0.035-blocker.position.z)
+			var above_tape := smoothstep(Net.NET_TOP+0.18,Net.NET_TOP+0.40,clearance_height)
+			wrist_offset.z = lerpf(minf(wrist_offset.z,safe_depth),pressed_depth,above_tape*press)
 		var wrist := shoulder+wrist_offset/scale_
 		author.limb(pose,"upperarm_"+side,"lowerarm_"+side,"hand_"+side,wrist,Vector3(sign_*lerpf(0.31,0.78,kong),-0.52,0.34),raise,176.0)
 		var base: Transform3D = author.world_pose(pose,rig.find_bone("hand_"+side))
@@ -333,8 +341,14 @@ func step_blocker(delta: float) -> void:
 		var palm := HandPose.hand_basis(finger_direction,index_edge)*HandPose.hand_basis(fingers,across).inverse()*base.basis
 		author.set_world_basis(pose,"hand_"+side,base.basis.slerp(palm,raise))
 		spread_block_fingers(pose,rig,author,side,raise)
-	var retreat := block_net_retreat(pose,rig,author)
-	blocker.position.z -= retreat
+	if player_attacks:
+		for side in ["l","r"]:
+			for attempt in 4:
+				var excess := arm_net_excess(pose,rig,author,side)
+				if excess < 0.002: break
+				author.rotate_world(pose,"upperarm_"+side,Vector3.RIGHT,-minf(0.18,excess*3.0))
+	else:
+		blocker.position.z -= block_net_retreat(pose,rig,author)
 	for hand_index in 2:
 		update_block_hand(pose,rig,author,"l" if hand_index == 0 else "r",hand_index,delta)
 	for bone in rig.get_bone_count(): rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
@@ -357,20 +371,23 @@ func update_chest_contact() -> void:
 		previous_chest_top = chest_top
 
 func block_net_retreat(pose: Array, rig: Skeleton3D, author: RefCounted) -> float:
+	return maxf(arm_net_excess(pose,rig,author,"l"),arm_net_excess(pose,rig,author,"r"))
+
+func arm_net_excess(pose: Array, rig: Skeleton3D, author: RefCounted, side: String) -> float:
 	var furthest := Net.NET_Z-0.035
 	var tape := Net.NET_TOP+0.035
-	for side in ["l","r"]:
-		var previous: Vector3 = rig.to_global(author.point(pose,"upperarm_"+side))
-		for joint in ["lowerarm_","hand_","middle_03_"]:
-			var point: Vector3 = rig.to_global(author.point(pose,joint+side))
-			if previous.y <= tape: furthest = maxf(furthest,previous.z)
-			if point.y <= tape: furthest = maxf(furthest,point.z)
-			if (previous.y < tape) != (point.y < tape):
-				furthest = maxf(furthest,previous.lerp(point,inverse_lerp(previous.y,point.y,tape)).z)
-			previous = point
+	var previous: Vector3 = rig.to_global(author.point(pose,"upperarm_"+side))
+	for joint in ["lowerarm_","hand_","middle_03_"]:
+		var point: Vector3 = rig.to_global(author.point(pose,joint+side))
+		if previous.y <= tape: furthest = maxf(furthest,previous.z)
+		if point.y <= tape: furthest = maxf(furthest,point.z)
+		if (previous.y < tape) != (point.y < tape):
+			furthest = maxf(furthest,previous.lerp(point,inverse_lerp(previous.y,point.y,tape)).z)
+		previous = point
 	return furthest-(Net.NET_Z-0.035)
 
 func update_block_hand(pose: Array, rig: Skeleton3D, author: RefCounted, side: String, index: int, delta: float) -> void:
+	var shoulder := to_local(rig.to_global(author.point(pose,"upperarm_"+side)))
 	var elbow := to_local(rig.to_global(author.point(pose,"lowerarm_"+side)))
 	var wrist: Vector3 = author.point(pose,"hand_"+side)
 	var middle: Vector3 = author.point(pose,"middle_01_"+side)
@@ -385,6 +402,8 @@ func update_block_hand(pose: Array, rig: Skeleton3D, author: RefCounted, side: S
 	block_hands[index] = {
 		"wrist":wrist_point,
 		"elbow":elbow,
+		"shoulder":shoulder,
+		"previous_shoulder":block_hands[index].get("shoulder",shoulder),
 		"previous_elbow":block_hands[index].get("elbow",elbow),
 		"tip":tip,
 		"previous_wrist":block_hands[index].get("wrist",wrist_point),
@@ -401,16 +420,18 @@ func rebound_from_hand(incoming: Vector3, hit: Vector3, hand: Dictionary) -> Vec
 	var relative := incoming-motion
 	if normal.dot(relative) > 0.0: normal = -normal
 	var center: Vector3 = hand.center
-	var incidence := clampf(-relative.normalized().dot(normal),0.0,1.0)
+	var incidence := clampf(-incoming.normalized().dot(normal),0.0,1.0)
 	var surface: String = hand.get("surface","chest")
 	var top_edge := float(hand.get("top_edge",0.0))
 	var side_edge := float(hand.get("side_edge",0.0))
 	var edge := (hit-center).slide(normal).limit_length(0.23)
-	if surface == "palm" and incidence >= 0.55 and absf(side_edge) < 0.45:
+	if surface == "palm" and incidence >= 0.33 and absf(side_edge) < 0.65:
 		# A square, pressed palm sends the spike straight back and down.
 		var press_normal := normal.lerp(Vector3(0.0,-0.42,-0.91),0.62).normalized()
 		var speed := maxf(0.0,-relative.dot(press_normal))
-		return relative.slide(press_normal)*0.18+press_normal*speed*0.69+motion*0.18
+		var stuff := relative.slide(press_normal)*0.18+press_normal*speed*0.69+motion*0.18
+		stuff.z = minf(stuff.z,-maxf(3.0,incoming.z*0.40))
+		return stuff
 	normal = (normal+edge*1.45).normalized()
 	var normal_speed := minf(relative.dot(normal),0.0)
 	var give := float(hand.get("give",0.0))
@@ -492,9 +513,12 @@ func play_spike(time: float, delta: float) -> void:
 				var wrist: Vector3 = hand.previous_wrist.lerp(hand.wrist,progress)
 				var tip: Vector3 = hand.previous_tip.lerp(hand.tip,progress)
 				var elbow: Vector3 = hand.previous_elbow.lerp(hand.elbow,progress)
-				for is_hand in [true,false]:
-					var start := wrist if is_hand else elbow
-					var finish := tip if is_hand else wrist
+				var shoulder: Vector3 = hand.previous_shoulder.lerp(hand.shoulder,progress)
+				var joints := [tip,wrist,elbow,shoulder]
+				for segment in 3:
+					var is_hand := segment == 0
+					var start: Vector3 = joints[segment+1]
+					var finish: Vector3 = joints[segment]
 					var surface := Geometry3D.get_closest_point_to_segment(point,start,finish)
 					var gap := point.distance_to(surface)
 					last_block_gap = minf(last_block_gap,gap)
@@ -516,11 +540,18 @@ func play_spike(time: float, delta: float) -> void:
 							var travel := (wrist-point).dot(normal)/incidence
 							contact_center += direction*clampf(travel,0.0,0.30)
 						var along := (contact_center-wrist).dot(axis)/maxf(wrist.distance_to(tip),0.001)
-						hit_hand.surface = "fingers" if along >= 0.73 else "palm"
-						hit_hand.give = smoothstep(0.70,1.0,along)
-						hit_hand.top_edge = smoothstep(0.64,1.12,along)
+						hit_hand.surface = "fingers" if along >= 0.83 else "palm"
+						hit_hand.give = smoothstep(0.80,1.04,along)
+						hit_hand.top_edge = smoothstep(0.76,1.12,along)
 						var lateral := (contact_center-wrist-axis*(contact_center-wrist).dot(axis)).x
-						hit_hand.side_edge = signf(lateral)*smoothstep(0.035,0.15,absf(lateral))
+						hit_hand.side_edge = signf(lateral)*smoothstep(0.065,0.20,absf(lateral))
+						# Two palms close the seam even when the first contact is on an inside edge.
+						var other: Dictionary = block_hands[1 if hand.side == "l" else 0]
+						if not other.is_empty() and hit_hand.surface == "palm":
+							var other_center: Vector3 = other.center
+							var center: Vector3 = hand.center
+							if (contact_center.x-center.x)*(contact_center.x-other_center.x) <= 0.0 and absf(contact_center.y-other_center.y) < 0.18:
+								hit_hand.side_edge *= 0.35
 					else:
 						hit_hand.give = 0.68
 						hit_hand.center = surface
