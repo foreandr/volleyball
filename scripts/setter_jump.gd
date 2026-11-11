@@ -173,8 +173,13 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 		if approach_plant:
 			# Carry the plant's backswing into the spike instead of pumping overhead first.
 			arm_load = load_in*(1.0-smoothstep(LOAD_TIME,LOAD_TIME+0.17,pose_time))
+		var front_swing := 0.0
+		if lead_time > 0.0:
+			var sweep_back := smoothstep(0.0,0.12,pose_time)
+			front_swing = 0.20*smoothstep(0.0,lead_time*0.72,elapsed)*(1.0-sweep_back)
+			arm_load *= sweep_back
 		var jump_drive := 0.0 if approach_plant else arm_drive
-		author.rotate_world(pose,upper_arm,Vector3.RIGHT,(1.52+load_arm_extra)*arm_load)
+		author.rotate_world(pose,upper_arm,Vector3.RIGHT,(1.52+load_arm_extra)*arm_load-front_swing)
 		author.rotate_world(pose,forearm,Vector3.RIGHT,-0.25*jump_drive)
 		var shoulder: Vector3 = author.point(pose,upper_arm)
 		var elbow: Vector3 = author.point(pose,forearm)
