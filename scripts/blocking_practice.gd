@@ -106,6 +106,8 @@ func step_blocker(delta: float) -> void:
 	var scale_: float = rig.global_basis.get_scale().y
 	var raise := smoothstep(0.06,BLOCK_LOAD+0.14,pose_time)*(1.0-smoothstep(BLOCK_LOAD+0.63,BLOCK_LOAD+BLOCK_AIR+0.13,pose_time))
 	var press := smoothstep(BLOCK_LOAD+0.025,BLOCK_LOAD+0.24,pose_time)*(1.0-smoothstep(BLOCK_LOAD+0.58,BLOCK_LOAD+0.76,pose_time))
+	var low_clearance := 0.40*smoothstep(0.0,0.09,pose_time)*(1.0-smoothstep(BLOCK_LOAD+BLOCK_AIR+0.09,BLOCK_LOAD+BLOCK_AIR+0.20,pose_time))
+	blocker.position.z -= 0.26*maxf(raise,low_clearance)*(1.0-smoothstep(0.66,0.97,block_lift))
 	var shot: Vector3 = ball.global_position
 	var crunch := 0.0
 	if stage == Stage.HIT and pass_motion.z > 0.1:
@@ -113,8 +115,13 @@ func step_blocker(delta: float) -> void:
 		var age := clock-stage_start-crossing
 		crunch = smoothstep(-0.13,-0.015,age)*(1.0-smoothstep(0.04,0.19,age))*raise
 		if not is_finite(block_contact_at): shot = to_global(flight_point(pass_origin,pass_motion,crossing))
-	author.rotate_world(pose,"spine_01",Vector3.RIGHT,0.12*press+0.085*crunch)
-	author.rotate_world(pose,"spine_02",Vector3.RIGHT,0.10*press+0.10*crunch)
+	# Stay upright until the block has enough height to press over the tape.
+	var clearance := smoothstep(0.58,BLOCK_HEIGHT,block_lift)
+	var extra_height := smoothstep(BLOCK_HEIGHT,BLOCK_HEIGHT+0.508,block_lift)
+	var body_press := clearance*(1.0+0.70*extra_height)
+	blocker.position.z += 0.12*extra_height*press
+	author.rotate_world(pose,"spine_01",Vector3.RIGHT,(0.12*press+0.085*crunch)*body_press)
+	author.rotate_world(pose,"spine_02",Vector3.RIGHT,(0.10*press+0.10*crunch)*body_press)
 	var track := clampf(shot.x-blocker.position.x,-0.23,0.23)
 	block_tracking = lerpf(block_tracking,track,1.0-exp(-delta*17.0))
 	for hand_index in 2:
@@ -136,13 +143,30 @@ func step_blocker(delta: float) -> void:
 		var palm := HandPose.hand_basis(finger_direction,index_edge)*HandPose.hand_basis(fingers,across).inverse()*base.basis
 		author.set_world_basis(pose,"hand_"+side,base.basis.slerp(palm,raise))
 		spread_block_fingers(pose,rig,author,side,raise)
-		update_block_hand(pose,rig,author,side,hand_index,delta)
+	var retreat := block_net_retreat(pose,rig,author)
+	blocker.position.z -= retreat
+	for hand_index in 2:
+		update_block_hand(pose,rig,author,"l" if hand_index == 0 else "r",hand_index,delta)
 	for bone in rig.get_bone_count(): rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
 	if pose_time >= BLOCK_LOAD+BLOCK_AIR+0.20:
 		block_elapsed = -1.0
 		block_lift = 0.0
 		blocker.position = block_base
 		blocker.animator.seek(0.0,true)
+
+func block_net_retreat(pose: Array, rig: Skeleton3D, author: RefCounted) -> float:
+	var furthest := Net.NET_Z-0.035
+	var tape := Net.NET_TOP+0.035
+	for side in ["l","r"]:
+		var previous: Vector3 = rig.to_global(author.point(pose,"upperarm_"+side))
+		for joint in ["lowerarm_","hand_","middle_03_"]:
+			var point: Vector3 = rig.to_global(author.point(pose,joint+side))
+			if previous.y <= tape: furthest = maxf(furthest,previous.z)
+			if point.y <= tape: furthest = maxf(furthest,point.z)
+			if (previous.y < tape) != (point.y < tape):
+				furthest = maxf(furthest,previous.lerp(point,inverse_lerp(previous.y,point.y,tape)).z)
+			previous = point
+	return furthest-(Net.NET_Z-0.035)
 
 func update_block_hand(pose: Array, rig: Skeleton3D, author: RefCounted, side: String, index: int, delta: float) -> void:
 	var wrist: Vector3 = author.point(pose,"hand_"+side)
