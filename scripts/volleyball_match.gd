@@ -22,7 +22,7 @@ const SERVES := [
 	preload("res://scripts/spin_serve.gd"),
 ]
 const SERVICE_START := [-6.40,-6.40,-7.4,-8.15]
-const WIN_SCORE := 7
+const WIN_SCORE := 15
 const RECOVERY_TIME := 0.32
 const PLAYER_GROUND_Y := 0.04
 const CPU_SPRINT_SPEED := 8.4

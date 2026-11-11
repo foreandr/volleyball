@@ -1,7 +1,7 @@
 extends SceneTree
 
 const STEP := 1.0/60.0
-const MAX_TICKS := 18000
+const TICKS_PER_TARGET_POINT := 3000
 const CAPTURE_FRAMES := 8
 
 func _initialize() -> void:
@@ -61,7 +61,7 @@ func run_match(match_seed: int, review_point: int, output_dir: String) -> Dictio
 	var stuck_frames := 0
 	var last_ball := Vector3.INF
 	var flags := []
-	for tick in MAX_TICKS:
+	for tick in range(game.WIN_SCORE*TICKS_PER_TARGET_POINT):
 		game.step_match(STEP,page.player_controls)
 		if game.phase == game.Phase.LIVE:
 			if review_point == game.rallies+1 and DisplayServer.get_name() != "headless":
