@@ -300,11 +300,11 @@ func show_match_tuning() -> void:
 	var tuning := VBoxContainer.new()
 	tuning.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(tuning)
-	add_attack_tuning_slider(tuning,"Attack vertical","MatchAttackVertical","in",32,65,1,demo_match.attack_vertical,demo_match.set_attack_vertical)
+	add_attack_tuning_slider(tuning,"Attack vertical","MatchAttackVertical","in",30,65,1,demo_match.attack_vertical,demo_match.set_attack_vertical)
 	add_attack_tuning_slider(tuning,"Block vertical","MatchBlockVertical","in",20,65,1,demo_match.block_vertical,
 		func(value: float): demo_match.block_vertical = value)
 	add_attack_tuning_slider(tuning,"Serve vertical","MatchServeVertical","in",30,65,1,demo_match.serve_vertical,demo_match.set_serve_vertical)
-	add_attack_tuning_slider(tuning,"Spike strength","MatchSpikeStrength","%",40,175,5,100,demo_match.set_spike_strength)
+	add_attack_tuning_slider(tuning,"Spike strength","MatchSpikeStrength","%",40,175,5,demo_match.spike_strength*100.0,demo_match.set_spike_strength)
 	match_sound = CheckButton.new()
 	match_sound.text = "Ball sounds (M)"
 	match_sound.focus_mode = Control.FOCUS_NONE
