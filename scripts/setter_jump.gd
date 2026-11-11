@@ -197,6 +197,12 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 			var forearm_pose: Transform3D = author.world_pose(pose,rig.find_bone(forearm))
 			var straighten := Quaternion((wrist-elbow).normalized(),(elbow-shoulder).normalized())
 			author.set_world_basis(pose,forearm,Basis(Quaternion.IDENTITY.slerp(straighten,extension))*forearm_pose.basis)
+		if front_swing > 0.0:
+			var outward := 1.0 if left else -1.0
+			var chest: Vector3 = author.point(pose,"spine_03")
+			var ready_hand := chest+Vector3(outward*0.105,0.08,0.20)/scale_
+			var ready_weight := smoothstep(0.0,0.20,front_swing)
+			author.limb(pose,upper_arm,forearm,"hand_"+side,ready_hand,Vector3(outward*0.40,-1.0,0.0),ready_weight,105.0)
 		if jump_drive > 0.0:
 			var outward := 1.0 if left else -1.0
 			var hand: String = "hand_"+side
