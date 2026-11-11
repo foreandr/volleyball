@@ -475,12 +475,13 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 				cutoff = Net.RADIUS+(0.04 if hand_setting or pancake else 0.05)
 				if not hand_setting and not low_save.active:
 					# Bring the platform toward the approaching ball, then test the posed bones again.
-					var preview: Vector3 = path.call(minf(end,sweep_end+0.025))
+					var preview: Vector3 = path.call(minf(end,sweep_end+0.070))
 					var live_contact := dig_contact_segment(first,preview,false,previous_dig_pose,previous_dig_pose)
 					var offset := live_contact[0]-live_contact[1]
-					var steer := (1.0-smoothstep(0.28,0.51,offset.length()))*smoothstep(0.0,0.055,elapsed)
+					var steer := (1.0-smoothstep(0.40,0.74,offset.length()))*smoothstep(0.0,0.055,elapsed)
 					if steer > 0.0 and offset.length() > 0.07:
-						reach_platform(offset*1.25,steer)
+						var lift := clampf(-incoming.y*0.016,0.0,0.16)
+						reach_platform(offset*1.85+Vector3.UP*lift,steer,0.54,true)
 						previous_dig_pose = dig_bones()
 						contact = dig_contact_segment(first,last,false,initial_pose,previous_dig_pose)
 						point = contact[0]
@@ -717,14 +718,22 @@ func pose_reach(weight: float, intercept: Vector3) -> void:
 		if is_finite(touch_time): planted_travel *= 1.0-smoothstep(0.10,0.40,rear_follow)
 		setter.pose_reception_reach(local*reach_step,local*planted_travel,weight,pose_progress,ready_pose,reach,false,0,intercept)
 
-func reach_platform(offset: Vector3, weight := 1.0) -> void:
+func reach_platform(offset: Vector3, weight := 1.0, reach_limit := 0.26, steer_sideways := false) -> void:
 	var rig: Skeleton3D = setter.skeleton
 	var author: RefCounted = setter.get_pose_author()
 	var pose: Array = []
 	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
 	var grip: Vector3 = (author.point(pose,"hand_l")+author.point(pose,"hand_r"))*0.5
-	var shift := rig.global_basis.inverse()*global_basis*offset.limit_length(0.26)
-	PlatformPose.connect_arms(pose,author,grip+shift,0.82*weight)
+	var shift := rig.global_basis.inverse()*global_basis*offset.limit_length(reach_limit)
+	var lateral := Vector3.RIGHT
+	var weight_scale := 0.82
+	if steer_sideways:
+		var shoulders: Vector3 = (author.point(pose,"upperarm_l")+author.point(pose,"upperarm_r"))*0.5
+		var reach_direction := grip+shift-shoulders
+		var yaw := clampf(atan2(reach_direction.x,maxf(0.12,reach_direction.z)),-0.80,0.80)
+		lateral = lateral.rotated(Vector3.UP,yaw)
+		weight_scale = 1.0
+	PlatformPose.connect_arms(pose,author,grip+shift,weight_scale*weight,0.022,lateral)
 	for side in ["l","r"]:
 		for part in ["upperarm_","lowerarm_","hand_"]:
 			var bone := rig.find_bone(part+side)

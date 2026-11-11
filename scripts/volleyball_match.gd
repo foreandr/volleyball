@@ -1355,10 +1355,14 @@ func start_block(index: int, remaining := INF, reads_second := false) -> void:
 func soft_block_rebound(rebound: Vector3, power: float) -> Vector3:
 	if power > 0.56: return rebound
 	var looseness := 1.0-smoothstep(0.0,0.62,power)
-	var angle := deg_to_rad(lerpf(19.0,44.0,looseness))
+	var scatter := lerpf(0.32,1.0,looseness)
+	var angle := deg_to_rad(lerpf(34.0,96.0,scatter))
 	var horizontal := rebound.slide(Vector3.UP).rotated(Vector3.UP,randf_range(-angle,angle))
-	horizontal *= randf_range(0.58,1.52)
-	return horizontal+Vector3.UP*(rebound.y+randf_range(-0.65,0.85)*looseness)
+	horizontal *= lerpf(1.0,randf_range(0.24,1.85),scatter)
+	if randf() < 0.30*looseness:
+		horizontal.z *= -randf_range(0.60,1.18)
+	var lift := rebound.y+randf_range(-4.0,3.7)*scatter
+	return horizontal+Vector3.UP*lift
 
 func block_contact_power(palm_gap: float, along: float, square: float, attack_depth: float) -> float:
 	var power := (1.0-smoothstep(0.09,0.24,palm_gap))*(1.0-smoothstep(0.72,1.22,along))*smoothstep(0.18,0.66,square)
