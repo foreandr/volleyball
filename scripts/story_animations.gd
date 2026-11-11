@@ -2,6 +2,8 @@ extends "res://scripts/create.gd"
 const BallPreview = preload("res://scripts/animation_ball_preview.gd")
 const Court = preload("res://scripts/preview_court.gd")
 const SETTING_CAMERA_FOCUS := Vector3(0,1.45,2.6)
+const SERVING_CAMERA_POSITION := Vector3(0.0,3.4,-18.1)
+const SERVING_CAMERA_FOCUS := Vector3(0.0,1.12,2.6)
 const BallTimingRing = preload("res://scripts/ball_timing_ring.gd")
 const Flight = preload("res://scripts/pass_flight.gd")
 const SideKneeSlide = preload("res://scripts/side_knee_slide.gd")
@@ -232,6 +234,9 @@ func select_category(category: String) -> void:
 		serving_position = Vector3(0.0,0.04,-6.20)
 		type_indices["Serving"] = MOVE_TYPES["Serving"].find("Underhand")
 		preview_player.get_node("DirectionArrows").hide()
+		setting_camera_focus = SERVING_CAMERA_FOCUS
+		preview_camera.position = SERVING_CAMERA_POSITION
+		preview_camera.look_at(setting_camera_focus)
 	preview_player.get_node("DirectionArrows").show_dive_ring = category == "Forearm reception"
 	clear_content()
 	set_title(category.to_upper())
@@ -657,9 +662,6 @@ func refresh_type() -> void:
 		underhand_serve = preload("res://scripts/underhand_serve.gd").new()
 		preview_player.get_parent().add_child(underhand_serve)
 		underhand_serve.configure(preview_player,serving_position)
-		setting_camera_focus = SETTING_CAMERA_FOCUS
-		preview_camera.position = Vector3(0.0,7.5,-11.2)
-		preview_camera.look_at(setting_camera_focus)
 		preview.grab_focus()
 		return
 	if selected_category == "Serving":
