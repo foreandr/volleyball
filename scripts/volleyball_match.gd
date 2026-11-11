@@ -97,6 +97,7 @@ var jump_set_started := [false,false,false,false]
 var recoveries := {}
 var trace := Trace.new()
 var block_lane_flight := [-1,-1]
+var opponent_shot_reads: Array[Dictionary] = [{},{}]
 var block_line := [true,true]
 var pocket_x := [0.0,0.0]
 var last_set_apex := 0.0
@@ -266,6 +267,7 @@ func reset_match() -> void:
 	last_point.clear()
 	last_called_set_x = [INF,INF]
 	block_calls = [0,0]
+	opponent_shot_reads = [{},{}]
 	second_ball_options = 0
 	score = [0,0]
 	service_team = 0
@@ -641,7 +643,27 @@ func on_spike(actor: Node3D, point: Vector3, motion: Vector3, spin_rate: float) 
 				stroke = "Free ball"
 				launch(point,frame.global_basis*safe,"free",index)
 				return
+	observe_opponent_shot(1-team(index),point,motion,spin_rate)
 	launch(point,motion,"spike",index,spin_rate)
+
+func shot_read_zone(local_x: float) -> int:
+	return 0 if absf(local_x) < 1.3 else (1 if local_x > 0.0 else -1)
+
+func observe_opponent_shot(side: int, point: Vector3, motion: Vector3, spin_rate: float) -> void:
+	var frame := frames[side]
+	var time := Flight.landing_time(point,motion,Flight.spike_gravity(spin_rate))
+	var landing := frame.to_local(point+motion*time)
+	if absf(landing.x) > 4.53 or landing.z < -5.03 or landing.z > Net.NET_Z: return
+	var zone := shot_read_zone(frame.to_local(point).x)
+	var reads := opponent_shot_reads[side]
+	var count := int(reads.get(zone,Vector2.ZERO).y)
+	var previous := float(reads.get(zone,Vector2(landing.x,0.0)).x)
+	reads[zone] = Vector2(lerpf(previous,landing.x,0.23),mini(16,count+1))
+
+func learned_cover(side: int, attack_x: float, base_cover: float) -> float:
+	var read: Vector2 = opponent_shot_reads[side].get(shot_read_zone(attack_x),Vector2.ZERO)
+	var confidence := smoothstep(2.0,7.0,read.y)
+	return base_cover+clampf(read.x-base_cover,-1.1,1.1)*confidence
 
 func route_ball_sound() -> void:
 	if OS.get_name() != "Windows": return
@@ -1565,6 +1587,7 @@ func position_defense(delta: float) -> void:
 			take_line = absf(players[near].position.x-line_x) <= absf(players[near].position.x-cross_x)
 		x = line_x if take_line else cross_x
 		cover = cross_goal.x if take_line else line_goal.x
+		if not is_human(deep): cover = learned_cover(defense_side,attack.x,cover)
 		var hit_at: float = driver.approach_expected_hit_at
 		if not is_human(expected_hitter) and attack_aim_flight != flight_number and driver.jump.active and not is_finite(driver.swing_drive_started):
 			var attack_frame := frames[hitter_side]
