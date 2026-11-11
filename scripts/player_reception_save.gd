@@ -16,6 +16,8 @@ var start_time: float
 var start_yaw: float
 var travel_scale := 1.0
 var entry_blend := ENTRY_BLEND
+var tracks_platform := false
+var platform_aim := Vector3.ZERO
 var entry_pose: Array[Transform3D] = []
 var ready: Array[Transform3D] = []
 var clasp: Array[Transform3D] = []
@@ -48,12 +50,15 @@ func plan(actor: Node3D, path: Callable, time: float, end: float, clip: Animatio
 		pancake = low_save
 		active = true
 		aim = point
+		platform_aim = point
 		start = actor.position
 		heading = offset.normalized()
 		contact_time = high
 		start_time = time
 		start_yaw = actor.rotation.y
-		travel_scale = clampf((distance-0.40)/(1.22 if low_save else 0.74),0.18,1.18) if quick_save else 1.0
+		tracks_platform = quick_save and not low_save
+		var reach_ahead := 0.72 if tracks_platform else 0.40
+		travel_scale = clampf((distance-reach_ahead)/(1.22 if low_save else 0.74),0.18,1.18) if quick_save else 1.0
 		entry_blend = 0.075 if quick_save else ENTRY_BLEND
 		entry_pose.clear()
 		var rig: Skeleton3D = actor.skeleton
@@ -63,11 +68,13 @@ func plan(actor: Node3D, path: Callable, time: float, end: float, clip: Animatio
 		return true
 	return false
 
-func sample(actor: Node3D, time: float, release: float) -> void:
+func sample(actor: Node3D, time: float, release: float, intercept := Vector3.INF) -> void:
 	var pose_time := Dive.WINDUP+(time-contact_time)
 	if time < contact_time:
 		pose_time = Dive.WINDUP*clampf(inverse_lerp(start_time,contact_time,time),0.0,1.0)
-	actor.pose_reception_dive(ready,clasp,start,heading,pose_time,aim,release-contact_time+Dive.WINDUP,pancake,travel_scale)
+	if tracks_platform and intercept.is_finite(): platform_aim = intercept
+	var target := platform_aim if tracks_platform else aim
+	actor.pose_reception_dive(ready,clasp,start,heading,pose_time,target,release-contact_time+Dive.WINDUP,pancake,travel_scale,tracks_platform)
 	var entry_weight := smoothstep(0.0,minf(entry_blend,contact_time-start_time),time-start_time)
 	if entry_weight < 1.0:
 		var rig: Skeleton3D = actor.skeleton

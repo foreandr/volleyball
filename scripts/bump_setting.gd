@@ -391,7 +391,11 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 			var target := track_hand_dig(path,time,end,delta) if face_dig else hand_intercept(path,time,end)
 			HandPose.apply(setter,to_global(target),smoothstep(0.0,0.048 if face_dig else (0.062 if quick_hand_receive else 0.105),elapsed),Vector3.ZERO,0.0,0.0,face_dig,-(global_basis*incoming))
 		elif low_save.active:
-			low_save.sample(setter,time,low_save.contact_time+0.07)
+			var intercept := Vector3.INF
+			if low_save.tracks_platform:
+				var aim_time := minf(end,clampf(time+0.025,low_save.contact_time-0.055,low_save.contact_time+0.025))
+				intercept = path.call(aim_time)
+			low_save.sample(setter,time,low_save.contact_time+0.07,intercept)
 		else:
 			var pose_time := 0.045 if strict_dig else 0.09
 			var windup := lerpf(-0.14,0.0,smoothstep(0.0,pose_time,elapsed))

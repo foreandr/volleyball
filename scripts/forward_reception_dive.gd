@@ -22,7 +22,7 @@ const KEYS := [
 	[1.28,0.00,0.0],
 ]
 
-static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D], clasp: Array[Transform3D], start: Vector3, heading: Vector3, time: float, ball_point: Vector3, release_time: float, pancake := false, travel_scale := 1.0) -> void:
+static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D], clasp: Array[Transform3D], start: Vector3, heading: Vector3, time: float, ball_point: Vector3, release_time: float, pancake := false, travel_scale := 1.0, track_platform := false) -> void:
 	var kick_time := time-WINDUP-LEG_KICK_OFFSET
 	var kick := smoothstep(0.0,0.13,kick_time)*(1.0-smoothstep(0.22,0.22+LEG_LOWER_DURATION,kick_time))
 	# Start later while preserving the reach at the intended ball contact.
@@ -50,6 +50,8 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 		var lunge := smoothstep(0.16,0.39,time)*(1.0-smoothstep(0.0,0.15,since_brace))
 		pitch -= deg_to_rad(29.0)*lunge
 		drop += 0.09*lunge
+		if track_platform:
+			drop -= 0.065*smoothstep(0.14,0.31,time)*(1.0-smoothstep(0.40,0.60,time))
 	travel *= travel_scale
 	actor.position = start+heading*travel
 	actor.rotation.y = atan2(heading.x,heading.z)
@@ -112,11 +114,12 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 		author.limb(pose,"upperarm_r","lowerarm_r","hand_r",target,Vector3(-0.30,-0.55,0.10),reach,174.0)
 		flatten_palm(pose,author,rig,reach)
 	elif reach > 0.0:
-		var target := rig.global_transform.affine_inverse()*ball_point+Vector3(0,-0.14,0.18)
+		var bias := Vector3.ZERO if track_platform else Vector3(0,-0.14,0.18)
+		var target := rig.global_transform.affine_inverse()*ball_point+bias
 		var head_height: float = author.point(pose,"Head").y
 		if not pancake:
 			var shoulder_height: float = (author.point(pose,"upperarm_l").y+author.point(pose,"upperarm_r").y)*0.5
-			head_height = minf(head_height-0.17,shoulder_height-0.12)
+			head_height = minf(head_height-(0.09 if track_platform else 0.17),shoulder_height-(0.04 if track_platform else 0.12))
 		target.y = clampf(target.y,0.13,maxf(0.13,head_height))
 		PlatformPose.connect_arms(pose,author,grip.lerp(target,reach),reach,0.0)
 		var turn := Quaternion(PlatformPose.platform_axis(clasp,author),PlatformPose.platform_axis(pose,author))
