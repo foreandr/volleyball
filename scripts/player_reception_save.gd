@@ -23,7 +23,7 @@ var entry_pose: Array[Transform3D] = []
 var ready: Array[Transform3D] = []
 var clasp: Array[Transform3D] = []
 
-func plan(actor: Node3D, path: Callable, time: float, end: float, clip: Animation, quick_save := false, allow_pancake := true, pancake_requires_chase := false) -> bool:
+func plan(actor: Node3D, path: Callable, time: float, end: float, clip: Animation, quick_save := false, allow_pancake := true, pancake_requires_chase := false, approach_velocity := Vector3.ZERO) -> bool:
 	if active: return true
 	var lookahead := minf(time+Dive.WINDUP,end)
 	if lookahead <= time: return false
@@ -40,10 +40,11 @@ func plan(actor: Node3D, path: Callable, time: float, end: float, clip: Animatio
 			var point: Vector3 = path.call(middle)
 			if point.y > height: low = middle
 			else: high = middle
-		if high-time < (0.085 if quick_save else MIN_WINDUP): continue
 		var point: Vector3 = path.call(high)
 		var offset := (point-actor.position).slide(Vector3.UP)
 		var distance := offset.length()
+		var momentum := smoothstep(2.6,7.7,approach_velocity.dot(offset.normalized())) if quick_save and not low_save else 0.0
+		if high-time < (lerpf(0.085,0.060,momentum) if quick_save else MIN_WINDUP): continue
 		if low_save and pancake_requires_chase and (point-first).slide(Vector3.UP).dot(offset.normalized()) <= 0.35*(high-time): continue
 		var local := actor.basis.inverse()*offset
 		var wide: bool = quick_save and not low_save and distance > 1.38 and absf(local.x) > absf(local.z)*0.64
@@ -52,6 +53,7 @@ func plan(actor: Node3D, path: Callable, time: float, end: float, clip: Animatio
 		var extra := clampf(toward_speed*0.035,0.0,0.32)
 		var maximum := (2.55 if low_save else 1.88)+extra
 		if wide: maximum = 2.85+extra
+		maximum += 0.80*momentum
 		if distance < minimum or distance > maximum or offset.normalized().dot(actor.basis.z)<(-0.12 if wide else (0.30 if quick_save else 0.62)): continue
 		pancake = low_save
 		wide_arm = ("l" if local.x > 0.0 else "r") if wide else ""
@@ -65,8 +67,8 @@ func plan(actor: Node3D, path: Callable, time: float, end: float, clip: Animatio
 		start_yaw = actor.rotation.y
 		tracks_platform = quick_save and not low_save
 		var reach_ahead := 0.72 if tracks_platform else 0.40
-		travel_scale = clampf((distance-reach_ahead)/(1.22 if low_save else 0.74),0.18,1.18) if quick_save else 1.0
-		if wide: travel_scale = clampf((distance-0.76)/0.78,0.60,2.25)
+		travel_scale = clampf((distance-reach_ahead)/(1.22 if low_save else 0.74),0.18,lerpf(1.18,2.65,momentum)) if quick_save else 1.0
+		if wide: travel_scale = clampf((distance-0.76)/0.78,0.60,2.25+0.35*momentum)
 		entry_blend = 0.075 if quick_save else ENTRY_BLEND
 		entry_pose.clear()
 		var rig: Skeleton3D = actor.skeleton

@@ -1142,6 +1142,7 @@ func tick_receive(delta: float, previous: float) -> void:
 	var catch_point := path_point(cue)
 	if not is_human(index) and frame.to_local(catch_point).z > Net.NET_Z+0.07: return
 	var actor := players[index]
+	bump.low_save_approach_velocity = Vector3.ZERO
 	if not is_human(index):
 		if technique != 0 and not is_finite(bump.pressed_at) and not overhead_available(index,technique):
 			cpu_technique = 1 if technique == 2 and overhead_available(index,1) else 0
@@ -1168,7 +1169,9 @@ func tick_receive(delta: float, previous: float) -> void:
 			elif is_finite(bump.pressed_at):
 				speed = minf(speed,2.0)
 			if turning_chase and to_drop.length() > 1.55: speed = CPU_SPRINT_SPEED
+			var before_move := actor.position
 			move_cpu(index,target,delta,speed,face,is_dig or cpu_setting or free_ball or flight_kind == "serve",turning_chase)
+			bump.low_save_approach_velocity = (actor.position-before_move)/maxf(delta,0.001)
 		var prep := 0.39 if technique == 2 else (0.40 if cpu_dig else (0.18 if cpu_setting and technique == 0 else 0.27))
 		if elapsed >= cue-prep: queue_receive(index,technique)
 	if not is_finite(bump.pressed_at): return
