@@ -46,6 +46,7 @@ var footwork: Array[RefCounted] = []
 var called_pin := Vector3.ZERO
 var called_pin_flight := -1
 var attack_aim_flight := -1
+var attack_aim_read_at := -INF
 var last_called_set_x := [INF,INF]
 var transition_possession := [false,false]
 var human: Node3D
@@ -531,7 +532,7 @@ func toward_incoming(index: int, point: Vector3) -> Vector3:
 	var local := frames[team(index)].global_basis.inverse()*(path_point(maxf(0.0,elapsed-0.10))-point)
 	return local.slide(Vector3.UP).normalized()
 
-func choose_shot(index: int, contact := Vector3.INF, block_at := Vector3.INF) -> Vector3:
+func choose_shot(index: int, contact := Vector3.INF, block_at := Vector3.INF, previous_shot := Vector3.INF) -> Vector3:
 	if is_human(index) and aim_point.is_finite() and aim_point.z > Net.NET_Z:
 		return Vector3(clampf(aim_point.x,-6.5,6.5),Flight.FLOOR,clampf(aim_point.z,4.5,15.0))
 	var side := team(index)
@@ -551,6 +552,9 @@ func choose_shot(index: int, contact := Vector3.INF, block_at := Vector3.INF) ->
 			if absf(crossing) > Net.NET_HALF_WIDTH-Net.RADIUS-0.12: continue
 			var shot_score := minf(5.0,(target-backcourt).slide(Vector3.UP).length())*0.19
 			shot_score -= absf(x)*0.038
+			if previous_shot.is_finite():
+				var change := (target-contact).slide(Vector3.UP).angle_to((previous_shot-contact).slide(Vector3.UP))
+				shot_score -= change*0.55
 			if block_at.is_finite():
 				var through := lane_at_depth(contact,target,block_at.z)
 				var gap := absf(through-block_at.x)
@@ -1697,15 +1701,7 @@ func position_defense(delta: float) -> void:
 		cover = cross_goal.x if take_line else line_goal.x
 		if not is_human(deep): cover = learned_cover(defense_side,attack.x,cover)
 		var hit_at: float = driver.approach_expected_hit_at
-		if not is_human(expected_hitter) and attack_aim_flight != flight_number and driver.jump.active and not is_finite(driver.swing_drive_started):
-			var attack_frame := frames[hitter_side]
-			var block_position := players[near].position if is_human(near) or blocks.has(near) else Vector3(x,0.04,3.42)
-			var wall := attack_frame.to_local(frame.to_global(block_position))
-			wall.z = clampf(wall.z-0.36,Net.NET_Z+0.10,Net.NET_Z+0.55)
-			var contact: Vector3 = driver.rally_set_target
-			contact.y = driver.set_contact_height()
-			driver.swing_aim = choose_shot(expected_hitter,contact,wall)
-			attack_aim_flight = flight_number
+		update_air_attack_read(expected_hitter,near,driver)
 		if is_finite(driver.swing_drive_started):
 			hit_at = driver.swing_drive_started+driver.swing_drive_duration*0.95
 			var shot: Vector3 = frame.to_local(frames[hitter_side].to_global(driver.swing_aim))
@@ -1734,6 +1730,30 @@ func position_defense(delta: float) -> void:
 			start_block(near,timing,dump_ready and not overpass_ready)
 	if not is_human(deep) and not blocks.has(deep) and not set_jumps[deep].active:
 		move_cpu(deep,frame.to_global(Vector3(clampf(cover,-4.05,4.05),0.04,depth)),delta)
+
+func update_air_attack_read(hitter: int, blocker: int, driver: Node3D) -> void:
+	if is_human(hitter) or not driver.jump.active: return
+	if is_finite(driver.swing_drive_started):
+		var drive_age: float = driver.clock-driver.swing_drive_started
+		if drive_age > minf(0.045,driver.swing_drive_duration*0.28): return
+	if driver.jump.elapsed <= driver.jump.load_duration()+0.018: return
+	var first_read := attack_aim_flight != flight_number
+	if not first_read and match_clock-attack_aim_read_at < 0.070: return
+	var frame := frames[team(hitter)]
+	var wall := frame.to_local(players[blocker].global_position)
+	if blocks.has(blocker) and blocks[blocker].hands.size() == 2:
+		var hands: Array = blocks[blocker].hands
+		wall.x = frame.to_local((hands[0]+hands[1])*0.5).x
+	if wall.z > Net.NET_Z+1.60:
+		wall = Vector3.INF
+	else:
+		wall.z = clampf(wall.z-0.36,Net.NET_Z+0.10,Net.NET_Z+0.55)
+	var contact: Vector3 = driver.approach_intercept if driver.approach_intercept.is_finite() else driver.rally_set_target
+	if contact.y < Net.NET_TOP: contact.y = driver.set_contact_height()
+	var previous: Vector3 = Vector3.INF if first_read else driver.swing_aim
+	driver.swing_aim = choose_shot(hitter,contact,wall,previous)
+	attack_aim_flight = flight_number
+	attack_aim_read_at = match_clock
 
 func lane_at_depth(from: Vector3, to: Vector3, depth: float) -> float:
 	var span := to.z-from.z
