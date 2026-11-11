@@ -17,7 +17,7 @@ const RECEIVE_START := Vector3(3.05,0.04,-3.10)
 const ATTACK_SERVE_SOURCE := Vector3(3.05,2.8,8.5)
 const CPU_HOME := Vector3(-0.55,0.04,3.10)
 const RALLY_SET_ZONES := 7
-const RALLY_SET_REACH := 2.75
+const RALLY_SET_NET_CLEARANCE := 0.3048
 const PIN_HEIGHT := 2.75
 const SET_APEX := 5.0
 const SET_TOPSPIN_RPS := 2.2
@@ -311,22 +311,17 @@ func reset_feed() -> void:
 
 func call_rally_set(passer: Vector3) -> void:
 	# Number the lanes from left to right as seen from the receiving end.
-	var depth := minf(PIN.z,passer.z+2.25)
+	var nearest := clampi(roundi(3.0-passer.x*RALLY_SET_ZONES/9.0),0,RALLY_SET_ZONES-1)
 	var candidates: Array[int] = []
-	var nearest := 0
-	for zone in RALLY_SET_ZONES:
-		var x := rally_zone_x(zone)
-		if absf(x-passer.x) < absf(rally_zone_x(nearest)-passer.x): nearest = zone
-		if Vector2(x-passer.x,depth-passer.z).length() <= RALLY_SET_REACH: candidates.append(zone)
+	for zone in range(maxi(0,nearest-1),mini(RALLY_SET_ZONES,nearest+2)):
+		candidates.append(zone)
 	if candidates.size() > 1: candidates.erase(rally_set_index)
-	rally_set_index = nearest if candidates.is_empty() else candidates.pick_random()
-	var lateral := absf(rally_zone_x(rally_set_index)-passer.x)
-	depth = minf(depth,passer.z+sqrt(maxf(0.0,RALLY_SET_REACH*RALLY_SET_REACH-lateral*lateral)))
-	rally_set_target = Vector3(rally_zone_x(rally_set_index),PIN.y,depth)
+	rally_set_index = candidates.pick_random()
+	rally_set_target = Vector3(rally_zone_x(rally_set_index),PIN.y,Net.NET_Z-RALLY_SET_NET_CLEARANCE)
 	region.position = rally_set_target
 	region.show()
 	if is_instance_valid(rally_set_call):
-		rally_set_call.text = "Setter calls Zone %d" % (rally_set_index+1)
+		rally_set_call.text = "Setter calls Zone %d" % ((rally_set_index+1)*10)
 		rally_set_call.show()
 	trace.write("setter_call",clock,{"zone":rally_set_index+1,"target":rally_set_target,"passer":passer},true)
 
