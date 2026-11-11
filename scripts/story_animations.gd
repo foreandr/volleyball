@@ -254,7 +254,7 @@ func start_demo_match() -> void:
 	var status := label("",17)
 	status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(status)
-	content.add_child(label("WASD to move | Shift to sprint\nQ forearms | E hands | F jump set\nSpace serves, attacks, or blocks\nMouse aims | Scroll changes height\nLeft-click or E to set the second ball\nB switches blocker | M mutes sound",16))
+	content.add_child(label("WASD to move | Shift to sprint\nQ forearms | E hands | F jump set\nSpace serves, attacks, or blocks\nMouse aims | Scroll zooms\nShift + scroll changes height\nLeft-click or E to set the second ball\nB switches blocker | M mutes sound",16))
 	var styles := OptionButton.new()
 	for title in ["Underhand","Standing float","Jump float","Spin serve"]: styles.add_item(title)
 	styles.focus_mode = Control.FOCUS_NONE
@@ -1489,7 +1489,10 @@ func handle_preview_input(event: InputEvent) -> void:
 			demo_match.click_set()
 			preview.accept_event()
 		elif event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_WHEEL_UP,MOUSE_BUTTON_WHEEL_DOWN]:
-			demo_match.change_arc(0.20 if event.button_index == MOUSE_BUTTON_WHEEL_UP else -0.20)
+			var wheel := (1.0 if event.button_index == MOUSE_BUTTON_WHEEL_UP else -1.0)*maxf(0.1,event.factor)
+			if event.shift_pressed: demo_match.change_arc(wheel*0.20)
+			else: zoom_attack_camera(wheel)
+			preview.accept_event()
 		return
 	if is_instance_valid(blocking_practice):
 		if event is InputEventMouseMotion and event.button_mask & MOUSE_BUTTON_MASK_MIDDLE:
@@ -1727,11 +1730,12 @@ func orbit_setting_camera(pixels: Vector2) -> void:
 
 func zoom_attack_camera(wheel: float) -> void:
 	var offset := preview_camera.position-setting_camera_focus
-	var distance := clampf(offset.length()*exp(-wheel*0.17),2.8,24.0)
+	var maximum := 36.0 if is_instance_valid(demo_match) else 24.0
+	var distance := clampf(offset.length()*exp(-wheel*0.17),2.8,maximum)
 	var actor_focus := preview_player.position+Vector3.UP*2.0
 	if is_instance_valid(setting_drill) and setting_drill.jump.active:
 		actor_focus = setting_drill.jump.start+Vector3(0.0,2.0,0.45)
-	if not is_instance_valid(underhand_serve):
+	if not is_instance_valid(underhand_serve) and not is_instance_valid(demo_match):
 		setting_camera_focus = SETTING_CAMERA_FOCUS.lerp(actor_focus,1.0-smoothstep(4.0,14.0,distance))
 	preview_camera.position = setting_camera_focus+offset.normalized()*distance
 	preview_camera.look_at(setting_camera_focus)
