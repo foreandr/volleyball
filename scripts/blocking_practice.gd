@@ -326,9 +326,12 @@ func rebound_from_hand(incoming: Vector3, hit: Vector3, hand: Dictionary) -> Vec
 	var edge_speed := relative.length()
 	var carry := relative*0.78
 	carry.x += side_edge*minf(7.0,edge_speed*0.35)
-	carry.y = lerpf(carry.y,minf(4.5,edge_speed*0.22),top_edge)
+	carry.y = lerpf(carry.y,minf(5.0,edge_speed*0.26),top_edge)
 	rebound = rebound.lerp(carry,maxf(top_edge,absf(side_edge))*0.82)
-	return rebound+motion*0.52
+	rebound += motion*0.52
+	# Let a ball off the fingertips float into the backcourt with less horizontal pace.
+	var horizontal := rebound.slide(Vector3.UP)
+	return rebound-horizontal*(0.55*top_edge)
 
 func spread_block_fingers(pose: Array, rig: Skeleton3D, author: RefCounted, side: String, weight: float) -> void:
 	var digits: Array[String] = ["index","middle","ring","pinky"]
