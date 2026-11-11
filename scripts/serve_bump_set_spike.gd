@@ -155,7 +155,10 @@ func tick_demo(delta: float, controls: RefCounted) -> void:
 			approach_space_held = true
 			trace_input = queued_approach_input(delta)
 		step_jump(delta)
+		var previous_stage := stage
 		step(delta)
+		if previous_stage == Stage.PASS and stage == Stage.SET:
+			aim_swing(Vector3(randf_range(-3.35,3.35),Flight.FLOOR,randf_range(8.5,11.8)))
 		if stage == Stage.PASS and not manual_set_requested: status.text = "Your set  |  Q, E / I, or Space"
 		return
 	controls.read_pace_input()
