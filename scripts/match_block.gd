@@ -6,9 +6,12 @@ const AIR := 0.74
 const HEIGHT := 1.16
 var actor: Node3D
 var age := 0.0
+var tempo := 1.0
 var base: Vector3
 var previous_hands: Array[Vector3] = []
 var hands: Array[Vector3] = []
+var wrists: Array[Vector3] = []
+var previous_wrists: Array[Vector3] = []
 
 func begin(player: Node3D) -> void:
 	actor = player
@@ -17,7 +20,7 @@ func begin(player: Node3D) -> void:
 	actor.animator.seek(0.0,true)
 
 func step(delta: float, world_ball: Vector3) -> bool:
-	age += delta
+	age += delta*tempo
 	var phase := clampf((age-START)/AIR,0.0,1.0)
 	var lift := 4.0*HEIGHT*phase*(1.0-phase)
 	actor.position = base+Vector3.UP*(lift-0.12*sin(PI*clampf(age/START,0.0,1.0)))
@@ -30,14 +33,16 @@ func step(delta: float, world_ball: Vector3) -> bool:
 	var aim := rig.to_local(world_ball)
 	var scale_: float = rig.global_basis.get_scale().y
 	previous_hands = hands.duplicate()
+	previous_wrists = wrists.duplicate()
 	hands.clear()
+	wrists.clear()
 	for side in ["l","r"]:
 		var arm: String = "upperarm_"+side
 		var shoulder: Vector3 = author.point(pose,arm)
 		var outward := 1.0 if side == "l" else -1.0
 		var press := smoothstep(0.45,0.95,lift)
 		var below_tape := 1.0-smoothstep(2.50,2.80,rig.to_global(shoulder).y+0.62)
-		var depth := lerpf(lerpf(0.20,0.48,press),0.17,below_tape)
+		var depth := lerpf(lerpf(0.20,0.55,press),0.17,below_tape)
 		var target := shoulder+Vector3(clampf(aim.x-shoulder.x,-0.18,0.18)-outward*0.06,0.62,depth)/scale_
 		author.limb(pose,arm,"lowerarm_"+side,"hand_"+side,target,Vector3(outward*0.38,-0.55,0.30),weight,174.0)
 		for digit in ["thumb","index","middle","ring","pinky"]:
@@ -55,8 +60,11 @@ func step(delta: float, world_ball: Vector3) -> bool:
 		author.set_world_basis(pose,hand_name,wrist.basis.orthonormalized().slerp(palm.orthonormalized(),weight))
 		var hand: Vector3 = author.point(pose,"hand_"+side)
 		var tip: Vector3 = author.point(pose,"middle_03_"+side)
-		hands.append(rig.to_global(hand.lerp(tip,0.70)))
-	if previous_hands.is_empty(): previous_hands = hands.duplicate()
+		hands.append(rig.to_global(tip))
+		wrists.append(rig.to_global(hand))
+	if previous_hands.is_empty():
+		previous_hands = hands.duplicate()
+		previous_wrists = wrists.duplicate()
 	for bone in rig.get_bone_count():
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.orthonormalized().get_rotation_quaternion())
 	if age < 1.02: return true

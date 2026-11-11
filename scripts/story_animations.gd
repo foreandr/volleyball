@@ -277,7 +277,7 @@ func start_demo_match() -> void:
 		preview.grab_focus()))
 	demo_match = preload("res://scripts/volleyball_match.gd").new()
 	preview_player.get_parent().add_child(demo_match)
-	demo_match.configure(preview_player,board,status)
+	demo_match.configure(preview_player,board,status,build_label)
 	styles.item_selected.connect(func(index: int): demo_match.set_serve_style(index))
 	player_controls.locomotion = ""
 	player_controls.setter_travel = Vector3.ZERO
@@ -1862,8 +1862,10 @@ func _input(event: InputEvent) -> void:
 					match_block_choice.select(index)
 					demo_match.set_player_blocks(index == 1)
 				KEY_M: StorySession.attack_ball_audio_muted = not StorySession.attack_ball_audio_muted
+				KEY_F8:
+					if demo_match.mark_trace(): show_marker_popup()
 				KEY_ESCAPE: open_menu()
-		if event.keycode in [KEY_Q,KEY_E,KEY_I,KEY_F,KEY_B,KEY_M,KEY_ESCAPE]:
+		if event.keycode in [KEY_Q,KEY_E,KEY_I,KEY_F,KEY_B,KEY_M,KEY_F8,KEY_ESCAPE]:
 			get_viewport().set_input_as_handled()
 		return
 	if is_instance_valid(blocking_practice) and event is InputEventKey:

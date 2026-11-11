@@ -1,5 +1,6 @@
 extends Node3D
 
+const Trace = preload("res://scripts/setting_trace.gd")
 const Player = preload("res://scripts/volleyball_player.gd")
 const Bump = preload("res://scripts/bump_setting.gd")
 const Attack = preload("res://scripts/match_attack.gd")
@@ -65,6 +66,11 @@ var defender_assignment := [-1,-1]
 var cpu_dump := false
 var jump_set_started := [false,false,false,false]
 var recoveries := {}
+var trace := Trace.new()
+var block_lane_flight := [-1,-1]
+var block_line := [true,true]
+var pocket_x := [0.0,0.0]
+var last_set_apex := 0.0
 var animated := [false,false,false,false]
 var elapsed := 0.0
 var origin := Vector3.ZERO
@@ -93,7 +99,8 @@ var next_touch_cue := INF
 var touched_tape := false
 var stroke := ""
 
-func configure(actor: Node3D, board: Label, status: Label) -> void:
+func configure(actor: Node3D, board: Label, status: Label, build := "") -> void:
+	trace.open(build)
 	human = actor
 	saved_transform = actor.transform
 	saved_callback = actor.animator.callback_mode_process
@@ -225,6 +232,8 @@ func begin_point() -> void:
 	bounce_end = 0.0
 	key_until = [0.0,0.0,0.0,0.0]
 	defender_assignment = [-1,-1]
+	block_lane_flight = [-1,-1]
+	last_set_apex = 0.0
 	for index in players.size():
 		var actor := players[index]
 		actor.position = Vector3(-2.1 if index%2 == 0 else 2.1,0.04,-2.6)
@@ -253,6 +262,7 @@ func begin_point() -> void:
 	var style: int = serve_style if is_human(server_index()) else rallies%SERVES.size()
 	prepare_serve(style)
 	update_score()
+	trace.begin_feed({"mode":"demo_match","score":score,"server":server_index(),"spectator":spectator})
 
 func prepare_serve(style: int) -> void:
 	if is_instance_valid(serve):
@@ -488,6 +498,13 @@ func aim_receive(index: int) -> void:
 	bump.destination = Vector2(clampf(destination.x,-6.5,6.5),clampf(destination.z,-6.0,13.0))
 	bump.height = pass_height if is_human(index) else (5.05 if side == possession_team and touches == 1 else 4.55)
 
+func cpu_set_apex(index: int, point: Vector3, pin: Vector3, pace: float) -> float:
+	var hitter := players[index^1]
+	var tight := smoothstep(1.0,2.85,point.z)
+	var near := 1.0-smoothstep(0.9,2.75,(pin-hitter.position).slide(Vector3.UP).length())
+	var controlled := 1.0-smoothstep(8.0,15.0,pace)*0.60
+	return maxf(point.y+0.18,lerpf(5.60,4.12,tight*near*controlled))
+
 func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, technique: int) -> void:
 	if frames[team(index)].to_local(world_point).z > Net.NET_Z+0.07: return
 	if not can_touch(index): return
@@ -500,11 +517,13 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 	play_touch()
 	if touches == 2 and not (cpu_dump and index == cpu_choice) and (bump.destination.y < 4.0 or (is_human(index) and technique != 0)):
 		var pin := set_pin_for(index)
-		var apex := maxf(4.15,bump.height)
+		var incoming := velocity+Vector3.DOWN*Flight.GRAVITY*elapsed
+		var apex := maxf(4.15,bump.height) if is_human(index) else cpu_set_apex(index,point,pin,incoming.length())
 		if is_human(index):
 			var error := Bump.Accuracy.sample_offset(Bump.Accuracy.spread(0.0,velocity.length(),spin,StorySession.setting_skill,true))
 			pin += error.slide(Vector3.UP)
 			apex = maxf(3.55,apex+error.y)
+		last_set_apex = apex
 		var driver := attackers[side]
 		var motion: Vector3 = driver.set_toward_pin(point,pin,apex,3.38)
 		launch(world_point,frame.global_basis*motion,"set",index,1.0,index^1,frame.to_global(pin))
@@ -561,6 +580,8 @@ func advance_idle_players(delta: float) -> void:
 	for index in players.size():
 		if animated[index] or owns_action(index): continue
 		var actor := players[index]
+		if phase == Phase.LIVE and not is_human(index):
+			actor.rotation.y = rotate_toward(actor.rotation.y,0.0,delta*8.0)
 		actor.animator.speed_scale = 1.0
 		actor.play_action("idle")
 		actor.animator.advance(delta)
@@ -580,7 +601,7 @@ func settle_point(delta: float) -> void:
 	advance_recoveries(delta)
 	advance_idle_players(delta)
 
-func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3) -> void:
+func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_facing := Vector3.INF) -> void:
 	if recoveries.has(index) or owns_action(index,true): return
 	if serve.player == players[index]:
 		if not serve.can_run_after_contact(): return
@@ -595,9 +616,10 @@ func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3) -> void:
 	actor.play_action("run" if moving else "idle",0.11 if moving else 0.065)
 	actor.animator.advance(delta)
 	animated[index] = true
-	var incoming := toward_incoming(index,ball.global_position)
-	if incoming.z > -0.5 and not incoming.is_zero_approx():
-		actor.rotation.y = rotate_toward(actor.rotation.y,atan2(incoming.x,incoming.z),delta*10.0)
+	var yaw := 0.0
+	if receive_facing.is_finite() and not receive_facing.is_zero_approx():
+		yaw = clampf(atan2(receive_facing.x,receive_facing.z),-1.03,1.03)
+	actor.rotation.y = rotate_toward(actor.rotation.y,yaw,delta*8.0)
 
 func arrival(height: float) -> float:
 	var start := elapsed
@@ -626,22 +648,26 @@ func select_receiver() -> void:
 	else: cpu_choice = first+1
 	if not spectator and side == 0 and cpu_choice == 0 and side != possession_team and not is_finite(platforms[0].pressed_at):
 		if point.slide(Vector3.UP).distance_to(human.global_position.slide(Vector3.UP)) > 1.65: cpu_choice = 1
-	cpu_technique = (rallies+touches+cpu_choice)%3
-	if flight_kind in ["serve","spike","dump"]: cpu_technique = 0 if (rallies+cpu_choice)%4 != 2 else 1
-	if flight_kind in ["spike","dump"]: cpu_technique = 1 if (rallies+cpu_choice)%5 == 2 else 0
-	if not is_human(cpu_choice) and side == possession_team and touches == 1 and flight_kind == "pass":
-		var hand_point := frames[side].to_local(path_point(arrival(2.05)))
-		cpu_dump = hand_point.z >= 2.60 and hand_point.z <= 3.62 and (rallies+cpu_choice)%4 == 0
-		if cpu_dump: cpu_technique = 1
-	if cpu_technique != 0 and not overhead_available(cpu_choice,cpu_technique):
-		cpu_technique = 0
-		cpu_dump = false
+	cpu_technique = 0
+	cpu_dump = false
+	if is_human(cpu_choice): return
+	var second_ball := side == possession_team and touches == 1 and flight_kind == "pass"
+	if second_ball and overhead_available(cpu_choice,2):
+		cpu_technique = 2
+	elif overhead_available(cpu_choice,1):
+		cpu_technique = 1
+	if second_ball and cpu_technique == 1:
+		var hand_point := frames[side].to_local(path_point(arrival(1.92)))
+		cpu_dump = hand_point.z >= 2.75 and hand_point.z <= 3.62 and (rallies+cpu_choice)%4 == 0
 
 func overhead_available(index: int, technique: int) -> bool:
 	var height := 2.35 if technique == 2 else 1.92
 	var at := arrival(height)
 	var point := frames[team(index)].to_local(path_point(at))
-	return point.z <= Net.NET_Z+0.05 and point.y >= height-0.12 and at < flight_end()-0.03
+	var actor := players[index]
+	var offset := (point-actor.position).slide(Vector3.UP)
+	var range_ := 0.68 if technique == 2 else 0.92
+	return point.z <= Net.NET_Z+0.05 and point.y >= height-0.12 and at < flight_end()-0.03 and point.z >= actor.position.z-0.24 and offset.length() <= range_
 
 func tick_receive(delta: float, previous: float) -> void:
 	if expected_hitter >= 0 and flight_kind == "set":
@@ -683,7 +709,7 @@ func tick_receive(delta: float, previous: float) -> void:
 			var lead := cue-elapsed
 			var speed := lerpf(1.7,5.3,smoothstep(0.035,0.24,lead))
 			if is_finite(bump.pressed_at): speed = minf(speed,2.0)
-			move_cpu(index,target,delta,speed)
+			move_cpu(index,target,delta,speed,face)
 		if elapsed >= cue-(0.34 if technique == 2 else 0.24): queue_receive(index,technique)
 	if not is_finite(bump.pressed_at): return
 	if technique == 2 and not jump_set_started[index] and cue-elapsed <= 0.29:
@@ -722,7 +748,7 @@ func tick_receive(delta: float, previous: float) -> void:
 			var target := {"position":bump.destination,"fit":"height","height":bump.height}
 			var result := Bump.Accuracy.pass_velocity(frame.to_local(catch_point),target,45.0,Vector2(0.25,0.22))
 			receive_contact(index,catch_point,frame.global_basis*result,technique)
-func start_block(index: int) -> void:
+func start_block(index: int, remaining := INF) -> void:
 	if blocks.has(index) or set_jumps[index].active: return
 	if recoveries.has(index): return
 	var actor := players[index]
@@ -730,6 +756,7 @@ func start_block(index: int) -> void:
 	if actor.position.z < 2.25 or actor.position.z > 3.45: return
 	var block := Block.new()
 	block.begin(actor)
+	if is_finite(remaining): block.tempo = clampf(0.49/maxf(remaining,0.18),1.13,1.70)
 	blocks[index] = block
 	show_key(index,"Space")
 
@@ -748,16 +775,26 @@ func tick_blocks(delta: float, previous: float) -> void:
 			var fraction := sample/6.0
 			var point := before.lerp(after,fraction)
 			for hand in block.hands.size():
-				var center: Vector3 = block.previous_hands[hand].lerp(block.hands[hand],fraction)
+				var tip: Vector3 = block.previous_hands[hand].lerp(block.hands[hand],fraction)
+				var wrist: Vector3 = block.previous_wrists[hand].lerp(block.wrists[hand],fraction)
+				var center := Geometry3D.get_closest_point_to_segment(point,wrist,tip)
 				var gap := point.distance_to(center)
 				if gap > 0.27 or center.y < Net.NET_TOP or absf(point.z-Net.NET_Z) > 0.9: continue
 				if not can_touch(index,true): return
 				var backward := frames[team(index)].global_basis.z.normalized()
-				var power := 1.0-smoothstep(0.08,0.26,gap)
+				var axis := (tip-wrist).normalized()
+				var incoming := velocity.normalized()
+				var square := clampf(-incoming.dot(backward),0.0,1.0)
+				var palm := wrist.lerp(tip,0.45)
+				var travel := (point-palm).dot(backward)/maxf(square,0.10)
+				var impact := point+incoming*clampf(travel,0.0,0.29)
+				var palm_gap := impact.distance_to(Geometry3D.get_closest_point_to_segment(impact,wrist,tip))
+				var along := (impact-wrist).dot(axis)/maxf(0.01,wrist.distance_to(tip))
+				var power := (1.0-smoothstep(0.09,0.24,palm_gap))*(1.0-smoothstep(0.72,1.22,along))*smoothstep(0.18,0.66,square)
 				var speed := velocity.length()
-				var rebound := backward*lerpf(-speed*0.19,speed*0.53,power)+Vector3.UP*lerpf(3.2,-4.5,power)
+				var rebound := backward*lerpf(-speed*0.16,speed*0.69,power)+Vector3.UP*lerpf(3.1,-6.0,power)
 				rebound.x += (point.x-center.x)*10.0
-				stroke = "Block"
+				stroke = "Stuff block" if power > 0.56 else "Block"
 				play_touch()
 				var over := rebound.dot(backward) > 0.0
 				launch(point,rebound,"free" if over else "block",index)
@@ -798,20 +835,53 @@ func position_defense(delta: float) -> void:
 	elif near < 0:
 		near = first if absf(players[first].position.x-x) < absf(players[first+1].position.x-x) else first+1
 	defender_assignment[defense_side] = near
-	if not is_human(near) and not blocks.has(near):
-		var target := frame.to_global(Vector3(clampf(x,-4.1,4.1),0.04,3.35))
-		move_cpu(near,target,delta,7.3 if players[near].position.z < 2.7 else 6.2)
-		players[near].rotation.y = rotate_toward(players[near].rotation.y,0.0,delta*9.0)
-		var attack_ready: bool = tracking_set and is_finite(driver.swing_started) and driver.clock-driver.swing_started >= 0.16
-		var dump_ready := cpu_dump and flight_kind == "pass" and is_finite(next_touch_cue) and next_touch_cue-elapsed <= 0.29
-		if absf(players[near].position.x-x) < 0.66 and (attack_ready or dump_ready): start_block(near)
 	var deep := near^1
+	var depth := -2.75
+	var cover := -x*0.48
+	var remaining := INF
+	if tracking_set:
+		var attack := frame.to_local(threat)
+		var line_goal := Vector3(attack.x,0.0,-2.9)
+		var cross_goal := Vector3(clampf(-attack.x*0.80,-3.7,3.7),0.0,depth)
+		var line_x := lane_at_depth(attack,line_goal,3.42)
+		var cross_x := lane_at_depth(attack,cross_goal,3.42)
+		if block_lane_flight[defense_side] != flight_number:
+			var line_cost := absf(players[near].position.x-line_x)+0.35*absf(players[deep].position.x-cross_goal.x)
+			var cross_cost := absf(players[near].position.x-cross_x)+0.35*absf(players[deep].position.x-line_goal.x)
+			block_line[defense_side] = line_cost <= cross_cost+0.14
+			block_lane_flight[defense_side] = flight_number
+		var take_line: bool = block_line[defense_side]
+		if is_human(near):
+			take_line = absf(players[near].position.x-line_x) <= absf(players[near].position.x-cross_x)
+		x = line_x if take_line else cross_x
+		cover = cross_goal.x if take_line else line_goal.x
+		var hit_at: float = driver.approach_expected_hit_at
+		if is_finite(driver.swing_drive_started):
+			hit_at = driver.swing_drive_started+driver.swing_drive_duration*0.95
+			var shot: Vector3 = frame.to_local(frames[hitter_side].to_global(driver.swing_aim))
+			var crossing := lane_at_depth(attack,shot,3.42)
+			x += clampf(crossing-x,-0.60,0.60)*0.65
+		if is_finite(hit_at): remaining = hit_at-driver.clock+0.065
+		var wall := Vector3(x,0.04,3.42)
+		if is_human(near) and players[near].position.z > 2.7: wall = players[near].position
+		var shadow := lane_at_depth(attack,wall,depth)
+		if absf(cover-shadow) < 0.88:
+			cover = dig_cover_x(frame,threat,frame.to_global(wall),depth,players[deep].position.x)
+	pocket_x[defense_side] = cover
+	if not is_human(near) and not blocks.has(near):
+		var target := frame.to_global(Vector3(clampf(x,-4.15,4.15),0.04,3.42))
+		move_cpu(near,target,delta,7.6 if players[near].position.z < 2.7 else 6.8)
+		var attack_ready := remaining <= 0.37
+		var dump_ready := cpu_dump and flight_kind == "pass" and is_finite(next_touch_cue) and next_touch_cue-elapsed <= 0.32
+		if absf(players[near].position.x-x) < 0.70 and (attack_ready or dump_ready):
+			start_block(near,remaining if attack_ready else next_touch_cue-elapsed+0.035)
 	if not is_human(deep) and not blocks.has(deep) and not set_jumps[deep].active:
-		var depth := -2.75
-		var wall := players[near].global_position
-		if players[near].position.z < 2.10: wall = frame.to_global(Vector3(clampf(x,-4.1,4.1),0.04,3.35))
-		var cover := dig_cover_x(frame,threat,wall,depth,players[deep].position.x) if tracking_set else -x*0.48
-		move_cpu(deep,frame.to_global(Vector3(cover,0.04,depth)),delta)
+		move_cpu(deep,frame.to_global(Vector3(clampf(cover,-4.05,4.05),0.04,depth)),delta)
+
+func lane_at_depth(from: Vector3, to: Vector3, depth: float) -> float:
+	var span := to.z-from.z
+	if absf(span) < 0.02: return to.x
+	return lerpf(from.x,to.x,(depth-from.z)/span)
 
 func update_player_guide() -> void:
 	player_label.global_position = human.global_position+Vector3.UP*2.17
@@ -882,6 +952,7 @@ func check_floor(previous: float) -> void:
 
 func tick_match(delta: float, controls: RefCounted) -> void:
 	match_clock += delta
+	if match_clock >= trace.next_sample: trace.sample(match_clock,trace_snapshot())
 	animated = [false,false,false,false]
 	update_player_guide()
 	if phase in [Phase.DEAD,Phase.FINISHED]:
@@ -964,3 +1035,21 @@ func tick_match(delta: float, controls: RefCounted) -> void:
 			cue = "Hold Space to attack" if expected_hitter == 0 else ("Set to your teammate" if possession_team == 0 and touches == 1 and last_player == 1 else "Receive or cover")
 		elif flight_kind == "set": cue = "Move up to block | Space" if player_blocks else "Teammate blocking | Cover the court"
 		info.text = "%s | %s" % [stroke,cue]
+
+func trace_snapshot() -> Dictionary:
+	var actors: Array = []
+	for index in players.size():
+		actors.append({"position":Trace.json_value(players[index].global_position),"yaw":players[index].rotation.y,
+			"key":key_labels[index].text if match_clock < key_until[index] else "",
+			"contact":Trace.json_value(platforms[index].contact_check)})
+	return {"phase":phase,"score":score,"flight":flight_kind,"ball":ball.global_position,"velocity":velocity,
+		"receiving_team":receiving_team,"last_touch":last_player,"touches":touches,"set_apex":last_set_apex,
+		"blocker":defender_assignment,"takes_line":block_line,"dig_pocket":pocket_x,"players":actors}
+
+func mark_trace() -> bool:
+	if trace.file == null: return false
+	trace.write("player_marker",match_clock,trace_snapshot(),true)
+	return true
+
+func _exit_tree() -> void:
+	trace.close(match_clock)
