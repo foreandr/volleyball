@@ -771,7 +771,7 @@ func prepare_cpu_set(lead: float) -> void:
 	if lead > 0.22: return
 	var weight := 1.0-smoothstep(0.0,0.22,lead)
 	if active_cpu_set_style == 1: cpu_set.apply_pose(cpu_set.contact_frame,weight)
-	else: HandPose.apply(receiver,cpu_contact_point,weight)
+	else: HandPose.apply(receiver,to_global(cpu_contact_point),weight)
 
 func cpu_set_move_speed(_distance: float) -> float:
 	return 3.2
@@ -875,7 +875,7 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 		var airborne := setter.position.y > jump.start.y+0.08
 		var duration := lerpf(0.21,0.09,charge)+(0.035 if uses_assisted_approach() else 0.0)
 		var predicted := flight_point(pass_origin,pass_motion,minf(time+duration,flight_end))
-		var toward_ball := predicted-setter.global_position
+		var toward_ball := predicted-to_local(setter.global_position)
 		if not is_finite(swing_drive_started) and airborne and time >= pin_arrival-0.46:
 			if toward_ball.slide(Vector3.UP).length() <= SWING_REACH and toward_ball.y <= SWING_CONTACT_HEIGHT:
 				swing_drive_started = clock
@@ -948,7 +948,7 @@ func right_palm() -> Vector3:
 	var index := rig.get_bone_global_pose(rig.find_bone("index_01_r")).origin
 	var pinky := rig.get_bone_global_pose(rig.find_bone("pinky_01_r")).origin
 	var palm_normal := (knuckle-wrist).cross(pinky-index).normalized()
-	return rig.to_global(wrist.lerp(knuckle,0.75)+palm_normal*0.018)
+	return to_local(rig.to_global(wrist.lerp(knuckle,0.75)+palm_normal*0.018))
 
 func hand_contact_fraction(before: Vector3, after: Vector3, palm_radius := PALM_RADIUS) -> float:
 	var radius := BallPreview.RADIUS+palm_radius
@@ -1077,7 +1077,7 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 	var lean := airborne_reach_lean(contact)*reach_weight
 	author.rotate_world(pose,"pelvis",Vector3.RIGHT,lean.x)
 	author.rotate_world(pose,"pelvis",Vector3.BACK,lean.y)
-	var ball_target := rig.to_local(contact)
+	var ball_target := rig.to_local(to_global(contact))
 	# Twist the ribcage around its own axis so the lean stays independent.
 	var chest_axis: Vector3 = (author.point(pose,"neck_01")-author.point(pose,"spine_03")).normalized()
 	var chest_yaw := clampf(turn*rotation_weight,-1.45,1.45)
@@ -1132,7 +1132,7 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 	else:
 		# Smooth the roll through the near-vertical hand angle using game time.
 		var roll_step := deg_to_rad(2700.0)*delta
-		var shot_direction := (rig.to_local(shot_aim)-ball_target).normalized()
+		var shot_direction := (rig.to_local(to_global(shot_aim))-ball_target).normalized()
 		var compact_finish := SpikeArm.compact_finish_weight(shot_aim,contact,line_weight < 0.5)
 		var arm_weight := 1.0 if uses_assisted_approach() and stage == Stage.SET else weight
 		swing_palm_roll = SpikeArm.apply(pose,author,ball_target,arm_weight,extension,follow,draw_progress,arm_lift,line_weight,elbow_clearance,swing_palm_roll,roll_step,shot_direction,compact_finish,backswing_reach*backswing_weight,uses_assisted_approach())
@@ -1197,7 +1197,7 @@ func shot_line_weight(target: Vector3, origin: Vector3) -> float:
 
 func airborne_reach_lean(contact: Vector3) -> Vector2:
 	var drift: Vector3 = jump.horizontal_velocity()*0.12
-	var reach := setter.to_local(contact-drift)-Vector3(-0.24,0.0,0.28)
+	var reach := setter.to_local(to_global(contact-drift))-Vector3(-0.24,0.0,0.28)
 	var tilt := Vector2(reach.z,-reach.x)
 	var angle := clampf((tilt.length()-0.10)*1.20,0.0,0.68)
 	return tilt.normalized()*angle

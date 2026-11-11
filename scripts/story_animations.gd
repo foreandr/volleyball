@@ -24,6 +24,9 @@ var content: VBoxContainer
 var category_buttons: Dictionary = {}
 var selected_category := ""
 var underhand_serve: Node3D
+var serve_opponents: Node3D
+var serve_opponent_frame: Node3D
+var serving_rally_status: Label
 var serving_original_transform: Transform3D
 var serving_position := Vector3(0.0,0.04,-6.20)
 var serving_running := false
@@ -635,6 +638,14 @@ func stop_serving_session() -> void:
 	serving_running = false
 
 func stop_underhand_serve() -> void:
+	if is_instance_valid(serving_rally_status):
+		content.remove_child(serving_rally_status)
+		serving_rally_status.queue_free()
+		serving_rally_status = null
+	if is_instance_valid(serve_opponent_frame):
+		serve_opponent_frame.queue_free()
+		serve_opponent_frame = null
+		serve_opponents = null
 	if not is_instance_valid(underhand_serve): return
 	underhand_serve.stop()
 	underhand_serve = null
@@ -662,6 +673,18 @@ func refresh_type() -> void:
 		underhand_serve = preload("res://scripts/underhand_serve.gd").new()
 		preview_player.get_parent().add_child(underhand_serve)
 		underhand_serve.configure(preview_player,serving_position)
+		serve_opponent_frame = Node3D.new()
+		serve_opponent_frame.position.z = 8.0
+		serve_opponent_frame.rotation.y = PI
+		preview_player.get_parent().add_child(serve_opponent_frame)
+		serve_opponents = preload("res://scripts/serve_opponent_rally.gd").new()
+		serve_opponents.swing_practice = false
+		serve_opponent_frame.add_child(serve_opponents)
+		serving_rally_status = label("",16)
+		serving_rally_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		content.add_child(serving_rally_status)
+		serve_opponents.configure_team(serving_rally_status,build_label)
+		serve_opponents.set_ball_audio_muted(StorySession.attack_ball_audio_muted)
 		preview.grab_focus()
 		return
 	if selected_category == "Serving":
@@ -770,7 +793,7 @@ func _process(delta: float) -> void:
 	if selected_category == "Serving":
 		move_server(player_controls.movement_input(),delta)
 		if is_instance_valid(underhand_serve):
-			underhand_serve.step(delta)
+			step_underhand_rally(delta)
 			return
 		if serving_running or selected_entry.is_empty(): return
 	if is_instance_valid(setting_drill) and selected_category == "Chasing":
@@ -1258,11 +1281,27 @@ func handle_preview_input(event: InputEvent) -> void:
 		return
 	super.handle_preview_input(event)
 
+func step_underhand_rally(delta: float) -> void:
+	var was_ready: bool = underhand_serve.elapsed < 0.0
+	underhand_serve.step(delta)
+	if is_finite(underhand_serve.contact_clock) and not underhand_serve.external_rally and underhand_serve.net_hit.is_empty():
+		underhand_serve.external_rally = true
+		underhand_serve.ball.hide()
+		serve_opponents.receive_serve(underhand_serve.to_global(underhand_serve.origin),underhand_serve.global_basis*underhand_serve.velocity)
+	if underhand_serve.external_rally:
+		serve_opponents.tick_opponents(delta)
+		if not serve_opponents.rally_active: underhand_serve.reset()
+	if not was_ready and underhand_serve.elapsed < 0.0:
+		serving_position = underhand_serve.serve_start
+		serving_running = false
+
 func move_server(direction: Vector2, delta: float) -> void:
-	if is_instance_valid(underhand_serve) and underhand_serve.elapsed >= 0.0: return
+	var after_contact := is_instance_valid(underhand_serve) and is_finite(underhand_serve.contact_clock)
+	if is_instance_valid(underhand_serve) and underhand_serve.elapsed >= 0.0 and not after_contact: return
+	if after_contact: serving_position = preview_player.position
 	var next := serving_position+Vector3(-direction.x,0.0,direction.y)*4.5*delta
 	next.x = clampf(next.x,-6.5,6.5)
-	next.z = clampf(next.z,-10.0,-5.20)
+	next.z = clampf(next.z,-10.0,3.50 if after_contact else -5.20)
 	var moving := not next.is_equal_approx(serving_position)
 	if moving:
 		var travel := next-serving_position

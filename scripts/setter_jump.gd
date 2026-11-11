@@ -77,8 +77,8 @@ func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time
 		if lead_time > 0.0: lead_distance = clampf(ball_offset.length()-entry_distance-1.12,0.40,0.90)
 		stride = minf(0.40,minf(stride,maxf(0.08,ball_offset.length()*0.60)))
 		var rig: Skeleton3D = actor.skeleton
-		right_foot_start = rig.to_global(rig.get_bone_global_pose(rig.find_bone("foot_r")).origin)
-		left_foot_start = rig.to_global(rig.get_bone_global_pose(rig.find_bone("foot_l")).origin)
+		right_foot_start = actor.get_parent_node_3d().to_local(rig.to_global(rig.get_bone_global_pose(rig.find_bone("foot_r")).origin))
+		left_foot_start = actor.get_parent_node_3d().to_local(rig.to_global(rig.get_bone_global_pose(rig.find_bone("foot_l")).origin))
 		right_plant = right_foot_start+heading*(entry_distance+lead_distance+stride*0.68)
 		var toward_ball := (ball_target-right_plant).slide(Vector3.UP).normalized()
 		var reach := (ball_target-start-heading*(stride+entry_distance+lead_distance)).slide(Vector3.UP)
@@ -185,7 +185,7 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 			var planted := plant_from.lerp(plant_to,step_progress)
 			planted.y += transfer_hop+sin(PI*step_progress)*(0.12 if left else 0.09)
 			var release_weight := smoothstep(LOAD_TIME,LOAD_TIME+0.08,pose_time)
-			target = rig.to_local(planted).lerp(target,release_weight)
+			target = rig.to_local(actor.get_parent_node_3d().to_global(planted)).lerp(target,release_weight)
 		author.limb(pose,"thigh_"+side,"calf_"+side,foot,target,Vector3(0.09 if left else -0.09,0.25,1.0))
 		author.set_world_basis(pose,foot,foot_pose.basis)
 		var upper_arm: String = "upperarm_"+side

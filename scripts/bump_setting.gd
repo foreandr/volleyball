@@ -127,7 +127,7 @@ func movement_scale(time: float, arrival: float, ball_position: Vector3) -> floa
 		if hand_setting: return smoothstep(hand_release_delay(),0.25,time-touch_time)
 		return smoothstep(0.045,0.15,time-touch_time)
 	if not is_finite(pressed_at) or grade != Timing.Grade.WAITING: return 1.0
-	var distance := (ball_position-setter.global_position).slide(Vector3.UP).length()
+	var distance := (ball_position-to_local(setter.global_position)).slide(Vector3.UP).length()
 	if distance > 1.15: return 1.0
 	# Let the reception step own the last part of the approach.
 	var lead := arrival-time
@@ -135,18 +135,18 @@ func movement_scale(time: float, arrival: float, ball_position: Vector3) -> floa
 	return 1.0-brake
 
 func platform_center() -> Vector3:
-	if hand_setting: return HandPose.contact_center(setter)
+	if hand_setting: return to_local(HandPose.contact_center(setter))
 	var rig: Skeleton3D = setter.skeleton
 	var elbows := []
 	var wrists := []
 	for side in ["l","r"]:
 		elbows.append(rig.to_global(rig.get_bone_global_pose(rig.find_bone("lowerarm_"+side)).origin))
 		wrists.append(rig.to_global(rig.get_bone_global_pose(rig.find_bone("hand_"+side)).origin))
-	return Contact.surface(elbows,wrists,0.055).ball
+	return to_local(Contact.surface(elbows,wrists,0.055).ball)
 
 func ready_contact() -> Vector3:
-	if hand_setting: return setter.to_global(Vector3(0,HandPose.CONTACT_HEIGHT,HandPose.CONTACT_FORWARD))
-	return setter.to_global(Vector3(0,1.04,0.62))
+	if hand_setting: return to_local(setter.to_global(Vector3(0,HandPose.CONTACT_HEIGHT,HandPose.CONTACT_FORWARD)))
+	return to_local(setter.to_global(Vector3(0,1.04,0.62)))
 
 func contact_radius() -> float:
 	return HandPose.CONTACT_RADIUS if hand_setting else PLATFORM_RADIUS
@@ -226,7 +226,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 	if striking:
 		if hand_setting:
 			var target := hand_intercept(path,time,end)
-			HandPose.apply(setter,target,smoothstep(0.0,0.062 if quick_hand_receive else 0.105,elapsed))
+			HandPose.apply(setter,to_global(target),smoothstep(0.0,0.062 if quick_hand_receive else 0.105,elapsed))
 		elif low_save.active:
 			low_save.sample(setter,time,low_save.contact_time+0.07)
 		else:
@@ -241,7 +241,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 				else:
 					pose_reach(smoothstep(0.0,1.0,reach_progress),intercept)
 		var pancake := low_save.active and low_save.pancake
-		var center := LowSave.palm_center(setter) if pancake else platform_center()
+		var center := to_local(LowSave.palm_center(setter)) if pancake else platform_center()
 		var radius := 0.16 if pancake else contact_radius()
 		var near_dive_contact := low_save.active and not pancake and absf(time-low_save.contact_time)<=0.12
 		var allowance := DIVE_CONTACT_ALLOWANCE if near_dive_contact else 0.0
@@ -261,7 +261,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 			var receive_allowance := green_hand_allowance if hand_setting else green_forearm_allowance
 			var near_receive := green and not low_save.active and receive_allowance > 0.0 and gap_after_adjustment <= radius+receive_allowance
 			var assisted := green and not hand_setting and not low_save.active and gap_after_adjustment > radius and (near_receive or close_body_contact(point,center))
-			var from_setter := point-setter.global_position
+			var from_setter := point-to_local(setter.global_position)
 			var hand_assisted := (
 				hand_setting and green and gap_after_adjustment > radius
 				and (near_receive or (
@@ -323,7 +323,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 func begin_hand_contact(point: Vector3, time: float, error := 0.0) -> void:
 	touch = point
 	touch_time = time
-	hand_anchor = setter.to_local(point)
+	hand_anchor = setter.to_local(to_global(point))
 	if catch_only: return
 	outgoing = aim_velocity(touch,error)
 	var endpoint := flight_point(touch,outgoing,Flight.landing_time(touch,outgoing))
@@ -343,7 +343,7 @@ func update_hand_push(time: float, follow: float) -> void:
 	var blend := 1.0-smoothstep(0.22,0.32,follow)
 	var after_release := time-release_time if is_finite(release_time) else 0.0
 	var torso_follow := smoothstep(0.0,0.10,after_release)
-	HandPose.apply(setter,setter.to_global(hand_anchor),blend,push,cushion,torso_follow)
+	HandPose.apply(setter,setter.to_global(hand_anchor),blend,global_basis*push,cushion,torso_follow)
 	if follow >= delay and not is_finite(release_time):
 		release_time = time
 		release_point = platform_center()
@@ -354,7 +354,7 @@ func update_hand_push(time: float, follow: float) -> void:
 
 func close_body_contact(point: Vector3, platform: Vector3) -> bool:
 	# Give green timing a little forgiveness on balls dropping inside the stance.
-	var from_body := point-setter.global_position
+	var from_body := point-to_local(setter.global_position)
 	return from_body.slide(Vector3.UP).length() <= 0.42 and absf(point.y-platform.y) <= 0.23 and point.distance_to(platform) <= 0.78
 
 func timing_error(elapsed: float) -> float:
@@ -463,7 +463,7 @@ func reach_platform(offset: Vector3) -> void:
 	var pose: Array = []
 	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
 	var grip: Vector3 = (author.point(pose,"hand_l")+author.point(pose,"hand_r"))*0.5
-	var shift := rig.global_basis.inverse()*offset.limit_length(0.26)
+	var shift := rig.global_basis.inverse()*global_basis*offset.limit_length(0.26)
 	PlatformPose.connect_arms(pose,author,grip+shift,0.82)
 	for side in ["l","r"]:
 		for part in ["upperarm_","lowerarm_","hand_"]:

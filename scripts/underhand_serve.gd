@@ -14,6 +14,8 @@ var player: Node3D
 var serve_start := START
 var serve_yaw := 0.0
 var running := false
+var external_rally := false
+var moved_after_contact := false
 var forward := Vector3.BACK
 var ball: MeshInstance3D
 var aim_ring: MeshInstance3D
@@ -94,6 +96,11 @@ func stop() -> void:
 
 func reset() -> void:
 	elapsed = -1.0
+	contact_clock = INF
+	external_rally = false
+	moved_after_contact = false
+	running = false
+	ball.show()
 	net_hit.clear()
 	player.play_action("idle",0.0)
 	player.position = serve_start
@@ -124,22 +131,26 @@ func launch_velocity(start: Vector3, duration: float) -> Vector3:
 	return (target-start).slide(Vector3.UP)/duration+Vector3.UP*sqrt(2.0*Flight.GRAVITY*(apex-start.y))
 
 func run_to(point: Vector3, yaw: float, delta: float) -> void:
-	preview_origin += point-serve_start
-	serve_start = point
+	if elapsed < 0.0:
+		preview_origin += point-serve_start
+		serve_start = point
+	else: moved_after_contact = true
 	player.position = point
 	player.rotation.y = rotate_toward(player.rotation.y,yaw,delta*16.0)
 	player.play_action("run")
 	player.animator.advance(delta)
 	running = true
-	var rig: Skeleton3D = player.skeleton
-	var palm := rig.get_bone_global_pose(rig.find_bone("middle_01_l")).origin
-	ball.position = to_local(rig.to_global(palm))+Vector3.UP*(BallPreview.RADIUS+0.012)
-	update_path_preview()
+	if elapsed < 0.0:
+		var rig: Skeleton3D = player.skeleton
+		var palm := rig.get_bone_global_pose(rig.find_bone("middle_01_l")).origin
+		ball.position = to_local(rig.to_global(palm))+Vector3.UP*(BallPreview.RADIUS+0.012)
+		update_path_preview()
 
 func settle_run() -> void:
 	if not running: return
 	running = false
-	reset()
+	if elapsed < 0.0: reset()
+	else: player.play_action("idle")
 
 func serve() -> void:
 	if elapsed >= 0.0: return
@@ -156,7 +167,8 @@ func step(delta: float) -> void:
 	elapsed += delta
 	swing_time += delta*swing_rate if not is_finite(contact_clock) else delta
 	var striking := previous < CONTACT_TIME and swing_time >= CONTACT_TIME
-	pose(CONTACT_TIME if striking else swing_time)
+	if not moved_after_contact and swing_time <= 1.23: pose(CONTACT_TIME if striking else swing_time)
+	elif not running: player.animator.advance(delta)
 	if striking:
 		contact_clock = elapsed-(swing_time-CONTACT_TIME)/swing_rate
 		origin = ball.position
@@ -168,7 +180,7 @@ func step(delta: float) -> void:
 	if flight_time >= 0.0:
 		var time := minf(flight_time,landing_time)
 		ball.position = Net.after_hit(net_hit,time) if not net_hit.is_empty() and time >= net_hit.time else flight_point(time)
-	if flight_time >= landing_time+0.55: reset()
+	if flight_time >= landing_time+0.55 and not external_rally: reset()
 
 func flight_point(time: float) -> Vector3:
 	return origin+velocity*time+Vector3.DOWN*0.5*Flight.GRAVITY*time*time
