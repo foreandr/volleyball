@@ -1,7 +1,7 @@
 extends "res://scripts/blocking_practice.gd"
 
-const DEFENSE_START := Vector3(0.0,0.04,-2.25)
-const DIG_LANES := [Vector2(0.0,12.6),Vector2(-1.8,10.0),Vector2(1.8,11.5),Vector2(0.6,9.5),Vector2(-0.7,12.1)]
+const DEFENSE_START := Vector3(1.45,0.04,-2.62)
+const ZONE_FIVE_TARGETS := [Vector2(-3.1,12.6),Vector2(-2.4,11.7),Vector2(-3.7,12.1)]
 
 var dig: MeshInstance3D
 var next_dig_lane := 0
@@ -29,8 +29,15 @@ func configure_block(actor: Node3D, readout: Label, build: String) -> void:
 
 func reset_feed() -> void:
 	super.reset_feed()
-	var lane: Vector2 = DIG_LANES[next_dig_lane]
-	next_dig_lane = (next_dig_lane+1)%DIG_LANES.size()
+	setter.position.x = PIN.x*0.78
+	rally_set_target.x = PIN.x
+	pass_origin.x = 0.0
+	pass_motion = set_toward_pin(pass_origin,rally_set_target,set_apex,3.38)
+	pin_arrival = descending_time(pass_origin,pass_motion,3.38)
+	flight_end = Flight.landing_time(pass_origin,pass_motion)
+	ball.position = pass_origin
+	var lane: Vector2 = ZONE_FIVE_TARGETS[next_dig_lane]
+	next_dig_lane = (next_dig_lane+1)%ZONE_FIVE_TARGETS.size()
 	aim_swing(Vector3(lane.x,Flight.FLOOR,lane.y))
 	swing_target.hide()
 	approach_rings.hide()
@@ -40,7 +47,7 @@ func reset_feed() -> void:
 		dig.reset()
 		dig.hand_setting = false
 		dig.hide()
-	status.text = "Read the hitter"
+	status.text = "Left pin to zone 5"
 
 func queue_dig(use_hands: bool) -> void:
 	if stage not in [Stage.SET,Stage.HIT] or is_finite(dig.touch_time): return
@@ -67,7 +74,7 @@ func tick_block(delta: float) -> void:
 
 func play_pin_ball(time: float, previous: float, delta: float) -> void:
 	super.play_pin_ball(time,previous,delta)
-	if stage == Stage.SET: status.text = "Read the hitter"
+	if stage == Stage.SET: status.text = "Left pin to zone 5"
 
 func play_spike(time: float, delta: float) -> void:
 	if not swing_net_hit.is_empty():
