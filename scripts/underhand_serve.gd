@@ -162,6 +162,15 @@ func serve() -> void:
 func contact_time() -> float:
 	return CONTACT_TIME
 
+func front_start_limit() -> float:
+	return -5.20
+
+func can_run_after_contact() -> bool:
+	return is_finite(contact_clock)
+
+func recovery_end() -> float:
+	return 1.23
+
 func step(delta: float) -> void:
 	if elapsed < 0.0: return
 	var contact := contact_time()
@@ -171,7 +180,7 @@ func step(delta: float) -> void:
 	elapsed += delta
 	swing_time += delta*swing_rate if not is_finite(contact_clock) else delta
 	var striking := previous < contact and swing_time >= contact
-	if not moved_after_contact and swing_time <= 1.23: pose(contact if striking else swing_time)
+	if not moved_after_contact and swing_time <= recovery_end(): pose(contact if striking else swing_time)
 	elif not running: player.animator.advance(delta)
 	if striking:
 		contact_clock = elapsed-(swing_time-contact)/swing_rate

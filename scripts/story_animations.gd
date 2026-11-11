@@ -14,7 +14,7 @@ const Catalog = preload("res://scripts/volleyball_animations.gd")
 const MOVE_TYPES := {
 	"Forearm reception":["Forearm"],
 	"Attacking":["Line Hit","Cross Hit"],
-	"Serving":["Float","Spin","Hybrid","Skyball","Underhand","Standing Float","Standing Spin"],
+	"Serving":["Jump Float","Spin","Hybrid","Skyball","Underhand","Standing Float","Standing Spin"],
 	"Blocking":["Straight","Left","Right"],
 	"Setting":["Hand setting","Bump setting"],
 	"Chasing":["Forward","Back","Left","Right"]
@@ -663,15 +663,19 @@ func refresh_type() -> void:
 				return
 		if is_instance_valid(ball_preview): ball_preview.stop()
 		return
-	var serving_practice := selected_category == "Serving" and current_type() in ["Underhand","Standing Float"]
+	var serving_practice := selected_category == "Serving" and current_type() in ["Underhand","Standing Float","Jump Float"]
 	animation_list.visible = not serving_practice
 	edit_button.visible = not serving_practice
 	if selected_category == "Serving" and is_instance_valid(drill_status):
 		drill_status.text = "Space to serve\nMove cursor to aim\nWASD to run\nMiddle drag to rotate\nScroll for arc  |  Shift + scroll to zoom" if serving_practice else "WASD to run"
 	if serving_practice:
 		if is_instance_valid(ball_preview): ball_preview.stop()
-		var serve_script := preload("res://scripts/standing_float_serve.gd") if current_type() == "Standing Float" else preload("res://scripts/underhand_serve.gd")
+		var serve_script := preload("res://scripts/underhand_serve.gd")
+		match current_type():
+			"Standing Float": serve_script = preload("res://scripts/standing_float_serve.gd")
+			"Jump Float": serve_script = preload("res://scripts/jump_float_serve.gd")
 		underhand_serve = serve_script.new()
+		serving_position.z = minf(serving_position.z,underhand_serve.front_start_limit())
 		preview_player.get_parent().add_child(underhand_serve)
 		underhand_serve.configure(preview_player,serving_position)
 		serve_opponent_frame = Node3D.new()
@@ -1297,12 +1301,13 @@ func step_underhand_rally(delta: float) -> void:
 		serving_running = false
 
 func move_server(direction: Vector2, delta: float) -> void:
-	var after_contact := is_instance_valid(underhand_serve) and is_finite(underhand_serve.contact_clock)
+	var after_contact: bool = is_instance_valid(underhand_serve) and underhand_serve.can_run_after_contact()
 	if is_instance_valid(underhand_serve) and underhand_serve.elapsed >= 0.0 and not after_contact: return
 	if after_contact: serving_position = preview_player.position
 	var next := serving_position+Vector3(-direction.x,0.0,direction.y)*4.5*delta
 	next.x = clampf(next.x,-6.5,6.5)
-	next.z = clampf(next.z,-10.0,3.50 if after_contact else -5.20)
+	var start_limit: float = underhand_serve.front_start_limit() if is_instance_valid(underhand_serve) else -5.20
+	next.z = clampf(next.z,-10.0,3.50 if after_contact else start_limit)
 	var moving := not next.is_equal_approx(serving_position)
 	if moving:
 		var travel := next-serving_position
