@@ -1,5 +1,7 @@
 extends "res://scripts/standing_float_serve.gd"
 
+const SpikeArm = preload("res://scripts/spike_arm_swing.gd")
+
 const TOSS := 0.25
 const TAKEOFF := 0.77
 const STRIKE := 1.11
@@ -46,6 +48,23 @@ func prepare_toss_hands(pose: Array, rig: Skeleton3D, author: RefCounted, time: 
 		var up := Vector3(0.07*outward,0.43,0.33)
 		var hand := shoulder+back.lerp(up,lift)/scale_
 		author.limb(pose,"upperarm_"+side,"lowerarm_"+side,"hand_"+side,hand,Vector3(outward,-0.30,0.28),drive_weight)
+
+func shape_float_strike(pose: Array, rig: Skeleton3D, author: RefCounted, time: float) -> void:
+	var weight := smoothstep(TAKEOFF+0.07,TAKEOFF+0.20,time)*(1.0-smoothstep(STRIKE+0.23,LAND+0.06,time))
+	if weight <= 0.0: return
+	var extension := smoothstep(STRIKE-0.16,STRIKE,time)
+	var follow := 0.64*smoothstep(STRIKE,STRIKE+0.26,time)
+	var scale_: float = rig.global_basis.get_scale().y
+	var shoulder: Vector3 = author.point(pose,"upperarm_r")
+	var contact := shoulder+Vector3(-0.04,0.61,0.36)/scale_
+	var shot_direction := Vector3.BACK
+	SpikeArm.apply(pose,author,contact,weight,extension,follow,1.0,0.80,0.8,0.09,0.0,TAU,shot_direction,0.86,0.14/scale_,true)
+	var guide_drop := smoothstep(STRIKE-0.12,STRIKE+0.12,time)
+	SpikeArm.apply_guide_arm(pose,author,Vector3(0.08,0.39,0.38)/scale_,Vector3(0.35,-0.55,0.18),guide_drop,weight*0.68,163.0)
+	var palm_finish := weight*smoothstep(STRIKE,STRIKE+0.12,time)
+	orient_palm(pose,rig,author,"r",Vector3(0.10,0.08,1.0),Vector3.RIGHT,palm_finish)
+	var straighten := smoothstep(STRIKE-0.05,STRIKE+0.21,time)*(1.0-smoothstep(STRIKE+0.24,LAND,time))
+	author.rotate_world(pose,"spine_02",Vector3.RIGHT,-0.17*straighten)
 
 func position_toss_hands(pose: Array, rig: Skeleton3D, author: RefCounted, time: float, weight: float) -> void:
 	var lift := smoothstep(0.08,TOSS,time)

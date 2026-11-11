@@ -69,10 +69,11 @@ func float_approach(time: float, plant_time: float, land_time: float, jump_heigh
 		var advance := (0.49*left_lead+0.93*left_plant if left else 1.12*right_step)*stride_scale
 		var step_height := 0.13*(sin(PI*left_lead)+sin(PI*left_plant)) if left else 0.15*sin(PI*right_step)
 		if not left:
-			var kick := sin(PI*flight) if jump_height > 0.0 else sin(PI*recovery)*0.45
+			var kick := sin(PI*flight)*(1.0-smoothstep(0.02,0.24,time-contact_time())) if jumping else sin(PI*recovery)*0.45
 			advance += (0.38*recovery if jump_height == 0.0 else 0.0)-0.33*kick
 			step_height += 0.25*kick
-		foot += forward*(advance+drift)+Vector3.UP*(lift+step_height+0.09*sin(PI*flight))
+		var tuck := 0.09*sin(PI*flight)*(1.0-smoothstep(0.02,0.22,time-contact_time()))
+		foot += forward*(advance+drift)+Vector3.UP*(lift+step_height+tuck)
 		author.limb(bones,"thigh_"+side,"calf_"+side,"foot_"+side,rig.to_local(foot),Vector3(0.12 if left else -0.12,0.2,1.0))
 	return bones
 
@@ -107,6 +108,7 @@ func pose(time: float) -> void:
 	author.limb(bones,"upperarm_r","lowerarm_r","hand_r",right_wrist,Vector3(-0.62,0.12,-0.91).lerp(Vector3(-0.35,-0.3,0.6),drive),1.0,176.0)
 	orient_palm(bones,rig,author,"r",Vector3(0.0,1.0,0.10),Vector3.RIGHT,windup*(1.0-0.75*follow))
 	prepare_toss_hands(bones,rig,author,time)
+	shape_float_strike(bones,rig,author,time)
 	for bone in rig.get_bone_count(): rig.set_bone_pose_rotation(bone,bones[bone].basis.get_rotation_quaternion())
 	if time <= toss_release:
 		var palm: Vector3 = toss_palm(bones,rig,author,time)
@@ -117,6 +119,9 @@ func pose(time: float) -> void:
 	elif time < contact:
 		var portion := (time-toss_release)/(contact-toss_release)
 		ball.position = toss_origin.lerp(preview_origin,portion)+Vector3.UP*toss_curve_height()*4.0*portion*(1.0-portion)
+
+func shape_float_strike(_pose: Array, _rig: Skeleton3D, _author: RefCounted, _time: float) -> void:
+	pass
 
 func toss_curve_height() -> float:
 	return 0.25
