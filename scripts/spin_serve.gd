@@ -1,9 +1,9 @@
 extends "res://scripts/jump_float_serve.gd"
 
 const TOSS_STEP := 0.36
-const SPIN_TAKEOFF := 1.02
-const SPIN_CONTACT := 1.43
-const SPIN_LAND := 1.87
+const SPIN_TAKEOFF := 1.13
+const SPIN_CONTACT := 1.55
+const SPIN_LAND := 2.01
 
 var sidespin := 0.0
 var released_sidespin := 0.0
@@ -26,19 +26,33 @@ func front_start_limit() -> float:
 	return -7.70
 
 func recovery_end() -> float:
-	return 1.98
+	return 2.12
 
 func can_run_after_contact() -> bool:
 	return is_finite(contact_clock) and swing_time >= SPIN_LAND
 
 func float_body_scale() -> float:
-	return 1.38
+	return 1.62
 
 func float_step_pose(time: float) -> Array:
 	return float_approach(time,SPIN_TAKEOFF,SPIN_LAND,1.12,1.17,TOSS_STEP)
 
 func toss_curve_height() -> float:
-	return 1.47
+	return 1.84
+
+func toss_palm(pose: Array, _rig: Skeleton3D, author: RefCounted, _time: float) -> Vector3:
+	return author.point(pose,"hand_r").lerp(author.point(pose,"middle_01_r"),0.72)
+
+func position_toss_hands(pose: Array, rig: Skeleton3D, author: RefCounted, time: float, weight: float) -> void:
+	var rise := smoothstep(0.09,TOSS_STEP,time)
+	var scale_: float = rig.global_basis.get_scale().y
+	var shoulder: Vector3 = author.point(pose,"upperarm_r")
+	var wrist := shoulder+Vector3(0.07,-0.37+0.61*rise,0.37+0.07*rise)/scale_
+	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",wrist,Vector3(-0.55,-0.65,0.13),weight)
+	orient_palm(pose,rig,author,"r",Vector3.BACK,Vector3.RIGHT,0.72*weight)
+	var left_shoulder: Vector3 = author.point(pose,"upperarm_l")
+	var off_hand := left_shoulder+Vector3(0.11,-0.51,0.07)/scale_
+	author.limb(pose,"upperarm_l","lowerarm_l","hand_l",off_hand,Vector3(0.60,-0.20,0.25),weight)
 
 func shape_float_strike(pose: Array, rig: Skeleton3D, author: RefCounted, time: float) -> void:
 	var weight := smoothstep(SPIN_TAKEOFF+0.06,SPIN_TAKEOFF+0.23,time)*(1.0-smoothstep(SPIN_CONTACT+0.25,SPIN_LAND+0.09,time))
@@ -46,14 +60,17 @@ func shape_float_strike(pose: Array, rig: Skeleton3D, author: RefCounted, time: 
 	var extension := smoothstep(SPIN_CONTACT-0.17,SPIN_CONTACT,time)
 	var follow := smoothstep(SPIN_CONTACT,SPIN_CONTACT+0.29,time)
 	var scale_: float = rig.global_basis.get_scale().y
+	var tilt := smoothstep(SPIN_TAKEOFF+0.13,SPIN_CONTACT-0.015,time)*(1.0-smoothstep(SPIN_CONTACT+0.04,SPIN_LAND-0.05,time))
+	var crunch := smoothstep(SPIN_CONTACT-0.11,SPIN_CONTACT+0.15,time)*(1.0-smoothstep(SPIN_CONTACT+0.20,SPIN_LAND,time))
+	author.rotate_world(pose,"spine_01",Vector3.BACK,deg_to_rad(-24.0)*tilt)
+	author.rotate_world(pose,"spine_03",Vector3.BACK,deg_to_rad(-10.0)*tilt)
+	author.rotate_world(pose,"spine_02",Vector3.RIGHT,0.42*crunch)
 	var shoulder: Vector3 = author.point(pose,"upperarm_r")
-	var contact := shoulder+Vector3(-0.04,0.64,0.41)/scale_
+	var contact := shoulder+Vector3(-0.055,0.67,0.33)/scale_
 	var shot_direction := Vector3(0.20*sidespin,0.0,1.0).normalized()
 	SpikeArm.apply(pose,author,contact,weight,extension,follow,1.0,0.72,0.84,0.12,0.0,0.0,shot_direction,0.0,0.22/scale_,true)
 	var guide_drop := smoothstep(SPIN_CONTACT-0.18,SPIN_CONTACT+0.14,time)
 	SpikeArm.apply_guide_arm(pose,author,Vector3(0.08,0.45,0.48)/scale_,Vector3(0.35,-0.55,0.18),guide_drop,weight,166.0)
-	var crunch := smoothstep(SPIN_CONTACT-0.10,SPIN_CONTACT+0.14,time)*(1.0-smoothstep(SPIN_CONTACT+0.19,SPIN_LAND,time))
-	author.rotate_world(pose,"spine_02",Vector3.RIGHT,0.34*crunch)
 
 func finish_float_wrist(pose: Array, _rig: Skeleton3D, author: RefCounted, time: float) -> void:
 	var snap := smoothstep(SPIN_CONTACT-0.07,SPIN_CONTACT+0.12,time)*(1.0-smoothstep(SPIN_CONTACT+0.21,SPIN_LAND,time))
