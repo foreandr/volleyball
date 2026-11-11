@@ -15,6 +15,7 @@ var block_base := BLOCK_START
 var block_tracking := 0.0
 var block_lift := 0.0
 var vertical_inches := 0.0
+var palm_angle_degrees := 0.0
 var active_block_height := BLOCK_HEIGHT
 var hand_normals: Array[Vector3] = [Vector3.BACK,Vector3.BACK]
 var block_hands: Array[Dictionary] = [{},{}]
@@ -139,7 +140,7 @@ func step_blocker(delta: float) -> void:
 		if ball_direction.z > 0.04 and not is_finite(block_contact_at):
 			var desired := Vector3(clampf(ball_direction.x,-0.16,0.16),clampf(ball_direction.y,-0.14,0.09),1.0).normalized()
 			hand_normals[hand_index] = hand_normals[hand_index].slerp(desired,1.0-exp(-delta*28.0))
-		var toward_ball := hand_normals[hand_index]
+		var toward_ball := hand_normals[hand_index].rotated(Vector3.RIGHT,deg_to_rad(palm_angle_degrees))
 		var finger_direction := Vector3.UP.slide(toward_ball).normalized()
 		var index_edge := finger_direction.cross(toward_ball).normalized()*-sign_
 		var palm := HandPose.hand_basis(finger_direction,index_edge)*HandPose.hand_basis(fingers,across).inverse()*base.basis

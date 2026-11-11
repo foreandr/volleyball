@@ -353,6 +353,18 @@ func start_blocking_practice() -> void:
 		blocking_practice.set_vertical_inches(value)
 		vertical_readout.text = "Vertical jump  %+.0f in" % value)
 	content.add_child(vertical)
+	var palm_readout := label("Palm angle  0 deg",16)
+	content.add_child(palm_readout)
+	var palm_angle := HSlider.new()
+	palm_angle.min_value = -40.0
+	palm_angle.max_value = 40.0
+	palm_angle.step = 1.0
+	palm_angle.focus_mode = Control.FOCUS_NONE
+	palm_angle.tooltip_text = "Negative tilts up, positive tilts down"
+	palm_angle.value_changed.connect(func(value: float):
+		blocking_practice.palm_angle_degrees = value
+		palm_readout.text = "Palm angle  %+.0f deg" % value)
+	content.add_child(palm_angle)
 
 	preview_camera.position = Vector3(0.0,4.9,-5.2)
 	setting_camera_focus = Vector3(0.0,2.1,4.6)
