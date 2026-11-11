@@ -18,12 +18,23 @@ func run() -> void:
 	var review_point := int(args[3]) if args.size() > 3 else 0
 	var results := []
 	var timed_out := false
+	var series := args.size() > 4 and args[4] == "series"
+	var page: Node
 	for number in count:
-		var result := await run_match(first_seed+number,review_point,args[0].get_base_dir())
+		var match_seed := first_seed+number
+		seed(match_seed)
+		if page == null:
+			page = await prepare_match()
+		else:
+			page.demo_match.reset_match()
+		var result := await run_match(page,match_seed,review_point,args[0].get_base_dir())
 		results.append(result)
-		timed_out = timed_out or not bool(result.review_rendered if review_point > 0 else result.finished)
-		unload_current_scene()
-		await process_frame
+		var finished := bool(result.review_rendered if review_point > 0 else result.finished)
+		timed_out = timed_out or not finished
+		if not series or not finished or number == count-1:
+			unload_current_scene()
+			await process_frame
+			page = null
 	var output := FileAccess.open(args[0],FileAccess.WRITE)
 	if output == null:
 		push_error("Could not write " + args[0])
@@ -33,8 +44,7 @@ func run() -> void:
 	output.close()
 	quit(1 if timed_out else 0)
 
-func run_match(match_seed: int, review_point: int, output_dir: String) -> Dictionary:
-	seed(match_seed)
+func prepare_match() -> Node:
 	change_scene_to_file("res://scenes/story_animations.tscn")
 	await process_frame
 	await process_frame
@@ -49,6 +59,11 @@ func run_match(match_seed: int, review_point: int, output_dir: String) -> Dictio
 	game.set_spike_strength(75)
 	game.passing_skill = 55
 	game.setting_skill = 65
+	return page
+
+func run_match(page: Node, match_seed: int, review_point: int, output_dir: String) -> Dictionary:
+	var game: Node3D = page.demo_match
+	var prior_matches: int = int(game.completed_read_matches) if game.has_method("remember_opponent_reads") else 0
 	var counts := {}
 	var rallies := []
 	var review_frames := []
@@ -56,7 +71,7 @@ func run_match(match_seed: int, review_point: int, output_dir: String) -> Dictio
 	var review_rendered := false
 	var previous_flight := -1
 	var previous_rally := 0
-	var rally_started := 0.0
+	var rally_started: float = game.match_clock
 	var closest_attempt := {}
 	var closest_unattempted := {}
 	var deflection := {}
@@ -131,7 +146,7 @@ func run_match(match_seed: int, review_point: int, output_dir: String) -> Dictio
 				break
 		if game.phase == game.Phase.FINISHED and not is_finite(review_deadline): break
 	return {"seed":match_seed,"score":game.score.duplicate(),"finished":game.phase == game.Phase.FINISHED,
-		"counts":counts,"rallies":rallies,"review_flags":flags,"review_rendered":review_rendered}
+		"counts":counts,"rallies":rallies,"review_flags":flags,"review_rendered":review_rendered,"learned_from_matches":prior_matches}
 
 func render_review(page: Node, game: Node3D, frames: Array, output_dir: String, match_seed: int, point: int) -> bool:
 	var camera: Camera3D = page.preview_camera

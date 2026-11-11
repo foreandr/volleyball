@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)]
-    [ValidateSet('Measure','New','Review','Clip','List','Accept','Reject')]
+    [ValidateSet('Measure','Scout','New','Review','Clip','List','Accept','Reject')]
     [string]$Action,
     [ValidatePattern('^[a-z0-9][a-z0-9-]{0,39}$')][string]$Id,
     [string]$Title,
@@ -9,7 +9,8 @@ param(
     [ValidateRange(1,2000)][int]$Matches = 3,
     [int]$Seed = 41,
     [ValidateRange(1,100)][int]$Point = 1,
-    [string]$GodotPath
+    [string]$GodotPath,
+    [switch]$Series
 )
 
 $ErrorActionPreference = 'Stop'
@@ -56,6 +57,7 @@ replay_speed=0.5
             if ($import.ExitCode -ne 0) { throw "Godot import failed. See $output." }
         }
         $arguments = @('--path',('"' + $Project + '"'),'--script',('"' + $SimulationScript + '"'),'--',('"' + $Result + '"'),$Seed,$Count,$ReviewPoint)
+        if ($Series) { $arguments += 'series' }
         if ($ReviewPoint -eq 0) { $arguments = @('--headless') + $arguments }
         else { $arguments = @('--resolution','1200x800') + $arguments }
         $run = Start-Process -FilePath $GodotPath -ArgumentList $arguments -WindowStyle Hidden -Wait -PassThru -RedirectStandardOutput (Join-Path $output 'godot.txt') -RedirectStandardError (Join-Path $output 'godot-errors.txt')
@@ -88,15 +90,41 @@ if ($Action -eq 'List') {
     return
 }
 
-if ($Action -in @('Measure','Review','Clip')) {
+if ($Action -in @('Measure','Scout','Review','Clip')) {
     if (-not $GodotPath) { $GodotPath = Join-Path $repo '../game/tools/Godot_v4.6-stable_win64.exe' }
     $GodotPath = (Resolve-Path -LiteralPath $GodotPath).Path
 }
-if ($Action -eq 'Measure') {
-    $result = Join-Path $root ('measure-' + (Get-Date -Format 'yyyyMMdd-HHmmss-fff') + '/matches.json')
+if ($Action -in @('Measure','Scout')) {
+    $name = $Action.ToLowerInvariant() + '-' + (Get-Date -Format 'yyyyMMdd-HHmmss-fff')
+    $result = Join-Path $root "$name/matches.json"
     Invoke-Simulation $repo $result $Matches
     Read-Totals $result
     Write-Output $result
+    if ($Action -eq 'Scout') {
+        $report = Get-Content -LiteralPath $result -Raw | ConvertFrom-Json
+        $findings = foreach ($match in $report.matches) {
+            foreach ($flag in $match.review_flags) {
+                [pscustomobject]@{ seed=$match.seed; point=$flag.point; time=$flag.time; type=$flag.type; evidence=$flag }
+            }
+        }
+        $leads = @($findings | Group-Object -Property type | Sort-Object -Property Count -Descending | ForEach-Object {
+            $examples = @($_.Group | Sort-Object -Property @{ Expression={
+                if ($null -ne $_.evidence.margin_m) { $_.evidence.margin_m }
+                elseif ($null -ne $_.evidence.distance_m) { $_.evidence.distance_m }
+                else { 0 }
+            } } | Select-Object -First 3)
+            $nextCheck = switch -Wildcard ($_.Name) {
+                'close attempted dig' { 'Replay the approach and platform alignment just before contact.' }
+                '*without an attempt' { 'Check receiver assignment and whether the player could have committed earlier.' }
+                'ball stayed still*' { 'Inspect the preceding contact and ball-flight transition.' }
+                default { 'Inspect the flagged frame before proposing a change.' }
+            }
+            [pscustomobject]@{ type=$_.Name; occurrences=$_.Count; matches=@($_.Group.seed | Sort-Object -Unique).Count; review=$nextCheck; examples=$examples }
+        })
+        $scouting = Join-Path (Split-Path -Parent $result) 'scouting.json'
+        ConvertTo-Json -InputObject $leads -Depth 10 | Set-Content -LiteralPath $scouting -Encoding UTF8
+        Write-Output $scouting
+    }
     return
 }
 
