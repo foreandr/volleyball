@@ -228,11 +228,11 @@ func recalculate() -> void:
 		if practice_mode:
 			var direction: Vector3 = aim_point-actor.global_position
 			direction.y = 0.0
-			var reach: float = [0.42,0.85,1.42,1.82][arrows.selected_distance-1]
+			var reach: float = [0.42,0.85,1.42,1.82,2.33][arrows.selected_distance-1]
 			aim_point = impact_point+direction.normalized()*reach
 			if arrows.selected_distance == 4:
 				aim_point.y = Flight.FLOOR+0.045
-			elif arrows.selected_distance == 3 and arrows.selected in [1,2,8]:
+			elif arrows.selected_distance == 5 or (arrows.selected_distance == 3 and arrows.selected in [1,2,8]):
 				aim_point.y = 0.46
 			elif float(actor.get_meta("feed_settings",{}).get("source_height",0.0)) >= 4.6:
 				aim_point.y += 0.36
@@ -240,7 +240,7 @@ func recalculate() -> void:
 	if review_feed.is_empty():
 		var settings: Dictionary = actor.get_meta("feed_settings",{})
 		feed = Flight.feed(aim_point,settings)
-		if practice_mode and missed and (arrows.selected_distance == 4 or (arrows.selected_distance == 3 and arrows.selected in [1,2,8])):
+		if practice_mode and missed and (arrows.selected_distance >= 4 or (arrows.selected_distance == 3 and arrows.selected in [1,2,8])):
 			# Keep the low dive target reachable across the net without moving the source.
 			var fitted := settings.duplicate()
 			fitted.fit = "speed"

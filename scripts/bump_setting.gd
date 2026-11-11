@@ -56,6 +56,9 @@ var pressed_at := -INF
 var low_save := LowSave.new()
 var previous_dig_pose := PackedVector3Array()
 var quick_low_save := false
+var entry_pose: Array[Transform3D] = []
+var entry_time := -INF
+var reach_changed_at := -INF
 var pose_started_at := -INF
 var cone: MeshInstance3D
 var contact_check := {}
@@ -115,6 +118,8 @@ func set_custom_backward(animation: Animation) -> void:
 	if animation != null: custom_backward_tracks = animation_tracks(animation)
 
 func reset() -> void:
+	entry_pose.clear()
+	reach_changed_at = -INF
 	previous_dig_pose.clear()
 	tracked_hand_dig = Vector3.INF
 	contact_check.clear()
@@ -357,6 +362,7 @@ func dig_contact_segment(first: Vector3, last: Vector3, pancake := false, start_
 		var before := first.lerp(last,start)
 		var after := first.lerp(last,finish)
 		for side in range(1 if pancake else 0,2):
+			if low_save.active and not low_save.wide_arm.is_empty() and side != (0 if low_save.wide_arm == "l" else 1): continue
 			for index in range(1 if hand_setting or pancake else 0,2):
 				var joint := side*3+index
 				var from := start_pose[joint].lerp(end_pose[joint],phase)
@@ -367,6 +373,23 @@ func dig_contact_segment(first: Vector3, last: Vector3, pancake := false, start_
 					gap = distance
 					closest = pair
 	return closest
+
+func begin_dig_transition(time: float) -> void:
+	entry_pose.clear()
+	entry_time = time
+	for bone in setter.skeleton.get_bone_count(): entry_pose.append(setter.skeleton.get_bone_pose(bone))
+
+func blend_dig_transition(time: float) -> void:
+	if entry_pose.is_empty(): return
+	var weight := smoothstep(0.0,0.065,time-entry_time)
+	if weight >= 1.0:
+		entry_pose.clear()
+		return
+	var rig: Skeleton3D = setter.skeleton
+	for bone in entry_pose.size():
+		var pose := entry_pose[bone].interpolate_with(rig.get_bone_pose(bone),weight)
+		rig.set_bone_pose_position(bone,pose.origin)
+		rig.set_bone_pose_rotation(bone,pose.basis.orthonormalized().get_rotation_quaternion())
 
 func update_attempt(time: float, previous: float, end: float, path: Callable, incoming: Vector3, delta: float, cue_arrival := INF, spin_rps := 0.0, dig_cue := INF) -> void:
 	contact_check.clear()
@@ -395,6 +418,11 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 			if low_save.tracks_platform:
 				var aim_time := minf(end,clampf(time+0.025,low_save.contact_time-0.055,low_save.contact_time+0.025))
 				intercept = path.call(aim_time)
+				if low_save.wide_arm.is_empty() and time < low_save.contact_time-0.07:
+					var local := setter.basis.inverse()*(intercept-setter.position)
+					if absf(local.x) > 0.64 and local.z > -0.38 and absf(local.x) > absf(local.z)*0.92:
+						begin_dig_transition(time)
+						low_save.wide_arm = "l" if local.x > 0.0 else "r"
 			low_save.sample(setter,time,low_save.contact_time+0.07,intercept)
 		else:
 			var pose_time := 0.045 if strict_dig else 0.09
@@ -409,6 +437,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 				else:
 					pose_reach(smoothstep(0.0,1.0,reach_progress),intercept)
 		if not hand_setting: apply_knee_bend(time)
+		blend_dig_transition(time)
 		var pancake := low_save.active and low_save.pancake
 		var center := to_local(LowSave.palm_center(setter)) if pancake else platform_center()
 		var radius := 0.16 if pancake else (0.33 if face_dig else contact_radius())
@@ -582,8 +611,14 @@ func advance_reach(path: Callable, time: float, end: float, delta: float, quick_
 		var future: Vector3 = path.call(lookahead)
 		var now: Vector3 = path.call(time)
 		intercept = Geometry3D.get_closest_point_to_segment(ready_contact(),now,future)
+		var offset := intercept-ready_contact()
+		var direction := offset.slide(Vector3.UP)
+		if quick_dig and not reach.is_empty() and time-reach_changed_at > 0.12 and direction.length() > 0.32 and reach_step.normalized().dot(direction.normalized()) < 0.48:
+			begin_dig_transition(time)
+			clear_reach()
+			reach_changed_at = time
 		if reach.is_empty() and (lookahead >= end or not intercept.is_equal_approx(future)):
-			plan_reach(intercept-ready_contact())
+			plan_reach(offset)
 	if not reach.is_empty():
 		var before := reach_progress
 		var duration := 0.27 if reach.side_lunge and not rear_setup.is_zero_approx() else (0.19 if reach.tier == 2 else 0.15)

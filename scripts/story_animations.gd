@@ -1337,8 +1337,9 @@ func step_cpu_receive(previous: float, delta: float) -> void:
 			preview_player.install_custom(custom_backward_clip,"backward_receive",false)
 		if sample_custom_backward(previous): drill_status.text = "Clean platform contact"
 		return
-	if arrows.selected_distance == 4:
-		step_cpu_forward_dive(previous,true)
+	if arrows.selected_distance >= 4:
+		var wide := ("r" if arrows.selected in [2,3,4] else "l") if arrows.selected_distance == 5 else ""
+		step_cpu_forward_dive(previous,arrows.selected_distance == 4,wide)
 		return
 	var knee_slide: bool = arrows.selected_distance == 3 and arrows.selected in [3,7]
 	if arrows.selected != 0 and arrows.selected_distance == 3 and not knee_slide:
@@ -1419,7 +1420,7 @@ func body_dig_status() -> String:
 	if part == "Head": return "Body dig  |  Head deflection"
 	return "Body dig  |  Deflected off the player"
 
-func step_cpu_forward_dive(previous: float, pancake := false) -> void:
+func step_cpu_forward_dive(previous: float, pancake := false, wide := "") -> void:
 	var time: float = preview_clock-ball_preview.contact_time+ForwardDive.WINDUP
 	if time < 0.0 or not ball_preview.incoming_net.is_empty(): return
 	if cpu_dive_ready.is_empty():
@@ -1433,14 +1434,21 @@ func step_cpu_forward_dive(previous: float, pancake := false) -> void:
 		cpu_dive_clasp = player_controls.snapshot_receive_pose()
 		preview_player.animator.seek(0.0,true)
 	var heading: Vector3 = (ball_preview.aim_point-cpu_start).slide(Vector3.UP).normalized()
-	preview_player.pose_reception_dive(cpu_dive_ready,cpu_dive_clasp,cpu_start,heading,time,ball_preview.aim_point,float(ball_preview.recovery.get("time",0.07))+ForwardDive.WINDUP,pancake)
+	var facing := heading if wide.is_empty() else Vector3.BACK.rotated(Vector3.UP,cpu_start_yaw)
+	preview_player.pose_reception_dive(cpu_dive_ready,cpu_dive_clasp,cpu_start,facing,time,ball_preview.aim_point,float(ball_preview.recovery.get("time",0.07))+ForwardDive.WINDUP,pancake,1.0 if wide.is_empty() else 1.85,not wide.is_empty(),wide,heading)
 	if pancake:
 		ball_preview.try_pancake(previous,preview_clock)
 		drill_status.text = "Pancake save" if ball_preview.recovery.has("pancake") else "CPU pancake reach"
 		return
-	drill_status.text = "CPU forward dive  |  F1 to take control"
+	drill_status.text = "CPU forward dive  |  F1 to take control" if wide.is_empty() else "CPU one-arm dive  |  F1 to take control"
 	if time >= ForwardDive.WINDUP-0.12 and time <= ForwardDive.WINDUP+0.07:
 		ball_preview.update_practice_platform()
+		if not wide.is_empty():
+			var rig: Skeleton3D = preview_player.skeleton
+			var elbow := rig.get_bone_global_pose(rig.find_bone("lowerarm_"+wide)).origin
+			var wrist := rig.get_bone_global_pose(rig.find_bone("hand_"+wide)).origin
+			ball_preview.practice_reach_center = rig.to_global(elbow.lerp(wrist,0.72))
+			ball_preview.practice_forearms.assign([rig.to_global(elbow),rig.to_global(wrist)])
 		ball_preview.try_practice_pass(previous,preview_clock,0.16)
 	else:
 		ball_preview.practice_reach_center = Vector3.INF
@@ -1455,7 +1463,7 @@ func update_distance_status(in_control: bool) -> void:
 		var offset: Vector3 = ball_preview.practice_step_offset(preview_clock)
 		tier = ball_preview.practice_reach_tier(offset)
 		high = offset.y >= 0.20
-	var names := ["Short reach","High shoulder reach" if high else "Low lunge","Dive","Pancake"]
+	var names := ["Short reach","High shoulder reach" if high else "Low lunge","Dive","Pancake","One-arm dive"]
 	if tier == 3:
 		if arrows.selected in [1,2,8]: names[2] = "Forward dive"
 		if arrows.selected in [3,7]: names[2] = "Side knee slide"

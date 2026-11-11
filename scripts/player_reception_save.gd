@@ -18,6 +18,7 @@ var travel_scale := 1.0
 var entry_blend := ENTRY_BLEND
 var tracks_platform := false
 var platform_aim := Vector3.ZERO
+var wide_arm := ""
 var entry_pose: Array[Transform3D] = []
 var ready: Array[Transform3D] = []
 var clasp: Array[Transform3D] = []
@@ -42,23 +43,28 @@ func plan(actor: Node3D, path: Callable, time: float, end: float, clip: Animatio
 		var point: Vector3 = path.call(high)
 		var offset := (point-actor.position).slide(Vector3.UP)
 		var distance := offset.length()
+		var local := actor.basis.inverse()*offset
+		var wide: bool = quick_save and not low_save and distance > 1.38 and absf(local.x) > absf(local.z)*0.64
 		var minimum := (0.58 if low_save else 0.72) if quick_save else (1.80 if low_save else 1.28)
 		var toward_speed := (first-point).dot(offset.normalized())/maxf(high-time,0.001)
 		var extra := clampf(toward_speed*0.035,0.0,0.32)
 		var maximum := (2.55 if low_save else 1.88)+extra
-		if distance < minimum or distance > maximum or offset.normalized().dot(actor.basis.z)<(0.30 if quick_save else 0.62): continue
+		if wide: maximum = 2.85+extra
+		if distance < minimum or distance > maximum or offset.normalized().dot(actor.basis.z)<(-0.12 if wide else (0.30 if quick_save else 0.62)): continue
 		pancake = low_save
+		wide_arm = ("l" if local.x > 0.0 else "r") if wide else ""
 		active = true
 		aim = point
 		platform_aim = point
 		start = actor.position
-		heading = offset.normalized()
+		heading = offset.normalized() if not wide else actor.basis.z.slide(Vector3.UP).normalized()
 		contact_time = high
 		start_time = time
 		start_yaw = actor.rotation.y
 		tracks_platform = quick_save and not low_save
 		var reach_ahead := 0.72 if tracks_platform else 0.40
 		travel_scale = clampf((distance-reach_ahead)/(1.22 if low_save else 0.74),0.18,1.18) if quick_save else 1.0
+		if wide: travel_scale = clampf((distance-0.76)/0.78,0.60,2.25)
 		entry_blend = 0.075 if quick_save else ENTRY_BLEND
 		entry_pose.clear()
 		var rig: Skeleton3D = actor.skeleton
@@ -74,7 +80,7 @@ func sample(actor: Node3D, time: float, release: float, intercept := Vector3.INF
 		pose_time = Dive.WINDUP*clampf(inverse_lerp(start_time,contact_time,time),0.0,1.0)
 	if tracks_platform and intercept.is_finite(): platform_aim = intercept
 	var target := platform_aim if tracks_platform else aim
-	actor.pose_reception_dive(ready,clasp,start,heading,pose_time,target,release-contact_time+Dive.WINDUP,pancake,travel_scale,tracks_platform)
+	actor.pose_reception_dive(ready,clasp,start,heading,pose_time,target,release-contact_time+Dive.WINDUP,pancake,travel_scale,tracks_platform,wide_arm,(aim-start).slide(Vector3.UP).normalized())
 	var entry_weight := smoothstep(0.0,minf(entry_blend,contact_time-start_time),time-start_time)
 	if entry_weight < 1.0:
 		var rig: Skeleton3D = actor.skeleton
