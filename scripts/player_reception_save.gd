@@ -23,13 +23,14 @@ var entry_pose: Array[Transform3D] = []
 var ready: Array[Transform3D] = []
 var clasp: Array[Transform3D] = []
 
-func plan(actor: Node3D, path: Callable, time: float, end: float, clip: Animation, quick_save := false) -> bool:
+func plan(actor: Node3D, path: Callable, time: float, end: float, clip: Animation, quick_save := false, allow_pancake := true, pancake_requires_chase := false) -> bool:
 	if active: return true
 	var lookahead := minf(time+Dive.WINDUP,end)
 	if lookahead <= time: return false
 	var first: Vector3 = path.call(time)
 	var last: Vector3 = path.call(lookahead)
 	for low_save in [false,true]:
+		if low_save and not allow_pancake: continue
 		var height := PANCAKE_HEIGHT if low_save else DIVE_HEIGHT
 		if first.y <= height or last.y > height: continue
 		var low := time
@@ -43,6 +44,7 @@ func plan(actor: Node3D, path: Callable, time: float, end: float, clip: Animatio
 		var point: Vector3 = path.call(high)
 		var offset := (point-actor.position).slide(Vector3.UP)
 		var distance := offset.length()
+		if low_save and pancake_requires_chase and (point-first).slide(Vector3.UP).dot(offset.normalized()) <= 0.35*(high-time): continue
 		var local := actor.basis.inverse()*offset
 		var wide: bool = quick_save and not low_save and distance > 1.38 and absf(local.x) > absf(local.z)*0.64
 		var minimum := (0.58 if low_save else 0.72) if quick_save else (1.80 if low_save else 1.28)

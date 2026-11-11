@@ -717,6 +717,8 @@ func queue_receive(index: int, technique: int) -> void:
 	bump.green_end = 0.78 if is_human(index) else 0.55
 	bump.defensive_hand_dig = defensive_ball() and technique == 1
 	bump.quick_low_save = technique == 0 and not is_human(index)
+	bump.allow_pancake = flight_kind not in ["spike","dump"] or touched_tape
+	bump.pancake_requires_chase = true
 	bump.allow_auto_dive = technique == 0 and (not is_human(index) or not defensive_ball())
 	bump.queue_bump(elapsed)
 	show_key(index,["Q","E","F"][technique])
@@ -792,6 +794,10 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 		world_motion = frame.global_basis*cpu_free_ball_motion(point,frame.global_basis.inverse()*world_motion)
 	var crossing := (Net.NET_Z-world_point.z)/world_motion.z if absf(world_motion.z)>0.001 else -1.0
 	var over := crossing > 0.0 and crossing < Flight.landing_time(world_point,world_motion)
+	if over:
+		var crossing_point := world_point+world_motion*crossing+Vector3.DOWN*0.5*Flight.GRAVITY*crossing*crossing
+		# A teammate can still play a low pass before it reaches the net.
+		over = crossing_point.y >= Net.NET_TOP+0.02
 	launch(world_point,world_motion,("dump" if touches == 2 and technique != 0 else "free") if over else "pass",index)
 
 func owns_action(index: int, allow_serve_move := false) -> bool:
@@ -919,6 +925,8 @@ func arrival(height: float) -> float:
 	if touched_tape and not net_hit.is_empty(): start = maxf(start,float(net_hit.release_time))
 	var beginning := start
 	var end := flight_end()
+	if not touched_tape and not net_hit.is_empty() and net_hit.kind == "under":
+		end = minf(end,float(net_hit.time))
 	if beginning >= end: return end
 	for i in range(1,26):
 		var next := lerpf(beginning,end,i/25.0)
