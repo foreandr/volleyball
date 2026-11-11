@@ -88,6 +88,8 @@ var cpu_contact_time := 0.0
 var cpu_contact_point: Vector3
 var cpu_stand: Vector3
 var cpu_set: MeshInstance3D
+var cpu_set_style := 0
+var active_cpu_set_style := 0
 var cpu_feet: RefCounted
 var pin_arrival := 0.0
 var flight_end := 0.0
@@ -239,6 +241,7 @@ func reset_feed() -> void:
 	receiver.position = CPU_HOME
 	receiver.rotation.y = PI
 	cpu_set.reset()
+	active_cpu_set_style = 0
 	jump.active = false
 	approach_jump_queued = false
 	approach_steps = 2
@@ -619,7 +622,12 @@ func step(delta: float) -> void:
 		Stage.SET:
 			if uses_assisted_approach(): face_receiver(called_set_target()-receiver.position,delta*APPROACH_SET_TURN_RATE)
 			if not swing_practice:
-				cpu_set.update_hand_push(cpu_set.release_time+time,cpu_set.release_time+time-cpu_set.touch_time)
+				if active_cpu_set_style == 1:
+					cpu_set.follow_forearm(cpu_set.touch_time+time,Vector3.DOWN*5.0)
+				else:
+					cpu_set.update_hand_push(cpu_set.release_time+time,cpu_set.release_time+time-cpu_set.touch_time)
+				if active_cpu_set_style == 2:
+					receiver.position.y = CPU_HOME.y+0.44*(1.0-smoothstep(0.0,0.33,time))
 			play_pin_ball(time,previous,delta)
 		Stage.HIT: play_spike(time,delta)
 		Stage.MISS:
@@ -659,7 +667,10 @@ func play_serve(time: float, previous: float, delta: float) -> void:
 			return
 		pass_origin = bump.release_point if bump.hand_setting else bump.touch
 		pass_motion = bump.outgoing
+		active_cpu_set_style = cpu_set_style
 		var head_height := CPU_HOME.y+HandPose.CONTACT_HEIGHT*receiver.scale.y
+		if active_cpu_set_style == 1: head_height = CPU_HOME.y+1.0
+		if active_cpu_set_style == 2: head_height += 0.44
 		cpu_contact_time = descending_time(pass_origin,pass_motion,head_height)
 		if cpu_contact_time <= 0.0:
 			shank("Pass was too low to set")
@@ -722,8 +733,9 @@ func play_cpu_set(time: float, delta: float) -> void:
 			var anchor: Vector3 = receiver.to_global(cpu_set.hand_anchor)
 			face_receiver(called_set_target()-receiver.position,delta*APPROACH_SET_TURN_RATE)
 			cpu_set.hand_anchor = receiver.to_local(anchor)
-		cpu_set.update_hand_push(time,push_time)
-		ball.position = cpu_set.platform_center()
+		if active_cpu_set_style != 1:
+			cpu_set.update_hand_push(time,push_time)
+			ball.position = cpu_set.platform_center()
 		if is_finite(cpu_set.release_time):
 			pass_origin = cpu_set.release_point
 			pass_motion = cpu_set.outgoing if approach_practice else set_toward_pin(pass_origin,rally_set_target,SET_APEX,RALLY_SET_CONTACT_HEIGHT)
@@ -741,7 +753,7 @@ func play_cpu_set(time: float, delta: float) -> void:
 			trace.write("cpu_set",clock,{"point":pass_origin,"velocity":pass_motion,"pin_arrival":pin_arrival},true)
 		return
 	ball.position = flight_point(pass_origin,pass_motion,minf(time,cpu_contact_time))
-	var travel := (cpu_stand-receiver.position).limit_length(3.2*delta)
+	var travel := (cpu_stand-receiver.position).slide(Vector3.UP).limit_length(3.2*delta)
 	receiver.position += travel
 	var toward_ball := (ball.position-receiver.position).slide(Vector3.UP)
 	if toward_ball.length_squared() < 0.09 and travel.is_zero_approx():
@@ -755,17 +767,28 @@ func play_cpu_set(time: float, delta: float) -> void:
 	else:
 		face_receiver(toward_ball,delta*9.0)
 	cpu_feet.step(receiver.basis.inverse()*travel/maxf(delta*3.2,0.001),delta,1.4,true)
+	if active_cpu_set_style == 2:
+		receiver.position.y = CPU_HOME.y+0.44*(1.0-smoothstep(0.0,0.24,lead))
 	if lead <= 0.22:
-		HandPose.apply(receiver,cpu_contact_point,1.0-smoothstep(0.0,0.22,lead))
+		var prepare := 1.0-smoothstep(0.0,0.22,lead)
+		if active_cpu_set_style == 1: cpu_set.apply_pose(cpu_set.contact_frame,prepare)
+		else: HandPose.apply(receiver,cpu_contact_point,prepare)
 	if time >= cpu_contact_time:
-		if receiver.position.distance_to(cpu_stand)>0.60:
+		if (receiver.position-cpu_stand).slide(Vector3.UP).length()>0.60:
 			shank("CPU could not reach the pass",time)
 			return
 		cpu_set.height = approach_set_apex if approach_practice else SET_APEX
 		var ideal := set_toward_pin(cpu_contact_point,called_set_target(),cpu_set.height,PIN_HEIGHT if approach_practice else RALLY_SET_CONTACT_HEIGHT)
 		var target := flight_point(cpu_contact_point,ideal,Flight.landing_time(cpu_contact_point,ideal))
 		cpu_set.destination = Vector2(target.x,target.z)
-		cpu_set.begin_hand_contact(cpu_contact_point,time)
+		if active_cpu_set_style == 1:
+			cpu_set.touch = cpu_contact_point
+			cpu_set.touch_time = time
+			cpu_set.release_time = time
+			cpu_set.release_point = cpu_contact_point
+			cpu_set.outgoing = ideal
+		else:
+			cpu_set.begin_hand_contact(cpu_contact_point,time)
 		if uses_assisted_approach(): approach_set_touched_at = clock
 
 func play_pin_ball(time: float, previous: float, delta: float) -> void:
