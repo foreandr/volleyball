@@ -1,5 +1,6 @@
 extends Node3D
 
+const HandPose = preload("res://scripts/hand_setting_pose.gd")
 const BallPreview = preload("res://scripts/animation_ball_preview.gd")
 const Net = preload("res://scripts/net_collision.gd")
 const Flight = preload("res://scripts/pass_flight.gd")
@@ -155,21 +156,34 @@ func pose(time: float) -> void:
 	var follow := smoothstep(CONTACT_TIME,0.78,time)*(1.0-smoothstep(0.78,1.22,time))
 	var right_shoulder: Vector3 = author.point(bones,"upperarm_r")
 	var left_shoulder: Vector3 = author.point(bones,"upperarm_l")
-	var right_wrist := right_shoulder+Vector3(0.06+0.17*back,-0.49+0.30*follow,0.33-0.68*back+0.16*follow)/scale_
-	var left_wrist := left_shoulder+Vector3(-0.19,-0.44,0.37)/scale_
+	var right_wrist := right_shoulder+Vector3(-0.055-0.08*back,-0.59+0.34*follow,0.015-0.36*back+0.51*follow)/scale_
+	var left_wrist := left_shoulder+Vector3(-0.13,-0.40,0.38)/scale_
 	var hold := 1.0-smoothstep(CONTACT_TIME,0.85,time)
 	var left_ready: Vector3 = author.point(bones,"hand_l")
-	author.limb(bones,"upperarm_l","lowerarm_l","hand_l",left_ready.lerp(left_wrist,hold),Vector3(0.3,-0.4,0.6))
-	var left_hand: Vector3 = author.point(bones,"hand_l")
+	author.limb(bones,"upperarm_l","lowerarm_l","hand_l",left_ready.lerp(left_wrist,hold),Vector3(0.65,-0.6,0.15))
+	var left_basis: Transform3D = author.world_pose(bones,rig.find_bone("hand_l"))
+	var fingers: Vector3 = author.point(bones,"middle_01_l")-left_basis.origin
+	var palm_width: Vector3 = author.point(bones,"index_01_l")-author.point(bones,"pinky_01_l")
+	var palm_up := HandPose.hand_basis(Vector3.BACK,Vector3.RIGHT)*HandPose.hand_basis(fingers,palm_width).inverse()*left_basis.basis
+	author.set_world_basis(bones,"hand_l",left_basis.basis.slerp(palm_up,hold))
+	for digit in ["thumb","index","middle","ring","pinky"]:
+		for joint in ["01","02","03"]:
+			var left_digit := rig.find_bone("%s_%s_l" % [digit,joint])
+			var right_digit := rig.find_bone("%s_%s_r" % [digit,joint])
+			bones[left_digit].basis = bones[left_digit].basis.slerp(rig.get_bone_rest(left_digit).basis,hold)
+			bones[right_digit].basis = rig.get_bone_rest(right_digit).basis
+	var knuckles: Vector3 = author.point(bones,"middle_01_l")
+	var ball_center := left_basis.origin.lerp(knuckles,0.72)+Vector3.UP*(BallPreview.RADIUS+0.012)/scale_
 	var strike := smoothstep(0.32,CONTACT_TIME,time)*(1.0-smoothstep(CONTACT_TIME,0.78,time))
-	right_wrist = right_wrist.lerp(left_hand+Vector3(0.04,0.04,0.03)/scale_,strike)
-	author.limb(bones,"upperarm_r","lowerarm_r","hand_r",right_wrist,Vector3(-0.3,-0.4,0.6))
+	right_wrist = right_wrist.lerp(ball_center+Vector3(-0.02,-0.13,-0.13)/scale_,strike)
+	author.limb(bones,"upperarm_r","lowerarm_r","hand_r",right_wrist,Vector3(-0.55,-0.4,0.45))
 	var across: Vector3 = (author.point(bones,"index_01_r")-author.point(bones,"pinky_01_r")).normalized()
+	var fist := smoothstep(0.0,0.13,time)*(1.0-smoothstep(0.85,1.20,time))
 	for digit in ["index","middle","ring","pinky"]:
 		for joint in ["01","02","03"]:
-			author.rotate_world(bones,"%s_%s_r" % [digit,joint],across,-1.25 if joint != "03" else -0.85)
-	author.rotate_world(bones,"thumb_01_r",across,-0.45)
+			author.rotate_world(bones,"%s_%s_r" % [digit,joint],across,fist*(-1.25 if joint != "03" else -0.85))
+	author.rotate_world(bones,"thumb_01_r",across,-0.45*fist)
 	for bone in rig.get_bone_count():
 		rig.set_bone_pose_rotation(bone,bones[bone].basis.get_rotation_quaternion())
 	if time <= CONTACT_TIME:
-		ball.position = to_local(rig.to_global(left_hand))+Vector3(0.0,0.09,0.08)
+		ball.position = to_local(rig.to_global(ball_center))
