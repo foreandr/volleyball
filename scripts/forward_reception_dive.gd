@@ -52,6 +52,9 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 		drop += 0.09*lunge
 		if track_platform:
 			drop -= 0.065*smoothstep(0.14,0.31,time)*(1.0-smoothstep(0.40,0.60,time))
+	if not wide_arm.is_empty():
+		# Carry the lateral lunge farther before contact, then rejoin the normal slide.
+		travel += 0.14*smoothstep(0.12,0.40,time)*(1.0-smoothstep(0.40,0.62,time))
 	travel *= travel_scale
 	actor.position = start+(heading if wide_arm.is_empty() or slide_heading.is_zero_approx() else slide_heading)*travel
 	var facing_yaw := atan2(heading.x,heading.z)
@@ -121,8 +124,12 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 	elif not wide_arm.is_empty() and reach > 0.0:
 		var side := 1.0 if wide_arm == "l" else -1.0
 		var lift := smoothstep(0.0,0.12,since_brace)
-		var target := rig.to_local(ball_point)+Vector3(0,-0.09+0.31*lift,0)
-		author.limb(pose,"upperarm_"+wide_arm,"lowerarm_"+wide_arm,"hand_"+wide_arm,target,
+		var upper: String = "upperarm_"+wide_arm
+		var shoulder: Vector3 = author.point(pose,upper)
+		var ball := rig.to_local(ball_point)
+		# Put the forearm under the ball, with the wrist extending just past it.
+		var target := ball+(ball-shoulder).normalized()*(0.10/scale_)+Vector3.UP*(-0.055+0.31*lift)/scale_
+		author.limb(pose,upper,"lowerarm_"+wide_arm,"hand_"+wide_arm,target,
 			Vector3(side*0.85,-0.32,0.16),reach,172.0)
 	elif reach > 0.0:
 		var bias := Vector3.ZERO if track_platform else Vector3(0,-0.14,0.18)

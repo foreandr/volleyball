@@ -459,6 +459,10 @@ func reset_receives() -> void:
 	request_age = -INF
 
 func launch(point: Vector3, motion: Vector3, kind: String, from: int, spin_rate := 0.0, hitter := -1, set_pin := Vector3.ZERO) -> void:
+	# A deflection changes the ball's flight immediately, even during a player's slide.
+	for index in players.size():
+		var save: RefCounted = platforms[index].low_save
+		if save.active and not save.finished(elapsed): begin_recovery(index)
 	flight_number += 1
 	origin = point
 	velocity = motion
@@ -1280,6 +1284,7 @@ func deflect_defender_body(previous: float) -> void:
 	var contact := Vector3.ZERO
 	var surface := Vector3.ZERO
 	var first_fraction := INF
+	var body_part := ""
 	for index in range(receiving_team*2,receiving_team*2+2):
 		if index == last_player: continue
 		var actor := players[index]
@@ -1308,11 +1313,12 @@ func deflect_defender_body(previous: float) -> void:
 			player = index
 			contact = point
 			surface = normal
+			body_part = segment[0]
 	if player < 0 or not can_touch(player): return
 	var incoming := travel/maxf(0.001,minf(elapsed,flight_end())-previous)
 	if surface.is_zero_approx(): surface = -incoming.normalized()
 	var rebound := incoming.slide(surface)*0.48-surface*incoming.dot(surface)*0.46
-	trace.write("body_contact",match_clock,{"player":player,"point":contact,"rebound":rebound})
+	trace.write("body_contact",match_clock,{"player":player,"body_part":body_part,"point":contact,"rebound":rebound})
 	stroke = "Body deflection"
 	transition_possession[team(player)] = true
 	play_touch()
