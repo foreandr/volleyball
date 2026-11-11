@@ -1030,11 +1030,11 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 				var front := (forward*sin(deg_to_rad(80.0))-up*cos(deg_to_rad(80.0))).normalized()
 				var lift_direction := front.slerp(Vector3.UP,overhead)
 				var front_reach := 0.43 if side == "r" else 0.54
-				var inward := lerpf(0.105 if side == "r" else 0.07,0.02,overhead)
+				var inward := lerpf(0.135 if side == "r" else 0.07,0.02,overhead*overhead if side == "r" else overhead)
 				var target := shoulder+lift_direction*lerpf(front_reach,arm_length*0.995,overhead)-outward*inward
 				# Keep the elbow bend on the same side as the hand passes overhead.
 				var elbow_pole := lerp_angle(0.0,PI*0.5,overhead)
-				var bend := forward*sin(elbow_pole)-up*cos(elbow_pole)-outward*(0.10+(0.08*(1.0-overhead) if side == "r" else 0.0))
+				var bend := forward*sin(elbow_pole)-up*cos(elbow_pole)-outward*(0.10+(0.16*(1.0-overhead*overhead) if side == "r" else 0.0))
 				author.limb(front_pose,upper,"lowerarm_"+side,"hand_"+side,target,bend,1.0,lerpf(155.0,174.0,overhead))
 				var front_weight := 1.0-smootherstep(0.20 if side == "r" else 0.21,0.34 if side == "r" else 0.40,handoff_age)
 				SpikeArm.blend_arm(pose,front_pose,author,front_weight,side)
