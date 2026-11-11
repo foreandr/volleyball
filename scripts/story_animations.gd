@@ -276,6 +276,8 @@ Scroll to set pass height",16)
 		refresh_type()
 		preview.grab_focus()
 		return
+	if category == "Chasing":
+		content.add_child(button("Serve Bump Set Spike",start_serve_bump_set_spike))
 	if category == "Serving":
 		drill_status = label("Space to serve\nMove cursor to aim\nWASD to move camera\nMiddle drag to rotate\nScroll for arc  |  Shift + scroll to zoom",16)
 		content.add_child(drill_status)
@@ -294,6 +296,31 @@ Scroll to set pass height",16)
 	content.add_child(edit_button)
 	refresh_type()
 	animation_list.grab_focus()
+
+func start_serve_bump_set_spike() -> void:
+	clear_content()
+	if is_instance_valid(ball_preview): ball_preview.stop()
+	set_title("SERVE BUMP SET SPIKE")
+	drill_status = label("",18)
+	content.add_child(drill_status)
+	setter_original_transform = preview_player.transform
+	setter_original_height = preview_player.height_cm
+	setter_animation_process = preview_player.animator.callback_mode_process
+	setter_animator_active = preview_player.animator.active
+	preview_player.set_height_cm(setter_original_height+10.0)
+	preview_player.animator.active = true
+	preview_player.animator.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
+	preview_player.get_node("DirectionArrows").hide()
+	setting_drill = preload("res://scripts/serve_bump_set_spike.gd").new()
+	setting_drill.swing_practice = false
+	preview_player.get_parent().add_child(setting_drill)
+	setting_drill.configure(preview_player,drill_status,true,build_label)
+	setting_drill.setup_demo()
+	content.add_child(button("Replay",setting_drill.reset_feed))
+	setting_camera_focus = SETTING_CAMERA_FOCUS
+	preview_camera.position = Vector3(-9.0,10.0,-11.0)
+	preview_camera.look_at(setting_camera_focus)
+	preview.grab_focus()
 
 func current_type() -> String:
 	if selected_category.is_empty(): return ""
@@ -694,6 +721,9 @@ func _process(delta: float) -> void:
 	if is_instance_valid(underhand_serve):
 		pan_serve_camera(player_controls.movement_input(),delta)
 		underhand_serve.step(delta)
+		return
+	if is_instance_valid(setting_drill) and selected_category == "Chasing":
+		setting_drill.tick_demo(delta)
 		return
 	if is_instance_valid(setting_drill):
 		if selected_category == "Attacking" and not setting_drill.approach_setup_drag.is_empty(): return
@@ -1312,7 +1342,7 @@ func open_editor(index := -1) -> void:
 	get_tree().change_scene_to_file("res://scenes/animation_editor.tscn")
 
 func cycle_type(direction: int) -> void:
-	if selected_category.is_empty() or selected_category in ["Setting","Attacking"]: return
+	if is_instance_valid(setting_drill) or selected_category.is_empty() or selected_category in ["Setting","Attacking"]: return
 	type_indices[selected_category] = posmod(int(type_indices.get(selected_category,0))+direction,MOVE_TYPES[selected_category].size())
 	refresh_type()
 
@@ -1324,6 +1354,9 @@ func open_menu() -> void:
 	else: get_tree().change_scene_to_file("res://scenes/story.tscn")
 
 func _input(event: InputEvent) -> void:
+	if selected_category == "Chasing" and is_instance_valid(setting_drill):
+		if event.is_action_pressed("ui_cancel"): open_menu()
+		return
 	if is_instance_valid(underhand_serve) and event is InputEventKey and event.keycode == KEY_SPACE:
 		if event.pressed and not event.echo: underhand_serve.serve()
 		get_viewport().set_input_as_handled()

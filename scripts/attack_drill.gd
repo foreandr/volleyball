@@ -81,6 +81,7 @@ var backswing_bend := DEFAULT_BACKSWING_BEND
 var backswing_reach := DEFAULT_BACKSWING_REACH
 var stage_start := 0.0
 var serve_target: Vector3
+var serve_origin := ATTACK_SERVE_SOURCE
 var pass_origin: Vector3
 var pass_motion: Vector3
 var cpu_contact_time := 0.0
@@ -421,7 +422,7 @@ func receive_cue_time() -> float:
 		var midpoint := (earliest+latest)*0.5
 		var progress := clampf((midpoint-jump_start-jump.load_duration())/jump.air_time,0.0,1.0)
 		var hand_height := height+4.0*jump.height*progress*(1.0-progress)
-		if flight_point(ATTACK_SERVE_SOURCE,serve_velocity,midpoint).y > hand_height:
+		if flight_point(serve_origin,serve_velocity,midpoint).y > hand_height:
 			earliest = midpoint
 		else:
 			latest = midpoint
@@ -645,8 +646,8 @@ func trace_snapshot(time: float) -> Dictionary:
 	}
 
 func play_serve(time: float, previous: float, delta: float) -> void:
-	var path := func(t): return flight_point(ATTACK_SERVE_SOURCE,serve_velocity,t)
-	var end := Flight.landing_time(ATTACK_SERVE_SOURCE,serve_velocity)
+	var path := func(t): return flight_point(serve_origin,serve_velocity,t)
+	var end := Flight.landing_time(serve_origin,serve_velocity)
 	ball.position = path.call(minf(time,end))
 	var cue := receive_cue_time()
 	timing_cue.update_timing(time,cue,bump.green_start,bump.green_end)

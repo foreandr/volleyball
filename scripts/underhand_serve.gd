@@ -11,6 +11,8 @@ const STEP_DISTANCE := 0.98
 const PREVIEW_DOTS := 42
 
 var player: Node3D
+var serve_start := START
+var forward := Vector3.BACK
 var ball: MeshInstance3D
 var aim_ring: MeshInstance3D
 var path_preview: MultiMeshInstance3D
@@ -36,12 +38,14 @@ func change_arc(amount: float) -> void:
 	apex = clampf(apex+amount,3.5,9.0)
 	update_path_preview()
 
-func configure(actor: Node3D) -> void:
+func configure(actor: Node3D, start := START, yaw := 0.0) -> void:
 	player = actor
 	original_transform = player.transform
 	original_animation_mode = player.animator.callback_mode_process
-	player.position = START
-	player.rotation.y = 0.0
+	serve_start = start
+	player.position = serve_start
+	player.rotation.y = yaw
+	forward = player.basis.z.normalized()
 	player.animator.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
 	ball = MeshInstance3D.new()
 	ball.mesh = BallPreview.make_ball()
@@ -89,7 +93,7 @@ func reset() -> void:
 	elapsed = -1.0
 	net_hit.clear()
 	player.play_action("idle",0.0)
-	player.position = START
+	player.position = serve_start
 	player.animator.seek(0.0,true)
 	var rig: Skeleton3D = player.skeleton
 	for side in ["l","r"]:
@@ -149,7 +153,7 @@ func flight_point(time: float) -> Vector3:
 func pose(time: float) -> void:
 	var step := smoothstep(0.14,0.50,time)
 	var transfer := smoothstep(0.20,CONTACT_TIME,time)
-	player.position = START+Vector3.BACK*STEP_DISTANCE*0.55*transfer
+	player.position = serve_start+Vector3.BACK*STEP_DISTANCE*0.55*transfer
 	player.position.y -= 0.12*transfer*(1.0-smoothstep(0.55,1.05,time))
 	player.animator.seek(0.0,true)
 	var rig: Skeleton3D = player.skeleton
@@ -159,7 +163,7 @@ func pose(time: float) -> void:
 	var scale_: float = rig.global_basis.get_scale().y
 	for side in ["l","r"]:
 		var foot: Vector3 = foot_starts[side]
-		if side == "l": foot += Vector3.BACK*STEP_DISTANCE*step+Vector3.UP*0.15*sin(PI*step)
+		if side == "l": foot += forward*STEP_DISTANCE*step+Vector3.UP*0.15*sin(PI*step)
 		author.limb(bones,"thigh_"+side,"calf_"+side,"foot_"+side,rig.to_local(foot),Vector3(0.1 if side == "l" else -0.1,0.2,1.0))
 	var back := smoothstep(0.0,0.32,time)*(1.0-smoothstep(0.32,CONTACT_TIME,time))
 	var follow := smoothstep(CONTACT_TIME,0.78,time)*(1.0-smoothstep(0.78,1.22,time))
