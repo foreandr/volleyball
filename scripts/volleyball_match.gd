@@ -859,13 +859,17 @@ func advance_recoveries(delta: float) -> void:
 		if age >= RECOVERY_TIME:
 			recoveries.erase(index)
 			continue
-		if owns_action(index): continue
+		var landing_set: bool = set_jumps[index].active
+		if owns_action(index) and not landing_set: continue
 		var actor := players[index]
 		var rig: Skeleton3D = actor.skeleton
-		actor.animator.advance(delta)
+		if not landing_set: actor.animator.advance(delta)
 		animated[index] = true
 		var weight := 1.0-smoothstep(0.0,RECOVERY_TIME,age)
 		for bone in rig.get_bone_count():
+			if landing_set:
+				var name_ := rig.get_bone_name(bone)
+				if name_.begins_with("thigh_") or name_.begins_with("calf_") or name_.begins_with("foot_") or name_.begins_with("ball_") or name_ in ["root","pelvis"]: continue
 			var pose: Transform3D = recovery.pose[bone]
 			var idle := rig.get_bone_pose(bone)
 			rig.set_bone_pose_position(bone,idle.origin.lerp(pose.origin,weight))
@@ -1318,8 +1322,8 @@ func pose_fake_dump(actor: Node3D, lead: float) -> void:
 	var pose: Array = []
 	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
 	var shoulder: Vector3 = author.point(pose,"upperarm_r")
-	var target := shoulder+Vector3(-0.28,0.34,-0.28)/rig.global_basis.get_scale().y
-	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",target,Vector3(-1.0,0.2,-0.4),weight)
+	var target := shoulder+Vector3(-0.23,0.35,0.14)/rig.global_basis.get_scale().y
+	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",target,Vector3(-0.85,0.10,0.30),weight)
 	for part in ["upperarm_r","lowerarm_r","hand_r"]:
 		var bone := rig.find_bone(part)
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.orthonormalized().get_rotation_quaternion())

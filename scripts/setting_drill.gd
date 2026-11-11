@@ -154,7 +154,7 @@ func setter_is_diving() -> bool:
 
 func queue_jump(direction: Vector2) -> void:
 	if jump.active or setter_is_diving() or (not bump_enabled and is_finite(bump.touch_time) and not is_finite(bump.release_time)): return
-	jump.begin(setter,direction)
+	jump.begin(setter,direction,Vector3.INF,SetterJump.APPROACH_LOAD_TIME,0.0,2,false,1.0,not bump_enabled)
 	trace.write("jump",clock,{"position":setter.position,"direction":jump.heading},true)
 
 func restore_torso_lean(actor: Node3D) -> void:

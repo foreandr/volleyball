@@ -15,12 +15,13 @@ static func contact_center(actor: Node3D) -> Vector3:
 	return rig.to_global(center*0.25+Vector3(0,0.075,0.07))
 
 static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.ZERO, cushion := 0.0, torso_follow := 0.0, face_save := false, ball_direction := Vector3.ZERO) -> void:
+	if blend <= 0.0: return
 	var rig: Skeleton3D = actor.skeleton
 	var author: RefCounted = actor.get_pose_author()
 	var pose: Array = []
 	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
 	var original := pose.duplicate()
-	var lean_weight := 0.0 if face_save else 1.0
+	var lean_weight := 0.0 if face_save else blend
 	author.rotate_world(pose,"spine_01",Vector3.RIGHT,-0.18*lean_weight)
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,-0.075*lean_weight)
 	var target_local := rig.to_local(target)
@@ -37,6 +38,7 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 	var local_push := rig.global_basis.inverse()*push
 	var horizontal_push := local_push.slide(Vector3.UP)
 	var turn := 0.0
+	torso_follow *= blend
 	if torso_follow > 0.0 and horizontal_push.length_squared() > 0.0001:
 		var set_yaw := atan2(horizontal_push.x,horizontal_push.z)
 		var facing := PI if horizontal_push.z < -absf(horizontal_push.x) else 0.0
@@ -50,7 +52,18 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 		var sign_ := 1.0 if side == "l" else -1.0
 		var hand: String = "hand_"+side
 		var wrist := diamond+Vector3(sign_*0.14,-0.08,-0.015).rotated(Vector3.UP,turn*0.65)
-		author.limb(pose,"upperarm_"+side,"lowerarm_"+side,hand,wrist,Vector3(sign_*0.9,-0.55,0.25),1.0,elbow_limit)
+		var upper: String = "upperarm_"+side
+		var lower: String = "lowerarm_"+side
+		var pole := Vector3(sign_*0.9,-0.55,0.30)
+		if not face_save and blend < 1.0:
+			var shoulder: Vector3 = author.point(pose,upper)
+			var elbow: Vector3 = author.point(pose,lower)
+			var start: Vector3 = author.point(pose,hand)
+			var start_pole := (elbow-shoulder).slide((start-shoulder).normalized())
+			pole = start_pole.normalized().slerp(pole.normalized(),smoothstep(0.0,0.46,blend))
+			# Lead with the hands through the space in front of the chest.
+			wrist = start.lerp(wrist,blend)+Vector3.BACK*sin(PI*blend)*0.16/rig.global_basis.get_scale().y
+		author.limb(pose,upper,lower,hand,wrist,pole,1.0,elbow_limit)
 		for digit in ["thumb","index","middle","ring","pinky"]:
 			for joint in ["01","02","03"]:
 				var finger := rig.find_bone("%s_%s_%s" % [digit,joint,side])
@@ -76,7 +89,9 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 	for bone in rig.get_bone_count():
 		var before: Quaternion = original[bone].basis.orthonormalized().get_rotation_quaternion().normalized()
 		var after: Quaternion = pose[bone].basis.orthonormalized().get_rotation_quaternion().normalized()
-		rig.set_bone_pose_rotation(bone,before.slerp(after,blend).normalized())
+		var bone_name := rig.get_bone_name(bone)
+		var solved := not face_save and (bone_name.begins_with("spine_") or bone_name.begins_with("upperarm_") or bone_name.begins_with("lowerarm_"))
+		rig.set_bone_pose_rotation(bone,after if solved else before.slerp(after,blend).normalized())
 
 static func shape_outer_fingers(author: RefCounted, pose: Array, side: String, ball_center: Vector3) -> void:
 	var inside: Vector3 = author.point(pose,"index_01_"+side)

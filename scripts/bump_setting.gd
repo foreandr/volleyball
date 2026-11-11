@@ -405,7 +405,8 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 	if strict_dig and attempted and initial_pose.is_empty(): initial_pose = dig_bones()
 	if attempted and grade == Timing.Grade.WAITING:
 		var start_dig := strict_dig and (not hand_setting or time >= dig_cue-0.19)
-		if not is_finite(pose_started_at) and (start_dig or progress >= 1.0-PLATFORM_PREP_TIME/APPROACH_TIME):
+		var start_jump_set := setter_jumping and hand_setting and not face_dig
+		if not is_finite(pose_started_at) and (start_dig or start_jump_set or progress >= 1.0-PLATFORM_PREP_TIME/APPROACH_TIME):
 			pose_started_at = maxf(pressed_at,time-delta)
 		if allow_auto_dive and not hand_setting and not setter_jumping and (reach.is_empty() or quick_low_save):
 			low_save.plan(setter,path,time,end,clip,quick_low_save,allow_pancake,pancake_requires_chase,low_save_approach_velocity)
@@ -415,7 +416,8 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 		if hand_setting:
 			apply_knee_bend(time)
 			var target := track_hand_dig(path,time,end,delta) if face_dig else hand_intercept(path,time,end)
-			HandPose.apply(setter,to_global(target),smoothstep(0.0,0.048 if face_dig else (0.062 if quick_hand_receive else 0.105),elapsed),Vector3.ZERO,0.0,0.0,face_dig,-(global_basis*incoming))
+			var lift_time := 0.048 if face_dig else (0.062 if quick_hand_receive else (0.155 if setter_jumping else 0.105))
+			HandPose.apply(setter,to_global(target),smoothstep(0.0,lift_time,elapsed),Vector3.ZERO,0.0,0.0,face_dig,-(global_basis*incoming))
 		elif low_save.active:
 			var intercept := Vector3.INF
 			if low_save.tracks_platform:

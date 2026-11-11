@@ -36,6 +36,7 @@ var entry_distance := 0.0
 var lead_arm_clip: Animation
 var lead_distance := 0.0
 var approach_plant := false
+var setting_jump := false
 var assisted_load_time := APPROACH_LOAD_TIME
 var assisted_height := 0.0
 var standing_load_time := LOAD_TIME
@@ -53,7 +54,7 @@ func load_lead_arm_clip() -> void:
 			lead_arm_clip = load(entry.path) as Animation
 			return
 
-func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time := APPROACH_LOAD_TIME, jump_height := 0.0, approach_steps := 2, from_sprint := false, tempo := 1.0) -> void:
+func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time := APPROACH_LOAD_TIME, jump_height := 0.0, approach_steps := 2, from_sprint := false, tempo := 1.0, for_setting := false) -> void:
 	if active: return
 	active = true
 	held = true
@@ -68,6 +69,7 @@ func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time
 	heading = travel.normalized() if not travel.is_zero_approx() else actor.basis.z.normalized()
 	approach_lunge = Vector3.ZERO
 	approach_plant = ball_target.is_finite()
+	setting_jump = for_setting
 	standing_load_time = LOAD_TIME
 	assisted_load_time = plant_time
 	assisted_height = jump_height
@@ -102,7 +104,7 @@ func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time
 
 func begin_set_jump(actor: Node3D, load: float) -> void:
 	if active: return
-	begin(actor,Vector2.ZERO,Vector3.INF,APPROACH_LOAD_TIME,0.56)
+	begin(actor,Vector2.ZERO,Vector3.INF,APPROACH_LOAD_TIME,0.56,2,false,1.0,true)
 	standing_load_time = load
 	stride = 0.0
 
@@ -205,6 +207,7 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 			target = rig.to_local(actor.get_parent_node_3d().to_global(planted)).lerp(target,release_weight)
 		author.limb(pose,"thigh_"+side,"calf_"+side,foot,target,Vector3(0.09 if left else -0.09,0.25,1.0))
 		author.set_world_basis(pose,foot,foot_pose.basis)
+		if setting_jump: continue
 		var upper_arm: String = "upperarm_"+side
 		var forearm: String = "lowerarm_"+side
 		var arm_load := load
