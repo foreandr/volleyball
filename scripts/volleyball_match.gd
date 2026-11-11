@@ -1346,12 +1346,12 @@ func position_defense(delta: float) -> void:
 		near = first if absf(players[first].position.x-x) < absf(players[first+1].position.x-x) else first+1
 	defender_assignment[defense_side] = near
 	var deep := near^1
-	var depth := -2.75
+	var depth := -2.15
 	var cover := -x*0.48
 	var remaining := INF
 	if tracking_set:
 		var attack := frame.to_local(threat)
-		var line_goal := Vector3(attack.x,0.0,-2.9)
+		var line_goal := Vector3(attack.x,0.0,depth)
 		var cross_goal := Vector3(clampf(-attack.x*0.80,-3.7,3.7),0.0,depth)
 		var sideline := signf(attack.x) if absf(attack.x) > 0.20 else (1.0 if players[near].position.x >= 0.0 else -1.0)
 		var line_x := clampf(lane_at_depth(attack,line_goal,3.42)+sideline*0.25,-4.15,4.15)
@@ -1385,7 +1385,7 @@ func position_defense(delta: float) -> void:
 			var shot: Vector3 = frame.to_local(frames[hitter_side].to_global(driver.swing_aim))
 			var crossing := lane_at_depth(attack,shot,3.42)
 			x += clampf(crossing-x,-0.27,0.27)*(0.15 if take_line else 0.45)
-			var read_depth := clampf(lerpf(attack.z,shot.z,0.72),-3.65,-1.30)
+			var read_depth := clampf(lerpf(attack.z,shot.z,0.72),-3.25,-1.30)
 			var read_x := lane_at_depth(attack,shot,read_depth)
 			cover += clampf(read_x-cover,-1.1,1.1)
 			depth = lerpf(depth,read_depth,0.72)
