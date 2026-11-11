@@ -23,6 +23,8 @@ const SERVES := [
 const SERVICE_START := [-6.40,-6.40,-7.4,-8.15]
 const WIN_SCORE := 7
 const RECOVERY_TIME := 0.32
+const HAND_DIG_REACH := 0.46
+const FOREARM_DIG_REACH := 0.66
 enum Phase { READY, LIVE, DEAD, FINISHED }
 
 var phase := Phase.READY
@@ -826,22 +828,29 @@ func overhead_available(index: int, technique: int) -> bool:
 	var point := frames[team(index)].to_local(path_point(at))
 	var actor := players[index]
 	var offset := (point-actor.position).slide(Vector3.UP)
-	var range_ := (0.76 if technique == 2 else (0.58 if high_dig else 0.92))+minf(0.88,maxf(0.0,at-elapsed-0.24)*2.4)
-	return point.z <= Net.NET_Z+0.05 and point.y >= height-0.12 and at < flight_end()-0.03 and point.z >= actor.position.z-0.24 and offset.length() <= range_
+	var range_ := (0.76 if technique == 2 else 0.92)+minf(0.88,maxf(0.0,at-elapsed-0.24)*2.4)
+	if high_dig:
+		var direction := frames[team(index)].global_basis.inverse()*(path_point(maxf(elapsed,at-0.08))-path_point(at))
+		var incoming := direction.slide(Vector3.UP).normalized()
+		offset -= incoming*HAND_DIG_REACH
+		var time_to_move := maxf(0.0,at-elapsed-0.10)
+		var forward := offset.normalized().dot(actor.basis.z)
+		range_ = 0.48+time_to_move*(5.5 if forward > 0.65 else 3.85)
+	return point.z <= Net.NET_Z+0.05 and point.y >= height-0.12 and at < flight_end()-0.03 and (high_dig or point.z >= actor.position.z-0.24) and offset.length() <= range_
 
 func dig_intercept(index: int) -> float:
 	var actor := players[index]
-	var best := arrival(1.10)
+	var best := arrival(0.96)
 	var best_cost := INF
-	for height in [1.15,0.95,0.75,0.59]:
+	for height in [0.96,1.13,0.78,0.60]:
 		var at := arrival(height)
 		if at >= flight_end()-0.025: continue
 		var point := path_point(at)
 		if frames[team(index)].to_local(point).z > Net.NET_Z: continue
 		var approach := (path_point(maxf(0.0,at-0.06))-point).slide(Vector3.UP).normalized()
-		var body_target := point-approach*0.49
+		var body_target := point-approach*FOREARM_DIG_REACH
 		var distance := (body_target-actor.global_position).slide(Vector3.UP).length()
-		var cost := maxf(0.0,distance-5.0*maxf(0.0,at-elapsed-0.04))+absf(height-1.15)*0.37
+		var cost := maxf(0.0,distance-5.0*maxf(0.0,at-elapsed-0.04))+absf(height-0.96)*0.48
 		if cost < best_cost:
 			best = at
 			best_cost = cost
@@ -861,6 +870,10 @@ func tick_receive(delta: float, previous: float) -> void:
 	var frame := frames[team(index)]
 	var bump := platforms[index]
 	var technique := requested if is_human(index) else cpu_technique
+	if not is_human(index) and technique == 0 and defensive_ball() and not is_finite(bump.pressed_at) and overhead_available(index,1):
+		technique = 1
+		cpu_technique = 1
+		next_touch_cue = INF
 	var recovering := recoveries.has(index)
 	if recovering:
 		if technique != 0 or not defensive_ball() or recoveries[index].has("save"): return
@@ -886,17 +899,17 @@ func tick_receive(delta: float, previous: float) -> void:
 			return
 		var face := toward_incoming(index,catch_point)
 		if face.is_zero_approx(): face = Vector3.BACK
-		var offset := 0.52 if technique == 0 else 0.28
+		var offset := (FOREARM_DIG_REACH if cpu_dig else 0.52) if technique == 0 else (HAND_DIG_REACH if is_dig else 0.28)
 		if not recovering and not set_jumps[index].active and not bump.low_save.active:
 			var target := catch_point-frame.global_basis*face*offset
 			var lead := cue-elapsed
 			var speed := lerpf(1.7,5.3,smoothstep(0.035,0.24,lead))
-			if cpu_dig:
+			if is_dig:
 				var distance := (target-actor.global_position).slide(Vector3.UP).length()
-				speed = clampf(distance/maxf(0.035,lead-0.055),2.0,7.2)
+				speed = clampf(distance/maxf(0.035,lead-(0.055 if cpu_dig else 0.12)),2.0,7.2)
 			elif is_finite(bump.pressed_at):
 				speed = minf(speed,2.0)
-			move_cpu(index,target,delta,speed,face,cpu_dig or flight_kind == "serve")
+			move_cpu(index,target,delta,speed,face,is_dig or flight_kind == "serve")
 		var prep := 0.39 if technique == 2 else (0.40 if cpu_dig else 0.27)
 		if elapsed >= cue-prep: queue_receive(index,technique)
 	if not is_finite(bump.pressed_at): return
