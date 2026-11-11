@@ -152,7 +152,7 @@ func request_manual_set(technique: int) -> void:
 	cpu_stand = Court.clamp_setter(Vector3(cpu_contact_point.x,CPU_HOME.y,cpu_contact_point.z)-incoming*HandPose.CONTACT_FORWARD*receiver.scale.z,ATTACK_FRONT_LIMIT)
 	if partner_receiving: update_manual_set_target()
 	else:
-		cpu_set_launch(cpu_contact_point)
+		draw_set_preview(cpu_contact_point,cpu_set_launch(cpu_contact_point))
 		if is_instance_valid(rally_set_call):
 			show_teammate_set_call("Setting Zone %d")
 
@@ -189,7 +189,7 @@ func adjust_teammate_set_height(amount: float) -> void:
 	if not can_adjust_teammate_set(): return
 	teammate_set_apex = clampf(teammate_set_apex+amount,MIN_SET_APEX,7.5)
 	var origin: Vector3 = cpu_set.platform_center() if is_finite(cpu_set.touch_time) else cpu_contact_point
-	cpu_set_launch(origin)
+	draw_set_preview(origin,cpu_set_launch(origin))
 	show_teammate_set_call("If set, Zone %d" if active_cpu_set_style == 3 else "Set to Zone %d")
 
 func show_teammate_set_call(format: String) -> void:
@@ -241,7 +241,7 @@ func call_rally_set(passer: Vector3) -> void:
 	rally_set_index = candidates.pick_random()
 	rally_set_target = Vector3(rally_zone_x(rally_set_index),PIN.y,Net.NET_Z-RALLY_SET_NET_CLEARANCE)
 	if partner_receiving: update_manual_set_target()
-	else: cpu_set_launch(cpu_contact_point)
+	else: draw_set_preview(cpu_contact_point,cpu_set_launch(cpu_contact_point))
 	region.show()
 	if not partner_receiving:
 		show_teammate_set_call("If set, Zone %d" if active_cpu_set_style == 3 else "Set to Zone %d")
@@ -300,8 +300,9 @@ func try_second_ball_attack() -> void:
 	approach_jump_queued = true
 	pin_arrival = height_time
 	flight_end = Flight.landing_time(pass_origin,pass_motion)
-	set_preview.clear_surfaces()
-	if not cpu_attempt: region.hide()
+	if not cpu_attempt:
+		set_preview.clear_surfaces()
+		region.hide()
 	status.text = "Second-ball attack"
 
 func advances_receiver_animation() -> bool:
@@ -336,8 +337,9 @@ func tick_demo(delta: float, controls: RefCounted) -> void:
 		if stage == Stage.SET and approach_jump_queued: time_approach_plant(delta)
 		step_jump(delta)
 		step(delta)
-		if cpu_second_ball_attack and stage == Stage.HIT and is_instance_valid(rally_set_call):
-			rally_set_call.hide()
+		if cpu_second_ball_attack and stage in [Stage.HIT,Stage.MISS]:
+			set_preview.clear_surfaces()
+			if is_instance_valid(rally_set_call): rally_set_call.hide()
 		return
 	if partner_receiving:
 		if stage == Stage.SERVE and clock-stage_start >= serve_contact-0.20 and not is_finite(bump.pressed_at):
@@ -382,5 +384,10 @@ func tick_demo(delta: float, controls: RefCounted) -> void:
 		controls.move_player(trace_input,delta,false,ball.position,setter_movement_scale(),court_facing_weight(),not after_pass,jump.front_limit,0.0,0.0,after_pass)
 		approach_from_sprint = after_pass and controls.sprinting
 	step_jump(delta)
+	var previous_stage := stage
 	step(delta)
 	blend_swing_to_set()
+	if previous_stage == Stage.PASS and stage == Stage.SET:
+		draw_set_preview(pass_origin,pass_motion)
+	elif stage in [Stage.HIT,Stage.MISS,Stage.SHANK] and set_preview.get_surface_count() > 0:
+		set_preview.clear_surfaces()
