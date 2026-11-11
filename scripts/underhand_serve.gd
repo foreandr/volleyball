@@ -31,6 +31,7 @@ var velocity: Vector3
 var landing_time := 0.0
 var planned_duration := 0.0
 var target := TARGET
+var launch_target := TARGET
 var apex := 5.6
 var foot_starts: Dictionary = {}
 
@@ -83,7 +84,7 @@ func configure(actor: Node3D, start := START, yaw := 0.0) -> void:
 	dot_style.albedo_color = Color("64cfff")
 	dot.material = dot_style
 	dots.mesh = dot
-	dots.instance_count = PREVIEW_DOTS
+	dots.instance_count = PREVIEW_DOTS*preview_lane_count()
 	path_preview.multimesh = dots
 	path_preview.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(path_preview)
@@ -117,13 +118,21 @@ func reset() -> void:
 
 var preview_origin: Vector3
 
+func preview_lane_count() -> int:
+	return 1
+
+func preview_lane_offset(_lane: int, _progress: float, _launch: Vector3) -> Vector3:
+	return Vector3.ZERO
+
 func update_path_preview() -> void:
 	var duration := flight_duration(preview_origin)
 	var launch := launch_velocity(preview_origin,duration)
-	for i in PREVIEW_DOTS:
-		var time := duration*(i+1)/float(PREVIEW_DOTS)
-		var point := preview_origin+launch*time+Vector3.DOWN*0.5*Flight.GRAVITY*time*time+serve_curve_offset(time,duration)
-		path_preview.multimesh.set_instance_transform(i,Transform3D(Basis.IDENTITY,point))
+	for lane in preview_lane_count():
+		for i in PREVIEW_DOTS:
+			var progress := (i+1)/float(PREVIEW_DOTS)
+			var time := duration*progress
+			var point := preview_origin+launch*time+Vector3.DOWN*0.5*Flight.GRAVITY*time*time+preview_lane_offset(lane,progress,launch)
+			path_preview.multimesh.set_instance_transform(lane*PREVIEW_DOTS+i,Transform3D(Basis.IDENTITY,point))
 
 func flight_duration(start: Vector3) -> float:
 	return (sqrt(2.0*Flight.GRAVITY*(apex-start.y))+sqrt(2.0*Flight.GRAVITY*(apex-Flight.FLOOR)))/Flight.GRAVITY
@@ -188,14 +197,23 @@ func step(delta: float) -> void:
 		origin = ball.position
 		landing_time = flight_duration(origin)
 		planned_duration = landing_time
+		launch_target = target
 		velocity = launch_velocity(origin,landing_time)
+		begin_serve_curve()
 		net_hit = Net.first_hit(flight_point,0.0,landing_time)
 		if not net_hit.is_empty(): landing_time = net_hit.end_time
 	var flight_time := elapsed-contact_clock
 	if flight_time >= 0.0:
+		advance_serve_curve(minf(flight_time,planned_duration))
 		var time := minf(flight_time,landing_time)
 		ball.position = Net.after_hit(net_hit,time) if not net_hit.is_empty() and time >= net_hit.time else flight_point(time)
 	if flight_time >= landing_time+0.55 and not external_rally: reset()
+
+func begin_serve_curve() -> void:
+	pass
+
+func advance_serve_curve(_time: float) -> void:
+	pass
 
 func serve_curve_offset(_time: float, _duration: float) -> Vector3:
 	return Vector3.ZERO

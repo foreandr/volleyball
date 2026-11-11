@@ -1,9 +1,13 @@
 extends "res://scripts/underhand_serve.gd"
 
+const SpikeArm = preload("res://scripts/spike_arm_swing.gd")
+
 const FLOAT_CONTACT := 0.79
 const TOSS_RELEASE := 0.34
 
 var toss_origin: Vector3
+var drift_segments: Array[Dictionary] = []
+const DRIFT_RADIUS := 0.52
 
 func configure(actor: Node3D, start := START, yaw := 0.0) -> void:
 	apex = 3.85
@@ -29,12 +33,41 @@ func front_start_limit() -> float:
 func float_body_scale() -> float:
 	return 0.73
 
+func preview_lane_count() -> int:
+	return 3
+
+func preview_lane_offset(lane: int, progress: float, launch: Vector3) -> Vector3:
+	if lane == 0: return Vector3.ZERO
+	var side := Vector3.UP.cross(launch.slide(Vector3.UP).normalized())
+	return side*DRIFT_RADIUS*progress*(1.0 if lane == 1 else -1.0)
+
+func begin_serve_curve() -> void:
+	drift_segments.clear()
+	add_drift_segment(0.0,Vector2.ZERO)
+
+func add_drift_segment(start: float, previous: Vector2) -> void:
+	var next := Vector2.from_angle(randf_range(0.0,TAU))*sqrt(randf())
+	drift_segments.append({"start":start,"end":start+randf_range(0.10,0.24),"from":previous,"to":next})
+
+func advance_serve_curve(time: float) -> void:
+	while not drift_segments.is_empty() and time >= float(drift_segments.back().end):
+		var previous: Dictionary = drift_segments.back()
+		add_drift_segment(previous.end,previous.to)
+
 func serve_curve_offset(time: float, duration: float) -> Vector3:
+	if drift_segments.is_empty() or time <= 0.0: return Vector3.ZERO
+	var segment: Dictionary = drift_segments.back()
+	for candidate in drift_segments:
+		if time <= float(candidate.end):
+			segment = candidate
+			break
+	var blend := smoothstep(float(segment.start),float(segment.end),time)
+	var start_offset: Vector2 = segment.from
+	var offset := start_offset.lerp(segment.to,blend)
 	var progress := clampf(time/maxf(duration,0.001),0.0,1.0)
-	var envelope := sin(PI*progress)
-	var flutter := 0.29*sin(TAU*(1.85*progress+0.23*progress*progress))*envelope
-	var drift := 0.10*sin(TAU*2.8*progress)*envelope
-	return Vector3(flutter,0.0,drift)
+	var side := Vector3.UP.cross(velocity.slide(Vector3.UP).normalized())
+	var vertical := offset.y*(1.0-smoothstep(0.78,1.0,progress))
+	return (side*offset.x+Vector3.UP*vertical)*DRIFT_RADIUS*progress
 
 func float_approach(time: float, plant_time: float, land_time: float, jump_height: float, stride_scale: float) -> Array:
 	var phase := time/plant_time
@@ -106,9 +139,9 @@ func pose(time: float) -> void:
 	var follow_right := right_shoulder+Vector3(0.36,-0.42,0.30)/scale_
 	var right_wrist := low_right.lerp(drawn_right,windup).lerp(contact_right,drive).lerp(follow_right,follow)
 	author.limb(bones,"upperarm_r","lowerarm_r","hand_r",right_wrist,Vector3(-0.62,0.12,-0.91).lerp(Vector3(-0.35,-0.3,0.6),drive),1.0,176.0)
-	orient_palm(bones,rig,author,"r",Vector3(0.0,1.0,0.10),Vector3.RIGHT,windup*(1.0-0.75*follow))
 	prepare_toss_hands(bones,rig,author,time)
 	shape_float_strike(bones,rig,author,time)
+	finish_float_wrist(bones,rig,author,time)
 	for bone in rig.get_bone_count(): rig.set_bone_pose_rotation(bone,bones[bone].basis.get_rotation_quaternion())
 	if time <= toss_release:
 		var palm: Vector3 = toss_palm(bones,rig,author,time)
@@ -119,6 +152,20 @@ func pose(time: float) -> void:
 	elif time < contact:
 		var portion := (time-toss_release)/(contact-toss_release)
 		ball.position = toss_origin.lerp(preview_origin,portion)+Vector3.UP*toss_curve_height()*4.0*portion*(1.0-portion)
+
+func finish_float_wrist(pose: Array, rig: Skeleton3D, author: RefCounted, time: float) -> void:
+	var contact := contact_time()
+	var weight := smoothstep(toss_release_time(),toss_release_time()+0.22,time)
+	SpikeArm.align_wrist_to_forearm(pose,author,0.88*weight)
+	var hand := rig.find_bone("hand_r")
+	var neutral := rig.get_bone_rest(hand).basis.get_rotation_quaternion()
+	var wrist_rotation: Quaternion = pose[hand].basis.get_rotation_quaternion()
+	pose[hand].basis = Basis(wrist_rotation.slerp(neutral,0.78*weight))
+	var finish := smoothstep(contact,contact+0.18,time)*(1.0-smoothstep(contact+0.26,recovery_end(),time))
+	if finish <= 0.0: return
+	var wrist: Vector3 = author.point(pose,"hand_r")
+	var elbow: Vector3 = author.point(pose,"lowerarm_r")
+	author.rotate_world(pose,"hand_r",(wrist-elbow).normalized(),deg_to_rad(12.0)*finish)
 
 func shape_float_strike(_pose: Array, _rig: Skeleton3D, _author: RefCounted, _time: float) -> void:
 	pass

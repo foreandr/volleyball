@@ -1290,7 +1290,7 @@ func step_underhand_rally(delta: float) -> void:
 	var was_ready: bool = underhand_serve.elapsed < 0.0
 	underhand_serve.step(delta)
 	if is_finite(underhand_serve.contact_clock) and not underhand_serve.external_rally and underhand_serve.net_hit.is_empty():
-		var target: Vector3 = underhand_serve.flight_point(underhand_serve.planned_duration)
+		var target: Vector3 = underhand_serve.launch_target
 		if absf(target.x) <= 4.5001 and target.z <= 13.0001:
 			underhand_serve.external_rally = true
 			underhand_serve.ball.hide()
