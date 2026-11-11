@@ -8,6 +8,7 @@ var actor: Node3D
 var age := 0.0
 var tempo := 1.0
 var jump_height := HEIGHT
+var landing_recovery := 0.13
 var base: Vector3
 var previous_hands: Array[Vector3] = []
 var hands: Array[Vector3] = []
@@ -68,7 +69,7 @@ func step(delta: float, world_ball: Vector3) -> bool:
 		previous_wrists = wrists.duplicate()
 	for bone in rig.get_bone_count():
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.orthonormalized().get_rotation_quaternion())
-	if age < 1.02: return true
+	if age < 0.89+landing_recovery: return true
 	actor.position = base
 	actor.animator.seek(0.0,true)
 	return false

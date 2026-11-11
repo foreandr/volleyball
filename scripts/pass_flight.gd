@@ -110,8 +110,11 @@ static func position(feed_: Dictionary, hit: Vector3, time: float) -> Vector3:
 	var flutter := Vector2(sin(19*u+0.8)+0.45*sin(37*u),0.6*sin(27*u+1.2))
 	return result+(feed_.side*flutter.x+Vector3.UP*flutter.y)*envelope*float(feed_.get("float_strength",0))*0.25
 
-static func landing_time(hit: Vector3, velocity: Vector3) -> float:
-	return (velocity.y+sqrt(maxf(0,velocity.y*velocity.y+2*GRAVITY*(hit.y-FLOOR))))/GRAVITY
+static func spike_gravity(topspin_rps: float) -> float:
+	return GRAVITY+clampf(topspin_rps,0.0,13.0)*0.52
+
+static func landing_time(hit: Vector3, velocity: Vector3, gravity := GRAVITY) -> float:
+	return (velocity.y+sqrt(maxf(0,velocity.y*velocity.y+2*gravity*(hit.y-FLOOR))))/gravity
 
 static func distance(hit: Vector3, velocity: Vector3) -> float:
 	return Vector2(velocity.x,velocity.z).length()*landing_time(hit,velocity)

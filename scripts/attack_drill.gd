@@ -678,7 +678,8 @@ func trace_snapshot(time: float) -> Dictionary:
 	var velocity := Vector3.ZERO
 	match stage:
 		Stage.SERVE: velocity = serve_velocity+Vector3.DOWN*Flight.GRAVITY*time
-		Stage.PASS,Stage.SET,Stage.HIT,Stage.SHANK: velocity = pass_motion+Vector3.DOWN*Flight.GRAVITY*time
+		Stage.HIT: velocity = pass_motion+Vector3.DOWN*Flight.spike_gravity(spike_topspin_rps)*time
+		Stage.PASS,Stage.SET,Stage.SHANK: velocity = pass_motion+Vector3.DOWN*Flight.GRAVITY*time
 	var platform: Vector3 = bump.platform_center()
 	return {
 		"stage":stage,"result":status.text,"ball_position":ball.position,"ball_velocity":velocity,
@@ -999,7 +1000,7 @@ func hit_spike(charge: float, point: Vector3, palm_gap := 0.0) -> void:
 	swing_contact = point
 	ball.position = point
 	swing_power = charge
-	spike_topspin_rps = clampf(swing_impact_speed*0.55,4.0,10.0)
+	spike_topspin_rps = clampf(3.5+swing_impact_speed*0.54,6.0,13.0)
 	pass_origin = swing_contact
 	swing_contact_aim = swing_aim
 	var target := swing_contact_aim-pass_origin
@@ -1012,15 +1013,18 @@ func hit_spike(charge: float, point: Vector3, palm_gap := 0.0) -> void:
 		var completion := smoothstep(0.22,0.93,swing_contact_extension)
 		speed *= lerpf(0.56,1.0,charge)*lerpf(0.65,1.0,completion)
 	var duration := target.slide(Vector3.UP).length()/(speed*spike_speed_multiplier())
-	pass_motion = target/duration+Vector3.UP*Flight.GRAVITY*duration*0.5
+	pass_motion = target/duration+Vector3.UP*Flight.spike_gravity(spike_topspin_rps)*duration*0.5
 	flight_end = duration
-	swing_net_hit = Net.first_hit(func(t): return flight_point(pass_origin,pass_motion,t),0.0,duration)
+	swing_net_hit = Net.first_hit(spike_flight_point,0.0,duration)
 	stage = Stage.HIT
 	stage_start = clock
 	region.hide()
 	timing_cue.hide()
 	status.text = "Spike  |  %d%% power" % roundi(charge*100.0)
 	trace.write("spike",clock,{"point":swing_contact,"aim":swing_aim,"velocity":pass_motion,"power":charge,"palm_gap":palm_gap,"swing":SpikeArm.SWING_NAME,"palm_speed":swing_impact_speed,"peak_palm_speed":swing_hand_speed,"topspin_rps":spike_topspin_rps,"net":not swing_net_hit.is_empty()},true)
+
+func spike_flight_point(time: float) -> Vector3:
+	return pass_origin+pass_motion*time+Vector3.DOWN*0.5*Flight.spike_gravity(spike_topspin_rps)*time*time
 
 func play_spike(time: float, delta: float) -> void:
 	show_attack_net(swing_net_hit,time)
@@ -1033,12 +1037,13 @@ func play_spike(time: float, delta: float) -> void:
 		ball.position = Net.after_hit(swing_net_hit,minf(time,landing_time))
 		status.text = "Spike hit the net"
 	else:
-		ball.position = flight_point(pass_origin,pass_motion,minf(time,landing_time))
+		ball.position = spike_flight_point(minf(time,landing_time))
 	if time >= landing_time:
 		var ground := Vector3(ball.position.x,Flight.FLOOR,ball.position.z)
 		var fall_time := float(swing_net_hit.drop_time) if hit_net else landing_time
 		var landing_velocity: Vector3 = swing_net_hit.velocity if hit_net else pass_motion
-		landing_velocity += Vector3.DOWN*Flight.GRAVITY*fall_time
+		var gravity := Flight.GRAVITY if hit_net else Flight.spike_gravity(spike_topspin_rps)
+		landing_velocity += Vector3.DOWN*gravity*fall_time
 		if spike_bounce_speed == 0.0:
 			play_floor_sound()
 			spike_bounce_speed = clampf(-landing_velocity.y*0.58,3.8,6.5)*sqrt(ball_bounciness)

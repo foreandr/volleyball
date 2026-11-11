@@ -289,7 +289,7 @@ func step_blocker(delta: float) -> void:
 		var crossing := maxf(0.0,(Net.NET_Z-pass_origin.z)/pass_motion.z)
 		var age := clock-stage_start-crossing
 		crunch = smoothstep(-0.13,-0.015,age)*(1.0-smoothstep(0.04,0.19,age))*raise
-		if not is_finite(block_contact_at): shot = to_global(flight_point(pass_origin,pass_motion,crossing))
+		if not is_finite(block_contact_at): shot = to_global(spike_flight_point(crossing))
 	# Stay upright until the block has enough height to press over the tape.
 	var clearance := smoothstep(0.58,BLOCK_HEIGHT,block_lift)
 	var extra_height := smoothstep(BLOCK_HEIGHT,BLOCK_HEIGHT+0.508,block_lift)
@@ -313,7 +313,7 @@ func step_blocker(delta: float) -> void:
 			var shoulder_world := rig.to_global(shoulder)
 			var local_depth := Net.NET_Z-0.12*press
 			var time_to_hand := maxf(0.0,(local_depth-pass_origin.z)/maxf(pass_motion.z,0.1))
-			var intercept := to_global(flight_point(pass_origin,pass_motion,time_to_hand))
+			var intercept := to_global(spike_flight_point(time_to_hand))
 			var reach := clampf((intercept.x-shoulder_world.x)*sign_+0.04,0.16,0.86)
 			var height := clampf(intercept.y-shoulder_world.y-0.07,0.35,0.66)
 			kong_tracking[hand_index] = kong_tracking[hand_index].lerp(Vector2(reach,height),1.0-exp(-delta*33.0))
@@ -484,9 +484,10 @@ func hit_spike(charge: float, point: Vector3, palm_gap := 0.0) -> void:
 	var depth := top.z if top.z > point.z+0.18 else Net.NET_Z+0.12
 	var time_to_hands := (depth-point.z)/pass_motion.z
 	var height := maxf(Net.NET_TOP+0.30,top.y+0.07)
-	pass_motion.y = (height-point.y)/time_to_hands+Flight.GRAVITY*time_to_hands*0.5
-	flight_end = Flight.landing_time(pass_origin,pass_motion)
-	swing_net_hit = Net.first_hit(func(t): return flight_point(pass_origin,pass_motion,t),0.0,flight_end)
+	var gravity := Flight.spike_gravity(spike_topspin_rps)
+	pass_motion.y = (height-point.y)/time_to_hands+gravity*time_to_hands*0.5
+	flight_end = Flight.landing_time(pass_origin,pass_motion,gravity)
+	swing_net_hit = Net.first_hit(spike_flight_point,0.0,flight_end)
 
 func play_spike(time: float, delta: float) -> void:
 	if is_finite(block_contact_at):
@@ -500,9 +501,9 @@ func play_spike(time: float, delta: float) -> void:
 		if elapsed >= end+0.40 and not jump.active: reset_feed()
 		return
 	if time <= flight_end and (swing_net_hit.is_empty() or time-delta < swing_net_hit.time):
-		var before := flight_point(pass_origin,pass_motion,maxf(0.0,time-delta))
+		var before := spike_flight_point(maxf(0.0,time-delta))
 		var sweep_end := time if swing_net_hit.is_empty() else minf(time,float(swing_net_hit.time))
-		var after := flight_point(pass_origin,pass_motion,sweep_end)
+		var after := spike_flight_point(sweep_end)
 		var hit_hand: Dictionary = {}
 		for sample in 9:
 			var best_gap := INF
@@ -567,7 +568,7 @@ func play_spike(time: float, delta: float) -> void:
 			block_contact_at = time
 			last_block_hand = hit_hand.side
 			last_block_surface = hit_hand.get("surface","chest")
-			var incoming := pass_motion+Vector3.DOWN*Flight.GRAVITY*time
+			var incoming := pass_motion+Vector3.DOWN*Flight.spike_gravity(spike_topspin_rps)*time
 			block_velocity = rebound_from_hand(incoming,block_contact,hit_hand)
 			ball.position = block_contact
 			if last_block_hand == "chest":

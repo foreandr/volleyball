@@ -1,0 +1,99 @@
+extends RefCounted
+
+var current: Array[Dictionary] = []
+var previous: Array[Dictionary] = []
+var frames: Array[Dictionary] = []
+var restore := {}
+var active := false
+var playing := false
+var clock := 0.0
+var speed := 0.5
+var index := 0
+
+func capture(match_: Node3D) -> Dictionary:
+	var actors := []
+	for actor in match_.players:
+		var bones: Array[Transform3D] = []
+		for bone in actor.skeleton.get_bone_count(): bones.append(actor.skeleton.get_bone_pose(bone))
+		actors.append({"root":actor.transform,"model":actor.model.transform,"bones":bones})
+	var shown: Node3D = match_.ball if match_.ball.visible else match_.serve.ball
+	var keys := []
+	for key in match_.key_labels: keys.append([key.text,key.visible])
+	return {"time":match_.match_clock,"actors":actors,"ball":shown.global_transform,"visible":shown.visible,
+		"match_ball":match_.ball.global_transform,"match_visible":match_.ball.visible,"serve_visible":match_.serve.ball.visible,
+		"score":match_.score_label.text,"info":match_.info.text,"keys":keys,"aim":match_.aim_ring.visible,"guide":match_.trajectory_node.visible}
+
+func record(match_: Node3D) -> void:
+	current.append(capture(match_))
+
+func finish_point() -> void:
+	if not current.is_empty(): previous = current
+	current = []
+
+func reset() -> void:
+	current = []
+	previous = []
+
+func duration() -> float:
+	return frames.back().time-frames.front().time if frames.size() > 1 else 0.0
+
+func toggle(match_: Node3D, current_finished: bool) -> void:
+	if active:
+		active = false
+		playing = false
+		apply(match_,restore,restore,0.0)
+		match_.ball.global_transform = restore.match_ball
+		match_.ball.visible = restore.match_visible
+		match_.serve.ball.visible = restore.serve_visible
+		match_.aim_ring.visible = restore.aim
+		match_.trajectory_node.visible = restore.guide
+		restore.clear()
+		frames = []
+		return
+	frames = current if (current_finished or previous.is_empty()) and not current.is_empty() else previous
+	if frames.size() < 2: return
+	restore = capture(match_)
+	index = 0
+	active = true
+	playing = true
+	match_.serve.ball.hide()
+	match_.aim_ring.hide()
+	match_.trajectory_node.hide()
+	seek(match_,0.0)
+
+func seek(match_: Node3D, value: float) -> void:
+	if not active: return
+	clock = clampf(value,0.0,duration())
+	var sample: float = frames.front().time+clock
+	if frames[index].time > sample: index = 0
+	while index+1 < frames.size() and frames[index+1].time <= sample: index += 1
+	var first := frames[index]
+	var second := frames[mini(index+1,frames.size()-1)]
+	var blend := clampf((sample-float(first.time))/maxf(0.00001,float(second.time)-float(first.time)),0.0,1.0)
+	apply(match_,first,second,blend)
+
+func step(match_: Node3D, delta: float) -> void:
+	if playing:
+		seek(match_,clock+delta*speed)
+		if clock >= duration(): playing = false
+
+func apply(match_: Node3D, first: Dictionary, second: Dictionary, blend: float) -> void:
+	for i in match_.players.size():
+		var actor: Node3D = match_.players[i]
+		var a: Dictionary = first.actors[i]
+		var b: Dictionary = second.actors[i]
+		actor.transform = a.root.interpolate_with(b.root,blend)
+		actor.model.transform = a.model.interpolate_with(b.model,blend)
+		for bone in actor.skeleton.get_bone_count():
+			var pose: Transform3D = a.bones[bone].interpolate_with(b.bones[bone],blend)
+			actor.skeleton.set_bone_pose_position(bone,pose.origin)
+			actor.skeleton.set_bone_pose_rotation(bone,pose.basis.orthonormalized().get_rotation_quaternion())
+		var key: Label3D = match_.key_labels[i]
+		key.text = first.keys[i][0]
+		key.visible = first.keys[i][1]
+		key.global_position = actor.global_position+Vector3.UP*2.18
+	match_.ball.global_transform = first.ball.interpolate_with(second.ball,blend)
+	match_.ball.visible = first.visible
+	match_.score_label.text = first.score
+	match_.info.text = first.info
+	match_.player_label.global_position = match_.human.global_position+Vector3.UP*2.17

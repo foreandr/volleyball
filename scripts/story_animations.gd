@@ -74,6 +74,10 @@ var reception_review: VBoxContainer
 var setting_drill: Node3D
 var attack_position_panel: PanelContainer
 var match_sound: CheckButton
+var match_replay_panel: VBoxContainer
+var match_replay_seek: HSlider
+var match_replay_button: Button
+var match_replay_play: Button
 var attack_playback_speed := 1.0
 var setting_camera_focus := SETTING_CAMERA_FOCUS
 var approach_drag_offset := Vector3.ZERO
@@ -315,6 +319,65 @@ func show_match_tuning() -> void:
 	match_sound.button_pressed = not StorySession.attack_ball_audio_muted
 	match_sound.toggled.connect(demo_match.set_ball_sound)
 	tuning.add_child(match_sound)
+
+	match_replay_button = Button.new()
+	match_replay_button.text = "Replay rally (R)"
+	match_replay_button.focus_mode = Control.FOCUS_NONE
+	match_replay_button.pressed.connect(toggle_match_replay)
+	tuning.add_child(match_replay_button)
+	match_replay_panel = VBoxContainer.new()
+	match_replay_panel.hide()
+	tuning.add_child(match_replay_panel)
+	match_replay_play = Button.new()
+	match_replay_play.focus_mode = Control.FOCUS_NONE
+	match_replay_play.pressed.connect(toggle_match_replay_playback)
+	match_replay_panel.add_child(match_replay_play)
+	match_replay_seek = HSlider.new()
+	match_replay_seek.step = 0.01
+	match_replay_seek.focus_mode = Control.FOCUS_NONE
+	match_replay_seek.value_changed.connect(func(value: float): demo_match.replay.seek(demo_match,value))
+	match_replay_panel.add_child(match_replay_seek)
+	var speed_label := label("Replay speed  0.50×",16)
+	match_replay_panel.add_child(speed_label)
+	var speed := HSlider.new()
+	speed.min_value = 0.10
+	speed.max_value = 1.0
+	speed.step = 0.05
+	speed.value = demo_match.replay.speed
+	speed.focus_mode = Control.FOCUS_NONE
+	speed.value_changed.connect(func(value: float):
+		demo_match.replay.speed = value
+		speed_label.text = "Replay speed  %.2f×" % value)
+	match_replay_panel.add_child(speed)
+	match_replay_panel.add_child(label("Middle drag or WASD to move camera\nScroll to zoom",15))
+
+func toggle_match_replay() -> void:
+	demo_match.toggle_replay()
+	update_match_replay_controls()
+
+func toggle_match_replay_playback() -> void:
+	var replay = demo_match.replay
+	if not replay.active: return
+	if not replay.playing and replay.clock >= replay.duration(): replay.seek(demo_match,0.0)
+	replay.playing = not replay.playing
+	update_match_replay_controls()
+
+func update_match_replay_controls() -> void:
+	var replay = demo_match.replay
+	match_replay_panel.visible = replay.active
+	match_replay_button.text = "Back to match (R)" if replay.active else "Replay rally (R)"
+	if not replay.active: return
+	match_replay_play.text = "Pause (Space)" if replay.playing else "Play (Space)"
+	match_replay_seek.max_value = replay.duration()
+	match_replay_seek.set_value_no_signal(replay.clock)
+
+func move_match_replay_camera(delta: float) -> void:
+	var movement: Vector2 = player_controls.movement_input()
+	var forward := -preview_camera.global_basis.z.slide(Vector3.UP).normalized()
+	var right := preview_camera.global_basis.x.slide(Vector3.UP).normalized()
+	var offset := (right*movement.x+forward*movement.y)*delta*6.0
+	preview_camera.position += offset
+	setting_camera_focus += offset
 
 func stop_demo_match() -> void:
 	if not is_instance_valid(demo_match): return
@@ -1072,6 +1135,11 @@ func _process(delta: float) -> void:
 	pass_timing_cue.hide()
 	if is_instance_valid(demo_match):
 		demo_match.tick_match(delta,player_controls)
+		if demo_match.replay.active:
+			move_match_replay_camera(delta)
+			update_match_replay_controls()
+		elif match_replay_panel.visible:
+			update_match_replay_controls()
 		return
 	if is_instance_valid(blocking_practice):
 		if defense_active:
@@ -1480,17 +1548,17 @@ func handle_preview_input(event: InputEvent) -> void:
 		if event is InputEventMouseMotion:
 			if event.button_mask & MOUSE_BUTTON_MASK_MIDDLE:
 				orbit_setting_camera(event.relative)
-			else:
+			elif not demo_match.replay.active:
 				var hit: Variant = attack_floor_point(event.position)
 				if hit is Vector3: demo_match.set_aim(hit)
-		elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		elif not demo_match.replay.active and event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 			var hit: Variant = attack_floor_point(event.position)
 			if hit is Vector3: demo_match.set_aim(hit)
 			demo_match.click_set()
 			preview.accept_event()
 		elif event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_WHEEL_UP,MOUSE_BUTTON_WHEEL_DOWN]:
 			var wheel := (1.0 if event.button_index == MOUSE_BUTTON_WHEEL_UP else -1.0)*maxf(0.1,event.factor)
-			if event.shift_pressed: demo_match.change_arc(wheel*0.20)
+			if event.shift_pressed and not demo_match.replay.active: demo_match.change_arc(wheel*0.20)
 			else: zoom_attack_camera(wheel)
 			preview.accept_event()
 		return
@@ -1886,6 +1954,14 @@ func open_menu() -> void:
 func _input(event: InputEvent) -> void:
 	if is_instance_valid(demo_match) and event is InputEventKey:
 		if event.echo: return
+		if event.keycode == KEY_R and event.pressed:
+			toggle_match_replay()
+			get_viewport().set_input_as_handled()
+			return
+		if demo_match.replay.active and event.keycode in [KEY_Q,KEY_E,KEY_I,KEY_F,KEY_B,KEY_SPACE]:
+			if event.keycode == KEY_SPACE and event.pressed: toggle_match_replay_playback()
+			get_viewport().set_input_as_handled()
+			return
 		if event.keycode == KEY_SPACE:
 			demo_match.input_space(event.pressed)
 			get_viewport().set_input_as_handled()

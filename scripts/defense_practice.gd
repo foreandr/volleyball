@@ -166,8 +166,8 @@ func play_spike(time: float, delta: float) -> void:
 			dig.queue_bump(dig_pressed_at-stage_start)
 		dig_pressed_at = -INF
 	var path := func(t: float) -> Vector3:
-		return to_global(flight_point(pass_origin,pass_motion,minf(t,flight_end)))
-	var incoming := global_basis*(pass_motion+Vector3.DOWN*Flight.GRAVITY*time)
+		return to_global(spike_flight_point(minf(t,flight_end)))
+	var incoming := global_basis*(pass_motion+Vector3.DOWN*Flight.spike_gravity(spike_topspin_rps)*time)
 	dig.show()
 	dig.update_aim()
 	dig.update_attempt(time,maxf(0.0,time-delta),flight_end,path,incoming,delta,INF,spike_topspin_rps)

@@ -447,13 +447,12 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 				))
 			)
 			var face_aligned := true
-			if face_dig:
+			if face_dig and not strict_dig:
 				var facing := setter.global_basis.orthonormalized()
 				var offset := facing.inverse()*global_basis*(point-hand_dig_face())
 				var approach_velocity := facing.inverse()*global_basis*incoming
-				var directly_overhead := is_finite(dig_cue) and offset.y >= 0.12 and offset.y <= 0.48 and offset.z >= -0.16 and approach_velocity.y < -0.2
 				var in_front := absf(offset.y) <= 0.28 and offset.z >= 0.05 and approach_velocity.z < -0.2
-				face_aligned = absf(offset.x) <= 0.29 and offset.z <= 0.68 and (directly_overhead or in_front)
+				face_aligned = absf(offset.x) <= 0.29 and offset.z <= 0.68 and in_front
 			contact_check = {
 				"time":time,"surface":"hands" if hand_setting else ("palm" if pancake else "forearms"),"surface_center":center,
 				"ball_point":point,"gap_before_adjustment":gap,"gap":gap_after_adjustment,
