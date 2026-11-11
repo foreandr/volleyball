@@ -111,10 +111,14 @@ func reset() -> void:
 	var rig: Skeleton3D = player.skeleton
 	for side in ["l","r"]:
 		foot_starts[side] = rig.to_global(rig.get_bone_global_pose(rig.find_bone("foot_"+side)).origin)
+	prepare_serve_reset()
 	pose(contact_time())
 	preview_origin = ball.position
 	pose(0.0)
 	update_path_preview()
+
+func prepare_serve_reset() -> void:
+	pass
 
 var preview_origin: Vector3
 

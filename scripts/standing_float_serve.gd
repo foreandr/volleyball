@@ -126,25 +126,26 @@ func pose(time: float) -> void:
 	var rig: Skeleton3D = player.skeleton
 	var author: RefCounted = player.get_pose_author()
 	var scale_: float = rig.global_basis.get_scale().y
-	var windup := smoothstep(0.09,contact-0.21,time)
-	var drive := smoothstep(contact-0.22,contact,time)
-	var follow := smoothstep(contact,contact+0.40,time)
-	author.rotate_world(bones,"spine_03",Vector3.UP,(-0.48*windup*(1.0-drive)+0.39*drive*(1.0-0.60*follow))*float_body_scale())
-	author.rotate_world(bones,"spine_02",Vector3.RIGHT,-0.17*windup*(1.0-drive)+0.22*follow)
-	var left_shoulder: Vector3 = author.point(bones,"upperarm_l")
-	var right_shoulder: Vector3 = author.point(bones,"upperarm_r")
-	var toss_lift := smoothstep(0.07,toss_release,time)
-	var left_drop := smoothstep(toss_release,0.72,time)
-	var left_wrist := left_shoulder+Vector3(-0.14-0.12*toss_lift,-0.37+0.48*toss_lift,0.41)/scale_
-	var left_ready: Vector3 = author.point(bones,"hand_l")
-	author.limb(bones,"upperarm_l","lowerarm_l","hand_l",left_wrist.lerp(left_ready,left_drop),Vector3(0.30,-0.9,-0.15))
-	orient_palm(bones,rig,author,"l",Vector3.BACK,Vector3.LEFT,1.0-left_drop)
-	var low_right := right_shoulder+Vector3(-0.08,-0.53,0.03)/scale_
-	var drawn_right := right_shoulder+Vector3(-0.24,0.34,-0.47)/scale_
-	var contact_right := right_shoulder+Vector3(-0.045,0.53,0.28)/scale_
-	var follow_right := right_shoulder+Vector3(0.36,-0.42,0.30)/scale_
-	var right_wrist := low_right.lerp(drawn_right,windup).lerp(contact_right,drive).lerp(follow_right,follow)
-	author.limb(bones,"upperarm_r","lowerarm_r","hand_r",right_wrist,Vector3(-0.62,0.12,-0.91).lerp(Vector3(-0.35,-0.3,0.6),drive),1.0,176.0)
+	if uses_float_arm_pose():
+		var windup := smoothstep(0.09,contact-0.21,time)
+		var drive := smoothstep(contact-0.22,contact,time)
+		var follow := smoothstep(contact,contact+0.40,time)
+		author.rotate_world(bones,"spine_03",Vector3.UP,(-0.48*windup*(1.0-drive)+0.39*drive*(1.0-0.60*follow))*float_body_scale())
+		author.rotate_world(bones,"spine_02",Vector3.RIGHT,-0.17*windup*(1.0-drive)+0.22*follow)
+		var left_shoulder: Vector3 = author.point(bones,"upperarm_l")
+		var right_shoulder: Vector3 = author.point(bones,"upperarm_r")
+		var toss_lift := smoothstep(0.07,toss_release,time)
+		var left_drop := smoothstep(toss_release,0.72,time)
+		var left_wrist := left_shoulder+Vector3(-0.14-0.12*toss_lift,-0.37+0.48*toss_lift,0.41)/scale_
+		var left_ready: Vector3 = author.point(bones,"hand_l")
+		author.limb(bones,"upperarm_l","lowerarm_l","hand_l",left_wrist.lerp(left_ready,left_drop),Vector3(0.30,-0.9,-0.15))
+		orient_palm(bones,rig,author,"l",Vector3.BACK,Vector3.LEFT,1.0-left_drop)
+		var low_right := right_shoulder+Vector3(-0.08,-0.53,0.03)/scale_
+		var drawn_right := right_shoulder+Vector3(-0.24,0.34,-0.47)/scale_
+		var contact_right := right_shoulder+Vector3(-0.045,0.53,0.28)/scale_
+		var follow_right := right_shoulder+Vector3(0.36,-0.42,0.30)/scale_
+		var right_wrist := low_right.lerp(drawn_right,windup).lerp(contact_right,drive).lerp(follow_right,follow)
+		author.limb(bones,"upperarm_r","lowerarm_r","hand_r",right_wrist,Vector3(-0.62,0.12,-0.91).lerp(Vector3(-0.35,-0.3,0.6),drive),1.0,176.0)
 	prepare_toss_hands(bones,rig,author,time)
 	shape_float_strike(bones,rig,author,time)
 	finish_float_wrist(bones,rig,author,time)
@@ -158,6 +159,9 @@ func pose(time: float) -> void:
 	elif time < contact:
 		var portion := (time-toss_release)/(contact-toss_release)
 		ball.position = toss_origin.lerp(preview_origin,portion)+Vector3.UP*toss_curve_height()*4.0*portion*(1.0-portion)
+
+func uses_float_arm_pose() -> bool:
+	return true
 
 func finish_float_wrist(pose: Array, rig: Skeleton3D, author: RefCounted, time: float) -> void:
 	var contact := contact_time()

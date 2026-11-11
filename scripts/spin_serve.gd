@@ -1,15 +1,24 @@
 extends "res://scripts/jump_float_serve.gd"
 
+const SetterJump = preload("res://scripts/setter_jump.gd")
+
 const TOSS_STEP := 0.36
-const APPROACH_START := TOSS_STEP+0.15
-const SPIN_TAKEOFF := APPROACH_START+0.91
+const APPROACH_START := TOSS_STEP+0.36
+const SPIN_TAKEOFF := APPROACH_START+0.70
 const SPIN_CONTACT := SPIN_TAKEOFF+0.43
-const SPIN_LAND := SPIN_TAKEOFF+0.89
+const JUMP_HEIGHT := 1.12
+const SPIN_LAND := SPIN_TAKEOFF+SetterJump.FULL_AIR_TIME*sqrt(JUMP_HEIGHT/SetterJump.FULL_HEIGHT)*1.09
+const APPROACH_SAMPLE_RATE := 120.0
 
 var sidespin := 0.0
 var released_sidespin := 0.0
+var approach := SetterJump.new()
+var approach_positions: PackedVector3Array = []
+var approach_sample_origin: Vector3
+var approach_poses: Array[Array] = []
 
 func configure(actor: Node3D, start := START, yaw := 0.0) -> void:
+	approach.load_lead_arm_clip()
 	super.configure(actor,start,yaw)
 	apex = 3.70
 	update_path_preview()
@@ -35,8 +44,49 @@ func can_run_after_contact() -> bool:
 func float_body_scale() -> float:
 	return 1.62
 
+func uses_float_arm_pose() -> bool:
+	return false
+
+func prepare_toss_hands(pose: Array, rig: Skeleton3D, author: RefCounted, time: float) -> void:
+	var weight := 1.0-smoothstep(TOSS_STEP,TOSS_STEP+0.21,time)
+	if weight > 0.0: position_toss_hands(pose,rig,author,time,weight)
+
+func prepare_serve_reset() -> void:
+	if not approach_poses.is_empty(): return
+	approach_sample_origin = serve_start
+	var rig: Skeleton3D = player.skeleton
+	var setup := float_approach(APPROACH_START,SPIN_TAKEOFF,SPIN_LAND,JUMP_HEIGHT,1.17,APPROACH_START,TOSS_STEP)
+	for bone in rig.get_bone_count():
+		rig.set_bone_pose_rotation(bone,setup[bone].basis.get_rotation_quaternion())
+	approach.active = false
+	approach.load_bend_extra = deg_to_rad(85.0)*0.36
+	approach.load_arm_extra = 0.48*0.85
+	var intercept := player.position+forward*2.14+Vector3.UP*3.0
+	approach.begin(player,Vector2(-forward.x,forward.z),intercept,SPIN_TAKEOFF-APPROACH_START-SetterJump.LEAD_STEP_TIME,JUMP_HEIGHT,3)
+	var sample_count := ceili((recovery_end()-APPROACH_START)*APPROACH_SAMPLE_RATE)
+	for index in range(sample_count+1):
+		if index > 0: approach.step(player,1.0/APPROACH_SAMPLE_RATE,Vector2.ZERO)
+		approach_positions.append(player.position)
+		var sample: Array[Transform3D] = []
+		for bone in rig.get_bone_count(): sample.append(rig.get_bone_pose(bone))
+		approach_poses.append(sample)
+	player.position = serve_start
+
 func float_step_pose(time: float) -> Array:
-	return float_approach(time,SPIN_TAKEOFF,SPIN_LAND,1.12,1.17,APPROACH_START,TOSS_STEP)
+	if time < APPROACH_START or approach_poses.is_empty():
+		return float_approach(time,SPIN_TAKEOFF,SPIN_LAND,JUMP_HEIGHT,1.17,APPROACH_START,TOSS_STEP)
+	var frame := minf((time-APPROACH_START)*APPROACH_SAMPLE_RATE,approach_poses.size()-1)
+	var index := floori(frame)
+	var next := mini(index+1,approach_poses.size()-1)
+	var weight := frame-index
+	player.position = serve_start-approach_sample_origin+approach_positions[index].lerp(approach_positions[next],weight)
+	var pose: Array[Transform3D] = []
+	var rig: Skeleton3D = player.skeleton
+	for bone in rig.get_bone_count():
+		var sample: Transform3D = approach_poses[index][bone]
+		pose.append(sample.interpolate_with(approach_poses[next][bone],weight))
+		rig.set_bone_pose_position(bone,pose[bone].origin)
+	return pose
 
 func toss_curve_height() -> float:
 	var air_time := SPIN_CONTACT-TOSS_STEP
@@ -81,6 +131,14 @@ func shape_float_strike(pose: Array, rig: Skeleton3D, author: RefCounted, time: 
 	author.rotate_world(pose,"spine_01",Vector3.BACK,deg_to_rad(-24.0)*tilt)
 	author.rotate_world(pose,"spine_03",Vector3.BACK,deg_to_rad(-10.0)*tilt)
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,0.42*crunch)
+	var coil := weight*(1.0-extension)
+	author.rotate_world(pose,"spine_03",Vector3.UP,-0.48*coil+0.40*extension*(1.0-0.65*follow))
+	var kick := smoothstep(SPIN_TAKEOFF+0.04,SPIN_CONTACT-0.09,time)*(1.0-smoothstep(SPIN_CONTACT,SPIN_CONTACT+0.24,time))
+	for side in ["l","r"]:
+		var knee: Vector3 = author.point(pose,"calf_"+side)
+		var ankle: Vector3 = author.point(pose,"foot_"+side)
+		var direction := (ankle-knee).normalized().slerp(Vector3(0.04,-0.35,-1.0).normalized(),kick*(0.54 if side == "r" else 0.35))
+		author.aim_joint(pose,"calf_"+side,"foot_"+side,knee+direction)
 	var shoulder: Vector3 = author.point(pose,"upperarm_r")
 	var contact := shoulder+Vector3(-0.055,0.67,0.33)/scale_
 	var shot_direction := Vector3(0.20*sidespin,0.0,1.0).normalized()

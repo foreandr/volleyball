@@ -1,5 +1,6 @@
 extends RefCounted
 
+const AnimationCatalog = preload("res://scripts/volleyball_animations.gd")
 const HandPose = preload("res://scripts/hand_setting_pose.gd")
 const Court = preload("res://scripts/preview_court.gd")
 const LOAD_TIME := 0.24
@@ -42,6 +43,14 @@ var right_foot_start: Vector3
 var left_foot_start: Vector3
 var right_plant: Vector3
 var left_plant: Vector3
+
+func load_lead_arm_clip() -> void:
+	var copies := AnimationCatalog.custom_entries()
+	for index in range(copies.size()-1,-1,-1):
+		var entry := copies[index]
+		if entry.get("source") == "approach_first_left_step":
+			lead_arm_clip = load(entry.path) as Animation
+			return
 
 func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time := APPROACH_LOAD_TIME, jump_height := 0.0, approach_steps := 2, from_sprint := false, tempo := 1.0) -> void:
 	if active: return

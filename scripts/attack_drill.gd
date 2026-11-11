@@ -130,12 +130,7 @@ func _ready() -> void:
 	spike_audio = create_ball_sound(preload("res://assets/audio/spike_smack.wav"),-6.0)
 	floor_audio = create_ball_sound(preload("res://assets/audio/ball_floor.wav"),-9.0)
 	load_practice_target()
-	var copies := AnimationCatalog.custom_entries()
-	for index in range(copies.size()-1,-1,-1):
-		var entry := copies[index]
-		if entry.get("source") == "approach_first_left_step":
-			jump.lead_arm_clip = load(entry.path) as Animation
-			break
+	jump.load_lead_arm_clip()
 	build_approach_rings()
 
 func build_approach_rings() -> void:
