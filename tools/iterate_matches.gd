@@ -21,7 +21,7 @@ func run() -> void:
 	for number in count:
 		var result := await run_match(first_seed+number,review_point,args[0].get_base_dir())
 		results.append(result)
-		timed_out = timed_out or not bool(result.finished)
+		timed_out = timed_out or not bool(result.review_rendered if review_point > 0 else result.finished)
 		unload_current_scene()
 		await process_frame
 	var output := FileAccess.open(args[0],FileAccess.WRITE)
@@ -53,6 +53,7 @@ func run_match(match_seed: int, review_point: int, output_dir: String) -> Dictio
 	var rallies := []
 	var review_frames := []
 	var review_deadline := INF
+	var review_rendered := false
 	var previous_flight := -1
 	var previous_rally := 0
 	var rally_started := 0.0
@@ -96,13 +97,13 @@ func run_match(match_seed: int, review_point: int, output_dir: String) -> Dictio
 		if is_finite(review_deadline):
 			review_frames.append(game.replay.capture(game))
 			if game.match_clock >= review_deadline or game.phase == game.Phase.READY:
-				await render_review(page,game,review_frames,output_dir,match_seed,review_point)
-				review_deadline = INF
+				review_rendered = await render_review(page,game,review_frames,output_dir,match_seed,review_point)
+				break
 		if game.phase == game.Phase.FINISHED and not is_finite(review_deadline): break
 	return {"seed":match_seed,"score":game.score.duplicate(),"finished":game.phase == game.Phase.FINISHED,
-		"counts":counts,"rallies":rallies,"review_flags":flags}
+		"counts":counts,"rallies":rallies,"review_flags":flags,"review_rendered":review_rendered}
 
-func render_review(page: Node, game: Node3D, frames: Array, output_dir: String, match_seed: int, point: int) -> void:
+func render_review(page: Node, game: Node3D, frames: Array, output_dir: String, match_seed: int, point: int) -> bool:
 	var camera: Camera3D = page.preview_camera
 	var viewport := camera.get_viewport()
 	var focus := Vector3(0.0,1.05,4.0)
@@ -122,9 +123,10 @@ func render_review(page: Node, game: Node3D, frames: Array, output_dir: String, 
 			image.resize(320,180,Image.INTERPOLATE_LANCZOS)
 			image.convert(Image.FORMAT_RGB8)
 			tiles.blit_rect(image,Rect2i(0,0,320,180),Vector2i(column*320,view*180))
-	tiles.save_png(output_dir.path_join("seed-%d-point-%d.png" % [match_seed,point]))
+	var written := tiles.save_png(output_dir.path_join("seed-%d-point-%d.png" % [match_seed,point]))
 	camera.global_transform = camera_transform
 	game.replay.apply(game,saved,saved,0.0)
 	game.ball.global_transform = saved.match_ball
 	game.ball.visible = saved.match_visible
 	game.serve.ball.visible = saved.serve_visible
+	return written == OK
