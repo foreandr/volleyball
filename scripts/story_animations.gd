@@ -277,7 +277,7 @@ Scroll to set pass height",16)
 		preview.grab_focus()
 		return
 	if category == "Serving":
-		drill_status = label("Space to serve\nMove cursor to aim\nWASD to move camera\nMiddle drag to rotate\nScroll to zoom  |  Shift + scroll for arc",16)
+		drill_status = label("Space to serve\nMove cursor to aim\nWASD to move camera\nMiddle drag to rotate\nScroll for arc  |  Shift + scroll to zoom",16)
 		content.add_child(drill_status)
 	var list := ItemList.new()
 	list.name = "AnimationList"
@@ -1084,8 +1084,8 @@ func handle_preview_input(event: InputEvent) -> void:
 				if point is Vector3: underhand_serve.aim(point)
 		elif event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_WHEEL_UP,MOUSE_BUTTON_WHEEL_DOWN]:
 			var wheel := 1.0 if event.button_index == MOUSE_BUTTON_WHEEL_UP else -1.0
-			if event.shift_pressed: underhand_serve.change_arc(wheel*0.35)
-			else: zoom_attack_camera(wheel)
+			if event.shift_pressed: zoom_attack_camera(wheel)
+			else: underhand_serve.change_arc(wheel*0.35)
 			preview.accept_event()
 		return
 	if is_instance_valid(setting_drill):

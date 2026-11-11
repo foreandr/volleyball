@@ -18,6 +18,8 @@ var net_hit: Dictionary = {}
 var original_transform: Transform3D
 var original_animation_mode: int
 var elapsed := -1.0
+var swing_time := 0.0
+var contact_clock := INF
 var origin: Vector3
 var velocity: Vector3
 var landing_time := 0.0
@@ -116,19 +118,26 @@ func launch_velocity(start: Vector3, duration: float) -> Vector3:
 func serve() -> void:
 	if elapsed >= 0.0: return
 	elapsed = 0.0
+	swing_time = 0.0
+	contact_clock = INF
 
 func step(delta: float) -> void:
 	if elapsed < 0.0: return
-	var previous := elapsed
+	var previous := swing_time
+	var launch_speed := launch_velocity(preview_origin,flight_duration(preview_origin)).length()
+	var swing_rate := clampf(launch_speed/12.0,0.65,1.45)
 	elapsed += delta
-	pose(CONTACT_TIME if previous < CONTACT_TIME and elapsed >= CONTACT_TIME else elapsed)
-	if previous < CONTACT_TIME and elapsed >= CONTACT_TIME:
+	swing_time += delta*swing_rate if not is_finite(contact_clock) else delta
+	var striking := previous < CONTACT_TIME and swing_time >= CONTACT_TIME
+	pose(CONTACT_TIME if striking else swing_time)
+	if striking:
+		contact_clock = elapsed-(swing_time-CONTACT_TIME)/swing_rate
 		origin = ball.position
 		landing_time = flight_duration(origin)
 		velocity = launch_velocity(origin,landing_time)
 		net_hit = Net.first_hit(flight_point,0.0,landing_time)
 		if not net_hit.is_empty(): landing_time = net_hit.end_time
-	var flight_time := elapsed-CONTACT_TIME
+	var flight_time := elapsed-contact_clock
 	if flight_time >= 0.0:
 		var time := minf(flight_time,landing_time)
 		ball.position = Net.after_hit(net_hit,time) if not net_hit.is_empty() and time >= net_hit.time else flight_point(time)
