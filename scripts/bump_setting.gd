@@ -327,6 +327,23 @@ func apply_knee_bend(time := INF) -> void:
 		rig.set_bone_pose_position(bone,pose[bone].origin)
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.orthonormalized().get_rotation_quaternion().normalized())
 
+func dig_contact_segment(first: Vector3, last: Vector3) -> PackedVector3Array:
+	var rig: Skeleton3D = setter.skeleton
+	var closest := PackedVector3Array([first,Vector3.INF])
+	var gap := INF
+	for side in ["l","r"]:
+		var elbow := to_local(rig.to_global(rig.get_bone_global_pose(rig.find_bone("lowerarm_"+side)).origin))
+		var wrist := to_local(rig.to_global(rig.get_bone_global_pose(rig.find_bone("hand_"+side)).origin))
+		var fingers := to_local(rig.to_global(rig.get_bone_global_pose(rig.find_bone("middle_03_"+side)).origin))
+		var bones := [wrist,fingers] if hand_setting else [elbow,wrist,fingers]
+		for index in bones.size()-1:
+			var pair := Geometry3D.get_closest_points_between_segments(first,last,bones[index],bones[index+1])
+			var distance := pair[0].distance_squared_to(pair[1])
+			if distance < gap:
+				gap = distance
+				closest = pair
+	return closest
+
 func update_attempt(time: float, previous: float, end: float, path: Callable, incoming: Vector3, delta: float, cue_arrival := INF, spin_rps := 0.0, dig_cue := INF) -> void:
 	contact_check.clear()
 	var progress := approach(path,time,end) if grade == Timing.Grade.WAITING else -1.0
@@ -352,7 +369,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 			var pose_time := 0.065 if is_finite(dig_cue) else 0.09
 			apply_pose(contact_frame+windup,smoothstep(0.0,pose_time,elapsed))
 			if not setter_jumping:
-				var intercept := advance_reach(path,time,end,delta)
+				var intercept := advance_reach(path,time,end,delta,is_finite(dig_cue))
 				if reach.has("custom_clip"):
 					var contact := float(custom_backward.get_meta("contact_time"))
 					custom_backward_time = lerpf(maxf(0.0,contact-0.50),contact,smoothstep(0.0,0.85,reach_progress))
@@ -371,19 +388,26 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 		if center.is_finite() and not first.is_equal_approx(last):
 			var point := Geometry3D.get_closest_point_to_segment(center,first,last)
 			var gap := point.distance_to(center)
-			if not hand_setting and not low_save.active and gap > PLATFORM_RADIUS and gap <= 0.58:
+			var strict_dig := is_finite(dig_cue)
+			var adjustment_threshold := 0.08 if strict_dig else PLATFORM_RADIUS
+			if not hand_setting and not low_save.active and gap > adjustment_threshold and gap <= 0.58:
 				reach_platform(point-center)
 				center = platform_center()
 				point = Geometry3D.get_closest_point_to_segment(center,first,last)
 			var timing := (cue_arrival if is_finite(cue_arrival) and not low_save.active else time)-pressed_at
 			var green := timing >= green_start and timing <= green_end
+			if strict_dig:
+				var contact := dig_contact_segment(first,last)
+				point = contact[0]
+				center = contact[1]
+				cutoff = Net.RADIUS+(0.04 if hand_setting else 0.05)
 			var gap_after_adjustment := point.distance_to(center)
 			var receive_allowance := (0.0 if face_dig else green_hand_allowance) if hand_setting else green_forearm_allowance
 			var near_receive := green and not low_save.active and receive_allowance > 0.0 and gap_after_adjustment <= radius+receive_allowance
-			var assisted := green and not hand_setting and not low_save.active and gap_after_adjustment > radius and (near_receive or close_body_contact(point,center))
+			var assisted := not strict_dig and green and not hand_setting and not low_save.active and gap_after_adjustment > radius and (near_receive or close_body_contact(point,center))
 			var from_setter := point-to_local(setter.global_position)
 			var hand_assisted := (
-				hand_setting and not face_dig and green and gap_after_adjustment > radius
+				not strict_dig and hand_setting and not face_dig and green and gap_after_adjustment > radius
 				and (near_receive or (
 					gap_after_adjustment <= radius+HandPose.GREEN_CONTACT_ALLOWANCE
 					and from_setter.slide(Vector3.UP).length() <= 0.80
@@ -513,7 +537,7 @@ func clear_reach() -> void:
 	rear_setup_travel = Vector3.ZERO
 	rear_follow = 0.0
 
-func advance_reach(path: Callable, time: float, end: float, delta: float) -> Vector3:
+func advance_reach(path: Callable, time: float, end: float, delta: float, quick_dig := false) -> Vector3:
 	var intercept := Vector3.INF
 	var lookahead := minf(time+0.30,end)
 	if lookahead > time:
@@ -525,6 +549,7 @@ func advance_reach(path: Callable, time: float, end: float, delta: float) -> Vec
 	if not reach.is_empty():
 		var before := reach_progress
 		var duration := 0.27 if reach.side_lunge and not rear_setup.is_zero_approx() else (0.19 if reach.tier == 2 else 0.15)
+		if quick_dig and (reach.side_lunge or absf(reach_step.x) > 0.45): duration *= 0.68
 		reach_progress = minf(1.0,reach_progress+delta/duration)
 		var origin := setter.position
 		var setup := rear_setup*(smoothstep(0.0,0.50,reach_progress)-smoothstep(0.0,0.50,before))
