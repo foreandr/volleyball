@@ -1140,7 +1140,7 @@ func handle_preview_input(event: InputEvent) -> void:
 	if selected_category == "Chasing" and is_instance_valid(setting_drill):
 		if event is InputEventMouseMotion:
 			if event.button_mask & MOUSE_BUTTON_MASK_MIDDLE: return
-			elif setting_drill.partner_receiving and setting_drill.stage in [setting_drill.Stage.SERVE,setting_drill.Stage.PASS] and not is_finite(setting_drill.cpu_set.touch_time):
+			elif setting_drill.can_adjust_manual_set():
 				var point: Variant = attack_floor_point(event.position)
 				if point is Vector3: setting_drill.aim_manual_set(point)
 			elif setting_drill.can_aim_set():
@@ -1149,8 +1149,8 @@ func handle_preview_input(event: InputEvent) -> void:
 			elif not setting_drill.partner_receiving and setting_drill.stage != setting_drill.Stage.SERVE: aim_attack_shot(event.position)
 		elif event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_WHEEL_UP,MOUSE_BUTTON_WHEEL_DOWN]:
 			var wheel := 1.0 if event.button_index == MOUSE_BUTTON_WHEEL_UP else -1.0
-			if setting_drill.partner_receiving and setting_drill.stage in [setting_drill.Stage.SERVE,setting_drill.Stage.PASS] and not is_finite(setting_drill.cpu_set.touch_time):
-				setting_drill.adjust_manual_set_height(wheel*0.25)
+			if setting_drill.can_adjust_manual_set():
+				setting_drill.adjust_manual_set_height(wheel*0.25*maxf(0.1,event.factor))
 			elif not setting_drill.partner_receiving and setting_drill.can_aim_set():
 				adjust_bump_height(wheel*0.25)
 			preview.accept_event()

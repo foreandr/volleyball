@@ -13,6 +13,7 @@ var user_player: Node3D
 var teammate: Node3D
 var manual_set_requested := false
 var manual_set_apex := SET_APEX
+var requested_set_apex := SET_APEX
 var manual_set_target := Vector3.INF
 var set_lane_center := 0.0
 var set_preview := ImmediateMesh.new()
@@ -76,6 +77,10 @@ func reset_feed() -> void:
 	region.hide()
 	approach_rings.hide()
 	status.text = "Serve to teammate" if partner_receiving else "Serve to you"
+	if partner_receiving:
+		set_lane_center = setter.position.x
+		rally_set_target = Vector3(set_lane_center,PIN.y,Net.NET_Z-RALLY_SET_NET_CLEARANCE)
+		update_manual_set_target()
 
 func receive_cue_time() -> float:
 	return super.receive_cue_time() if bump.hand_setting else serve_contact
@@ -84,16 +89,17 @@ func set_pass_aim(point: Vector3) -> void:
 	if partner_receiving: return
 	bump.destination = Vector2(clampf(point.x,-4.35,4.35),clampf(point.z,-4.8,3.45))
 
+func can_adjust_manual_set() -> bool:
+	return partner_receiving and stage in [Stage.SERVE,Stage.PASS] and not is_finite(cpu_set.release_time)
+
 func aim_manual_set(point: Vector3) -> void:
-	if not partner_receiving or stage not in [Stage.SERVE,Stage.PASS]: return
-	if stage == Stage.PASS and is_finite(cpu_set.touch_time): return
+	if not can_adjust_manual_set(): return
 	manual_set_target = point
-	if stage == Stage.PASS: update_manual_set_target()
+	update_manual_set_target()
 
 func adjust_manual_set_height(amount: float) -> void:
-	if stage == Stage.PASS and is_finite(cpu_set.touch_time): return
-	manual_set_apex = clampf(manual_set_apex+amount,4.2,7.5)
-	if stage == Stage.PASS: update_manual_set_target()
+	if not can_adjust_manual_set(): return
+	requested_set_apex = clampf(requested_set_apex+amount,4.2,7.5)
 
 func request_manual_set(technique: int) -> void:
 	if not partner_receiving or stage != Stage.PASS or is_finite(cpu_set.touch_time): return
@@ -114,9 +120,14 @@ func cpu_set_apex() -> float:
 func update_manual_set_target() -> void:
 	if manual_set_target.is_finite():
 		rally_set_target.x = clampf(manual_set_target.x,maxf(-4.35,set_lane_center-APPROACH_RADII[1]),minf(4.35,set_lane_center+APPROACH_RADII[1]))
-	var launch := cpu_set_launch(cpu_contact_point)
-	draw_set_preview(cpu_contact_point,launch)
-	if is_instance_valid(rally_set_call): rally_set_call.text = "Set height %.1f m" % manual_set_apex
+	var origin := Vector3(receiver.position.x,cpu_set_contact_height(),receiver.position.z+0.45)
+	if stage == Stage.PASS:
+		origin = cpu_set.platform_center() if is_finite(cpu_set.touch_time) else cpu_contact_point
+	var launch := cpu_set_launch(origin)
+	draw_set_preview(origin,launch)
+	if is_instance_valid(rally_set_call):
+		rally_set_call.text = "Set height %.1f m" % manual_set_apex
+		rally_set_call.show()
 
 func draw_set_preview(origin: Vector3, launch: Vector3) -> void:
 	set_preview.clear_surfaces()
@@ -161,6 +172,9 @@ func cpu_set_move_speed(distance: float) -> float:
 	return 5.0 if not partner_receiving and distance > 0.85 else 3.2
 
 func tick_demo(delta: float, controls: RefCounted) -> void:
+	if can_adjust_manual_set():
+		manual_set_apex = move_toward(manual_set_apex,requested_set_apex,9.0*delta)
+		update_manual_set_target()
 	if stage == Stage.SERVE and not is_finite(serve_demo.contact_clock):
 		if not partner_receiving: bump.update_aim()
 		serve_demo.step(delta)
