@@ -353,6 +353,17 @@ func start_blocking_practice() -> void:
 		blocking_practice.set_vertical_inches(value)
 		vertical_readout.text = "Vertical jump  %+.0f in" % value)
 	content.add_child(vertical)
+	var tracking_readout := label("Arm tracking  25%",16)
+	content.add_child(tracking_readout)
+	var tracking := HSlider.new()
+	tracking.max_value = 100.0
+	tracking.step = 1.0
+	tracking.value = 25.0
+	tracking.focus_mode = Control.FOCUS_NONE
+	tracking.value_changed.connect(func(value: float):
+		blocking_practice.arm_tracking = value/100.0
+		tracking_readout.text = "Arm tracking  %.0f%%" % value)
+	content.add_child(tracking)
 	preview_camera.position = Vector3(0.0,4.9,-5.2)
 	setting_camera_focus = Vector3(0.0,2.1,4.6)
 	preview_camera.look_at(setting_camera_focus)

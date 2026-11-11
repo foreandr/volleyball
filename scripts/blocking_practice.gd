@@ -13,6 +13,7 @@ var block_base := BLOCK_START
 var block_tracking := 0.0
 var block_lift := 0.0
 var vertical_inches := 0.0
+var arm_tracking := 0.25
 var active_block_height := BLOCK_HEIGHT
 var hand_normals: Array[Vector3] = [Vector3.BACK,Vector3.BACK]
 var block_hands: Array[Dictionary] = [{},{}]
@@ -120,8 +121,8 @@ func step_blocker(delta: float) -> void:
 		var side := "l" if hand_index == 0 else "r"
 		var sign_ := 1.0 if side == "l" else -1.0
 		var shoulder: Vector3 = author.point(pose,"upperarm_"+side)
-		var wrist := shoulder+Vector3(sign_*0.025+block_tracking*press*0.55,0.64,0.20+0.34*press)/scale_
-		author.limb(pose,"upperarm_"+side,"lowerarm_"+side,"hand_"+side,wrist,Vector3(sign_*0.65,-0.52,0.34),raise,176.0)
+		var wrist := shoulder+Vector3(-sign_*0.105+block_tracking*press*arm_tracking*2.0,0.64,0.20+0.34*press)/scale_
+		author.limb(pose,"upperarm_"+side,"lowerarm_"+side,"hand_"+side,wrist,Vector3(sign_*0.31,-0.52,0.34),raise,176.0)
 		var base: Transform3D = author.world_pose(pose,rig.find_bone("hand_"+side))
 		var fingers: Vector3 = author.point(pose,"middle_01_"+side)-base.origin
 		var across: Vector3 = author.point(pose,"index_01_"+side)-author.point(pose,"pinky_01_"+side)
@@ -134,7 +135,7 @@ func step_blocker(delta: float) -> void:
 		var index_edge := finger_direction.cross(toward_ball).normalized()*-sign_
 		var palm := HandPose.hand_basis(finger_direction,index_edge)*HandPose.hand_basis(fingers,across).inverse()*base.basis
 		author.set_world_basis(pose,"hand_"+side,base.basis.slerp(palm,raise))
-		spread_block_fingers(pose,rig,author,side,toward_ball,raise)
+		spread_block_fingers(pose,rig,author,side,raise)
 		update_block_hand(pose,rig,author,side,hand_index,delta)
 	for bone in rig.get_bone_count(): rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
 	if pose_time >= BLOCK_LOAD+BLOCK_AIR+0.20:
@@ -171,17 +172,33 @@ func rebound_from_hand(incoming: Vector3, hit: Vector3, hand: Dictionary) -> Vec
 	var normal_speed := minf(relative.dot(normal),0.0)
 	return relative.slide(normal)*0.69-normal*normal_speed*0.42+motion*0.52
 
-func spread_block_fingers(pose: Array, rig: Skeleton3D, author: RefCounted, side: String, palm_normal: Vector3, weight: float) -> void:
-	var fingers := ["index","middle","ring","pinky"]
-	var spread_angles := [-16.0,-4.0,8.0,21.0]
-	var mirror := 1.0 if side == "l" else -1.0
-	for digit in fingers+["thumb"]:
-		for joint in ["01","02","03"]:
-			var index := rig.find_bone("%s_%s_%s" % [digit,joint,side])
-			if index >= 0: pose[index].basis = pose[index].basis.slerp(rig.get_bone_rest(index).basis,weight)
-	for index in fingers.size():
-		author.rotate_world(pose,fingers[index]+"_01_"+side,palm_normal,deg_to_rad(spread_angles[index]*mirror)*weight)
-	author.rotate_world(pose,"thumb_01_"+side,palm_normal,deg_to_rad(-17.0*mirror)*weight)
+func spread_block_fingers(pose: Array, rig: Skeleton3D, author: RefCounted, side: String, weight: float) -> void:
+	var digits: Array[String] = ["index","middle","ring","pinky"]
+	var fan: Array[float] = [0.34,0.08,-0.15,-0.43]
+	var wrist: Vector3 = author.point(pose,"hand_"+side)
+	var index_base: Vector3 = author.point(pose,"index_01_"+side)
+	var pinky_base: Vector3 = author.point(pose,"pinky_01_"+side)
+	var forward := (index_base.lerp(pinky_base,0.5)-wrist).normalized()
+	var across := (index_base-pinky_base).slide(forward).normalized()
+	for index in digits.size():
+		var first := digits[index]+"_01_"+side
+		var second := digits[index]+"_02_"+side
+		var third := digits[index]+"_03_"+side
+		var direction := (forward+across*fan[index]).normalized()
+		var root: Vector3 = author.point(pose,first)
+		var next: Vector3 = author.point(pose,second)
+		author.aim_joint(pose,first,second,next.lerp(root+direction*root.distance_to(next),weight))
+		var joint: Vector3 = author.point(pose,second)
+		var tip: Vector3 = author.point(pose,third)
+		author.aim_joint(pose,second,third,tip.lerp(joint+direction*joint.distance_to(tip),weight))
+		var bone := rig.find_bone(third)
+		pose[bone].basis = pose[bone].basis.slerp(rig.get_bone_rest(bone).basis,weight)
+	var thumb := "thumb_01_"+side
+	var thumb_joint := "thumb_02_"+side
+	var root: Vector3 = author.point(pose,thumb)
+	var next: Vector3 = author.point(pose,thumb_joint)
+	var direction := (forward*0.52+across*0.85).normalized()
+	author.aim_joint(pose,thumb,thumb_joint,next.lerp(root+direction*root.distance_to(next),weight))
 
 func play_spike(time: float, delta: float) -> void:
 	if is_finite(block_contact_at):
