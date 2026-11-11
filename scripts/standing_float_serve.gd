@@ -7,7 +7,7 @@ const TOSS_RELEASE := 0.34
 
 var toss_origin: Vector3
 var drift_segments: Array[Dictionary] = []
-const DRIFT_RADIUS := 0.52
+const DRIFT_RADIUS := 0.34
 
 func configure(actor: Node3D, start := START, yaw := 0.0) -> void:
 	apex = 3.85
@@ -46,8 +46,9 @@ func begin_serve_curve() -> void:
 	add_drift_segment(0.0,Vector2.ZERO)
 
 func add_drift_segment(start: float, previous: Vector2) -> void:
-	var next := Vector2.from_angle(randf_range(0.0,TAU))*sqrt(randf())
-	drift_segments.append({"start":start,"end":start+randf_range(0.10,0.24),"from":previous,"to":next})
+	var sample := Vector2.from_angle(randf_range(0.0,TAU))*sqrt(randf())
+	var next := previous.lerp(sample,0.65)
+	drift_segments.append({"start":start,"end":start+randf_range(0.28,0.54),"from":previous,"to":next})
 
 func advance_serve_curve(time: float) -> void:
 	while not drift_segments.is_empty() and time >= float(drift_segments.back().end):
