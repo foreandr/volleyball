@@ -26,6 +26,7 @@ var selected_category := ""
 var blocking_practice: Node3D
 var defense_active := false
 var demo_match: Node3D
+var match_block_choice: OptionButton
 var blocking_frame: Node3D
 var underhand_serve: Node3D
 var serve_opponents: Node3D
@@ -252,11 +253,20 @@ func start_demo_match() -> void:
 	var status := label("",17)
 	status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(status)
-	content.add_child(label("WASD to move | Shift to sprint\nQ forearms | E hands | F jump set\nSpace serves, attacks, or blocks\nMouse aims | Scroll changes height",16))
+	content.add_child(label("WASD to move | Shift to sprint\nQ forearms | E hands | F jump set\nSpace serves, attacks, or blocks\nMouse aims | Scroll changes height\nLeft-click or E to set the second ball\nB switches blocker",16))
 	var styles := OptionButton.new()
 	for title in ["Underhand","Standing float","Jump float","Spin serve"]: styles.add_item(title)
 	styles.focus_mode = Control.FOCUS_NONE
 	content.add_child(styles)
+	match_block_choice = OptionButton.new()
+	match_block_choice.add_item("Blocker | Teammate")
+	match_block_choice.add_item("Blocker | You")
+	match_block_choice.focus_mode = Control.FOCUS_NONE
+	content.add_child(match_block_choice)
+	match_block_choice.item_selected.connect(func(index: int): demo_match.set_player_blocks(index == 1))
+	content.add_child(button("Reset Match",func():
+		demo_match.reset_match()
+		preview.grab_focus()))
 	demo_match = preload("res://scripts/volleyball_match.gd").new()
 	preview_player.get_parent().add_child(demo_match)
 	demo_match.configure(preview_player,board,status)
@@ -1432,6 +1442,11 @@ func handle_preview_input(event: InputEvent) -> void:
 			else:
 				var hit: Variant = attack_floor_point(event.position)
 				if hit is Vector3: demo_match.set_aim(hit)
+		elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			var hit: Variant = attack_floor_point(event.position)
+			if hit is Vector3: demo_match.set_aim(hit)
+			demo_match.click_set()
+			preview.accept_event()
 		elif event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_WHEEL_UP,MOUSE_BUTTON_WHEEL_DOWN]:
 			demo_match.change_arc(0.20 if event.button_index == MOUSE_BUTTON_WHEEL_UP else -0.20)
 		return
@@ -1834,6 +1849,10 @@ func _input(event: InputEvent) -> void:
 				KEY_Q: demo_match.input_receive(0)
 				KEY_E, KEY_I: demo_match.input_receive(1)
 				KEY_F: demo_match.input_receive(2)
+				KEY_B:
+					var index := 0 if demo_match.player_blocks else 1
+					match_block_choice.select(index)
+					demo_match.set_player_blocks(index == 1)
 				KEY_M: StorySession.attack_ball_audio_muted = not StorySession.attack_ball_audio_muted
 				KEY_ESCAPE: open_menu()
 		return
