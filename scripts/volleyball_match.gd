@@ -390,8 +390,11 @@ func click_set() -> void:
 	if phase == Phase.LIVE and receiving_team == 0 and possession_team == 0 and touches == 1 and last_player != 0:
 		input_receive(1)
 
+func can_play_forearms(index: int) -> bool:
+	return players[index].position.y <= PLAYER_GROUND_Y+0.02
+
 func input_receive(technique: int) -> void:
-	if spectator: return
+	if spectator or (technique == 0 and not can_play_forearms(0)): return
 	if phase != Phase.LIVE: return
 	var bump := platforms[0]
 	if is_finite(bump.pressed_at):
@@ -723,6 +726,7 @@ func defensive_ball() -> bool:
 	return flight_kind in ["spike","dump","block","free"] or (touched_tape and not net_hit.is_empty())
 
 func queue_receive(index: int, technique: int) -> void:
+	if technique == 0 and not can_play_forearms(index): return
 	var bump := platforms[index]
 	if is_finite(bump.pressed_at): return
 	bump.hand_setting = technique != 0
@@ -1166,6 +1170,7 @@ func tick_receive(delta: float, previous: float) -> void:
 		if index == last_player and not last_was_block and possession_team == team(index): return
 	if is_human(index) and technique < 0: return
 	if is_human(index) and not is_finite(bump.pressed_at) and elapsed-request_age < 0.44: queue_receive(0,technique)
+	if technique == 0 and not can_play_forearms(index): return
 	var height := 1.10 if technique == 0 else hand_contact_height(technique)
 	var is_dig := defensive_ball()
 	var hand_pass := technique == 1 and flight_kind == "serve"
