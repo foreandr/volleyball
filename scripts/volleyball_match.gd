@@ -911,6 +911,9 @@ func advance_recoveries(delta: float) -> void:
 			rig.set_bone_pose_position(bone,idle.origin.lerp(pose.origin,weight))
 			var rotation := pose.basis.orthonormalized().get_rotation_quaternion().normalized()
 			rig.set_bone_pose_rotation(bone,idle.basis.orthonormalized().get_rotation_quaternion().normalized().slerp(rotation,weight))
+		if recovery.has("kick_foot"):
+			var flick := smoothstep(0.0,0.070,age)*(1.0-smoothstep(0.07,0.22,age))
+			if flick > 0.001: pose_kick_leg(actor,recovery.kick_foot,(Vector3.UP*0.15+actor.global_basis.z*0.11)*flick)
 
 func advance_set_jumps(delta: float) -> void:
 	for index in players.size():
@@ -1318,7 +1321,7 @@ func input_kick() -> void:
 	kick_pressed_until = match_clock+0.20
 
 func try_foot_save(previous: float) -> void:
-	if flight_kind == "serve" or held_ball or elapsed > flight_end()+0.05: return
+	if held_ball or elapsed > flight_end()+0.05: return
 	var end := flight_end()
 	var first := path_point(previous)
 	var last := path_point(minf(elapsed,end))
@@ -1351,17 +1354,10 @@ func try_foot_save(previous: float) -> void:
 		if foot_side.is_empty(): continue
 		var foot := "foot_"+foot_side
 		var toe_bone := "ball_"+foot_side
-		var author: RefCounted = actor.get_pose_author()
-		var pose: Array[Transform3D] = []
-		for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
-		var ankle: Vector3 = author.point(pose,foot)
-		var toe: Vector3 = author.point(pose,toe_bone)
-		var shift := (rig.to_local(goal-Vector3.UP*0.055)-toe).limit_length(0.30)
+		var toe := rig.to_global(rig.get_bone_global_pose(rig.find_bone(toe_bone)).origin)
+		var shift := (goal-Vector3.UP*0.055-toe).limit_length(0.30)
 		var lift := 1.0-smoothstep(0.16,0.35,gap)
-		author.limb(pose,"thigh_"+foot_side,"calf_"+foot_side,foot,ankle+shift*lift,Vector3(0.10 if foot_side == "l" else -0.10,0.12,1.0),1.0,174.0)
-		for name_ in ["thigh_"+foot_side,"calf_"+foot_side,foot]:
-			var bone := rig.find_bone(name_)
-			rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
+		pose_kick_leg(actor,foot_side,shift*lift)
 		animated[index] = true
 		var a := rig.to_global(rig.get_bone_global_pose(rig.find_bone(foot)).origin)
 		var b := rig.to_global(rig.get_bone_global_pose(rig.find_bone(toe_bone)).origin)
@@ -1372,6 +1368,7 @@ func try_foot_save(previous: float) -> void:
 		kick_pressed_until = -INF
 		show_key(index,"C | Kick")
 		begin_recovery(index)
+		recoveries[index]["kick_foot"] = foot_side
 		var heading := Vector3.BACK.rotated(Vector3.UP,randf_range(-PI,PI))
 		var rebound := heading*randf_range(1.8,6.0)+Vector3.UP*randf_range(3.2,6.0)
 		trace.write("foot_save",match_clock,{"player":index,"foot":foot_side,"point":contact,"rebound":rebound},true)
@@ -1379,6 +1376,21 @@ func try_foot_save(previous: float) -> void:
 		play_touch()
 		launch(contact,rebound,"pass",index)
 		return
+
+func pose_kick_leg(actor: Node3D, side: String, world_shift: Vector3) -> void:
+	var rig: Skeleton3D = actor.skeleton
+	var author: RefCounted = actor.get_pose_author()
+	var pose: Array[Transform3D] = []
+	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
+	var foot := "foot_"+side
+	var thigh := "thigh_"+side
+	var calf := "calf_"+side
+	var ankle: Vector3 = author.point(pose,foot)
+	var knee := Vector3(0.10 if side == "l" else -0.10,0.12,1.0)
+	author.limb(pose,thigh,calf,foot,ankle+rig.global_basis.inverse()*world_shift,knee,1.0,174.0)
+	for joint in [thigh,calf,foot]:
+		var bone := rig.find_bone(joint)
+		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
 
 func deflect_defender_body(previous: float) -> void:
 	if flight_kind not in ["spike","dump","block"] or held_ball: return
