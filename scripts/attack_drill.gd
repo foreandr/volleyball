@@ -602,6 +602,9 @@ func setter_movement_scale() -> float:
 		return bump.movement_scale(clock-stage_start,receive_cue_time(),ball.position)
 	return 1.0
 
+func advances_receiver_animation() -> bool:
+	return true
+
 func step(delta: float) -> void:
 	if uses_assisted_approach():
 		approach_rings.position = Vector3(setter.position.x,0.061,setter.position.z)
@@ -609,7 +612,7 @@ func step(delta: float) -> void:
 	var time := clock-stage_start
 	var previous := maxf(0.0,time-delta)
 	restore_torso_lean(receiver)
-	receiver.animator.advance(delta)
+	if advances_receiver_animation(): receiver.animator.advance(delta)
 	apply_torso_lean(receiver)
 	match stage:
 		Stage.SERVE: play_serve(time,previous,delta)

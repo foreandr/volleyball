@@ -24,6 +24,7 @@ var cpu_second_ball_attack := false
 var cpu_commits_to_spike := false
 var manual_set_apex := SET_APEX
 var requested_set_apex := SET_APEX
+var teammate_set_apex := SET_APEX
 var manual_set_target := Vector3.INF
 var set_preview := ImmediateMesh.new()
 var set_preview_material := StandardMaterial3D.new()
@@ -153,7 +154,7 @@ func request_manual_set(technique: int) -> void:
 	else:
 		cpu_set_launch(cpu_contact_point)
 		if is_instance_valid(rally_set_call):
-			rally_set_call.text = "Setting Zone %d" % ((rally_set_index+1)*10)
+			show_teammate_set_call("Setting Zone %d")
 
 func set_requested() -> bool:
 	return not partner_receiving or manual_set_requested
@@ -179,7 +180,22 @@ func cpu_jump_set_rise(lead: float) -> float:
 	return super.cpu_jump_set_rise(lead)
 
 func cpu_set_apex() -> float:
-	return manual_set_apex if partner_receiving else SET_APEX
+	return manual_set_apex if partner_receiving else teammate_set_apex
+
+func can_adjust_teammate_set() -> bool:
+	return not partner_receiving and (stage == Stage.PASS or (stage == Stage.SET and cpu_second_ball_attack)) and not is_finite(cpu_set.release_time)
+
+func adjust_teammate_set_height(amount: float) -> void:
+	if not can_adjust_teammate_set(): return
+	teammate_set_apex = clampf(teammate_set_apex+amount,MIN_SET_APEX,7.5)
+	var origin: Vector3 = cpu_set.platform_center() if is_finite(cpu_set.touch_time) else cpu_contact_point
+	cpu_set_launch(origin)
+	show_teammate_set_call("If set, Zone %d" if active_cpu_set_style == 3 else "Set to Zone %d")
+
+func show_teammate_set_call(format: String) -> void:
+	if not is_instance_valid(rally_set_call): return
+	rally_set_call.text = (format % ((rally_set_index+1)*10))+"  |  %.1f m" % teammate_set_apex
+	rally_set_call.show()
 
 func update_manual_set_target() -> void:
 	if manual_set_target.is_finite():
@@ -227,11 +243,8 @@ func call_rally_set(passer: Vector3) -> void:
 	if partner_receiving: update_manual_set_target()
 	else: cpu_set_launch(cpu_contact_point)
 	region.show()
-	if is_instance_valid(rally_set_call):
-		if not partner_receiving:
-			var call := "If set, Zone %d" if active_cpu_set_style == 3 else "Set to Zone %d"
-			rally_set_call.text = call % ((rally_set_index+1)*10)
-		rally_set_call.show()
+	if not partner_receiving:
+		show_teammate_set_call("If set, Zone %d" if active_cpu_set_style == 3 else "Set to Zone %d")
 
 func cpu_set_move_speed(distance: float) -> float:
 	return 5.0 if distance > 0.85 else 3.2
@@ -291,6 +304,9 @@ func try_second_ball_attack() -> void:
 	if not cpu_attempt: region.hide()
 	status.text = "Second-ball attack"
 
+func advances_receiver_animation() -> bool:
+	return not cpu_second_ball_attack
+
 func tick_demo(delta: float, controls: RefCounted) -> void:
 	if can_adjust_manual_set():
 		manual_set_apex = move_toward(manual_set_apex,requested_set_apex,9.0*delta)
@@ -309,6 +325,13 @@ func tick_demo(delta: float, controls: RefCounted) -> void:
 		if clock-swing_started >= 0.14 or clock >= approach_expected_hit_at-0.055:
 			request_manual_set(0)
 	if player_second_ball_attack or cpu_second_ball_attack:
+		if cpu_second_ball_attack:
+			controls.read_pace_input()
+			var movement: Vector2 = controls.movement_input()
+			if movement.y > 0.05:
+				user_player.rotation.y = rotate_toward(user_player.rotation.y,atan2(-movement.x,movement.y),delta*8.0)
+			controls.move_player(movement,delta,false,ball.position,1.0,0.0,false,jump.front_limit,0.0,0.0,true)
+			approach_from_sprint = false
 		trace_input = Vector2.ZERO
 		if stage == Stage.SET and approach_jump_queued: time_approach_plant(delta)
 		step_jump(delta)

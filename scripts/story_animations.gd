@@ -302,7 +302,7 @@ func start_serve_bump_set_spike() -> void:
 	clear_content()
 	if is_instance_valid(ball_preview): ball_preview.stop()
 	set_title("SERVE BUMP SET SPIKE")
-	var controls_hint := label("WASD to move  |  Q forearms  |  E / I hands\nCursor aims  |  Scroll for pass height\nShift + W to run  |  Hold Space to spike",16)
+	var controls_hint := label("WASD to move  |  Q forearms  |  E / I hands\nCursor aims  |  Scroll for pass or set height\nShift + W to run  |  Hold Space to spike",16)
 	controls_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(controls_hint)
 	drill_status = label("",18)
@@ -337,7 +337,7 @@ func start_serve_bump_set_spike() -> void:
 	serve_side.item_selected.connect(func(index: int):
 		setting_drill.serve_to_partner = index == 1
 		technique.disabled = index == 1
-		controls_hint.text = "Aim the set with the cursor\nScroll to change set height\nQ forearms  |  E / I hands\nHold Space to spike\nF to jump set" if index == 1 else "WASD to move  |  Q forearms  |  E / I hands\nCursor aims  |  Scroll for pass height\nShift + W to run  |  Hold Space to spike"
+		controls_hint.text = "Aim the set with the cursor\nScroll to change set height\nQ forearms  |  E / I hands\nHold Space to spike\nF to jump set" if index == 1 else "WASD to move  |  Q forearms  |  E / I hands\nCursor aims  |  Scroll for pass or set height\nShift + W to run  |  Hold Space to spike"
 		setting_drill.reset_feed())
 	content.add_child(serve_side)
 	content.add_child(button("Replay",setting_drill.reset_feed))
@@ -1154,10 +1154,13 @@ func handle_preview_input(event: InputEvent) -> void:
 			elif (not setting_drill.partner_receiving or setting_drill.player_second_ball_attack) and not setting_drill.cpu_second_ball_attack and setting_drill.stage != setting_drill.Stage.SERVE: aim_attack_shot(event.position)
 		elif event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_WHEEL_UP,MOUSE_BUTTON_WHEEL_DOWN]:
 			var wheel := 1.0 if event.button_index == MOUSE_BUTTON_WHEEL_UP else -1.0
+			var height_change := wheel*0.25*maxf(0.1,event.factor)
 			if setting_drill.can_adjust_manual_set():
-				setting_drill.adjust_manual_set_height(wheel*0.25*maxf(0.1,event.factor))
+				setting_drill.adjust_manual_set_height(height_change)
+			elif setting_drill.can_adjust_teammate_set():
+				setting_drill.adjust_teammate_set_height(height_change)
 			elif not setting_drill.partner_receiving and setting_drill.can_aim_set():
-				adjust_bump_height(wheel*0.25)
+				adjust_bump_height(height_change)
 			preview.accept_event()
 		return
 	if is_instance_valid(setting_drill):
