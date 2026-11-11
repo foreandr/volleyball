@@ -24,6 +24,7 @@ const SERVES := [
 const SERVICE_START := [-6.40,-6.40,-7.4,-8.15]
 const WIN_SCORE := 7
 const RECOVERY_TIME := 0.32
+const CPU_SPRINT_SPEED := 8.4
 const HAND_DIG_REACH := 0.46
 const FOREARM_DIG_REACH := 0.66
 enum Phase { READY, LIVE, DEAD, FINISHED }
@@ -121,6 +122,7 @@ var held_ball := false
 var last_point := {}
 var replay := Replay.new()
 var overpass_flight := -1
+var rear_chaser := -1
 var block_vertical := 30.0
 var serve_vertical := 30.0
 var spike_strength := 0.70
@@ -431,6 +433,7 @@ func award(side: int, reason: String) -> void:
 		info.text = winner+" · "+reason
 
 func reset_receives() -> void:
+	rear_chaser = -1
 	held_ball = false
 	cpu_second_spike = false
 	for bump in platforms:
@@ -530,7 +533,7 @@ func choose_shot(index: int, contact := Vector3.INF, block_at := Vector3.INF) ->
 			var travel := (target-contact).slide(Vector3.UP).length()/maxf(6.0,22.0*spike_strength)
 			var net_time := travel*clampf((Net.NET_Z-contact.z)/(depth-contact.z),0.0,1.0)
 			var net_height := lerpf(contact.y,Flight.FLOOR,net_time/travel)+0.5*Flight.spike_gravity(9.0)*net_time*(travel-net_time)
-			shot_score -= 5.0*(1.0-smoothstep(Net.NET_TOP,Net.NET_TOP+0.22,net_height))
+			shot_score -= 17.0*(1.0-smoothstep(Net.NET_TOP+Net.RADIUS,Net.NET_TOP+0.25,net_height))
 			if shot_score > best_score:
 				best_score = shot_score
 				best = target
@@ -543,7 +546,7 @@ func cpu_spike_has_lane(contact: Vector3) -> bool:
 			var target := Vector3(x,Flight.FLOOR,depth)
 			var fraction: float = (Net.NET_Z-contact.z)/(depth-contact.z)
 			if absf(lerpf(contact.x,x,fraction)) > Net.NET_HALF_WIDTH-Net.RADIUS-0.12: continue
-			var speed := maxf(7.0,22.0*spike_strength)
+			var speed := maxf(7.0,22.0*spike_strength)*0.64
 			var time := (target-contact).slide(Vector3.UP).length()/speed
 			var height := lerpf(contact.y,Flight.FLOOR,fraction)+0.5*Flight.spike_gravity(9.0)*time*time*fraction*(1.0-fraction)
 			if height >= Net.NET_TOP+Net.RADIUS: return true
@@ -583,6 +586,23 @@ func can_touch(index: int, block := false) -> bool:
 	last_was_block = block
 	return true
 
+func controlled_spike_motion(contact: Vector3, motion: Vector3, target: Vector3, spin_rate: float) -> Vector3:
+	var gravity := Flight.spike_gravity(spin_rate)
+	var limit := motion.slide(Vector3.UP).length()
+	if limit < 1.0: return motion
+	var flight_time := Flight.landing_time(contact,motion,gravity)
+	if Net.first_hit(func(t): return contact+motion*t+Vector3.DOWN*0.5*gravity*t*t,0.0,flight_time).is_empty(): return motion
+	for aim in [target,Vector3(clampf(target.x,-2.8,2.8),Flight.FLOOR,11.4),Vector3(0.0,Flight.FLOOR,10.1)]:
+		var offset: Vector3 = aim-contact
+		var time_to_net := (Net.NET_Z-contact.z)/maxf(0.01,offset.z)
+		if time_to_net <= 0.0 or time_to_net >= 1.0 or absf(contact.x+offset.x*time_to_net) > Net.NET_HALF_WIDTH-Net.RADIUS-0.12: continue
+		for power in [1.0,0.86,0.72,0.58]:
+			var time: float = offset.slide(Vector3.UP).length()/(limit*power)
+			var candidate := offset/time+Vector3.UP*0.5*gravity*time
+			if Net.first_hit(func(t): return contact+candidate*t+Vector3.DOWN*0.5*gravity*t*t,0.0,time).is_empty():
+				return candidate
+	return motion
+
 func on_spike(actor: Node3D, point: Vector3, motion: Vector3, spin_rate: float) -> void:
 	var index := players.find(actor)
 	if index < 0 or not can_touch(index): return
@@ -592,8 +612,13 @@ func on_spike(actor: Node3D, point: Vector3, motion: Vector3, spin_rate: float) 
 		var frame := frames[team(index)]
 		var start := frame.to_local(point)
 		var local_motion := frame.global_basis.inverse()*motion
+		var shot: Vector3 = attackers[team(index)].swing_aim
+		local_motion = controlled_spike_motion(start,local_motion,shot,spin_rate)
+		motion = frame.global_basis*local_motion
 		var cross := (Net.NET_Z-start.z)/maxf(0.01,local_motion.z)
-		if cross > 0.0 and absf(start.x+local_motion.x*cross) > Net.NET_HALF_WIDTH-Net.RADIUS-0.12:
+		var gravity := Flight.spike_gravity(spin_rate)
+		var at_net := start+local_motion*cross+Vector3.DOWN*0.5*gravity*cross*cross
+		if cross > 0.0 and (absf(at_net.x) > Net.NET_HALF_WIDTH-Net.RADIUS-0.12 or at_net.y < Net.NET_TOP+Net.RADIUS):
 			var safe := cpu_free_ball_motion(start,local_motion)
 			if not safe.is_equal_approx(local_motion):
 				stroke = "Free ball"
@@ -621,6 +646,7 @@ func make_ball_audio(stream: AudioStream, gain: float) -> AudioStreamPlayer:
 
 func set_ball_sound(enabled: bool) -> void:
 	StorySession.attack_ball_audio_muted = not enabled
+	AudioServer.set_bus_mute(AudioServer.get_bus_index("Master"),not enabled)
 	if enabled:
 		route_ball_sound()
 		play_touch(true)
@@ -847,7 +873,7 @@ func settle_point(delta: float) -> void:
 	advance_recoveries(delta)
 	advance_idle_players(delta)
 
-func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_facing := Vector3.INF, chase := false) -> void:
+func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_facing := Vector3.INF, chase := false, turn_to_travel := false) -> void:
 	if recoveries.has(index) or owns_action(index,true): return
 	if serve.player == players[index]:
 		if not serve.can_run_after_contact(): return
@@ -862,16 +888,17 @@ func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_f
 	# Chase the projected contact point. The airborne ball can still be elsewhere.
 	var sprint := chase and distance > (0.55 if already_running else 1.05) and heading.dot(facing) > (0.69 if already_running else 0.79)
 	var yaw := 0.0
-	if sprint:
+	if sprint or (turn_to_travel and distance > 0.25):
 		yaw = atan2(heading.x,heading.z)
 	elif receive_facing.is_finite() and not receive_facing.is_zero_approx():
-		yaw = clampf(atan2(receive_facing.x,receive_facing.z),-1.03,1.03)
-	actor.rotation.y = rotate_toward(actor.rotation.y,yaw,delta*8.0)
-	var pace := maxf(4.65,speed) if sprint else minf(speed,4.35)
+		yaw = atan2(receive_facing.x,receive_facing.z)
+		if not turn_to_travel: yaw = clampf(yaw,-1.03,1.03)
+	actor.rotation.y = rotate_toward(actor.rotation.y,yaw,delta*(12.5 if turn_to_travel else 8.0))
+	var pace := clampf(speed*1.24,5.85,CPU_SPRINT_SPEED) if sprint else minf(speed,4.35)
 	var before := actor.position
 	actor.position = Court.clamp_setter(before+offset.limit_length(delta*pace),3.43)
 	var movement := actor.basis.inverse()*(actor.position-before)
-	actor.animator.speed_scale = 1.45 if sprint else 1.0
+	actor.animator.speed_scale = lerpf(1.60,1.92,smoothstep(5.85,CPU_SPRINT_SPEED,pace)) if sprint else 1.0
 	actor.play_action("run" if sprint else "idle",0.10)
 	actor.animator.advance(delta)
 	var steps := footwork[index]
@@ -964,7 +991,7 @@ func overhead_available(index: int, technique: int) -> bool:
 		if forward.is_zero_approx(): forward = actor.basis.z
 		offset -= forward*hand_receive_reach()
 		var reserve := 0.32 if technique == 2 else 0.10
-		var pace := 5.5 if first_contact and offset.normalized().dot(actor.basis.z) > 0.65 else 4.15
+		var pace := 6.65 if first_contact and offset.normalized().dot(actor.basis.z) > 0.65 else 4.15
 		range_ = (0.48 if first_contact else 0.55)+maxf(0.0,at-elapsed-reserve)*pace
 	return point.z <= Net.NET_Z+0.05 and point.y >= height-0.12 and at < flight_end()-0.03 and (first_contact or setting or point.z >= actor.position.z-0.24) and offset.length() <= range_
 
@@ -1020,7 +1047,11 @@ func should_let_blockout_go() -> bool:
 	return absf(landing.x) > 4.72 or landing.z < -5.22 or landing.z > 13.22
 
 func tick_receive(delta: float, previous: float) -> void:
-	if should_let_blockout_go() and (spectator or not is_finite(platforms[0].pressed_at)): return
+	if spectator or not is_finite(platforms[0].pressed_at):
+		if should_let_blockout_go(): return
+		if flight_kind == "spike" and not net_hit.is_empty() and team(last_player) != receiving_team:
+			var landing := path_point(flight_end())
+			if absf(landing.x) > 4.85 or landing.z < -5.35 or landing.z > 13.35: return
 	if expected_hitter >= 0 and flight_kind == "set":
 		var hitter := expected_hitter
 		var driver := attackers[team(hitter)]
@@ -1087,6 +1118,11 @@ func tick_receive(delta: float, previous: float) -> void:
 			return
 		var face := toward_incoming(index,catch_point)
 		if face.is_zero_approx(): face = Vector3.BACK
+		var to_drop := (frame.to_local(catch_point)-actor.position).slide(Vector3.UP)
+		if cpu_dig and to_drop.length() > 0.80 and to_drop.normalized().dot(actor.basis.z) < -0.32:
+			rear_chaser = index
+		var turning_chase := cpu_dig and rear_chaser == index
+		if turning_chase: face = to_drop.normalized() if to_drop.length() > 0.45 else actor.basis.z
 		var offset := (FOREARM_DIG_REACH if cpu_dig else 0.52) if technique == 0 else hand_receive_reach()
 		if not recovering and not set_jumps[index].active and not bump.low_save.active:
 			var target := catch_point-frame.global_basis*face*offset
@@ -1098,7 +1134,8 @@ func tick_receive(delta: float, previous: float) -> void:
 				speed = clampf(distance/maxf(0.035,lead-reserve),2.0,7.2)
 			elif is_finite(bump.pressed_at):
 				speed = minf(speed,2.0)
-			move_cpu(index,target,delta,speed,face,is_dig or cpu_setting or free_ball or flight_kind == "serve")
+			if turning_chase and to_drop.length() > 1.55: speed = CPU_SPRINT_SPEED
+			move_cpu(index,target,delta,speed,face,is_dig or cpu_setting or free_ball or flight_kind == "serve",turning_chase)
 		var prep := 0.39 if technique == 2 else (0.40 if cpu_dig else (0.18 if cpu_setting and technique == 0 else 0.27))
 		if elapsed >= cue-prep: queue_receive(index,technique)
 	if not is_finite(bump.pressed_at): return
@@ -1244,8 +1281,9 @@ func prepare_cpu_approach(hitter: int, driver: Node3D, delta: float) -> void:
 	var time_left: float = driver.pin_arrival-(driver.clock-driver.stage_start)
 	var gap := (pin-actor.position).slide(Vector3.UP).length()
 	var staging := pin-Vector3.BACK*2.02
-	if gap < 1.86 and time_left > 0.95 and last_set_apex > 4.85:
-		move_cpu(hitter,frames[team(hitter)].to_global(staging),delta,2.8)
+	var peeling := actor.position.z > pin.z-1.58 and time_left > 0.84
+	if peeling or (gap < 1.86 and time_left > 0.95 and last_set_apex > 4.85):
+		move_cpu(hitter,frames[team(hitter)].to_global(staging),delta,4.8 if peeling else 2.8,Vector3.INF,peeling,peeling)
 		return
 	if not driver.approach_space_held:
 		var intercept: Vector3 = driver.find_approach_intercept(true)
@@ -1260,6 +1298,14 @@ func prepare_cpu_approach(hitter: int, driver: Node3D, delta: float) -> void:
 		move_cpu(hitter,frames[team(hitter)].to_global(staging),delta,speed,Vector3.INF,true)
 
 func position_attack(delta: float) -> void:
+	if last_was_block and last_player >= 0 and team(last_player) == receiving_team and defensive_ball():
+		if cpu_choice < 0: select_receiver()
+		var hitter := last_player
+		if cpu_choice >= 0 and cpu_choice != hitter and not is_human(hitter) and players[hitter].position.z > 1.20:
+			var stage_from := players[hitter].position
+			stage_from.z = 0.95
+			move_cpu(hitter,frames[receiving_team].to_global(stage_from),delta,5.0,Vector3.INF,true,true)
+		return
 	if flight_kind != "pass" or possession_team != receiving_team or touches != 1: return
 	var passer := last_player
 	if is_human(passer) or blocks.has(passer) or set_jumps[passer].active: return
@@ -1269,7 +1315,8 @@ func position_attack(delta: float) -> void:
 	var staging := set_pin_for(passer^1)-Vector3.BACK*run_up
 	var distance := (staging-players[passer].position).slide(Vector3.UP).length()
 	var speed := clampf(distance/maxf(0.24,receive_at-elapsed+0.16),1.5,4.1)
-	move_cpu(passer,frames[receiving_team].to_global(staging),delta,speed)
+	var peeling := players[passer].position.z-staging.z > 0.85
+	move_cpu(passer,frames[receiving_team].to_global(staging),delta,maxf(speed,4.8) if peeling else speed,Vector3.INF,peeling,peeling)
 
 func dig_cover_x(frame: Node3D, attacker: Vector3, blocker: Vector3, depth: float, digger_x: float) -> float:
 	var attack := frame.to_local(attacker)

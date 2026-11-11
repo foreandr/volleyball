@@ -316,8 +316,12 @@ func show_match_tuning() -> void:
 	match_sound = CheckButton.new()
 	match_sound.text = "Ball sounds (M)"
 	match_sound.focus_mode = Control.FOCUS_NONE
-	match_sound.button_pressed = not StorySession.attack_ball_audio_muted
-	match_sound.toggled.connect(demo_match.set_ball_sound)
+	match_sound.button_pressed = StorySession.match_preference("sound",true)
+	StorySession.attack_ball_audio_muted = not match_sound.button_pressed
+	AudioServer.set_bus_mute(AudioServer.get_bus_index("Master"),not match_sound.button_pressed)
+	match_sound.toggled.connect(func(enabled: bool):
+		StorySession.save_match_preference("sound",enabled)
+		demo_match.set_ball_sound(enabled))
 	tuning.add_child(match_sound)
 
 	match_replay_button = Button.new()
@@ -337,7 +341,8 @@ func show_match_tuning() -> void:
 	match_replay_seek.focus_mode = Control.FOCUS_NONE
 	match_replay_seek.value_changed.connect(func(value: float): demo_match.replay.seek(demo_match,value))
 	match_replay_panel.add_child(match_replay_seek)
-	var speed_label := label("Replay speed  0.50×",16)
+	demo_match.replay.speed = StorySession.match_preference("replay_speed",0.50)
+	var speed_label := label("Replay speed  %.2f×" % demo_match.replay.speed,16)
 	match_replay_panel.add_child(speed_label)
 	var speed := HSlider.new()
 	speed.min_value = 0.10
@@ -347,6 +352,7 @@ func show_match_tuning() -> void:
 	speed.focus_mode = Control.FOCUS_NONE
 	speed.value_changed.connect(func(value: float):
 		demo_match.replay.speed = value
+		StorySession.save_match_preference("replay_speed",value)
 		speed_label.text = "Replay speed  %.2f×" % value)
 	match_replay_panel.add_child(speed)
 	match_replay_panel.add_child(label("Middle drag or WASD to move camera\nScroll to zoom",15))
@@ -886,11 +892,13 @@ func add_attack_tuning_slider(panel_content: VBoxContainer, caption: String, nod
 	slider.min_value = minimum
 	slider.max_value = maximum
 	slider.step = step
-	slider.value = StorySession.attack_swing_tuning.get(node_name,initial)
+	var saved: float = StorySession.attack_swing_tuning.get(node_name,initial)
+	slider.value = StorySession.match_preference(node_name,saved) if node_name.begins_with("Match") else saved
 	slider.custom_minimum_size.y = 24
 	panel_content.add_child(slider)
 	var update := func(value: float):
 		StorySession.attack_swing_tuning[node_name] = value
+		if node_name.begins_with("Match"): StorySession.save_match_preference(node_name,value)
 		apply.call(value)
 		var number := "%.1f" % value if step < 1.0 else str(roundi(value))
 		readout.text = "%s  %s %s" % [caption,number,units]

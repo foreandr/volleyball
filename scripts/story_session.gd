@@ -8,6 +8,8 @@ var edit_entry: Dictionary = {}
 var animation_draft: Dictionary = {}
 var animation_return: Dictionary = {}
 var attack_swing_tuning: Dictionary = {}
+var match_preferences := ConfigFile.new()
+const MATCH_SETTINGS_PATH := "user://match_settings.cfg"
 var attack_ball_audio_muted := false
 var forearm_reception_skill := 100.0
 var hand_reception_skill := 100.0
@@ -120,11 +122,20 @@ var preview_path := "user://preview_setup.cfg"
 const PREVIEW_FIELDS := ["pass_start","pass_distance","pass_output_angle","incoming_speed","incoming_angle","feed_spot","incoming_spin","spin_rate","float_strength","source_height","feed_fit","receive_direction","receive_distance_tier","ball_tab","pass_destination","pass_apex","destination_fit","preview_camera"]
 
 func _ready() -> void:
+	match_preferences.load(MATCH_SETTINGS_PATH)
 	AudioServer.set_bus_mute(AudioServer.get_bus_index("Master"),true)
 	var config := ConfigFile.new()
 	if config.load(preview_path)==OK:
 		for field in PREVIEW_FIELDS:
 			if config.has_section_key("preview",field): set(field,config.get_value("preview",field))
+
+func match_preference(key: String, fallback: Variant) -> Variant:
+	return match_preferences.get_value("match",key,fallback)
+
+func save_match_preference(key: String, value: Variant) -> void:
+	if match_preferences.get_value("match",key,null) == value: return
+	match_preferences.set_value("match",key,value)
+	match_preferences.save(MATCH_SETTINGS_PATH)
 
 func save_preview_setup() -> void:
 	var values := {}
@@ -138,6 +149,8 @@ func save_preview_setup() -> void:
 func _input(event: InputEvent) -> void:
 	if not event is InputEventKey or not event.pressed or event.echo: return
 	if event.physical_keycode != KEY_M or event.ctrl_pressed or event.alt_pressed or event.meta_pressed: return
+	var page := get_tree().current_scene
+	if page and page.has_method("toggle_match_replay") and is_instance_valid(page.get("demo_match")): return
 	var focus := get_viewport().gui_get_focus_owner()
 	if focus is LineEdit or focus is TextEdit: return
 	var master := AudioServer.get_bus_index("Master")

@@ -1,7 +1,7 @@
 extends RefCounted
 const QUICK_STEP_RATE := 1.5
 const SHUFFLE_SPEED := 2.06
-const RUN_SPEED := 5.85
+const RUN_SPEED := 7.20
 const SHUFFLE_CLIP_RATE := 1.25
 const Court = preload("res://scripts/preview_court.gd")
 const Stamina = preload("res://scripts/player_stamina.gd")
@@ -558,7 +558,7 @@ func move_player(direction: Vector2, delta: float, track_ball := true, setting_t
 		locomotion = action
 		actor.play_action(action)
 	moving = now_moving
-	actor.animator.speed_scale = 1.67 if sprinting else 1.0
+	actor.animator.speed_scale = 1.85 if sprinting else 1.0
 	actor.animator.advance(delta)
 	var local_velocity: Vector3 = actor.basis.inverse()*velocity
 	var model_yaw := atan2(local_velocity.x,local_velocity.z) if sprinting and not drill else 0.0
