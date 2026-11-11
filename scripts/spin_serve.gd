@@ -8,10 +8,15 @@ const APPROACH_START := TOSS_STEP+0.36
 const SPIN_TAKEOFF := APPROACH_START+0.56
 const SPIN_CONTACT := SPIN_TAKEOFF+0.55
 const JUMP_HEIGHT := 1.12
-const SPIN_LAND := SPIN_TAKEOFF+SetterJump.FULL_AIR_TIME*sqrt(JUMP_HEIGHT/SetterJump.FULL_HEIGHT)*1.09
+const MAX_SERVE_SPEED := 1.55
 const APPROACH_SAMPLE_RATE := 120.0
 
 var sidespin := 0.0
+var serve_speed := MAX_SERVE_SPEED
+var jump_height := JUMP_HEIGHT
+var jump_carry_enabled := true
+var active_jump_height := JUMP_HEIGHT
+var active_jump_carry := true
 const DEFAULT_FORWARD_LEAN := -15.0
 var forward_lean_degrees := DEFAULT_FORWARD_LEAN
 var active_forward_lean_degrees := 0.0
@@ -44,11 +49,14 @@ func takeoff_time() -> float:
 func front_start_limit() -> float:
 	return -7.70
 
+func jump_landing_time() -> float:
+	return SPIN_TAKEOFF+approach.flight_duration(active_jump_height,true)
+
 func recovery_end() -> float:
-	return SPIN_LAND+0.11
+	return jump_landing_time()+0.11
 
 func can_run_after_contact() -> bool:
-	return is_finite(contact_clock) and swing_time >= SPIN_LAND
+	return is_finite(contact_clock) and swing_time >= jump_landing_time()
 
 func float_body_scale() -> float:
 	return 1.62
@@ -64,14 +72,15 @@ func prepare_serve_reset() -> void:
 	if not approach_poses.is_empty(): return
 	approach_sample_origin = serve_start
 	var rig: Skeleton3D = player.skeleton
-	var setup := float_approach(APPROACH_START,SPIN_TAKEOFF,SPIN_LAND,JUMP_HEIGHT,1.17,APPROACH_START,TOSS_STEP)
+	var setup := float_approach(APPROACH_START,SPIN_TAKEOFF,jump_landing_time(),active_jump_height,1.17,APPROACH_START,TOSS_STEP)
 	for bone in rig.get_bone_count():
 		rig.set_bone_pose_rotation(bone,setup[bone].basis.get_rotation_quaternion())
 	approach.active = false
 	approach.load_bend_extra = deg_to_rad(85.0)*0.36
 	approach.load_arm_extra = 0.48*0.85
 	var intercept := player.position+forward*2.14+Vector3.UP*3.0
-	approach.begin(player,Vector2(-forward.x,forward.z),intercept,SPIN_TAKEOFF-APPROACH_START-SetterJump.LEAD_STEP_TIME,JUMP_HEIGHT,3)
+	approach.begin(player,Vector2(-forward.x,forward.z),intercept,SPIN_TAKEOFF-APPROACH_START-SetterJump.LEAD_STEP_TIME,active_jump_height,3)
+	if active_jump_carry: approach.approach_lunge += forward*maxf(0.0,active_jump_height-0.75)*0.90
 	var sample_count := ceili((recovery_end()-APPROACH_START)*APPROACH_SAMPLE_RATE)
 	for index in range(sample_count+1):
 		if index > 0: approach.step(player,1.0/APPROACH_SAMPLE_RATE,Vector2.ZERO)
@@ -83,7 +92,7 @@ func prepare_serve_reset() -> void:
 
 func float_step_pose(time: float) -> Array:
 	if time < APPROACH_START or approach_poses.is_empty():
-		return float_approach(time,SPIN_TAKEOFF,SPIN_LAND,JUMP_HEIGHT,1.17,APPROACH_START,TOSS_STEP)
+		return float_approach(time,SPIN_TAKEOFF,jump_landing_time(),active_jump_height,1.17,APPROACH_START,TOSS_STEP)
 	var frame := minf((time-APPROACH_START)*APPROACH_SAMPLE_RATE,approach_poses.size()-1)
 	var index := floori(frame)
 	var next := mini(index+1,approach_poses.size()-1)
@@ -106,6 +115,11 @@ func serve_swing_rate(_launch_speed: float) -> float:
 
 func reset() -> void:
 	active_forward_lean_degrees = forward_lean_degrees
+	if active_jump_height != jump_height or active_jump_carry != jump_carry_enabled:
+		approach_poses.clear()
+		approach_positions.clear()
+	active_jump_height = jump_height
+	active_jump_carry = jump_carry_enabled
 	super.reset()
 	ball.rotation = Vector3.ZERO
 
@@ -178,12 +192,24 @@ func shape_float_strike(pose: Array, rig: Skeleton3D, author: RefCounted, time: 
 	for bone in pose.size(): pose[bone] = strike_pose[bone]
 
 func finish_float_wrist(pose: Array, _rig: Skeleton3D, author: RefCounted, time: float) -> void:
-	var snap := smoothstep(SPIN_CONTACT-0.07,SPIN_CONTACT+0.12,time)*(1.0-smoothstep(SPIN_CONTACT+0.21,SPIN_LAND,time))
+	var snap := smoothstep(SPIN_CONTACT-0.07,SPIN_CONTACT+0.12,time)*(1.0-smoothstep(SPIN_CONTACT+0.21,jump_landing_time(),time))
 	SpikeArm.align_wrist_to_forearm(pose,author,0.82*smoothstep(TOSS_STEP,TOSS_STEP+0.22,time))
 	author.rotate_world(pose,"hand_r",Vector3.RIGHT,deg_to_rad(24.0)*snap)
 
 func set_forward_lean(value: float) -> void:
 	forward_lean_degrees = value
+	if elapsed < 0.0 and not running: reset()
+
+func set_serve_speed(value: float) -> void:
+	serve_speed = value
+	update_path_preview()
+
+func set_jump_height(value: float) -> void:
+	jump_height = value
+	if elapsed < 0.0 and not running: reset()
+
+func set_jump_carry(enabled: bool) -> void:
+	jump_carry_enabled = enabled
 	if elapsed < 0.0 and not running: reset()
 
 func set_sidespin(value: float) -> void:
@@ -194,7 +220,7 @@ func preview_lane_count() -> int:
 	return 1
 
 func flight_duration(start: Vector3) -> float:
-	return super.flight_duration(start)*0.65
+	return super.flight_duration(start)*0.65/serve_speed
 
 func launch_velocity(start: Vector3, duration: float) -> Vector3:
 	return (target-start)/duration+Vector3.UP*(0.5*Flight.GRAVITY*duration)

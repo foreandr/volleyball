@@ -1322,6 +1322,31 @@ func add_serve_spin_controls() -> void:
 		lean_readout.text = "Torso forward lean  %+.0f deg" % value)
 	serving_spin_controls.add_child(lean_slider)
 
+	add_spin_slider("Serve speed",65.0,155.0,1.0,underhand_serve.serve_speed*100.0,"%.0f%%",
+		func(value: float): underhand_serve.set_serve_speed(value/100.0))
+	add_spin_slider("Jump height",0.75,1.48,0.01,underhand_serve.jump_height,"%.2f m",
+		func(value: float): underhand_serve.set_jump_height(value))
+	var carry := CheckButton.new()
+	carry.text = "Higher jump carries forward"
+	carry.button_pressed = underhand_serve.jump_carry_enabled
+	carry.focus_mode = Control.FOCUS_NONE
+	carry.toggled.connect(func(enabled: bool): underhand_serve.set_jump_carry(enabled))
+	serving_spin_controls.add_child(carry)
+
+func add_spin_slider(title: String, minimum: float, maximum: float, increment: float, value: float, display: String, changed: Callable) -> void:
+	var readout := label(title+"  "+(display % value),16)
+	serving_spin_controls.add_child(readout)
+	var slider := HSlider.new()
+	slider.min_value = minimum
+	slider.max_value = maximum
+	slider.step = increment
+	slider.value = value
+	slider.focus_mode = Control.FOCUS_NONE
+	slider.value_changed.connect(func(next: float):
+		changed.call(next)
+		readout.text = title+"  "+(display % next))
+	serving_spin_controls.add_child(slider)
+
 func step_underhand_rally(delta: float) -> void:
 	var was_ready: bool = underhand_serve.elapsed < 0.0
 	underhand_serve.step(delta)
