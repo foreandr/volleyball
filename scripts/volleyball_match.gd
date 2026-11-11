@@ -54,6 +54,15 @@ var service_team := 0
 var rallies := 0
 var ready_age := 0.0
 var dead_age := 0.0
+var bounce_origin := Vector3.ZERO
+var bounce_velocity := Vector3.ZERO
+var bounce_end := 0.0
+var spectator := false
+var key_labels: Array[Label3D] = []
+var key_until := [0.0,0.0,0.0,0.0]
+var defender_assignment := [-1,-1]
+var cpu_dump := false
+var jump_set_started := [false,false,false,false]
 var elapsed := 0.0
 var origin := Vector3.ZERO
 var velocity := Vector3.ZERO
@@ -148,6 +157,16 @@ func configure(actor: Node3D, board: Label, status: Label) -> void:
 	player_label.pixel_size = 0.007
 	player_label.no_depth_test = true
 	add_child(player_label)
+	for index in players.size():
+		var key := Label3D.new()
+		key.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		key.font_size = 42
+		key.outline_size = 13
+		key.pixel_size = 0.0065
+		key.no_depth_test = true
+		key.modulate = Color("ffd278")
+		add_child(key)
+		key_labels.append(key)
 	trajectory = ImmediateMesh.new()
 	trajectory_node = MeshInstance3D.new()
 	trajectory_node.mesh = trajectory
@@ -172,6 +191,18 @@ func stop() -> void:
 func team(index: int) -> int:
 	return index >> 1
 
+func is_human(index: int) -> bool:
+	return index == 0 and not spectator
+
+func set_spectator(value: bool) -> void:
+	if spectator == value: return
+	spectator = value
+	reset_match()
+
+func show_key(index: int, caption: String) -> void:
+	key_labels[index].text = caption
+	key_until[index] = match_clock+0.64
+
 func server_index() -> int:
 	return service_team*2+server_slot[service_team]
 
@@ -188,6 +219,9 @@ func set_player_blocks(value: bool) -> void:
 func begin_point() -> void:
 	last_input_at = -INF
 	last_input_technique = -1
+	bounce_end = 0.0
+	key_until = [0.0,0.0,0.0,0.0]
+	defender_assignment = [-1,-1]
 	for index in players.size():
 		var actor := players[index]
 		actor.position = Vector3(-2.1 if index%2 == 0 else 2.1,0.04,-2.6)
@@ -212,7 +246,7 @@ func begin_point() -> void:
 	ball.hide()
 	aim_ring.hide()
 	trajectory_node.hide()
-	var style: int = serve_style if server_index() == 0 else rallies%SERVES.size()
+	var style: int = serve_style if is_human(server_index()) else rallies%SERVES.size()
 	prepare_serve(style)
 	update_score()
 
@@ -226,19 +260,20 @@ func prepare_serve(style: int) -> void:
 	frames[side].add_child(serve)
 	var x := -1.6 if index%2 == 0 else 1.6
 	serve.configure(players[index],Vector3(x,0.04,SERVICE_START[style]))
-	serve.aim(Vector3(randf_range(-3.35,3.35),Flight.FLOOR,randf_range(9.2,12.4)) if index != 0 else Vector3(0.0,Flight.FLOOR,10.7))
-	serve.aim_ring.visible = index == 0
-	serve.path_preview.visible = index == 0
+	serve.aim(Vector3(randf_range(-3.35,3.35),Flight.FLOOR,randf_range(9.2,12.4)) if not is_human(index) else Vector3(0.0,Flight.FLOOR,10.7))
+	serve.aim_ring.visible = is_human(index)
+	serve.path_preview.visible = is_human(index)
 	serve_pending = false
-	info.text = ["Your serve · Space","Teammate serving","Opponents serving"][0 if index == 0 else (1 if side == 0 else 2)]
+	info.text = ("Blue serving" if side == 0 else "Orange serving") if spectator else ["Your serve · Space","Teammate serving","Opponents serving"][0 if index == 0 else (1 if side == 0 else 2)]
 
 func set_serve_style(style: int) -> void:
 	serve_style = style
-	if phase == Phase.READY and server_index() == 0 and not serve_pending: prepare_serve(style)
+	if phase == Phase.READY and is_human(server_index()) and not serve_pending: prepare_serve(style)
 
 func set_aim(point: Vector3) -> void:
+	if spectator: return
 	aim_point = point
-	if phase == Phase.READY and server_index() == 0 and not serve_pending and point.z > Net.NET_Z:
+	if phase == Phase.READY and is_human(server_index()) and not serve_pending and point.z > Net.NET_Z:
 		serve.aim(Vector3(clampf(point.x,-7.0,7.0),Flight.FLOOR,clampf(point.z,4.4,16.0)))
 	if phase != Phase.LIVE: return
 	var driver := attackers[0]
@@ -246,10 +281,11 @@ func set_aim(point: Vector3) -> void:
 		driver.swing_aim = frames[0].to_local(point)
 
 func change_arc(amount: float) -> void:
-	if phase == Phase.READY and server_index() == 0 and not serve_pending: serve.change_arc(amount)
+	if phase == Phase.READY and is_human(server_index()) and not serve_pending: serve.change_arc(amount)
 	else: pass_height = clampf(pass_height+amount,3.45,7.0)
 
 func input_space(pressed: bool) -> void:
+	if spectator: return
 	space_held = pressed
 	if phase == Phase.FINISHED: return
 	if phase == Phase.READY and server_index() == 0 and pressed:
@@ -257,10 +293,12 @@ func input_space(pressed: bool) -> void:
 		return
 	var driver := attackers[0]
 	if driver.enabled and driver.setter == human and driver.stage == driver.Stage.SET:
-		if pressed: driver.queue_jump(Vector2.ZERO)
+		if pressed:
+			driver.queue_jump(Vector2.ZERO)
+			show_key(0,"Space")
 		else: driver.release_approach_jump()
 	elif pressed and player_blocks and phase == Phase.LIVE and receiving_team == 0 and human.position.z >= 2.25:
-		if flight_kind == "spike": start_block(0)
+		if flight_kind in ["spike","dump"] or (flight_kind == "pass" and possession_team == 1 and touches == 1): start_block(0)
 	elif pressed and player_blocks and phase == Phase.LIVE and expected_hitter >= 2 and human.position.z >= 2.25:
 		start_block(0)
 
@@ -269,6 +307,7 @@ func click_set() -> void:
 		input_receive(1)
 
 func input_receive(technique: int) -> void:
+	if spectator: return
 	if phase != Phase.LIVE: return
 	var bump := platforms[0]
 	if is_finite(bump.pressed_at):
@@ -278,16 +317,18 @@ func input_receive(technique: int) -> void:
 	last_input_technique = technique
 	requested = technique
 	request_age = elapsed
+	next_touch_cue = INF
 	if receiving_team == 0 and not blocks.has(0):
 		queue_receive(0,technique)
 
 func start_serve() -> void:
 	if serve_pending: return
 	serve_pending = true
+	show_key(server_index(),"Space")
 	serve.serve()
 
 func update_score() -> void:
-	score_label.text = "YOU  %d  –  %d  CPU" % [score[0],score[1]]
+	score_label.text = ("BLUE  %d  –  %d  ORANGE" if spectator else "YOU  %d  –  %d  CPU") % [score[0],score[1]]
 
 func award(side: int, reason: String) -> void:
 	if phase != Phase.LIVE: return
@@ -304,13 +345,16 @@ func award(side: int, reason: String) -> void:
 Space to play again"
 	else:
 		phase = Phase.DEAD
-		info.text = ("Your point" if side == 0 else "CPU point")+" · "+reason
+		var winner := ("Blue point" if side == 0 else "Orange point") if spectator else ("Your point" if side == 0 else "CPU point")
+		info.text = winner+" · "+reason
 
 func reset_receives() -> void:
 	for bump in platforms:
 		bump.reset()
 		bump.hide()
 	cpu_choice = -1
+	cpu_dump = false
+	jump_set_started = [false,false,false,false]
 	next_touch_cue = INF
 	requested = -1
 	request_age = -INF
@@ -339,8 +383,8 @@ func launch(point: Vector3, motion: Vector3, kind: String, from: int, spin_rate 
 			net_hit.velocity = serve.global_basis*net_hit.velocity
 			if team(from) == 1: net_hit.side = -float(net_hit.side)
 		duration = serve.planned_duration
-	if kind == "spike" or kind == "free": receiving_team = 1-team(from)
-	if kind == "pass" and from == 1 and receiving_team == 0 and match_clock-last_input_at <= 0.35:
+	if kind in ["spike","free","dump"]: receiving_team = 1-team(from)
+	if not spectator and kind == "pass" and from == 1 and receiving_team == 0 and match_clock-last_input_at <= 0.35:
 		requested = last_input_technique
 		request_age = 0.0
 		queue_receive(0,requested)
@@ -348,7 +392,7 @@ func launch(point: Vector3, motion: Vector3, kind: String, from: int, spin_rate 
 		var side := team(hitter)
 		var frame := frames[side]
 		var shot := choose_shot(hitter)
-		attackers[side].start_set(players[hitter],frame.to_local(origin),frame.global_basis.inverse()*velocity,frame.to_local(set_pin),shot,0.0,hitter != 0 or space_held)
+		attackers[side].start_set(players[hitter],frame.to_local(origin),frame.global_basis.inverse()*velocity,frame.to_local(set_pin),shot,0.0,is_human(hitter) and space_held)
 	ball.global_position = point
 	ball.show()
 
@@ -368,7 +412,7 @@ func toward_incoming(index: int, point: Vector3) -> Vector3:
 	return local.slide(Vector3.UP).normalized()
 
 func choose_shot(index: int) -> Vector3:
-	if index == 0 and aim_point.is_finite() and aim_point.z > Net.NET_Z:
+	if is_human(index) and aim_point.is_finite() and aim_point.z > Net.NET_Z:
 		return Vector3(clampf(aim_point.x,-6.5,6.5),Flight.FLOOR,clampf(aim_point.z,4.5,15.0))
 	var opposite := players[(1-team(index))*2].position.x
 	return Vector3(clampf(opposite+randf_range(-1.8,1.8),-3.9,3.9),Flight.FLOOR,randf_range(8.0,12.3))
@@ -401,7 +445,7 @@ func play_touch() -> void:
 
 func set_pin_for(index: int) -> Vector3:
 	var frame := frames[team(index)]
-	if index == 0 and aim_point.is_finite():
+	if is_human(index) and aim_point.is_finite():
 		var point := frame.to_local(aim_point)
 		if point.z <= Net.NET_Z: return Vector3(clampf(point.x,-4.6,4.6),0.065,clampf(point.z,-1.6,3.62))
 	var hitter := players[index^1]
@@ -414,13 +458,14 @@ func queue_receive(index: int, technique: int) -> void:
 	bump.hand_setting = technique != 0
 	bump.quick_hand_receive = technique == 1 and (team(index) != possession_team or touches == 0)
 	bump.forearm_setting = team(index) == possession_team and touches == 1
-	bump.green_hand_allowance = 0.50 if index == 0 and bump.forearm_setting else 0.38
-	bump.defensive_hand_dig = flight_kind == "spike"
-	bump.allow_auto_dive = flight_kind != "spike"
+	bump.green_hand_allowance = 0.50 if is_human(index) and bump.forearm_setting else 0.38
+	bump.green_forearm_allowance = 0.48 if is_human(index) else 0.30
+	bump.green_start = 0.0 if is_human(index) else 0.01
+	bump.green_end = 0.78 if is_human(index) else 0.55
+	bump.defensive_hand_dig = flight_kind in ["spike","dump"] and technique == 1
+	bump.allow_auto_dive = flight_kind not in ["spike","dump"]
 	bump.queue_bump(elapsed)
-	if technique == 2 and not set_jumps[index].active:
-		set_jumps[index].front_limit = 3.35
-		set_jumps[index].begin(players[index],Vector2.ZERO)
+	show_key(index,["Q","E","F"][technique])
 
 func aim_receive(index: int) -> void:
 	var bump := platforms[index]
@@ -429,10 +474,10 @@ func aim_receive(index: int) -> void:
 	var teammate := players[index^1]
 	var destination := teammate.position
 	destination.z = clampf(destination.z+0.65,-2.7,2.85)
-	if index == 0 and aim_point.is_finite(): destination = frame.to_local(aim_point)
-	elif side == possession_team and touches >= 2: destination = choose_shot(index)
+	if is_human(index) and aim_point.is_finite(): destination = frame.to_local(aim_point)
+	elif side == possession_team and (touches >= 2 or (cpu_dump and index == cpu_choice)): destination = choose_shot(index)
 	bump.destination = Vector2(clampf(destination.x,-6.5,6.5),clampf(destination.z,-6.0,13.0))
-	bump.height = pass_height if index == 0 else (5.05 if side == possession_team and touches == 1 else 4.55)
+	bump.height = pass_height if is_human(index) else (5.05 if side == possession_team and touches == 1 else 4.55)
 
 func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, technique: int) -> void:
 	if frames[team(index)].to_local(world_point).z > Net.NET_Z+0.07: return
@@ -443,10 +488,10 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 	var bump := platforms[index]
 	stroke = ["Forearm","Hands","Jump set"][technique]
 	play_touch()
-	if touches == 2 and (bump.destination.y < 4.0 or (index == 0 and technique != 0)):
+	if touches == 2 and not (cpu_dump and index == cpu_choice) and (bump.destination.y < 4.0 or (is_human(index) and technique != 0)):
 		var pin := set_pin_for(index)
 		var apex := maxf(4.15,bump.height)
-		if index == 0:
+		if is_human(index):
 			var error := Bump.Accuracy.sample_offset(Bump.Accuracy.spread(0.0,velocity.length(),spin,StorySession.setting_skill,true))
 			pin += error.slide(Vector3.UP)
 			apex = maxf(3.55,apex+error.y)
@@ -456,7 +501,7 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 		return
 	var crossing := (Net.NET_Z-world_point.z)/world_motion.z if absf(world_motion.z)>0.001 else -1.0
 	var over := crossing > 0.0 and crossing < Flight.landing_time(world_point,world_motion)
-	launch(world_point,world_motion,"free" if over else "pass",index)
+	launch(world_point,world_motion,("dump" if touches == 2 and technique != 0 else "free") if over else "pass",index)
 
 func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3) -> void:
 	if index == server_index():
@@ -497,59 +542,71 @@ func select_receiver() -> void:
 	elif point.distance_squared_to(players[first].global_position) <= point.distance_squared_to(players[first+1].global_position):
 		cpu_choice = first
 	else: cpu_choice = first+1
-	if side == 0 and cpu_choice == 0 and side != possession_team and not is_finite(platforms[0].pressed_at):
+	if not spectator and side == 0 and cpu_choice == 0 and side != possession_team and not is_finite(platforms[0].pressed_at):
 		if point.slide(Vector3.UP).distance_to(human.global_position.slide(Vector3.UP)) > 1.65: cpu_choice = 1
 	cpu_technique = (rallies+touches+cpu_choice)%3
-	if flight_kind in ["serve","spike"]: cpu_technique = 0 if (rallies+cpu_choice)%4 != 2 else 1
-	if flight_kind == "spike": cpu_technique = 1 if (rallies+cpu_choice)%5 == 2 else 0
+	if flight_kind in ["serve","spike","dump"]: cpu_technique = 0 if (rallies+cpu_choice)%4 != 2 else 1
+	if flight_kind in ["spike","dump"]: cpu_technique = 1 if (rallies+cpu_choice)%5 == 2 else 0
+	if not is_human(cpu_choice) and side == possession_team and touches == 1 and flight_kind == "pass":
+		var hand_point := frames[side].to_local(path_point(arrival(2.05)))
+		cpu_dump = hand_point.z >= 2.60 and hand_point.z <= 3.62 and (rallies+cpu_choice)%4 == 0
+		if cpu_dump: cpu_technique = 1
 
 func tick_receive(delta: float, previous: float) -> void:
 	if expected_hitter >= 0 and flight_kind == "set":
 		var hitter := expected_hitter
 		var driver := attackers[team(hitter)]
-		if hitter != 0 and driver.enabled and not driver.jump.active:
+		if not is_human(hitter) and driver.enabled and not driver.jump.active:
+			if not driver.approach_space_held:
+				driver.queue_jump(Vector2.ZERO)
+				show_key(hitter,"Space")
 			var pin: Vector3 = driver.rally_set_target
 			pin.z -= 1.25
 			move_cpu(hitter,frames[team(hitter)].to_global(pin),delta)
-		if hitter != 0 or driver.jump.active or not is_finite(platforms[0].pressed_at): return
+		if not is_human(hitter) or driver.jump.active or not is_finite(platforms[0].pressed_at): return
 	if cpu_choice < 0: select_receiver()
 	var index := cpu_choice
-	if receiving_team == 0 and is_finite(platforms[0].pressed_at) and not blocks.has(0): index = 0
+	if not spectator and receiving_team == 0 and is_finite(platforms[0].pressed_at) and not blocks.has(0): index = 0
 	if index < 0 or blocks.has(index): return
 	var frame := frames[team(index)]
 	var bump := platforms[index]
-	var technique := requested if index == 0 else cpu_technique
-	if index == 0 and technique < 0: return
-	if index == 0 and not is_finite(bump.pressed_at) and elapsed-request_age < 0.44: queue_receive(0,technique)
+	var technique := requested if is_human(index) else cpu_technique
+	if is_human(index) and technique < 0: return
+	if is_human(index) and not is_finite(bump.pressed_at) and elapsed-request_age < 0.44: queue_receive(0,technique)
 	var height: float = [1.10,1.92,2.35][technique]
 	if not is_finite(next_touch_cue): next_touch_cue = arrival(height)
 	var cue := next_touch_cue
 	var catch_point := path_point(cue)
 	var actor := players[index]
-	if index != 0:
+	if not is_human(index):
 		var face := toward_incoming(index,catch_point)
 		if face.is_zero_approx(): face = Vector3.BACK
 		var offset := 0.52 if technique == 0 else 0.28
 		if not set_jumps[index].active and not bump.low_save.active:
 			move_cpu(index,catch_point-frame.global_basis*face*offset,delta)
-		if elapsed >= cue-(0.28 if technique == 2 else 0.21): queue_receive(index,technique)
+		if elapsed >= cue-(0.34 if technique == 2 else 0.21): queue_receive(index,technique)
 	if not is_finite(bump.pressed_at): return
+	if technique == 2 and not jump_set_started[index] and cue-elapsed <= 0.29:
+		jump_set_started[index] = true
+		set_jumps[index].front_limit = 3.35
+		set_jumps[index].begin_set_jump(actor,clampf(cue-elapsed-0.13,0.055,0.16))
 	var end := flight_end()
 	var path := func(t: float) -> Vector3: return frame.to_local(path_point(t))
 	var motion := (path_point(minf(end,elapsed+0.003))-path_point(maxf(0.0,elapsed-0.003)))/0.006
 	bump.setter_jumping = set_jumps[index].active
 	aim_receive(index)
-	if index == 0:
+	if is_human(index):
 		bump.show()
 		bump.update_aim()
-	bump.update_attempt(elapsed,previous,end,path,frame.global_basis.inverse()*motion,delta,INF,spin)
+	var timing_cue := cue if is_human(index) and technique == 0 else INF
+	bump.update_attempt(elapsed,previous,end,path,frame.global_basis.inverse()*motion,delta,timing_cue,spin)
 	if is_finite(bump.touch_time):
 		if bump.hand_setting and not is_finite(bump.release_time):
 			ball.global_position = frame.to_global(bump.platform_center())
 			return
 		var touch: Vector3 = bump.release_point if bump.hand_setting else bump.touch
 		receive_contact(index,frame.to_global(touch),frame.global_basis*bump.outgoing,technique)
-	elif index != 0 and not (flight_kind == "spike" and technique == 1) and previous <= cue and elapsed >= cue and catch_point.y > 0.55:
+	elif not is_human(index) and not (flight_kind in ["spike","dump"] and technique == 1) and previous <= cue and elapsed >= cue and catch_point.y > 0.55:
 		var gap := (actor.global_position-catch_point).slide(Vector3.UP).length()
 		if gap <= (0.66 if technique == 0 else 0.46) and cue < end-0.025:
 			var target := {"position":bump.destination,"fit":"height","height":bump.height}
@@ -563,9 +620,10 @@ func start_block(index: int) -> void:
 	var block := Block.new()
 	block.begin(actor)
 	blocks[index] = block
+	show_key(index,"Space")
 
 func tick_blocks(delta: float, previous: float) -> void:
-	var incoming_spike := flight_kind == "spike"
+	var incoming_spike := flight_kind in ["spike","dump"]
 	for index in blocks.keys():
 		var block = blocks[index]
 		if not block.step(delta,ball.global_position):
@@ -594,28 +652,39 @@ func tick_blocks(delta: float, previous: float) -> void:
 				return
 
 func position_defense(delta: float) -> void:
-	if flight_kind != "set" or expected_hitter < 0: return
-	var hitter_side := team(expected_hitter)
+	if flight_kind not in ["serve","pass","set","free"]: return
+	var hitter_side := receiving_team
 	var defense_side := 1-hitter_side
-	var driver := attackers[hitter_side]
 	var frame := frames[defense_side]
-	var pin := frames[hitter_side].to_global(driver.rally_set_target)
-	var x := frame.to_local(pin).x
+	var driver := attackers[hitter_side]
+	var tracking_set := flight_kind == "set" and expected_hitter >= 0
+	var threat := frames[hitter_side].to_global(driver.rally_set_target) if tracking_set else path_point(arrival(2.0))
+	var x := frame.to_local(threat).x
 	var first := defense_side*2
-	var near := first if absf(players[first].position.x-x) < absf(players[first+1].position.x-x) else first+1
-	if defense_side == 0: near = 0 if player_blocks else 1
-	if near != 0 and not blocks.has(near):
+	var near: int = defender_assignment[defense_side]
+	if defense_side == 0 and not spectator:
+		near = 0 if player_blocks else 1
+	elif near < 0:
+		near = first if absf(players[first].position.x-x) < absf(players[first+1].position.x-x) else first+1
+	defender_assignment[defense_side] = near
+	if not is_human(near) and not blocks.has(near):
 		var target := frame.to_global(Vector3(clampf(x,-4.1,4.1),0.04,3.35))
-		move_cpu(near,target,delta,6.1)
-		if absf(players[near].position.x-x) < 0.62 and is_finite(driver.swing_started) and driver.clock-driver.swing_started >= 0.18:
-			start_block(near)
+		move_cpu(near,target,delta,7.3 if players[near].position.z < 2.7 else 6.2)
+		players[near].rotation.y = rotate_toward(players[near].rotation.y,0.0,delta*9.0)
+		var attack_ready: bool = tracking_set and is_finite(driver.swing_started) and driver.clock-driver.swing_started >= 0.16
+		var dump_ready := cpu_dump and flight_kind == "pass" and is_finite(next_touch_cue) and next_touch_cue-elapsed <= 0.29
+		if absf(players[near].position.x-x) < 0.66 and (attack_ready or dump_ready): start_block(near)
 	var deep := near^1
-	if deep != 0 and not blocks.has(deep):
+	if not is_human(deep) and not blocks.has(deep) and not set_jumps[deep].active:
 		move_cpu(deep,frame.to_global(Vector3(-x*0.48,0.04,-2.75)),delta)
 
 func update_player_guide() -> void:
 	player_label.global_position = human.global_position+Vector3.UP*2.17
-	var show_guide := phase == Phase.LIVE or (phase == Phase.READY and server_index() != 0)
+	player_label.visible = not spectator
+	for index in players.size():
+		key_labels[index].global_position = players[index].global_position+Vector3.UP*(2.43 if is_human(index) else 2.18)
+		key_labels[index].visible = match_clock < key_until[index]
+	var show_guide := not spectator and (phase == Phase.LIVE or (phase == Phase.READY and server_index() != 0))
 	trajectory_node.visible = show_guide
 	aim_ring.visible = show_guide
 	if not show_guide: return
@@ -663,6 +732,12 @@ func check_floor(previous: float) -> void:
 	if elapsed < flight_end(): return
 	if not StorySession.attack_ball_audio_muted: floor_audio.play()
 	var point := ball.global_position
+	bounce_origin = point
+	var before_impact := path_point(maxf(0.0,flight_end()-0.015))
+	var impact_velocity := (point-before_impact)/0.015
+	bounce_velocity = impact_velocity.slide(Vector3.UP)*0.37
+	bounce_velocity.y = clampf(absf(impact_velocity.y)*0.55,1.85,6.35)
+	bounce_end = Flight.landing_time(bounce_origin,bounce_velocity)
 	var in_bounds := absf(point.x) <= 4.53 and point.z >= -5.03 and point.z <= 13.03
 	if in_bounds:
 		var court_side := 0 if point.z < Net.NET_Z else 1
@@ -673,14 +748,16 @@ func check_floor(previous: float) -> void:
 func tick_match(delta: float, controls: RefCounted) -> void:
 	match_clock += delta
 	update_player_guide()
-	if phase == Phase.FINISHED: return
-	if phase == Phase.DEAD:
+	if phase in [Phase.DEAD,Phase.FINISHED]:
 		dead_age += delta
-		if dead_age >= 0.85: begin_point()
+		if bounce_end > 0.0:
+			var time := minf(dead_age,bounce_end)
+			ball.global_position = bounce_origin+bounce_velocity*time+Vector3.DOWN*0.5*Flight.GRAVITY*time*time
+		if phase == Phase.DEAD and dead_age >= maxf(0.85,bounce_end+0.15): begin_point()
 		return
 	if phase == Phase.READY:
 		ready_age += delta
-		if server_index() != 0 and ready_age >= 0.65: start_serve()
+		if not is_human(server_index()) and ready_age >= 0.65: start_serve()
 		if not serve_pending: return
 		serve.step(delta)
 		if not is_finite(serve.contact_clock): return
@@ -718,7 +795,7 @@ func tick_match(delta: float, controls: RefCounted) -> void:
 		var jump := set_jumps[index]
 		if jump.active: jump.step(players[index],delta,Vector2.ZERO)
 	var diving: bool = platforms[0].low_save.active and not platforms[0].low_save.finished(elapsed)
-	if not blocks.has(0) and not player_attacking and not serving_human and not set_jumps[0].active and not diving:
+	if not spectator and not blocks.has(0) and not player_attacking and not serving_human and not set_jumps[0].active and not diving:
 		controls.read_pace_input()
 		var motion: Vector2 = controls.movement_input()
 		if server_index() == 0 and motion.length() > 0.05: serve.moved_after_contact = true
@@ -735,6 +812,9 @@ func tick_match(delta: float, controls: RefCounted) -> void:
 	if flight_number != current_flight or phase != Phase.LIVE: return
 	check_floor(previous)
 	if phase == Phase.LIVE:
+		if spectator:
+			info.text = "%s | %s court" % [stroke,"Blue" if receiving_team == 0 else "Orange"]
+			return
 		var cue := "Opponent's ball"
 		if receiving_team == 0:
 			cue = "Hold Space to attack" if expected_hitter == 0 else ("Set to your teammate" if possession_team == 0 and touches == 1 and last_player == 1 else "Receive or cover")

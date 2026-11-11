@@ -264,6 +264,14 @@ func start_demo_match() -> void:
 	match_block_choice.focus_mode = Control.FOCUS_NONE
 	content.add_child(match_block_choice)
 	match_block_choice.item_selected.connect(func(index: int): demo_match.set_player_blocks(index == 1))
+	var watch := CheckButton.new()
+	watch.name = "WatchCPUMatch"
+	watch.text = "Watch CPU Match"
+	watch.focus_mode = Control.FOCUS_NONE
+	content.add_child(watch)
+	watch.toggled.connect(func(enabled: bool):
+		demo_match.set_spectator(enabled)
+		preview.grab_focus())
 	content.add_child(button("Reset Match",func():
 		demo_match.reset_match()
 		preview.grab_focus()))
@@ -1855,6 +1863,8 @@ func _input(event: InputEvent) -> void:
 					demo_match.set_player_blocks(index == 1)
 				KEY_M: StorySession.attack_ball_audio_muted = not StorySession.attack_ball_audio_muted
 				KEY_ESCAPE: open_menu()
+		if event.keycode in [KEY_Q,KEY_E,KEY_I,KEY_F,KEY_B,KEY_M,KEY_ESCAPE]:
+			get_viewport().set_input_as_handled()
 		return
 	if is_instance_valid(blocking_practice) and event is InputEventKey:
 		if event.echo: return

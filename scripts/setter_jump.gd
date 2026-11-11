@@ -38,6 +38,7 @@ var lead_distance := 0.0
 var approach_plant := false
 var assisted_load_time := APPROACH_LOAD_TIME
 var assisted_height := 0.0
+var standing_load_time := LOAD_TIME
 var approach_lunge := Vector3.ZERO
 var right_foot_start: Vector3
 var left_foot_start: Vector3
@@ -67,6 +68,7 @@ func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time
 	heading = travel.normalized() if not travel.is_zero_approx() else actor.basis.z.normalized()
 	approach_lunge = Vector3.ZERO
 	approach_plant = ball_target.is_finite()
+	standing_load_time = LOAD_TIME
 	assisted_load_time = plant_time
 	assisted_height = jump_height
 	lead_step_duration = LEAD_STEP_TIME*tempo
@@ -98,6 +100,12 @@ func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time
 		left_plant.y = right_plant.y
 	if not from_sprint: actor.play_action("idle")
 
+func begin_set_jump(actor: Node3D, load: float) -> void:
+	if active: return
+	begin(actor,Vector2.ZERO,Vector3.INF,APPROACH_LOAD_TIME,0.56)
+	standing_load_time = load
+	stride = 0.0
+
 func release() -> void:
 	held = false
 
@@ -105,7 +113,7 @@ func horizontal_velocity() -> Vector3:
 	return air_velocity+heading*(stride*AIR_TRAVEL_FRACTION/air_time)
 
 func load_duration() -> float:
-	return assisted_load_time+lead_time if approach_plant else LOAD_TIME
+	return assisted_load_time+lead_time if approach_plant else standing_load_time
 
 func flight_duration(jump_height: float, assisted: bool) -> float:
 	return FULL_AIR_TIME*sqrt(jump_height/FULL_HEIGHT)*(1.09 if assisted else 1.0)
