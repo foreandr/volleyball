@@ -26,7 +26,7 @@ function Write-Entry {
     $entry | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $manifest -Encoding UTF8
 }
 
-function Invoke-Simulation($Project, $Result, $Count, $ReviewPoint = 0) {
+function Invoke-Simulation($Project, $Result, $Count, $ReviewPoint = 0, $SimulationScript = $runner) {
     $output = Split-Path -Parent $Result
     New-Item -ItemType Directory -Path $output -Force | Out-Null
     $oldAppData = $env:APPDATA
@@ -55,7 +55,7 @@ replay_speed=0.5
             foreach ($uid in $uids) { Remove-Item -LiteralPath (Join-Path $Project $uid) }
             if ($import.ExitCode -ne 0) { throw "Godot import failed. See $output." }
         }
-        $arguments = @('--path',('"' + $Project + '"'),'--script',('"' + $runner + '"'),'--',('"' + $Result + '"'),$Seed,$Count,$ReviewPoint)
+        $arguments = @('--path',('"' + $Project + '"'),'--script',('"' + $SimulationScript + '"'),'--',('"' + $Result + '"'),$Seed,$Count,$ReviewPoint)
         if ($ReviewPoint -eq 0) { $arguments = @('--headless') + $arguments }
         else { $arguments = @('--resolution','1200x800') + $arguments }
         $run = Start-Process -FilePath $GodotPath -ArgumentList $arguments -WindowStyle Hidden -Wait -PassThru -RedirectStandardOutput (Join-Path $output 'godot.txt') -RedirectStandardError (Join-Path $output 'godot-errors.txt')
@@ -187,8 +187,12 @@ if ($Action -eq 'Clip') {
 $review = Join-Path $directory ('review-' + $revision.Substring(0,12))
 $before = Join-Path $review 'before/matches.json'
 $after = Join-Path $review 'after/matches.json'
+$candidateRunner = $runner
+if ('tools/iterate_matches.gd' -in @(Invoke-Git diff --name-only $entry.base $revision)) {
+    $candidateRunner = Join-Path $candidate 'tools/iterate_matches.gd'
+}
 Invoke-Simulation $baseline $before $Matches
-Invoke-Simulation $candidate $after $Matches
+Invoke-Simulation $candidate $after $Matches 0 $candidateRunner
 $comparison = [ordered]@{ base = $entry.base; candidate = $revision; first_seed = $Seed; before = Read-Totals $before; after = Read-Totals $after }
 $comparison | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $review 'comparison.json') -Encoding UTF8
 Invoke-Git diff $entry.base $revision | Set-Content -LiteralPath (Join-Path $review 'changes.diff') -Encoding UTF8
