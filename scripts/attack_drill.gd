@@ -77,6 +77,7 @@ var air_turn_speed := 240.0
 var draw_delay := SpikeArm.DEFAULT_DRAW_DELAY
 var elbow_clearance := SpikeArm.DEFAULT_ELBOW_CLEARANCE
 var two_step_tilt := 40.0
+var force_contact_tilt := false
 var backswing_bend := DEFAULT_BACKSWING_BEND
 var backswing_reach := DEFAULT_BACKSWING_REACH
 var stage_start := 0.0
@@ -1029,9 +1030,25 @@ func finish_attack_rep() -> void:
 
 func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0.0, follow := 0.0, draw_progress := 1.0, arm_lift := 1.0) -> void:
 	var rig: Skeleton3D = setter.skeleton
-	var author: RefCounted = setter.get_pose_author()
 	var pose: Array[Transform3D] = []
 	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
+	pose = build_bow_draw_pose(self,pose,delta,weight,contact,extension,follow,draw_progress,arm_lift)
+	var smoothing := 0.0
+	if uses_assisted_approach() and not approach_arm_transition.is_empty():
+		if approach_render_rotations.is_empty():
+			for source in approach_arm_transition:
+				approach_render_rotations.append(source.basis.get_rotation_quaternion())
+		smoothing = exp(-delta/0.016)*smoothstep(0.0,0.32,weight)
+	for bone in rig.get_bone_count():
+		var rotation := pose[bone].basis.get_rotation_quaternion()
+		if smoothing > 0.0:
+			rotation = rotation.slerp(approach_render_rotations[bone],smoothing)
+			approach_render_rotations[bone] = rotation
+		rig.set_bone_pose_rotation(bone,rotation)
+
+func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, weight: float, contact: Vector3, extension: float, follow: float, draw_progress: float, arm_lift: float) -> Array[Transform3D]:
+	var rig: Skeleton3D = setter.skeleton
+	var author: RefCounted = setter.get_pose_author()
 	var drive_age := clock-swing_drive_started if is_finite(swing_drive_started) else 0.0
 	var rotation_phase := smoothstep(0.0,swing_drive_duration+0.02,drive_age) if is_finite(swing_drive_started) else 0.0
 	var shot_aim := swing_contact_aim if stage == Stage.HIT else swing_aim
@@ -1072,10 +1089,10 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 	var reach_weight := airborne*weight*maxf(0.72*arm_lift,extension)
 	reach_weight *= 1.0-smoothstep(0.0,0.85,follow)
 	if uses_assisted_approach(): reach_weight *= 0.28
-	var lean := airborne_reach_lean(contact)*reach_weight
+	var lean := airborne_reach_lean(contact,frame)*reach_weight
 	author.rotate_world(pose,"pelvis",Vector3.RIGHT,lean.x)
 	author.rotate_world(pose,"pelvis",Vector3.BACK,lean.y)
-	var ball_target := rig.to_local(to_global(contact))
+	var ball_target := rig.to_local(frame.to_global(contact))
 	# Twist the ribcage around its own axis so the lean stays independent.
 	var chest_axis: Vector3 = (author.point(pose,"neck_01")-author.point(pose,"spine_03")).normalized()
 	var chest_yaw := clampf(turn*rotation_weight,-1.45,1.45)
@@ -1103,7 +1120,7 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 	var torso_pitch := pitch+deg_to_rad(30.0)*follow_crunch
 	author.rotate_world(pose,"spine_01",Vector3.RIGHT,torso_pitch*0.45*weight)
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,torso_pitch*0.55*weight)
-	if uses_assisted_approach() and approach_steps == 2:
+	if uses_assisted_approach() and (approach_steps == 2 or force_contact_tilt):
 		var tilt_weight := smoothstep(0.04,0.78,extension)
 		if stage == Stage.HIT:
 			tilt_weight *= 1.0-smootherstep(0.0,0.32,clock-stage_start)
@@ -1130,7 +1147,7 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 	else:
 		# Smooth the roll through the near-vertical hand angle using game time.
 		var roll_step := deg_to_rad(2700.0)*delta
-		var shot_direction := (rig.to_local(to_global(shot_aim))-ball_target).normalized()
+		var shot_direction := (rig.to_local(frame.to_global(shot_aim))-ball_target).normalized()
 		var compact_finish := SpikeArm.compact_finish_weight(shot_aim,contact,line_weight < 0.5)
 		var arm_weight := 1.0 if uses_assisted_approach() and stage == Stage.SET else weight
 		swing_palm_roll = SpikeArm.apply(pose,author,ball_target,arm_weight,extension,follow,draw_progress,arm_lift,line_weight,elbow_clearance,swing_palm_roll,roll_step,shot_direction,compact_finish,backswing_reach*backswing_weight,uses_assisted_approach())
@@ -1173,18 +1190,7 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 			if source_weight > 0.0:
 				SpikeArm.blend_arm(pose,approach_arm_transition,author,source_weight)
 				SpikeArm.blend_arm(pose,approach_arm_transition,author,source_weight,"l")
-	var smoothing := 0.0
-	if uses_assisted_approach() and not approach_arm_transition.is_empty():
-		if approach_render_rotations.is_empty():
-			for source in approach_arm_transition:
-				approach_render_rotations.append(source.basis.get_rotation_quaternion())
-		smoothing = exp(-delta/0.016)*smoothstep(0.0,0.32,weight)
-	for bone in rig.get_bone_count():
-		var rotation := pose[bone].basis.get_rotation_quaternion()
-		if smoothing > 0.0:
-			rotation = rotation.slerp(approach_render_rotations[bone],smoothing)
-			approach_render_rotations[bone] = rotation
-		rig.set_bone_pose_rotation(bone,rotation)
+	return pose
 
 func shot_line_weight(target: Vector3, origin: Vector3) -> float:
 	# Only an inward angle crosses the court. Outward aim can still run down the near sideline.
@@ -1193,9 +1199,9 @@ func shot_line_weight(target: Vector3, origin: Vector3) -> float:
 	var across_court := inward/maxf(target.z-origin.z,0.1)
 	return 1.0-smoothstep(0.16,0.38,across_court)
 
-func airborne_reach_lean(contact: Vector3) -> Vector2:
+func airborne_reach_lean(contact: Vector3, frame: Node3D) -> Vector2:
 	var drift: Vector3 = jump.horizontal_velocity()*0.12
-	var reach := setter.to_local(to_global(contact-drift))-Vector3(-0.24,0.0,0.28)
+	var reach := setter.to_local(frame.to_global(contact-drift))-Vector3(-0.24,0.0,0.28)
 	var tilt := Vector2(reach.z,-reach.x)
 	var angle := clampf((tilt.length()-0.10)*1.20,0.0,0.68)
 	return tilt.normalized()*angle

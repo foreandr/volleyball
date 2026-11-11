@@ -1,11 +1,12 @@
 extends "res://scripts/jump_float_serve.gd"
 
+const AttackDrill = preload("res://scripts/attack_drill.gd")
 const SetterJump = preload("res://scripts/setter_jump.gd")
 
 const TOSS_STEP := 0.36
 const APPROACH_START := TOSS_STEP+0.36
-const SPIN_TAKEOFF := APPROACH_START+0.70
-const SPIN_CONTACT := SPIN_TAKEOFF+0.43
+const SPIN_TAKEOFF := APPROACH_START+0.56
+const SPIN_CONTACT := SPIN_TAKEOFF+0.55
 const JUMP_HEIGHT := 1.12
 const SPIN_LAND := SPIN_TAKEOFF+SetterJump.FULL_AIR_TIME*sqrt(JUMP_HEIGHT/SetterJump.FULL_HEIGHT)*1.09
 const APPROACH_SAMPLE_RATE := 120.0
@@ -13,6 +14,7 @@ const APPROACH_SAMPLE_RATE := 120.0
 var sidespin := 0.0
 var released_sidespin := 0.0
 var approach := SetterJump.new()
+var spike_pose_driver := AttackDrill.new()
 var approach_positions: PackedVector3Array = []
 var approach_sample_origin: Vector3
 var approach_poses: Array[Array] = []
@@ -22,6 +24,9 @@ func configure(actor: Node3D, start := START, yaw := 0.0) -> void:
 	super.configure(actor,start,yaw)
 	apex = 3.70
 	update_path_preview()
+
+func _exit_tree() -> void:
+	spike_pose_driver.free()
 
 func contact_time() -> float:
 	return SPIN_CONTACT
@@ -108,10 +113,11 @@ func toss_palm(pose: Array, _rig: Skeleton3D, author: RefCounted, _time: float) 
 	return author.point(pose,"hand_r").lerp(author.point(pose,"middle_01_r"),0.72)
 
 func position_toss_hands(pose: Array, rig: Skeleton3D, author: RefCounted, time: float, weight: float) -> void:
-	var rise := smoothstep(0.09,TOSS_STEP,time)
+	var rise := smoothstep(0.14,TOSS_STEP,time)
+	var draw := smoothstep(0.0,0.13,time)*(1.0-smoothstep(0.13,TOSS_STEP,time))
 	var scale_: float = rig.global_basis.get_scale().y
 	var shoulder: Vector3 = author.point(pose,"upperarm_r")
-	var wrist := shoulder+Vector3(0.07,-0.37+0.61*rise,0.37+0.07*rise)/scale_
+	var wrist := shoulder+Vector3(0.07,-0.37+0.61*rise,0.31+0.13*rise-0.77*draw)/scale_
 	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",wrist,Vector3(-0.55,-0.65,0.13),weight)
 	orient_palm(pose,rig,author,"r",Vector3.BACK,Vector3.RIGHT,0.72*weight)
 	var roll := smoothstep(TOSS_STEP-0.08,TOSS_STEP+0.05,time)
@@ -121,30 +127,45 @@ func position_toss_hands(pose: Array, rig: Skeleton3D, author: RefCounted, time:
 	author.limb(pose,"upperarm_l","lowerarm_l","hand_l",off_hand,Vector3(0.60,-0.20,0.25),weight)
 
 func shape_float_strike(pose: Array, rig: Skeleton3D, author: RefCounted, time: float) -> void:
-	var weight := smoothstep(SPIN_TAKEOFF+0.06,SPIN_TAKEOFF+0.23,time)*(1.0-smoothstep(SPIN_CONTACT+0.25,SPIN_LAND+0.09,time))
+	var swing_start := SPIN_TAKEOFF+0.015
+	if time < swing_start: return
+	var hit_age := maxf(0.0,time-SPIN_CONTACT)
+	var weight := smoothstep(swing_start,swing_start+0.12,time)*(1.0-smoothstep(0.19,0.44,hit_age))
 	if weight <= 0.0: return
-	var extension := smoothstep(SPIN_CONTACT-0.17,SPIN_CONTACT,time)
-	var follow := smoothstep(SPIN_CONTACT,SPIN_CONTACT+0.29,time)
+	var drive_start := SPIN_CONTACT-0.16
+	var extension := smoothstep(drive_start,SPIN_CONTACT,time)
+	var follow := 1.0-pow(1.0-clampf(hit_age/0.19,0.0,1.0),2.0)
 	var scale_: float = rig.global_basis.get_scale().y
-	var tilt := smoothstep(SPIN_TAKEOFF+0.13,SPIN_CONTACT-0.015,time)*(1.0-smoothstep(SPIN_CONTACT+0.04,SPIN_LAND-0.05,time))
-	var crunch := smoothstep(SPIN_CONTACT-0.11,SPIN_CONTACT+0.15,time)*(1.0-smoothstep(SPIN_CONTACT+0.20,SPIN_LAND,time))
-	author.rotate_world(pose,"spine_01",Vector3.BACK,deg_to_rad(-24.0)*tilt)
-	author.rotate_world(pose,"spine_03",Vector3.BACK,deg_to_rad(-10.0)*tilt)
-	author.rotate_world(pose,"spine_02",Vector3.RIGHT,0.42*crunch)
-	var coil := weight*(1.0-extension)
-	author.rotate_world(pose,"spine_03",Vector3.UP,-0.48*coil+0.40*extension*(1.0-0.65*follow))
-	var kick := smoothstep(SPIN_TAKEOFF+0.04,SPIN_CONTACT-0.09,time)*(1.0-smoothstep(SPIN_CONTACT,SPIN_CONTACT+0.24,time))
-	for side in ["l","r"]:
-		var knee: Vector3 = author.point(pose,"calf_"+side)
-		var ankle: Vector3 = author.point(pose,"foot_"+side)
-		var direction := (ankle-knee).normalized().slerp(Vector3(0.04,-0.35,-1.0).normalized(),kick*(0.54 if side == "r" else 0.35))
-		author.aim_joint(pose,"calf_"+side,"foot_"+side,knee+direction)
 	var shoulder: Vector3 = author.point(pose,"upperarm_r")
-	var contact := shoulder+Vector3(-0.055,0.67,0.33)/scale_
-	var shot_direction := Vector3(0.20*sidespin,0.0,1.0).normalized()
-	SpikeArm.apply(pose,author,contact,weight,extension,follow,1.0,0.72,0.84,0.12,0.0,0.0,shot_direction,0.0,0.22/scale_,true)
-	var guide_drop := smoothstep(SPIN_CONTACT-0.18,SPIN_CONTACT+0.14,time)
-	SpikeArm.apply_guide_arm(pose,author,Vector3(0.08,0.45,0.48)/scale_,Vector3(0.35,-0.55,0.18),guide_drop,weight,166.0)
+	var contact := to_local(rig.to_global(shoulder+Vector3(-0.05,0.67,0.33)/scale_))
+	var source_index := roundi((swing_start-APPROACH_START)*APPROACH_SAMPLE_RATE)
+	spike_pose_driver.setter = player
+	spike_pose_driver.jump = approach
+	spike_pose_driver.jump.start = serve_start
+	spike_pose_driver.swing_practice = false
+	spike_pose_driver.approach_steps = 3
+	spike_pose_driver.force_contact_tilt = true
+	spike_pose_driver.clock = time
+	spike_pose_driver.stage = AttackDrill.Stage.HIT if hit_age > 0.0 else AttackDrill.Stage.SET
+	spike_pose_driver.stage_start = SPIN_CONTACT
+	spike_pose_driver.swing_aim = target
+	spike_pose_driver.swing_contact_aim = target
+	spike_pose_driver.swing_started = swing_start
+	spike_pose_driver.swing_charge_started = swing_start
+	spike_pose_driver.swing_drive_started = drive_start if time >= drive_start else -INF
+	spike_pose_driver.swing_drive_duration = SPIN_CONTACT-drive_start
+	spike_pose_driver.swing_power = 1.0
+	spike_pose_driver.approach_pressed_at = APPROACH_START
+	spike_pose_driver.approach_set_touched_at = APPROACH_START
+	spike_pose_driver.approach_expected_hit_at = SPIN_CONTACT
+	spike_pose_driver.swing_palm_roll = 0.0
+	spike_pose_driver.swing_finish_pose.clear()
+	spike_pose_driver.approach_arm_transition.assign(approach_poses[source_index])
+	var hand_lift := smoothstep(0.08,0.26,time-swing_start)
+	var strike_pose: Array[Transform3D] = []
+	strike_pose.assign(pose)
+	strike_pose = spike_pose_driver.build_bow_draw_pose(self,strike_pose,1.0/APPROACH_SAMPLE_RATE,weight,contact,extension,follow,1.0,hand_lift)
+	for bone in pose.size(): pose[bone] = strike_pose[bone]
 
 func finish_float_wrist(pose: Array, _rig: Skeleton3D, author: RefCounted, time: float) -> void:
 	var snap := smoothstep(SPIN_CONTACT-0.07,SPIN_CONTACT+0.12,time)*(1.0-smoothstep(SPIN_CONTACT+0.21,SPIN_LAND,time))
