@@ -24,6 +24,7 @@ var content: VBoxContainer
 var category_buttons: Dictionary = {}
 var selected_category := ""
 var blocking_practice: Node3D
+var defense_active := false
 var blocking_frame: Node3D
 var underhand_serve: Node3D
 var serve_opponents: Node3D
@@ -324,7 +325,14 @@ Scroll to set pass height",16)
 	refresh_type()
 	animation_list.grab_focus()
 
-func start_blocking_practice() -> void:
+func open_blocking_mode(defense: bool) -> void:
+	stop_blocking_practice()
+	clear_content()
+	set_title("DEFENSE" if defense else "BLOCKING")
+	start_blocking_practice(defense)
+
+func start_blocking_practice(defense := false) -> void:
+	defense_active = defense
 	if player_controls.active: player_controls.set_active(false)
 	if is_instance_valid(ball_preview): ball_preview.stop()
 	right_panel.hide()
@@ -337,10 +345,21 @@ func start_blocking_practice() -> void:
 	blocking_frame.position.z = 8.0
 	blocking_frame.rotation.y = PI
 	preview_player.get_parent().add_child(blocking_frame)
-	blocking_practice = preload("res://scripts/blocking_practice.gd").new()
+	var drill_script := preload("res://scripts/defense_practice.gd") if defense else preload("res://scripts/blocking_practice.gd")
+	blocking_practice = drill_script.new()
 	blocking_frame.add_child(blocking_practice)
 	blocking_practice.configure_block(preview_player,drill_status,build_label)
 	blocking_practice.set_ball_audio_muted(StorySession.attack_ball_audio_muted)
+	if defense:
+		content.add_child(label("WASD to move  |  Shift to sprint\nQ to dig  |  E to receive with hands\nMove mouse to aim your pass",18))
+		content.add_child(button("Back to Blocking",open_blocking_mode.bind(false)))
+		preview_camera.position = Vector3(0.0,5.0,-8.8)
+		setting_camera_focus = Vector3(0.0,1.65,3.0)
+		preview_camera.look_at(setting_camera_focus)
+		player_controls.setter_travel = Vector3.ZERO
+		preview.grab_focus()
+		return
+	content.add_child(button("Defense Practice",open_blocking_mode.bind(true)))
 	var role := OptionButton.new()
 	role.add_item("Attack against CPU blocker")
 	role.add_item("Block against CPU attacker")
@@ -441,9 +460,11 @@ func add_block_position_slider(parent: VBoxContainer, caption: String, minimum: 
 func stop_blocking_practice() -> void:
 	if not is_instance_valid(blocking_practice): return
 	blocking_practice.stop_block()
-	attack_position_panel.hide()
-	attack_position_panel.queue_free()
-	attack_position_panel = null
+	if is_instance_valid(attack_position_panel):
+		attack_position_panel.hide()
+		attack_position_panel.queue_free()
+		attack_position_panel = null
+	defense_active = false
 	blocking_frame.queue_free()
 	blocking_practice = null
 	blocking_frame = null
@@ -935,6 +956,11 @@ func reception_drill_active() -> bool:
 func _process(delta: float) -> void:
 	pass_timing_cue.hide()
 	if is_instance_valid(blocking_practice):
+		if defense_active:
+			player_controls.read_pace_input()
+			player_controls.move_player(player_controls.movement_input(),delta,false,blocking_practice.ball.global_position,blocking_practice.defense_move_scale(),0.80,true,3.20,0.0,0.0,true)
+			blocking_practice.tick_block(delta)
+			return
 		var camera_motion := camera_pan_delta(player_controls.movement_input(),delta,5.0)
 		preview_camera.position += camera_motion
 		setting_camera_focus += camera_motion
@@ -1334,6 +1360,9 @@ func handle_preview_input(event: InputEvent) -> void:
 		if event is InputEventMouseMotion and event.button_mask & MOUSE_BUTTON_MASK_MIDDLE:
 			orbit_setting_camera(event.relative)
 			preview.accept_event()
+		elif event is InputEventMouseMotion and defense_active:
+			var hit: Variant = attack_floor_point(event.position)
+			if hit is Vector3: blocking_practice.aim_dig(hit)
 		elif event is InputEventMouseMotion and blocking_practice.player_attacks:
 			var cursor: Vector2 = setup_drag.screen_position(event.position)
 			blocking_practice.aim_player_spike(preview_camera.project_ray_origin(cursor),preview_camera.project_ray_normal(cursor))
@@ -1718,6 +1747,13 @@ func open_menu() -> void:
 func _input(event: InputEvent) -> void:
 	if is_instance_valid(blocking_practice) and event is InputEventKey:
 		if event.echo: return
+		if defense_active:
+			if event.pressed:
+				match event.keycode:
+					KEY_Q: blocking_practice.queue_dig(false)
+					KEY_E, KEY_I: blocking_practice.queue_dig(true)
+					KEY_ESCAPE: open_blocking_mode(false)
+			return
 		if event.keycode == KEY_SPACE and blocking_practice.player_attacks:
 			if event.pressed: blocking_practice.queue_jump(Vector2.ZERO)
 			else: blocking_practice.release_approach_jump()
