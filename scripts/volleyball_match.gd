@@ -546,24 +546,33 @@ func choose_shot(index: int, contact := Vector3.INF, block_at := Vector3.INF, pr
 	var best := Vector3(0.0,Flight.FLOOR,10.7)
 	var best_score := -INF
 	for x in [-4.02,-2.55,0.0,2.55,4.02]:
-		for depth in [5.2,7.35,9.8,12.1]:
+		for depth in [5.2,6.55,7.35,9.8,12.1]:
 			var target := Vector3(x,Flight.FLOOR,depth)
 			var crossing := lane_at_depth(contact,target,Net.NET_Z)
 			if absf(crossing) > Net.NET_HALF_WIDTH-Net.RADIUS-0.12: continue
-			var shot_score := minf(5.0,(target-backcourt).slide(Vector3.UP).length())*0.19
+			var defender_gap := (target-backcourt).slide(Vector3.UP).length()
+			var shot_score := minf(5.0,defender_gap)*0.19
 			shot_score -= absf(x)*0.038
 			if previous_shot.is_finite():
 				var change := (target-contact).slide(Vector3.UP).angle_to((previous_shot-contact).slide(Vector3.UP))
 				shot_score -= change*0.55
+			var clear_block := 1.0
 			if block_at.is_finite():
 				var through := lane_at_depth(contact,target,block_at.z)
 				var gap := absf(through-block_at.x)
+				clear_block = smoothstep(0.65,1.2,gap)
 				shot_score += minf(1.6,gap)*3.4
 				shot_score -= 1.6*(1.0-smoothstep(0.22,0.66,gap))
-			var travel := (target-contact).slide(Vector3.UP).length()/maxf(6.0,22.0*spike_strength)
+			var distance := (target-contact).slide(Vector3.UP).length()
+			var travel := distance/maxf(6.0,22.0*spike_strength)
 			var net_time := travel*clampf((Net.NET_Z-contact.z)/(depth-contact.z),0.0,1.0)
 			var net_height := lerpf(contact.y,Flight.FLOOR,net_time/travel)+0.5*Flight.spike_gravity(9.0)*net_time*(travel-net_time)
 			shot_score -= 17.0*(1.0-smoothstep(Net.NET_TOP+Net.RADIUS,Net.NET_TOP+0.25,net_height))
+			if depth < Net.NET_Z+3.0:
+				var clearance := smoothstep(Net.NET_TOP+0.25,Net.NET_TOP+0.47,net_height)
+				var open_floor := smoothstep(1.3,2.8,defender_gap)
+				var closeness := 1.0-smoothstep(1.60,7.10,distance)
+				shot_score += (0.75+1.85*closeness)*clearance*clear_block*open_floor
 			if shot_score > best_score:
 				best_score = shot_score
 				best = target
