@@ -98,6 +98,8 @@ var recoveries := {}
 var trace := Trace.new()
 var block_lane_flight := [-1,-1]
 var opponent_shot_reads: Array[Dictionary] = [{},{}]
+var carried_shot_reads: Array[Dictionary] = [{},{}]
+var completed_read_matches := 0
 var block_line := [true,true]
 var pocket_x := [0.0,0.0]
 var last_set_apex := 0.0
@@ -253,6 +255,8 @@ func is_human(index: int) -> bool:
 func set_spectator(value: bool) -> void:
 	if spectator == value: return
 	spectator = value
+	carried_shot_reads = [{},{}]
+	completed_read_matches = 0
 	reset_match()
 
 func show_key(index: int, caption: String) -> void:
@@ -268,7 +272,7 @@ func reset_match() -> void:
 	last_point.clear()
 	last_called_set_x = [INF,INF]
 	block_calls = [0,0]
-	opponent_shot_reads = [{},{}]
+	opponent_shot_reads = carried_shot_reads.duplicate(true)
 	second_ball_options = 0
 	score = [0,0]
 	service_team = 0
@@ -441,6 +445,7 @@ func award(side: int, reason: String) -> void:
 	update_score()
 	if score[side] >= WIN_SCORE and score[side]-score[1-side] >= 2:
 		phase = Phase.FINISHED
+		remember_opponent_reads()
 		var winner := ("Blue wins" if side == 0 else "Orange wins") if spectator else ("You win!" if side == 0 else "CPU wins")
 		info.text = winner+"\nUse Reset Match to play again"
 	else:
@@ -665,7 +670,18 @@ func observe_opponent_shot(side: int, point: Vector3, motion: Vector3, spin_rate
 func learned_cover(side: int, attack_x: float, base_cover: float) -> float:
 	var read: Vector2 = opponent_shot_reads[side].get(shot_read_zone(attack_x),Vector2.ZERO)
 	var confidence := smoothstep(2.0,7.0,read.y)
-	return base_cover+clampf(read.x-base_cover,-1.1,1.1)*confidence
+	var limit := 1.10+0.11*mini(completed_read_matches,5)
+	return base_cover+clampf(read.x-base_cover,-limit,limit)*confidence
+
+func remember_opponent_reads() -> void:
+	completed_read_matches += 1
+	for side in opponent_shot_reads.size():
+		carried_shot_reads[side].clear()
+		for zone in opponent_shot_reads[side]:
+			var read: Vector2 = opponent_shot_reads[side][zone]
+			var samples := mini(8,floori(read.y*0.65))
+			if samples > 0:
+				carried_shot_reads[side][zone] = Vector2(read.x,samples)
 
 func route_ball_sound() -> void:
 	if OS.get_name() != "Windows": return
