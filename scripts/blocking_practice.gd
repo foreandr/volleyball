@@ -120,18 +120,18 @@ func step_blocker(delta: float) -> void:
 		var side := "l" if hand_index == 0 else "r"
 		var sign_ := 1.0 if side == "l" else -1.0
 		var shoulder: Vector3 = author.point(pose,"upperarm_"+side)
-		var wrist := shoulder+Vector3(sign_*(0.06-0.19*press)+block_tracking*press,0.53+0.04*press,0.23+0.34*press)/scale_
-		author.limb(pose,"upperarm_"+side,"lowerarm_"+side,"hand_"+side,wrist,Vector3(sign_*0.65,-0.52,0.34),raise,169.0)
+		var wrist := shoulder+Vector3(sign_*0.025+block_tracking*press*0.55,0.64,0.20+0.34*press)/scale_
+		author.limb(pose,"upperarm_"+side,"lowerarm_"+side,"hand_"+side,wrist,Vector3(sign_*0.65,-0.52,0.34),raise,176.0)
 		var base: Transform3D = author.world_pose(pose,rig.find_bone("hand_"+side))
 		var fingers: Vector3 = author.point(pose,"middle_01_"+side)-base.origin
 		var across: Vector3 = author.point(pose,"index_01_"+side)-author.point(pose,"pinky_01_"+side)
 		var ball_direction := (rig.to_local(ball.global_position)-base.origin).normalized()
 		if ball_direction.z > 0.04 and not is_finite(block_contact_at):
-			var desired := Vector3(clampf(ball_direction.x,-0.86,0.86),clampf(ball_direction.y,-0.79,0.79),maxf(0.33,ball_direction.z)).normalized()
+			var desired := Vector3(clampf(ball_direction.x,-0.28,0.28),clampf(ball_direction.y,-0.34,0.15),1.0).normalized()
 			hand_normals[hand_index] = hand_normals[hand_index].slerp(desired,1.0-exp(-delta*28.0))
 		var toward_ball := hand_normals[hand_index]
 		var finger_direction := Vector3.UP.slide(toward_ball).normalized()
-		var index_edge := finger_direction.cross(toward_ball).normalized()
+		var index_edge := finger_direction.cross(toward_ball).normalized()*-sign_
 		var palm := HandPose.hand_basis(finger_direction,index_edge)*HandPose.hand_basis(fingers,across).inverse()*base.basis
 		author.set_world_basis(pose,"hand_"+side,base.basis.slerp(palm,raise))
 		spread_block_fingers(pose,rig,author,side,toward_ball,raise)
@@ -148,7 +148,7 @@ func update_block_hand(pose: Array, rig: Skeleton3D, author: RefCounted, side: S
 	var middle: Vector3 = author.point(pose,"middle_01_"+side)
 	var fingertip: Vector3 = author.point(pose,"middle_03_"+side)
 	var across: Vector3 = author.point(pose,"pinky_01_"+side)-author.point(pose,"index_01_"+side)
-	var local_normal := (middle-wrist).cross(across).normalized()
+	var local_normal := (middle-wrist).cross(across).normalized()*(-1.0 if side == "l" else 1.0)
 	var normal := (global_basis.inverse()*rig.global_basis*local_normal).normalized()
 	var center := to_local(rig.to_global(wrist.lerp(middle,0.76)))
 	var previous: Vector3 = block_hands[index].get("center",center)
@@ -197,7 +197,7 @@ func play_spike(time: float, delta: float) -> void:
 	if block_lift > 0.10 and time <= flight_end:
 		var before := flight_point(pass_origin,pass_motion,maxf(0.0,time-delta))
 		var after := flight_point(pass_origin,pass_motion,time)
-		var best_gap := BallPreview.RADIUS+0.15
+		var best_gap := BallPreview.RADIUS+0.19
 		var hit_hand: Dictionary = {}
 		for hand in block_hands:
 			if hand.is_empty(): continue
