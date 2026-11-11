@@ -301,6 +301,7 @@ func start_serve_bump_set_spike() -> void:
 	clear_content()
 	if is_instance_valid(ball_preview): ball_preview.stop()
 	set_title("SERVE BUMP SET SPIKE")
+	content.add_child(label("WASD to move  |  Q to bump\nShift + W to run  |  Hold Space to spike",16))
 	drill_status = label("",18)
 	content.add_child(drill_status)
 	setter_original_transform = preview_player.transform
@@ -723,7 +724,7 @@ func _process(delta: float) -> void:
 		underhand_serve.step(delta)
 		return
 	if is_instance_valid(setting_drill) and selected_category == "Chasing":
-		setting_drill.tick_demo(delta)
+		setting_drill.tick_demo(delta,player_controls)
 		return
 	if is_instance_valid(setting_drill):
 		if selected_category == "Attacking" and not setting_drill.approach_setup_drag.is_empty(): return
@@ -1118,6 +1119,11 @@ func handle_preview_input(event: InputEvent) -> void:
 			else: underhand_serve.change_arc(wheel*0.35)
 			preview.accept_event()
 		return
+	if selected_category == "Chasing" and is_instance_valid(setting_drill):
+		if event is InputEventMouseMotion:
+			if event.button_mask & MOUSE_BUTTON_MASK_MIDDLE: orbit_setting_camera(event.relative)
+			elif setting_drill.stage != setting_drill.Stage.SERVE: aim_attack_shot(event.position)
+		return
 	if is_instance_valid(setting_drill):
 		if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
 			open_menu()
@@ -1356,6 +1362,11 @@ func open_menu() -> void:
 func _input(event: InputEvent) -> void:
 	if selected_category == "Chasing" and is_instance_valid(setting_drill):
 		if event.is_action_pressed("ui_cancel"): open_menu()
+		elif event is InputEventKey and not event.echo:
+			if event.keycode == KEY_Q and event.pressed: setting_drill.queue_set()
+			elif event.keycode == KEY_SPACE:
+				if event.pressed: setting_drill.queue_jump(Vector2.ZERO)
+				else: setting_drill.release_approach_jump()
 		return
 	if is_instance_valid(underhand_serve) and event is InputEventKey and event.keycode == KEY_SPACE:
 		if event.pressed and not event.echo: underhand_serve.serve()
