@@ -1139,7 +1139,7 @@ func handle_preview_input(event: InputEvent) -> void:
 		return
 	if selected_category == "Chasing" and is_instance_valid(setting_drill):
 		if event is InputEventMouseMotion:
-			if event.button_mask & MOUSE_BUTTON_MASK_MIDDLE: orbit_setting_camera(event.relative)
+			if event.button_mask & MOUSE_BUTTON_MASK_MIDDLE: return
 			elif setting_drill.partner_receiving and setting_drill.stage in [setting_drill.Stage.SERVE,setting_drill.Stage.PASS] and not is_finite(setting_drill.cpu_set.touch_time):
 				var point: Variant = attack_floor_point(event.position)
 				if point is Vector3: setting_drill.aim_manual_set(point)
