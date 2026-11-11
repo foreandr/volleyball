@@ -879,7 +879,7 @@ func settle_point(delta: float) -> void:
 	advance_recoveries(delta)
 	advance_idle_players(delta)
 
-func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_facing := Vector3.INF, chase := false, turn_to_travel := false) -> void:
+func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_facing := Vector3.INF, chase := false, turn_to_travel := false, turn_rate := 12.5) -> void:
 	if recoveries.has(index) or owns_action(index,true): return
 	if serve.player == players[index]:
 		if not serve.can_run_after_contact(): return
@@ -899,7 +899,7 @@ func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_f
 	elif receive_facing.is_finite() and not receive_facing.is_zero_approx():
 		yaw = atan2(receive_facing.x,receive_facing.z)
 		if not turn_to_travel: yaw = clampf(yaw,-1.03,1.03)
-	actor.rotation.y = rotate_toward(actor.rotation.y,yaw,delta*(12.5 if turn_to_travel else 8.0))
+	actor.rotation.y = rotate_toward(actor.rotation.y,yaw,delta*(turn_rate if turn_to_travel else 8.0))
 	var pace := clampf(speed*1.24,5.85,CPU_SPRINT_SPEED) if sprint else minf(speed,4.35)
 	var before := actor.position
 	actor.position = Court.clamp_setter(before+offset.limit_length(delta*pace),3.43)
@@ -1318,16 +1318,27 @@ func tick_blocks(delta: float, previous: float) -> void:
 				launch(point,rebound,"free" if over else "block",index)
 				return
 
+func peel_cpu_off_net(index: int, staging: Vector3, delta: float) -> void:
+	if recoveries.has(index):
+		var recovery: Dictionary = recoveries[index]
+		if recovery.has("save") or match_clock-float(recovery.started) < 0.11: return
+		recoveries.erase(index)
+	move_cpu(index,frames[team(index)].to_global(staging),delta,7.4,Vector3.INF,true,true,17.0)
+
 func prepare_cpu_approach(hitter: int, driver: Node3D, delta: float) -> void:
-	if driver.approach_jump_queued or recoveries.has(hitter): return
+	if driver.approach_jump_queued: return
 	var actor := players[hitter]
 	var pin: Vector3 = driver.rally_set_target
 	var time_left: float = driver.pin_arrival-(driver.clock-driver.stage_start)
 	var gap := (pin-actor.position).slide(Vector3.UP).length()
 	var staging := pin-Vector3.BACK*2.02
-	var peeling := actor.position.z > pin.z-1.58 and time_left > 0.84
-	if peeling or (gap < 1.86 and time_left > 0.95 and last_set_apex > 4.85):
-		move_cpu(hitter,frames[team(hitter)].to_global(staging),delta,4.8 if peeling else 2.8,Vector3.INF,peeling,peeling)
+	var peeling := actor.position.z > pin.z-1.70 and time_left > 0.82
+	if peeling:
+		peel_cpu_off_net(hitter,staging,delta)
+		return
+	if recoveries.has(hitter): return
+	if gap < 1.86 and time_left > 0.95 and last_set_apex > 4.85:
+		move_cpu(hitter,frames[team(hitter)].to_global(staging),delta,2.8)
 		return
 	if not driver.approach_space_held:
 		var intercept: Vector3 = driver.find_approach_intercept(true)
@@ -1342,13 +1353,18 @@ func prepare_cpu_approach(hitter: int, driver: Node3D, delta: float) -> void:
 		move_cpu(hitter,frames[team(hitter)].to_global(staging),delta,speed,Vector3.INF,true)
 
 func position_attack(delta: float) -> void:
-	if last_was_block and last_player >= 0 and team(last_player) == receiving_team and defensive_ball():
-		if cpu_choice < 0: select_receiver()
-		var hitter := last_player
-		if cpu_choice >= 0 and cpu_choice != hitter and not is_human(hitter) and players[hitter].position.z > 1.20:
-			var stage_from := players[hitter].position
-			stage_from.z = 0.95
-			move_cpu(hitter,frames[receiving_team].to_global(stage_from),delta,5.0,Vector3.INF,true,true)
+	if defensive_ball() and flight_kind != "pass":
+		var side := receiving_team
+		var frame := frames[side]
+		var ball_behind_block := frame.to_local(ball.global_position).z < 2.40
+		var own_block := last_was_block and last_player >= 0 and team(last_player) == side
+		if ball_behind_block or own_block:
+			if cpu_choice < 0: select_receiver()
+			var blocker: int = last_player if own_block else defender_assignment[side]
+			if blocker >= 0 and cpu_choice >= 0 and cpu_choice != blocker and not is_human(blocker) and players[blocker].position.z > 1.20:
+				var stage_from := players[blocker].position
+				stage_from.z = 0.95
+				peel_cpu_off_net(blocker,stage_from,delta)
 		return
 	if flight_kind != "pass" or possession_team != receiving_team or touches != 1: return
 	var passer := last_player
@@ -1359,8 +1375,10 @@ func position_attack(delta: float) -> void:
 	var staging := set_pin_for(passer^1)-Vector3.BACK*run_up
 	var distance := (staging-players[passer].position).slide(Vector3.UP).length()
 	var speed := clampf(distance/maxf(0.24,receive_at-elapsed+0.16),1.5,4.1)
-	var peeling := players[passer].position.z-staging.z > 0.85
-	move_cpu(passer,frames[receiving_team].to_global(staging),delta,maxf(speed,4.8) if peeling else speed,Vector3.INF,peeling,peeling)
+	if players[passer].position.z-staging.z > 0.45:
+		peel_cpu_off_net(passer,staging,delta)
+	else:
+		move_cpu(passer,frames[receiving_team].to_global(staging),delta,speed)
 
 func dig_cover_x(frame: Node3D, attacker: Vector3, blocker: Vector3, depth: float, digger_x: float) -> float:
 	var attack := frame.to_local(attacker)
