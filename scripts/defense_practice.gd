@@ -1,6 +1,6 @@
 extends "res://scripts/blocking_practice.gd"
 
-const DIG_SQUAT_DEPTH := 0.22
+const DIG_SQUAT_DEPTH := 0.34
 const DEFENSE_START := Vector3(2.15,0.04,-1.30)
 const ZONE_FIVE_TARGETS := [Vector2(-4.2,10.4),Vector2(-3.7,10.9),Vector2(-4.35,10.0)]
 
@@ -107,7 +107,7 @@ func update_defense_knee_bend(delta: float) -> void:
 	elif stage == Stage.HIT:
 		var time := clock-stage_start
 		var recovery_at := float(dig.touch_time) if is_finite(dig.touch_time) else flight_end-0.06
-		weight = 1.0-smootherstep(0.09,0.40,time-recovery_at)
+		weight = 1.0-smootherstep(0.12,0.45,time-recovery_at)
 	if dig.low_save.active: weight = 0.0
 	dig.knee_bend_depth = lerpf(dig.knee_bend_depth,DIG_SQUAT_DEPTH*weight,1.0-exp(-delta*15.0))
 	if stage != Stage.HIT: dig.apply_knee_bend()
