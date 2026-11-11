@@ -1072,6 +1072,9 @@ func finish_attack_rep() -> void:
 func uses_front_right_lift() -> bool:
 	return false
 
+func uses_air_reach_assist() -> bool:
+	return false
+
 func attack_pose_smoothing_time() -> float:
 	return 0.016
 
@@ -1143,10 +1146,13 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 	# Tilt after the leg solve so the hips carry the tucked legs into the reach.
 	var reach_weight := airborne*weight*maxf(0.72*arm_lift,extension)
 	reach_weight *= 1.0-smoothstep(0.0,0.85,follow)
-	if uses_assisted_approach(): reach_weight *= 0.28
 	var lean := airborne_reach_lean(contact,frame)*reach_weight
-	author.rotate_world(pose,"pelvis",Vector3.RIGHT,lean.x)
-	author.rotate_world(pose,"pelvis",Vector3.BACK,lean.y)
+	var body_reach := 1.0
+	if uses_assisted_approach():
+		body_reach = 0.28
+		if uses_air_reach_assist(): body_reach *= smoothstep(0.10,0.30,clock-swing_started)
+	author.rotate_world(pose,"pelvis",Vector3.RIGHT,lean.x*body_reach)
+	author.rotate_world(pose,"pelvis",Vector3.BACK,lean.y*body_reach)
 	var ball_target := rig.to_local(frame.to_global(contact))
 	# Twist the ribcage around its own axis so the lean stays independent.
 	var chest_axis: Vector3 = (author.point(pose,"neck_01")-author.point(pose,"spine_03")).normalized()
@@ -1177,6 +1183,10 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 	var torso_pitch := pitch+deg_to_rad(30.0)*follow_crunch+deg_to_rad(torso_forward_bias_degrees)*lean_blend
 	author.rotate_world(pose,"spine_01",Vector3.RIGHT,torso_pitch*0.45*weight)
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,torso_pitch*0.55*weight)
+	if uses_air_reach_assist() and stage == Stage.SET:
+		var torso_reach := smootherstep(0.03,0.18,clock-swing_started)*0.68
+		author.rotate_world(pose,"spine_01",Vector3.RIGHT,lean.x*torso_reach)
+		author.rotate_world(pose,"spine_01",Vector3.BACK,lean.y*torso_reach)
 	if uses_assisted_approach() and (approach_steps == 2 or force_contact_tilt):
 		var tilt_weight := smoothstep(0.04,0.78,extension)
 		if stage == Stage.HIT:

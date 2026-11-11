@@ -748,14 +748,19 @@ func aim_receive(index: int) -> void:
 
 func cpu_set_apex(index: int, point: Vector3, pin: Vector3, pace: float) -> float:
 	var hitter := players[index^1]
-	var tight := smoothstep(1.0,2.85,point.z)
-	var near := 1.0-smoothstep(1.75,3.35,(pin-hitter.position).slide(Vector3.UP).length())
-	var controlled := 1.0-smoothstep(8.0,15.0,pace)*0.62
-	var readiness := tight*near*controlled
+	var tight := smoothstep(0.85,3.10,point.z)
+	var distance := (pin-hitter.position).slide(Vector3.UP).length()
+	var ready := 1.0-smoothstep(1.65,3.40,distance)
+	var controlled := 1.0-smoothstep(8.0,15.0,pace)*0.38
 	var variety := float(posmod(second_ball_options+index+rallies,4))/3.0
-	var compact := lerpf(3.60,4.50,variety)
-	var high := lerpf(5.65,7.35,maxf(variety*0.74,1.0-near))
-	return maxf(point.y+0.18,lerpf(high,compact,readiness))
+	var quick := lerpf(3.62,4.20,variety)
+	var high := lerpf(5.50,7.28,maxf(variety*0.69,1.0-ready))
+	var apex := lerpf(high,quick,tight*lerpf(0.48,1.0,ready)*controlled)
+	if transition_possession[team(index)]:
+		var peel := smoothstep(1.50,3.10,hitter.position.z)*smoothstep(0.16,0.9,hitter.position.z-(pin.z-1.85))
+		var lateral := smoothstep(0.8,3.45,absf(pin.x-hitter.position.x))
+		apex = maxf(apex,lerpf(4.35,6.15,maxf(peel*0.86,lateral)))
+	return maxf(point.y+0.18,apex)
 
 func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, technique: int) -> void:
 	if frames[team(index)].to_local(world_point).z > Net.NET_Z+0.07: return
@@ -781,9 +786,6 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 		var contact_height: float = driver.set_contact_height()
 		var minimum := maxf(contact_height+0.22,point.y+0.18)
 		var apex := maxf(minimum,bump.height) if is_human(index) else cpu_set_apex(index,point,pin,incoming.length())
-		if not is_human(index) and transition_possession[side]:
-			var width := absf(pin.x-players[index^1].position.x)
-			apex = maxf(apex,lerpf(4.4,6.35,smoothstep(0.75,3.45,width)))
 		var error := Bump.Accuracy.sample_offset(Bump.Accuracy.spread(0.0,incoming.length(),spin,setting_skill,true))
 		pin += error.slide(Vector3.UP)
 		apex = maxf(minimum,apex+error.y)

@@ -28,7 +28,12 @@ static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float,
 	var draw_elbow_limit := 112.0+42.0*smoothstep(0.0,0.60,backswing_reach)
 	var elbow_limit := lerpf(draw_elbow_limit,168.0 if contact_palm else 158.0,smoothstep(0.29,0.98,extension))
 	if contact_palm:
-		elbow_pole = elbow_pole.lerp(Vector3(-0.78,0.22,0.32),smoothstep(0.16,0.78,extension))
+		var wrist_axis := (target-shoulder).normalized()
+		var natural_pole := Vector3(-0.78,0.22,0.32).slide(wrist_axis)
+		var fallback := Vector3.FORWARD.slide(wrist_axis)
+		if fallback.length_squared() < 0.08: fallback = Vector3.DOWN.slide(wrist_axis)
+		natural_pole = natural_pole.lerp(fallback,1.0-smoothstep(0.09,0.32,natural_pole.length()))
+		elbow_pole = elbow_pole.lerp(natural_pole.normalized(),smoothstep(0.16,0.78,extension))
 	elbow_limit = lerpf(elbow_limit,164.0 if same_side else 172.0,finish)
 	elbow_pole = elbow_pole.lerp(finish_elbow_pole(same_side),finish)
 	var base := pose

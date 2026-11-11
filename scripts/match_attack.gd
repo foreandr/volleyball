@@ -66,6 +66,28 @@ func tick_attack(delta: float) -> void:
 	elif not jump.active:
 		enabled = false
 
+func spike_body_target(ball_target: Vector3) -> Vector3:
+	var shot := (swing_aim-ball_target).slide(Vector3.UP).normalized()
+	var hitting_side := shot.cross(Vector3.UP)
+	var target := ball_target-shot*0.47-hitting_side*0.19
+	target.z = minf(target.z,jump.front_limit)
+	return target
+
+func uses_air_reach_assist() -> bool:
+	return true
+
+func step_jump(delta: float) -> void:
+	var original := trace_input
+	if stage == Stage.SET and jump.active and approach_intercept.is_finite() and jump.elapsed > jump.load_duration():
+		var air_age: float = jump.elapsed-jump.load_duration()
+		var predicted := setter.position+jump.horizontal_velocity()*0.10
+		var error := (spike_body_target(approach_intercept)-predicted).slide(Vector3.UP)
+		var gain := smootherstep(0.10,0.29,air_age)*0.92
+		var steering := error.limit_length(0.46)*gain/0.46
+		trace_input = original+Vector2(-steering.x,steering.z)
+	super.step_jump(delta)
+	trace_input = original
+
 func uses_front_right_lift() -> bool:
 	return true
 
