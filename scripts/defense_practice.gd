@@ -1,7 +1,7 @@
 extends "res://scripts/blocking_practice.gd"
 
-const DEFENSE_START := Vector3(1.45,0.04,-2.62)
-const ZONE_FIVE_TARGETS := [Vector2(-3.1,12.6),Vector2(-2.4,11.7),Vector2(-3.7,12.1)]
+const DEFENSE_START := Vector3(2.15,0.04,-1.30)
+const ZONE_FIVE_TARGETS := [Vector2(-4.2,10.4),Vector2(-3.7,10.9),Vector2(-4.35,10.0)]
 
 var dig: MeshInstance3D
 var next_dig_lane := 0
@@ -13,6 +13,7 @@ func load_setup() -> void:
 
 func configure_block(actor: Node3D, readout: Label, build: String) -> void:
 	super.configure_block(actor,readout,build)
+	receiver.show()
 	dig = BumpSetting.new()
 	dig.top_level = true
 	add_child(dig)
@@ -28,13 +29,23 @@ func configure_block(actor: Node3D, readout: Label, build: String) -> void:
 	actor.rotation.y = 0.0
 
 func reset_feed() -> void:
+	var defender_position: Vector3 = blocker.position
 	super.reset_feed()
-	setter.position.x = PIN.x*0.78
-	rally_set_target.x = PIN.x
-	pass_origin.x = 0.0
-	pass_motion = set_toward_pin(pass_origin,rally_set_target,set_apex,3.38)
-	pin_arrival = descending_time(pass_origin,pass_motion,3.38)
-	flight_end = Flight.landing_time(pass_origin,pass_motion)
+	blocker.position = defender_position
+	stage = Stage.PASS
+	approach_space_held = false
+	setter.position = Vector3(1.78,0.04,1.82)
+	rally_set_target = Vector3(PIN.x,0.065,PIN.z)
+	active_cpu_set_style = 2
+	cpu_stand = Vector3(0.15,0.04,2.62)
+	receiver.position = cpu_stand
+	pass_origin = Vector3(-0.75,1.15,0.10)
+	var incoming_side := (pass_origin-cpu_stand).slide(Vector3.UP).normalized()
+	receiver.rotation.y = atan2(incoming_side.x,incoming_side.z)
+	cpu_contact_point = cpu_stand+incoming_side*HandPose.CONTACT_FORWARD*receiver.scale.z
+	cpu_contact_point.y = cpu_set_contact_height()
+	cpu_contact_time = 0.86
+	pass_motion = (cpu_contact_point-pass_origin)/cpu_contact_time+Vector3.UP*Flight.GRAVITY*cpu_contact_time*0.5
 	ball.position = pass_origin
 	var lane: Vector2 = ZONE_FIVE_TARGETS[next_dig_lane]
 	next_dig_lane = (next_dig_lane+1)%ZONE_FIVE_TARGETS.size()
@@ -48,6 +59,20 @@ func reset_feed() -> void:
 		dig.hand_setting = false
 		dig.hide()
 	status.text = "Left pin to zone 5"
+
+func follow_receive(_time: float) -> void:
+	pass
+
+func cpu_set_apex() -> float:
+	return set_apex
+
+func play_cpu_set(time: float, delta: float) -> void:
+	super.play_cpu_set(time,delta)
+	if stage == Stage.SET:
+		approach_space_held = true
+		approach_set_touched_at = clock
+		region.hide()
+		swing_target.hide()
 
 func queue_dig(use_hands: bool) -> void:
 	if stage not in [Stage.SET,Stage.HIT] or is_finite(dig.touch_time): return
