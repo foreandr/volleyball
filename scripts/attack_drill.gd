@@ -78,6 +78,7 @@ var draw_delay := SpikeArm.DEFAULT_DRAW_DELAY
 var elbow_clearance := SpikeArm.DEFAULT_ELBOW_CLEARANCE
 var two_step_tilt := 40.0
 var force_contact_tilt := false
+var torso_forward_bias_degrees := 0.0
 var backswing_bend := DEFAULT_BACKSWING_BEND
 var backswing_reach := DEFAULT_BACKSWING_REACH
 var stage_start := 0.0
@@ -1117,7 +1118,9 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 		elif stage == Stage.HIT:
 			var hit_age := clock-stage_start
 			follow_crunch = smootherstep(0.0,0.11,hit_age)*(1.0-smootherstep(0.14,0.32,hit_age))
-	var torso_pitch := pitch+deg_to_rad(30.0)*follow_crunch
+	var lean_blend := maxf(contact_crunch,follow_crunch)
+	if stage == Stage.HIT: lean_blend *= 1.0-smootherstep(0.14,0.34,clock-stage_start)
+	var torso_pitch := pitch+deg_to_rad(30.0)*follow_crunch+deg_to_rad(torso_forward_bias_degrees)*lean_blend
 	author.rotate_world(pose,"spine_01",Vector3.RIGHT,torso_pitch*0.45*weight)
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,torso_pitch*0.55*weight)
 	if uses_assisted_approach() and (approach_steps == 2 or force_contact_tilt):

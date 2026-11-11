@@ -12,6 +12,8 @@ const SPIN_LAND := SPIN_TAKEOFF+SetterJump.FULL_AIR_TIME*sqrt(JUMP_HEIGHT/Setter
 const APPROACH_SAMPLE_RATE := 120.0
 
 var sidespin := 0.0
+var forward_lean_degrees := 0.0
+var active_forward_lean_degrees := 0.0
 var released_sidespin := 0.0
 var released_lift := 0.0
 var approach := SetterJump.new()
@@ -102,6 +104,7 @@ func serve_swing_rate(_launch_speed: float) -> float:
 	return 1.0
 
 func reset() -> void:
+	active_forward_lean_degrees = forward_lean_degrees
 	super.reset()
 	ball.rotation = Vector3.ZERO
 
@@ -118,12 +121,13 @@ func position_toss_hands(pose: Array, rig: Skeleton3D, author: RefCounted, time:
 	var draw := smoothstep(0.0,0.13,time)*(1.0-smoothstep(0.13,TOSS_STEP,time))
 	var scale_: float = rig.global_basis.get_scale().y
 	var shoulder: Vector3 = author.point(pose,"upperarm_r")
-	var wrist := shoulder+Vector3(0.07,-0.37+0.61*rise,0.31+0.13*rise-0.77*draw)/scale_
-	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",wrist,Vector3(-0.55,-0.65,0.13),weight)
+	var left_shoulder: Vector3 = author.point(pose,"upperarm_l")
+	var outside := (shoulder-left_shoulder).slide(Vector3.UP).normalized()
+	var wrist := shoulder+(Vector3(0.0,-0.37+0.61*rise,0.31+0.13*rise-0.77*draw)+outside*(0.08+0.30*draw))/scale_
+	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",wrist,Vector3(-0.80,-0.42,-0.12),weight)
 	orient_palm(pose,rig,author,"r",Vector3.BACK,Vector3.RIGHT,0.72*weight)
 	var roll := smoothstep(TOSS_STEP-0.08,TOSS_STEP+0.05,time)
 	author.rotate_world(pose,"hand_r",Vector3.RIGHT,deg_to_rad(-20.0)*roll*weight)
-	var left_shoulder: Vector3 = author.point(pose,"upperarm_l")
 	var off_hand := left_shoulder+Vector3(0.11,-0.51,0.07)/scale_
 	author.limb(pose,"upperarm_l","lowerarm_l","hand_l",off_hand,Vector3(0.60,-0.20,0.25),weight)
 
@@ -146,6 +150,8 @@ func shape_float_strike(pose: Array, rig: Skeleton3D, author: RefCounted, time: 
 	spike_pose_driver.swing_practice = false
 	spike_pose_driver.approach_steps = 3
 	spike_pose_driver.force_contact_tilt = true
+	spike_pose_driver.torso_forward_bias_degrees = active_forward_lean_degrees
+	spike_pose_driver.elbow_clearance = 0.23
 	spike_pose_driver.clock = time
 	spike_pose_driver.stage = AttackDrill.Stage.HIT if hit_age > 0.0 else AttackDrill.Stage.SET
 	spike_pose_driver.stage_start = SPIN_CONTACT
@@ -172,6 +178,10 @@ func finish_float_wrist(pose: Array, _rig: Skeleton3D, author: RefCounted, time:
 	var snap := smoothstep(SPIN_CONTACT-0.07,SPIN_CONTACT+0.12,time)*(1.0-smoothstep(SPIN_CONTACT+0.21,SPIN_LAND,time))
 	SpikeArm.align_wrist_to_forearm(pose,author,0.82*smoothstep(TOSS_STEP,TOSS_STEP+0.22,time))
 	author.rotate_world(pose,"hand_r",Vector3.RIGHT,deg_to_rad(24.0)*snap)
+
+func set_forward_lean(value: float) -> void:
+	forward_lean_degrees = value
+	if elapsed < 0.0 and not running: reset()
 
 func set_sidespin(value: float) -> void:
 	sidespin = value
