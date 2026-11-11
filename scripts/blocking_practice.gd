@@ -6,11 +6,13 @@ const BLOCK_AIR := 0.86
 const BLOCK_HEIGHT := 1.12
 const BLOCK_AIM_HALF_WIDTH := 18.0
 const BLOCK_AIM_FAR := 29.0
+const SETUP_PATH := "user://blocking_setup.cfg"
 const SHOT_LANES := [3.35,0.0,-3.35]
 
 var next_shot_lane := 0
 var player_attacks := true
 var cpu_block_queued := false
+var block_tempo := 1.0
 var feed_lane := 0
 var next_pin := 1.0
 var current_pin := 0.0
@@ -54,6 +56,32 @@ func attack_pose_smoothing_time() -> float:
 func uses_front_right_lift() -> bool:
 	return true
 
+func load_setup() -> void:
+	var config := ConfigFile.new()
+	if config.load(SETUP_PATH) != OK: return
+	player_attacks = config.get_value("court","player_attacks",true)
+	feed_lane = config.get_value("court","feed_lane",0)
+	attacker_offset = config.get_value("court","attacker_offset",Vector2.ZERO)
+	blocker_offset = config.get_value("court","blocker_offset",Vector2.ZERO)
+	set_offset = config.get_value("court","set_offset",Vector2.ZERO)
+	ball_source_offset = config.get_value("court","ball_source_offset",Vector2.ZERO)
+	set_apex = config.get_value("court","set_apex",4.75)
+	vertical_inches = config.get_value("court","vertical_inches",0.0)
+	arm_tracking = config.get_value("court","arm_tracking",1.0)
+	player_shot_aim = config.get_value("court","shot_aim",player_shot_aim)
+
+func save_setup() -> void:
+	var config := ConfigFile.new()
+	var setup := {
+		"player_attacks":player_attacks,"feed_lane":feed_lane,
+		"attacker_offset":attacker_offset,"blocker_offset":blocker_offset,
+		"set_offset":set_offset,"ball_source_offset":ball_source_offset,
+		"set_apex":set_apex,"vertical_inches":vertical_inches,
+		"arm_tracking":arm_tracking,"shot_aim":player_shot_aim
+	}
+	for key in setup: config.set_value("court",key,setup[key])
+	config.save(SETUP_PATH)
+
 func configure_block(actor: Node3D, readout: Label, build: String) -> void:
 	blocker = actor
 	blocker_start = actor.transform
@@ -71,6 +99,7 @@ func configure_block(actor: Node3D, readout: Label, build: String) -> void:
 	hitter.animator.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
 	hitter.get_node("DirectionArrows").hide()
 	swing_practice = false
+	load_setup()
 	configure(hitter,readout,true,build)
 	receiver.hide()
 
@@ -87,6 +116,7 @@ func apply_position_setup() -> void:
 	repeat_setup_feed = true
 	restart_block_feed()
 	blocker.position.x = to_global(setup_marker("blocker")).x
+	save_setup()
 
 func setup_marker(marker: String) -> Vector3:
 	match marker:
@@ -202,6 +232,7 @@ func queue_block() -> void:
 	blocker.animator.speed_scale = 1.0
 	blocker.play_action("idle",0.0)
 	blocker.animator.advance(0.0)
+	block_tempo = 1.0
 	block_elapsed = 0.0
 
 func queue_kong(hand_index: int) -> void:
@@ -213,10 +244,17 @@ func tick_block(delta: float) -> void:
 	if player_attacks and stage == Stage.SET and block_elapsed < 0.0:
 		var target := to_global(setup_marker("blocker"))
 		blocker.position.x = move_toward(blocker.position.x,target.x,delta*8.0)
-	if player_attacks and not cpu_block_queued and block_elapsed < 0.0:
-		if stage == Stage.SET and is_finite(swing_started) and clock-swing_started >= 0.20:
+	if player_attacks and not cpu_block_queued and block_elapsed < 0.0 and stage == Stage.SET and jump.active:
+		var takeoff_at := clock+maxf(0.0,jump.load_duration()-jump.elapsed) if not is_finite(swing_started) else swing_started
+		var contact_at := maxf(approach_expected_hit_at+0.04,takeoff_at+0.43)
+		if is_finite(swing_drive_started):
+			contact_at = maxf(clock,swing_drive_started+swing_drive_duration*0.92)
+		var remaining := contact_at+0.055-clock
+		var rise_time := BLOCK_LOAD+0.49*BLOCK_AIR*sqrt((BLOCK_HEIGHT+vertical_inches*0.0254)/BLOCK_HEIGHT)
+		if remaining <= rise_time/1.15:
 			cpu_block_queued = true
 			queue_block()
+			block_tempo = clampf(rise_time/maxf(remaining,0.18),1.15,1.8)
 	step_blocker(delta)
 	update_chest_contact()
 	if stage == Stage.SET: queued_approach_input(delta)
@@ -225,7 +263,7 @@ func tick_block(delta: float) -> void:
 
 func step_blocker(delta: float) -> void:
 	if block_elapsed < 0.0: return
-	block_elapsed += delta
+	block_elapsed += delta*block_tempo
 	var air_scale := sqrt(active_block_height/BLOCK_HEIGHT)
 	var pose_time := minf(block_elapsed,BLOCK_LOAD)+maxf(0.0,block_elapsed-BLOCK_LOAD)/air_scale
 	var airborne := clampf((pose_time-BLOCK_LOAD)/BLOCK_AIR,0.0,1.0)
@@ -363,23 +401,30 @@ func rebound_from_hand(incoming: Vector3, hit: Vector3, hand: Dictionary) -> Vec
 	var relative := incoming-motion
 	if normal.dot(relative) > 0.0: normal = -normal
 	var center: Vector3 = hand.center
-	var edge := (hit-center).slide(normal).limit_length(0.23)
-	normal = (normal+edge*2.0).normalized()
-	var normal_speed := minf(relative.dot(normal),0.0)
-	var give := float(hand.get("give",0.0))
-	var rebound := relative.slide(normal)*lerpf(0.69,0.80,give)-normal*normal_speed*lerpf(0.42,0.14,give)
-	# A glancing fingertip touch can carry through and roll upward off the block.
+	var incidence := clampf(-relative.normalized().dot(normal),0.0,1.0)
+	var surface: String = hand.get("surface","chest")
 	var top_edge := float(hand.get("top_edge",0.0))
 	var side_edge := float(hand.get("side_edge",0.0))
+	var edge := (hit-center).slide(normal).limit_length(0.23)
+	if surface == "palm" and incidence >= 0.55 and absf(side_edge) < 0.45:
+		# A square, pressed palm sends the spike straight back and down.
+		var press_normal := normal.lerp(Vector3(0.0,-0.42,-0.91),0.62).normalized()
+		var speed := maxf(0.0,-relative.dot(press_normal))
+		return relative.slide(press_normal)*0.18+press_normal*speed*0.69+motion*0.18
+	normal = (normal+edge*1.45).normalized()
+	var normal_speed := minf(relative.dot(normal),0.0)
+	var give := float(hand.get("give",0.0))
+	var rebound := relative.slide(normal)*lerpf(0.69,0.42,give)-normal*normal_speed*lerpf(0.42,0.26,give)
 	var edge_speed := relative.length()
 	var carry := relative*0.78
 	carry.x += side_edge*minf(7.0,edge_speed*0.35)
 	carry.y = lerpf(carry.y,minf(5.0,edge_speed*0.26),top_edge)
-	rebound = rebound.lerp(carry,maxf(top_edge,absf(side_edge))*0.82)
-	rebound += motion*0.52
-	# Let a ball off the fingertips float into the backcourt with less horizontal pace.
-	var horizontal := rebound.slide(Vector3.UP)
-	return rebound-horizontal*(0.55*top_edge)
+	var wipe := maxf(smoothstep(0.16,0.90,top_edge),absf(side_edge))
+	rebound = rebound.lerp(carry,wipe*0.82)+motion*lerpf(0.52,0.30,give)
+	if surface == "fingers":
+		rebound.y = maxf(rebound.y,lerpf(0.8,2.2,top_edge))
+		rebound -= rebound.slide(Vector3.UP)*(0.55*top_edge)
+	return rebound
 
 func spread_block_fingers(pose: Array, rig: Skeleton3D, author: RefCounted, side: String, weight: float) -> void:
 	var digits: Array[String] = ["index","middle","ring","pinky"]
@@ -462,13 +507,22 @@ func play_spike(time: float, delta: float) -> void:
 					hit_hand.surface = "forearm"
 					if is_hand:
 						var axis := (tip-wrist).normalized()
-						var along := (point-wrist).dot(axis)/maxf(wrist.distance_to(tip),0.001)
+						# Measure the strike on the palm plane, ahead of the ball's center at first touch.
+						var normal: Vector3 = hand.normal
+						var direction := (after-before).normalized()
+						var incidence := direction.dot(normal)
+						var contact_center := point
+						if absf(incidence) > 0.15:
+							var travel := (wrist-point).dot(normal)/incidence
+							contact_center += direction*clampf(travel,0.0,0.30)
+						var along := (contact_center-wrist).dot(axis)/maxf(wrist.distance_to(tip),0.001)
 						hit_hand.surface = "fingers" if along >= 0.73 else "palm"
-						hit_hand.give = lerpf(0.35,1.0,smoothstep(0.50,1.05,along))
+						hit_hand.give = smoothstep(0.70,1.0,along)
 						hit_hand.top_edge = smoothstep(0.64,1.12,along)
-						var lateral := point.x-surface.x
+						var lateral := (contact_center-wrist-axis*(contact_center-wrist).dot(axis)).x
 						hit_hand.side_edge = signf(lateral)*smoothstep(0.035,0.15,absf(lateral))
 					else:
+						hit_hand.give = 0.68
 						hit_hand.center = surface
 						hit_hand.normal = (point-surface).normalized()
 			if not hit_hand.is_empty(): break
@@ -485,7 +539,16 @@ func play_spike(time: float, delta: float) -> void:
 			var incoming := pass_motion+Vector3.DOWN*Flight.GRAVITY*time
 			block_velocity = rebound_from_hand(incoming,block_contact,hit_hand)
 			ball.position = block_contact
-			status.text = "Chest deflection" if last_block_hand == "chest" else ("High hands!" if last_block_surface == "fingers" else "Block!")
+			if last_block_hand == "chest":
+				status.text = "Chest deflection"
+			elif last_block_surface == "palm" and block_velocity.z < -5.0:
+				status.text = "Stuff block!"
+			elif last_block_surface == "fingers" and block_velocity.z > 0.0:
+				status.text = "High hands!"
+			elif block_velocity.z > 0.0:
+				status.text = "Off the block"
+			else:
+				status.text = "Soft block"
 			if not ball_audio_muted: spike_audio.play()
 			return
 	super.play_spike(time,delta)

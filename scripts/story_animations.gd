@@ -345,29 +345,34 @@ func start_blocking_practice() -> void:
 	role.add_item("Attack against CPU blocker")
 	role.add_item("Block against CPU attacker")
 	role.focus_mode = Control.FOCUS_NONE
+	role.select(0 if blocking_practice.player_attacks else 1)
 	content.move_child(drill_status,0)
 	content.add_child(role)
 	content.move_child(role,0)
 	var controls := label("",18)
 	content.add_child(controls)
 	content.move_child(controls,1)
-	var tracking_readout := label("Arm tracking  100%",16)
+	var tracking_readout := label("Arm tracking  %.0f%%" % (blocking_practice.arm_tracking*100.0),16)
 	content.add_child(tracking_readout)
 	var tracking := HSlider.new()
 	tracking.max_value = 100.0
 	tracking.step = 1.0
-	tracking.value = 100.0
+	tracking.value = blocking_practice.arm_tracking*100.0
 	tracking.focus_mode = Control.FOCUS_NONE
 	tracking.value_changed.connect(func(value: float):
 		blocking_practice.arm_tracking = value/100.0
-		tracking_readout.text = "Arm tracking  %.0f%%" % value)
+		tracking_readout.text = "Arm tracking  %.0f%%" % value
+		blocking_practice.save_setup())
 	content.add_child(tracking)
 
 	var feed := OptionButton.new()
 	for title in ["Alternate pins","Left pin","Right pin","Middle"]:
 		feed.add_item(title)
 	feed.focus_mode = Control.FOCUS_NONE
-	feed.item_selected.connect(func(index: int): blocking_practice.set_feed_lane(index))
+	feed.select(blocking_practice.feed_lane)
+	feed.item_selected.connect(func(index: int):
+		blocking_practice.set_feed_lane(index)
+		blocking_practice.save_setup())
 	content.add_child(feed)
 	content.move_child(feed,1)
 	var update_role := func(attacking: bool):
@@ -379,8 +384,9 @@ func start_blocking_practice() -> void:
 		preview.grab_focus()
 	role.item_selected.connect(func(index: int):
 		blocking_practice.set_player_attacks(index == 0)
+		blocking_practice.save_setup()
 		update_role.call(index == 0))
-	update_role.call(true)
+	update_role.call(blocking_practice.player_attacks)
 	show_block_positions()
 
 func show_block_positions() -> void:
@@ -398,20 +404,21 @@ func show_block_positions() -> void:
 	var map := preload("res://scripts/blocking_position_map.gd").new()
 	map.drill = blocking_practice
 	positions.add_child(map)
-	var vertical_readout := label("Blocker vertical  +0 in",16)
+	var vertical_readout := label("Blocker vertical  %+.0f in" % blocking_practice.vertical_inches,16)
 	positions.add_child(vertical_readout)
 	var vertical := HSlider.new()
 	vertical.min_value = -20
 	vertical.max_value = 30
 	vertical.step = 1
-	vertical.value = 0
+	vertical.value = blocking_practice.vertical_inches
 	vertical.focus_mode = Control.FOCUS_NONE
 	vertical.value_changed.connect(func(value: float):
 		blocking_practice.set_vertical_inches(value)
-		vertical_readout.text = "Blocker vertical  %+.0f in" % value)
+		vertical_readout.text = "Blocker vertical  %+.0f in" % value
+		blocking_practice.save_setup())
 	positions.add_child(vertical)
 
-	add_block_position_slider(positions,"Set height",3.8,6.5,4.75,
+	add_block_position_slider(positions,"Set height",3.8,6.5,blocking_practice.set_apex,
 		func(value: float): blocking_practice.set_apex = value)
 
 func add_block_position_slider(parent: VBoxContainer, caption: String, minimum: float, maximum: float, initial: float, apply: Callable) -> void:
