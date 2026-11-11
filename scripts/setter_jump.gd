@@ -28,6 +28,7 @@ var air_velocity := Vector3.ZERO
 var air_offset := Vector3.ZERO
 const LEAD_STEP_TIME := 0.24
 var lead_time := 0.0
+var lead_arm_clip: Animation
 var lead_distance := 0.0
 var approach_plant := false
 var assisted_load_time := APPROACH_LOAD_TIME
@@ -212,6 +213,14 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 			var hand_orientation := HandPose.hand_basis(Vector3(-outward*0.24,0.85,0.34),Vector3(-outward*0.72,-0.24,-0.52))
 			var rotation := hand_orientation*HandPose.hand_basis(fingers,across).inverse()
 			author.set_world_basis(pose,hand,Basis(Quaternion.IDENTITY.slerp(rotation.get_rotation_quaternion(),jump_drive*0.75))*base.basis)
+	if lead_time > 0.0 and lead_arm_clip != null and elapsed < lead_time+0.10:
+		var track := lead_arm_clip.find_track(^"Armature/Skeleton3D:upperarm_r",Animation.TYPE_ROTATION_3D)
+		if track >= 0:
+			var bone := rig.find_bone("upperarm_r")
+			var clip_time := minf(elapsed/lead_time,1.0)*lead_arm_clip.length
+			var edited := lead_arm_clip.rotation_track_interpolate(track,clip_time)
+			var blend := smoothstep(0.0,0.035,elapsed)*(1.0-smoothstep(lead_time,lead_time+0.10,elapsed))
+			pose[bone].basis = Basis(pose[bone].basis.get_rotation_quaternion().slerp(edited,blend))
 	rig.set_bone_pose_position(pelvis,pose[pelvis].origin)
 	for bone in rig.get_bone_count():
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())

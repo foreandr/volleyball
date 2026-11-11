@@ -3,6 +3,7 @@ extends "res://scripts/setting_drill.gd"
 signal shot_sequence_changed(playing: bool)
 
 const Court = preload("res://scripts/preview_court.gd")
+const AnimationCatalog = preload("res://scripts/volleyball_animations.gd")
 const SpikeArm = preload("res://scripts/spike_arm_swing.gd")
 const HandPose = preload("res://scripts/hand_setting_pose.gd")
 const Footwork = preload("res://scripts/directional_footwork.gd")
@@ -119,6 +120,12 @@ func _ready() -> void:
 	spike_audio = create_ball_sound(preload("res://assets/audio/spike_smack.wav"),-6.0)
 	floor_audio = create_ball_sound(preload("res://assets/audio/ball_floor.wav"),-9.0)
 	load_practice_target()
+	var copies := AnimationCatalog.custom_entries()
+	for index in range(copies.size()-1,-1,-1):
+		var entry := copies[index]
+		if entry.get("source") == "approach_first_left_step":
+			jump.lead_arm_clip = load(entry.path) as Animation
+			break
 	build_approach_rings()
 
 func build_approach_rings() -> void:
