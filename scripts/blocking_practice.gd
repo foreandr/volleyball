@@ -17,6 +17,7 @@ var block_lift := 0.0
 var vertical_inches := 0.0
 const PALM_ANGLE_DEGREES := 30.0
 var last_block_gap := INF
+var last_block_hand := ""
 var kong_pressed_at: Array[float] = [INF,INF]
 var kong_tracking: Array[Vector2] = [Vector2(0.83,0.43),Vector2(0.83,0.43)]
 var active_block_height := BLOCK_HEIGHT
@@ -62,6 +63,7 @@ func reset_feed() -> void:
 	stage = Stage.SET
 	block_contact_at = INF
 	last_block_gap = INF
+	last_block_hand = ""
 	approach_space_held = true
 	setter.position = Vector3(0.0,0.04,1.67)
 	setter.rotation.y = 0.0
@@ -155,11 +157,14 @@ func step_blocker(delta: float) -> void:
 		var wrist_offset := Vector3(-sign_*0.105+block_tracking*press*2.0,0.64,0.20+0.34*press)
 		if kong > 0.0 and stage == Stage.HIT and not is_finite(block_contact_at):
 			var shoulder_world := rig.to_global(shoulder)
-			var reach := clampf((shot.x-shoulder_world.x)*sign_+0.04,0.26,0.86)
-			var height := clampf(shot.y-shoulder_world.y-0.10,0.35,0.64)
+			var local_depth := Net.NET_Z-0.12*press
+			var time_to_hand := maxf(0.0,(local_depth-pass_origin.z)/maxf(pass_motion.z,0.1))
+			var intercept := to_global(flight_point(pass_origin,pass_motion,time_to_hand))
+			var reach := clampf((intercept.x-shoulder_world.x)*sign_+0.04,0.16,0.86)
+			var height := clampf(intercept.y-shoulder_world.y-0.07,0.35,0.66)
 			kong_tracking[hand_index] = kong_tracking[hand_index].lerp(Vector2(reach,height),1.0-exp(-delta*33.0))
 		var tracked := kong_tracking[hand_index]
-		wrist_offset = wrist_offset.lerp(Vector3(sign_*tracked.x,tracked.y,0.25+0.14*press),kong)
+		wrist_offset = wrist_offset.lerp(Vector3(sign_*tracked.x,tracked.y,0.29+0.27*press),kong)
 		var wrist := shoulder+wrist_offset/scale_
 		author.limb(pose,"upperarm_"+side,"lowerarm_"+side,"hand_"+side,wrist,Vector3(sign_*lerpf(0.31,0.78,kong),-0.52,0.34),raise,176.0)
 		var base: Transform3D = author.world_pose(pose,rig.find_bone("hand_"+side))
@@ -217,6 +222,7 @@ func update_block_hand(pose: Array, rig: Skeleton3D, author: RefCounted, side: S
 		"previous_wrist":block_hands[index].get("wrist",wrist_point),
 		"previous_tip":block_hands[index].get("tip",tip),
 		"center":center,
+		"side":side,
 		"normal":normal,
 		"velocity":((center-previous)/maxf(delta,0.001)).limit_length(5.0)
 	}
@@ -274,26 +280,26 @@ func play_spike(time: float, delta: float) -> void:
 	if block_lift > 0.10 and time <= flight_end:
 		var before := flight_point(pass_origin,pass_motion,maxf(0.0,time-delta))
 		var after := flight_point(pass_origin,pass_motion,time)
-		var best_gap := BallPreview.RADIUS+0.19
 		var hit_hand: Dictionary = {}
-		for hand in block_hands:
-			if hand.is_empty(): continue
-			var wrist: Vector3 = hand.wrist
-			var tip: Vector3 = hand.tip
-			var old_wrist: Vector3 = hand.previous_wrist
-			var old_tip: Vector3 = hand.previous_tip
-			for sample in 9:
-				var progress := sample/8.0
-				var point := before.lerp(after,progress)
-				var surface := Geometry3D.get_closest_point_to_segment(point,old_wrist.lerp(wrist,progress),old_tip.lerp(tip,progress))
+		for sample in 9:
+			var best_gap := BallPreview.RADIUS+0.19
+			var progress := sample/8.0
+			var point := before.lerp(after,progress)
+			for hand in block_hands:
+				if hand.is_empty(): continue
+				var wrist: Vector3 = hand.previous_wrist.lerp(hand.wrist,progress)
+				var tip: Vector3 = hand.previous_tip.lerp(hand.tip,progress)
+				var surface := Geometry3D.get_closest_point_to_segment(point,wrist,tip)
 				var gap := point.distance_to(surface)
 				last_block_gap = minf(last_block_gap,gap)
 				if surface.y >= Net.NET_TOP and gap <= best_gap:
 					best_gap = gap
 					block_contact = point
 					hit_hand = hand
+			if not hit_hand.is_empty(): break
 		if not hit_hand.is_empty():
 			block_contact_at = time
+			last_block_hand = hit_hand.side
 			var incoming := pass_motion+Vector3.DOWN*Flight.GRAVITY*time
 			block_velocity = rebound_from_hand(incoming,block_contact,hit_hand)
 			ball.position = block_contact
@@ -307,6 +313,6 @@ func trace_snapshot(time: float) -> Dictionary:
 	snapshot["block"] = {
 		"jump_elapsed":block_elapsed,"lift":block_lift,"kong":kong_pressed_at,
 		"hands":block_hands,"closest_gap":last_block_gap,
-		"contact_at":block_contact_at,"outgoing":block_velocity
+		"contact_at":block_contact_at,"contact_hand":last_block_hand,"outgoing":block_velocity
 	}
 	return snapshot
