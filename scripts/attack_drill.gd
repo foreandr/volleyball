@@ -236,7 +236,7 @@ func reset_feed() -> void:
 	approach_steps = 2
 	approach_intercept = Vector3.INF
 	approach_setup_drag = ""
-	approach_rings.visible = approach_practice
+	approach_rings.visible = uses_assisted_approach()
 	approach_pressed_at = -INF
 	approach_released_at = INF
 	approach_set_touched_at = INF
@@ -410,8 +410,11 @@ func aim_swing(point: Vector3) -> void:
 	swing_target.position = Vector3(swing_aim.x,0.065,swing_aim.z)
 	swing_target.show()
 
+func uses_assisted_approach() -> bool:
+	return not swing_practice
+
 func swing_input(pressed: bool) -> void:
-	if swing_practice or approach_practice or stage != Stage.SET: return
+	if swing_practice or uses_assisted_approach() or stage != Stage.SET: return
 	if not pressed:
 		if is_finite(swing_started) and not is_finite(swing_released): swing_released = clock
 		return
@@ -424,7 +427,7 @@ func capture_approach_arm_pose() -> void:
 	for bone in rig.get_bone_count(): approach_arm_transition.append(rig.get_bone_pose(bone))
 
 func start_attack_swing() -> void:
-	if approach_practice: capture_approach_arm_pose()
+	if uses_assisted_approach(): capture_approach_arm_pose()
 	swing_started = clock
 	swing_charge_started = -INF
 	swing_released = -INF
@@ -434,7 +437,7 @@ func start_attack_swing() -> void:
 	trace.write("swing_start",clock,{"player":setter.position,"aim":swing_aim},true)
 
 func swing_charge() -> float:
-	if approach_practice:
+	if uses_assisted_approach():
 		return approach_hold_charge(approach_expected_hit_at)
 	return clampf((minf(clock,swing_released if is_finite(swing_released) else clock)-swing_charge_started)/(0.48 if swing_practice else SWING_CHARGE_TIME),0.0,1.0)
 
@@ -457,7 +460,7 @@ func setter_is_diving() -> bool:
 	return stage == Stage.PASS and not bump.low_save.finished(bump.touch_time+clock-stage_start)
 
 func queue_jump(direction: Vector2) -> void:
-	if approach_practice:
+	if uses_assisted_approach():
 		approach_space_held = true
 		try_queue_approach(true)
 		return
@@ -465,7 +468,8 @@ func queue_jump(direction: Vector2) -> void:
 	begin_attack_jump(direction)
 
 func try_queue_approach(log_rejection: bool) -> void:
-	if stage not in [Stage.PASS,Stage.SET] or is_finite(approach_pressed_at): return
+	if stage not in [Stage.PASS,Stage.SET] or is_finite(approach_pressed_at) or setter_is_diving(): return
+	if stage == Stage.PASS and not approach_practice and not is_finite(cpu_set.touch_time): return
 	var intercept := Vector3.INF
 	for tier in APPROACH_RADII.size():
 		intercept = find_approach_intercept(true,tier)
@@ -493,6 +497,9 @@ func unavailable_approach_status() -> String:
 func find_approach_intercept(respect_timing := true, tier := 2) -> Vector3:
 	var origin := pass_origin if stage == Stage.SET else cpu_contact_point
 	var velocity := pass_motion if stage == Stage.SET else set_toward_pin(origin,approach_set_target,approach_set_apex)
+	if stage == Stage.PASS and is_finite(cpu_set.touch_time):
+		origin = cpu_contact_point
+		velocity = cpu_set.outgoing
 	var apex := origin.y+velocity.y*velocity.y/(2.0*Flight.GRAVITY)
 	var earliest := descending_time(origin,velocity,minf(apex-0.15,3.59))
 	var latest := descending_time(origin,velocity,3.10)
@@ -540,15 +547,15 @@ func time_approach_plant(delta: float) -> void:
 func begin_attack_jump(direction: Vector2, plant_time := 0.36, jump_height := 0.0) -> void:
 	takeoff_yaw = setter.rotation.y
 	var ball_target := Vector3.INF
-	if approach_practice:
+	if uses_assisted_approach():
 		ball_target = approach_intercept
-	jump.begin(setter,direction,ball_target,plant_time,jump_height,approach_steps if approach_practice else 2)
+	jump.begin(setter,direction,ball_target,plant_time,jump_height,approach_steps if uses_assisted_approach() else 2)
 	trace.write("jump",clock,{"position":setter.position,"direction":jump.heading,"plant_time":jump.load_duration(),"assisted_height":jump_height},true)
 
 func step_jump(delta: float) -> void:
-	jump.load_bend_extra = deg_to_rad(backswing_bend)*0.36 if approach_practice else 0.0
-	jump.load_arm_extra = backswing_reach*0.85 if approach_practice else 0.0
-	if approach_practice and jump.active and jump.elapsed < jump.load_duration():
+	jump.load_bend_extra = deg_to_rad(backswing_bend)*0.36 if uses_assisted_approach() else 0.0
+	jump.load_arm_extra = backswing_reach*0.85 if uses_assisted_approach() else 0.0
+	if uses_assisted_approach() and jump.active and jump.elapsed < jump.load_duration():
 		var yaw := atan2(jump.heading.x,jump.heading.z)
 		setter.rotation.y = rotate_toward(setter.rotation.y,yaw,delta*12.0)
 		takeoff_yaw = setter.rotation.y
@@ -560,7 +567,7 @@ func setter_movement_scale() -> float:
 	return 1.0
 
 func step(delta: float) -> void:
-	if approach_practice:
+	if uses_assisted_approach():
 		approach_rings.position = Vector3(setter.position.x,0.061,setter.position.z)
 	clock += delta
 	var time := clock-stage_start
@@ -691,7 +698,7 @@ func play_cpu_set(time: float, delta: float) -> void:
 			bump.hand_setting = false
 			trace.closest_check.clear()
 			trace.closest_margin = INF
-			status.text = "Space to jump  |  Hold left-click to spike"
+			status.text = "Hold Space to approach and spike"
 			region.show()
 			aim_swing(swing_aim)
 			trace.write("cpu_set",clock,{"point":pass_origin,"velocity":pass_motion,"pin_arrival":pin_arrival},true)
@@ -722,31 +729,31 @@ func play_cpu_set(time: float, delta: float) -> void:
 		var target := flight_point(cpu_contact_point,ideal,Flight.landing_time(cpu_contact_point,ideal))
 		cpu_set.destination = Vector2(target.x,target.z)
 		cpu_set.begin_hand_contact(cpu_contact_point,time)
-		if approach_practice: approach_set_touched_at = clock
+		if uses_assisted_approach(): approach_set_touched_at = clock
 
 func play_pin_ball(time: float, previous: float, delta: float) -> void:
-	if approach_practice and not is_finite(approach_pressed_at):
+	if uses_assisted_approach() and not is_finite(approach_pressed_at):
 		status.text = "Hold Space to charge the spike" if find_approach_intercept().is_finite() else unavailable_approach_status()
 	var spin_axis := Vector3.UP.cross(pass_motion).normalized()
 	if not spin_axis.is_zero_approx(): ball.rotate(spin_axis,TAU*SET_TOPSPIN_RPS*delta)
 	ball.position = flight_point(pass_origin,pass_motion,minf(time,flight_end))
 	timing_cue.update_timing(time,pin_arrival,BumpSetting.GREEN_START,BumpSetting.GREEN_END)
-	var in_air := jump.active and setter.position.y > jump.start.y+0.02 and (not approach_practice or jump.elapsed > jump.load_duration())
+	var in_air := jump.active and setter.position.y > jump.start.y+0.02 and (not uses_assisted_approach() or jump.elapsed > jump.load_duration())
 	var air_age := maxf(0.0,jump.elapsed-jump.load_duration())
-	if approach_practice and in_air and not is_finite(swing_started): start_attack_swing()
+	if uses_assisted_approach() and in_air and not is_finite(swing_started): start_attack_swing()
 	if in_air and not swing_practice and (air_age < 0.10 or not is_finite(swing_started)):
 		var incoming_yaw := incoming_set_heading()
-		if approach_practice:
+		if uses_assisted_approach():
 			var glance := clampf(angle_difference(takeoff_yaw,incoming_yaw),-deg_to_rad(25.0),deg_to_rad(25.0))
 			incoming_yaw = takeoff_yaw+glance
-		var turn_rate := 420.0 if approach_practice else 720.0
+		var turn_rate := 420.0 if uses_assisted_approach() else 720.0
 		setter.rotation.y = rotate_toward(setter.rotation.y,incoming_yaw,deg_to_rad(turn_rate)*delta)
 	if is_finite(swing_started) and in_air:
 		if not is_finite(swing_charge_started): swing_charge_started = clock
 		var charge := swing_charge()
 		status.text = "Swing power  |  %d%%" % roundi(charge*100.0)
 		var airborne := setter.position.y > jump.start.y+0.08
-		var duration := lerpf(0.21,0.09,charge)+(0.035 if approach_practice else 0.0)
+		var duration := lerpf(0.21,0.09,charge)+(0.035 if uses_assisted_approach() else 0.0)
 		var predicted := flight_point(pass_origin,pass_motion,minf(time+duration,flight_end))
 		var toward_ball := predicted-setter.global_position
 		if not is_finite(swing_drive_started) and airborne and time >= pin_arrival-0.46:
@@ -754,7 +761,7 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 				swing_drive_started = clock
 				swing_drive_duration = duration
 				swing_hand_speed = 0.0
-		var load := smoothstep(0.0,0.26 if approach_practice else 0.18,clock-swing_charge_started)
+		var load := smoothstep(0.0,0.26 if uses_assisted_approach() else 0.18,clock-swing_charge_started)
 		var estimated_contact := descending_time(pass_origin,pass_motion,PIN_HEIGHT+1.0)
 		var draw_reference := estimated_contact-5.0*LOW_BOW_FRAME
 		var hold_delay := 0.0 if swing_practice else minf(0.12,0.24-draw_delay)*charge
@@ -763,7 +770,7 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 		# An early draw holds the low chamber until the lift window opens.
 		var lift_start := clampf(draw_end-LOW_BOW_FRAME,draw_reference+SpikeArm.DEFAULT_DRAW_DELAY-LOW_BOW_FRAME,estimated_contact-0.04)
 		var arm_lift := smoothstep(lift_start,estimated_contact,time)
-		if approach_practice:
+		if uses_assisted_approach():
 			draw_progress = 1.0
 			arm_lift = smootherstep(0.08,0.26,clock-swing_started)
 		if airborne:
@@ -776,7 +783,7 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 		var drive := clock-swing_drive_started if is_finite(swing_drive_started) else -INF
 		var approach_point := flight_point(pass_origin,pass_motion,clampf(maxf(time+0.12,pin_arrival-0.14),0.0,flight_end))
 		var drive_phase := clampf(drive/swing_drive_duration,0.0,1.0)
-		var extension := smootherstep(0.08,1.0,drive_phase) if approach_practice else smoothstep(0.0,1.0,drive_phase*(1.18-0.18*drive_phase))
+		var extension := smootherstep(0.08,1.0,drive_phase) if uses_assisted_approach() else smoothstep(0.0,1.0,drive_phase*(1.18-0.18*drive_phase))
 		if drive < 0.0:
 			pose_bow_draw(delta,load,approach_point,0.0,0.0,draw_progress,arm_lift)
 		else:
@@ -794,18 +801,18 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 			var palm_gap := Geometry3D.get_closest_point_to_segment(Vector3.ZERO,before,after).length()
 			# Give the real palm a chance to meet the ball before accepting an assisted hit.
 			var leaving_reach := after.dot(after-before) >= 0.0 or drive+delta > swing_drive_duration+0.12
-			if approach_practice and fraction < 0.0 and leaving_reach:
+			if uses_assisted_approach() and fraction < 0.0 and leaving_reach:
 				fraction = hand_contact_fraction(before,after,ASSISTED_PALM_RADIUS)
 			if fraction >= 0.0:
 				swing_contact_extension = extension
-				var contact_charge := approach_hold_charge(clock-(time-previous)*(1.0-fraction)) if approach_practice else charge
+				var contact_charge := approach_hold_charge(clock-(time-previous)*(1.0-fraction)) if uses_assisted_approach() else charge
 				hit_spike(contact_charge,previous_ball.lerp(ball.position,fraction),palm_gap)
 				return
 		previous_palm = palm
 	if time >= flight_end:
 		play_floor_sound()
 		var result := "Spike missed"
-		if approach_practice and not is_finite(approach_pressed_at):
+		if uses_assisted_approach() and not is_finite(approach_pressed_at):
 			result = "Set went untouched"
 		miss(result)
 
@@ -836,7 +843,7 @@ func hand_contact_fraction(before: Vector3, after: Vector3, palm_radius := PALM_
 	return entry if entry >= 0.0 and entry <= 1.0 else -1.0
 
 func hit_spike(charge: float, point: Vector3, palm_gap := 0.0) -> void:
-	if approach_practice: capture_approach_arm_pose()
+	if uses_assisted_approach(): capture_approach_arm_pose()
 	spike_bounce_speed = 0.0
 	if not ball_audio_muted: spike_audio.play()
 	swing_contact = point
@@ -847,7 +854,7 @@ func hit_spike(charge: float, point: Vector3, palm_gap := 0.0) -> void:
 	swing_contact_aim = swing_aim
 	var target := swing_contact_aim-pass_origin
 	var speed := clampf(swing_hand_speed*2.2,1.0,32.0)
-	if approach_practice:
+	if uses_assisted_approach():
 		var palm_bonus := lerpf(0.95,1.05,smoothstep(5.0,15.0,swing_hand_speed))
 		var contact_bonus := lerpf(1.12,0.74,smoothstep(BallPreview.RADIUS,BallPreview.RADIUS+ASSISTED_PALM_RADIUS,palm_gap))
 		speed = lerpf(12.0,27.0,charge)*palm_bonus*contact_bonus
@@ -945,7 +952,7 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 	# Tilt after the leg solve so the hips carry the tucked legs into the reach.
 	var reach_weight := airborne*weight*maxf(0.72*arm_lift,extension)
 	reach_weight *= 1.0-smoothstep(0.0,0.85,follow)
-	if approach_practice: reach_weight *= 0.28
+	if uses_assisted_approach(): reach_weight *= 0.28
 	var lean := airborne_reach_lean(contact)*reach_weight
 	author.rotate_world(pose,"pelvis",Vector3.RIGHT,lean.x)
 	author.rotate_world(pose,"pelvis",Vector3.BACK,lean.y)
@@ -964,7 +971,7 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 		pitch = lerpf(pitch,deg_to_rad(30.0-torso_lean_degrees),forward_crunch)
 		pitch *= 1.0-smoothstep(0.10,0.27,hit_age)
 	var follow_crunch := 0.0
-	if approach_practice:
+	if uses_assisted_approach():
 		pitch *= 0.38
 		if stage == Stage.SET:
 			var rise_age := clock-swing_started
@@ -977,7 +984,7 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 	var torso_pitch := pitch+deg_to_rad(30.0)*follow_crunch
 	author.rotate_world(pose,"spine_01",Vector3.RIGHT,torso_pitch*0.45*weight)
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,torso_pitch*0.55*weight)
-	if approach_practice and approach_steps == 2:
+	if uses_assisted_approach() and approach_steps == 2:
 		var tilt_weight := smoothstep(0.04,0.78,extension)
 		if stage == Stage.HIT:
 			tilt_weight *= 1.0-smootherstep(0.0,0.32,clock-stage_start)
@@ -1006,15 +1013,15 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 		var roll_step := deg_to_rad(2700.0)*delta
 		var shot_direction := (rig.to_local(shot_aim)-ball_target).normalized()
 		var compact_finish := SpikeArm.compact_finish_weight(shot_aim,contact,line_weight < 0.5)
-		var arm_weight := 1.0 if approach_practice and stage == Stage.SET else weight
-		swing_palm_roll = SpikeArm.apply(pose,author,ball_target,arm_weight,extension,follow,draw_progress,arm_lift,line_weight,elbow_clearance,swing_palm_roll,roll_step,shot_direction,compact_finish,backswing_reach*backswing_weight,approach_practice)
+		var arm_weight := 1.0 if uses_assisted_approach() and stage == Stage.SET else weight
+		swing_palm_roll = SpikeArm.apply(pose,author,ball_target,arm_weight,extension,follow,draw_progress,arm_lift,line_weight,elbow_clearance,swing_palm_roll,roll_step,shot_direction,compact_finish,backswing_reach*backswing_weight,uses_assisted_approach())
 		var guide_drop := maxf(smoothstep(0.07,0.83,extension),smoothstep(0.0,0.62,follow))
-		if approach_practice and stage == Stage.SET:
+		if uses_assisted_approach() and stage == Stage.SET:
 			guide_drop = maxf(guide_drop*0.75,0.72*smootherstep(0.28,0.49,clock-swing_started))
 		SpikeArm.apply_guide_arm(pose,author,Vector3(0.06,0.43,0.64-backswing_reach*backswing_weight*0.6),Vector3(0.26,-0.55,0.15),guide_drop,arm_weight,172.0)
 		if stage == Stage.HIT and follow >= 0.90:
 			swing_finish_pose = pose.duplicate()
-	if approach_practice and not approach_arm_transition.is_empty():
+	if uses_assisted_approach() and not approach_arm_transition.is_empty():
 		var handoff_age := clock-stage_start if stage == Stage.HIT else clock-swing_started
 		if stage == Stage.SET and handoff_age < 0.43:
 			var front_pose := pose.duplicate()
@@ -1048,7 +1055,7 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 				SpikeArm.blend_arm(pose,approach_arm_transition,author,source_weight)
 				SpikeArm.blend_arm(pose,approach_arm_transition,author,source_weight,"l")
 	var smoothing := 0.0
-	if approach_practice and not approach_arm_transition.is_empty():
+	if uses_assisted_approach() and not approach_arm_transition.is_empty():
 		if approach_render_rotations.is_empty():
 			for source in approach_arm_transition:
 				approach_render_rotations.append(source.basis.get_rotation_quaternion())

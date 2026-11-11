@@ -315,7 +315,7 @@ func start_setting_drill(attack := false) -> void:
 			if index == 2:
 				controls_hint.text = "WASD to move  |  Hold Space when rings overlap\nHold from setter touch to spike\nMove mouse to aim\nDrag player or set ring\nCtrl-click start  |  Shift-click set"
 				return
-			controls_hint.text = "WASD to move  |  Q forearms  |  I / E hands\nMouse to aim  |  Shift + scroll for pass height\nSpace to jump  |  Hold left-click to spike"
+			controls_hint.text = "WASD to move  |  Q forearms  |  I / E hands\nMouse to aim  |  Shift + scroll for pass height\nHold Space from setter touch to spike"
 			return
 		controls_hint.text = "WASD to move  |  Tap Q to bump set\nMouse to aim  |  Scroll to change height" if index == 1 else "WASD to move  |  Tap E to set\nMouse to aim  |  Scroll to change height\nSpace jump  |  7 to 50 in"
 	show_mode.call(modes.selected)
@@ -667,7 +667,7 @@ func _process(delta: float) -> void:
 		setting_drill.trace_input = player_controls.movement_input()
 		var approach_speed := 0.0
 		var approach_rate := 0.0
-		if selected_category == "Attacking" and setting_drill.approach_practice:
+		if selected_category == "Attacking" and setting_drill.uses_assisted_approach():
 			setting_drill.trace_input = setting_drill.queued_approach_input(delta)
 			approach_speed = setting_drill.approach_run_speed
 			approach_rate = 1.45
@@ -1040,7 +1040,7 @@ func handle_preview_input(event: InputEvent) -> void:
 		elif event is InputEventMouseMotion:
 			if event.button_mask & MOUSE_BUTTON_MASK_MIDDLE and (selected_category != "Attacking" or setting_drill.approach_setup_drag.is_empty()):
 				orbit_setting_camera(event.relative)
-			elif selected_category == "Attacking" and setting_drill.approach_practice:
+			elif selected_category == "Attacking" and setting_drill.uses_assisted_approach() and setting_drill.stage != setting_drill.Stage.SERVE:
 				if setting_drill.approach_setup_drag.is_empty():
 					aim_attack_shot(event.position)
 				else:
@@ -1282,10 +1282,10 @@ func _input(event: InputEvent) -> void:
 	if is_instance_valid(setting_drill) and event is InputEventKey and event.keycode == KEY_SPACE:
 		if event.pressed and not event.echo:
 			setting_drill.queue_jump(player_controls.movement_input())
-			if selected_category != "Attacking" or not setting_drill.approach_practice or setting_drill.approach_jump_queued:
+			if selected_category != "Attacking" or not setting_drill.uses_assisted_approach() or setting_drill.approach_jump_queued:
 				player_controls.setter_travel = Vector3.ZERO
 		elif not event.pressed:
-			if selected_category == "Attacking" and setting_drill.approach_practice:
+			if selected_category == "Attacking" and setting_drill.uses_assisted_approach():
 				setting_drill.release_approach_jump()
 			else:
 				setting_drill.jump.release()
