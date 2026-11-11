@@ -1090,7 +1090,7 @@ func dig_intercept(index: int) -> float:
 			best_cost = cost
 	return best
 
-func start_second_ball_spike(index: int) -> bool:
+func start_second_ball_spike(index: int, require_open_lane := false) -> bool:
 	var side := team(index)
 	var driver := attackers[side]
 	if driver.enabled or not net_hit.is_empty() or recoveries.has(index): return false
@@ -1107,6 +1107,14 @@ func start_second_ball_spike(index: int) -> bool:
 	if blocker >= 0:
 		wall = frame.to_local(players[blocker].global_position)
 		wall.z = Net.NET_Z+0.40
+	if require_open_lane:
+		if not cpu_spike_has_lane(contact): return false
+		if blocker >= 0:
+			var actual := frame.to_local(players[blocker].global_position)
+			var lane_gap := absf(actual.x-contact.x)
+			var closing_time := maxf(0.0,at-elapsed-0.25)
+			var net_gap := maxf(0.0,actual.z-(Net.NET_Z+0.70))
+			if Vector2(maxf(0.0,lane_gap-0.85),net_gap).length() <= closing_time*5.3: return false
 	driver.start_set(attacker,frame.to_local(origin),frame.global_basis.inverse()*velocity,contact,choose_shot(index,contact,wall),elapsed,false)
 	if not driver.find_approach_intercept(true).is_finite():
 		driver.enabled = false
@@ -1154,7 +1162,9 @@ func tick_receive(delta: float, previous: float) -> void:
 	if not spectator and receiving_team == 0 and is_finite(platforms[0].pressed_at) and not blocks.has(0): index = 0
 	if index < 0 or blocks.has(index): return
 	if cpu_second_spike: return
-	if (cpu_dump or overpass_flight == flight_number) and not is_human(index) and not is_finite(platforms[index].pressed_at) and start_second_ball_spike(index): return
+	if not is_human(index) and not is_finite(platforms[index].pressed_at):
+		var planned_attack := cpu_dump or overpass_flight == flight_number
+		if (planned_attack or cpu_is_setting(index)) and start_second_ball_spike(index,not planned_attack): return
 	var frame := frames[team(index)]
 	var bump := platforms[index]
 	var technique := requested if is_human(index) else cpu_technique
