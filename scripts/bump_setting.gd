@@ -24,6 +24,8 @@ var setter: Node3D
 var hand_setting := false
 var quick_hand_receive := false
 var defensive_hand_dig := false
+var allow_auto_dive := true
+var tracked_hand_dig := Vector3.INF
 var catch_only := false
 var catch_airborne := false
 var setter_jumping := false
@@ -109,6 +111,7 @@ func set_custom_backward(animation: Animation) -> void:
 	if animation != null: custom_backward_tracks = animation_tracks(animation)
 
 func reset() -> void:
+	tracked_hand_dig = Vector3.INF
 	contact_check.clear()
 	approach_progress = -1.0
 	grade = Timing.Grade.WAITING
@@ -173,6 +176,20 @@ func hand_intercept(path: Callable, time: float, end: float) -> Vector3:
 	if current.is_equal_approx(next): return center
 	var nearest := Geometry3D.get_closest_point_to_segment(center,current,next)
 	return center+(nearest-center).limit_length(0.50)
+
+func track_hand_dig(path: Callable, time: float, end: float, delta: float) -> Vector3:
+	var facing := setter.global_basis.orthonormalized()
+	var face := hand_dig_face()
+	var origin := to_global(face)
+	var start: Vector3 = path.call(time)
+	var finish: Vector3 = path.call(minf(time+0.13,end))
+	var center := ready_contact()
+	var target := Geometry3D.get_closest_point_to_segment(center,start,finish)
+	var offset := facing.inverse()*(to_global(target)-origin)
+	offset = offset.clamp(Vector3(-0.26,-0.19,0.18),Vector3(0.26,0.23,0.50))
+	if not tracked_hand_dig.is_finite(): tracked_hand_dig = Vector3(0.0,0.0,0.30)
+	tracked_hand_dig = tracked_hand_dig.lerp(offset,1.0-exp(-delta*34.0))
+	return to_local(origin+facing*tracked_hand_dig)
 
 func aim_velocity(origin: Vector3, spread := Vector2.ZERO) -> Vector3:
 	return Accuracy.pass_velocity(origin,{"position":destination,"fit":"height","height":height},45.0,spread)
@@ -250,6 +267,7 @@ func apply_knee_bend(time := INF) -> void:
 	var parent: Transform3D = author.world_pose(pose,rig.get_bone_parent(pelvis))
 	var feet: Array[Transform3D] = []
 	var knee_poles: Array[Vector3] = []
+	var hips_across: Vector3 = (author.point(pose,"thigh_l")-author.point(pose,"thigh_r")).normalized()
 	var requested_depth := knee_bend_depth
 	if reach.get("tier",0) == 2:
 		var recovery := 1.0-smoothstep(0.04,0.35,time-touch_time) if is_finite(touch_time) else clampf(knee_bend_depth/maxf(0.001,ready_knee_bend_depth),0.0,1.0)
@@ -279,7 +297,18 @@ func apply_knee_bend(time := INF) -> void:
 		for joint in [thigh,calf,foot]:
 			var bone := rig.find_bone(joint)
 			knee_bend_source[bone] = pose[bone]
-		author.limb(pose,thigh,calf,foot,feet[index].origin,knee_poles[index])
+		var hip: Vector3 = author.point(pose,thigh)
+		var axis := (feet[index].origin-hip).normalized()
+		var out := (hips_across if index == 0 else -hips_across).slide(axis).normalized()
+		var pole := knee_poles[index].slide(axis).normalized()
+		var lateral := pole.dot(out)
+		if lateral < 0.32:
+			var bend := pole.slide(out)
+			if bend.length_squared() < 0.0001:
+				bend = out.cross(axis)
+				if bend.z < 0.0: bend = -bend
+			pole = bend.normalized()*sqrt(1.0-0.32*0.32)+out*0.32
+		author.limb(pose,thigh,calf,foot,feet[index].origin,pole)
 		author.set_world_basis(pose,foot,feet[index].basis)
 	for bone in knee_bend_source: rig.set_bone_pose(bone,pose[bone])
 
@@ -292,14 +321,14 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 	if attempted and grade == Timing.Grade.WAITING:
 		if not is_finite(pose_started_at) and progress >= 1.0-PLATFORM_PREP_TIME/APPROACH_TIME:
 			pose_started_at = maxf(pressed_at,time-delta)
-		if not hand_setting and not setter_jumping and reach.is_empty(): low_save.plan(setter,path,time,end,clip)
+		if allow_auto_dive and not hand_setting and not setter_jumping and reach.is_empty(): low_save.plan(setter,path,time,end,clip)
 	var elapsed := time-pose_started_at
 	var striking := attempted and grade == Timing.Grade.WAITING and (low_save.active or is_finite(pose_started_at)) and time < end and (not catch_only or catch_airborne)
 	if striking:
 		if hand_setting:
 			apply_knee_bend(time)
-			var target := hand_intercept(path,time,end)
-			HandPose.apply(setter,to_global(target),smoothstep(0.0,0.048 if face_dig else (0.062 if quick_hand_receive else 0.105),elapsed),Vector3.ZERO,0.0,0.0,face_dig)
+			var target := track_hand_dig(path,time,end,delta) if face_dig else hand_intercept(path,time,end)
+			HandPose.apply(setter,to_global(target),smoothstep(0.0,0.048 if face_dig else (0.062 if quick_hand_receive else 0.105),elapsed),Vector3.ZERO,0.0,0.0,face_dig,-(global_basis*incoming))
 		elif low_save.active:
 			low_save.sample(setter,time,low_save.contact_time+0.07)
 		else:
@@ -397,7 +426,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 				var relax := 1.0-smoothstep(0.035,0.22,follow)
 				var recoil := smoothstep(0.0,0.035,follow)*(1.0-smoothstep(0.035,0.13,follow))
 				var push := (global_basis*outgoing).normalized()*0.08*recoil
-				HandPose.apply(setter,setter.to_global(hand_anchor),relax,push,recoil,0.0,true)
+				HandPose.apply(setter,setter.to_global(hand_anchor),relax,push,recoil,0.0,true,-(global_basis*incoming))
 		elif hand_setting:
 			update_hand_push(time,follow)
 		else:

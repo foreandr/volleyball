@@ -976,8 +976,9 @@ func _process(delta: float) -> void:
 	if is_instance_valid(blocking_practice):
 		if defense_active:
 			blocking_practice.dig.restore_knee_bend()
+			blocking_practice.update_defense_facing(delta)
 			player_controls.read_pace_input()
-			player_controls.move_player(player_controls.movement_input(),delta,false,blocking_practice.ball.global_position,blocking_practice.defense_move_scale(),0.80,true,3.20,0.0,0.0,true)
+			player_controls.move_player(player_controls.movement_input(),delta,false,blocking_practice.ball.global_position,blocking_practice.defense_move_scale(),0.80,false,3.20,0.0,0.0,true)
 			blocking_practice.tick_block(delta)
 			return
 		var camera_motion := camera_pan_delta(player_controls.movement_input(),delta,5.0)

@@ -14,13 +14,13 @@ static func contact_center(actor: Node3D) -> Vector3:
 		center += rig.get_bone_global_pose(rig.find_bone("thumb_03_"+side)).origin
 	return rig.to_global(center*0.25+Vector3(0,0.075,0.07))
 
-static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.ZERO, cushion := 0.0, torso_follow := 0.0, face_save := false) -> void:
+static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.ZERO, cushion := 0.0, torso_follow := 0.0, face_save := false, ball_direction := Vector3.ZERO) -> void:
 	var rig: Skeleton3D = actor.skeleton
 	var author: RefCounted = actor.get_pose_author()
 	var pose: Array = []
 	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
 	var original := pose.duplicate()
-	var lean_weight := 0.35 if face_save else 1.0
+	var lean_weight := 0.0 if face_save else 1.0
 	author.rotate_world(pose,"spine_01",Vector3.RIGHT,-0.18*lean_weight)
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,-0.075*lean_weight)
 	var target_local := rig.to_local(target)
@@ -33,7 +33,7 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,forward_lean*0.19*lean_weight)
 	head = author.point(pose,"Head")
 	var aim := target_local-head
-	var diamond := head+Vector3(clampf(aim.x,-0.22,0.22),clampf(aim.y-0.075,0.00 if face_save else 0.12,0.15 if face_save else 0.27),clampf(aim.z-0.07,0.09,0.35))
+	var diamond := head+Vector3(clampf(aim.x,-0.28 if face_save else -0.22,0.28 if face_save else 0.22),clampf(aim.y-0.075,-0.10 if face_save else 0.12,0.20 if face_save else 0.27),clampf(aim.z-0.07,0.09,0.35))
 	var local_push := rig.global_basis.inverse()*push
 	var horizontal_push := local_push.slide(Vector3.UP)
 	var turn := 0.0
@@ -64,6 +64,11 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 		target_fingers = target_fingers.lerp(local_push.normalized(),0.46*follow)
 		# Index side stays inward and back so the pinky edge cups forward.
 		var target_across := Vector3(-sign_*0.72,-0.30,-0.54)
+		if face_save and not ball_direction.is_zero_approx():
+			var incoming := (rig.global_basis.inverse()*ball_direction).normalized()
+			var palm_normal := Vector3(clampf(incoming.x,-0.45,0.45),clampf(incoming.y,-0.18,0.40),maxf(0.55,incoming.z)).normalized()
+			target_fingers = target_fingers.slide(palm_normal).normalized()
+			target_across = palm_normal.cross(target_fingers)*sign_
 		author.set_world_basis(pose,hand,hand_basis(target_fingers,target_across)*hand_basis(fingers,across).inverse()*base.basis)
 		shape_digit(author,pose,"index",side,diamond+Vector3(sign_*0.018,0.065,0.025))
 		shape_digit(author,pose,"thumb",side,diamond+Vector3(sign_*0.016,-0.047,0.045))

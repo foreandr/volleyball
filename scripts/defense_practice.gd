@@ -21,6 +21,7 @@ func configure_block(actor: Node3D, readout: Label, build: String) -> void:
 	dig.global_transform = Transform3D.IDENTITY
 	dig.configure(actor,bump.clip)
 	dig.defensive_hand_dig = true
+	dig.allow_auto_dive = false
 	dig.destination = Vector2(0.0,1.8)
 	dig.height = 3.4
 	dig.lunge_bend_depth = 0.18
@@ -54,7 +55,11 @@ func reset_feed() -> void:
 	var lane: Vector2 = ZONE_FIVE_TARGETS[next_dig_lane]
 	next_dig_lane = (next_dig_lane+1)%ZONE_FIVE_TARGETS.size()
 	aim_swing(Vector3(lane.x,Flight.FLOOR,lane.y))
-	swing_target.hide()
+	if swing_target.material_override == region_style:
+		var marker := region_style.duplicate() as StandardMaterial3D
+		marker.albedo_color = Color.WHITE
+		swing_target.material_override = marker
+	swing_target.show()
 	approach_rings.hide()
 	dig_pressed_at = -INF
 	dig_sound_played = false
@@ -76,7 +81,7 @@ func play_cpu_set(time: float, delta: float) -> void:
 		approach_space_held = true
 		approach_set_touched_at = clock
 		region.hide()
-		swing_target.hide()
+		swing_target.show()
 
 func queue_dig(use_hands: bool) -> void:
 	if stage not in [Stage.SET,Stage.HIT] or is_finite(dig.touch_time): return
@@ -89,6 +94,15 @@ func queue_dig(use_hands: bool) -> void:
 
 func aim_dig(point: Vector3) -> void:
 	dig.destination = Vector2(clampf(point.x,-5.5,5.5),clampf(point.z,-5.0,3.7))
+
+func update_defense_facing(delta: float) -> void:
+	if dig.hand_setting and (is_finite(dig_pressed_at) or is_finite(dig.pressed_at)):
+		if not is_finite(dig.touch_time) or clock-stage_start-dig.touch_time < 0.22: return
+	var toward := (ball.global_position-blocker.global_position).slide(Vector3.UP)
+	var yaw := 0.0
+	if stage in [Stage.SET,Stage.HIT] and not is_finite(dig.touch_time) and toward.z > 0.35:
+		yaw = clampf(atan2(toward.x,toward.z),-0.65,0.65)
+	blocker.rotation.y = rotate_toward(blocker.rotation.y,yaw,delta*4.0)
 
 func defense_move_scale() -> float:
 	if stage != Stage.HIT: return 1.0
