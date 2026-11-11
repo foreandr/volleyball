@@ -301,7 +301,8 @@ func start_serve_bump_set_spike() -> void:
 	clear_content()
 	if is_instance_valid(ball_preview): ball_preview.stop()
 	set_title("SERVE BUMP SET SPIKE")
-	content.add_child(label("WASD to move  |  Q forearms  |  E / I hands\nCursor aims  |  Shift + scroll for pass height\nShift + W to run  |  Hold Space to spike",16))
+	var controls_hint := label("WASD to move  |  Q forearms  |  E / I hands\nCursor aims  |  Shift + scroll for pass height\nShift + W to run  |  Hold Space to spike",16)
+	content.add_child(controls_hint)
 	drill_status = label("",18)
 	content.add_child(drill_status)
 	setter_original_transform = preview_player.transform
@@ -330,6 +331,8 @@ func start_serve_bump_set_spike() -> void:
 	serve_side.add_item("Serve to teammate")
 	serve_side.item_selected.connect(func(index: int):
 		setting_drill.serve_to_partner = index == 1
+		technique.disabled = index == 1
+		controls_hint.text = "Aim the set with the cursor\nShift + scroll sets height\nQ forearms  |  E / I hands  |  Space jump set\nAfter release, aim teammate's spike with cursor" if index == 1 else "WASD to move  |  Q forearms  |  E / I hands\nCursor aims  |  Shift + scroll for pass height\nShift + W to run  |  Hold Space to spike"
 		setting_drill.reset_feed())
 	content.add_child(serve_side)
 	content.add_child(button("Replay",setting_drill.reset_feed))
@@ -1137,13 +1140,18 @@ func handle_preview_input(event: InputEvent) -> void:
 	if selected_category == "Chasing" and is_instance_valid(setting_drill):
 		if event is InputEventMouseMotion:
 			if event.button_mask & MOUSE_BUTTON_MASK_MIDDLE: orbit_setting_camera(event.relative)
+			elif setting_drill.partner_receiving and setting_drill.stage in [setting_drill.Stage.SERVE,setting_drill.Stage.PASS] and not is_finite(setting_drill.cpu_set.touch_time):
+				var point: Variant = attack_floor_point(event.position)
+				if point is Vector3: setting_drill.aim_manual_set(point)
 			elif setting_drill.can_aim_set():
 				var point: Variant = attack_floor_point(event.position)
 				if point is Vector3: setting_drill.set_pass_aim(point)
 			elif setting_drill.stage != setting_drill.Stage.SERVE: aim_attack_shot(event.position)
 		elif event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_WHEEL_UP,MOUSE_BUTTON_WHEEL_DOWN]:
 			var wheel := 1.0 if event.button_index == MOUSE_BUTTON_WHEEL_UP else -1.0
-			if event.shift_pressed and setting_drill.can_aim_set(): adjust_bump_height(wheel*0.25)
+			if event.shift_pressed and setting_drill.partner_receiving and setting_drill.stage in [setting_drill.Stage.SERVE,setting_drill.Stage.PASS]:
+				setting_drill.adjust_manual_set_height(wheel*0.25)
+			elif event.shift_pressed and setting_drill.can_aim_set(): adjust_bump_height(wheel*0.25)
 			else: zoom_attack_camera(wheel)
 		return
 	if is_instance_valid(setting_drill):
@@ -1385,7 +1393,13 @@ func _input(event: InputEvent) -> void:
 	if selected_category == "Chasing" and is_instance_valid(setting_drill):
 		if event.is_action_pressed("ui_cancel"): open_menu()
 		elif event is InputEventKey and not event.echo:
-			if setting_drill.partner_receiving: return
+			if setting_drill.partner_receiving:
+				if event.pressed:
+					match event.keycode:
+						KEY_Q: setting_drill.request_manual_set(1)
+						KEY_E, KEY_I: setting_drill.request_manual_set(0)
+						KEY_SPACE: setting_drill.request_manual_set(2)
+				return
 			if event.keycode == KEY_Q and event.pressed: setting_drill.queue_set()
 			elif event.keycode in [KEY_E,KEY_I] and event.pressed: setting_drill.queue_hand_receive()
 			elif event.keycode == KEY_SPACE:

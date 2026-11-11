@@ -668,10 +668,7 @@ func play_serve(time: float, previous: float, delta: float) -> void:
 		pass_origin = bump.release_point if bump.hand_setting else bump.touch
 		pass_motion = bump.outgoing
 		active_cpu_set_style = cpu_set_style
-		var head_height := CPU_HOME.y+HandPose.CONTACT_HEIGHT*receiver.scale.y
-		if active_cpu_set_style == 1: head_height = CPU_HOME.y+1.0
-		if active_cpu_set_style == 2: head_height += 0.44
-		cpu_contact_time = descending_time(pass_origin,pass_motion,head_height)
+		cpu_contact_time = descending_time(pass_origin,pass_motion,cpu_set_contact_height())
 		if cpu_contact_time <= 0.0:
 			shank("Pass was too low to set")
 			return
@@ -726,6 +723,20 @@ func face_receiver(direction: Vector3, max_turn: float) -> void:
 func called_set_target() -> Vector3:
 	return approach_set_target if approach_practice else rally_set_target
 
+func cpu_set_contact_height() -> float:
+	if active_cpu_set_style == 1: return CPU_HOME.y+1.0
+	var height := CPU_HOME.y+HandPose.CONTACT_HEIGHT*receiver.scale.y
+	return height+0.44 if active_cpu_set_style == 2 else height
+
+func cpu_set_apex() -> float:
+	return approach_set_apex if approach_practice else SET_APEX
+
+func cpu_set_launch(origin: Vector3) -> Vector3:
+	return set_toward_pin(origin,called_set_target(),cpu_set_apex(),PIN_HEIGHT if approach_practice else RALLY_SET_CONTACT_HEIGHT)
+
+func set_requested() -> bool:
+	return true
+
 func play_cpu_set(time: float, delta: float) -> void:
 	if is_finite(cpu_set.touch_time):
 		var push_time: float = time-cpu_set.touch_time
@@ -738,7 +749,7 @@ func play_cpu_set(time: float, delta: float) -> void:
 			ball.position = cpu_set.platform_center()
 		if is_finite(cpu_set.release_time):
 			pass_origin = cpu_set.release_point
-			pass_motion = cpu_set.outgoing if approach_practice else set_toward_pin(pass_origin,rally_set_target,SET_APEX,RALLY_SET_CONTACT_HEIGHT)
+			pass_motion = cpu_set.outgoing if approach_practice else cpu_set_launch(pass_origin)
 			pin_arrival = descending_time(pass_origin,pass_motion,PIN_HEIGHT if approach_practice else RALLY_SET_CONTACT_HEIGHT)
 			flight_end = Flight.landing_time(pass_origin,pass_motion)
 			stage = Stage.SET
@@ -777,8 +788,11 @@ func play_cpu_set(time: float, delta: float) -> void:
 		if (receiver.position-cpu_stand).slide(Vector3.UP).length()>0.60:
 			shank("CPU could not reach the pass",time)
 			return
-		cpu_set.height = approach_set_apex if approach_practice else SET_APEX
-		var ideal := set_toward_pin(cpu_contact_point,called_set_target(),cpu_set.height,PIN_HEIGHT if approach_practice else RALLY_SET_CONTACT_HEIGHT)
+		if not set_requested():
+			shank("Set missed",time)
+			return
+		cpu_set.height = cpu_set_apex()
+		var ideal := cpu_set_launch(cpu_contact_point)
 		var target := flight_point(cpu_contact_point,ideal,Flight.landing_time(cpu_contact_point,ideal))
 		cpu_set.destination = Vector2(target.x,target.z)
 		if active_cpu_set_style == 1:

@@ -11,6 +11,10 @@ var serve_to_partner := false
 var partner_receiving := false
 var user_player: Node3D
 var teammate: Node3D
+var manual_set_requested := false
+var manual_set_apex := SET_APEX
+var manual_set_target := Vector3.INF
+var set_lane_center := 0.0
 
 func setup_demo() -> void:
 	user_player = setter
@@ -43,6 +47,8 @@ func reset_feed() -> void:
 	super.reset_feed()
 	if not is_instance_valid(serve_demo): return
 	release_approach_jump()
+	manual_set_requested = false
+	manual_set_target = Vector3.INF
 	setter.position = BACK_RIGHT if partner_receiving else BACK_LEFT
 	setter.rotation.y = 0.0
 	receiver.position = BACK_LEFT if partner_receiving else BACK_RIGHT
@@ -69,7 +75,52 @@ func set_pass_aim(point: Vector3) -> void:
 	if partner_receiving: return
 	bump.destination = Vector2(clampf(point.x,-4.35,4.35),clampf(point.z,-4.8,3.45))
 
+func aim_manual_set(point: Vector3) -> void:
+	if not partner_receiving or stage not in [Stage.SERVE,Stage.PASS]: return
+	if stage == Stage.PASS and is_finite(cpu_set.touch_time): return
+	manual_set_target = point
+	if stage == Stage.PASS: update_manual_set_target()
+
+func adjust_manual_set_height(amount: float) -> void:
+	if stage == Stage.PASS and is_finite(cpu_set.touch_time): return
+	manual_set_apex = clampf(manual_set_apex+amount,4.2,7.5)
+	if stage == Stage.PASS: update_manual_set_target()
+
+func request_manual_set(technique: int) -> void:
+	if not partner_receiving or stage != Stage.PASS or is_finite(cpu_set.touch_time): return
+	manual_set_requested = true
+	active_cpu_set_style = technique
+	cpu_contact_time = maxf(clock-stage_start,descending_time(pass_origin,pass_motion,cpu_set_contact_height()))
+	cpu_contact_point = flight_point(pass_origin,pass_motion,cpu_contact_time)
+	var incoming := (pass_origin-cpu_contact_point).slide(Vector3.UP).normalized()
+	cpu_stand = Court.clamp_setter(Vector3(cpu_contact_point.x,CPU_HOME.y,cpu_contact_point.z)-incoming*HandPose.CONTACT_FORWARD*receiver.scale.z,ATTACK_FRONT_LIMIT)
+
+func set_requested() -> bool:
+	return not partner_receiving or manual_set_requested
+
+func cpu_set_apex() -> float:
+	return manual_set_apex if partner_receiving else SET_APEX
+
+func update_manual_set_target() -> void:
+	if manual_set_target.is_finite():
+		rally_set_target.x = clampf(manual_set_target.x,maxf(-4.35,set_lane_center-APPROACH_RADII[1]),minf(4.35,set_lane_center+APPROACH_RADII[1]))
+	cpu_set_launch(cpu_contact_point)
+	if is_instance_valid(rally_set_call): rally_set_call.text = "Set height %.1f m" % manual_set_apex
+
+func cpu_set_launch(origin: Vector3) -> Vector3:
+	var apex := cpu_set_apex()
+	var contact := descending_time(origin,Vector3.UP*sqrt(2.0*Flight.GRAVITY*(apex-origin.y)),RALLY_SET_CONTACT_HEIGHT)
+	var floor_time := Flight.landing_time(origin,Vector3.UP*sqrt(2.0*Flight.GRAVITY*(apex-origin.y)))
+	var target_depth := Net.NET_Z-RALLY_SET_NET_CLEARANCE
+	if partner_receiving and manual_set_target.is_finite():
+		target_depth = clampf(manual_set_target.z,minf(target_depth,origin.z+0.35),target_depth)
+	var safe_floor := Net.NET_Z-0.16
+	rally_set_target.z = minf(target_depth,lerpf(origin.z,safe_floor,contact/floor_time))
+	region.position = rally_set_target
+	return set_toward_pin(origin,rally_set_target,apex,RALLY_SET_CONTACT_HEIGHT)
+
 func call_rally_set(passer: Vector3) -> void:
+	set_lane_center = passer.x
 	var candidates: Array[int] = []
 	for zone in RALLY_SET_ZONES:
 		if absf(rally_zone_x(zone)-passer.x) <= APPROACH_RADII[1]:
@@ -79,10 +130,11 @@ func call_rally_set(passer: Vector3) -> void:
 	if candidates.size() > 1: candidates.erase(rally_set_index)
 	rally_set_index = candidates.pick_random()
 	rally_set_target = Vector3(rally_zone_x(rally_set_index),PIN.y,Net.NET_Z-RALLY_SET_NET_CLEARANCE)
-	region.position = rally_set_target
+	if partner_receiving: update_manual_set_target()
+	else: cpu_set_launch(cpu_contact_point)
 	region.show()
 	if is_instance_valid(rally_set_call):
-		rally_set_call.text = "Set to Zone %d" % ((rally_set_index+1)*10)
+		if not partner_receiving: rally_set_call.text = "Set to Zone %d" % ((rally_set_index+1)*10)
 		rally_set_call.show()
 
 func tick_demo(delta: float, controls: RefCounted) -> void:
@@ -104,6 +156,7 @@ func tick_demo(delta: float, controls: RefCounted) -> void:
 			trace_input = queued_approach_input(delta)
 		step_jump(delta)
 		step(delta)
+		if stage == Stage.PASS and not manual_set_requested: status.text = "Your set  |  Q, E / I, or Space"
 		return
 	controls.read_pace_input()
 	trace_input = controls.movement_input()
