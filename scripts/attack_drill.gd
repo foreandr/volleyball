@@ -49,6 +49,7 @@ var approach_practice := false
 var takeoff_yaw := 0.0
 var approach_jump_queued := false
 var approach_steps := 2
+var approach_from_sprint := false
 var approach_space_held := false
 var approach_intercept := Vector3.INF
 var approach_start := APPROACH_START
@@ -240,6 +241,7 @@ func reset_feed() -> void:
 	jump.active = false
 	approach_jump_queued = false
 	approach_steps = 2
+	approach_from_sprint = false
 	approach_intercept = Vector3.INF
 	approach_setup_drag = ""
 	approach_rings.visible = uses_assisted_approach()
@@ -539,7 +541,7 @@ func find_approach_intercept(respect_timing := true, tier := 2) -> Vector3:
 		if (point-setter.position).slide(Vector3.UP).length() <= APPROACH_RADII[tier]+REGION_RADIUS: return point
 	return Vector3.INF
 
-func queued_approach_input(delta: float) -> Vector2:
+func queued_approach_input(delta: float, sprint_held := false) -> Vector2:
 	approach_run_speed = 0.0
 	if stage == Stage.APPROACH_RETURN:
 		var offset := (approach_start-setter.position).slide(Vector3.UP)
@@ -549,6 +551,8 @@ func queued_approach_input(delta: float) -> Vector2:
 	if not approach_jump_queued:
 		return Vector2.ZERO if jump.active else trace_input
 	if stage == Stage.SET: time_approach_plant(delta)
+	if not approach_practice and sprint_held and trace_input.y > 0.3 and not jump.active:
+		return trace_input
 	return Vector2.ZERO
 
 func time_approach_plant(delta: float) -> void:
@@ -577,7 +581,7 @@ func begin_attack_jump(direction: Vector2, plant_time := 0.36, jump_height := 0.
 	var ball_target := Vector3.INF
 	if uses_assisted_approach():
 		ball_target = approach_intercept
-	jump.begin(setter,direction,ball_target,plant_time,jump_height,approach_steps if uses_assisted_approach() else 2)
+	jump.begin(setter,direction,ball_target,plant_time,jump_height,approach_steps if uses_assisted_approach() else 2,approach_from_sprint)
 	trace.write("jump",clock,{"position":setter.position,"direction":jump.heading,"plant_time":jump.load_duration(),"assisted_height":jump_height},true)
 
 func step_jump(delta: float) -> void:

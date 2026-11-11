@@ -27,6 +27,9 @@ var stride := 0.0
 var air_velocity := Vector3.ZERO
 var air_offset := Vector3.ZERO
 const LEAD_STEP_TIME := 0.24
+const RUN_HANDOFF_TIME := 0.15
+var run_handoff_pose: Array[Transform3D] = []
+var run_model_yaw := 0.0
 var lead_time := 0.0
 var entry_time := 0.0
 var entry_distance := 0.0
@@ -41,7 +44,7 @@ var left_foot_start: Vector3
 var right_plant: Vector3
 var left_plant: Vector3
 
-func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time := APPROACH_LOAD_TIME, jump_height := 0.0, approach_steps := 2) -> void:
+func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time := APPROACH_LOAD_TIME, jump_height := 0.0, approach_steps := 2, from_sprint := false) -> void:
 	if active: return
 	active = true
 	held = true
@@ -62,6 +65,7 @@ func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time
 	entry_time = LEAD_STEP_TIME if approach_steps == 4 else 0.0
 	entry_distance = 0.0
 	lead_distance = 0.0
+	run_handoff_pose.clear()
 	if approach_plant:
 		var ball_offset := (ball_target-start).slide(Vector3.UP)
 		if entry_time > 0.0: entry_distance = clampf(ball_offset.length()-1.85,0.45,1.15)
@@ -78,6 +82,11 @@ func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time
 		left_plant = right_plant+toward_ball*0.43+Vector3.UP.cross(toward_ball)*0.19
 		right_plant.y = minf(right_foot_start.y,left_foot_start.y)
 		left_plant.y = right_plant.y
+		if from_sprint:
+			for bone in rig.get_bone_count():
+				run_handoff_pose.append(rig.get_bone_pose(bone))
+			run_model_yaw = actor.model.rotation.y
+			actor.animator.speed_scale = 1.0
 	actor.play_action("idle")
 
 func release() -> void:
@@ -120,6 +129,10 @@ func step(actor: Node3D, delta: float, input: Vector2) -> void:
 	if lead_time > 0.0:
 		transfer_hop = 0.05*smoothstep(LEAD_STEP_TIME*0.82,LEAD_STEP_TIME,lead_age)*(1.0-smoothstep(0.0,0.135,pose_time))
 	var base := start+heading*distance+Vector3.UP*(4.0*height*flight*(1.0-flight)+transfer_hop)
+	if not run_handoff_pose.is_empty():
+		var handoff := smoothstep(0.0,RUN_HANDOFF_TIME,elapsed)
+		actor.model.rotation.y = lerp_angle(run_model_yaw,0.0,handoff)
+		if elapsed >= RUN_HANDOFF_TIME: run_handoff_pose.clear()
 	var lunge := approach_lunge*smoothstep(0.0,0.58,elapsed-load_time)
 	var position := base+air_offset+lunge
 	actor.position = Court.clamp_setter(position,front_limit)
@@ -232,6 +245,10 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 			var edited := lead_arm_clip.rotation_track_interpolate(track,clip_time)
 			var blend := smoothstep(0.0,0.035,lead_age)*(1.0-smoothstep(lead_time,lead_time+0.10,elapsed))
 			pose[bone].basis = Basis(pose[bone].basis.get_rotation_quaternion().slerp(edited,blend))
+	if not run_handoff_pose.is_empty():
+		var handoff := smoothstep(0.0,RUN_HANDOFF_TIME,elapsed)
+		for bone in rig.get_bone_count():
+			pose[bone] = run_handoff_pose[bone].interpolate_with(pose[bone],handoff)
 	rig.set_bone_pose_position(pelvis,pose[pelvis].origin)
 	for bone in rig.get_bone_count():
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
