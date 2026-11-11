@@ -466,14 +466,16 @@ func queue_jump(direction: Vector2) -> void:
 
 func try_queue_approach(log_rejection: bool) -> void:
 	if stage not in [Stage.PASS,Stage.SET] or is_finite(approach_pressed_at): return
-	var intercept := find_approach_intercept(true,0)
-	if not intercept.is_finite():
-		intercept = find_approach_intercept(true,1)
-		if intercept.is_finite(): approach_steps = 3
+	var intercept := Vector3.INF
+	for tier in APPROACH_RADII.size():
+		intercept = find_approach_intercept(true,tier)
+		if intercept.is_finite():
+			approach_steps = tier+2
+			break
 	if not intercept.is_finite():
 		if log_rejection:
 			status.text = unavailable_approach_status()
-			trace.write("approach_rejected",clock,{"target":approach_set_target,"range":APPROACH_RADII[1]+REGION_RADIUS,"reason":status.text},true)
+			trace.write("approach_rejected",clock,{"target":approach_set_target,"range":APPROACH_RADII.back()+REGION_RADIUS,"reason":status.text},true)
 		return
 	approach_pressed_at = clock
 	approach_jump_queued = true
@@ -488,14 +490,14 @@ func release_approach_jump() -> void:
 func unavailable_approach_status() -> String:
 	return "Too late to plant" if find_approach_intercept(false).is_finite() else "Set outside approach reach"
 
-func find_approach_intercept(respect_timing := true, tier := 1) -> Vector3:
+func find_approach_intercept(respect_timing := true, tier := 2) -> Vector3:
 	var origin := pass_origin if stage == Stage.SET else cpu_contact_point
 	var velocity := pass_motion if stage == Stage.SET else set_toward_pin(origin,approach_set_target,approach_set_apex)
 	var apex := origin.y+velocity.y*velocity.y/(2.0*Flight.GRAVITY)
 	var earliest := descending_time(origin,velocity,minf(apex-0.15,3.59))
 	var latest := descending_time(origin,velocity,3.10)
 	if respect_timing and stage == Stage.SET:
-		earliest = maxf(earliest,clock-stage_start+APPROACH_MIN_PLANT_TIME+0.10+(jump.LEAD_STEP_TIME if tier == 1 else 0.0))
+		earliest = maxf(earliest,clock-stage_start+APPROACH_MIN_PLANT_TIME+0.10+jump.LEAD_STEP_TIME*tier)
 	if earliest > latest: return Vector3.INF
 	for sample in 7:
 		var point := flight_point(origin,velocity,lerpf(earliest,latest,sample/6.0))
@@ -527,7 +529,7 @@ func time_approach_plant(delta: float) -> void:
 	var contact_at := descending_time(pass_origin,pass_motion,contact_height)
 	var time_before_lift := contact_at-(clock-stage_start)-air_time*0.54
 	var plant_time := lerpf(0.30,jump.APPROACH_LOAD_TIME,distance_weight)+0.15
-	var lead_time := jump.LEAD_STEP_TIME if approach_steps == 3 else 0.0
+	var lead_time := jump.LEAD_STEP_TIME*(approach_steps-2)
 	if time_before_lift > plant_time+lead_time+delta: return
 	approach_jump_queued = false
 	approach_expected_hit_at = stage_start+contact_at
@@ -540,7 +542,7 @@ func begin_attack_jump(direction: Vector2, plant_time := 0.36, jump_height := 0.
 	var ball_target := Vector3.INF
 	if approach_practice:
 		ball_target = approach_intercept
-	jump.begin(setter,direction,ball_target,plant_time,jump_height,approach_practice and approach_steps == 3)
+	jump.begin(setter,direction,ball_target,plant_time,jump_height,approach_steps if approach_practice else 2)
 	trace.write("jump",clock,{"position":setter.position,"direction":jump.heading,"plant_time":jump.load_duration(),"assisted_height":jump_height},true)
 
 func step_jump(delta: float) -> void:
