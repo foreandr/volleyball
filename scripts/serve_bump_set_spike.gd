@@ -121,7 +121,8 @@ func cpu_set_apex() -> float:
 
 func update_manual_set_target() -> void:
 	if manual_set_target.is_finite():
-		rally_set_target.x = clampf(manual_set_target.x,maxf(-4.35,set_lane_center-APPROACH_RADII[1]),minf(4.35,set_lane_center+APPROACH_RADII[1]))
+		var lateral_reach: float = APPROACH_RADII[2]
+		rally_set_target.x = clampf(manual_set_target.x,maxf(-4.35,set_lane_center-lateral_reach),minf(4.35,set_lane_center+lateral_reach))
 	var origin := Vector3(receiver.position.x,cpu_set_contact_height(),receiver.position.z+0.45)
 	if stage == Stage.PASS:
 		origin = cpu_set.platform_center() if is_finite(cpu_set.touch_time) else cpu_contact_point
