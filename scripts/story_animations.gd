@@ -364,8 +364,16 @@ func start_blocking_practice() -> void:
 		vertical_readout.text = "Vertical jump  %+.0f in" % value)
 	content.add_child(vertical)
 
+	var feed := OptionButton.new()
+	for title in ["Alternate pins","Left pin","Right pin","Middle"]:
+		feed.add_item(title)
+	feed.focus_mode = Control.FOCUS_NONE
+	feed.item_selected.connect(func(index: int): blocking_practice.set_feed_lane(index))
+	content.add_child(feed)
+	content.move_child(feed,1)
 	var update_role := func(attacking: bool):
 		controls.text = ("Hold Space to approach and spike\nMove mouse to aim" if attacking else "Space to jump\nQ / E to open left / right arm")+"\nWASD to move camera\nMiddle drag to rotate"
+		feed.visible = attacking
 		vertical_readout.visible = not attacking
 		vertical.visible = not attacking
 		preview_camera.position = Vector3(0.0,4.9,13.2 if attacking else -5.2)

@@ -9,6 +9,8 @@ const SHOT_LANES := [3.35,0.0,-3.35]
 var next_shot_lane := 0
 var player_attacks := true
 var cpu_block_queued := false
+var feed_lane := 0
+var next_pin := 1.0
 var player_shot_aim := Vector3(0.0,0.065,10.5)
 var blocker: Node3D
 var blocker_start: Transform3D
@@ -75,6 +77,10 @@ func set_player_attacks(value: bool) -> void:
 	blocker.animator.seek(0.0,true)
 	reset_feed()
 
+func set_feed_lane(value: int) -> void:
+	feed_lane = value
+	if player_attacks: set_player_attacks(true)
+
 func aim_player_spike(world_point: Vector3) -> void:
 	if not player_attacks or stage != Stage.SET: return
 	var point := to_local(world_point)
@@ -91,10 +97,18 @@ func reset_feed() -> void:
 	last_block_hand = ""
 	approach_space_held = space_held if player_attacks else true
 	cpu_block_queued = false
-	setter.position = Vector3(0.0,0.04,1.67)
+	var pin_x := 0.0
+	if player_attacks:
+		match feed_lane:
+			0:
+				pin_x = next_pin*PIN.x
+				next_pin = -next_pin
+			1: pin_x = PIN.x
+			2: pin_x = -PIN.x
+	setter.position = Vector3(pin_x*0.78,0.04,1.67)
 	setter.rotation.y = 0.0
-	rally_set_target = Vector3(0.0,0.065,3.34)
-	pass_origin = Vector3(-0.65,2.12,2.35)
+	rally_set_target = Vector3(pin_x,0.065,3.34)
+	pass_origin = Vector3(0.0 if player_attacks else -0.65,2.12,2.35)
 	pass_motion = set_toward_pin(pass_origin,rally_set_target,4.75,3.38)
 	pin_arrival = descending_time(pass_origin,pass_motion,3.38)
 	flight_end = Flight.landing_time(pass_origin,pass_motion)
@@ -133,6 +147,9 @@ func queue_kong(hand_index: int) -> void:
 		kong_pressed_at[hand_index] = block_elapsed
 
 func tick_block(delta: float) -> void:
+	if player_attacks and stage == Stage.SET and block_elapsed < 0.0:
+		var pin_world := to_global(rally_set_target)
+		blocker.position.x = move_toward(blocker.position.x,pin_world.x,delta*8.0)
 	if player_attacks and not cpu_block_queued and block_elapsed < 0.0:
 		if stage == Stage.SET and is_finite(swing_started) and clock-swing_started >= 0.20:
 			cpu_block_queued = true
