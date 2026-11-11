@@ -68,6 +68,8 @@ var dead_age := 0.0
 var bounce_origin := Vector3.ZERO
 var bounce_velocity := Vector3.ZERO
 var bounce_end := 0.0
+var bounce_start := 0.0
+var dead_flight_from := INF
 var spectator := false
 var key_labels: Array[Label3D] = []
 var key_until := [0.0,0.0,0.0,0.0]
@@ -105,7 +107,10 @@ var cpu_choice := -1
 var cpu_technique := 0
 var aim_point := Vector3.INF
 var pass_height := 4.6
-var attack_vertical := 30.0
+var attack_vertical := 40.0
+var passing_skill := 78.0
+var setting_skill := 84.0
+var held_ball := false
 var block_vertical := 30.0
 var serve_vertical := 30.0
 var spike_strength := 0.70
@@ -249,6 +254,8 @@ func begin_point() -> void:
 	last_input_at = -INF
 	last_input_technique = -1
 	bounce_end = 0.0
+	bounce_start = 0.0
+	dead_flight_from = INF
 	key_until = [0.0,0.0,0.0,0.0]
 	defender_assignment = [-1,-1]
 	block_lane_flight = [-1,-1]
@@ -386,6 +393,9 @@ func award(side: int, reason: String) -> void:
 		if rallies > 0: server_slot[side] = 1-int(server_slot[side])
 	rallies += 1
 	dead_age = 0.0
+	if bounce_end <= 0.0 and elapsed < flight_end(): dead_flight_from = elapsed
+	trace.write("point",match_clock,{"reason":reason,"ball":ball.global_position,"flight":flight_kind,
+		"net":net_hit.get("kind",""),"winner":side},true)
 	for driver in attackers:
 		if driver.enabled and driver.stage == driver.Stage.SET:
 			driver.stage = driver.Stage.MISS
@@ -402,6 +412,7 @@ func award(side: int, reason: String) -> void:
 		info.text = winner+" · "+reason
 
 func reset_receives() -> void:
+	held_ball = false
 	for bump in platforms:
 		bump.reset()
 		bump.knee_bend_depth = 0.0
@@ -577,13 +588,20 @@ func queue_receive(index: int, technique: int) -> void:
 	bump.queue_bump(elapsed)
 	show_key(index,["Q","E","F"][technique])
 
+func cpu_pass_target(index: int) -> Vector3:
+	var passer := players[index].position
+	var teammate := players[index^1].position
+	var x := lerpf(passer.x,teammate.x,0.82)
+	var forward := maxf(1.05,absf(x-passer.x)*tan(deg_to_rad(40.0)))
+	return Vector3(x,0.065,clampf(passer.z+forward,-3.4,2.95))
+
 func aim_receive(index: int) -> void:
 	var bump := platforms[index]
 	var side := team(index)
 	var frame := frames[side]
-	var teammate := players[index^1]
-	var destination := teammate.position
-	destination.z = clampf(destination.z+0.65,-2.7,2.85)
+	var destination := cpu_pass_target(index)
+	bump.passing_skill_override = passing_skill
+	bump.setting_skill_override = setting_skill
 	if is_human(index) and aim_point.is_finite(): destination = frame.to_local(aim_point)
 	elif side == possession_team and (touches >= 2 or (cpu_dump and index == cpu_choice)): destination = choose_shot(index)
 	bump.destination = Vector2(clampf(destination.x,-6.5,6.5),clampf(destination.z,-6.0,13.0))
@@ -614,14 +632,15 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 	if touches == 2 and not (cpu_dump and index == cpu_choice) and (bump.destination.y < 4.0 or (is_human(index) and technique != 0)):
 		var pin := set_pin_for(index)
 		var incoming := velocity+Vector3.DOWN*Flight.GRAVITY*elapsed
-		var apex := maxf(3.60,maxf(point.y+0.18,bump.height)) if is_human(index) else cpu_set_apex(index,point,pin,incoming.length())
-		if is_human(index):
-			var error := Bump.Accuracy.sample_offset(Bump.Accuracy.spread(0.0,velocity.length(),spin,StorySession.setting_skill,true))
-			pin += error.slide(Vector3.UP)
-			apex = maxf(maxf(3.60,point.y+0.18),apex+error.y)
-		last_set_apex = apex
 		var driver := attackers[side]
-		var motion: Vector3 = driver.set_toward_pin(point,pin,apex,3.38)
+		var contact_height: float = driver.set_contact_height()
+		var minimum := maxf(contact_height+0.22,point.y+0.18)
+		var apex := maxf(minimum,bump.height) if is_human(index) else cpu_set_apex(index,point,pin,incoming.length())
+		var error := Bump.Accuracy.sample_offset(Bump.Accuracy.spread(0.0,incoming.length(),spin,setting_skill,true))
+		pin += error.slide(Vector3.UP)
+		apex = maxf(minimum,apex+error.y)
+		last_set_apex = apex
+		var motion: Vector3 = driver.set_toward_pin(point,pin,apex,contact_height)
 		launch(world_point,frame.global_basis*motion,"set",index,1.0,index^1,frame.to_global(pin))
 		return
 	var crossing := (Net.NET_Z-world_point.z)/world_motion.z if absf(world_motion.z)>0.001 else -1.0
@@ -895,9 +914,13 @@ func tick_receive(delta: float, previous: float) -> void:
 		pose_fake_dump(actor,cue-elapsed)
 	if is_finite(bump.touch_time):
 		if bump.hand_setting and not is_finite(bump.release_time):
+			held_ball = true
 			ball.global_position = frame.to_global(bump.platform_center())
 			return
+		held_ball = false
 		var touch: Vector3 = bump.release_point if bump.hand_setting else bump.touch
+		if touch.z > Net.NET_Z+0.07:
+			touch = bump.touch
 		if not is_human(index) and technique != 0 and bump.touch.y < actor.position.y+1.45:
 			bump.reset()
 			cpu_technique = 0
@@ -914,7 +937,8 @@ func tick_receive(delta: float, previous: float) -> void:
 			if technique == 0: bump.apply_pose(bump.contact_frame,0.82)
 			else: Bump.HandPose.apply(actor,catch_point,0.86)
 			var target := {"position":bump.destination,"fit":"height","height":bump.height}
-			var result := Bump.Accuracy.pass_velocity(frame.to_local(catch_point),target,45.0,Vector2(0.25,0.22))
+			var spread: Vector2 = bump.accuracy_bounds(0.0,frame.global_basis.inverse()*motion,spin)
+			var result := Bump.Accuracy.pass_velocity(frame.to_local(catch_point),target,45.0,spread)
 			receive_contact(index,catch_point,frame.global_basis*result,technique)
 func pose_fake_dump(actor: Node3D, lead: float) -> void:
 	var weight := (1.0-smoothstep(0.15,0.28,lead))*smoothstep(0.045,0.12,lead)
@@ -1054,7 +1078,7 @@ func position_defense(delta: float) -> void:
 		var cross_goal := Vector3(clampf(-attack.x*0.80,-3.7,3.7),0.0,depth)
 		var sideline := signf(attack.x) if absf(attack.x) > 0.20 else (1.0 if players[near].position.x >= 0.0 else -1.0)
 		var line_x := clampf(lane_at_depth(attack,line_goal,3.42)+sideline*0.25,-4.15,4.15)
-		var cross_x := lane_at_depth(attack,cross_goal,3.42)-sideline*0.22
+		var cross_x := lerpf(lane_at_depth(attack,cross_goal,3.42),attack.x,0.44)
 		if block_lane_flight[defense_side] != flight_number:
 			var line_cost := absf(players[near].position.x-line_x)+0.35*absf(players[deep].position.x-cross_goal.x)
 			var cross_cost := absf(players[near].position.x-cross_x)+0.35*absf(players[deep].position.x-line_goal.x)
@@ -1118,7 +1142,7 @@ func update_player_guide() -> void:
 	var launch: Vector3
 	if expected_hitter == 0 and flight_kind == "set":
 		var driver := attackers[0]
-		var contact_at: float = driver.descending_time(origin,velocity,3.38)
+		var contact_at: float = driver.descending_time(origin,velocity,driver.set_contact_height())
 		start = flight_point(clampf(contact_at,0.0,duration))
 		target = driver.swing_aim
 		var travel := target-start
@@ -1126,7 +1150,7 @@ func update_player_guide() -> void:
 		launch = travel/air_time+Vector3.UP*0.5*Flight.GRAVITY*air_time
 	elif receiving_team == 0 and possession_team == 0 and touches == 1 and last_player == 1:
 		target = set_pin_for(0)
-		launch = attackers[0].set_toward_pin(start,target,maxf(maxf(3.60,start.y+0.18),pass_height),3.38)
+		launch = attackers[0].set_toward_pin(start,target,maxf(maxf(3.60,start.y+0.18),pass_height),attackers[0].set_contact_height())
 	else:
 		launch = Flight.target_velocity(start,{"position":Vector2(target.x,target.z),"fit":"height","height":pass_height},45.0)
 	aim_ring.global_position = Vector3(target.x,0.066,target.z)
@@ -1142,29 +1166,38 @@ func update_player_guide() -> void:
 			trajectory.surface_add_vertex(to_local(start+launch*time+Vector3.DOWN*0.5*Flight.GRAVITY*time*time))
 	trajectory.surface_end()
 
-func check_floor(previous: float) -> void:
-	if not crossed_net:
-		var before := path_point(previous)
-		var after := ball.global_position
-		if (before.z-Net.NET_Z)*(after.z-Net.NET_Z) < 0.0:
-			crossed_net = true
-			var crossing := before.lerp(after,inverse_lerp(before.z,after.z,Net.NET_Z))
-			if absf(crossing.x) > Net.NET_HALF_WIDTH or crossing.y < Net.NET_TOP:
-				award(1-team(last_player),"Outside the crossing space")
-				return
-	if elapsed < flight_end(): return
+func begin_ball_bounce() -> void:
 	if not StorySession.attack_ball_audio_muted: floor_audio.play()
-	var point := ball.global_position
-	bounce_origin = point
+	bounce_origin = path_point(flight_end())
+	bounce_origin.y = Flight.FLOOR
 	var before_impact := path_point(maxf(0.0,flight_end()-0.015))
-	var impact_velocity := (point-before_impact)/0.015
+	var impact_velocity := (bounce_origin-before_impact)/0.015
 	bounce_velocity = impact_velocity.slide(Vector3.UP)*0.37
 	bounce_velocity.y = clampf(absf(impact_velocity.y)*0.55,1.85,6.35)
 	bounce_end = Flight.landing_time(bounce_origin,bounce_velocity)
+
+func check_floor(previous: float) -> void:
+	if held_ball: return
+	if not crossed_net and net_hit.is_empty():
+		var before := path_point(previous)
+		var after := path_point(minf(elapsed,flight_end()))
+		if (before.z-Net.NET_Z)*(after.z-Net.NET_Z) < 0.0:
+			crossed_net = true
+			var crossing := before.lerp(after,inverse_lerp(before.z,after.z,Net.NET_Z))
+			if absf(crossing.x) > Net.NET_HALF_WIDTH:
+				award(1-team(last_player),"Outside the antenna")
+				return
+			if crossing.y < Net.NET_TOP:
+				award(1-team(last_player),"Under the net")
+				return
+	if elapsed < flight_end(): return
+	begin_ball_bounce()
+	var point := bounce_origin
 	var in_bounds := absf(point.x) <= 4.53 and point.z >= -5.03 and point.z <= 13.03
 	if in_bounds:
 		var court_side := 0 if point.z < Net.NET_Z else 1
-		award(1-court_side,"Ball down")
+		var reason := "Into the net" if not net_hit.is_empty() and not net_hit.rollover else "Ball down"
+		award(1-court_side,reason)
 	else:
 		award(1-team(last_player),"Out")
 
@@ -1176,10 +1209,16 @@ func tick_match(delta: float, controls: RefCounted) -> void:
 	if phase in [Phase.DEAD,Phase.FINISHED]:
 		dead_age += delta
 		settle_point(delta)
+		if is_finite(dead_flight_from) and bounce_end <= 0.0:
+			var flight_time := minf(dead_flight_from+dead_age,flight_end())
+			ball.global_position = path_point(flight_time)
+			if flight_time >= flight_end():
+				bounce_start = dead_age
+				begin_ball_bounce()
 		if bounce_end > 0.0:
-			var time := minf(dead_age,bounce_end)
+			var time := minf(dead_age-bounce_start,bounce_end)
 			ball.global_position = bounce_origin+bounce_velocity*time+Vector3.DOWN*0.5*Flight.GRAVITY*time*time
-		if phase == Phase.DEAD and dead_age >= maxf(0.85,bounce_end+0.15):
+		if phase == Phase.DEAD and (not is_finite(dead_flight_from) or bounce_end > 0.0) and dead_age >= maxf(0.85,bounce_start+bounce_end+0.15):
 			var settling := false
 			for index in players.size(): settling = settling or owns_action(index)
 			if not settling or dead_age >= 1.55: begin_point()
@@ -1240,6 +1279,7 @@ func tick_match(delta: float, controls: RefCounted) -> void:
 	position_defense(delta)
 	tick_blocks(delta,previous)
 	if flight_number != current_flight or phase != Phase.LIVE: return
+	held_ball = false
 	tick_receive(delta,previous)
 	if flight_number != current_flight or phase != Phase.LIVE: return
 	advance_idle_players(delta)

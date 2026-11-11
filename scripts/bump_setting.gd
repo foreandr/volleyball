@@ -22,6 +22,8 @@ const FOREARM_RECOVERY_TIME := 0.47
 
 var setter: Node3D
 var hand_setting := false
+var passing_skill_override := -1.0
+var setting_skill_override := -1.0
 var quick_hand_receive := false
 var defensive_hand_dig := false
 var allow_auto_dive := true
@@ -200,6 +202,8 @@ func aim_velocity(origin: Vector3, spread := Vector2.ZERO) -> Vector3:
 func accuracy_bounds(error: float, incoming: Vector3, spin_rps: float) -> Vector2:
 	var setting := forearm_setting or (hand_setting and not quick_hand_receive)
 	var skill := StorySession.setting_skill if setting else (StorySession.hand_reception_skill if hand_setting else StorySession.forearm_reception_skill)
+	var override := setting_skill_override if setting else passing_skill_override
+	if override >= 0.0: skill = override
 	var bounds := Accuracy.spread(error,incoming.length(),spin_rps,skill,setting)
 	if hand_setting and defensive_hand_dig: bounds = bounds*1.32+Vector2(0.30,0.25)
 	return bounds

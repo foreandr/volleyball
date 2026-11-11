@@ -531,6 +531,12 @@ func unavailable_approach_status() -> String:
 func adaptive_approach_timing() -> bool:
 	return false
 
+func approach_reach_height() -> float:
+	return INF
+
+func approach_hand_height() -> float:
+	return 2.32
+
 func find_approach_intercept(respect_timing := true, tier := 2) -> Vector3:
 	var origin := pass_origin if stage == Stage.SET else cpu_contact_point
 	var velocity := pass_motion if stage == Stage.SET else set_toward_pin(origin,approach_set_target,approach_set_apex)
@@ -538,8 +544,9 @@ func find_approach_intercept(respect_timing := true, tier := 2) -> Vector3:
 		origin = cpu_contact_point
 		velocity = cpu_set.outgoing
 	var apex := origin.y+velocity.y*velocity.y/(2.0*Flight.GRAVITY)
-	var earliest := descending_time(origin,velocity,minf(apex-0.15,3.59))
-	var latest := descending_time(origin,velocity,3.10)
+	var reach_height := approach_reach_height()
+	var earliest := descending_time(origin,velocity,minf(apex-0.15,minf(3.59,reach_height)))
+	var latest := descending_time(origin,velocity,minf(3.10,reach_height-0.23))
 	if respect_timing and stage == Stage.SET:
 		var minimum_plant := 0.115 if adaptive_approach_timing() else APPROACH_MIN_PLANT_TIME
 		var minimum_step := jump.LEAD_STEP_TIME*(0.55 if adaptive_approach_timing() else 1.0)
@@ -576,7 +583,7 @@ func time_approach_plant(delta: float) -> void:
 	var minimum_plant := APPROACH_MIN_PLANT_TIME
 	var lead_time := jump.LEAD_STEP_TIME*(approach_steps-2)
 	var air_fraction := 0.54
-	var contact_height := minf(ball_target.y,2.32+jump_height*0.91)
+	var contact_height := minf(ball_target.y,approach_hand_height()+jump_height*0.91)
 	var contact_at := descending_time(pass_origin,pass_motion,contact_height)
 	if adaptive_approach_timing():
 		minimum_plant = 0.115
@@ -584,10 +591,10 @@ func time_approach_plant(delta: float) -> void:
 		var nominal_rise := jump.flight_duration(jump_height,true)*air_fraction
 		var ground_budget := remaining-nominal_rise
 		var rush := 1.0-smoothstep(minimum_plant+lead_time*0.55,plant_time+lead_time,ground_budget)
-		var lower_jump := clampf((ball_target.y-2.32)/0.91+0.04,minf(0.78,jump_height),jump_height)
+		var lower_jump := clampf((ball_target.y-approach_hand_height())/0.91+0.04,minf(0.78,jump_height),jump_height)
 		jump_height = lerpf(jump_height,lower_jump,rush)
 		air_fraction = lerpf(0.54,0.43,rush)
-		contact_height = minf(ball_target.y,2.32+jump_height*0.91)
+		contact_height = minf(ball_target.y,approach_hand_height()+jump_height*0.91)
 		contact_at = descending_time(pass_origin,pass_motion,contact_height)
 	var time_before_lift := contact_at-(clock-stage_start)-jump.flight_duration(jump_height,true)*air_fraction
 	if time_before_lift > plant_time+lead_time+delta: return

@@ -28,7 +28,7 @@ func start_set(actor: Node3D, origin: Vector3, velocity: Vector3, target: Vector
 	stage_start = clock-age
 	pass_origin = origin
 	pass_motion = velocity
-	pin_arrival = descending_time(origin,velocity,3.38)
+	pin_arrival = descending_time(origin,velocity,set_contact_height())
 	flight_end = Flight.landing_time(origin,velocity)
 	rally_set_target = target
 	swing_aim = shot
@@ -39,6 +39,15 @@ func start_set(actor: Node3D, origin: Vector3, velocity: Vector3, target: Vector
 	region.hide()
 	swing_target.hide()
 	enabled = true
+
+func approach_hand_height() -> float:
+	return 2.22
+
+func approach_reach_height() -> float:
+	return approach_hand_height()+(jump.max_height-0.2032)*0.91
+
+func set_contact_height() -> float:
+	return clampf(approach_reach_height(),2.70,3.38)
 
 func adaptive_approach_timing() -> bool:
 	return true
