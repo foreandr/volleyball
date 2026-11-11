@@ -1074,6 +1074,7 @@ func hand_receive_reach() -> float:
 	return Bump.HandPose.CONTACT_FORWARD if flight_kind == "serve" else 0.28
 
 func overhead_available(index: int, technique: int) -> bool:
+	if not is_human(index) and flight_kind == "serve" and serve.get_script() == SERVES[3]: return false
 	var first_contact := technique == 1 and (defensive_ball() or flight_kind == "serve")
 	var setting := cpu_is_setting(index)
 	var height := hand_contact_height(technique)
