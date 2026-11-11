@@ -301,7 +301,7 @@ func start_serve_bump_set_spike() -> void:
 	clear_content()
 	if is_instance_valid(ball_preview): ball_preview.stop()
 	set_title("SERVE BUMP SET SPIKE")
-	var controls_hint := label("WASD to move  |  Q forearms  |  E / I hands\nCursor aims  |  Shift + scroll for pass height\nScroll to zoom  |  Shift + W to run  |  Hold Space to spike",16)
+	var controls_hint := label("WASD to move  |  Q forearms  |  E / I hands\nCursor aims  |  Scroll for pass height\nShift + W to run  |  Hold Space to spike",16)
 	content.add_child(controls_hint)
 	drill_status = label("",18)
 	content.add_child(drill_status)
@@ -332,7 +332,7 @@ func start_serve_bump_set_spike() -> void:
 	serve_side.item_selected.connect(func(index: int):
 		setting_drill.serve_to_partner = index == 1
 		technique.disabled = index == 1
-		controls_hint.text = "Aim the set with the cursor\nScroll to change set height\nQ forearms  |  E / I hands  |  Space jump set" if index == 1 else "WASD to move  |  Q forearms  |  E / I hands\nCursor aims  |  Shift + scroll for pass height\nScroll to zoom  |  Shift + W to run  |  Hold Space to spike"
+		controls_hint.text = "Aim the set with the cursor\nScroll to change set height\nQ forearms  |  E / I hands  |  Space jump set" if index == 1 else "WASD to move  |  Q forearms  |  E / I hands\nCursor aims  |  Scroll for pass height\nShift + W to run  |  Hold Space to spike"
 		setting_drill.reset_feed())
 	content.add_child(serve_side)
 	content.add_child(button("Replay",setting_drill.reset_feed))
@@ -1149,10 +1149,11 @@ func handle_preview_input(event: InputEvent) -> void:
 			elif not setting_drill.partner_receiving and setting_drill.stage != setting_drill.Stage.SERVE: aim_attack_shot(event.position)
 		elif event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_WHEEL_UP,MOUSE_BUTTON_WHEEL_DOWN]:
 			var wheel := 1.0 if event.button_index == MOUSE_BUTTON_WHEEL_UP else -1.0
-			if not event.shift_pressed and setting_drill.partner_receiving and setting_drill.stage in [setting_drill.Stage.SERVE,setting_drill.Stage.PASS] and not is_finite(setting_drill.cpu_set.touch_time):
+			if setting_drill.partner_receiving and setting_drill.stage in [setting_drill.Stage.SERVE,setting_drill.Stage.PASS] and not is_finite(setting_drill.cpu_set.touch_time):
 				setting_drill.adjust_manual_set_height(wheel*0.25)
-			elif event.shift_pressed and setting_drill.can_aim_set(): adjust_bump_height(wheel*0.25)
-			else: zoom_attack_camera(wheel)
+			elif not setting_drill.partner_receiving and setting_drill.can_aim_set():
+				adjust_bump_height(wheel*0.25)
+			preview.accept_event()
 		return
 	if is_instance_valid(setting_drill):
 		if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
