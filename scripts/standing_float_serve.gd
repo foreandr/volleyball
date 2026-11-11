@@ -44,10 +44,14 @@ func float_approach(time: float, plant_time: float, land_time: float, jump_heigh
 	var flight := clampf((time-plant_time)/(land_time-plant_time),0.0,1.0) if jump_height > 0.0 else 0.0
 	var load := smoothstep(0.65,0.90,phase)*(1.0-smoothstep(0.90,1.04,phase))
 	var lift := 4.0*jump_height*flight*(1.0-flight)
-	var drift := 0.58*flight
+	var jumping := jump_height > 0.0
+	var drift := (0.78 if jumping else 0.58)*flight
 	var recovery := smoothstep(contact_time()-0.02,contact_time()+0.31,time)
 	var ground_travel := (0.30*left_lead+0.41*right_step+0.43*left_plant)*stride_scale
-	player.position = serve_start+forward*(ground_travel+drift+(0.20*recovery if jump_height == 0.0 else 0.0))+Vector3.UP*(lift-0.13*load)
+	if jumping:
+		var run := clampf((phase-0.05)/0.95,0.0,1.0)
+		ground_travel = 1.14*stride_scale*pow(run,1.53)
+	player.position = serve_start+forward*(ground_travel+drift+(0.20*recovery if not jumping else 0.0))+Vector3.UP*(lift-(0.23 if jumping else 0.13)*load)
 	player.animator.seek(0.0,true)
 	var rig: Skeleton3D = player.skeleton
 	var author: RefCounted = player.get_pose_author()
@@ -58,6 +62,7 @@ func float_approach(time: float, plant_time: float, land_time: float, jump_heigh
 	var settle := smoothstep(contact_time(),contact_time()+0.36,time)
 	var hip_turn := (-0.40*coil*(1.0-unwind)+0.44*unwind*(1.0-settle))*float_body_scale()
 	author.rotate_world(bones,"pelvis",Vector3.UP,hip_turn)
+	if jumping: author.rotate_world(bones,"spine_02",Vector3.RIGHT,0.32*load)
 	for side in ["l","r"]:
 		var left: bool = side == "l"
 		var foot: Vector3 = foot_starts[side]
