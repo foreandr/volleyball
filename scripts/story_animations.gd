@@ -351,19 +351,6 @@ func start_blocking_practice() -> void:
 	var controls := label("",18)
 	content.add_child(controls)
 	content.move_child(controls,1)
-	var vertical_readout := label("Vertical jump  +0 in",16)
-	content.add_child(vertical_readout)
-	var vertical := HSlider.new()
-	vertical.min_value = -20
-	vertical.max_value = 20
-	vertical.step = 1
-	vertical.value = 0
-	vertical.focus_mode = Control.FOCUS_NONE
-	vertical.value_changed.connect(func(value: float):
-		blocking_practice.set_vertical_inches(value)
-		vertical_readout.text = "Vertical jump  %+.0f in" % value)
-	content.add_child(vertical)
-
 	var tracking_readout := label("Arm tracking  100%",16)
 	content.add_child(tracking_readout)
 	var tracking := HSlider.new()
@@ -386,8 +373,6 @@ func start_blocking_practice() -> void:
 	var update_role := func(attacking: bool):
 		controls.text = ("Hold Space to approach and spike\nMove mouse to aim\nHold Shift at contact for high hands" if attacking else "Space to jump\nQ / E to open left / right arm")+"\nWASD to move camera\nMiddle drag to rotate"
 		feed.visible = attacking
-		vertical_readout.visible = not attacking
-		vertical.visible = not attacking
 		preview_camera.position = Vector3(0.0,4.9,13.2 if attacking else -5.2)
 		setting_camera_focus = Vector3(0.0,2.1,3.4 if attacking else 4.6)
 		preview_camera.look_at(setting_camera_focus)
@@ -396,10 +381,71 @@ func start_blocking_practice() -> void:
 		blocking_practice.set_player_attacks(index == 0)
 		update_role.call(index == 0))
 	update_role.call(true)
+	show_block_positions()
+
+func show_block_positions() -> void:
+	attack_position_panel = panel()
+	attack_position_panel.name = "BlockingPositions"
+	attack_position_panel.custom_minimum_size.x = 250
+	right_panel.get_parent().add_child(attack_position_panel)
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	attack_position_panel.add_child(scroll)
+	var positions := VBoxContainer.new()
+	positions.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(positions)
+	positions.add_child(label("Court setup",18))
+	var vertical_readout := label("Blocker vertical  +0 in",16)
+	positions.add_child(vertical_readout)
+	var vertical := HSlider.new()
+	vertical.min_value = -20
+	vertical.max_value = 30
+	vertical.step = 1
+	vertical.value = 0
+	vertical.focus_mode = Control.FOCUS_NONE
+	vertical.value_changed.connect(func(value: float):
+		blocking_practice.set_vertical_inches(value)
+		vertical_readout.text = "Blocker vertical  %+.0f in" % value)
+	positions.add_child(vertical)
+
+	add_block_position_slider(positions,"Attacker sideways",-2.5,2.5,0.0,
+		func(value: float): blocking_practice.attacker_offset.x = value)
+	add_block_position_slider(positions,"Attacker back / forward",-1.2,1.8,0.0,
+		func(value: float): blocking_practice.attacker_offset.y = value)
+	add_block_position_slider(positions,"Blocker sideways",-2.0,2.0,0.0,
+		func(value: float): blocking_practice.blocker_offset.x = value)
+	add_block_position_slider(positions,"Blocker back / forward",-0.25,1.25,0.0,
+		func(value: float): blocking_practice.blocker_offset.y = value)
+	add_block_position_slider(positions,"Set sideways",-2.0,2.0,0.0,
+		func(value: float): blocking_practice.set_offset.x = value)
+	add_block_position_slider(positions,"Set off the net",-0.35,1.8,0.0,
+		func(value: float): blocking_practice.set_offset.y = value)
+	add_block_position_slider(positions,"Set height",3.8,6.5,4.75,
+		func(value: float): blocking_practice.set_apex = value)
+
+func add_block_position_slider(parent: VBoxContainer, caption: String, minimum: float, maximum: float, initial: float, apply: Callable) -> void:
+	var readout := label("%s  %.2f m" % [caption,initial],16)
+	parent.add_child(readout)
+	var slider := HSlider.new()
+	slider.min_value = minimum
+	slider.max_value = maximum
+	slider.step = 0.05
+	slider.value = initial
+	slider.focus_mode = Control.FOCUS_NONE
+	parent.add_child(slider)
+	slider.drag_ended.connect(func(changed: bool):
+		if changed: blocking_practice.apply_position_setup())
+	slider.value_changed.connect(func(value: float):
+		apply.call(value)
+		readout.text = "%s  %.2f m" % [caption,value]
+		if not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT): blocking_practice.apply_position_setup())
 
 func stop_blocking_practice() -> void:
 	if not is_instance_valid(blocking_practice): return
 	blocking_practice.stop_block()
+	attack_position_panel.hide()
+	attack_position_panel.queue_free()
+	attack_position_panel = null
 	blocking_frame.queue_free()
 	blocking_practice = null
 	blocking_frame = null

@@ -13,6 +13,12 @@ var player_attacks := true
 var cpu_block_queued := false
 var feed_lane := 0
 var next_pin := 1.0
+var current_pin := 0.0
+var repeat_setup_feed := false
+var attacker_offset := Vector2.ZERO
+var blocker_offset := Vector2.ZERO
+var set_offset := Vector2.ZERO
+var set_apex := 4.75
 var player_shot_aim := Vector3(0.0,0.065,10.5)
 var blocker: Node3D
 var blocker_start: Transform3D
@@ -74,11 +80,18 @@ func stop_block() -> void:
 
 func set_player_attacks(value: bool) -> void:
 	player_attacks = value
+	restart_block_feed()
+
+func apply_position_setup() -> void:
+	repeat_setup_feed = true
+	restart_block_feed()
+
+func restart_block_feed() -> void:
 	release_approach_jump()
 	block_elapsed = -1.0
 	block_lift = 0.0
 	block_hands = [{},{}]
-	blocker.position = BLOCK_START
+	blocker.position.y = BLOCK_START.y
 	blocker.animator.seek(0.0,true)
 	reset_feed()
 
@@ -113,23 +126,31 @@ func reset_feed() -> void:
 	approach_space_held = space_held if player_attacks else true
 	cpu_block_queued = false
 	var pin_x := 0.0
-	if player_attacks:
+	if player_attacks and repeat_setup_feed:
+		pin_x = current_pin
+	elif player_attacks:
 		match feed_lane:
 			0:
 				pin_x = next_pin*PIN.x
 				next_pin = -next_pin
 			1: pin_x = PIN.x
 			2: pin_x = -PIN.x
-	setter.position = Vector3(pin_x*0.78,0.04,1.67)
+	current_pin = pin_x
+	repeat_setup_feed = false
+	setter.position = Vector3(clampf(pin_x*0.78-attacker_offset.x,-5.5,5.5),0.04,1.67-attacker_offset.y)
 	setter.rotation.y = 0.0
-	rally_set_target = Vector3(pin_x,0.065,3.34)
+	rally_set_target = Vector3(clampf(pin_x-set_offset.x,-4.4,4.4),0.065,3.34-set_offset.y)
+	if block_elapsed < 0.0:
+		blocker.position.z = BLOCK_START.z-blocker_offset.y
+		if not player_attacks: blocker.position.x = blocker_offset.x
 	pass_origin = Vector3(0.0 if player_attacks else -0.65,2.12,2.35)
-	pass_motion = set_toward_pin(pass_origin,rally_set_target,4.75,3.38)
+	pass_motion = set_toward_pin(pass_origin,rally_set_target,set_apex,3.38)
 	pin_arrival = descending_time(pass_origin,pass_motion,3.38)
 	flight_end = Flight.landing_time(pass_origin,pass_motion)
 	ball.position = pass_origin
 	bump.hide()
-	region.hide()
+	region.position = rally_set_target
+	region.visible = player_attacks
 	if player_attacks:
 		show_player_spike_aim()
 	else:
@@ -140,7 +161,7 @@ func reset_feed() -> void:
 	status.text = "Hold Space to approach" if player_attacks else "Time your jump"
 
 func set_vertical_inches(value: float) -> void:
-	vertical_inches = clampf(value,-20.0,20.0)
+	vertical_inches = clampf(value,-20.0,30.0)
 
 func queue_block() -> void:
 	if block_elapsed >= 0.0: return
@@ -164,7 +185,7 @@ func queue_kong(hand_index: int) -> void:
 func tick_block(delta: float) -> void:
 	if player_attacks and stage == Stage.SET and block_elapsed < 0.0:
 		var pin_world := to_global(rally_set_target)
-		blocker.position.x = move_toward(blocker.position.x,pin_world.x,delta*8.0)
+		blocker.position.x = move_toward(blocker.position.x,pin_world.x+blocker_offset.x,delta*8.0)
 	if player_attacks and not cpu_block_queued and block_elapsed < 0.0:
 		if stage == Stage.SET and is_finite(swing_started) and clock-swing_started >= 0.20:
 			cpu_block_queued = true
