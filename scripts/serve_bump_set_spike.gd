@@ -67,7 +67,7 @@ func reset_feed() -> void:
 	receiver.rotation.y = 0.0
 	bump.destination = Vector2(receiver.position.x,3.65 if partner_receiving else -1.9)
 	serve_demo.target = Vector3(setter.position.x,Flight.FLOOR,-4.15)
-	bump.height = 5.8 if partner_receiving else 4.6
+	bump.height = 6.8 if partner_receiving else 4.6
 	serve_demo.reset()
 	serve_demo.ball.show()
 	serve_demo.serve()
