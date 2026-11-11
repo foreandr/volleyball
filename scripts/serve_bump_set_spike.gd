@@ -3,6 +3,8 @@ extends "res://scripts/attack_drill.gd"
 const Underhand = preload("res://scripts/underhand_serve.gd")
 const BACK_LEFT := Vector3(2.5,0.04,-3.3)
 const BACK_RIGHT := Vector3(-2.5,0.04,-3.3)
+const MIN_SET_APEX := 3.55
+const QUICK_SET_APEX := 4.1
 
 var server: Node3D
 var serve_demo: Node3D
@@ -99,7 +101,7 @@ func aim_manual_set(point: Vector3) -> void:
 
 func adjust_manual_set_height(amount: float) -> void:
 	if not can_adjust_manual_set(): return
-	requested_set_apex = clampf(requested_set_apex+amount,4.2,7.5)
+	requested_set_apex = clampf(requested_set_apex+amount,MIN_SET_APEX,7.5)
 
 func request_manual_set(technique: int) -> void:
 	if not partner_receiving or stage != Stage.PASS or is_finite(cpu_set.touch_time): return
@@ -171,6 +173,27 @@ func call_rally_set(passer: Vector3) -> void:
 func cpu_set_move_speed(distance: float) -> float:
 	return 5.0 if distance > 0.85 else 3.2
 
+func try_quick_attack(delta: float) -> void:
+	if not manual_set_requested or manual_set_apex > QUICK_SET_APEX: return
+	var launch := cpu_set_launch(cpu_contact_point)
+	var contact := descending_time(cpu_contact_point,launch,RALLY_SET_CONTACT_HEIGHT)
+	var release_delay: float = 0.0 if active_cpu_set_style == 1 else cpu_set.hand_release_delay()
+	var time_to_hit := cpu_contact_time+release_delay+contact-(clock-stage_start)
+	var plant_time := 0.20
+	var jump_height := 1.12
+	var rise := jump.flight_duration(jump_height,true)*0.46
+	if time_to_hit > plant_time+rise+delta: return
+	var intercept := flight_point(cpu_contact_point,launch,contact)
+	var toward := (intercept-setter.position).slide(Vector3.UP)
+	if toward.length() > APPROACH_RADII[0]+REGION_RADIUS: return
+	approach_steps = 2
+	approach_intercept = intercept
+	approach_expected_hit_at = clock+time_to_hit
+	approach_pressed_at = clock
+	approach_jump_queued = false
+	var direction := toward.normalized()
+	begin_attack_jump(Vector2(-direction.x,direction.z),maxf(0.12,time_to_hit-rise),jump_height)
+
 func tick_demo(delta: float, controls: RefCounted) -> void:
 	if can_adjust_manual_set():
 		manual_set_apex = move_toward(manual_set_apex,requested_set_apex,9.0*delta)
@@ -188,7 +211,7 @@ func tick_demo(delta: float, controls: RefCounted) -> void:
 		if stage == Stage.SERVE and clock-stage_start >= serve_contact-0.20 and not is_finite(bump.pressed_at):
 			queue_set()
 		if stage in [Stage.PASS,Stage.SET] and not jump.active:
-			var run_target := rally_set_target-Vector3.BACK*1.95
+			var run_target := rally_set_target-Vector3.BACK*(0.55 if manual_set_apex <= QUICK_SET_APEX else 1.95)
 			var travel := (run_target-setter.position).slide(Vector3.UP)
 			approach_from_sprint = travel.length() > 0.65
 			if approach_from_sprint:
@@ -200,7 +223,10 @@ func tick_demo(delta: float, controls: RefCounted) -> void:
 			setter.position += travel.limit_length((5.0 if approach_from_sprint else 3.2)*delta)
 			setter.animator.advance(delta)
 			approach_space_held = true
-			trace_input = queued_approach_input(delta)
+			if stage == Stage.PASS and manual_set_apex <= QUICK_SET_APEX:
+				try_quick_attack(delta)
+			else:
+				trace_input = queued_approach_input(delta)
 		step_jump(delta)
 		var previous_stage := stage
 		step(delta)

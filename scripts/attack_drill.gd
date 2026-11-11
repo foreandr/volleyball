@@ -848,7 +848,8 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 				swing_drive_duration = duration
 				swing_hand_speed = 0.0
 		var load := smoothstep(0.0,0.26 if uses_assisted_approach() else 0.18,clock-swing_charge_started)
-		var estimated_contact := descending_time(pass_origin,pass_motion,PIN_HEIGHT+1.0)
+		var set_apex := pass_origin.y+pass_motion.y*pass_motion.y/(2.0*Flight.GRAVITY)
+		var estimated_contact := descending_time(pass_origin,pass_motion,minf(PIN_HEIGHT+1.0,set_apex-0.025))
 		var draw_reference := estimated_contact-5.0*LOW_BOW_FRAME
 		var hold_delay := 0.0 if swing_practice else minf(0.12,0.24-draw_delay)*charge
 		var draw_end := draw_reference+draw_delay+hold_delay
