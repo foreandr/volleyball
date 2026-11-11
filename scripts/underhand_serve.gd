@@ -189,10 +189,10 @@ func step(delta: float) -> void:
 func flight_point(time: float) -> Vector3:
 	return origin+velocity*time+Vector3.DOWN*0.5*Flight.GRAVITY*time*time
 
-func prepare_serve_pose(time: float, plant: float, distance: float, sink: float, step_begin := 0.14, step_end := 0.50) -> Array:
+func prepare_serve_pose(time: float, plant: float, distance: float, sink: float, step_begin := 0.14, step_end := 0.50, carry := 0.55, rear_step := 0.0) -> Array:
 	var step := smoothstep(step_begin,step_end,time)
 	var transfer := smoothstep(0.20,plant,time)
-	player.position = serve_start+forward*distance*0.55*transfer
+	player.position = serve_start+forward*distance*carry*transfer
 	player.position.y -= sink*transfer*(1.0-smoothstep(plant,plant+0.50,time))
 	player.animator.seek(0.0,true)
 	var rig: Skeleton3D = player.skeleton
@@ -202,6 +202,9 @@ func prepare_serve_pose(time: float, plant: float, distance: float, sink: float,
 	for side in ["l","r"]:
 		var foot: Vector3 = foot_starts[side]
 		if side == "l": foot += forward*distance*step+Vector3.UP*0.15*sin(PI*step)
+		elif rear_step > 0.0:
+			var recovery := smoothstep(plant-0.13,plant+0.26,time)
+			foot += forward*rear_step*recovery+Vector3.UP*0.08*sin(PI*recovery)
 		author.limb(bones,"thigh_"+side,"calf_"+side,"foot_"+side,rig.to_local(foot),Vector3(0.1 if side == "l" else -0.1,0.2,1.0))
 	return bones
 

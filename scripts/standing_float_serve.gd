@@ -21,15 +21,15 @@ func reset() -> void:
 	pose(0.0)
 
 func pose(time: float) -> void:
-	var bones := prepare_serve_pose(time,0.63,0.79,0.085,0.09,0.57)
+	var bones := prepare_serve_pose(time,0.88,1.02,0.075,0.07,0.52,0.91,0.48)
 	var rig: Skeleton3D = player.skeleton
 	var author: RefCounted = player.get_pose_author()
 	var scale_: float = rig.global_basis.get_scale().y
-	var windup := smoothstep(0.12,0.52,time)
-	var drive := smoothstep(0.54,FLOAT_CONTACT,time)
-	var follow := smoothstep(FLOAT_CONTACT,1.11,time)
-	author.rotate_world(bones,"spine_03",Vector3.UP,-0.20*windup*(1.0-drive))
-	author.rotate_world(bones,"spine_02",Vector3.RIGHT,-0.12*windup*(1.0-drive)+0.12*follow)
+	var windup := smoothstep(0.09,0.58,time)
+	var drive := smoothstep(0.57,FLOAT_CONTACT,time)
+	var follow := smoothstep(FLOAT_CONTACT,1.19,time)
+	author.rotate_world(bones,"spine_03",Vector3.UP,-0.34*windup*(1.0-drive)+0.30*drive*(1.0-0.60*follow))
+	author.rotate_world(bones,"spine_02",Vector3.RIGHT,-0.17*windup*(1.0-drive)+0.22*follow)
 	var left_shoulder: Vector3 = author.point(bones,"upperarm_l")
 	var right_shoulder: Vector3 = author.point(bones,"upperarm_r")
 	var toss_lift := smoothstep(0.07,TOSS_RELEASE,time)
@@ -39,11 +39,11 @@ func pose(time: float) -> void:
 	author.limb(bones,"upperarm_l","lowerarm_l","hand_l",left_wrist.lerp(left_ready,left_drop),Vector3(0.30,-0.9,-0.15))
 	orient_palm(bones,rig,author,"l",Vector3.BACK,Vector3.LEFT,1.0-left_drop)
 	var low_right := right_shoulder+Vector3(-0.08,-0.53,0.03)/scale_
-	var drawn_right := right_shoulder+Vector3(-0.24,0.26,-0.21)/scale_
+	var drawn_right := right_shoulder+Vector3(-0.24,0.34,-0.35)/scale_
 	var contact_right := right_shoulder+Vector3(-0.045,0.53,0.28)/scale_
-	var follow_right := right_shoulder+Vector3(-0.04,-0.18,0.49)/scale_
+	var follow_right := right_shoulder+Vector3(0.36,-0.42,0.30)/scale_
 	var right_wrist := low_right.lerp(drawn_right,windup).lerp(contact_right,drive).lerp(follow_right,follow)
-	author.limb(bones,"upperarm_r","lowerarm_r","hand_r",right_wrist,Vector3(-0.80,-0.18,0.22),1.0,176.0)
+	author.limb(bones,"upperarm_r","lowerarm_r","hand_r",right_wrist,Vector3(-0.85,0.05,-0.25).lerp(Vector3(-0.35,-0.3,0.6),drive),1.0,176.0)
 	orient_palm(bones,rig,author,"r",Vector3(0.0,1.0,0.10),Vector3.RIGHT,windup*(1.0-0.75*follow))
 	for bone in rig.get_bone_count(): rig.set_bone_pose_rotation(bone,bones[bone].basis.get_rotation_quaternion())
 	if time <= TOSS_RELEASE:
