@@ -186,7 +186,8 @@ func track_hand_dig(path: Callable, time: float, end: float, delta: float) -> Ve
 	var center := ready_contact()
 	var target := Geometry3D.get_closest_point_to_segment(center,start,finish)
 	var offset := facing.inverse()*(to_global(target)-origin)
-	offset = offset.clamp(Vector3(-0.26,-0.19,0.18),Vector3(0.26,0.23,0.50))
+	var overhead := offset.y > 0.18
+	offset = offset.clamp(Vector3(-0.26,-0.19,0.05 if overhead else 0.18),Vector3(0.26,0.43,0.50))
 	if not tracked_hand_dig.is_finite(): tracked_hand_dig = Vector3(0.0,0.0,0.30)
 	tracked_hand_dig = tracked_hand_dig.lerp(offset,1.0-exp(-delta*34.0))
 	return to_local(origin+facing*tracked_hand_dig)
@@ -327,15 +328,15 @@ func apply_knee_bend(time := INF) -> void:
 		rig.set_bone_pose_position(bone,pose[bone].origin)
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.orthonormalized().get_rotation_quaternion().normalized())
 
-func dig_contact_segment(first: Vector3, last: Vector3) -> PackedVector3Array:
+func dig_contact_segment(first: Vector3, last: Vector3, pancake := false) -> PackedVector3Array:
 	var rig: Skeleton3D = setter.skeleton
 	var closest := PackedVector3Array([first,Vector3.INF])
 	var gap := INF
-	for side in ["l","r"]:
+	for side in (["r"] if pancake else ["l","r"]):
 		var elbow := to_local(rig.to_global(rig.get_bone_global_pose(rig.find_bone("lowerarm_"+side)).origin))
 		var wrist := to_local(rig.to_global(rig.get_bone_global_pose(rig.find_bone("hand_"+side)).origin))
 		var fingers := to_local(rig.to_global(rig.get_bone_global_pose(rig.find_bone("middle_03_"+side)).origin))
-		var bones := [wrist,fingers] if hand_setting else [elbow,wrist,fingers]
+		var bones := [wrist,fingers] if hand_setting or pancake else [elbow,wrist,fingers]
 		for index in bones.size()-1:
 			var pair := Geometry3D.get_closest_points_between_segments(first,last,bones[index],bones[index+1])
 			var distance := pair[0].distance_squared_to(pair[1])
@@ -351,7 +352,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 	var attempted := is_finite(pressed_at)
 	var face_dig := hand_setting and defensive_hand_dig
 	if attempted and grade == Timing.Grade.WAITING:
-		var start_dig := not hand_setting and is_finite(dig_cue) and time >= dig_cue-0.17
+		var start_dig := is_finite(dig_cue) and time >= dig_cue-0.17
 		if not is_finite(pose_started_at) and (start_dig or progress >= 1.0-PLATFORM_PREP_TIME/APPROACH_TIME):
 			pose_started_at = maxf(pressed_at,time-delta)
 		if allow_auto_dive and not hand_setting and not setter_jumping and reach.is_empty(): low_save.plan(setter,path,time,end,clip)
@@ -397,10 +398,10 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 			var timing := (cue_arrival if is_finite(cue_arrival) and not low_save.active else time)-pressed_at
 			var green := timing >= green_start and timing <= green_end
 			if strict_dig:
-				var contact := dig_contact_segment(first,last)
+				var contact := dig_contact_segment(first,last,pancake)
 				point = contact[0]
 				center = contact[1]
-				cutoff = Net.RADIUS+(0.04 if hand_setting else 0.05)
+				cutoff = Net.RADIUS+(0.04 if hand_setting or pancake else 0.05)
 			var gap_after_adjustment := point.distance_to(center)
 			var receive_allowance := (0.0 if face_dig else green_hand_allowance) if hand_setting else green_forearm_allowance
 			var near_receive := green and not low_save.active and receive_allowance > 0.0 and gap_after_adjustment <= radius+receive_allowance
@@ -419,7 +420,9 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 				var facing := setter.global_basis.orthonormalized()
 				var offset := facing.inverse()*global_basis*(point-hand_dig_face())
 				var approach_velocity := facing.inverse()*global_basis*incoming
-				face_aligned = absf(offset.x) <= 0.29 and absf(offset.y) <= 0.28 and offset.z >= 0.05 and offset.z <= 0.68 and approach_velocity.z < -0.2
+				var directly_overhead := is_finite(dig_cue) and offset.y >= 0.12 and offset.y <= 0.48 and offset.z >= -0.16 and approach_velocity.y < -0.2
+				var in_front := absf(offset.y) <= 0.28 and offset.z >= 0.05 and approach_velocity.z < -0.2
+				face_aligned = absf(offset.x) <= 0.29 and offset.z <= 0.68 and (directly_overhead or in_front)
 			contact_check = {
 				"time":time,"surface":"hands" if hand_setting else ("palm" if pancake else "forearms"),"surface_center":center,
 				"ball_point":point,"gap_before_adjustment":gap,"gap":gap_after_adjustment,

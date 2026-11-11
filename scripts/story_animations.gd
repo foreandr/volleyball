@@ -309,8 +309,21 @@ func show_match_tuning() -> void:
 	match_sound.text = "Ball sounds (M)"
 	match_sound.focus_mode = Control.FOCUS_NONE
 	match_sound.button_pressed = not StorySession.attack_ball_audio_muted
-	match_sound.toggled.connect(func(enabled: bool): StorySession.attack_ball_audio_muted = not enabled)
+	match_sound.toggled.connect(demo_match.set_ball_sound)
 	tuning.add_child(match_sound)
+
+	var outputs := AudioServer.get_output_device_list()
+	if outputs.size() > 1:
+		tuning.add_child(label("Audio output",16))
+		var device := OptionButton.new()
+		device.focus_mode = Control.FOCUS_NONE
+		device.fit_to_longest_item = false
+		for output in outputs: device.add_item(output)
+		device.select(maxi(0,outputs.find(AudioServer.output_device)))
+		device.item_selected.connect(func(index: int):
+			AudioServer.output_device = outputs[index]
+			if match_sound.button_pressed: demo_match.play_touch(true))
+		tuning.add_child(device)
 
 func stop_demo_match() -> void:
 	if not is_instance_valid(demo_match): return

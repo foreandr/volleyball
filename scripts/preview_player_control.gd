@@ -512,8 +512,11 @@ func move_player(direction: Vector2, delta: float, track_ball := true, setting_t
 		var facing := actor.basis.z.normalized()
 		step_direction = Vector2(travel.dot(facing.cross(Vector3.UP)),travel.dot(facing))
 	var quick_pace := sprint_requested and direction.length()>0.1 and stamina.can_sprint()
-	sprinting = quick_pace and ((not setting and step_direction.y>0.3) or (run_after_pass and direction.y>0.3))
-	var step_rate := QUICK_STEP_RATE if quick_pace else 1.0
+	var toward_ball := (setting_target-actor.global_position).slide(Vector3.UP).normalized() if setting else Vector3.ZERO
+	var ball_sprint := run_after_pass and setting and travel.normalized().dot(toward_ball) > 0.76 and step_direction.normalized().y > 0.76
+	sprinting = quick_pace and ((not setting and step_direction.y>0.3) or ball_sprint)
+	var quick_step := quick_pace if not run_after_pass else sprinting
+	var step_rate := QUICK_STEP_RATE if quick_step else 1.0
 	if setting:
 		setter_step_rate = move_toward(setter_step_rate,QUICK_STEP_RATE*step_rate,delta*7.0)
 		step_rate = setter_step_rate
@@ -545,7 +548,7 @@ func move_player(direction: Vector2, delta: float, track_ball := true, setting_t
 			session.pass_start = Vector2(actor.position.x,actor.position.z)
 	var now_moving := actor.position.distance_to(before)>0.00001
 	sprinting = sprinting and now_moving
-	if quick_pace and now_moving:
+	if quick_step and now_moving:
 		stamina.spend(Stamina.SPRINT_DRAIN*delta)
 	else:
 		stamina.recover(delta)
