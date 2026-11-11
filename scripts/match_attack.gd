@@ -50,6 +50,22 @@ func approach_reach_height() -> float:
 func set_contact_height(apex := INF) -> float:
 	return minf(clampf(approach_reach_height(),2.70,3.38),maxf(2.62,apex-0.22))
 
+func apex_for_set_time(origin_height: float, apex: float, minimum_time: float) -> float:
+	var rise := sqrt(2.0*Flight.GRAVITY*(apex-origin_height))
+	if descending_time(Vector3.UP*origin_height,Vector3.UP*rise,set_contact_height(apex)) >= minimum_time:
+		return apex
+	# Find the lowest arc that gives the hitter the required time to the contact point.
+	var low := apex
+	var high := maxf(apex,set_contact_height())+0.5*Flight.GRAVITY*minimum_time**2
+	for sample in 10:
+		var middle := (low+high)*0.5
+		rise = sqrt(2.0*Flight.GRAVITY*(middle-origin_height))
+		if descending_time(Vector3.UP*origin_height,Vector3.UP*rise,set_contact_height(middle)) < minimum_time:
+			low = middle
+		else:
+			high = middle
+	return high
+
 func adaptive_approach_timing() -> bool:
 	return true
 

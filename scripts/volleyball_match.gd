@@ -805,6 +805,10 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 		if not is_human(index) and absf(set_width) >= 1.0 and (pin.x-setter_x)*signf(set_width) < 1.0:
 			pin.x = setter_x+signf(set_width)
 		apex = maxf(minimum,apex+error.y)
+		if not is_human(index):
+			var span := (pin-point).slide(Vector3.UP).length()
+			var time_to_hit := maxf(0.68,span/6.2)
+			apex = driver.apex_for_set_time(point.y,apex,time_to_hit)
 		var contact_height: float = driver.set_contact_height(apex)
 		last_set_apex = apex
 		var motion: Vector3 = driver.set_toward_pin(point,pin,apex,contact_height)
