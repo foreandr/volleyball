@@ -620,8 +620,8 @@ func step(delta: float) -> void:
 			follow_receive(time)
 			play_shank(time,previous)
 		Stage.SET:
-			if uses_assisted_approach(): face_receiver(called_set_target()-receiver.position,delta*APPROACH_SET_TURN_RATE)
-			if not swing_practice:
+			if is_finite(cpu_set.release_time) and not swing_practice:
+				if uses_assisted_approach(): face_receiver(called_set_target()-receiver.position,delta*APPROACH_SET_TURN_RATE)
 				if active_cpu_set_style == 1:
 					cpu_set.follow_forearm(cpu_set.touch_time+time,Vector3.DOWN*5.0)
 				else:

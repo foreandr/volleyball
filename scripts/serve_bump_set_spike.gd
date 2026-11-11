@@ -14,6 +14,8 @@ var partner_receiving := false
 var user_player: Node3D
 var teammate: Node3D
 var manual_set_requested := false
+var second_ball_spike_held := false
+var player_second_ball_attack := false
 var manual_set_apex := SET_APEX
 var requested_set_apex := SET_APEX
 var manual_set_target := Vector3.INF
@@ -59,6 +61,8 @@ func reset_feed() -> void:
 	release_approach_jump()
 	set_preview.clear_surfaces()
 	manual_set_requested = false
+	second_ball_spike_held = false
+	player_second_ball_attack = false
 	manual_set_target = Vector3.INF
 	setter.position = BACK_RIGHT if partner_receiving else BACK_LEFT
 	setter.rotation.y = 0.0
@@ -102,8 +106,20 @@ func adjust_manual_set_height(amount: float) -> void:
 	requested_set_apex = clampf(requested_set_apex+amount,MIN_SET_APEX,7.5)
 
 func request_manual_set(technique: int) -> void:
+	if player_second_ball_attack and stage == Stage.SET:
+		jump.active = false
+		user_player.position.y = BACK_LEFT.y
+		user_player.play_action("idle",0.0)
+		setter = teammate
+		receiver = user_player
+		stage = Stage.PASS
+		player_second_ball_attack = false
+		approach_jump_queued = false
+		approach_pressed_at = -INF
+		swing_started = -INF
 	if not partner_receiving or stage != Stage.PASS or is_finite(cpu_set.touch_time): return
 	manual_set_requested = true
+	second_ball_spike_held = false
 	active_cpu_set_style = technique
 	cpu_contact_time = maxf(clock-stage_start,descending_time(pass_origin,pass_motion,cpu_set_contact_height()))
 	cpu_contact_point = flight_point(pass_origin,pass_motion,cpu_contact_time)
@@ -119,7 +135,7 @@ func cpu_set_apex() -> float:
 
 func update_manual_set_target() -> void:
 	if manual_set_target.is_finite():
-		rally_set_target.x = clampf(manual_set_target.x,-4.35,4.35)
+		rally_set_target.x = clampf(manual_set_target.x,-5.5,5.5)
 	var origin := Vector3(receiver.position.x,cpu_set_contact_height(),receiver.position.z+0.45)
 	if stage == Stage.PASS:
 		origin = cpu_set.platform_center() if is_finite(cpu_set.touch_time) else cpu_contact_point
@@ -191,6 +207,35 @@ func try_quick_attack(delta: float) -> void:
 	var direction := toward.normalized()
 	begin_attack_jump(Vector2(-direction.x,direction.z),maxf(0.12,time_to_hit-rise),jump_height)
 
+func try_second_ball_attack() -> void:
+	if not second_ball_spike_held or manual_set_requested or stage != Stage.PASS: return
+	var height_time := descending_time(pass_origin,pass_motion,3.35)
+	if height_time-(clock-stage_start) > 1.05: return
+	setter = user_player
+	receiver = teammate
+	stage = Stage.SET
+	var intercept := Vector3.INF
+	for tier in APPROACH_RADII.size():
+		intercept = find_approach_intercept(true,tier)
+		if intercept.is_finite():
+			approach_steps = tier+2
+			break
+	if not intercept.is_finite():
+		setter = teammate
+		receiver = user_player
+		stage = Stage.PASS
+		return
+	player_second_ball_attack = true
+	approach_pressed_at = clock
+	approach_released_at = INF
+	approach_set_touched_at = clock
+	approach_jump_queued = true
+	pin_arrival = height_time
+	flight_end = Flight.landing_time(pass_origin,pass_motion)
+	set_preview.clear_surfaces()
+	region.hide()
+	status.text = "Second-ball attack"
+
 func tick_demo(delta: float, controls: RefCounted) -> void:
 	if can_adjust_manual_set():
 		manual_set_apex = move_toward(manual_set_apex,requested_set_apex,9.0*delta)
@@ -205,6 +250,13 @@ func tick_demo(delta: float, controls: RefCounted) -> void:
 		ball.show()
 	serve_demo.step(delta)
 	if partner_receiving:
+		try_second_ball_attack()
+		if player_second_ball_attack:
+			trace_input = Vector2.ZERO
+			if stage == Stage.SET and approach_jump_queued: time_approach_plant(delta)
+			step_jump(delta)
+			step(delta)
+			return
 		if stage == Stage.SERVE and clock-stage_start >= serve_contact-0.20 and not is_finite(bump.pressed_at):
 			queue_set()
 		if stage in [Stage.PASS,Stage.SET] and not jump.active:
@@ -230,7 +282,7 @@ func tick_demo(delta: float, controls: RefCounted) -> void:
 		if previous_stage == Stage.PASS and stage != Stage.PASS: set_preview.clear_surfaces()
 		if previous_stage == Stage.PASS and stage == Stage.SET:
 			aim_swing(Vector3(randf_range(-3.35,3.35),Flight.FLOOR,randf_range(8.5,11.8)))
-		if stage == Stage.PASS and not manual_set_requested: status.text = "Your set  |  Q, E / I, or Space"
+		if stage == Stage.PASS and not manual_set_requested: status.text = "E / I to set  |  Hold Space to spike"
 		return
 	controls.read_pace_input()
 	trace_input = controls.movement_input()

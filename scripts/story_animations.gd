@@ -332,7 +332,7 @@ func start_serve_bump_set_spike() -> void:
 	serve_side.item_selected.connect(func(index: int):
 		setting_drill.serve_to_partner = index == 1
 		technique.disabled = index == 1
-		controls_hint.text = "Aim the set with the cursor\nScroll to change set height\nQ forearms  |  E / I hands  |  Space jump set" if index == 1 else "WASD to move  |  Q forearms  |  E / I hands\nCursor aims  |  Scroll for pass height\nShift + W to run  |  Hold Space to spike"
+		controls_hint.text = "Aim the set with the cursor\nScroll to change set height\nQ forearms  |  E / I hands\nHold Space or Square to spike\nShift + Space to jump set" if index == 1 else "WASD to move  |  Q forearms  |  E / I hands\nCursor aims  |  Scroll for pass height\nShift + W to run  |  Hold Space to spike"
 		setting_drill.reset_feed())
 	content.add_child(serve_side)
 	content.add_child(button("Replay",setting_drill.reset_feed))
@@ -1146,7 +1146,7 @@ func handle_preview_input(event: InputEvent) -> void:
 			elif setting_drill.can_aim_set():
 				var point: Variant = attack_floor_point(event.position)
 				if point is Vector3: setting_drill.set_pass_aim(point)
-			elif not setting_drill.partner_receiving and setting_drill.stage != setting_drill.Stage.SERVE: aim_attack_shot(event.position)
+			elif (not setting_drill.partner_receiving or setting_drill.player_second_ball_attack) and setting_drill.stage != setting_drill.Stage.SERVE: aim_attack_shot(event.position)
 		elif event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_WHEEL_UP,MOUSE_BUTTON_WHEEL_DOWN]:
 			var wheel := 1.0 if event.button_index == MOUSE_BUTTON_WHEEL_UP else -1.0
 			if setting_drill.can_adjust_manual_set():
@@ -1393,13 +1393,18 @@ func open_menu() -> void:
 func _input(event: InputEvent) -> void:
 	if selected_category == "Chasing" and is_instance_valid(setting_drill):
 		if event.is_action_pressed("ui_cancel"): open_menu()
+		elif event is InputEventJoypadButton and event.button_index == JOY_BUTTON_X and setting_drill.partner_receiving:
+			setting_drill.second_ball_spike_held = event.pressed
 		elif event is InputEventKey and not event.echo:
 			if setting_drill.partner_receiving:
-				if event.pressed:
-					match event.keycode:
-						KEY_Q: setting_drill.request_manual_set(1)
-						KEY_E, KEY_I: setting_drill.request_manual_set(0)
-						KEY_SPACE: setting_drill.request_manual_set(2)
+				match event.keycode:
+					KEY_Q:
+						if event.pressed: setting_drill.request_manual_set(1)
+					KEY_E, KEY_I:
+						if event.pressed: setting_drill.request_manual_set(0)
+					KEY_SPACE:
+						if event.shift_pressed and event.pressed: setting_drill.request_manual_set(2)
+						else: setting_drill.second_ball_spike_held = event.pressed
 				return
 			if event.keycode == KEY_Q and event.pressed: setting_drill.queue_set()
 			elif event.keycode in [KEY_E,KEY_I] and event.pressed: setting_drill.queue_hand_receive()
