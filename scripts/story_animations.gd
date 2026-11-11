@@ -301,7 +301,7 @@ func start_serve_bump_set_spike() -> void:
 	clear_content()
 	if is_instance_valid(ball_preview): ball_preview.stop()
 	set_title("SERVE BUMP SET SPIKE")
-	var controls_hint := label("WASD to move  |  Q forearms  |  E / I hands\nCursor aims  |  Shift + scroll for pass height\nShift + W to run  |  Hold Space to spike",16)
+	var controls_hint := label("WASD to move  |  Q forearms  |  E / I hands\nCursor aims  |  Shift + scroll for pass height\nScroll to zoom  |  Shift + W to run  |  Hold Space to spike",16)
 	content.add_child(controls_hint)
 	drill_status = label("",18)
 	content.add_child(drill_status)
@@ -332,12 +332,12 @@ func start_serve_bump_set_spike() -> void:
 	serve_side.item_selected.connect(func(index: int):
 		setting_drill.serve_to_partner = index == 1
 		technique.disabled = index == 1
-		controls_hint.text = "Aim the set with the cursor\nScroll to change set height\nQ forearms  |  E / I hands  |  Space jump set" if index == 1 else "WASD to move  |  Q forearms  |  E / I hands\nCursor aims  |  Shift + scroll for pass height\nShift + W to run  |  Hold Space to spike"
+		controls_hint.text = "Aim the set with the cursor\nScroll to change set height\nQ forearms  |  E / I hands  |  Space jump set" if index == 1 else "WASD to move  |  Q forearms  |  E / I hands\nCursor aims  |  Shift + scroll for pass height\nScroll to zoom  |  Shift + W to run  |  Hold Space to spike"
 		setting_drill.reset_feed())
 	content.add_child(serve_side)
 	content.add_child(button("Replay",setting_drill.reset_feed))
 	setting_camera_focus = SETTING_CAMERA_FOCUS
-	preview_camera.position = Vector3(-9.0,10.0,-11.0)
+	preview_camera.position = Vector3(0.0,8.0,-14.0)
 	preview_camera.look_at(setting_camera_focus)
 	preview.grab_focus()
 

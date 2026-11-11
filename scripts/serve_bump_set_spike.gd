@@ -15,6 +15,8 @@ var manual_set_requested := false
 var manual_set_apex := SET_APEX
 var manual_set_target := Vector3.INF
 var set_lane_center := 0.0
+var set_preview := ImmediateMesh.new()
+var set_preview_material := StandardMaterial3D.new()
 
 func setup_demo() -> void:
 	user_player = setter
@@ -26,6 +28,12 @@ func setup_demo() -> void:
 	serve_demo.target = Vector3(BACK_LEFT.x,Flight.FLOOR,-4.15)
 	serve_demo.aim_ring.hide()
 	serve_demo.path_preview.hide()
+	var preview := MeshInstance3D.new()
+	preview.mesh = set_preview
+	preview.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	set_preview_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	set_preview_material.albedo_color = Color("57dfff")
+	add_child(preview)
 	reset_feed()
 
 func make_demo_player(role: String, color: Color) -> Node3D:
@@ -47,6 +55,7 @@ func reset_feed() -> void:
 	super.reset_feed()
 	if not is_instance_valid(serve_demo): return
 	release_approach_jump()
+	set_preview.clear_surfaces()
 	manual_set_requested = false
 	manual_set_target = Vector3.INF
 	setter.position = BACK_RIGHT if partner_receiving else BACK_LEFT
@@ -94,6 +103,7 @@ func request_manual_set(technique: int) -> void:
 	cpu_contact_point = flight_point(pass_origin,pass_motion,cpu_contact_time)
 	var incoming := (pass_origin-cpu_contact_point).slide(Vector3.UP).normalized()
 	cpu_stand = Court.clamp_setter(Vector3(cpu_contact_point.x,CPU_HOME.y,cpu_contact_point.z)-incoming*HandPose.CONTACT_FORWARD*receiver.scale.z,ATTACK_FRONT_LIMIT)
+	update_manual_set_target()
 
 func set_requested() -> bool:
 	return not partner_receiving or manual_set_requested
@@ -104,8 +114,18 @@ func cpu_set_apex() -> float:
 func update_manual_set_target() -> void:
 	if manual_set_target.is_finite():
 		rally_set_target.x = clampf(manual_set_target.x,maxf(-4.35,set_lane_center-APPROACH_RADII[1]),minf(4.35,set_lane_center+APPROACH_RADII[1]))
-	cpu_set_launch(cpu_contact_point)
+	var launch := cpu_set_launch(cpu_contact_point)
+	draw_set_preview(cpu_contact_point,launch)
 	if is_instance_valid(rally_set_call): rally_set_call.text = "Set height %.1f m" % manual_set_apex
+
+func draw_set_preview(origin: Vector3, launch: Vector3) -> void:
+	set_preview.clear_surfaces()
+	var duration := Flight.landing_time(origin,launch)
+	set_preview.surface_begin(Mesh.PRIMITIVE_LINES,set_preview_material)
+	for segment in 28:
+		set_preview.surface_add_vertex(flight_point(origin,launch,duration*segment/28.0))
+		set_preview.surface_add_vertex(flight_point(origin,launch,duration*(segment+0.55)/28.0))
+	set_preview.surface_end()
 
 func cpu_set_launch(origin: Vector3) -> Vector3:
 	var apex := cpu_set_apex()
@@ -139,6 +159,7 @@ func call_rally_set(passer: Vector3) -> void:
 
 func tick_demo(delta: float, controls: RefCounted) -> void:
 	if stage == Stage.SERVE and not is_finite(serve_demo.contact_clock):
+		if not partner_receiving: bump.update_aim()
 		serve_demo.step(delta)
 		if not is_finite(serve_demo.contact_clock): return
 		serve_origin = serve_demo.origin
@@ -157,6 +178,7 @@ func tick_demo(delta: float, controls: RefCounted) -> void:
 		step_jump(delta)
 		var previous_stage := stage
 		step(delta)
+		if previous_stage == Stage.PASS and stage != Stage.PASS: set_preview.clear_surfaces()
 		if previous_stage == Stage.PASS and stage == Stage.SET:
 			aim_swing(Vector3(randf_range(-3.35,3.35),Flight.FLOOR,randf_range(8.5,11.8)))
 		if stage == Stage.PASS and not manual_set_requested: status.text = "Your set  |  Q, E / I, or Space"
