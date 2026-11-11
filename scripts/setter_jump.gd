@@ -201,7 +201,7 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 			var outward := 1.0 if left else -1.0
 			var chest: Vector3 = author.point(pose,"spine_03")
 			var ready_hand := chest+Vector3(outward*0.105,0.08,0.20)/scale_
-			var ready_weight := smoothstep(0.0,0.20,front_swing)
+			var ready_weight := 0.32*smoothstep(0.0,0.20,front_swing)
 			author.limb(pose,upper_arm,forearm,"hand_"+side,ready_hand,Vector3(outward*0.40,-1.0,0.0),ready_weight,105.0)
 		if jump_drive > 0.0:
 			var outward := 1.0 if left else -1.0
