@@ -13,6 +13,7 @@ const APPROACH_SAMPLE_RATE := 120.0
 
 var sidespin := 0.0
 var released_sidespin := 0.0
+var released_lift := 0.0
 var approach := SetterJump.new()
 var spike_pose_driver := AttackDrill.new()
 var approach_positions: PackedVector3Array = []
@@ -179,22 +180,44 @@ func set_sidespin(value: float) -> void:
 func preview_lane_count() -> int:
 	return 1
 
+func flight_duration(start: Vector3) -> float:
+	return super.flight_duration(start)*0.65
+
+func launch_velocity(start: Vector3, duration: float) -> Vector3:
+	return (target-start)/duration+Vector3.UP*(0.5*Flight.GRAVITY*duration)
+
 func preview_lane_offset(_lane: int, progress: float, launch: Vector3) -> Vector3:
-	return spin_offset(progress,launch,sidespin)
+	var duration := flight_duration(preview_origin)
+	return spin_offset(progress,launch,sidespin,spin_lift(preview_origin,launch,duration,sidespin))
 
 func begin_serve_curve() -> void:
 	released_sidespin = sidespin
+	released_lift = spin_lift(origin,velocity,planned_duration,released_sidespin)
 
 func advance_serve_curve(_time: float) -> void:
 	pass
 
 func serve_curve_offset(time: float, duration: float) -> Vector3:
-	return spin_offset(clampf(time/maxf(duration,0.001),0.0,1.0),velocity,released_sidespin)
+	return spin_offset(clampf(time/maxf(duration,0.001),0.0,1.0),velocity,released_sidespin,released_lift)
 
-func spin_offset(progress: float, launch: Vector3, curve: float) -> Vector3:
+func spin_offset(progress: float, launch: Vector3, curve: float, lift: float) -> Vector3:
 	var side := Vector3.UP.cross(launch.slide(Vector3.UP).normalized())
 	var envelope := 4.0*progress*(1.0-progress)
-	return -side*curve*1.15*envelope+Vector3.UP*0.44*envelope*progress
+	return -side*curve*1.15*envelope+Vector3.UP*lift*envelope*(0.55+0.45*progress)
+
+func spin_lift(start: Vector3, launch: Vector3, duration: float, curve: float) -> float:
+	var near := 0.0
+	var far := 1.0
+	for iteration in 10:
+		var progress := (near+far)*0.5
+		var point := start+launch*(duration*progress)+spin_offset(progress,launch,curve,0.0)
+		if point.z < Net.NET_Z: near = progress
+		else: far = progress
+	var crossing := (near+far)*0.5
+	var time := duration*crossing
+	var height := start.y+launch.y*time-0.5*Flight.GRAVITY*time*time
+	var shape := 4.0*crossing*(1.0-crossing)*(0.55+0.45*crossing)
+	return maxf(0.0,(Net.NET_TOP+BallPreview.RADIUS+0.18-height)/maxf(shape,0.02))
 
 func spin_serve_ball(delta: float) -> void:
 	var axis := Vector3.UP.cross(velocity.slide(Vector3.UP).normalized())+Vector3.UP*released_sidespin

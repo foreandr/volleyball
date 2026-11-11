@@ -48,9 +48,9 @@ func receive_serve(world_origin: Vector3, world_velocity: Vector3, source: Node3
 	rally_number += 1
 	serve_origin = to_local(world_origin)
 	serve_velocity = global_basis.inverse()*world_velocity
-	incoming_cue = descending_time(serve_origin,serve_velocity,1.13)
+	incoming_cue = descending_receive_time(1.13)
 	receive_with_hands = rally_number%3 == 2
-	if receive_with_hands: incoming_cue = descending_time(serve_origin,serve_velocity,2.05)
+	if receive_with_hands: incoming_cue = descending_receive_time(2.05)
 	var catch_point := serve_flight_point(incoming_cue).slide(Vector3.UP)
 	if catch_point.distance_squared_to(receiver.position.slide(Vector3.UP)) < catch_point.distance_squared_to(passer.position.slide(Vector3.UP)):
 		var other := receiver
@@ -79,6 +79,20 @@ func serve_flight_point(time: float) -> Vector3:
 		var drift: Vector3 = serve_source.serve_curve_offset(time,serve_source.planned_duration)
 		point += global_basis.inverse()*serve_source.global_basis*drift
 	return point
+
+func descending_receive_time(height: float) -> float:
+	if not is_instance_valid(serve_source): return descending_time(serve_origin,serve_velocity,height)
+	var last: float = serve_source.planned_duration
+	for sample in range(1,17):
+		var earlier: float = serve_source.planned_duration*(1.0-sample/16.0)
+		if serve_flight_point(earlier).y >= height:
+			for iteration in 12:
+				var middle := (earlier+last)*0.5
+				if serve_flight_point(middle).y >= height: earlier = middle
+				else: last = middle
+			return (earlier+last)*0.5
+		last = earlier
+	return descending_time(serve_origin,serve_velocity,height)
 
 func receive_cue_time() -> float:
 	return incoming_cue
