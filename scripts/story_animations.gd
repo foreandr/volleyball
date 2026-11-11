@@ -341,6 +341,18 @@ func start_blocking_practice() -> void:
 	blocking_frame.add_child(blocking_practice)
 	blocking_practice.configure_block(preview_player,drill_status,build_label)
 	blocking_practice.set_ball_audio_muted(StorySession.attack_ball_audio_muted)
+	var vertical_readout := label("Vertical jump  +0 in",16)
+	content.add_child(vertical_readout)
+	var vertical := HSlider.new()
+	vertical.min_value = -20
+	vertical.max_value = 20
+	vertical.step = 1
+	vertical.value = 0
+	vertical.focus_mode = Control.FOCUS_NONE
+	vertical.value_changed.connect(func(value: float):
+		blocking_practice.set_vertical_inches(value)
+		vertical_readout.text = "Vertical jump  %+.0f in" % value)
+	content.add_child(vertical)
 	preview_camera.position = Vector3(0.0,4.9,-5.2)
 	setting_camera_focus = Vector3(0.0,2.1,4.6)
 	preview_camera.look_at(setting_camera_focus)
