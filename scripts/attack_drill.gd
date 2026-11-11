@@ -528,6 +528,9 @@ func release_approach_jump() -> void:
 func unavailable_approach_status() -> String:
 	return "Too late to plant" if find_approach_intercept(false).is_finite() else "Set outside approach reach"
 
+func adaptive_approach_timing() -> bool:
+	return false
+
 func find_approach_intercept(respect_timing := true, tier := 2) -> Vector3:
 	var origin := pass_origin if stage == Stage.SET else cpu_contact_point
 	var velocity := pass_motion if stage == Stage.SET else set_toward_pin(origin,approach_set_target,approach_set_apex)
@@ -538,7 +541,9 @@ func find_approach_intercept(respect_timing := true, tier := 2) -> Vector3:
 	var earliest := descending_time(origin,velocity,minf(apex-0.15,3.59))
 	var latest := descending_time(origin,velocity,3.10)
 	if respect_timing and stage == Stage.SET:
-		earliest = maxf(earliest,clock-stage_start+APPROACH_MIN_PLANT_TIME+0.10+jump.LEAD_STEP_TIME*tier)
+		var minimum_plant := 0.115 if adaptive_approach_timing() else APPROACH_MIN_PLANT_TIME
+		var minimum_step := jump.LEAD_STEP_TIME*(0.55 if adaptive_approach_timing() else 1.0)
+		earliest = maxf(earliest,clock-stage_start+minimum_plant+0.10+minimum_step*tier)
 	if earliest > latest: return Vector3.INF
 	for sample in 7:
 		var point := flight_point(origin,velocity,lerpf(earliest,latest,sample/6.0))
@@ -567,25 +572,41 @@ func time_approach_plant(delta: float) -> void:
 	var set_apex := pass_origin.y+pass_motion.y*pass_motion.y/(2.0*Flight.GRAVITY)
 	var height_weight := smoothstep(4.2,5.0,set_apex)
 	var jump_height := jump.max_height*lerpf(0.94,1.0,maxf(distance_weight,height_weight))-0.2032
-	var air_time := jump.flight_duration(jump_height,true)
+	var plant_time := lerpf(0.30,jump.APPROACH_LOAD_TIME,distance_weight)+0.15
+	var minimum_plant := APPROACH_MIN_PLANT_TIME
+	var lead_time := jump.LEAD_STEP_TIME*(approach_steps-2)
+	var air_fraction := 0.54
 	var contact_height := minf(ball_target.y,2.32+jump_height*0.91)
 	var contact_at := descending_time(pass_origin,pass_motion,contact_height)
-	var time_before_lift := contact_at-(clock-stage_start)-air_time*0.54
-	var plant_time := lerpf(0.30,jump.APPROACH_LOAD_TIME,distance_weight)+0.15
-	var lead_time := jump.LEAD_STEP_TIME*(approach_steps-2)
+	if adaptive_approach_timing():
+		minimum_plant = 0.115
+		var remaining := contact_at-(clock-stage_start)
+		var nominal_rise := jump.flight_duration(jump_height,true)*air_fraction
+		var ground_budget := remaining-nominal_rise
+		var rush := 1.0-smoothstep(minimum_plant+lead_time*0.55,plant_time+lead_time,ground_budget)
+		var lower_jump := clampf((ball_target.y-2.32)/0.91+0.04,0.78,jump_height)
+		jump_height = lerpf(jump_height,lower_jump,rush)
+		air_fraction = lerpf(0.54,0.43,rush)
+		contact_height = minf(ball_target.y,2.32+jump_height*0.91)
+		contact_at = descending_time(pass_origin,pass_motion,contact_height)
+	var time_before_lift := contact_at-(clock-stage_start)-jump.flight_duration(jump_height,true)*air_fraction
 	if time_before_lift > plant_time+lead_time+delta: return
+	var lead_scale := 1.0
+	if adaptive_approach_timing():
+		lead_scale = lerpf(0.55,1.0,clampf((time_before_lift-minimum_plant)/(lead_time+plant_time-minimum_plant),0.0,1.0))
+	lead_time *= lead_scale
 	approach_jump_queued = false
 	approach_expected_hit_at = stage_start+contact_at
 	approach_intercept = flight_point(pass_origin,pass_motion,contact_at)
 	var direction := (approach_intercept-setter.position).slide(Vector3.UP).normalized()
-	begin_attack_jump(Vector2(-direction.x,direction.z),clampf(time_before_lift-lead_time,APPROACH_MIN_PLANT_TIME,plant_time),jump_height)
+	begin_attack_jump(Vector2(-direction.x,direction.z),clampf(time_before_lift-lead_time,minimum_plant,plant_time),jump_height,lead_scale)
 
-func begin_attack_jump(direction: Vector2, plant_time := 0.36, jump_height := 0.0) -> void:
+func begin_attack_jump(direction: Vector2, plant_time := 0.36, jump_height := 0.0, tempo := 1.0) -> void:
 	takeoff_yaw = setter.rotation.y
 	var ball_target := Vector3.INF
 	if uses_assisted_approach():
 		ball_target = approach_intercept
-	jump.begin(setter,direction,ball_target,plant_time,jump_height,approach_steps if uses_assisted_approach() else 2,approach_from_sprint)
+	jump.begin(setter,direction,ball_target,plant_time,jump_height,approach_steps if uses_assisted_approach() else 2,approach_from_sprint,tempo)
 	trace.write("jump",clock,{"position":setter.position,"direction":jump.heading,"plant_time":jump.load_duration(),"assisted_height":jump_height},true)
 
 func step_jump(delta: float) -> void:

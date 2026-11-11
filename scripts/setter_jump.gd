@@ -28,6 +28,8 @@ var air_velocity := Vector3.ZERO
 var air_offset := Vector3.ZERO
 const LEAD_STEP_TIME := 0.24
 var lead_time := 0.0
+var lead_step_duration := LEAD_STEP_TIME
+var air_glide_duration := 0.58
 var entry_time := 0.0
 var entry_distance := 0.0
 var lead_arm_clip: Animation
@@ -41,7 +43,7 @@ var left_foot_start: Vector3
 var right_plant: Vector3
 var left_plant: Vector3
 
-func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time := APPROACH_LOAD_TIME, jump_height := 0.0, approach_steps := 2, from_sprint := false) -> void:
+func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time := APPROACH_LOAD_TIME, jump_height := 0.0, approach_steps := 2, from_sprint := false, tempo := 1.0) -> void:
 	if active: return
 	active = true
 	held = true
@@ -58,8 +60,10 @@ func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time
 	approach_plant = ball_target.is_finite()
 	assisted_load_time = plant_time
 	assisted_height = jump_height
-	lead_time = LEAD_STEP_TIME*(approach_steps-2)
-	entry_time = LEAD_STEP_TIME if approach_steps == 4 else 0.0
+	lead_step_duration = LEAD_STEP_TIME*tempo
+	air_glide_duration = 0.58*lerpf(0.72,1.0,tempo)
+	lead_time = lead_step_duration*(approach_steps-2)
+	entry_time = lead_step_duration if approach_steps == 4 else 0.0
 	entry_distance = 0.0
 	lead_distance = 0.0
 	if from_sprint:
@@ -118,14 +122,14 @@ func step(actor: Node3D, delta: float, input: Vector2) -> void:
 		first = smoothstep(0.045,0.135,pose_time)
 		second = smoothstep(0.135,0.21,pose_time)
 	var lead_age := elapsed-entry_time
-	var lead_progress := smoothstep(0.0,LEAD_STEP_TIME,lead_age) if lead_time > 0.0 else 0.0
+	var lead_progress := smoothstep(0.0,lead_step_duration,lead_age) if lead_time > 0.0 else 0.0
 	var entry_progress := smoothstep(0.0,entry_time,elapsed) if entry_time > 0.0 else 0.0
 	var distance := entry_distance*entry_progress+lead_distance*lead_progress+stride*(0.34*first+0.66*second+AIR_TRAVEL_FRACTION*flight)
 	var transfer_hop := 0.0
 	if lead_time > 0.0:
-		transfer_hop = 0.05*smoothstep(LEAD_STEP_TIME*0.82,LEAD_STEP_TIME,lead_age)*(1.0-smoothstep(0.0,0.135,pose_time))
+		transfer_hop = 0.05*smoothstep(lead_step_duration*0.82,lead_step_duration,lead_age)*(1.0-smoothstep(0.0,0.135,pose_time))
 	var base := start+heading*distance+Vector3.UP*(4.0*height*flight*(1.0-flight)+transfer_hop)
-	var lunge := approach_lunge*smoothstep(0.0,0.58,elapsed-load_time)
+	var lunge := approach_lunge*smoothstep(0.0,air_glide_duration,elapsed-load_time)
 	var position := base+air_offset+lunge
 	actor.position = Court.clamp_setter(position,front_limit)
 	if air_delta > 0.0: air_offset += actor.position-position
@@ -134,7 +138,7 @@ func step(actor: Node3D, delta: float, input: Vector2) -> void:
 	if landing >= LAND_TIME:
 		active = false
 		return
-	var lead_load := 0.70*smoothstep(0.0,LEAD_STEP_TIME*0.78,lead_age) if lead_time > 0.0 else 0.0
+	var lead_load := 0.70*smoothstep(0.0,lead_step_duration*0.78,lead_age) if lead_time > 0.0 else 0.0
 	var load_in := lerpf(lead_load,1.0,smoothstep(0.035 if lead_time > 0.0 else 0.02,0.12 if lead_time > 0.0 else 0.19,pose_time))
 	var load := load_in*(1.0-smoothstep(0.19,LOAD_TIME+0.055,pose_time))
 	var impact := smoothstep(-0.025,0.04,landing)*(1.0-smoothstep(0.04,LAND_TIME,landing))
@@ -154,7 +158,7 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 	var lead_age := elapsed-entry_time
 	var lead_plant_load := 0.0
 	if lead_time > 0.0:
-		lead_plant_load = smoothstep(LEAD_STEP_TIME*0.38,LEAD_STEP_TIME*0.82,lead_age)*(1.0-smoothstep(0.0,0.135,pose_time))
+		lead_plant_load = smoothstep(lead_step_duration*0.38,lead_step_duration*0.82,lead_age)*(1.0-smoothstep(0.0,0.135,pose_time))
 	pose[pelvis].origin -= hips.basis.inverse()*Vector3.UP*(0.15*load+0.14*impact+0.035*lead_plant_load)/scale_
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,(0.16+load_bend_extra)*load+0.13*impact-0.22*arm_drive)
 	var travel := actor.basis.inverse()*heading*stride/scale_
@@ -175,7 +179,7 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 				var entry_progress := smoothstep(0.0,entry_time*0.86,elapsed)
 				plant_from += heading*(entry_distance+0.07)*entry_progress+Vector3.UP*0.10*sin(PI*entry_progress)
 			if left and lead_time > 0.0:
-				var lead_progress := smoothstep(0.0,LEAD_STEP_TIME*0.82,lead_age)
+				var lead_progress := smoothstep(0.0,lead_step_duration*0.82,lead_age)
 				plant_from += heading*(entry_distance+lead_distance+0.07)*lead_progress+Vector3.UP*0.08*sin(PI*lead_progress)
 			var plant_to := left_plant if left else right_plant
 			var planted := plant_from.lerp(plant_to,step_progress)
@@ -193,7 +197,7 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 		var front_swing := 0.0
 		if lead_time > 0.0:
 			var sweep_back := smoothstep(0.0,0.12,pose_time)
-			front_swing = 0.20*smoothstep(0.0,LEAD_STEP_TIME*0.72,lead_age)*(1.0-sweep_back)
+			front_swing = 0.20*smoothstep(0.0,lead_step_duration*0.72,lead_age)*(1.0-sweep_back)
 			arm_load *= sweep_back
 		var jump_drive := 0.0 if approach_plant else arm_drive
 		author.rotate_world(pose,upper_arm,Vector3.RIGHT,(1.52+load_arm_extra)*arm_load-front_swing)
@@ -233,7 +237,7 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 		var track := lead_arm_clip.find_track(^"Armature/Skeleton3D:upperarm_r",Animation.TYPE_ROTATION_3D)
 		if track >= 0:
 			var bone := rig.find_bone("upperarm_r")
-			var clip_time := minf(lead_age/LEAD_STEP_TIME,1.0)*lead_arm_clip.length
+			var clip_time := minf(lead_age/lead_step_duration,1.0)*lead_arm_clip.length
 			var edited := lead_arm_clip.rotation_track_interpolate(track,clip_time)
 			var blend := smoothstep(0.0,0.035,lead_age)*(1.0-smoothstep(lead_time,lead_time+0.10,elapsed))
 			pose[bone].basis = Basis(pose[bone].basis.get_rotation_quaternion().slerp(edited,blend))

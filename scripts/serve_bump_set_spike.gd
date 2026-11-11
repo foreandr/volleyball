@@ -246,6 +246,9 @@ func call_rally_set(passer: Vector3) -> void:
 	if not partner_receiving:
 		show_teammate_set_call("If set, Zone %d" if active_cpu_set_style == 3 else "Set to Zone %d")
 
+func adaptive_approach_timing() -> bool:
+	return true
+
 func cpu_set_move_speed(distance: float) -> float:
 	return 5.0 if distance > 0.85 else 3.2
 
