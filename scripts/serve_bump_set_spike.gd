@@ -157,6 +157,9 @@ func call_rally_set(passer: Vector3) -> void:
 		if not partner_receiving: rally_set_call.text = "Set to Zone %d" % ((rally_set_index+1)*10)
 		rally_set_call.show()
 
+func cpu_set_move_speed(distance: float) -> float:
+	return 5.0 if not partner_receiving and distance > 0.85 else 3.2
+
 func tick_demo(delta: float, controls: RefCounted) -> void:
 	if stage == Stage.SERVE and not is_finite(serve_demo.contact_clock):
 		if not partner_receiving: bump.update_aim()
@@ -172,7 +175,16 @@ func tick_demo(delta: float, controls: RefCounted) -> void:
 			queue_set()
 		if stage in [Stage.PASS,Stage.SET] and not jump.active:
 			var run_target := rally_set_target-Vector3.BACK*1.95
-			setter.position = setter.position.move_toward(Vector3(run_target.x,setter.position.y,run_target.z),4.5*delta)
+			var travel := (run_target-setter.position).slide(Vector3.UP)
+			approach_from_sprint = travel.length() > 0.65
+			if approach_from_sprint:
+				var yaw := atan2(travel.x,travel.z)
+				setter.rotation.y = rotate_toward(setter.rotation.y,yaw,12.0*delta)
+				setter.play_action("run")
+			else:
+				setter.play_action("idle")
+			setter.position += travel.limit_length((5.0 if approach_from_sprint else 3.2)*delta)
+			setter.animator.advance(delta)
 			approach_space_held = true
 			trace_input = queued_approach_input(delta)
 		step_jump(delta)

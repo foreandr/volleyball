@@ -737,6 +737,9 @@ func cpu_set_launch(origin: Vector3) -> Vector3:
 func set_requested() -> bool:
 	return true
 
+func cpu_set_move_speed(_distance: float) -> float:
+	return 3.2
+
 func play_cpu_set(time: float, delta: float) -> void:
 	if is_finite(cpu_set.touch_time):
 		var push_time: float = time-cpu_set.touch_time
@@ -764,23 +767,32 @@ func play_cpu_set(time: float, delta: float) -> void:
 			trace.write("cpu_set",clock,{"point":pass_origin,"velocity":pass_motion,"pin_arrival":pin_arrival},true)
 		return
 	ball.position = flight_point(pass_origin,pass_motion,minf(time,cpu_contact_time))
-	var travel := (cpu_stand-receiver.position).slide(Vector3.UP).limit_length(3.2*delta)
+	var remaining := (cpu_stand-receiver.position).slide(Vector3.UP)
+	var move_speed := cpu_set_move_speed(remaining.length())
+	var running := move_speed > 3.2
+	var travel := remaining.limit_length(move_speed*delta)
 	receiver.position += travel
 	var toward_ball := (ball.position-receiver.position).slide(Vector3.UP)
 	if toward_ball.length_squared() < 0.09 and travel.is_zero_approx():
 		toward_ball = (pass_origin-cpu_contact_point).slide(Vector3.UP)
 	var lead := cpu_contact_time-time
-	if uses_assisted_approach() and lead < 0.30:
+	if running:
+		face_receiver(travel,delta*12.0)
+		receiver.play_action("run")
+	elif uses_assisted_approach() and lead < 0.30:
 		var target := called_set_target()-receiver.position
 		var preturn := 1.0-smoothstep(0.0,0.30,lead)
 		var yaw := lerp_angle(atan2(toward_ball.x,toward_ball.z),atan2(target.x,target.z),preturn*0.28)
 		face_receiver(Vector3(sin(yaw),0.0,cos(yaw)),delta*lerpf(9.0,APPROACH_SET_TURN_RATE,preturn))
 	else:
 		face_receiver(toward_ball,delta*9.0)
-	cpu_feet.step(receiver.basis.inverse()*travel/maxf(delta*3.2,0.001),delta,1.4,true)
+	if not running:
+		receiver.play_action("idle")
+		cpu_feet.step(receiver.basis.inverse()*travel/maxf(delta*move_speed,0.001),delta,1.4,true)
 	if active_cpu_set_style == 2:
 		receiver.position.y = CPU_HOME.y+0.44*(1.0-smoothstep(0.0,0.24,lead))
 	if lead <= 0.22:
+		if running: receiver.play_action("idle",0.0)
 		var prepare := 1.0-smoothstep(0.0,0.22,lead)
 		if active_cpu_set_style == 1: cpu_set.apply_pose(cpu_set.contact_frame,prepare)
 		else: HandPose.apply(receiver,cpu_contact_point,prepare)
