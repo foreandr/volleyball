@@ -18,6 +18,7 @@ var vertical_inches := 0.0
 const PALM_ANGLE_DEGREES := 30.0
 var last_block_gap := INF
 var kong_pressed_at: Array[float] = [INF,INF]
+var kong_tracking: Array[Vector2] = [Vector2(0.83,0.43),Vector2(0.83,0.43)]
 var active_block_height := BLOCK_HEIGHT
 var hand_normals: Array[Vector3] = [Vector3.BACK,Vector3.BACK]
 var block_hands: Array[Dictionary] = [{},{}]
@@ -86,6 +87,7 @@ func queue_block() -> void:
 	block_base = blocker.position
 	block_tracking = 0.0
 	kong_pressed_at = [INF,INF]
+	kong_tracking = [Vector2(0.83,0.43),Vector2(0.83,0.43)]
 	active_block_height = BLOCK_HEIGHT+vertical_inches*0.0254
 	hand_normals = [Vector3.BACK,Vector3.BACK]
 	block_hands = [{},{}]
@@ -151,7 +153,13 @@ func step_blocker(delta: float) -> void:
 			kong = smoothstep(0.0,0.115,block_elapsed-kong_pressed_at[hand_index])
 			kong *= 1.0-smoothstep(BLOCK_LOAD+0.61,BLOCK_LOAD+BLOCK_AIR+0.12,pose_time)
 		var wrist_offset := Vector3(-sign_*0.105+block_tracking*press*2.0,0.64,0.20+0.34*press)
-		wrist_offset = wrist_offset.lerp(Vector3(sign_*0.83,0.43,0.25+0.14*press),kong)
+		if kong > 0.0 and stage == Stage.HIT and not is_finite(block_contact_at):
+			var shoulder_world := rig.to_global(shoulder)
+			var reach := clampf((shot.x-shoulder_world.x)*sign_+0.04,0.26,0.86)
+			var height := clampf(shot.y-shoulder_world.y-0.10,0.35,0.64)
+			kong_tracking[hand_index] = kong_tracking[hand_index].lerp(Vector2(reach,height),1.0-exp(-delta*33.0))
+		var tracked := kong_tracking[hand_index]
+		wrist_offset = wrist_offset.lerp(Vector3(sign_*tracked.x,tracked.y,0.25+0.14*press),kong)
 		var wrist := shoulder+wrist_offset/scale_
 		author.limb(pose,"upperarm_"+side,"lowerarm_"+side,"hand_"+side,wrist,Vector3(sign_*lerpf(0.31,0.78,kong),-0.52,0.34),raise,176.0)
 		var base: Transform3D = author.world_pose(pose,rig.find_bone("hand_"+side))
