@@ -52,6 +52,7 @@ var green_hand_allowance := 0.0
 var grade := Timing.Grade.WAITING
 var pressed_at := -INF
 var low_save := LowSave.new()
+var previous_dig_pose := PackedVector3Array()
 var pose_started_at := -INF
 var cone: MeshInstance3D
 var contact_check := {}
@@ -111,6 +112,7 @@ func set_custom_backward(animation: Animation) -> void:
 	if animation != null: custom_backward_tracks = animation_tracks(animation)
 
 func reset() -> void:
+	previous_dig_pose.clear()
 	tracked_hand_dig = Vector3.INF
 	contact_check.clear()
 	approach_progress = -1.0
@@ -328,21 +330,37 @@ func apply_knee_bend(time := INF) -> void:
 		rig.set_bone_pose_position(bone,pose[bone].origin)
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.orthonormalized().get_rotation_quaternion().normalized())
 
-func dig_contact_segment(first: Vector3, last: Vector3, pancake := false) -> PackedVector3Array:
+func dig_bones() -> PackedVector3Array:
 	var rig: Skeleton3D = setter.skeleton
+	var points := PackedVector3Array()
+	for side in ["l","r"]:
+		for part in ["lowerarm_","hand_","middle_03_"]:
+			var bone := rig.find_bone(part+side)
+			points.append(to_local(rig.to_global(rig.get_bone_global_pose(bone).origin)))
+	return points
+
+func dig_contact_segment(first: Vector3, last: Vector3, pancake := false, start_pose := PackedVector3Array(), end_pose := PackedVector3Array()) -> PackedVector3Array:
+	if end_pose.is_empty(): end_pose = dig_bones()
+	if start_pose.is_empty(): start_pose = end_pose
 	var closest := PackedVector3Array([first,Vector3.INF])
 	var gap := INF
-	for side in (["r"] if pancake else ["l","r"]):
-		var elbow := to_local(rig.to_global(rig.get_bone_global_pose(rig.find_bone("lowerarm_"+side)).origin))
-		var wrist := to_local(rig.to_global(rig.get_bone_global_pose(rig.find_bone("hand_"+side)).origin))
-		var fingers := to_local(rig.to_global(rig.get_bone_global_pose(rig.find_bone("middle_03_"+side)).origin))
-		var bones := [wrist,fingers] if hand_setting or pancake else [elbow,wrist,fingers]
-		for index in bones.size()-1:
-			var pair := Geometry3D.get_closest_points_between_segments(first,last,bones[index],bones[index+1])
-			var distance := pair[0].distance_squared_to(pair[1])
-			if distance < gap:
-				gap = distance
-				closest = pair
+	var samples := 1 if start_pose == end_pose else 5
+	for sample in samples:
+		var start := float(sample)/samples
+		var finish := float(sample+1)/samples
+		var phase := (start+finish)*0.5
+		var before := first.lerp(last,start)
+		var after := first.lerp(last,finish)
+		for side in range(1 if pancake else 0,2):
+			for index in range(1 if hand_setting or pancake else 0,2):
+				var joint := side*3+index
+				var from := start_pose[joint].lerp(end_pose[joint],phase)
+				var to := start_pose[joint+1].lerp(end_pose[joint+1],phase)
+				var pair := Geometry3D.get_closest_points_between_segments(before,after,from,to)
+				var distance := pair[0].distance_squared_to(pair[1])
+				if distance < gap:
+					gap = distance
+					closest = pair
 	return closest
 
 func update_attempt(time: float, previous: float, end: float, path: Callable, incoming: Vector3, delta: float, cue_arrival := INF, spin_rps := 0.0, dig_cue := INF) -> void:
@@ -351,13 +369,16 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 	approach_progress = progress
 	var attempted := is_finite(pressed_at)
 	var face_dig := hand_setting and defensive_hand_dig
+	var strict_dig := is_finite(dig_cue)
+	var initial_pose := previous_dig_pose
+	if strict_dig and attempted and initial_pose.is_empty(): initial_pose = dig_bones()
 	if attempted and grade == Timing.Grade.WAITING:
-		var start_dig := is_finite(dig_cue) and time >= dig_cue-0.17
+		var start_dig := strict_dig and (not hand_setting or time >= dig_cue-0.19)
 		if not is_finite(pose_started_at) and (start_dig or progress >= 1.0-PLATFORM_PREP_TIME/APPROACH_TIME):
 			pose_started_at = maxf(pressed_at,time-delta)
 		if allow_auto_dive and not hand_setting and not setter_jumping and reach.is_empty(): low_save.plan(setter,path,time,end,clip)
 	var elapsed := time-pose_started_at
-	var striking := attempted and grade == Timing.Grade.WAITING and (low_save.active or is_finite(pose_started_at)) and time < end and (not catch_only or catch_airborne)
+	var striking := attempted and grade == Timing.Grade.WAITING and (low_save.active or is_finite(pose_started_at)) and (time < end or (strict_dig and previous < end)) and (not catch_only or catch_airborne)
 	if striking:
 		if hand_setting:
 			apply_knee_bend(time)
@@ -366,8 +387,8 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 		elif low_save.active:
 			low_save.sample(setter,time,low_save.contact_time+0.07)
 		else:
-			var windup := lerpf(-0.14,0.0,smoothstep(0.0,0.08,elapsed))
-			var pose_time := 0.065 if is_finite(dig_cue) else 0.09
+			var pose_time := 0.045 if strict_dig else 0.09
+			var windup := lerpf(-0.14,0.0,smoothstep(0.0,pose_time,elapsed))
 			apply_pose(contact_frame+windup,smoothstep(0.0,pose_time,elapsed))
 			if not setter_jumping:
 				var intercept := advance_reach(path,time,end,delta,is_finite(dig_cue))
@@ -384,21 +405,25 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 		var near_dive_contact := low_save.active and not pancake and absf(time-low_save.contact_time)<=0.12
 		var allowance := DIVE_CONTACT_ALLOWANCE if near_dive_contact else 0.0
 		var cutoff := radius+allowance
-		var first: Vector3 = path.call(previous)
-		var last: Vector3 = path.call(time)
-		if center.is_finite() and not first.is_equal_approx(last):
+		var sweep_start := maxf(previous,pressed_at) if strict_dig else previous
+		var sweep_end := minf(time,end) if strict_dig else time
+		var first: Vector3 = path.call(sweep_start)
+		var last: Vector3 = path.call(sweep_end)
+		if (center.is_finite() or strict_dig) and sweep_start < sweep_end and (strict_dig or not first.is_equal_approx(last)):
+			if not center.is_finite(): center = first
 			var point := Geometry3D.get_closest_point_to_segment(center,first,last)
 			var gap := point.distance_to(center)
-			var strict_dig := is_finite(dig_cue)
 			var adjustment_threshold := 0.08 if strict_dig else PLATFORM_RADIUS
 			if not hand_setting and not low_save.active and gap > adjustment_threshold and gap <= 0.58:
-				reach_platform(point-center)
+				var reach_weight := smoothstep(0.0,0.045,elapsed) if strict_dig else 1.0
+				reach_platform(point-center,reach_weight)
 				center = platform_center()
 				point = Geometry3D.get_closest_point_to_segment(center,first,last)
 			var timing := (cue_arrival if is_finite(cue_arrival) and not low_save.active else time)-pressed_at
 			var green := timing >= green_start and timing <= green_end
 			if strict_dig:
-				var contact := dig_contact_segment(first,last,pancake)
+				previous_dig_pose = dig_bones()
+				var contact := dig_contact_segment(first,last,pancake,initial_pose,previous_dig_pose)
 				point = contact[0]
 				center = contact[1]
 				cutoff = Net.RADIUS+(0.04 if hand_setting or pancake else 0.05)
@@ -431,7 +456,8 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 				"accepted":face_aligned and (assisted or hand_assisted or gap_after_adjustment <= cutoff),
 			}
 			if contact_check.accepted:
-				touch_time = lerpf(previous,time,first.distance_to(point)/first.distance_to(last))
+				var fraction := first.distance_to(point)/maxf(0.00001,first.distance_to(last))
+				touch_time = lerpf(sweep_start,sweep_end,clampf(fraction,0.0,1.0))
 				touch = point
 				if not is_finite(cue_arrival) or low_save.active: timing = touch_time-pressed_at
 				if assisted: reach_platform(point-center)
@@ -628,14 +654,14 @@ func pose_reach(weight: float, intercept: Vector3) -> void:
 		if is_finite(touch_time): planted_travel *= 1.0-smoothstep(0.10,0.40,rear_follow)
 		setter.pose_reception_reach(local*reach_step,local*planted_travel,weight,pose_progress,ready_pose,reach,false,0,intercept)
 
-func reach_platform(offset: Vector3) -> void:
+func reach_platform(offset: Vector3, weight := 1.0) -> void:
 	var rig: Skeleton3D = setter.skeleton
 	var author: RefCounted = setter.get_pose_author()
 	var pose: Array = []
 	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
 	var grip: Vector3 = (author.point(pose,"hand_l")+author.point(pose,"hand_r"))*0.5
 	var shift := rig.global_basis.inverse()*global_basis*offset.limit_length(0.26)
-	PlatformPose.connect_arms(pose,author,grip+shift,0.82)
+	PlatformPose.connect_arms(pose,author,grip+shift,0.82*weight)
 	for side in ["l","r"]:
 		for part in ["upperarm_","lowerarm_","hand_"]:
 			var bone := rig.find_bone(part+side)

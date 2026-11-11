@@ -201,6 +201,7 @@ func configure(actor: Node3D, board: Label, status: Label, build := "") -> void:
 	trajectory_style.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	trajectory_style.albedo_color = Color("62d9f0")
 	add_child(trajectory_node)
+	route_ball_sound()
 	touch_audio = make_ball_audio(CONTACT_SOUND,3.0)
 	spike_audio = make_ball_audio(SPIKE_SOUND,2.0)
 	floor_audio = make_ball_audio(preload("res://assets/audio/ball_floor.wav"),1.5)
@@ -494,6 +495,16 @@ func on_spike(actor: Node3D, point: Vector3, motion: Vector3, spin_rate: float) 
 	stroke = "Spike"
 	launch(point,motion,"spike",index,spin_rate)
 
+func route_ball_sound() -> void:
+	if OS.get_name() != "Windows": return
+	var outputs := AudioServer.get_output_device_list()
+	for output in outputs:
+		var name_ := output.to_lower()
+		if name_.begins_with("speakers (") and not name_.contains("streaming") and not name_.contains("virtual"):
+			AudioServer.output_device = output
+			return
+	AudioServer.output_device = "Default"
+
 func make_ball_audio(stream: AudioStream, gain: float) -> AudioStreamPlayer:
 	var player := AudioStreamPlayer.new()
 	player.stream = stream
@@ -505,6 +516,7 @@ func make_ball_audio(stream: AudioStream, gain: float) -> AudioStreamPlayer:
 func set_ball_sound(enabled: bool) -> void:
 	StorySession.attack_ball_audio_muted = not enabled
 	if enabled:
+		route_ball_sound()
 		play_touch(true)
 	else:
 		for player in [touch_audio,spike_audio,floor_audio,net_audio]: player.stop()
@@ -595,6 +607,8 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 	var point := frame.to_local(world_point)
 	var bump := platforms[index]
 	stroke = ["Forearm","Hands","Jump set"][technique]
+	if defensive_ball() and not bump.contact_check.is_empty():
+		trace.write("dig_contact",match_clock,bump.contact_check)
 	begin_recovery(index)
 	play_touch()
 	if touches == 2 and not (cpu_dump and index == cpu_choice) and (bump.destination.y < 4.0 or (is_human(index) and technique != 0)):
@@ -648,7 +662,7 @@ func advance_recoveries(delta: float) -> void:
 				recovery.save.sample(players[index],time,recovery.save_release)
 				animated[index] = true
 				continue
-			recoveries.erase(index)
+			begin_recovery(index)
 			continue
 		if age >= RECOVERY_TIME:
 			recoveries.erase(index)
@@ -812,10 +826,14 @@ func tick_receive(delta: float, previous: float) -> void:
 	if cpu_choice < 0: select_receiver()
 	var index := cpu_choice
 	if not spectator and receiving_team == 0 and is_finite(platforms[0].pressed_at) and not blocks.has(0): index = 0
-	if index < 0 or blocks.has(index) or recoveries.has(index): return
+	if index < 0 or blocks.has(index): return
 	var frame := frames[team(index)]
 	var bump := platforms[index]
 	var technique := requested if is_human(index) else cpu_technique
+	var recovering := recoveries.has(index)
+	if recovering:
+		if technique != 0 or not defensive_ball() or recoveries[index].has("save"): return
+		if index == last_player and not last_was_block and possession_team == team(index): return
 	if is_human(index) and technique < 0: return
 	if is_human(index) and not is_finite(bump.pressed_at) and elapsed-request_age < 0.44: queue_receive(0,technique)
 	var height: float = [1.10,1.92,2.35][technique]
@@ -838,7 +856,7 @@ func tick_receive(delta: float, previous: float) -> void:
 		var face := toward_incoming(index,catch_point)
 		if face.is_zero_approx(): face = Vector3.BACK
 		var offset := 0.52 if technique == 0 else 0.28
-		if not set_jumps[index].active and not bump.low_save.active:
+		if not recovering and not set_jumps[index].active and not bump.low_save.active:
 			var target := catch_point-frame.global_basis*face*offset
 			var lead := cue-elapsed
 			var speed := lerpf(1.7,5.3,smoothstep(0.035,0.24,lead))
@@ -848,9 +866,10 @@ func tick_receive(delta: float, previous: float) -> void:
 			elif is_finite(bump.pressed_at):
 				speed = minf(speed,2.0)
 			move_cpu(index,target,delta,speed,face,cpu_dig or flight_kind == "serve")
-		var prep := 0.39 if technique == 2 else (0.32 if cpu_dig else 0.24)
+		var prep := 0.39 if technique == 2 else (0.35 if cpu_dig else 0.24)
 		if elapsed >= cue-prep: queue_receive(index,technique)
 	if not is_finite(bump.pressed_at): return
+	if recovering: recoveries.erase(index)
 	var jump_lead := 0.29 if is_human(index) else 0.35
 	var air_lead := 0.13 if is_human(index) else 0.20
 	if technique == 2 and not jump_set_started[index] and cue-elapsed <= jump_lead:
