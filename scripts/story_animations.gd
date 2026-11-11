@@ -298,12 +298,16 @@ Scroll to set pass height",16)
 	animation_list.grab_focus()
 
 func start_serve_bump_set_spike() -> void:
+	if player_controls.active: player_controls.set_active(false)
 	clear_content()
 	if is_instance_valid(ball_preview): ball_preview.stop()
 	set_title("SERVE BUMP SET SPIKE")
 	var controls_hint := label("WASD to move  |  Q forearms  |  E / I hands\nCursor aims  |  Scroll for pass height\nShift + W to run  |  Hold Space to spike",16)
+	controls_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(controls_hint)
 	drill_status = label("",18)
+	drill_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	drill_status.custom_minimum_size.y = 50
 	content.add_child(drill_status)
 	setter_original_transform = preview_player.transform
 	setter_original_height = preview_player.height_cm
@@ -319,6 +323,7 @@ func start_serve_bump_set_spike() -> void:
 	setting_drill.configure(preview_player,drill_status,true,build_label)
 	setting_drill.setup_demo()
 	var call := label("",18)
+	call.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	call.hide()
 	content.add_child(call)
 	setting_drill.rally_set_call = call
