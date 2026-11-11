@@ -59,14 +59,14 @@ func _ready() -> void:
 	play_action("idle")
 	animator.advance(float(player_number)*0.31)
 
-func play_action(action: String) -> void:
+func play_action(action: String, blend := 0.15) -> void:
 	if action == "forearm" and not animation_slots.has(action):
 		PassRecipes.refresh()
 		var platform := PassRecipes.clip(self,FOREARM_PLATFORM)
 		if platform != null: install_custom(platform,action,false)
 		return
 	var clip: String = animation_slots.get(action,action)
-	if animator.has_animation(clip): animator.play(clip,0.15)
+	if animator.has_animation(clip): animator.play(clip,blend)
 
 func install_custom(resource: Resource, slot := "idle", save := true) -> bool:
 	var library := AnimationLibrary.new()
