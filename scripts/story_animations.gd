@@ -328,7 +328,7 @@ func start_serve_bump_set_spike() -> void:
 	content.add_child(call)
 	setting_drill.rally_set_call = call
 	var technique := OptionButton.new()
-	for title in ["Hands set","Forearm set","Jump set","Jump set with spike fake"]: technique.add_item(title)
+	for title in ["Hands set","Forearm set","Jump set","Spike or fake jump set"]: technique.add_item(title)
 	technique.item_selected.connect(func(index: int): setting_drill.cpu_set_style = index)
 	content.add_child(technique)
 	var serve_side := OptionButton.new()
@@ -1151,7 +1151,7 @@ func handle_preview_input(event: InputEvent) -> void:
 			elif setting_drill.can_aim_set():
 				var point: Variant = attack_floor_point(event.position)
 				if point is Vector3: setting_drill.set_pass_aim(point)
-			elif (not setting_drill.partner_receiving or setting_drill.player_second_ball_attack) and setting_drill.stage != setting_drill.Stage.SERVE: aim_attack_shot(event.position)
+			elif (not setting_drill.partner_receiving or setting_drill.player_second_ball_attack) and not setting_drill.cpu_second_ball_attack and setting_drill.stage != setting_drill.Stage.SERVE: aim_attack_shot(event.position)
 		elif event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_WHEEL_UP,MOUSE_BUTTON_WHEEL_DOWN]:
 			var wheel := 1.0 if event.button_index == MOUSE_BUTTON_WHEEL_UP else -1.0
 			if setting_drill.can_adjust_manual_set():

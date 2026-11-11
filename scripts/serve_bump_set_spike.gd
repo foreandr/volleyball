@@ -20,6 +20,8 @@ var swing_to_set_started := 0.0
 var swing_to_set_duration := 0.14
 var second_ball_spike_held := false
 var player_second_ball_attack := false
+var cpu_second_ball_attack := false
+var cpu_commits_to_spike := false
 var manual_set_apex := SET_APEX
 var requested_set_apex := SET_APEX
 var manual_set_target := Vector3.INF
@@ -69,6 +71,8 @@ func reset_feed() -> void:
 	swing_to_set_pose.clear()
 	second_ball_spike_held = false
 	player_second_ball_attack = false
+	cpu_second_ball_attack = false
+	cpu_commits_to_spike = randf() < 0.35
 	manual_set_target = Vector3.INF
 	setter.position = BACK_RIGHT if partner_receiving else BACK_LEFT
 	setter.rotation.y = 0.0
@@ -112,26 +116,29 @@ func adjust_manual_set_height(amount: float) -> void:
 	requested_set_apex = clampf(requested_set_apex+amount,MIN_SET_APEX,7.5)
 
 func request_manual_set(technique: int) -> void:
-	if player_second_ball_attack and stage == Stage.SET:
-		var lift := maxf(0.0,user_player.position.y-BACK_LEFT.y)
+	var cpu_fake := cpu_second_ball_attack
+	if (player_second_ball_attack or cpu_fake) and stage == Stage.SET:
+		var actor := setter
+		var lift := maxf(0.0,actor.position.y-BACK_LEFT.y)
 		if technique == 0 and jump.active and lift > 0.03:
 			carried_jump_lift = lift
-			var rig: Skeleton3D = user_player.skeleton
+			var rig: Skeleton3D = actor.skeleton
 			for bone in rig.get_bone_count():
 				swing_to_set_pose.append(rig.get_bone_pose_rotation(bone))
 			swing_to_set_started = clock
 			technique = 2
 		jump.active = false
-		if carried_jump_lift == 0.0: user_player.position.y = BACK_LEFT.y
-		user_player.play_action("idle",0.0)
-		setter = teammate
-		receiver = user_player
+		if carried_jump_lift == 0.0: actor.position.y = BACK_LEFT.y
+		actor.play_action("idle",0.0)
+		setter = receiver
+		receiver = actor
 		stage = Stage.PASS
 		player_second_ball_attack = false
+		cpu_second_ball_attack = false
 		approach_jump_queued = false
 		approach_pressed_at = -INF
 		swing_started = -INF
-	if not partner_receiving or stage != Stage.PASS or is_finite(cpu_set.touch_time): return
+	if (not partner_receiving and not cpu_fake) or stage != Stage.PASS or is_finite(cpu_set.touch_time): return
 	manual_set_requested = true
 	second_ball_spike_held = false
 	active_cpu_set_style = technique
@@ -142,7 +149,8 @@ func request_manual_set(technique: int) -> void:
 		swing_to_set_duration = clampf(cpu_contact_time-(clock-stage_start)+0.055,0.075,0.16)
 	var incoming := (pass_origin-cpu_contact_point).slide(Vector3.UP).normalized()
 	cpu_stand = Court.clamp_setter(Vector3(cpu_contact_point.x,CPU_HOME.y,cpu_contact_point.z)-incoming*HandPose.CONTACT_FORWARD*receiver.scale.z,ATTACK_FRONT_LIMIT)
-	update_manual_set_target()
+	if partner_receiving: update_manual_set_target()
+	else: cpu_set_launch(cpu_contact_point)
 
 func set_requested() -> bool:
 	return not partner_receiving or manual_set_requested
@@ -154,7 +162,7 @@ func blend_swing_to_set() -> void:
 		swing_to_set_pose.clear()
 		return
 	var weight := smoothstep(0.0,swing_to_set_duration,age)
-	var rig: Skeleton3D = user_player.skeleton
+	var rig: Skeleton3D = receiver.skeleton
 	for bone in rig.get_bone_count():
 		var set_rotation := rig.get_bone_pose_rotation(bone)
 		rig.set_bone_pose_rotation(bone,swing_to_set_pose[bone].slerp(set_rotation,weight))
@@ -220,23 +228,6 @@ func call_rally_set(passer: Vector3) -> void:
 		if not partner_receiving: rally_set_call.text = "Set to Zone %d" % ((rally_set_index+1)*10)
 		rally_set_call.show()
 
-func prepare_cpu_set(lead: float) -> void:
-	super.prepare_cpu_set(lead)
-	if active_cpu_set_style != 3: return
-	var fake := (1.0-smoothstep(0.19,0.34,lead))*smoothstep(0.025,0.18,lead)
-	if fake <= 0.0: return
-	var rig: Skeleton3D = receiver.skeleton
-	var author: RefCounted = receiver.get_pose_author()
-	var pose: Array = []
-	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
-	var shoulder: Vector3 = author.point(pose,"upperarm_r")
-	var scale_: float = rig.global_basis.get_scale().y
-	var cocked_wrist := shoulder+Vector3(-0.20,0.27,-0.21)/scale_
-	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",cocked_wrist,Vector3(-0.85,-0.15,0.4),fake)
-	for joint in ["upperarm_r","lowerarm_r"]:
-		var bone := rig.find_bone(joint)
-		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
-
 func cpu_set_move_speed(distance: float) -> float:
 	return 5.0 if distance > 0.85 else 3.2
 
@@ -262,11 +253,14 @@ func try_quick_attack(delta: float) -> void:
 	begin_attack_jump(Vector2(-direction.x,direction.z),maxf(0.12,time_to_hit-rise),jump_height)
 
 func try_second_ball_attack() -> void:
-	if not second_ball_spike_held or manual_set_requested or stage != Stage.PASS: return
+	var cpu_attempt := not partner_receiving and active_cpu_set_style == 3
+	if manual_set_requested or stage != Stage.PASS or is_finite(cpu_set.touch_time): return
+	if not second_ball_spike_held and not cpu_attempt: return
 	var height_time := descending_time(pass_origin,pass_motion,3.35)
 	if height_time-(clock-stage_start) > 1.05: return
-	setter = user_player
-	receiver = teammate
+	var passer := setter
+	setter = receiver
+	receiver = passer
 	stage = Stage.SET
 	var intercept := Vector3.INF
 	for tier in APPROACH_RADII.size():
@@ -275,11 +269,13 @@ func try_second_ball_attack() -> void:
 			approach_steps = tier+2
 			break
 	if not intercept.is_finite():
-		setter = teammate
-		receiver = user_player
+		receiver = setter
+		setter = passer
 		stage = Stage.PASS
 		return
-	player_second_ball_attack = true
+	player_second_ball_attack = not cpu_attempt
+	cpu_second_ball_attack = cpu_attempt
+	if cpu_attempt: aim_swing(Vector3(randf_range(-2.75,2.75),Flight.FLOOR,10.2))
 	approach_pressed_at = clock
 	approach_released_at = INF
 	approach_set_touched_at = clock
@@ -303,14 +299,17 @@ func tick_demo(delta: float, controls: RefCounted) -> void:
 		serve_demo.ball.hide()
 		ball.show()
 	serve_demo.step(delta)
+	try_second_ball_attack()
+	if cpu_second_ball_attack and not cpu_commits_to_spike and stage == Stage.SET and is_finite(swing_started):
+		if clock-swing_started >= 0.14 or clock >= approach_expected_hit_at-0.055:
+			request_manual_set(0)
+	if player_second_ball_attack or cpu_second_ball_attack:
+		trace_input = Vector2.ZERO
+		if stage == Stage.SET and approach_jump_queued: time_approach_plant(delta)
+		step_jump(delta)
+		step(delta)
+		return
 	if partner_receiving:
-		try_second_ball_attack()
-		if player_second_ball_attack:
-			trace_input = Vector2.ZERO
-			if stage == Stage.SET and approach_jump_queued: time_approach_plant(delta)
-			step_jump(delta)
-			step(delta)
-			return
 		if stage == Stage.SERVE and clock-stage_start >= serve_contact-0.20 and not is_finite(bump.pressed_at):
 			queue_set()
 		if stage in [Stage.PASS,Stage.SET] and not jump.active:
@@ -354,3 +353,4 @@ func tick_demo(delta: float, controls: RefCounted) -> void:
 		approach_from_sprint = after_pass and controls.sprinting
 	step_jump(delta)
 	step(delta)
+	blend_swing_to_set()
