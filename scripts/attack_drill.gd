@@ -584,7 +584,7 @@ func time_approach_plant(delta: float) -> void:
 		var nominal_rise := jump.flight_duration(jump_height,true)*air_fraction
 		var ground_budget := remaining-nominal_rise
 		var rush := 1.0-smoothstep(minimum_plant+lead_time*0.55,plant_time+lead_time,ground_budget)
-		var lower_jump := clampf((ball_target.y-2.32)/0.91+0.04,0.78,jump_height)
+		var lower_jump := clampf((ball_target.y-2.32)/0.91+0.04,minf(0.78,jump_height),jump_height)
 		jump_height = lerpf(jump_height,lower_jump,rush)
 		air_fraction = lerpf(0.54,0.43,rush)
 		contact_height = minf(ball_target.y,2.32+jump_height*0.91)
@@ -982,6 +982,9 @@ func hand_contact_fraction(before: Vector3, after: Vector3, palm_radius := PALM_
 	var entry := (-projection-sqrt(discriminant))/length_squared
 	return entry if entry >= 0.0 and entry <= 1.0 else -1.0
 
+func spike_speed_multiplier() -> float:
+	return 1.0
+
 func hit_spike(charge: float, point: Vector3, palm_gap := 0.0) -> void:
 	if uses_assisted_approach(): capture_approach_arm_pose()
 	spike_bounce_speed = 0.0
@@ -1001,7 +1004,7 @@ func hit_spike(charge: float, point: Vector3, palm_gap := 0.0) -> void:
 	elif not swing_practice:
 		var completion := smoothstep(0.22,0.93,swing_contact_extension)
 		speed *= lerpf(0.56,1.0,charge)*lerpf(0.65,1.0,completion)
-	var duration := target.slide(Vector3.UP).length()/speed
+	var duration := target.slide(Vector3.UP).length()/(speed*spike_speed_multiplier())
 	pass_motion = target/duration+Vector3.UP*Flight.GRAVITY*duration*0.5
 	flight_end = duration
 	swing_net_hit = Net.first_hit(func(t): return flight_point(pass_origin,pass_motion,t),0.0,duration)

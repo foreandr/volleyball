@@ -327,14 +327,15 @@ func apply_knee_bend(time := INF) -> void:
 		rig.set_bone_pose_position(bone,pose[bone].origin)
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.orthonormalized().get_rotation_quaternion().normalized())
 
-func update_attempt(time: float, previous: float, end: float, path: Callable, incoming: Vector3, delta: float, cue_arrival := INF, spin_rps := 0.0) -> void:
+func update_attempt(time: float, previous: float, end: float, path: Callable, incoming: Vector3, delta: float, cue_arrival := INF, spin_rps := 0.0, dig_cue := INF) -> void:
 	contact_check.clear()
 	var progress := approach(path,time,end) if grade == Timing.Grade.WAITING else -1.0
 	approach_progress = progress
 	var attempted := is_finite(pressed_at)
 	var face_dig := hand_setting and defensive_hand_dig
 	if attempted and grade == Timing.Grade.WAITING:
-		if not is_finite(pose_started_at) and progress >= 1.0-PLATFORM_PREP_TIME/APPROACH_TIME:
+		var start_dig := not hand_setting and is_finite(dig_cue) and time >= dig_cue-0.17
+		if not is_finite(pose_started_at) and (start_dig or progress >= 1.0-PLATFORM_PREP_TIME/APPROACH_TIME):
 			pose_started_at = maxf(pressed_at,time-delta)
 		if allow_auto_dive and not hand_setting and not setter_jumping and reach.is_empty(): low_save.plan(setter,path,time,end,clip)
 	var elapsed := time-pose_started_at
@@ -348,7 +349,8 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 			low_save.sample(setter,time,low_save.contact_time+0.07)
 		else:
 			var windup := lerpf(-0.14,0.0,smoothstep(0.0,0.08,elapsed))
-			apply_pose(contact_frame+windup,smoothstep(0.0,0.09,elapsed))
+			var pose_time := 0.065 if is_finite(dig_cue) else 0.09
+			apply_pose(contact_frame+windup,smoothstep(0.0,pose_time,elapsed))
 			if not setter_jumping:
 				var intercept := advance_reach(path,time,end,delta)
 				if reach.has("custom_clip"):

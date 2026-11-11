@@ -3,6 +3,7 @@ extends "res://scripts/attack_drill.gd"
 signal struck(actor: Node3D, point: Vector3, velocity: Vector3, spin: float)
 
 var enabled := false
+var spike_strength := 1.0
 
 func configure_for_match(actor: Node3D, readout: Label) -> void:
 	swing_practice = false
@@ -55,6 +56,9 @@ func tick_attack(delta: float) -> void:
 		pose_bow_draw(delta,1.0-smoothstep(0.19,SWING_FOLLOW_TIME,age),swing_contact,swing_contact_extension,follow)
 	elif not jump.active:
 		enabled = false
+
+func spike_speed_multiplier() -> float:
+	return spike_strength
 
 func hit_spike(charge: float, point: Vector3, palm_gap := 0.0) -> void:
 	super.hit_spike(charge,point,palm_gap)

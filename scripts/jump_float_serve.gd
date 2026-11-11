@@ -5,6 +5,12 @@ const TAKEOFF := 0.77
 const STRIKE := 1.11
 const LAND := 1.49
 
+var float_jump_height := 0.88
+
+func set_jump_height(value: float) -> void:
+	float_jump_height = value
+	if elapsed < 0.0 and not running: reset()
+
 func contact_time() -> float:
 	return STRIKE
 
@@ -27,7 +33,7 @@ func float_body_scale() -> float:
 	return 1.0
 
 func float_step_pose(time: float) -> Array:
-	return float_approach(time,TAKEOFF,LAND,0.88,1.12)
+	return float_approach(time,TAKEOFF,LAND,float_jump_height,1.12)
 
 func toss_curve_height() -> float:
 	return 0.94

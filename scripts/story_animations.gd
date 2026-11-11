@@ -73,6 +73,7 @@ var pass_timing_cue: Node3D
 var reception_review: VBoxContainer
 var setting_drill: Node3D
 var attack_position_panel: PanelContainer
+var match_sound: CheckButton
 var attack_playback_speed := 1.0
 var setting_camera_focus := SETTING_CAMERA_FOCUS
 var approach_drag_offset := Vector3.ZERO
@@ -253,7 +254,7 @@ func start_demo_match() -> void:
 	var status := label("",17)
 	status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(status)
-	content.add_child(label("WASD to move | Shift to sprint\nQ forearms | E hands | F jump set\nSpace serves, attacks, or blocks\nMouse aims | Scroll changes height\nLeft-click or E to set the second ball\nB switches blocker",16))
+	content.add_child(label("WASD to move | Shift to sprint\nQ forearms | E hands | F jump set\nSpace serves, attacks, or blocks\nMouse aims | Scroll changes height\nLeft-click or E to set the second ball\nB switches blocker | M mutes sound",16))
 	var styles := OptionButton.new()
 	for title in ["Underhand","Standing float","Jump float","Spin serve"]: styles.add_item(title)
 	styles.focus_mode = Control.FOCUS_NONE
@@ -278,6 +279,7 @@ func start_demo_match() -> void:
 	demo_match = preload("res://scripts/volleyball_match.gd").new()
 	preview_player.get_parent().add_child(demo_match)
 	demo_match.configure(preview_player,board,status,build_label)
+	show_match_tuning()
 	styles.item_selected.connect(func(index: int): demo_match.set_serve_style(index))
 	player_controls.locomotion = ""
 	player_controls.setter_travel = Vector3.ZERO
@@ -287,10 +289,37 @@ func start_demo_match() -> void:
 	preview_camera.look_at(setting_camera_focus)
 	preview.grab_focus()
 
+func show_match_tuning() -> void:
+	attack_position_panel = panel()
+	attack_position_panel.name = "MatchTuning"
+	attack_position_panel.custom_minimum_size.x = 250
+	right_panel.get_parent().add_child(attack_position_panel)
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	attack_position_panel.add_child(scroll)
+	var tuning := VBoxContainer.new()
+	tuning.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(tuning)
+	add_attack_tuning_slider(tuning,"Attack vertical","MatchAttackVertical","in",32,65,1,demo_match.attack_vertical,demo_match.set_attack_vertical)
+	add_attack_tuning_slider(tuning,"Block vertical","MatchBlockVertical","in",20,65,1,demo_match.block_vertical,
+		func(value: float): demo_match.block_vertical = value)
+	add_attack_tuning_slider(tuning,"Serve vertical","MatchServeVertical","in",30,65,1,demo_match.serve_vertical,demo_match.set_serve_vertical)
+	add_attack_tuning_slider(tuning,"Spike strength","MatchSpikeStrength","%",40,175,5,100,demo_match.set_spike_strength)
+	match_sound = CheckButton.new()
+	match_sound.text = "Ball sounds (M)"
+	match_sound.focus_mode = Control.FOCUS_NONE
+	match_sound.button_pressed = not StorySession.attack_ball_audio_muted
+	match_sound.toggled.connect(func(enabled: bool): StorySession.attack_ball_audio_muted = not enabled)
+	tuning.add_child(match_sound)
+
 func stop_demo_match() -> void:
 	if not is_instance_valid(demo_match): return
 	demo_match.stop()
 	demo_match = null
+	attack_position_panel.hide()
+	attack_position_panel.queue_free()
+	attack_position_panel = null
+	match_sound = null
 
 func select_category(category: String) -> void:
 	category = Catalog.category_name(category)
@@ -1861,7 +1890,7 @@ func _input(event: InputEvent) -> void:
 					var index := 0 if demo_match.player_blocks else 1
 					match_block_choice.select(index)
 					demo_match.set_player_blocks(index == 1)
-				KEY_M: StorySession.attack_ball_audio_muted = not StorySession.attack_ball_audio_muted
+				KEY_M: match_sound.button_pressed = not match_sound.button_pressed
 				KEY_F8:
 					if demo_match.mark_trace(): show_marker_popup()
 				KEY_ESCAPE: open_menu()

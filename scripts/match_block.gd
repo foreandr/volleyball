@@ -7,6 +7,7 @@ const HEIGHT := 1.16
 var actor: Node3D
 var age := 0.0
 var tempo := 1.0
+var jump_height := HEIGHT
 var base: Vector3
 var previous_hands: Array[Vector3] = []
 var hands: Array[Vector3] = []
@@ -22,7 +23,7 @@ func begin(player: Node3D) -> void:
 func step(delta: float, world_ball: Vector3) -> bool:
 	age += delta*tempo
 	var phase := clampf((age-START)/AIR,0.0,1.0)
-	var lift := 4.0*HEIGHT*phase*(1.0-phase)
+	var lift := 4.0*jump_height*phase*(1.0-phase)
 	actor.position = base+Vector3.UP*(lift-0.12*sin(PI*clampf(age/START,0.0,1.0)))
 	actor.animator.seek(0.0,true)
 	var rig: Skeleton3D = actor.skeleton
