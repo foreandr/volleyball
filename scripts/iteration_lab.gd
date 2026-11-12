@@ -3,8 +3,7 @@ extends Control
 const Policy = preload("res://scripts/cpu_policy.gd")
 var status: Label
 var duration: SpinBox
-var play: Button
-var stop: Button
+var background_task: Button
 var clock := 0.0
 var proposal_list: ItemList
 var details: Label
@@ -52,6 +51,8 @@ func _ready() -> void:
 	header.add_child(proposal_title)
 	tool_panel = VBoxContainer.new()
 	tool_panel.hide()
+	background_task = button("Start background task",toggle_background_task)
+	header.add_child(background_task)
 	header.add_child(button("Tools",func(): tool_panel.visible = not tool_panel.visible))
 	header.add_child(button("Back",func(): get_tree().change_scene_to_file("res://scenes/main.tscn")))
 
@@ -79,10 +80,6 @@ func _ready() -> void:
 
 	var controls := HBoxContainer.new()
 	tool_panel.add_child(controls)
-	play = button("Play",start_run)
-	stop = button("Stop",stop_run)
-	controls.add_child(play)
-	controls.add_child(stop)
 	controls.add_child(label("Training speed",16))
 	controls.add_child(StorySession.iteration_run.speed_picker())
 	duration = number_box(10,0,720,"min")
@@ -208,8 +205,8 @@ func refresh_status() -> void:
 	var data := StorySession.iteration_run.status()
 	var running: bool = data.running
 	var learned := Policy.read_json(Policy.PATH)
-	play.disabled = running
-	stop.disabled = not running or data.state == "stopping"
+	background_task.disabled = data.state == "stopping"
+	background_task.text = "Stopping…" if background_task.disabled else ("Stop background task" if running else "Start background task")
 	var state := str(data.state).capitalize()
 	status.text = "%s   ·   %d matches this run   ·   %d review flags   ·   %d training matches saved" % [
 		state,int(data.get("matches",0)),int(data.get("observations",0)),int(learned.get("matches",0))]
@@ -219,13 +216,12 @@ func refresh_status() -> void:
 		refresh_proposals()
 		if message.begins_with("Error:"): details.text = message.get_slice("\n",0)
 
-func start_run() -> void:
-	if StorySession.iteration_run.start(int(duration.value)): refresh_status()
-	else: status.text = "Could not start self-play."
-
-func stop_run() -> void:
-	if StorySession.iteration_run.stop(): refresh_status()
-	else: status.text = "Could not stop self-play."
+func toggle_background_task() -> void:
+	var run = StorySession.iteration_run
+	var running: bool = run.status().running
+	var changed: bool = run.stop() if running else run.start(int(duration.value))
+	refresh_status()
+	if not changed: details.text = "Could not stop training." if running else "Could not start training."
 
 func watch_latest() -> void:
 	var demo_directory: String = preload("res://scripts/match_review.gd").DIRECTORY
