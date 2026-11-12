@@ -2,7 +2,8 @@ extends SceneTree
 
 const STEP := 1.0/60.0
 const TICKS_PER_TARGET_POINT := 3000
-const CAPTURE_FRAMES := 8
+const CAPTURE_FRAMES := 24
+const REVIEW_STEP := 1.0/12.0
 
 func _initialize() -> void:
 	call_deferred("run")
@@ -61,6 +62,12 @@ func prepare_match() -> Node:
 	game.setting_skill = 65
 	return page
 
+func pause_match(_game: Node3D) -> bool:
+	return false
+
+func keep_observation(_point: int, _event: Dictionary, _frames: Array) -> void:
+	pass
+
 func run_match(page: Node, match_seed: int, review_point: int, output_dir: String) -> Dictionary:
 	var game: Node3D = page.demo_match
 	var prior_matches: int = int(game.completed_read_matches) if game.has_method("remember_opponent_reads") else 0
@@ -75,10 +82,13 @@ func run_match(page: Node, match_seed: int, review_point: int, output_dir: Strin
 	var closest_attempt := {}
 	var closest_unattempted := {}
 	var deflection := {}
+	var evidence_frames := []
+	var watching: bool = game.has_method("set_cpu_swing_power") and bool(game.cpu_policy.training)
 	var stuck_frames := 0
 	var last_ball := Vector3.INF
 	var flags := []
 	for tick in range(game.WIN_SCORE*TICKS_PER_TARGET_POINT):
+		if watching and tick%120 == 0 and await pause_match(game): break
 		game.step_match(STEP,page.player_controls)
 		if game.phase == game.Phase.LIVE:
 			if review_point == game.rallies+1 and DisplayServer.get_name() != "headless":
@@ -88,6 +98,7 @@ func run_match(page: Node, match_seed: int, review_point: int, output_dir: Strin
 					deflection = closest_attempt if not closest_attempt.is_empty() else closest_unattempted
 				else:
 					deflection = {}
+					evidence_frames.clear()
 				closest_attempt = {}
 				closest_unattempted = {}
 				previous_flight = game.flight_number
@@ -101,6 +112,9 @@ func run_match(page: Node, match_seed: int, review_point: int, output_dir: Strin
 			else:
 				stuck_frames = 0
 			last_ball = game.ball.global_position
+			if watching and not deflection.is_empty() and tick%3 == 0:
+				evidence_frames.append(game.replay.capture(game))
+				if evidence_frames.size() > 24: evidence_frames.pop_front()
 			if game.flight_kind in ["spike","dump","block"]:
 				var side: int = game.receiving_team
 				var ball: Vector3 = game.ball.global_position
@@ -108,6 +122,9 @@ func run_match(page: Node, match_seed: int, review_point: int, output_dir: Strin
 					for index in range(side*2,side*2+2):
 						if index == game.last_player: continue
 						var platform: Node3D = game.platforms[index]
+						if watching and tick%3 == 0 and game.players[index].global_position.distance_to(ball) < 2.65:
+							evidence_frames.append(game.replay.capture(game))
+							if evidence_frames.size() > 24: evidence_frames.pop_front()
 						var check: Dictionary = platform.contact_check
 						if not check.is_empty() and not bool(check.accepted):
 							var margin := float(check.margin)
@@ -132,7 +149,9 @@ func run_match(page: Node, match_seed: int, review_point: int, output_dir: Strin
 				if not opportunity.is_empty():
 					opportunity["point"] = previous_rally
 					opportunity["outcome"] = "body deflection" if opportunity == deflection else "untouched ball down"
+					if watching: keep_observation(previous_rally,opportunity,evidence_frames)
 					flags.append(opportunity)
+			evidence_frames.clear()
 			closest_attempt = {}
 			closest_unattempted = {}
 			deflection = {}
@@ -156,12 +175,18 @@ func render_review(page: Node, game: Node3D, frames: Array, output_dir: String, 
 	var saved: Dictionary = game.replay.capture(game)
 	var camera_transform := camera.global_transform
 	var tiles := Image.create_empty(320*CAPTURE_FRAMES,180*anchors.size(),false,Image.FORMAT_RGB8)
+	var point_end: float = game.last_point.time
 	for view in anchors.size():
 		camera.global_position = anchors[view]
 		camera.look_at(focus)
+		var index := 0
 		for column in CAPTURE_FRAMES:
-			var frame: Dictionary = frames[roundi((frames.size()-1)*column/float(CAPTURE_FRAMES-1))]
-			game.replay.apply(game,frame,frame,0.0)
+			var time := point_end+(column-18)*REVIEW_STEP
+			while index+1 < frames.size() and float(frames[index+1].time) <= time: index += 1
+			var first: Dictionary = frames[index]
+			var second: Dictionary = frames[mini(index+1,frames.size()-1)]
+			var blend := clampf((time-float(first.time))/maxf(0.0001,float(second.time)-float(first.time)),0.0,1.0)
+			game.replay.apply(game,first,second,blend)
 			await process_frame
 			await RenderingServer.frame_post_draw
 			var image := viewport.get_texture().get_image()

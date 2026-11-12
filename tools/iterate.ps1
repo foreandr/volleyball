@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)]
-    [ValidateSet('Measure','Scout','New','Review','Clip','List','Accept','Reject')]
+    [ValidateSet('Measure','Scout','New','Review','Clip','List','Accept','Reject','Feedback')]
     [string]$Action,
     [ValidatePattern('^[a-z0-9][a-z0-9-]{0,39}$')][string]$Id,
     [string]$Title,
@@ -149,6 +149,13 @@ if ($Action -eq 'New') {
 
 $entry = Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
 if ($entry.status -in @('accepted','rejected')) { throw "Proposal is already $($entry.status)." }
+if ($Action -eq 'Feedback') {
+    if (-not $Note) { throw 'Enter feedback before sending the proposal back.' }
+    $entry.note = $Note
+    $entry.status = 'draft'
+    Write-Entry
+    return
+}
 if ($Action -eq 'Reject') {
     $entry.status = 'rejected'
     if ($Note) { $entry.note = $Note }
@@ -205,7 +212,7 @@ if (Test-Path -LiteralPath $baseline) {
 }
 if (-not (Test-Path -LiteralPath $baseline)) { Invoke-Git worktree add --detach $baseline $entry.base }
 if ($Action -eq 'Clip') {
-    $clip = Join-Path $directory "clips/seed-$Seed-point-$Point"
+    $clip = Join-Path $directory "clips/$($revision.Substring(0,12))/seed-$Seed-point-$Point"
     Invoke-Simulation $baseline (Join-Path $clip 'before/matches.json') 1 $Point
     Invoke-Simulation $candidate (Join-Path $clip 'after/matches.json') 1 $Point
     Get-ChildItem -LiteralPath $clip -Recurse -Filter '*.png' | Select-Object -ExpandProperty FullName

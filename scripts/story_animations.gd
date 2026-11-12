@@ -108,6 +108,7 @@ func _ready() -> void:
 	setup_drag = preload("res://scripts/court_setup_drag.gd").new(self)
 	preview_camera.fov = 42.0
 	preview_camera.far = 150.0
+	if not StorySession.lab_replay_path.is_empty(): call_deferred("open_lab_replay")
 	if not StorySession.animation_return.is_empty():
 		var destination: Dictionary = StorySession.animation_return.duplicate()
 		StorySession.animation_return.clear()
@@ -239,6 +240,7 @@ func show_categories() -> void:
 	var match_button := button("Demo Match | 2v2",start_demo_match)
 	match_button.custom_minimum_size.y = 52
 	content.add_child(match_button)
+	content.add_child(button("Iteration Lab",func(): get_tree().change_scene_to_file("res://scenes/iteration_lab.tscn")))
 
 func start_demo_match() -> void:
 	stop_blocking_practice()
@@ -356,6 +358,20 @@ func show_match_tuning() -> void:
 		speed_label.text = "Replay speed  %.2f×" % value)
 	match_replay_panel.add_child(speed)
 	match_replay_panel.add_child(label("Middle drag or WASD to move camera\nScroll to zoom",15))
+
+func open_lab_replay() -> void:
+	var path := StorySession.lab_replay_path
+	StorySession.lab_replay_path = ""
+	var file := FileAccess.open(path,FileAccess.READ)
+	if file == null: return
+	var record: Variant = file.get_var()
+	if not record is Dictionary or int(record.get("schema",0)) != 1: return
+	var frames: Variant = record.get("frames",[])
+	if not frames is Array or frames.size() < 2: return
+	start_demo_match()
+	demo_match.set_spectator(true)
+	demo_match.replay.previous.assign(frames)
+	toggle_match_replay()
 
 func toggle_match_replay() -> void:
 	demo_match.toggle_replay()

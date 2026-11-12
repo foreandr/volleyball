@@ -22,6 +22,7 @@ const SERVES := [
 	preload("res://scripts/spin_serve.gd"),
 ]
 const SERVICE_START := [-6.40,-6.40,-7.4,-8.15]
+const CpuPolicy = preload("res://scripts/cpu_policy.gd")
 const WIN_SCORE := 15
 const RECOVERY_TIME := 0.32
 const PLAYER_GROUND_Y := 0.04
@@ -101,6 +102,7 @@ var block_lane_flight := [-1,-1]
 var opponent_shot_reads: Array[Dictionary] = [{},{}]
 var carried_shot_reads: Array[Dictionary] = [{},{}]
 var completed_read_matches := 0
+var cpu_policy := CpuPolicy.new()
 var block_line := [true,true]
 var pocket_x := [0.0,0.0]
 var last_set_apex := 0.0
@@ -147,6 +149,7 @@ var stroke := ""
 
 func configure(actor: Node3D, board: Label, status: Label, build := "") -> void:
 	trace.open(build)
+	cpu_policy.load_profile()
 	human = actor
 	saved_transform = actor.transform
 	saved_callback = actor.animator.callback_mode_process
@@ -285,6 +288,7 @@ func set_player_blocks(value: bool) -> void:
 	player_blocks = value
 
 func begin_point() -> void:
+	cpu_policy.begin_point()
 	replay.finish_point()
 	last_input_at = -INF
 	kick_pressed_until = -INF
@@ -323,7 +327,8 @@ func begin_point() -> void:
 	ball.hide()
 	aim_ring.hide()
 	trajectory_node.hide()
-	var style: int = serve_style if is_human(server_index()) else rallies%SERVES.size()
+	var server := server_index()
+	var style: int = serve_style if is_human(server) else cpu_policy.choose(team(server),"serve type",[0,1,2,3],rallies%SERVES.size())
 	prepare_serve(style)
 	update_score()
 	trace.begin_feed({"mode":"demo_match","score":score,"server":server_index(),"spectator":spectator})
@@ -340,7 +345,13 @@ func prepare_serve(style: int) -> void:
 	serve.configure(players[index],Vector3(x,0.04,SERVICE_START[style]))
 	if style == 3: serve.set_serve_speed(1.12)
 	if serve.has_method("set_jump_height"): serve.set_jump_height(serve_vertical*0.0254)
-	serve.aim(Vector3(randf_range(-3.35,3.35),Flight.FLOOR,randf_range(9.2,12.4)) if not is_human(index) else Vector3(0.0,Flight.FLOOR,10.7))
+	var aim := Vector3(0.0,Flight.FLOOR,10.7)
+	if not is_human(index):
+		var placement := cpu_policy.choose(side,"serve lane",[0,-1,1],0)
+		aim.x = randf_range(-3.35,3.35)
+		if placement != 0: aim.x = clampf(aim.x*0.35+placement*2.45,-3.35,3.35)
+		aim.z = randf_range(9.2,12.4)
+	serve.aim(aim)
 	serve.aim_ring.visible = is_human(index)
 	serve.path_preview.visible = is_human(index)
 	serve_pending = false
@@ -420,6 +431,9 @@ func input_receive(technique: int) -> void:
 func start_serve() -> void:
 	if serve_pending: return
 	serve_pending = true
+	var serving_side := team(server_index())
+	cpu_policy.used(serving_side,"serve type")
+	cpu_policy.used(serving_side,"serve lane")
 	show_key(server_index(),"Space")
 	serve.serve()
 
@@ -429,6 +443,7 @@ func update_score() -> void:
 func award(side: int, reason: String) -> void:
 	if phase != Phase.LIVE: return
 	score[side] += 1
+	cpu_policy.finish_point(side)
 	if side != service_team:
 		service_team = side
 		if rallies > 0: server_slot[side] = 1-int(server_slot[side])
@@ -510,6 +525,7 @@ func launch(point: Vector3, motion: Vector3, kind: String, from: int, spin_rate 
 		var side := team(hitter)
 		var frame := frames[side]
 		var shot := choose_shot(hitter)
+		set_cpu_swing_power(hitter)
 		attackers[side].start_set(players[hitter],frame.to_local(origin),frame.global_basis.inverse()*velocity,frame.to_local(set_pin),shot,0.0,is_human(hitter) and space_held)
 	ball.global_position = point
 	ball.show()
@@ -545,6 +561,7 @@ func choose_shot(index: int, contact := Vector3.INF, block_at := Vector3.INF, pr
 		return Vector3(clampf(-backcourt.x,-3.8,3.8),Flight.FLOOR,10.7)
 	var best := Vector3(0.0,Flight.FLOOR,10.7)
 	var best_score := -INF
+	var depth_bias := cpu_policy.choose(side,"attack depth",[0,-1,1],0) if not is_human(index) else 0
 	for x in [-4.02,-2.55,0.0,2.55,4.02]:
 		for depth in [5.2,6.55,7.35,9.8,12.1]:
 			var target := Vector3(x,Flight.FLOOR,depth)
@@ -573,6 +590,8 @@ func choose_shot(index: int, contact := Vector3.INF, block_at := Vector3.INF, pr
 				var open_floor := smoothstep(1.3,2.8,defender_gap)
 				var closeness := 1.0-smoothstep(1.60,7.10,distance)
 				shot_score += (0.75+1.85*closeness)*clearance*clear_block*open_floor
+			if depth_bias != 0:
+				shot_score += depth_bias*0.23*clampf((depth-8.0)/3.0,-1.0,1.0)
 			if shot_score > best_score:
 				best_score = shot_score
 				best = target
@@ -642,6 +661,11 @@ func controlled_spike_motion(contact: Vector3, motion: Vector3, target: Vector3,
 				return candidate
 	return motion
 
+func set_cpu_swing_power(hitter: int) -> void:
+	var side := team(hitter)
+	var effort := cpu_policy.choose(side,"attack effort",[0,1,2],0) if not is_human(hitter) else 0
+	attackers[side].spike_strength = spike_strength*(1.0-0.075*effort)
+
 func on_spike(actor: Node3D, point: Vector3, motion: Vector3, spin_rate: float) -> void:
 	var index := players.find(actor)
 	if index < 0 or not can_touch(index): return
@@ -663,6 +687,8 @@ func on_spike(actor: Node3D, point: Vector3, motion: Vector3, spin_rate: float) 
 				stroke = "Free ball"
 				launch(point,frame.global_basis*safe,"free",index)
 				return
+	cpu_policy.used(team(index),"attack depth")
+	cpu_policy.used(team(index),"attack effort")
 	observe_opponent_shot(1-team(index),point,motion,spin_rate)
 	launch(point,motion,"spike",index,spin_rate)
 
@@ -745,6 +771,7 @@ func set_pin_for(index: int, setter_x := INF) -> Vector3:
 	var transition: bool = transition_possession[side] or defensive_ball()
 	var preparation := maxf(0.0,arrival(1.92)-elapsed-0.26)
 	var reach := (3.25 if transition else 2.65)+preparation*3.6
+	var lane_bias := cpu_policy.choose(side,"set lane",[0,-1,1],0)
 	var fallback := Vector3(clampf(hitter.position.x,-3.75,3.75),0.065,3.20)
 	called_pin = fallback
 	var called_zone := posmod(flight_number*3+rallies+team(index)*2,SET_ZONES.size())
@@ -767,6 +794,7 @@ func set_pin_for(index: int, setter_x := INF) -> Vector3:
 			repeat = (1.0-smoothstep(0.35,2.05,absf(x-last_called_set_x[side])))*(1.70 if transition else 0.75)
 		var same_lane := (1.0-smoothstep(0.45,1.85,absf(x-hitter.position.x)))*0.88 if transition else 0.0
 		var cost := 0.34*maxf(0.0,gap-1.8)+0.39*absf(x-preferred)-0.49*minf(blocker_gap,3.6)+repeat+same_lane
+		if lane_bias != 0: cost += 0.24*absf(x-lane_bias*2.50)
 		var is_wide := absf(x-setter_x) >= 1.0
 		if (is_wide and not best_is_wide) or (is_wide == best_is_wide and cost < best_cost):
 			best_cost = cost
@@ -802,6 +830,9 @@ func cpu_pass_target(index: int) -> Vector3:
 	var teammate := players[index^1].position
 	var x := lerpf(passer.x,teammate.x,0.82)
 	var forward := maxf(1.05,absf(x-passer.x)*tan(deg_to_rad(40.0)))
+	if not is_human(index):
+		var depth := cpu_policy.choose(team(index),"pass depth",[0,-1,1],0)
+		forward += depth*0.38
 	return Vector3(x,0.065,clampf(passer.z+forward,-3.4,2.95))
 
 func aim_receive(index: int) -> void:
@@ -817,6 +848,8 @@ func aim_receive(index: int) -> void:
 	var variety := float(posmod(flight_number+index*3,7))/6.0
 	var difficulty := smoothstep(7.0,25.0,velocity.length())
 	var pass_apex := lerpf(3.65,6.35,clampf(variety*0.78+difficulty*0.22,0.0,1.0))
+	if not is_human(index):
+		pass_apex += cpu_policy.choose(side,"pass height",[0,-1,1],0)*0.36
 	bump.height = pass_height if is_human(index) else (3.65 if cpu_dump and index == cpu_choice else pass_apex)
 
 func cpu_set_apex(index: int, point: Vector3, pin: Vector3, pace: float) -> float:
@@ -834,7 +867,8 @@ func cpu_set_apex(index: int, point: Vector3, pin: Vector3, pace: float) -> floa
 		var lateral := smoothstep(0.8,3.45,absf(pin.x-hitter.position.x))
 		var transition_load := maxf(peel,lateral)
 		apex = maxf(apex,lerpf(2.98,6.15,transition_load))
-	return maxf(point.y+0.18,apex)
+	var adjustment := cpu_policy.choose(team(index),"set height",[0,-1,1],0)
+	return maxf(point.y+0.18,apex+0.32*adjustment)
 
 func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, technique: int) -> void:
 	if frames[team(index)].to_local(world_point).z > Net.NET_Z+0.07: return
@@ -846,6 +880,9 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 	var point := frame.to_local(world_point)
 	var bump := platforms[index]
 	stroke = ["Forearm","Hands","Jump set"][technique]
+	if touches == 1:
+		cpu_policy.used(side,"pass depth")
+		cpu_policy.used(side,"pass height")
 	if defensive_ball() and not bump.contact_check.is_empty():
 		trace.write("dig_contact",match_clock,bump.contact_check)
 	begin_recovery(index)
@@ -872,6 +909,8 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 			apex = driver.apex_for_set_time(point.y,apex,time_to_hit)
 		var contact_height: float = driver.set_contact_height(apex)
 		last_set_apex = apex
+		cpu_policy.used(side,"set lane")
+		cpu_policy.used(side,"set height")
 		var motion: Vector3 = driver.set_toward_pin(point,pin,apex,contact_height)
 		launch(world_point,frame.global_basis*motion,"set",index,1.0,index^1,frame.to_global(pin))
 		return
@@ -1150,6 +1189,7 @@ func start_second_ball_spike(index: int, require_open_lane := false) -> bool:
 			var closing_time := maxf(0.0,at-elapsed-0.25)
 			var net_gap := maxf(0.0,actual.z-(Net.NET_Z+0.70))
 			if Vector2(maxf(0.0,lane_gap-0.85),net_gap).length() <= closing_time*5.3: return false
+	set_cpu_swing_power(index)
 	driver.start_set(attacker,frame.to_local(origin),frame.global_basis.inverse()*velocity,contact,choose_shot(index,contact,wall),elapsed,false)
 	if not driver.find_approach_intercept(true).is_finite():
 		driver.enabled = false
@@ -1498,6 +1538,7 @@ func start_block(index: int, remaining := INF, reads_second := false) -> void:
 	block.begin(actor)
 	if is_finite(remaining): block.tempo = clampf(0.49/maxf(remaining,0.18),1.13,1.70)
 	blocks[index] = block
+	cpu_policy.used(team(index),"block lane")
 	show_key(index,"Space")
 
 func soft_block_rebound(rebound: Vector3, power: float) -> Vector3:
@@ -1698,6 +1739,9 @@ func position_defense(delta: float) -> void:
 			var line_cost := absf(players[near].position.x-line_x)+0.35*absf(players[deep].position.x-cross_goal.x)
 			var cross_cost := absf(players[near].position.x-cross_x)+0.35*absf(players[deep].position.x-line_goal.x)
 			var prefer_line: bool = (block_calls[defense_side]+defense_side)%3 == 0
+			if not is_human(near):
+				var lane := cpu_policy.choose(defense_side,"block lane",[0,-1,1],0)
+				if lane != 0: prefer_line = lane > 0
 			var preferred_cost := line_cost if prefer_line else cross_cost
 			var alternate_cost := cross_cost if prefer_line else line_cost
 			block_line[defense_side] = prefer_line if preferred_cost <= alternate_cost+1.8 else not prefer_line
