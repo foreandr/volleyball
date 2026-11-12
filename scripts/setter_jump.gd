@@ -182,10 +182,12 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 	pose[pelvis].origin -= hips.basis.inverse()*Vector3.UP*(0.15*load+0.14*impact+0.035*lead_plant_load)/scale_
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,(0.16+load_bend_extra)*load+0.13*impact-0.22*arm_drive)
 	if approach_plant and not setting_jump:
-		var first_step := assisted_load_time*0.105/LOAD_TIME
-		if lead_time > 0.0:
-			first_step = lead_step_duration*(0.86 if entry_time > 0.0 else 0.82)
-		var upright := smoothstep(0.0,first_step,elapsed)*(1.0-smoothstep(LOAD_TIME,LOAD_TIME+0.12,pose_time))
+		var penultimate_plant := 0.135 if lead_time > 0.0 else 0.105
+		var rise := 0.0
+		if entry_time > 0.0:
+			rise = 0.58*smoothstep(0.045,penultimate_plant,pose_time)
+		rise = lerpf(rise,1.0,smoothstep(penultimate_plant,LOAD_TIME,pose_time))
+		var upright := rise*(1.0-smoothstep(LOAD_TIME,LOAD_TIME+0.12,pose_time))
 		var torso: Vector3 = author.point(pose,"neck_01")-author.point(pose,"spine_02")
 		var pitch := atan2(torso.z,torso.y)
 		author.rotate_world(pose,"spine_02",Vector3.RIGHT,(-deg_to_rad(5.0)-pitch)*upright)
