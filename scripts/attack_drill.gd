@@ -1086,7 +1086,7 @@ func attack_arm_turn_rate() -> float:
 	return INF
 
 func lift_lean_offset(arm_lift: float, extension: float) -> float:
-	var lift := smoothstep(0.06,0.62,arm_lift)*(1.0-smoothstep(0.72,1.0,arm_lift))
+	var lift := smoothstep(0.04,0.52,arm_lift)*(1.0-smoothstep(0.81,1.0,arm_lift))
 	return -deg_to_rad(lift_lean_back_degrees)*lift*(1.0-smoothstep(0.22,0.74,extension))
 
 func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0.0, follow := 0.0, draw_progress := 1.0, arm_lift := 1.0) -> void:

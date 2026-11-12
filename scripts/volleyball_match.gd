@@ -152,7 +152,7 @@ var dig_switch_at := -INF
 var block_vertical := 30.0
 var serve_vertical := 30.0
 var live_speed := 1.0
-var attack_lift_lean := 42.0
+var attack_lift_lean := 66.0
 var spike_strength := 0.70
 var serve_pending := false
 var crossed_net := false
@@ -451,7 +451,7 @@ func set_live_speed(percent: float) -> void:
 	live_speed = clampf(percent*0.01,0.10,1.0)
 
 func set_attack_lift_lean(degrees: float) -> void:
-	attack_lift_lean = clampf(degrees,0.0,90.0)
+	attack_lift_lean = clampf(degrees,0.0,110.0)
 	for driver in attackers:
 		driver.lift_lean_back_degrees = attack_lift_lean
 
