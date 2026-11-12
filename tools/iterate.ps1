@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)]
-    [ValidateSet('Measure','Scout','Findings','ImportMarkers','New','Review','Clip','List','Accept','Reject','Feedback')]
+    [ValidateSet('Measure','Scout','Findings','ImportMarkers','New','Focus','Review','Clip','List','Accept','Reject','Feedback')]
     [string]$Action,
     [ValidatePattern('^[a-z0-9][a-z0-9-]{0,39}$')][string]$Id,
     [string]$Title,
@@ -11,6 +11,8 @@ param(
     [int]$Seed = 41,
     [ValidateRange(1,100)][int]$Point = 1,
     [string]$GodotPath,
+    [string]$FocusScript,
+    [string[]]$FocusArguments,
     [switch]$Series,
     [switch]$DeferPublish
 )
@@ -35,6 +37,55 @@ function Write-Entry {
     }
 }
 
+function Initialize-ReviewProject($Project, $Output) {
+    $godot = Join-Path $Project '.godot'
+    $stamp = Join-Path $godot 'review-import.txt'
+    $cache = $null
+    $lock = $null
+    $projectKey = $null
+    if (-not (Invoke-Git -C $Project status --porcelain -- assets project.godot scripts tools)) {
+        $inputs = @((Get-FileHash -LiteralPath $GodotPath).Hash) + @(Invoke-Git -C $Project ls-tree HEAD -- assets project.godot)
+        $key = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
+            [Text.Encoding]::UTF8.GetBytes(($inputs -join "`n"))))
+        $projectKey = $key + ((Invoke-Git -C $Project ls-tree HEAD -- scripts tools) -join "`n")
+        if ((Test-Path $stamp) -and (Test-Path (Join-Path $godot 'global_script_class_cache.cfg')) -and
+            (Test-Path (Join-Path $godot 'imported')) -and ([IO.File]::ReadAllText($stamp) -eq $projectKey)) { return }
+        $cache = Join-Path $root ".asset-cache/$key"
+        if (-not (Test-Path (Join-Path $cache 'ready'))) {
+            $lock = [Threading.Mutex]::new($false, "Volleyball-assets-$key")
+            try { [void]$lock.WaitOne() } catch [Threading.AbandonedMutexException] {}
+        }
+    }
+    try {
+        $originalStatus = @(Invoke-Git -C $Project status --porcelain)
+        if ($cache -and (Test-Path (Join-Path $cache 'ready'))) {
+            New-Item -ItemType Directory -Path $godot -Force | Out-Null
+            Copy-Item -LiteralPath (Join-Path $cache 'imported') -Destination $godot -Recurse -Force
+        }
+        $import = Start-Process -FilePath $GodotPath -ArgumentList @('--headless','--editor','--import','--path',('"' + $Project + '"')) -WindowStyle Hidden -Wait -PassThru -RedirectStandardOutput (Join-Path $Output 'import.txt') -RedirectStandardError (Join-Path $Output 'import-errors.txt')
+        $importChanges = @(Invoke-Git -C $Project status --porcelain | Where-Object { $_ -notin $originalStatus })
+        $imports = @($importChanges | Where-Object { $_ -match '^ M .*\.import$' } | ForEach-Object { $_.Substring(3) })
+        $uids = @($importChanges | Where-Object { $_ -match '^\?\? [a-zA-Z0-9_./-]+\.gd\.uid$' } | ForEach-Object { $_.Substring(3) })
+        if ($imports.Count) { Invoke-Git -C $Project restore -- $imports }
+        foreach ($uid in $uids) { Remove-Item -LiteralPath (Join-Path $Project $uid) }
+        $errors = Get-Content -LiteralPath (Join-Path $Output 'import-errors.txt') -Raw
+        if ($import.ExitCode -ne 0 -or $errors -match '(?m)^(SCRIPT ERROR|ERROR):') {
+            throw "Godot import failed. See $Output."
+        }
+        if ($cache -and -not (Test-Path (Join-Path $cache 'ready'))) {
+            New-Item -ItemType Directory -Path $cache -Force | Out-Null
+            Copy-Item -LiteralPath (Join-Path $godot 'imported') -Destination $cache -Recurse -Force
+            New-Item -ItemType File -Path (Join-Path $cache 'ready') -Force | Out-Null
+        }
+        if ($projectKey) { [IO.File]::WriteAllText($stamp,$projectKey) }
+    } finally {
+        if ($lock) {
+            $lock.ReleaseMutex()
+            $lock.Dispose()
+        }
+    }
+}
+
 function Invoke-Simulation($Project, $Result, $Count, $ReviewPoint = 0, $SimulationScript = $runner) {
     $output = Split-Path -Parent $Result
     New-Item -ItemType Directory -Path $output -Force | Out-Null
@@ -54,16 +105,7 @@ sound=false
 replay_speed=0.5
 "@ | Set-Content -LiteralPath (Join-Path $preferences 'match_settings.cfg')
     try {
-        if (-not (Test-Path (Join-Path $Project '.godot/global_script_class_cache.cfg'))) {
-            $originalStatus = @(Invoke-Git -C $Project status --porcelain)
-            $import = Start-Process -FilePath $GodotPath -ArgumentList @('--headless','--editor','--import','--path',('"' + $Project + '"')) -WindowStyle Hidden -Wait -PassThru -RedirectStandardOutput (Join-Path $output 'import.txt') -RedirectStandardError (Join-Path $output 'import-errors.txt')
-            $importChanges = @(Invoke-Git -C $Project status --porcelain | Where-Object { $_ -notin $originalStatus })
-            $imports = @($importChanges | Where-Object { $_ -match '^ M .*\.import$' } | ForEach-Object { $_.Substring(3) })
-            $uids = @($importChanges | Where-Object { $_ -match '^\?\? [a-zA-Z0-9_./-]+\.gd\.uid$' } | ForEach-Object { $_.Substring(3) })
-            if ($imports.Count) { Invoke-Git -C $Project restore -- $imports }
-            foreach ($uid in $uids) { Remove-Item -LiteralPath (Join-Path $Project $uid) }
-            if ($import.ExitCode -ne 0) { throw "Godot import failed. See $output." }
-        }
+        Initialize-ReviewProject $Project $output
         $arguments = @('--path',('"' + $Project + '"'),'--script',('"' + $SimulationScript + '"'),'--',('"' + $Result + '"'),$Seed,$Count,$ReviewPoint)
         if ($Series) { $arguments += 'series' }
         if ($ReviewPoint -eq 0) { $arguments = @('--headless') + $arguments }
@@ -159,7 +201,7 @@ if ($Action -eq 'List') {
     return
 }
 
-if ($Action -in @('Measure','Scout','Findings','Review','Clip')) {
+if ($Action -in @('Measure','Scout','Findings','Focus','Review','Clip')) {
     if (-not $GodotPath) { $GodotPath = Join-Path $repo '../game/tools/Godot_v4.6-stable_win64.exe' }
     $GodotPath = (Resolve-Path -LiteralPath $GodotPath).Path
 }
@@ -300,6 +342,40 @@ if (Test-Path -LiteralPath $baseline) {
         $baseline = Join-Path $directory ('baseline-' + $entry.base.Substring(0,12))
     }
 }
+if ($Action -eq 'Focus') {
+    if (-not $FocusScript) { throw 'Specify -FocusScript for the focused check.' }
+    $fixture = (Resolve-Path -LiteralPath $FocusScript).Path
+    if (-not (Test-Path -LiteralPath $baseline)) { Invoke-Git worktree add --detach $baseline $entry.base }
+    $focus = Join-Path $directory "focus-$($revision.Substring(0,12))"
+    $previousProfile = $env:APPDATA
+    try {
+        foreach ($side in 'before','after') {
+            $project = if ($side -eq 'before') { $baseline } else { $candidate }
+            $output = Join-Path $focus $side
+            New-Item -ItemType Directory -Path $output -Force | Out-Null
+            $env:APPDATA = Join-Path $output 'profile'
+            Initialize-ReviewProject $project $output
+            $preview = Join-Path $output 'preview'
+            $arguments = @('--headless','--path',('"' + $project + '"'),'--script',('"' + $fixture + '"'),'--')
+            $inputs = if ($FocusArguments) { $FocusArguments } else { @('{output}') }
+            foreach ($input_ in $inputs) { $arguments += ('"' + $input_.Replace('{output}',$preview) + '"') }
+            $clock = [Diagnostics.Stopwatch]::StartNew()
+            $run = Start-Process $GodotPath -ArgumentList $arguments -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $output 'check.txt') -RedirectStandardError (Join-Path $output 'errors.txt')
+            if (-not $run.WaitForExit(90000)) {
+                $run.Kill()
+                $run.WaitForExit()
+                throw "Focused check timed out. See $output."
+            }
+            "$side focused check: $([math]::Round($clock.Elapsed.TotalSeconds,2)) seconds"
+            Get-Content -LiteralPath (Join-Path $output 'check.txt')
+            $errors = Get-Content -LiteralPath (Join-Path $output 'errors.txt') -Raw
+            if ($run.ExitCode -ne 0 -or ($errors -and [regex]::IsMatch($errors,'(?m)^(SCRIPT ERROR|ERROR):'))) {
+                throw "Focused check failed. See $output."
+            }
+        }
+    } finally { $env:APPDATA = $previousProfile }
+    return
+}
 if ($Action -eq 'Clip') {
     if (-not (Test-Path -LiteralPath $baseline)) { Invoke-Git worktree add --detach $baseline $entry.base }
     $clip = Join-Path $directory "clips/$($revision.Substring(0,12))/seed-$Seed-point-$Point"
@@ -330,15 +406,17 @@ if (Test-Path -LiteralPath $cachedBefore) {
     Copy-Item -LiteralPath $cachedBefore -Destination $before
 } else {
     $baselineJob = Start-Job -ScriptBlock {
-        param($GitFunction,$SimulationFunction,$Project,$Result,$Count,$RunnerPath,$Executable,$FirstSeed,$UseSeries,$RepoPath,$Base,$CacheFile,$Key)
+        param($GitFunction,$ImportFunction,$SimulationFunction,$Project,$Result,$Count,$RunnerPath,$Executable,$FirstSeed,$UseSeries,$RepoPath,$Base,$CacheFile,$Key,$ReviewRoot)
         $ErrorActionPreference = 'Stop'
         ${function:Invoke-Git} = [scriptblock]::Create($GitFunction)
+        ${function:Initialize-ReviewProject} = [scriptblock]::Create($ImportFunction)
         ${function:Invoke-Simulation} = [scriptblock]::Create($SimulationFunction)
         $runner = $RunnerPath
         $GodotPath = $Executable
         $Seed = $FirstSeed
         $Series = $UseSeries
         $repo = $RepoPath
+        $root = $ReviewRoot
         $lock = [Threading.Mutex]::new($false, "Volleyball-review-$Key")
         try {
             try { [void]$lock.WaitOne() } catch [Threading.AbandonedMutexException] {}
@@ -366,7 +444,7 @@ if (Test-Path -LiteralPath $cachedBefore) {
         } finally {
             $lock.Dispose()
         }
-    } -ArgumentList ${function:Invoke-Git}.ToString(),${function:Invoke-Simulation}.ToString(),$baseline,$before,$Matches,$runner,$GodotPath,$Seed,$Series.IsPresent,$repo,$entry.base,$cachedBefore,$cacheKey
+    } -ArgumentList ${function:Invoke-Git}.ToString(),${function:Initialize-ReviewProject}.ToString(),${function:Invoke-Simulation}.ToString(),$baseline,$before,$Matches,$runner,$GodotPath,$Seed,$Series.IsPresent,$repo,$entry.base,$cachedBefore,$cacheKey,$root
 }
 try {
     Invoke-Simulation $candidate $after $Matches 0 $candidateRunner
