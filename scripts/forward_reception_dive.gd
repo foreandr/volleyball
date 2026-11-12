@@ -162,13 +162,18 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 			var name_ := str(rig.get_bone_name(bone))
 			if name_.begins_with("thumb") or name_.begins_with("index") or name_.begins_with("middle") or name_.begins_with("ring") or name_.begins_with("pinky"):
 				pose[bone].basis = pose[bone].basis.slerp(clasp[bone].basis,reach)
-	if brace > 0.0:
+	if since_brace > 0.0:
 		for side in ["l","r"]:
+			var support := brace
+			if not wide_arm.is_empty():
+				var plant := smoothstep(0.0,0.075,since_brace) if side != wide_arm else smoothstep(0.065,0.20,since_brace)
+				support = plant*(1.0-smoothstep(0.49,0.77,since_brace))
+			if support <= 0.0: continue
 			var hand: String = "hand_"+side
 			var shoulder: Vector3 = author.point(pose,"upperarm_"+side)
 			# The palms travel back relative to the shoulders as the body slides past them.
 			var palm := Vector3(shoulder.x+(0.13 if side == "l" else -0.13),0.10+0.09*release_hands,shoulder.z+lerpf(0.19,-0.38,push))
-			author.limb(pose,"upperarm_"+side,"lowerarm_"+side,hand,palm,Vector3(0.8 if side == "l" else -0.8,0.4,-0.25),brace)
+			author.limb(pose,"upperarm_"+side,"lowerarm_"+side,hand,palm,Vector3(0.8 if side == "l" else -0.8,0.4,-0.25),support)
 	if pancake:
 		for side in ["l","r"]:
 			var hand: String = "hand_"+side
