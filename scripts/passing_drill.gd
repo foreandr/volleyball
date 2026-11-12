@@ -5,6 +5,7 @@ const Net = preload("res://scripts/net_collision.gd")
 const RECEIVER := 1
 const FEEDER := 2
 const TARGET_RADIUS := 0.90
+const BATCH_REPS := 10
 const SPINS := ["No spin","Topspin","Backspin","Sidespin left","Sidespin right"]
 
 var game: Node3D
@@ -17,7 +18,13 @@ var speed := 18.0
 var spin_rate := 6.0
 var spin := "Topspin"
 var playback_speed := 1.0
-var repeat := false
+var planned_reps := 0
+var completed_reps := 0
+var successful_reps := 0
+var batch_active := false
+var rep_readout: Label
+var batch_button: Button
+var launch_button: Button
 var running := false
 var finish_delay := -1.0
 var incoming_flight := -1
@@ -75,16 +82,16 @@ func marker(radius: float, inner: float, color: Color) -> MeshInstance3D:
 	return node
 
 func build_controls(host: Control, parent: VBoxContainer) -> void:
-	var launch: Button = host.button("Launch ball",launch_ball)
-	launch.name = "LaunchPassingFeed"
-	host.content.add_child(launch)
+	launch_button = host.button("Launch ball",start_single)
+	launch_button.name = "LaunchPassingFeed"
+	host.content.add_child(launch_button)
+	batch_button = host.button("Run 10 reps",toggle_batch)
+	batch_button.name = "RunPassingBatch"
+	host.content.add_child(batch_button)
+	rep_readout = host.label("",18)
+	rep_readout.hide()
+	host.content.add_child(rep_readout)
 	host.content.add_child(host.label("Drag the receiver, orange ball, or blue target.",16))
-	var loop := CheckButton.new()
-	loop.text = "Repeat launch"
-	loop.toggled.connect(func(value: bool):
-		repeat = value
-		if repeat and not running and not game.replay.active: launch_ball())
-	host.content.add_child(loop)
 	add_slider(host,parent,"target_height","Target height","m",0.15,4.5,0.05,target.y,func(v): target.y = v)
 	add_slider(host,parent,"skill","Passing skill","%",0,100,1,game.passing_skill,func(v): game.passing_skill = v)
 	parent.add_child(host.label("Ball feed",19))
@@ -205,6 +212,34 @@ func update_setup() -> void:
 	trajectory.mesh = mesh
 	trajectory.show()
 
+func start_single() -> void:
+	if batch_active: return
+	start_reps(1)
+
+func toggle_batch() -> void:
+	if batch_active:
+		batch_active = false
+		batch_button.text = "Run 10 reps"
+		launch_button.disabled = false
+		planned_reps = completed_reps+int(running)
+		update_rep_readout()
+		return
+	start_reps(BATCH_REPS)
+
+func start_reps(count: int) -> void:
+	planned_reps = count
+	completed_reps = 0
+	successful_reps = 0
+	batch_active = count > 1
+	launch_button.disabled = batch_active
+	batch_button.text = "Stop after this rep" if batch_active else "Run 10 reps"
+	update_rep_readout()
+	launch_ball()
+
+func update_rep_readout() -> void:
+	rep_readout.show()
+	rep_readout.text = "%d/%d successful · %d/%d completed" % [successful_reps,completed_reps,completed_reps,planned_reps] if completed_reps > 0 else "0/%d completed" % planned_reps
+
 func launch_ball() -> void:
 	if game.replay.active: game.toggle_replay()
 	game.begin_point()
@@ -248,7 +283,7 @@ func tick(delta: float) -> void:
 			finish_delay -= delta
 			if finish_delay <= 0.0:
 				finish_delay = -1.0
-				if repeat: launch_ball()
+				if batch_active: launch_ball()
 				else: reset_receiver()
 		return
 	delta *= playback_speed
@@ -290,12 +325,22 @@ func reset_receiver() -> void:
 func finish() -> void:
 	running = false
 	game.phase = game.Phase.FINISHED
+	var success := false
 	if contact_label.is_empty():
 		if game.platforms[RECEIVER].low_save.active: game.begin_recovery(RECEIVER)
 		game.info.text = "Missed feed" if game.net_hit.is_empty() else "Feed hit the net"
 	else:
 		var result_point: Vector3 = target_crossing if target_crossing.is_finite() else game.ball.global_position
 		var error: float = (result_point-game.drill_pass_target).length()
-		var result := "On target" if target_crossing.is_finite() and error <= TARGET_RADIUS else "%.2f m from target" % error
+		success = target_crossing.is_finite() and error <= TARGET_RADIUS
+		var result := "On target" if success else "%.2f m from target" % error
 		game.info.text = "%s · %s" % [contact_label,result]
+	if completed_reps < planned_reps:
+		completed_reps += 1
+		successful_reps += int(success)
+		if completed_reps >= planned_reps:
+			batch_active = false
+			batch_button.text = "Run 10 reps"
+			launch_button.disabled = false
+		update_rep_readout()
 	finish_delay = 1.0
