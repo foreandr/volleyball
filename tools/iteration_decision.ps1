@@ -2,7 +2,7 @@ param([string]$Tool,[ValidateSet('Accept','Reject','Clip','Feedback','Review')][
 $ErrorActionPreference='Stop'
 try {
     $argsForReview = @{ Action=$Action; Id=$Id }
-    if ($Action -in @('Accept','Reject') -and $Revision) { $argsForReview.ExpectedRevision = $Revision }
+    if ($Action -in @('Accept','Reject','Feedback') -and $Revision) { $argsForReview.ExpectedRevision = $Revision }
     if ($Action -eq 'Clip') {
         $argsForReview.Seed = $Seed
         $argsForReview.Point = $Point

@@ -12,12 +12,13 @@ var previews: Array[TextureRect] = []
 var choices: Array[Button] = []
 var tool_panel: VBoxContainer
 var proposal_title: Label
+var proposal_count: Label
 var proposal_description: Label
 var review_controls: HBoxContainer
 var frame_size := Vector2i(320,180)
 var skipped := {}
 var next_id := ""
-var frames: Array[Texture2D] = []
+var frames: Array[Image] = []
 var playback := false
 var playback_speed := 0.0
 var slow_frames := Vector2i(-1,-1)
@@ -53,6 +54,8 @@ func _ready() -> void:
 	proposal_title = label("Iteration Lab",24)
 	proposal_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(proposal_title)
+	proposal_count = label("",16)
+	header.add_child(proposal_count)
 	tool_panel = VBoxContainer.new()
 	tool_panel.hide()
 	background_task = button("Start background task",toggle_background_task)
@@ -82,6 +85,8 @@ func _ready() -> void:
 	var skip_button := button("Skip",skip)
 	skip_button.custom_minimum_size = Vector2(76,38)
 	review_controls.add_child(skip_button)
+	review_controls.add_child(button("Try a middle version",decide.bind("Feedback",
+		"Try a version halfway between Original and Proposed for the highlighted motion. Retest it and show a new comparison.")))
 	details = label("",16)
 	details.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -343,6 +348,7 @@ func update_proposals(pending: Array[Dictionary], preserve_clip: bool) -> void:
 	var playing_entry := manifests[previous[0]] if preserve_clip and not previous.is_empty() else {}
 	proposal_list.clear()
 	manifests = pending
+	proposal_count.text = "%d to review" % manifests.size()
 	var selected := -1
 	var next_index := 0
 	for index in manifests.size():
@@ -390,7 +396,7 @@ func select_proposal(index: int) -> void:
 			if not filename.ends_with(".png") or not FileAccess.file_exists(after.path_join(filename)): continue
 			for directory in [before,after]:
 				var sample := Image.load_from_file(directory.path_join(filename))
-				if not sample.is_empty(): frames.append(ImageTexture.create_from_image(sample))
+				if not sample.is_empty(): frames.append(sample)
 			if frames.size() == 2 and frames[0].get_size() == frames[1].get_size():
 				var settings := Policy.read_json(root.path_join(clip).path_join("clip.json"))
 				frame_size = Vector2i(clampi(int(settings.get("frame_width",320)),1,frames[0].get_width()),frames[0].get_height()/2)
@@ -409,12 +415,14 @@ func select_proposal(index: int) -> void:
 
 func show_frame(index: int) -> void:
 	current_frame = index
-	var region := Rect2(index*frame_size.x,view_index*frame_size.y,frame_size.x,frame_size.y)
+	var region := Rect2i(index*frame_size.x,view_index*frame_size.y,frame_size.x,frame_size.y)
 	for side in previews.size():
-		var atlas := AtlasTexture.new()
-		atlas.atlas = frames[side]
-		atlas.region = region
-		previews[side].texture = atlas
+		var frame := frames[side].get_region(region)
+		var texture := previews[side].texture as ImageTexture
+		if texture == null:
+			previews[side].texture = ImageTexture.create_from_image(frame)
+		else:
+			texture.update(frame)
 
 func toggle_camera() -> void:
 	view_index = 1-view_index
@@ -431,16 +439,16 @@ func queue_next() -> void:
 	if not selection.is_empty():
 		next_id = str(manifests[(selection[0]+1)%manifests.size()].id)
 
-func decide(action: String) -> void:
+func decide(action: String, feedback_override := "") -> void:
 	var selection := proposal_list.get_selected_items()
 	if selection.is_empty() or review_pid > 0: return
-	if action in ["Accept","Reject"]: queue_next()
+	if action in ["Accept","Reject","Feedback"]: queue_next()
 	var entry := manifests[selection[0]]
 	var script := ProjectSettings.globalize_path("res://tools/iterate.ps1")
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(Policy.DIRECTORY))
 	result_log = ProjectSettings.globalize_path(Policy.DIRECTORY+"/review-%d.txt" % Time.get_ticks_usec())
 	var wrapper := ProjectSettings.globalize_path("res://tools/iteration_decision.ps1")
-	var feedback := Marshalls.utf8_to_base64(note.text)
+	var feedback := Marshalls.utf8_to_base64(note.text if feedback_override.is_empty() else feedback_override)
 	review_pid = OS.create_process("pwsh.exe",["-NoProfile","-WindowStyle","Hidden","-File",wrapper,
 		script,action,str(entry.id),result_log,str(int(seed_input.value)),str(int(point_input.value)),feedback if not feedback.is_empty() else "-",str(entry.candidate)])
 	for choice in choices: choice.disabled = review_pid > 0
