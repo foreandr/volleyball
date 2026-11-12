@@ -25,7 +25,9 @@ var feed_spin_axis := Vector3.ZERO
 var feed_spin_speed := 0.0
 var contact_label := ""
 var technique_label := ""
-var placement: OptionButton
+var drag_handle := ""
+var drag_plane: Plane
+var grab_offset := Vector3.ZERO
 var sliders := {}
 var origin_marker: MeshInstance3D
 var target_marker: MeshInstance3D
@@ -43,7 +45,13 @@ func _init(match_: Node3D) -> void:
 	for label in game.key_labels:
 		label.hide()
 	game.players[RECEIVER].global_position = start
-	origin_marker = marker(0.18,0.12,Color("#ffa95b"))
+	origin_marker = MeshInstance3D.new()
+	var sphere := SphereMesh.new()
+	sphere.radius = 0.16
+	sphere.height = 0.32
+	origin_marker.mesh = sphere
+	origin_marker.material_override = material(Color("#ffa95b"))
+	game.add_child(origin_marker)
 	target_marker = marker(TARGET_RADIUS,TARGET_RADIUS-0.06,Color("#54d9e3"))
 	trajectory = MeshInstance3D.new()
 	game.add_child(trajectory)
@@ -68,34 +76,29 @@ func marker(radius: float, inner: float, color: Color) -> MeshInstance3D:
 func build_controls(host: Control, parent: VBoxContainer) -> void:
 	var launch: Button = host.button("Launch ball",launch_ball)
 	launch.name = "LaunchPassingFeed"
-	parent.add_child(launch)
+	host.content.add_child(launch)
+	host.content.add_child(host.label("Drag the receiver, orange ball, or blue target.",16))
 	var loop := CheckButton.new()
 	loop.text = "Repeat feed"
 	loop.toggled.connect(func(value: bool): repeat = value)
 	parent.add_child(loop)
-	placement = OptionButton.new()
-	for text in ["Click court to place receiver","Click court to place ball source","Click court to place target"]:
-		placement.add_item(text)
-	parent.add_child(placement)
-	parent.add_child(host.label("Receiver and target",19))
-	add_slider(host,parent,"receiver_x","Receiver X","m",-4.4,4.4,0.1,start.x,func(v): start.x = v)
-	add_slider(host,parent,"receiver_z","Receiver depth","m",-4.9,3.4,0.1,start.z,func(v): start.z = v)
-	add_slider(host,parent,"target_x","Target X","m",-4.4,4.4,0.1,target.x,func(v): target.x = v)
-	add_slider(host,parent,"target_z","Target depth","m",-4.9,3.8,0.1,target.z,func(v): target.z = v)
 	add_slider(host,parent,"skill","Passing skill","%",0,100,1,game.passing_skill,func(v): game.passing_skill = v)
 	parent.add_child(host.label("Ball feed",19))
-	add_slider(host,parent,"source_x","Source X","m",-6.5,6.5,0.1,source.x,func(v): source.x = v)
 	add_slider(host,parent,"source_y","Source height","m",0.3,7.0,0.05,source.y,func(v): source.y = v)
-	add_slider(host,parent,"source_z","Source depth","m",-6.5,15.0,0.1,source.z,func(v): source.z = v)
 	add_slider(host,parent,"heading","Direction","°",-180,180,1,heading,func(v): heading = v)
 	add_slider(host,parent,"angle","Downward angle","°",-65,75,1,angle,func(v): angle = v)
 	add_slider(host,parent,"speed","Ball speed","m/s",2,40,0.5,speed,func(v): speed = v)
 	var selector := OptionButton.new()
+	selector.name = "PassingSpinType"
 	for style in SPINS: selector.add_item(style)
 	selector.select(SPINS.find(spin))
-	selector.item_selected.connect(func(index: int): spin = SPINS[index]; update_setup())
+	selector.item_selected.connect(func(index: int):
+		spin = SPINS[index]
+		update_spin_controls()
+		update_setup())
 	parent.add_child(selector)
 	add_slider(host,parent,"spin","Spin rate","rps",0,18,0.5,spin_rate,func(v): spin_rate = v)
+	update_spin_controls()
 	add_slider(host,parent,"speed_scale","Drill speed","%",10,100,5,100,func(v): playback_speed = v*0.01)
 
 func add_slider(host: Control, parent: VBoxContainer, id: String, caption: String, unit: String, lower: float, upper: float, step: float, initial: float, apply: Callable) -> void:
@@ -117,18 +120,61 @@ func add_slider(host: Control, parent: VBoxContainer, id: String, caption: Strin
 	slider.value_changed.connect(update)
 	update.call(slider.value)
 
-func place(point: Vector3) -> void:
-	if running or game.replay.active: return
-	match placement.selected:
-		0:
-			sliders.receiver_x.value = point.x
-			sliders.receiver_z.value = point.z
-		1:
-			sliders.source_x.value = point.x
-			sliders.source_z.value = point.z
-		2:
-			sliders.target_x.value = point.x
-			sliders.target_z.value = point.z
+func update_spin_controls() -> void:
+	var slider: HSlider = sliders.spin
+	slider.editable = spin != "No spin"
+	slider.focus_mode = Control.FOCUS_ALL if slider.editable else Control.FOCUS_NONE
+	slider.modulate.a = 1.0 if slider.editable else 0.40
+
+func handle_drag(event: InputEvent, camera: Camera3D, screen: Vector2) -> bool:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and not event.pressed:
+		var was_dragging := not drag_handle.is_empty()
+		drag_handle = ""
+		return was_dragging
+	if running or finish_delay >= 0.0 or game.replay.active: return false
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+		var handle := pick_handle(camera,screen)
+		if handle.is_empty(): return false
+		var point: Vector3 = {"receiver":start,"source":source,"target":target}[handle]
+		drag_plane = Plane(Vector3.UP,point.y)
+		var hit: Variant = drag_point(camera,screen)
+		if hit == null: return false
+		drag_handle = handle
+		grab_offset = point-hit
+		return true
+	if event is InputEventMouseMotion and not drag_handle.is_empty():
+		if not (event.button_mask & MOUSE_BUTTON_MASK_LEFT):
+			drag_handle = ""
+			return false
+		var hit: Variant = drag_point(camera,screen)
+		if hit is Vector3:
+			var point: Vector3 = hit+grab_offset
+			match drag_handle:
+				"receiver": start = Vector3(clampf(point.x,-4.4,4.4),start.y,clampf(point.z,-4.9,3.4))
+				"source": source = Vector3(clampf(point.x,-6.5,6.5),source.y,clampf(point.z,-6.5,15.0))
+				"target": target = Vector3(clampf(point.x,-4.4,4.4),target.y,clampf(point.z,-4.9,3.8))
+			update_setup()
+		return true
+	return false
+
+func pick_handle(camera: Camera3D, screen: Vector2) -> String:
+	for handle in ["source","target"]:
+		var point := source if handle == "source" else target
+		var radius := 24.0
+		if handle == "target":
+			radius = maxf(radius,camera.unproject_position(point).distance_to(camera.unproject_position(point+Vector3.RIGHT*TARGET_RADIUS)))
+		if not camera.is_position_behind(point) and camera.unproject_position(point).distance_to(screen) <= radius:
+			return handle
+	if not camera.is_position_behind(start):
+		var foot := camera.unproject_position(start)
+		var head := camera.unproject_position(start+Vector3.UP*1.85)
+		var closest := Geometry2D.get_closest_point_to_segment(screen,foot,head)
+		if closest.distance_to(screen) <= maxf(18.0,foot.distance_to(head)*0.22):
+			return "receiver"
+	return ""
+
+func drag_point(camera: Camera3D, screen: Vector2) -> Variant:
+	return drag_plane.intersects_ray(camera.project_ray_origin(screen),camera.project_ray_normal(screen))
 
 func feed() -> Dictionary:
 	var radians := deg_to_rad(heading)
@@ -177,6 +223,7 @@ func launch_ball() -> void:
 	incoming_flight = game.flight_number
 	technique_label = ""
 	contact_label = ""
+	drag_handle = ""
 	running = true
 	finish_delay = -1.0
 	game.replay.record(game)
@@ -197,6 +244,7 @@ func tick(delta: float) -> void:
 			if finish_delay <= 0.0:
 				finish_delay = -1.0
 				if repeat: launch_ball()
+				else: reset_receiver()
 		return
 	delta *= playback_speed
 	game.match_clock += delta
@@ -218,6 +266,15 @@ func tick(delta: float) -> void:
 	if game.elapsed >= game.flight_end():
 		finish()
 	game.replay.record(game)
+
+func reset_receiver() -> void:
+	var receiver: Node3D = game.players[RECEIVER]
+	game.recoveries.erase(RECEIVER)
+	receiver.rotation.y = 0.0
+	receiver.play_action("idle",0.0)
+	receiver.animator.advance(0.0)
+	game.ball.hide()
+	update_setup()
 
 func finish() -> void:
 	running = false

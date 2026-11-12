@@ -1585,9 +1585,8 @@ func handle_preview_input(event: InputEvent) -> void:
 		if event is InputEventMouseMotion and (event.button_mask & MOUSE_BUTTON_MASK_MIDDLE):
 			orbit_setting_camera(event.relative)
 			preview.accept_event()
-		elif passing_drill != null and event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-			var point: Variant = attack_floor_point(event.position)
-			if point is Vector3: passing_drill.place(point)
+		elif passing_drill != null and event is InputEventMouse and passing_drill.handle_drag(event,preview_camera,setup_drag.screen_position(event.position)):
+			preview.grab_focus()
 			preview.accept_event()
 		elif event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_WHEEL_UP,MOUSE_BUTTON_WHEEL_DOWN]:
 			var wheel := (1.0 if event.button_index == MOUSE_BUTTON_WHEEL_UP else -1.0)*maxf(0.1,event.factor)
