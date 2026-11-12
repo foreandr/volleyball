@@ -991,16 +991,17 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 		var driver := attackers[side]
 		var minimum := maxf((driver.set_contact_height()+0.22) if is_human(index) else 2.96,point.y+0.18)
 		var apex: float = bump.height if is_human(index) else cpu_set_apex(index,point,pin,incoming.length())
-		var error := Bump.Accuracy.sample_offset(Bump.Accuracy.spread(0.0,incoming.length(),spin,setting_skill,true))
-		var set_width := pin.x-setter_x
-		pin += error.slide(Vector3.UP)
-		if not is_human(index) and absf(set_width) >= 1.0 and (pin.x-setter_x)*signf(set_width) < 1.0:
-			pin.x = setter_x+signf(set_width)
-		apex = maxf(minimum,apex+error.y)
+		apex = maxf(minimum,apex)
 		if not is_human(index):
 			var span := (pin-point).slide(Vector3.UP).length()
 			var time_to_hit := maxf(0.68,span/6.2)
 			apex = driver.apex_for_set_time(point.y,apex,time_to_hit)
+		var error := Bump.Accuracy.sample_set_offset(Bump.Accuracy.spread(0.0,incoming.length(),spin,setting_skill,true))
+		var set_width := pin.x-setter_x
+		pin += error.slide(Vector3.UP)
+		if not is_human(index) and absf(set_width) >= 1.0 and (pin.x-setter_x)*signf(set_width) < 1.0:
+			pin.x = setter_x+signf(set_width)
+		apex = maxf(maxf(2.74,point.y+0.18),apex+error.y)
 		var contact_height: float = driver.set_contact_height(apex)
 		last_set_apex = apex
 		if not is_human(index):
@@ -1492,9 +1493,8 @@ func tick_receive(delta: float, previous: float) -> void:
 		if gap <= reach and cue < end-0.025 and reachable_height:
 			if technique == 0: bump.apply_pose(bump.contact_frame,0.82)
 			else: Bump.HandPose.apply(actor,catch_point,0.86)
-			var target := {"position":bump.destination,"fit":"height","height":bump.height}
 			var spread: Vector2 = bump.accuracy_bounds(0.0,frame.global_basis.inverse()*motion,spin)
-			var result := Bump.Accuracy.pass_velocity(frame.to_local(catch_point),target,45.0,spread)
+			var result: Vector3 = bump.aim_velocity(frame.to_local(catch_point),spread)
 			receive_contact(index,catch_point,frame.global_basis*result,technique)
 
 func input_kick() -> void:

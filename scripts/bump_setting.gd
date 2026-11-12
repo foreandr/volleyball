@@ -208,10 +208,13 @@ func track_hand_dig(path: Callable, time: float, end: float, delta: float) -> Ve
 	return to_local(origin+facing*tracked_hand_dig)
 
 func aim_velocity(origin: Vector3, spread := Vector2.ZERO) -> Vector3:
-	return Accuracy.pass_velocity(origin,{"position":destination,"fit":"height","height":height},45.0,spread)
+	return Accuracy.pass_velocity(origin,{"position":destination,"fit":"height","height":height},45.0,spread,uses_set_accuracy())
+
+func uses_set_accuracy() -> bool:
+	return not defensive_hand_dig and (forearm_setting or (hand_setting and not quick_hand_receive))
 
 func accuracy_bounds(error: float, incoming: Vector3, spin_rps: float) -> Vector2:
-	var setting := forearm_setting or (hand_setting and not quick_hand_receive)
+	var setting := uses_set_accuracy()
 	var skill := StorySession.setting_skill if setting else (StorySession.hand_reception_skill if hand_setting else StorySession.forearm_reception_skill)
 	var override := setting_skill_override if setting else passing_skill_override
 	if override >= 0.0: skill = override
@@ -576,7 +579,11 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 		var apex := hand_dig_height(source,incoming.length()) if face_dig else height
 		var ideal := Flight.target_velocity(source,{"position":target,"fit":"height","height":apex},45.0)
 		var peak := flight_point(source,ideal,ideal.y/Flight.GRAVITY)
-		cone.show_spread(to_global(source),to_global(Vector3(target.x,0.075,target.y)),spread.x,to_global(peak),spread.y)
+		var ground := to_global(Vector3(target.x,0.075,target.y))
+		if uses_set_accuracy():
+			cone.show_set_spread(to_global(source),ground,to_global(peak),spread,global_basis.z.normalized())
+		else:
+			cone.show_spread(to_global(source),ground,spread.x,to_global(peak),spread.y)
 	else:
 		cone.hide()
 

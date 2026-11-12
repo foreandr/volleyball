@@ -1,6 +1,8 @@
 extends RefCounted
 
 const Flight = preload("res://scripts/pass_flight.gd")
+const SET_WIDTH_FRACTION := 0.20
+const SET_TIGHT_FRACTION := 0.16
 
 static func timing_error(lead: float, earliest: float, latest: float) -> float:
 	var ideal := lerpf(earliest,latest,0.40)
@@ -13,7 +15,7 @@ static func spread(timing: float, speed: float, spin_rps: float, skill: float, s
 	var pace := smoothstep(8.0,29.0,speed)
 	var spin := smoothstep(0.4,9.0,absf(spin_rps))
 	if setting:
-		return gap*(Vector2(2.9,2.2)+Vector2(1.55,1.45)*timing+Vector2(0.65,0.55)*pace+Vector2(0.35,0.28)*spin)
+		return gap*(Vector2(2.8,3.15)+Vector2(0.65,0.9)*timing+Vector2(0.40,0.60)*pace+Vector2(0.20,0.30)*spin)
 	var difficulty := pace*0.72+spin*0.32
 	return Vector2(0.11,0.09)+Vector2(1.4,1.15)*difficulty+Vector2(2.15,1.75)*gap+Vector2(1.65,1.55)*timing*(1.0+difficulty*0.52)
 
@@ -21,10 +23,18 @@ static func sample_offset(bounds: Vector2) -> Vector3:
 	var horizontal := Vector2.from_angle(randf()*TAU)*bounds.x*sqrt(randf_range(0.0001,1.0))
 	return Vector3(horizontal.x,bounds.y*(randf()-randf()),horizontal.y)
 
-static func pass_velocity(touch: Vector3, target: Dictionary, angle: float, bounds: Vector2) -> Vector3:
+static func sample_set_offset(bounds: Vector2) -> Vector3:
+	if bounds.is_zero_approx(): return Vector3.ZERO
+	var width := bounds.x*SET_WIDTH_FRACTION
+	var tight := bounds.x*SET_TIGHT_FRACTION
+	var horizontal := Vector2.from_angle(randf()*TAU)*sqrt(randf())
+	var depth := lerpf(-bounds.x,tight,0.5+0.5*horizontal.y)
+	return Vector3(horizontal.x*width,randf_range(-bounds.y,bounds.y),depth)
+
+static func pass_velocity(touch: Vector3, target: Dictionary, angle: float, bounds: Vector2, setting := false) -> Vector3:
 	var ideal := Flight.target_velocity(touch,target,angle)
 	if bounds.is_zero_approx(): return ideal
-	var offset := sample_offset(bounds)
+	var offset := sample_set_offset(bounds) if setting else sample_offset(bounds)
 	var destination: Vector2 = target.position+Vector2(offset.x,offset.z)
 	var peak := touch.y+ideal.y*ideal.y/(2.0*Flight.GRAVITY)
 	var minimum := float(target.get("minimum_height",touch.y+0.05))

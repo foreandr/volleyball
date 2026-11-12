@@ -210,7 +210,7 @@ func update_manual_set_target() -> void:
 		add_child(manual_set_cone)
 	var bounds := manual_set_spread()
 	var peak := flight_point(origin,launch,launch.y/Flight.GRAVITY)
-	manual_set_cone.show_spread(to_global(origin),to_global(rally_set_target),bounds.x,to_global(peak),bounds.y)
+	manual_set_cone.show_set_spread(to_global(origin),to_global(rally_set_target),to_global(peak),bounds,global_basis.z.normalized())
 	if is_instance_valid(rally_set_call):
 		rally_set_call.text = "Set height %.1f m" % manual_set_apex
 		rally_set_call.show()
@@ -237,7 +237,7 @@ func released_set_velocity(origin: Vector3) -> Vector3:
 	if not partner_receiving or not manual_set_requested: return ideal
 	var spread := manual_set_spread()
 	if spread.is_zero_approx(): return ideal
-	var error := BumpSetting.Accuracy.sample_offset(spread)
+	var error := BumpSetting.Accuracy.sample_set_offset(spread)
 	rally_set_target += error.slide(Vector3.UP)
 	var apex := maxf(cpu_set_apex()+error.y,maxf(origin.y,RALLY_SET_CONTACT_HEIGHT)+0.08)
 	return set_toward_pin(origin,rally_set_target,apex,RALLY_SET_CONTACT_HEIGHT)
