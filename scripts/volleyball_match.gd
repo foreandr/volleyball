@@ -1412,7 +1412,8 @@ func tick_receive(delta: float, previous: float) -> void:
 	if cpu_second_spike: return
 	if not is_human(index) and not is_finite(platforms[index].pressed_at):
 		var planned_attack := cpu_dump or overpass_flight == flight_number
-		if (planned_attack or cpu_is_setting(index)) and start_second_ball_spike(index,not planned_attack): return
+		var opportunistic_attack := cpu_is_setting(index) and not cpu_fake_dump
+		if (planned_attack or opportunistic_attack) and start_second_ball_spike(index,not planned_attack): return
 	var frame := frames[team(index)]
 	var bump := platforms[index]
 	var technique := requested if is_human(index) else cpu_technique
