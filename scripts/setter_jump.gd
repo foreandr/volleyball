@@ -181,6 +181,14 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 		lead_plant_load = smoothstep(lead_step_duration*0.38,lead_step_duration*0.82,lead_age)*(1.0-smoothstep(0.0,0.135,pose_time))
 	pose[pelvis].origin -= hips.basis.inverse()*Vector3.UP*(0.15*load+0.14*impact+0.035*lead_plant_load)/scale_
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,(0.16+load_bend_extra)*load+0.13*impact-0.22*arm_drive)
+	if approach_plant and not setting_jump:
+		var first_step := assisted_load_time*0.105/LOAD_TIME
+		if lead_time > 0.0:
+			first_step = lead_step_duration*(0.86 if entry_time > 0.0 else 0.82)
+		var upright := smoothstep(0.0,first_step,elapsed)*(1.0-smoothstep(LOAD_TIME,LOAD_TIME+0.12,pose_time))
+		var torso: Vector3 = author.point(pose,"neck_01")-author.point(pose,"spine_02")
+		var pitch := atan2(torso.z,torso.y)
+		author.rotate_world(pose,"spine_02",Vector3.RIGHT,(-deg_to_rad(5.0)-pitch)*upright)
 	var travel := actor.basis.inverse()*heading*stride/scale_
 	if actor.mirror_animation: travel.x = -travel.x
 	var stagger := 0.34*(first-second)
