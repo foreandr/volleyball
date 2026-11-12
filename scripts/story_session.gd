@@ -121,6 +121,7 @@ var preview_hash := 0
 var preview_path := "user://preview_setup.cfg"
 var lab_replay_path := ""
 var home_match_size := 0
+var iteration_run := preload("res://scripts/iteration_run.gd").new()
 const PREVIEW_FIELDS := ["pass_start","pass_distance","pass_output_angle","incoming_speed","incoming_angle","feed_spot","incoming_spin","spin_rate","float_strength","source_height","feed_fit","receive_direction","receive_distance_tier","ball_tab","pass_destination","pass_apex","destination_fit","preview_camera"]
 
 func _ready() -> void:

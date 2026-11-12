@@ -6,8 +6,6 @@ var duration: SpinBox
 var play: Button
 var stop: Button
 var clock := 0.0
-var pid := -1
-var active_run := ""
 var proposal_list: ItemList
 var details: Label
 var manifests: Array[Dictionary] = []
@@ -143,17 +141,12 @@ func _process(delta: float) -> void:
 		if current_frame != next: show_frame(next)
 
 func refresh_status() -> void:
-	var data := Policy.read_json(Policy.DIRECTORY+"/status.json")
-	var worker := int(data.get("pid",pid))
-	if pid > 0 and OS.is_process_running(pid): worker = pid
-	var running := worker > 0 and OS.is_process_running(worker)
+	var data := StorySession.iteration_run.status()
+	var running: bool = data.running
 	var learned := Policy.read_json(Policy.PATH)
-	var run := str(data.get("run",active_run))
-	if running and (worker != pid or int(data.get("pid",0)) == pid) and not run.is_empty(): active_run = run
 	play.disabled = running
-	stop.disabled = not running
-	var state := "Running" if running else str(data.get("state","Ready")).capitalize()
-	if not running and state == "Running": state = "Stopped"
+	stop.disabled = not running or data.state == "stopping"
+	var state := str(data.state).capitalize()
 	status.text = "%s   ·   %d matches this run   ·   %d review flags   ·   %d training matches saved" % [
 		state,int(data.get("matches",0)),int(data.get("observations",0)),int(learned.get("matches",0))]
 	if review_pid > 0 and not OS.is_process_running(review_pid):
@@ -163,20 +156,12 @@ func refresh_status() -> void:
 		details.text = message
 
 func start_run() -> void:
-	var id := "%d-%d" % [int(Time.get_unix_time_from_system()),Time.get_ticks_msec()]
-	active_run = Policy.DIRECTORY+"/runs/"+id
-	pid = OS.create_process(OS.get_executable_path(),["--headless","--path",ProjectSettings.globalize_path("res://"),
-		"--script","res://tools/iteration_worker.gd","--",id,str(int(duration.value))])
-	if pid < 0: status.text = "Could not start self-play."
-	else:
-		play.disabled = true
-		stop.disabled = false
+	if StorySession.iteration_run.start(int(duration.value)): refresh_status()
+	else: status.text = "Could not start self-play."
 
 func stop_run() -> void:
-	if active_run.is_empty(): return
-	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(active_run))
-	var file := FileAccess.open(active_run+"/stop",FileAccess.WRITE)
-	if file != null: file.close()
+	if StorySession.iteration_run.stop(): refresh_status()
+	else: status.text = "Could not stop self-play."
 
 func watch_latest() -> void:
 	var data := Policy.read_json(Policy.DIRECTORY+"/status.json")

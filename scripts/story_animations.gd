@@ -26,6 +26,8 @@ var selected_category := ""
 var blocking_practice: Node3D
 var defense_active := false
 var demo_match: Node3D
+var match_training: Button
+var match_training_poll := 0.0
 var match_block_choice: OptionButton
 var blocking_frame: Node3D
 var underhand_serve: Node3D
@@ -286,7 +288,13 @@ func start_demo_match(team_size := 2) -> void:
 	watch.toggled.connect(func(enabled: bool):
 		demo_match.set_spectator(enabled)
 		preview.grab_focus())
+	match_training = button("Start background training",toggle_match_training)
+	match_training.name = "MatchTraining"
+	match_training.focus_mode = Control.FOCUS_NONE
+	content.add_child(match_training)
+	refresh_match_training()
 	content.add_child(button("Reset Match",func():
+		demo_match.cpu_policy.load_profile()
 		demo_match.reset_match()
 		preview.grab_focus()))
 	demo_match = preload("res://scripts/volleyball_match.gd").new()
@@ -301,6 +309,25 @@ func start_demo_match(team_size := 2) -> void:
 	setting_camera_focus = Vector3(0.0,1.55,3.9)
 	preview_camera.look_at(setting_camera_focus)
 	preview.grab_focus()
+
+func toggle_match_training() -> void:
+	var run := StorySession.iteration_run
+	var state := run.status()
+	var changed := run.stop() if state.running else run.start(0)
+	if changed: refresh_match_training()
+	else: match_training.text = "Could not stop training" if state.running else "Could not start training"
+	preview.grab_focus()
+
+func refresh_match_training() -> void:
+	match_training_poll = 0.8
+	var state := StorySession.iteration_run.status()
+	match_training.disabled = state.state == "stopping"
+	if state.state == "stopping":
+		match_training.text = "Stopping training…"
+	elif state.running:
+		match_training.text = "Stop training  ·  %d matches" % int(state.get("matches",0))
+	else:
+		match_training.text = "Start background training"
 
 func show_match_tuning() -> void:
 	attack_position_panel = panel()
@@ -1166,6 +1193,9 @@ func _process(delta: float) -> void:
 	pass_timing_cue.hide()
 	if is_instance_valid(demo_match):
 		demo_match.tick_match(delta,player_controls)
+		if is_instance_valid(match_training):
+			match_training_poll -= delta
+			if match_training_poll <= 0.0: refresh_match_training()
 		if demo_match.replay.active:
 			move_match_replay_camera(delta)
 			update_match_replay_controls()
