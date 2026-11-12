@@ -301,8 +301,26 @@ $candidateRunner = $runner
 if ('tools/iterate_matches.gd' -in @(Invoke-Git diff --name-only $entry.base $revision)) {
     $candidateRunner = Join-Path $candidate 'tools/iterate_matches.gd'
 }
-Invoke-Simulation $baseline $before $Matches
-Invoke-Simulation $candidate $after $Matches 0 $candidateRunner
+# Separate PowerShell processes keep the two simulations' APPDATA profiles isolated.
+$baselineJob = Start-Job -ScriptBlock {
+    param($GitFunction,$SimulationFunction,$Project,$Result,$Count,$RunnerPath,$Executable,$FirstSeed,$UseSeries,$RepoPath)
+    $ErrorActionPreference = 'Stop'
+    ${function:Invoke-Git} = [scriptblock]::Create($GitFunction)
+    ${function:Invoke-Simulation} = [scriptblock]::Create($SimulationFunction)
+    $runner = $RunnerPath
+    $GodotPath = $Executable
+    $Seed = $FirstSeed
+    $Series = $UseSeries
+    $repo = $RepoPath
+    Invoke-Simulation $Project $Result $Count
+} -ArgumentList ${function:Invoke-Git}.ToString(),${function:Invoke-Simulation}.ToString(),$baseline,$before,$Matches,$runner,$GodotPath,$Seed,$Series.IsPresent,$repo
+try {
+    Invoke-Simulation $candidate $after $Matches 0 $candidateRunner
+    Receive-Job -Job $baselineJob -Wait -ErrorAction Stop
+} finally {
+    Wait-Job -Job $baselineJob | Out-Null
+    Remove-Job -Job $baselineJob
+}
 $comparison = [ordered]@{ base = $entry.base; candidate = $revision; first_seed = $Seed; before = Read-Totals $before; after = Read-Totals $after }
 $comparison | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $review 'comparison.json') -Encoding UTF8
 Invoke-Git diff $entry.base $revision | Set-Content -LiteralPath (Join-Path $review 'changes.diff') -Encoding UTF8
