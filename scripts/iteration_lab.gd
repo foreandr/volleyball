@@ -9,13 +9,11 @@ var clock := 0.0
 var proposal_list: ItemList
 var details: Label
 var manifests: Array[Dictionary] = []
-var preview: TextureRect
+var previews: Array[TextureRect] = []
+var choices: Array[Button] = []
 var tool_panel: VBoxContainer
 var proposal_title: Label
-var take_label: Label
 var review_controls: HBoxContainer
-var accept: Button
-var take := 1
 var frame_size := Vector2i(320,180)
 var skipped := {}
 var next_id := ""
@@ -57,39 +55,19 @@ func _ready() -> void:
 	header.add_child(button("Tools",func(): tool_panel.visible = not tool_panel.visible))
 	header.add_child(button("Back",func(): get_tree().change_scene_to_file("res://scenes/main.tscn")))
 
-	var stage := PanelContainer.new()
-	stage.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	var border := StyleBoxFlat.new()
-	border.bg_color = Color("#090d13")
-	border.set_corner_radius_all(10)
-	border.set_content_margin_all(4)
-	stage.add_theme_stylebox_override("panel",border)
-	layout.add_child(stage)
-	preview = TextureRect.new()
-	preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	stage.add_child(preview)
+	var comparison := AspectRatioContainer.new()
+	comparison.ratio = 3.3
+	comparison.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	layout.add_child(comparison)
+	var pair := HBoxContainer.new()
+	pair.add_theme_constant_override("separation",12)
+	comparison.add_child(pair)
+	pair.add_child(clip_choice("Original","Keep the original and move to the next proposal","Reject"))
+	pair.add_child(clip_choice("Proposed","Apply this change and move to the next proposal","Accept"))
 
 	review_controls = HBoxContainer.new()
 	review_controls.alignment = BoxContainer.ALIGNMENT_CENTER
-	review_controls.add_theme_constant_override("separation",10)
 	layout.add_child(review_controls)
-	var left := button("‹",set_take.bind(0))
-	left.tooltip_text = "Original (Left arrow)"
-	left.custom_minimum_size = Vector2(42,38)
-	review_controls.add_child(left)
-	take_label = label("Proposed",16)
-	take_label.custom_minimum_size.x = 78
-	take_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	review_controls.add_child(take_label)
-	var right := button("›",set_take.bind(1))
-	right.tooltip_text = "Proposed (Right arrow)"
-	right.custom_minimum_size = Vector2(42,38)
-	review_controls.add_child(right)
-	accept = button("Accept",decide.bind("Accept"))
-	accept.custom_minimum_size = Vector2(100,38)
-	accept.add_theme_color_override("font_color",Color("#a3e7c9"))
-	review_controls.add_child(accept)
 	var skip_button := button("Skip",skip)
 	skip_button.custom_minimum_size = Vector2(76,38)
 	review_controls.add_child(skip_button)
@@ -139,7 +117,6 @@ func _ready() -> void:
 	tool_panel.add_child(actions)
 	actions.add_child(button("Refresh queue",func(): skipped.clear(); refresh_proposals()))
 	actions.add_child(button("Re-test",decide.bind("Review")))
-	actions.add_child(button("Reject",decide.bind("Reject")))
 	note = LineEdit.new()
 	note.placeholder_text = "Feedback"
 	note.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -167,6 +144,38 @@ func button(caption: String, action: Callable) -> Button:
 	item.text = caption
 	item.pressed.connect(action)
 	return item
+
+func clip_choice(caption: String, hint: String, action: String) -> Button:
+	var choice := button("",decide.bind(action))
+	choice.tooltip_text = hint
+	choice.accessibility_name = caption
+	choice.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	choice.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	var content := VBoxContainer.new()
+	content.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	choice.add_child(content)
+	content.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	content.offset_left = 6
+	content.offset_top = 5
+	content.offset_right = -6
+	content.offset_bottom = -6
+	var heading := label(caption,16)
+	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	heading.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	content.add_child(heading)
+	var preview := TextureRect.new()
+	preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	preview.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	content.add_child(preview)
+	previews.append(preview)
+	choices.append(choice)
+	return choice
+
+func clear_comparison() -> void:
+	for preview in previews: preview.texture = null
+	for choice in choices: choice.disabled = true
 
 func _process(delta: float) -> void:
 	clock += delta
@@ -257,7 +266,7 @@ func refresh_proposals() -> void:
 	proposal_list.clear()
 	manifests.clear()
 	frames.clear()
-	preview.texture = null
+	clear_comparison()
 	proposal_title.text = "Iteration Lab"
 	review_controls.hide()
 	details.text = "No proposals to review."
@@ -283,13 +292,10 @@ func select_proposal(index: int) -> void:
 	selected_id = str(entry.id)
 	frames.clear()
 	playback = false
-	preview.texture = null
+	clear_comparison()
 	proposal_title.text = str(entry.get("short_title",entry.get("title",selected_id)))
 	details.text = ""
 	review_controls.show()
-	accept.disabled = review_pid > 0
-	take = 1
-	take_label.text = "Proposed"
 	view_index = 0
 	var root := str(entry.directory).path_join("clips").path_join(str(entry.candidate).left(12))
 	if not DirAccess.dir_exists_absolute(root):
@@ -317,6 +323,7 @@ func select_proposal(index: int) -> void:
 				loop_focus = bool(settings.get("loop_focus",false))
 				frame_time = 0.0
 				playback = true
+				for choice in choices: choice.disabled = review_pid > 0
 				show_frame(maxi(0,slow_frames.x) if loop_focus and playback_speed == 0.0 else 0)
 				return
 			frames.clear()
@@ -324,23 +331,12 @@ func select_proposal(index: int) -> void:
 
 func show_frame(index: int) -> void:
 	current_frame = index
-	var atlas := AtlasTexture.new()
-	atlas.atlas = frames[take]
-	atlas.region = Rect2(index*frame_size.x,view_index*frame_size.y,frame_size.x,frame_size.y)
-	preview.texture = atlas
-
-func set_take(index: int) -> void:
-	take = index
-	take_label.text = "Original" if index == 0 else "Proposed"
-	if frames.size() == 2: show_frame(current_frame)
-
-func _input(event: InputEvent) -> void:
-	if not review_controls.visible or tool_panel.visible or not event is InputEventKey or not event.pressed: return
-	match event.keycode:
-		KEY_LEFT: set_take(0)
-		KEY_RIGHT: set_take(1)
-		_: return
-	get_viewport().set_input_as_handled()
+	var region := Rect2(index*frame_size.x,view_index*frame_size.y,frame_size.x,frame_size.y)
+	for side in previews.size():
+		var atlas := AtlasTexture.new()
+		atlas.atlas = frames[side]
+		atlas.region = region
+		previews[side].texture = atlas
 
 func toggle_camera() -> void:
 	view_index = 1-view_index
@@ -369,5 +365,5 @@ func decide(action: String) -> void:
 	var feedback := Marshalls.utf8_to_base64(note.text)
 	review_pid = OS.create_process("pwsh.exe",["-NoProfile","-WindowStyle","Hidden","-File",wrapper,
 		script,action,str(entry.id),result_log,str(int(seed_input.value)),str(int(point_input.value)),feedback if not feedback.is_empty() else "-"])
-	accept.disabled = review_pid > 0
+	for choice in choices: choice.disabled = review_pid > 0
 	details.text = "Could not open the review tool." if review_pid < 0 else "Working…"
