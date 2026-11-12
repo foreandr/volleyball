@@ -24,16 +24,34 @@ func front_start_limit() -> float:
 	return -7.12
 
 func recovery_end() -> float:
-	return 1.57
+	return LAND+0.16
 
 func can_run_after_contact() -> bool:
-	return is_finite(contact_clock) and swing_time >= LAND
+	return is_finite(contact_clock) and swing_time >= LAND+0.10
 
 func float_body_scale() -> float:
 	return 1.0
 
 func float_step_pose(time: float) -> Array:
-	return float_approach(time,TAKEOFF,LAND,float_jump_height,1.12)
+	var pose := float_approach(time,TAKEOFF,LAND,float_jump_height,1.12)
+	var age := time-LAND
+	var depth := 0.12*smoothstep(0.0,0.06,age)*(1.0-smoothstep(0.06,0.16,age))
+	if depth <= 0.0: return pose
+	var rig: Skeleton3D = player.skeleton
+	var author: RefCounted = player.get_pose_author()
+	var feet: Array[Transform3D] = []
+	for side in ["l","r"]:
+		feet.append(author.world_pose(pose,rig.find_bone("foot_"+side)))
+	var pelvis := rig.find_bone("pelvis")
+	var parent: Transform3D = author.world_pose(pose,rig.get_bone_parent(pelvis))
+	pose[pelvis].origin += parent.basis.inverse()*rig.global_basis.inverse()*(Vector3.DOWN*depth)
+	for index in 2:
+		var side := "l" if index == 0 else "r"
+		var foot := feet[index]
+		author.limb(pose,"thigh_"+side,"calf_"+side,"foot_"+side,foot.origin,
+			Vector3(0.12 if index == 0 else -0.12,0.2,1.0))
+		author.set_world_basis(pose,"foot_"+side,foot.basis)
+	return pose
 
 func toss_curve_height() -> float:
 	return 0.94
