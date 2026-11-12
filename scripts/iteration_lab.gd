@@ -12,6 +12,7 @@ var previews: Array[TextureRect] = []
 var choices: Array[Button] = []
 var tool_panel: VBoxContainer
 var proposal_title: Label
+var proposal_description: Label
 var review_controls: HBoxContainer
 var frame_size := Vector2i(320,180)
 var skipped := {}
@@ -55,6 +56,12 @@ func _ready() -> void:
 	header.add_child(background_task)
 	header.add_child(button("Tools",func(): tool_panel.visible = not tool_panel.visible))
 	header.add_child(button("Back",func(): get_tree().change_scene_to_file("res://scenes/main.tscn")))
+
+	proposal_description = label("",16)
+	proposal_description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	proposal_description.add_theme_color_override("font_color",Color("#c3ceda"))
+	proposal_description.hide()
+	layout.add_child(proposal_description)
 
 	var comparison := AspectRatioContainer.new()
 	comparison.ratio = 3.3
@@ -264,6 +271,7 @@ func refresh_proposals() -> void:
 	frames.clear()
 	clear_comparison()
 	proposal_title.text = "Iteration Lab"
+	proposal_description.hide()
 	review_controls.hide()
 	details.text = "No proposals to review."
 	var root := ProjectSettings.globalize_path("res://work/iterations")
@@ -290,6 +298,8 @@ func select_proposal(index: int) -> void:
 	playback = false
 	clear_comparison()
 	proposal_title.text = str(entry.get("short_title",entry.get("title",selected_id)))
+	proposal_description.text = str(entry.get("description",entry.get("note",""))).strip_edges()
+	proposal_description.visible = not proposal_description.text.is_empty()
 	details.text = ""
 	review_controls.show()
 	view_index = 0
