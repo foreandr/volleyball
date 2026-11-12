@@ -9,6 +9,7 @@ var age := 0.0
 var tempo := 1.0
 var jump_height := HEIGHT
 var landing_recovery := 0.13
+var overpass_swing := false
 var base: Vector3
 var previous_hands: Array[Vector3] = []
 var hands: Array[Vector3] = []
@@ -58,7 +59,18 @@ func step(delta: float, world_ball: Vector3) -> bool:
 		var below_tape := 1.0-smoothstep(2.50,2.80,rig.to_global(shoulder).y+0.62)
 		var depth := lerpf(lerpf(0.20,0.55,press),0.17,below_tape)
 		var target := shoulder+Vector3(clampf(aim.x-shoulder.x,-0.18,0.18)-outward*0.06,0.62,depth)/scale_
-		author.limb(pose,arm,"lowerarm_"+side,"hand_"+side,target,Vector3(outward*0.38,-0.55,0.30),weight,174.0)
+		var pole := Vector3(outward*0.38,-0.55,0.30)
+		if overpass_swing and side == "r":
+			var draw := smoothstep(0.11,0.30,age)*(1.0-smoothstep(0.30,0.47,age))
+			var strike := smoothstep(0.30,0.51,age)
+			var follow := smoothstep(0.53,0.74,age)
+			var contact := aim+Vector3(0.0,-0.055,-0.07)/scale_
+			target = (target+Vector3(-0.13,-0.23,-0.40)*draw/scale_).lerp(contact,strike)
+			target = target.lerp(shoulder+Vector3(-0.16,-0.35,0.30)/scale_,follow)
+			pole = pole.lerp(Vector3(-0.75,-0.27,-0.42),draw)
+		elif overpass_swing:
+			target = target.lerp(shoulder+Vector3(0.12,0.04,0.30)/scale_,smoothstep(0.30,0.56,age))
+		author.limb(pose,arm,"lowerarm_"+side,"hand_"+side,target,pole,weight,174.0)
 		for digit in ["thumb","index","middle","ring","pinky"]:
 			for segment in ["01","02","03"]:
 				var bone := rig.find_bone("%s_%s_%s" % [digit,segment,side])
