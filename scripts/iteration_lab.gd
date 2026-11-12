@@ -15,6 +15,10 @@ var proposal_title: Label
 var proposal_count: Label
 var proposal_description: Label
 var review_controls: HBoxContainer
+var listen_controls: HBoxContainer
+var comparison_audio: AudioStreamPlayer
+var audio_previews: Array[AudioStreamWAV] = []
+var restore_master_mute := false
 var frame_size := Vector2i(320,180)
 var skipped := {}
 var next_id := ""
@@ -78,6 +82,16 @@ func _ready() -> void:
 	comparison.add_child(pair)
 	pair.add_child(clip_choice("Original","Keep the original and move to the next proposal","Reject"))
 	pair.add_child(clip_choice("Proposed","Apply this change and move to the next proposal","Accept"))
+
+	listen_controls = HBoxContainer.new()
+	listen_controls.alignment = BoxContainer.ALIGNMENT_CENTER
+	listen_controls.add_child(button("Listen to Original",listen_to_comparison.bind(0)))
+	listen_controls.add_child(button("Listen to Proposed",listen_to_comparison.bind(1)))
+	listen_controls.hide()
+	layout.add_child(listen_controls)
+	comparison_audio = AudioStreamPlayer.new()
+	comparison_audio.finished.connect(stop_comparison_audio)
+	add_child(comparison_audio)
 
 	review_controls = HBoxContainer.new()
 	review_controls.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -193,8 +207,28 @@ func clip_choice(caption: String, hint: String, action: String) -> Button:
 	return choice
 
 func clear_comparison() -> void:
+	stop_comparison_audio()
+	audio_previews.clear()
+	listen_controls.hide()
 	for preview in previews: preview.texture = null
 	for choice in choices: choice.disabled = true
+
+func listen_to_comparison(side: int) -> void:
+	if audio_previews.size() != 2 or review_pid > 0: return
+	stop_comparison_audio()
+	restore_master_mute = AudioServer.is_bus_mute(0)
+	if restore_master_mute: AudioServer.set_bus_mute(0,false)
+	comparison_audio.stream = audio_previews[side]
+	comparison_audio.play()
+
+func stop_comparison_audio() -> void:
+	if is_instance_valid(comparison_audio): comparison_audio.stop()
+	if restore_master_mute:
+		AudioServer.set_bus_mute(0,true)
+		restore_master_mute = false
+
+func _exit_tree() -> void:
+	stop_comparison_audio()
 
 func _process(delta: float) -> void:
 	clock += delta
@@ -385,6 +419,21 @@ func select_proposal(index: int) -> void:
 	if not DirAccess.dir_exists_absolute(root):
 		details.text = "No preview yet. Render it from Tools."
 		return
+	var audio_root := root.path_join("audio")
+	if FileAccess.file_exists(audio_root.path_join("before.wav")) and FileAccess.file_exists(audio_root.path_join("after.wav")):
+		for side in ["before","after"]:
+			var stream := AudioStreamWAV.load_from_file(audio_root.path_join(side+".wav"))
+			if stream != null: audio_previews.append(stream)
+		if audio_previews.size() == 2:
+			listen_controls.show()
+			for side in previews.size():
+				var name_ := "before" if side == 0 else "after"
+				var waveform := audio_root.path_join(name_+".png")
+				if FileAccess.file_exists(waveform):
+					var sample := Image.load_from_file(waveform)
+					if not sample.is_empty(): previews[side].texture = ImageTexture.create_from_image(sample)
+			for choice in choices: choice.disabled = review_pid > 0
+			return
 	var clips := DirAccess.get_directories_at(root)
 	var requested := "seed-%d-point-%d" % [int(seed_input.value),int(point_input.value)]
 	if requested in clips: clips = PackedStringArray([requested])
@@ -442,6 +491,7 @@ func queue_next() -> void:
 func decide(action: String, feedback_override := "") -> void:
 	var selection := proposal_list.get_selected_items()
 	if selection.is_empty() or review_pid > 0: return
+	stop_comparison_audio()
 	if action in ["Accept","Reject","Feedback"]: queue_next()
 	var entry := manifests[selection[0]]
 	var script := ProjectSettings.globalize_path("res://tools/iterate.ps1")
