@@ -2201,14 +2201,21 @@ func hand_over_overpass(side: int) -> void:
 	reset_receives()
 
 func begin_ball_bounce() -> void:
-	if not StorySession.attack_ball_audio_muted: floor_audio.play()
 	bounce_origin = path_point(flight_end())
 	bounce_origin.y = Flight.FLOOR
 	var before_impact := path_point(maxf(0.0,flight_end()-0.015))
 	var impact_velocity := (bounce_origin-before_impact)/0.015
+	play_floor_impact(absf(impact_velocity.y))
 	bounce_velocity = impact_velocity.slide(Vector3.UP)*0.37
 	bounce_velocity.y = clampf(absf(impact_velocity.y)*0.64,2.10,7.35)*sqrt(1.25)
 	bounce_end = Flight.landing_time(bounce_origin,bounce_velocity)
+
+func play_floor_impact(speed: float, rebound := false) -> void:
+	if StorySession.attack_ball_audio_muted: return
+	var strength := smoothstep(2.0,11.0,speed)
+	floor_audio.volume_db = lerpf(-10.0,1.5,strength)-(6.0 if rebound else 0.0)
+	floor_audio.pitch_scale = lerpf(1.04,0.96,strength)
+	floor_audio.play()
 
 func check_floor(previous: float) -> void:
 	if held_ball: return
@@ -2290,6 +2297,8 @@ func step_match(delta: float, controls: RefCounted) -> void:
 		if bounce_end > 0.0:
 			var time := minf(dead_age-bounce_start,bounce_end)
 			ball.global_position = bounce_origin+bounce_velocity*time+Vector3.DOWN*0.5*Flight.GRAVITY*time*time
+			if time >= bounce_end and dead_age-delta < bounce_start+bounce_end:
+				play_floor_impact(absf(bounce_velocity.y-Flight.GRAVITY*bounce_end),true)
 		if phase == Phase.DEAD and (not is_finite(dead_flight_from) or bounce_end > 0.0) and dead_age >= maxf(0.85,bounce_start+bounce_end+0.15):
 			var settling := false
 			for index in players.size(): settling = settling or owns_action(index)
