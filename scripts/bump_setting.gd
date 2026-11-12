@@ -26,6 +26,7 @@ var passing_skill_override := -1.0
 var setting_skill_override := -1.0
 var quick_hand_receive := false
 var defensive_hand_dig := false
+var hard_dig := false
 var allow_auto_dive := true
 var tracked_hand_dig := Vector3.INF
 var catch_only := false
@@ -121,6 +122,7 @@ func set_custom_backward(animation: Animation) -> void:
 	if animation != null: custom_backward_tracks = animation_tracks(animation)
 
 func reset() -> void:
+	hard_dig = false
 	entry_pose.clear()
 	reach_changed_at = -INF
 	previous_dig_pose.clear()
@@ -215,6 +217,9 @@ func accuracy_bounds(error: float, incoming: Vector3, spin_rps: float) -> Vector
 	if override >= 0.0: skill = override
 	var bounds := Accuracy.spread(error,incoming.length(),spin_rps,skill,setting)
 	if hand_setting and defensive_hand_dig: bounds = bounds*1.32+Vector2(0.30,0.25)
+	if hard_dig:
+		var pace := smoothstep(7.0,24.0,incoming.length())
+		bounds = (bounds*1.48+Vector2(1.45,1.0)+Vector2(1.65,0.75)*pace).min(Vector2(7.2,3.65))
 	return bounds
 
 func update_aim() -> void:

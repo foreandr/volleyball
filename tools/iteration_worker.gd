@@ -1,6 +1,7 @@
 extends "res://tools/iterate_matches.gd"
 
 const Policy = preload("res://scripts/cpu_policy.gd")
+const Review = preload("res://scripts/match_review.gd")
 var run_dir := ""
 var started := 0
 var limit_ms := 0
@@ -8,6 +9,9 @@ var completed := 0
 var observations := 0
 var latest_score: Array = []
 var active_seed := 0
+var demo_findings := {}
+var next_demo_scan := 0
+var reported_demo_findings := -1
 
 func run() -> void:
 	var args := OS.get_cmdline_user_args()
@@ -22,6 +26,7 @@ func run() -> void:
 	run_dir = Policy.DIRECTORY+"/runs/"+args[0]
 	limit_ms = maxi(0,int(args[1]))*60000
 	started = Time.get_ticks_msec()
+	scan_demo_findings()
 	update_status("running")
 	var page := await prepare_match()
 	var game: Node3D = page.demo_match
@@ -63,7 +68,9 @@ func run() -> void:
 			update_status("Match exceeded its time limit")
 			break
 		update_status("running")
-	if should_stop(): update_status("stopped")
+	if should_stop():
+		scan_demo_findings()
+		update_status("stopped")
 	unload_current_scene()
 	await process_frame
 	quit()
@@ -73,9 +80,20 @@ func should_stop() -> bool:
 
 func pause_match(game: Node3D) -> bool:
 	latest_score = game.score.duplicate()
+	if Time.get_ticks_msec() >= next_demo_scan: scan_demo_findings()
 	update_status("running")
 	await process_frame
 	return should_stop()
+
+func scan_demo_findings() -> void:
+	next_demo_scan = Time.get_ticks_msec()+3000
+	Review.collect_findings(demo_findings)
+	var path := run_dir+"/demo-findings.json"
+	if reported_demo_findings != demo_findings.size() or not FileAccess.file_exists(path):
+		if Policy.write_json(path,{"findings":demo_findings.values()}) == OK:
+			reported_demo_findings = demo_findings.size()
+		else:
+			push_warning("Could not write Demo Match review findings")
 
 func keep_observation(point: int, event: Dictionary, frames: Array) -> void:
 	if frames.is_empty(): return
@@ -98,4 +116,5 @@ func append_summary(result: Dictionary) -> bool:
 func update_status(state: String) -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(run_dir))
 	Policy.write_json(Policy.DIRECTORY+"/status.json",{"state":state,"pid":OS.get_process_id(),
-		"run":run_dir,"matches":completed,"observations":observations,"score":latest_score})
+		"run":run_dir,"matches":completed,"observations":observations,
+		"demo_observations":demo_findings.size(),"score":latest_score})

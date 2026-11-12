@@ -1,5 +1,6 @@
 extends RefCounted
 
+const Trace = preload("res://scripts/setting_trace.gd")
 const DIRECTORY := "user://iteration_lab/demo-findings"
 var flight := -1
 var dig := {}
@@ -71,8 +72,31 @@ func save_finding(game: Node3D, evidence: Dictionary) -> String:
 			frames.append(sample)
 	if frames.size() < 2 or DirAccess.make_dir_recursive_absolute(DIRECTORY) != OK: return ""
 	var path := DIRECTORY.path_join("%d-%d.vreplay" % [int(Time.get_unix_time_from_system()*1000000),OS.get_process_id()])
-	var file := FileAccess.open(path,FileAccess.WRITE)
+	var file := FileAccess.open(path+".tmp",FileAccess.WRITE)
 	if file == null: return ""
-	file.store_var({"schema":1,"team_size":game.team_size,"point":game.rallies,"evidence":evidence,"frames":frames})
+	file.store_var({"schema":1,"team_size":game.team_size,"point":game.rallies,"evidence":evidence,"frames":frames,
+		"match_id":"%s:%d" % [game.trace.path,game.trace.feed-game.rallies],"score":game.score.duplicate()})
 	file.close()
-	return path
+	return path if DirAccess.rename_absolute(path+".tmp",path) == OK else ""
+
+static func collect_findings(known: Dictionary) -> void:
+	if not DirAccess.dir_exists_absolute(DIRECTORY): return
+	for name_ in DirAccess.get_files_at(DIRECTORY):
+		if not name_.ends_with(".vreplay") or known.has(name_): continue
+		var path := DIRECTORY.path_join(name_)
+		var file := FileAccess.open(path,FileAccess.READ)
+		if file == null: continue
+		var record: Variant = file.get_var()
+		if not record is Dictionary or not record.get("evidence") is Dictionary: continue
+		var evidence: Dictionary = record.evidence.duplicate(true)
+		evidence["replay"] = ProjectSettings.globalize_path(path)
+		var nearest := {}
+		var distance := INF
+		for sample in record.get("frames",[]):
+			var gap := absf(float(sample.get("time",0.0))-float(evidence.get("time",0.0)))
+			if gap < distance and sample.get("trace") is Dictionary:
+				distance = gap
+				nearest = sample.trace
+		known[name_] = {"source":"demo_match","type":evidence.get("type",""),"time":evidence.get("time",0.0),
+			"point":record.get("point",0),"team_size":record.get("team_size",2),"match_id":record.get("match_id",""),
+			"score":record.get("score",[]),"evidence":evidence,"contact_frame":Trace.json_value(nearest)}

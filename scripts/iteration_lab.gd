@@ -169,7 +169,10 @@ func watch_latest() -> void:
 	if DirAccess.dir_exists_absolute(demo_directory):
 		var clips := DirAccess.get_files_at(demo_directory)
 		clips.sort()
-		if not clips.is_empty(): demo_path = demo_directory.path_join(clips[-1])
+		for index in range(clips.size()-1,-1,-1):
+			if clips[index].ends_with(".vreplay"):
+				demo_path = demo_directory.path_join(clips[index])
+				break
 	var data := Policy.read_json(Policy.DIRECTORY+"/status.json")
 	var run := str(data.get("run",""))
 	var path := run+"/matches.jsonl"

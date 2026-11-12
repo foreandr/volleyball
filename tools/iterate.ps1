@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)]
-    [ValidateSet('Measure','Scout','New','Review','Clip','List','Accept','Reject','Feedback')]
+    [ValidateSet('Measure','Scout','Findings','New','Review','Clip','List','Accept','Reject','Feedback')]
     [string]$Action,
     [ValidatePattern('^[a-z0-9][a-z0-9-]{0,39}$')][string]$Id,
     [string]$Title,
@@ -82,6 +82,18 @@ function Read-Totals($Path) {
     return $totals
 }
 
+function Export-DemoFindings($Result) {
+    $output = Split-Path -Parent $Result
+    New-Item -ItemType Directory -Path $output -Force | Out-Null
+    $reader = Join-Path $PSScriptRoot 'demo_findings.gd'
+    $arguments = @('--headless','--path',('"' + $repo + '"'),'--script',('"' + $reader + '"'),'--',('"' + $Result + '"'))
+    $errors = Join-Path $output 'demo-findings-errors.txt'
+    $run = Start-Process -FilePath $GodotPath -ArgumentList $arguments -WindowStyle Hidden -Wait -PassThru -RedirectStandardError $errors
+    if ($run.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $Result)) {
+        throw "Could not read Demo Match findings. See $errors."
+    }
+}
+
 if ($Action -eq 'List') {
     Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue | ForEach-Object {
         $path = Join-Path $_.FullName 'proposal.json'
@@ -90,9 +102,15 @@ if ($Action -eq 'List') {
     return
 }
 
-if ($Action -in @('Measure','Scout','Review','Clip')) {
+if ($Action -in @('Measure','Scout','Findings','Review','Clip')) {
     if (-not $GodotPath) { $GodotPath = Join-Path $repo '../game/tools/Godot_v4.6-stable_win64.exe' }
     $GodotPath = (Resolve-Path -LiteralPath $GodotPath).Path
+}
+if ($Action -eq 'Findings') {
+    $result = Join-Path $root 'demo-findings.json'
+    Export-DemoFindings $result
+    Write-Output $result
+    return
 }
 if ($Action -in @('Measure','Scout')) {
     $name = $Action.ToLowerInvariant() + '-' + (Get-Date -Format 'yyyyMMdd-HHmmss-fff')
@@ -102,24 +120,31 @@ if ($Action -in @('Measure','Scout')) {
     Write-Output $result
     if ($Action -eq 'Scout') {
         $report = Get-Content -LiteralPath $result -Raw | ConvertFrom-Json
-        $findings = foreach ($match in $report.matches) {
+        $demoReport = Join-Path (Split-Path -Parent $result) 'demo-findings.json'
+        Export-DemoFindings $demoReport
+        $live = Get-Content -LiteralPath $demoReport -Raw | ConvertFrom-Json
+        $simulated = foreach ($match in $report.matches) {
             foreach ($flag in $match.review_flags) {
-                [pscustomobject]@{ seed=$match.seed; point=$flag.point; time=$flag.time; type=$flag.type; evidence=$flag }
+                [pscustomobject]@{ source='simulation'; match_id="seed:$($match.seed)"; seed=$match.seed; point=$flag.point; time=$flag.time; type=$flag.type; evidence=$flag }
             }
         }
+        $findings = @($simulated | Where-Object { $_ }) + @($live.findings | Where-Object { $_ })
         $leads = @($findings | Group-Object -Property type | Sort-Object -Property Count -Descending | ForEach-Object {
             $examples = @($_.Group | Sort-Object -Property @{ Expression={
                 if ($null -ne $_.evidence.margin_m) { $_.evidence.margin_m }
                 elseif ($null -ne $_.evidence.distance_m) { $_.evidence.distance_m }
                 else { 0 }
             } } | Select-Object -First 3)
-            $nextCheck = switch -Wildcard ($_.Name) {
-                'close attempted dig' { 'Replay the approach and platform alignment just before contact.' }
-                '*without an attempt' { 'Check receiver assignment and whether the player could have committed earlier.' }
-                'ball stayed still*' { 'Inspect the preceding contact and ball-flight transition.' }
-                default { 'Inspect the flagged frame before proposing a change.' }
+            $nextCheck = $examples[0].evidence.review
+            if (-not $nextCheck) {
+                $nextCheck = switch -Wildcard ($_.Name) {
+                    'close attempted dig' { 'Replay the approach and platform alignment just before contact.' }
+                    '*without an attempt' { 'Check receiver assignment and whether the player could have committed earlier.' }
+                    'ball stayed still*' { 'Inspect the preceding contact and ball-flight transition.' }
+                    default { 'Inspect the flagged frame before proposing a change.' }
+                }
             }
-            [pscustomobject]@{ type=$_.Name; occurrences=$_.Count; matches=@($_.Group.seed | Sort-Object -Unique).Count; review=$nextCheck; examples=$examples }
+            [pscustomobject]@{ type=$_.Name; occurrences=$_.Count; matches=@($_.Group.match_id | Where-Object { $_ } | Sort-Object -Unique).Count; review=$nextCheck; examples=$examples }
         })
         $scouting = Join-Path (Split-Path -Parent $result) 'scouting.json'
         ConvertTo-Json -InputObject $leads -Depth 10 | Set-Content -LiteralPath $scouting -Encoding UTF8

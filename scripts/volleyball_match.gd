@@ -935,6 +935,7 @@ func aim_receive(index: int) -> void:
 	var destination := cpu_pass_target(index)
 	bump.passing_skill_override = passing_skill
 	bump.setting_skill_override = setting_skill
+	bump.hard_dig = flight_kind in ["spike","dump","block"]
 	if is_human(index) and aim_point.is_finite(): destination = frame.to_local(aim_point)
 	elif side == possession_team and (touches >= 2 or (cpu_dump and index == cpu_choice)): destination = choose_shot(index)
 	bump.destination = Vector2(clampf(destination.x,-6.5,6.5),clampf(destination.z,-6.0,13.0))
@@ -1112,25 +1113,31 @@ func settle_point(delta: float) -> void:
 
 func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_facing := Vector3.INF, chase := false, turn_to_travel := false, turn_rate := 12.5) -> void:
 	if recoveries.has(index) or owns_action(index,true): return
-	if serve.player == players[index]:
+	var actor := players[index]
+	var is_server: bool = serve.player == actor
+	if is_server:
 		if not serve.can_run_after_contact(): return
 		serve.moved_after_contact = true
-	var actor := players[index]
 	var local := frames[team(index)].to_local(target)
 	var offset := (local-actor.position).slide(Vector3.UP)
 	var heading := offset.normalized()
 	var already_running: bool = actor.animator.current_animation == actor.animation_slots["run"]
 	var distance := offset.length()
-	var facing := actor.basis.z.normalized()
-	# Chase the projected contact point. The airborne ball can still be elsewhere.
-	var sprint := chase and distance > (0.55 if already_running else 1.05) and heading.dot(facing) > (0.69 if already_running else 0.79)
+	if is_server and offset.z > 0.75 and offset.z > absf(offset.x):
+		chase = true
+		turn_to_travel = true
+		speed = maxf(speed,6.5)
+	var run_distance := 0.48 if already_running else 0.85
+	var run_alignment := 0.66 if already_running else 0.76
+	var may_run := chase and distance > run_distance
 	var yaw := 0.0
-	if sprint or (turn_to_travel and distance > 0.25):
+	if (may_run and heading.dot(actor.basis.z.normalized()) >= run_alignment) or (turn_to_travel and distance > 0.25):
 		yaw = atan2(heading.x,heading.z)
 	elif receive_facing.is_finite() and not receive_facing.is_zero_approx():
 		yaw = atan2(receive_facing.x,receive_facing.z)
 		if not turn_to_travel: yaw = clampf(yaw,-1.03,1.03)
 	actor.rotation.y = rotate_toward(actor.rotation.y,yaw,delta*(turn_rate if turn_to_travel else 8.0))
+	var sprint := may_run and heading.dot(actor.basis.z.normalized()) >= run_alignment
 	var pace := clampf(speed*1.24,5.85,CPU_SPRINT_SPEED) if sprint else minf(speed,4.35)
 	var before := actor.position
 	var grounded := Court.clamp_setter(before+offset.limit_length(delta*pace),3.43)
@@ -1398,10 +1405,15 @@ func tick_receive(delta: float, previous: float) -> void:
 		var face := toward_incoming(index,catch_point)
 		if face.is_zero_approx(): face = Vector3.BACK
 		var to_drop := (frame.to_local(catch_point)-actor.position).slide(Vector3.UP)
-		if cpu_dig and to_drop.length() > 0.80 and to_drop.normalized().dot(actor.basis.z) < -0.32:
+		var drop_distance := to_drop.length()
+		var drop_heading := to_drop.normalized()
+		var alignment := drop_heading.dot(actor.basis.z.normalized())
+		if cpu_dig and drop_distance > 0.80 and alignment < -0.32:
 			rear_chaser = index
 		var turning_chase := cpu_dig and rear_chaser == index
-		if turning_chase: face = to_drop.normalized() if to_drop.length() > 0.45 else actor.basis.z
+		var forward_chase := is_dig and drop_distance > 1.20 and alignment > 0.48 and cue-elapsed > 0.095
+		var run_to_drop := turning_chase or forward_chase
+		if run_to_drop: face = drop_heading if drop_distance > 0.45 else actor.basis.z
 		var offset := (FOREARM_DIG_REACH if cpu_dig else 0.52) if technique == 0 else hand_receive_reach()
 		if not recovering and not set_jumps[index].active and not bump.low_save.active:
 			var target := catch_point-frame.global_basis*face*offset
@@ -1413,9 +1425,10 @@ func tick_receive(delta: float, previous: float) -> void:
 				speed = clampf(distance/maxf(0.035,lead-reserve),2.0,7.2)
 			elif is_finite(bump.pressed_at):
 				speed = minf(speed,2.0)
-			if turning_chase and to_drop.length() > 1.55: speed = CPU_SPRINT_SPEED
+			if run_to_drop and drop_distance > 1.55: speed = CPU_SPRINT_SPEED
+			var plant := is_finite(bump.pose_started_at) and lead < 0.16 and drop_distance < 1.05
 			var before_move := actor.position
-			move_cpu(index,target,delta,speed,face,is_dig or cpu_setting or free_ball or flight_kind == "serve",turning_chase)
+			move_cpu(index,target,delta,speed,face,not plant and (is_dig or cpu_setting or free_ball or flight_kind == "serve"),run_to_drop and not plant)
 			bump.low_save_approach_velocity = (actor.position-before_move)/maxf(delta,0.001)
 		var prep := 0.39 if technique == 2 else (0.40 if cpu_dig else (0.18 if cpu_setting and technique == 0 else 0.27))
 		if elapsed >= cue-prep: queue_receive(index,technique)
@@ -1882,7 +1895,7 @@ func position_defense(delta: float) -> void:
 	pocket_x[defense_side] = cover
 	if not is_human(near) and not blocks.has(near):
 		var target := frame.to_global(Vector3(clampf(x,-4.15,4.15),0.04,3.42))
-		move_cpu(near,target,delta,7.6 if players[near].position.z < 2.7 else 6.8)
+		move_cpu(near,target,delta,7.6 if players[near].position.z < 2.7 else 6.8,Vector3.INF,true)
 		var attack_ready := remaining <= 0.37
 		var dump_ready := second_ball_eta >= -0.06 and second_ball_eta <= 0.30
 		if absf(players[near].position.x-x) < 0.70 and (attack_ready or dump_ready or overpass_ready):
