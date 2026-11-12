@@ -77,6 +77,7 @@ var contact_destination := Vector2.ZERO
 var touch_time := -INF
 var touch: Vector3
 var hand_anchor: Vector3
+var hand_catch_from := Vector3.INF
 var hand_target := {}
 var release_time := -INF
 var release_point: Vector3
@@ -566,7 +567,8 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 				var push := (global_basis*outgoing).normalized()*0.08*recoil
 				HandPose.apply(setter,setter.to_global(hand_anchor),relax,push,recoil,0.0,true,-(global_basis*incoming))
 		elif hand_setting:
-			update_hand_push(time,follow)
+			# The airborne receiving pose already owns the contact frame.
+			if not (setter_jumping and striking): update_hand_push(time,follow)
 		else:
 			follow_forearm(time,incoming)
 	if not striking: apply_knee_bend(time)
@@ -593,6 +595,7 @@ func begin_hand_contact(point: Vector3, time: float, spread := Vector2.ZERO) -> 
 	touch = point
 	touch_time = time
 	hand_anchor = setter.to_local(to_global(point))
+	hand_catch_from = setter.to_local(HandPose.contact_center(setter)) if setter_jumping else Vector3.INF
 	if catch_only: return
 	outgoing = aim_velocity(touch,spread)
 	var endpoint := flight_point(touch,outgoing,Flight.landing_time(touch,outgoing))
@@ -612,7 +615,9 @@ func update_hand_push(time: float, follow: float) -> void:
 	var blend := 1.0-smoothstep(0.22,0.32,follow)
 	var after_release := time-release_time if is_finite(release_time) else 0.0
 	var torso_follow := smoothstep(0.0,0.10,after_release)
-	HandPose.apply(setter,setter.to_global(hand_anchor),blend,global_basis*push,cushion,torso_follow)
+	var anchor := hand_anchor
+	if setter_jumping and hand_catch_from.is_finite(): anchor = hand_catch_from.lerp(anchor,smoothstep(0.0,0.065,follow))
+	HandPose.apply(setter,setter.to_global(anchor),blend,global_basis*push,cushion,torso_follow)
 	if follow >= delay and not is_finite(release_time):
 		release_time = time
 		release_point = platform_center()
