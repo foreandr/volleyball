@@ -119,6 +119,7 @@ func sync_approach_arm_lift() -> bool:
 	return true
 
 func attack_arm_turn_rate() -> float:
+	if stage == Stage.SET and clock-swing_started <= 0.26: return deg_to_rad(3200.0)
 	return deg_to_rad(1580.0)
 
 func spike_speed_multiplier() -> float:
