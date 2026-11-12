@@ -199,7 +199,7 @@ func step(delta: float) -> void:
 	swing_time += delta*swing_rate if not is_finite(contact_clock) else delta
 	var striking := previous < contact and swing_time >= contact
 	if not moved_after_contact and swing_time <= recovery_end(): pose(contact if striking else swing_time)
-	elif not running: player.animator.advance(delta)
+	elif not running and not external_rally: player.animator.advance(delta)
 	if not is_finite(contact_clock): spin_toss_ball(previous,minf(swing_time,contact),swing_rate)
 	if striking:
 		contact_clock = elapsed-(swing_time-contact)/swing_rate
