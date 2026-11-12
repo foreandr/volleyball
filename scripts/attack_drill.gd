@@ -1296,7 +1296,9 @@ func shot_line_weight(target: Vector3, origin: Vector3) -> float:
 
 func airborne_reach_lean(contact: Vector3, frame: Node3D) -> Vector2:
 	var drift: Vector3 = jump.horizontal_velocity()*0.12
-	var reach := setter.to_local(frame.to_global(contact-drift))-Vector3(-0.24,0.0,0.28)
+	var reach := setter.to_local(frame.to_global(contact-drift))
+	if setter.mirror_animation: reach.x = -reach.x
+	reach -= Vector3(-0.24,0.0,0.28)
 	var tilt := Vector2(reach.z,-reach.x)
 	var angle := clampf((tilt.length()-0.10)*1.20,0.0,0.68)
 	return tilt.normalized()*angle

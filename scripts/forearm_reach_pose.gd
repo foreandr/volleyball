@@ -20,7 +20,7 @@ static func sample(rig: Skeleton3D, author: RefCounted, step: Vector3, travel: V
 			var bone := rig.find_bone(name_)
 			if bone >= 0:
 				pose[bone] = pose[bone].interpolate_with(ready[bone],weight) if centered_back else ready[bone]
-	var scale_: float = rig.global_basis.get_scale().y
+	var scale_: float = rig.global_basis.y.length()
 	var short_straight := tier == 1 and (forward_lunge or short_straight_back)
 	var back_amount := 0.0 if short_straight else clampf(-step.z/0.32,0.0,1.0)
 	var side_lean := clampf(step.x/0.32,-1.0,1.0)

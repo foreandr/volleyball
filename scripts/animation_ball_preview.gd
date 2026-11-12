@@ -201,7 +201,7 @@ func platform(time: float) -> Dictionary:
 		var wrist: Vector3 = rig.global_transform*pose(rig.find_bone("hand_"+side),time,cache).origin
 		elbows.append(elbow)
 		wrists.append(wrist)
-	return Contact.surface(elbows,wrists,0.032*rig.global_basis.get_scale().y)
+	return Contact.surface(elbows,wrists,0.032*rig.global_basis.y.length())
 
 
 func recalculate() -> void:
@@ -348,7 +348,7 @@ func update_practice_platform() -> void:
 	for side in ["l","r"]:
 		elbows.append(rig.global_transform*rig.get_bone_global_pose(rig.find_bone("lowerarm_"+side)).origin)
 		wrists.append(rig.global_transform*rig.get_bone_global_pose(rig.find_bone("hand_"+side)).origin)
-	var surface := Contact.surface(elbows,wrists,0.032*rig.global_basis.get_scale().y)
+	var surface := Contact.surface(elbows,wrists,0.032*rig.global_basis.y.length())
 	practice_reach_center = surface.ball
 	var clearance: Vector3 = surface.ball-surface.surface
 	practice_forearms.assign([

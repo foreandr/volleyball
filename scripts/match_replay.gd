@@ -15,7 +15,7 @@ func capture(match_: Node3D) -> Dictionary:
 	for actor in match_.players:
 		var bones: Array[Transform3D] = []
 		for bone in actor.skeleton.get_bone_count(): bones.append(actor.skeleton.get_bone_pose(bone))
-		actors.append({"root":actor.transform,"model":actor.model.transform,"bones":bones})
+		actors.append({"root":actor.transform,"model":actor.model.transform,"bones":bones,"mirrored":actor.mirror_animation})
 	var shown: Node3D = match_.ball if match_.ball.visible else match_.serve.ball
 	var keys := []
 	for key in match_.key_labels: keys.append([key.text,key.visible])

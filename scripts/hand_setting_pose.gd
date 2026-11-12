@@ -62,7 +62,7 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 			var start_pole := (elbow-shoulder).slide((start-shoulder).normalized())
 			pole = start_pole.normalized().slerp(pole.normalized(),smoothstep(0.0,0.46,blend))
 			# Lead with the hands through the space in front of the chest.
-			wrist = start.lerp(wrist,blend)+Vector3.BACK*sin(PI*blend)*0.16/rig.global_basis.get_scale().y
+			wrist = start.lerp(wrist,blend)+Vector3.BACK*sin(PI*blend)*0.16/rig.global_basis.y.length()
 		author.limb(pose,upper,lower,hand,wrist,pole,1.0,elbow_limit)
 		for digit in ["thumb","index","middle","ring","pinky"]:
 			for joint in ["01","02","03"]:

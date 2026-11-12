@@ -89,6 +89,7 @@ var setter_animation_process: int
 var setter_animator_active: bool
 
 var match_from_home := false
+var match_from_lab_replay := false
 
 func _ready() -> void:
 	process_priority = 10
@@ -115,9 +116,11 @@ func _ready() -> void:
 	if not StorySession.lab_replay_path.is_empty(): call_deferred("open_lab_replay")
 	if StorySession.home_match_size > 0:
 		var size := StorySession.home_match_size
+		var cpu_only := StorySession.home_match_spectator
 		StorySession.home_match_size = 0
+		StorySession.home_match_spectator = false
 		match_from_home = true
-		start_demo_match.call_deferred(size)
+		start_demo_match.call_deferred(size,true,cpu_only)
 	if not StorySession.animation_return.is_empty():
 		var destination: Dictionary = StorySession.animation_return.duplicate()
 		StorySession.animation_return.clear()
@@ -147,18 +150,19 @@ func build_marker_popup() -> void:
 	marker_popup.add_theme_stylebox_override("normal",badge)
 	preview_overlay.add_child(marker_popup)
 	marker_popup.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
-	marker_popup.offset_left = -112
-	marker_popup.offset_right = 112
+	marker_popup.offset_left = -150
+	marker_popup.offset_right = 150
 	marker_popup.offset_top = 16
 	marker_popup.offset_bottom = 54
 	marker_popup.hide()
 
-func show_marker_popup() -> void:
+func show_marker_popup(caption := "Debug marker saved") -> void:
 	if marker_fade != null: marker_fade.kill()
+	marker_popup.text = caption
 	marker_popup.modulate.a = 1.0
 	marker_popup.show()
 	marker_fade = create_tween()
-	marker_fade.tween_interval(0.7)
+	marker_fade.tween_interval(1.45)
 	marker_fade.tween_property(marker_popup,"modulate:a",0.0,0.35)
 	marker_fade.tween_callback(marker_popup.hide)
 
@@ -251,7 +255,7 @@ func show_categories() -> void:
 	content.add_child(match_button)
 	content.add_child(button("Iteration Lab",func(): get_tree().change_scene_to_file("res://scenes/iteration_lab.tscn")))
 
-func start_demo_match(team_size := 2, learn_from_demo := true) -> void:
+func start_demo_match(team_size := 2, learn_from_demo := true, cpu_only := false, mirror_blue_right := true) -> void:
 	stop_blocking_practice()
 	stop_serving_session()
 	stop_setting_drill()
@@ -297,8 +301,13 @@ func start_demo_match(team_size := 2, learn_from_demo := true) -> void:
 		demo_match.reset_match()
 		preview.grab_focus()))
 	demo_match = preload("res://scripts/volleyball_match.gd").new()
+	if learn_from_demo:
+		demo_match.win_score = 21
+		demo_match.auto_rematch = true
 	preview_player.get_parent().add_child(demo_match)
-	demo_match.configure(preview_player,board,status,build_label,team_size,learn_from_demo)
+	demo_match.configure(preview_player,board,status,build_label,team_size,learn_from_demo,mirror_blue_right)
+	demo_match.review_flagged.connect(show_marker_popup)
+	if cpu_only: watch.button_pressed = true
 	show_match_tuning()
 	styles.item_selected.connect(func(index: int): demo_match.set_serve_style(index))
 	player_controls.locomotion = ""
@@ -401,10 +410,13 @@ func open_lab_replay() -> void:
 	if not record is Dictionary or int(record.get("schema",0)) != 1: return
 	var frames: Variant = record.get("frames",[])
 	if not frames is Array or frames.size() < 2: return
-	start_demo_match(2,false)
-	demo_match.set_spectator(true)
+	match_from_lab_replay = true
+	var mirrored := bool(frames[0].actors[1].get("mirrored",false))
+	start_demo_match(int(record.get("team_size",2)),false,true,mirrored)
 	demo_match.replay.previous.assign(frames)
 	toggle_match_replay()
+	var evidence: Dictionary = record.get("evidence",{})
+	if evidence.has("type"): show_marker_popup(str(evidence.type).capitalize())
 
 func toggle_match_replay() -> void:
 	demo_match.toggle_replay()
@@ -2013,6 +2025,9 @@ func cycle_type(direction: int) -> void:
 	refresh_type()
 
 func open_menu() -> void:
+	if match_from_lab_replay and is_instance_valid(demo_match):
+		get_tree().change_scene_to_file("res://scenes/iteration_lab.tscn")
+		return
 	if match_from_home and is_instance_valid(demo_match):
 		get_tree().change_scene_to_file("res://scenes/main.tscn")
 		return

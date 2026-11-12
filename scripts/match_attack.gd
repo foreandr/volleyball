@@ -86,6 +86,7 @@ func tick_attack(delta: float) -> void:
 func spike_body_target(ball_target: Vector3) -> Vector3:
 	var shot := (swing_aim-ball_target).slide(Vector3.UP).normalized()
 	var hitting_side := shot.cross(Vector3.UP)
+	if setter.mirror_animation: hitting_side = -hitting_side
 	var target := ball_target-shot*0.47-hitting_side*0.19
 	target.z = minf(target.z,jump.front_limit)
 	return target

@@ -264,7 +264,7 @@ func pose(time: float) -> void:
 	var bones := prepare_serve_pose(time)
 	var rig: Skeleton3D = player.skeleton
 	var author: RefCounted = player.get_pose_author()
-	var scale_: float = rig.global_basis.get_scale().y
+	var scale_: float = rig.global_basis.y.length()
 	var back := smoothstep(0.0,0.32,time)*(1.0-smoothstep(0.32,CONTACT_TIME,time))
 	var follow := smoothstep(CONTACT_TIME,0.78,time)*(1.0-smoothstep(0.78,1.22,time))
 	var right_shoulder: Vector3 = author.point(bones,"upperarm_r")

@@ -2,6 +2,8 @@ extends Node3D
 
 const Trace = preload("res://scripts/setting_trace.gd")
 const Replay = preload("res://scripts/match_replay.gd")
+const Review = preload("res://scripts/match_review.gd")
+signal review_flagged(caption: String)
 const Player = preload("res://scripts/volleyball_player.gd")
 const Bump = preload("res://scripts/bump_setting.gd")
 const Attack = preload("res://scripts/match_attack.gd")
@@ -147,12 +149,15 @@ var next_touch_cue := INF
 var touched_tape := false
 var stroke := ""
 var team_size := 2
+var win_score := WIN_SCORE
+var auto_rematch := false
+var review := Review.new()
 var rally_setter := -1
 var rally_hitter := -1
 var deep_defenders := [-1,-1]
 var support_lanes := [0.0,0.0]
 
-func configure(actor: Node3D, board: Label, status: Label, build := "", players_per_team := 2, learn_from_demo := false) -> void:
+func configure(actor: Node3D, board: Label, status: Label, build := "", players_per_team := 2, learn_from_demo := false, mirror_blue_right := true) -> void:
 	team_size = clampi(players_per_team,2,3)
 	key_until.resize(team_size*2)
 	jump_set_started.resize(team_size*2)
@@ -178,6 +183,9 @@ func configure(actor: Node3D, board: Label, status: Label, build := "", players_
 			if avatar != actor:
 				avatar.name = ("Teammate" if slot == 1 else "Teammate2") if side == 0 else "Opponent%d" % (slot+1)
 				avatar.team_color = Color("287fda") if side == 0 else Color("d9874e")
+				if side == 0 and slot == 1 and mirror_blue_right:
+					avatar.handedness = "Left"
+					avatar.mirror_animation = true
 				frame.add_child(avatar)
 			avatar.animator.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
 			avatar.get_node("DirectionArrows").hide()
@@ -339,6 +347,7 @@ func set_player_blocks(value: bool) -> void:
 
 func begin_point() -> void:
 	cpu_policy.begin_point()
+	review.reset()
 	replay.finish_point()
 	last_input_at = -INF
 	kick_pressed_until = -INF
@@ -515,7 +524,7 @@ func award(side: int, reason: String) -> void:
 	for index in players.size():
 		if not owns_action(index) and not recoveries.has(index): begin_recovery(index)
 	update_score()
-	if score[side] >= WIN_SCORE and score[side]-score[1-side] >= 2:
+	if score[side] >= win_score and score[side]-score[1-side] >= 2:
 		phase = Phase.FINISHED
 		remember_opponent_reads()
 		if cpu_policy.demo_recording:
@@ -523,7 +532,7 @@ func award(side: int, reason: String) -> void:
 			trace.write("demo_learning_saved",match_clock,{"error":error},true)
 			if error != OK: push_warning("Could not save Demo Match learning: "+error_string(error))
 		var winner := ("Blue wins" if side == 0 else "Orange wins") if spectator else ("You win!" if side == 0 else "CPU wins")
-		info.text = winner+"\nUse Reset Match to play again"
+		info.text = winner+("\nRematch starting soon" if auto_rematch and spectator else "\nUse Reset Match to play again")
 	else:
 		phase = Phase.DEAD
 		var winner := ("Blue point" if side == 0 else "Orange point") if spectator else ("Your point" if side == 0 else "CPU point")
@@ -627,7 +636,10 @@ func choose_shot(index: int, contact := Vector3.INF, block_at := Vector3.INF, pr
 	var best := Vector3(0.0,Flight.FLOOR,10.7)
 	var best_score := -INF
 	var depth_bias := cpu_policy.choose(side,"attack depth",[0,-1,1],0) if not is_human(index) else 0
-	for x in [-4.02,-2.55,0.0,2.55,4.02]:
+	var lanes: Array[float] = [-4.02,-2.55,0.0,2.55,4.02]
+	var line_x := clampf(contact.x,-4.02,4.02)
+	if absf(contact.x) > 2.4: lanes.append(line_x)
+	for x in lanes:
 		for depth in [5.2,6.55,7.35,9.8,12.1]:
 			var target := Vector3(x,Flight.FLOOR,depth)
 			var crossing := lane_at_depth(contact,target,Net.NET_Z)
@@ -655,6 +667,11 @@ func choose_shot(index: int, contact := Vector3.INF, block_at := Vector3.INF, pr
 			var net_time := travel*clampf((Net.NET_Z-contact.z)/(depth-contact.z),0.0,1.0)
 			var net_height := lerpf(contact.y,Flight.FLOOR,net_time/travel)+0.5*Flight.spike_gravity(9.0)*net_time*(travel-net_time)
 			shot_score -= 17.0*(1.0-smoothstep(Net.NET_TOP+Net.RADIUS,Net.NET_TOP+0.25,net_height))
+			var near_pin := smoothstep(1.9,3.0,absf(contact.x))
+			var down_line := 1.0-smoothstep(0.28,1.25,absf(target.x-line_x))
+			var open_line := smoothstep(1.55,3.0,defender_gap)*clear_block
+			var safe_line := smoothstep(Net.NET_TOP+0.24,Net.NET_TOP+0.43,net_height)
+			shot_score += 2.05*near_pin*down_line*open_line*safe_line
 			if depth < Net.NET_Z+3.0:
 				var clearance := smoothstep(Net.NET_TOP+0.25,Net.NET_TOP+0.47,net_height)
 				var open_floor := smoothstep(1.3,2.8,defender_gap)
@@ -1117,6 +1134,7 @@ func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_f
 	grounded.y = move_toward(before.y,PLAYER_GROUND_Y,delta*1.25)
 	actor.position = grounded
 	var movement := actor.basis.inverse()*(actor.position-before).slide(Vector3.UP)
+	if actor.mirror_animation: movement.x = -movement.x
 	actor.animator.speed_scale = lerpf(1.60,1.92,smoothstep(5.85,CPU_SPRINT_SPEED,pace)) if sprint else 1.0
 	actor.play_action("run" if sprint else "idle",0.10)
 	actor.animator.advance(delta)
@@ -1597,7 +1615,7 @@ func pose_fake_dump(actor: Node3D, lead: float) -> void:
 	var pose: Array = []
 	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
 	var shoulder: Vector3 = author.point(pose,"upperarm_r")
-	var target := shoulder+Vector3(-0.23,0.35,0.14)/rig.global_basis.get_scale().y
+	var target := shoulder+Vector3(-0.23,0.35,0.14)/rig.global_basis.y.length()
 	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",target,Vector3(-0.85,0.10,0.30),weight)
 	for part in ["upperarm_r","lowerarm_r","hand_r"]:
 		var bone := rig.find_bone(part)
@@ -1613,7 +1631,7 @@ func start_block(index: int, remaining := INF, reads_second := false) -> void:
 	block.jump_height = block_vertical*0.0254
 	block.landing_recovery = 0.43 if reads_second else 0.13
 	block.begin(actor)
-	if is_finite(remaining): block.tempo = clampf(0.49/maxf(remaining,0.18),1.13,1.70)
+	if is_finite(remaining): block.tempo = clampf((Block.START+Block.AIR*0.5)/maxf(remaining,0.18),1.13,1.80)
 	blocks[index] = block
 	if not is_human(index): cpu_policy.used(team(index),"block lane")
 	show_key(index,"Space")
@@ -2000,8 +2018,18 @@ func tick_match(delta: float, controls: RefCounted) -> void:
 	if replay.active:
 		replay.step(self,delta)
 		return
+	var previous_rallies := rallies
 	step_match(delta,controls)
 	if phase != Phase.FINISHED or dead_age <= 2.0: replay.record(self)
+	if not cpu_policy.demo_recording: return
+	if phase == Phase.LIVE:
+		review.observe(self,delta)
+	elif rallies > previous_rallies:
+		var evidence := review.finding(last_point)
+		if not evidence.is_empty():
+			var path := review.save_finding(self,evidence)
+			trace.write("automatic_review_marker",match_clock,{"point":rallies,"evidence":evidence,"replay":path},true)
+			review_flagged.emit(str(evidence.type))
 
 func step_match(delta: float, controls: RefCounted) -> void:
 	match_clock += delta
@@ -2024,6 +2052,8 @@ func step_match(delta: float, controls: RefCounted) -> void:
 			var settling := false
 			for index in players.size(): settling = settling or owns_action(index)
 			if not settling or dead_age >= 1.55: begin_point()
+		elif phase == Phase.FINISHED and auto_rematch and spectator and dead_age >= maxf(3.0,bounce_start+bounce_end+0.35):
+			reset_match()
 		return
 	if phase == Phase.READY:
 		ready_age += delta

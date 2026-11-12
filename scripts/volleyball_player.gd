@@ -13,6 +13,7 @@ var pose_author: RefCounted
 var display_name := "Player"
 var height_cm: float = Profile.DEFAULTS.height_cm
 var handedness := "Right"
+var mirror_animation := false
 var model: Node3D
 var skeleton: Skeleton3D
 var animator: AnimationPlayer
@@ -22,13 +23,20 @@ func _ready() -> void:
 	set_height_cm(height_cm)
 	add_child(preload("res://scripts/player_direction_arrows.gd").new())
 	model = preload("res://assets/characters/base/Superhero_Male_FullBody.gltf").instantiate()
-	add_child(model)
+	if mirror_animation:
+		var reflection := Node3D.new()
+		reflection.name = "AnimationReflection"
+		reflection.basis = Basis.from_scale(Vector3(-1.0,1.0,1.0))
+		add_child(reflection)
+		reflection.add_child(model)
+	else: add_child(model)
 	skeleton = model.find_child("Skeleton3D",true,false)
 	for mesh: MeshInstance3D in skeleton.find_children("*","MeshInstance3D",true,false):
 		for surface in mesh.mesh.get_surface_count():
 			var original := mesh.mesh.surface_get_material(surface)
 			if original == null: continue
 			var skin := original.duplicate() as StandardMaterial3D
+			if mirror_animation: skin.cull_mode = BaseMaterial3D.CULL_DISABLED
 			skin.roughness = 0.85
 			skin.metallic_specular = 0.2
 			if skin.resource_name.begins_with("MI_Superhero"):
@@ -101,7 +109,16 @@ func get_pose_author() -> RefCounted:
 		pose_author = preload("res://tools/animation_author.gd").new(skeleton,preload("res://assets/animations/goalkeeper_idle.tres"))
 	return pose_author
 
+func animation_side(side: String) -> String:
+	return ("r" if side == "l" else "l") if mirror_animation else side
+
 func pose_reception_reach(step: Vector3, travel: Vector3, weight: float, progress: float, ready: Array[Transform3D], reach: Dictionary, knee_slide: bool, direction: int, contact: Vector3) -> void:
+	if mirror_animation:
+		step.x = -step.x
+		travel.x = -travel.x
+		if reach.side_lunge or reach.rear_diagonal or absf(step.x) > 0.10 and absf(step.x) > absf(step.z)*0.55:
+			reach = reach.duplicate()
+			reach.lead = animation_side(reach.lead)
 	ForearmReach.sample(skeleton,get_pose_author(),step,travel,weight,progress,ready,reach,knee_slide,direction,contact)
 
 func pose_reception_dive(ready: Array[Transform3D], clasp: Array[Transform3D], start: Vector3, heading: Vector3, time: float, ball_point: Vector3, release_time: float, pancake := false, travel_scale := 1.0, track_platform := false, wide_arm := "", slide_heading := Vector3.ZERO) -> void:

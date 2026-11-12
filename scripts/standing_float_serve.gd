@@ -126,7 +126,7 @@ func pose(time: float) -> void:
 	var bones := float_step_pose(time)
 	var rig: Skeleton3D = player.skeleton
 	var author: RefCounted = player.get_pose_author()
-	var scale_: float = rig.global_basis.get_scale().y
+	var scale_: float = rig.global_basis.y.length()
 	if uses_float_arm_pose():
 		var windup := smoothstep(0.09,contact-0.21,time)
 		var drive := smoothstep(contact-0.22,contact,time)

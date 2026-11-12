@@ -427,7 +427,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 					var local := setter.basis.inverse()*(intercept-setter.position)
 					if absf(local.x) > 0.64 and local.z > -0.38 and absf(local.x) > absf(local.z)*0.92:
 						begin_dig_transition(time)
-						low_save.wide_arm = "l" if local.x > 0.0 else "r"
+						low_save.wide_arm = setter.animation_side("l" if local.x > 0.0 else "r")
 				if not low_save.wide_arm.is_empty():
 					# On a fast spike, aiming ahead by a full frame can put the arm past the ball.
 					var lead := minf(0.025,0.14/maxf(0.01,incoming.length()))

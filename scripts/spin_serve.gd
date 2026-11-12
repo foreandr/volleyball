@@ -131,13 +131,13 @@ func spin_toss_ball(previous: float, time: float, rate: float) -> void:
 
 func toss_palm(pose: Array, rig: Skeleton3D, author: RefCounted, _time: float) -> Vector3:
 	var wrist: Vector3 = author.point(pose,"hand_r")
-	var scale_: float = rig.global_basis.get_scale().y
+	var scale_: float = rig.global_basis.y.length()
 	return wrist+Vector3.BACK*0.06/scale_
 
 func position_toss_hands(pose: Array, rig: Skeleton3D, author: RefCounted, time: float, weight: float) -> void:
 	var draw := smoothstep(0.0,0.16,time)*(1.0-smoothstep(0.16,TOSS_STEP,time))
 	var rise := pow(clampf(inverse_lerp(0.15,TOSS_STEP,time),0.0,1.0),1.65)
-	var scale_: float = rig.global_basis.get_scale().y
+	var scale_: float = rig.global_basis.y.length()
 	var shoulder: Vector3 = author.point(pose,"upperarm_r")
 	var left_shoulder: Vector3 = author.point(pose,"upperarm_l")
 	var outside := (shoulder-left_shoulder).slide(Vector3.UP).normalized()
@@ -158,7 +158,7 @@ func shape_float_strike(pose: Array, rig: Skeleton3D, author: RefCounted, time: 
 	var drive_start := SPIN_CONTACT-0.16
 	var extension := smoothstep(drive_start,SPIN_CONTACT,time)
 	var follow := 1.0-pow(1.0-clampf(hit_age/0.19,0.0,1.0),2.0)
-	var scale_: float = rig.global_basis.get_scale().y
+	var scale_: float = rig.global_basis.y.length()
 	var shoulder: Vector3 = author.point(pose,"upperarm_r")
 	var contact := to_local(rig.to_global(shoulder+Vector3(-0.05,0.67,0.33+SERVE_CONTACT_LEAD)/scale_))
 	var source_index := roundi((swing_start-APPROACH_START)*APPROACH_SAMPLE_RATE)

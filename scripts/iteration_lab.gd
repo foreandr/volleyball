@@ -164,11 +164,18 @@ func stop_run() -> void:
 	else: status.text = "Could not stop self-play."
 
 func watch_latest() -> void:
+	var demo_directory: String = preload("res://scripts/match_review.gd").DIRECTORY
+	var demo_path := ""
+	if DirAccess.dir_exists_absolute(demo_directory):
+		var clips := DirAccess.get_files_at(demo_directory)
+		clips.sort()
+		if not clips.is_empty(): demo_path = demo_directory.path_join(clips[-1])
 	var data := Policy.read_json(Policy.DIRECTORY+"/status.json")
 	var run := str(data.get("run",""))
 	var path := run+"/matches.jsonl"
 	if run.is_empty() or not FileAccess.file_exists(path):
-		details.text = "The run has no replay findings yet."
+		if demo_path.is_empty(): details.text = "No replay findings yet."
+		else: open_finding(demo_path)
 		return
 	var lines := FileAccess.get_file_as_string(path).split("
 ",false)
@@ -178,10 +185,15 @@ func watch_latest() -> void:
 		var flags: Array = match_.get("review_flags",[])
 		for flag in flags:
 			if not flag.has("replay"): continue
-			StorySession.lab_replay_path = str(flag.replay)
-			get_tree().change_scene_to_file("res://scenes/story_animations.tscn")
+			var worker_path := str(flag.replay)
+			open_finding(demo_path if not demo_path.is_empty() and FileAccess.get_modified_time(demo_path) >= FileAccess.get_modified_time(worker_path) else worker_path)
 			return
-	details.text = "The run has no replay findings yet."
+	if demo_path.is_empty(): details.text = "No replay findings yet."
+	else: open_finding(demo_path)
+
+func open_finding(path: String) -> void:
+	StorySession.lab_replay_path = path
+	get_tree().change_scene_to_file("res://scenes/story_animations.tscn")
 
 func refresh_proposals() -> void:
 	proposal_list.clear()

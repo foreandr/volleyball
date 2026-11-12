@@ -173,7 +173,7 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 	var pelvis := rig.find_bone("pelvis")
 	var parent := rig.get_bone_parent(pelvis)
 	var hips: Transform3D = author.world_pose(pose,parent)
-	var scale_: float = rig.global_basis.get_scale().y
+	var scale_: float = rig.global_basis.y.length()
 	var lead_age := elapsed-entry_time
 	var lead_plant_load := 0.0
 	if lead_time > 0.0:

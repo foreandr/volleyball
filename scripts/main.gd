@@ -1,6 +1,12 @@
 extends Control
 
 func _ready() -> void:
+	if not StorySession.demo_launch_consumed and "--demo-match" in OS.get_cmdline_user_args():
+		StorySession.demo_launch_consumed = true
+		StorySession.home_match_size = 2
+		StorySession.home_match_spectator = true
+		get_tree().change_scene_to_file.call_deferred("res://scenes/story_animations.tscn")
+		return
 	var background := ColorRect.new()
 	background.color = Color("102b40")
 	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)

@@ -56,7 +56,7 @@ func plan(actor: Node3D, path: Callable, time: float, end: float, clip: Animatio
 		maximum += 0.80*momentum
 		if distance < minimum or distance > maximum or offset.normalized().dot(actor.basis.z)<(-0.12 if wide else (0.30 if quick_save else 0.62)): continue
 		pancake = low_save
-		wide_arm = ("l" if local.x > 0.0 else "r") if wide else ""
+		wide_arm = actor.animation_side("l" if local.x > 0.0 else "r") if wide else ""
 		active = true
 		aim = point
 		platform_aim = point

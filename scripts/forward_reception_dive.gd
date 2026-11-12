@@ -66,7 +66,7 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 	var pose := ready.duplicate()
 	var pelvis := rig.find_bone("pelvis")
 	var parent := rig.get_bone_parent(pelvis)
-	var scale_: float = rig.global_basis.get_scale().y
+	var scale_: float = rig.global_basis.y.length()
 	pose[pelvis].origin -= author.world_pose(pose,parent).basis.inverse()*Vector3.UP*drop/scale_
 	author.rotate_world(pose,"pelvis",Vector3.RIGHT,pitch)
 	var extension := smoothstep(0.19,0.39,time)

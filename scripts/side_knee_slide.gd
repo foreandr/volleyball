@@ -9,6 +9,9 @@ static func sample(actor: Node3D, author: RefCounted, from_pose: Array[Transform
 	var rig: Skeleton3D = actor.skeleton
 	var sign_ := 1.0 if side == "l" else -1.0
 	var lateral := actor.basis.x.normalized()*sign_
+	if actor.mirror_animation:
+		side = actor.animation_side(side)
+		sign_ = -sign_
 	var slide := 0.28*smoothstep(0.0,0.32,time)
 	actor.position = start+lateral*slide
 	var down := smoothstep(0.0,0.24,time)
@@ -20,7 +23,7 @@ static func sample(actor: Node3D, author: RefCounted, from_pose: Array[Transform
 	var knee: Vector3 = author.point(pose,"calf_"+side)
 	var thigh_length := hip.distance_to(knee)
 	var knee_offset := Vector3(sign_*0.18,0.0,0.16)
-	var scale_: float = rig.global_basis.get_scale().y
+	var scale_: float = rig.global_basis.y.length()
 	var floor: float = rig.to_local(Vector3(actor.position.x,0.0,actor.position.z)).y
 	knee_offset.y = -sqrt(maxf(0.0,thigh_length*thigh_length-knee_offset.length_squared()))
 	var drop := hip.y+knee_offset.y-floor-0.105/scale_

@@ -48,7 +48,7 @@ func prepare_toss_hands(pose: Array, rig: Skeleton3D, author: RefCounted, time: 
 	if weight > 0.0: position_toss_hands(pose,rig,author,time,weight)
 	var drive_weight := smoothstep(toss+0.07,lerpf(toss,takeoff,0.42),time)*(1.0-smoothstep(takeoff+0.015,takeoff+0.19,time))
 	if drive_weight <= 0.0: return
-	var scale_: float = rig.global_basis.get_scale().y
+	var scale_: float = rig.global_basis.y.length()
 	var lift := smoothstep(takeoff-0.18,takeoff+0.055,time)
 	for side in ["l","r"]:
 		var outward := 1.0 if side == "l" else -1.0
@@ -63,7 +63,7 @@ func shape_float_strike(pose: Array, rig: Skeleton3D, author: RefCounted, time: 
 	if weight <= 0.0: return
 	var extension := smoothstep(STRIKE-0.16,STRIKE,time)
 	var follow := 0.64*smoothstep(STRIKE,STRIKE+0.26,time)
-	var scale_: float = rig.global_basis.get_scale().y
+	var scale_: float = rig.global_basis.y.length()
 	var shoulder: Vector3 = author.point(pose,"upperarm_r")
 	var contact := shoulder+Vector3(-0.04,0.61,0.36+SERVE_CONTACT_LEAD)/scale_
 	var shot_direction := Vector3.BACK
@@ -75,7 +75,7 @@ func shape_float_strike(pose: Array, rig: Skeleton3D, author: RefCounted, time: 
 
 func position_toss_hands(pose: Array, rig: Skeleton3D, author: RefCounted, time: float, weight: float) -> void:
 	var lift := smoothstep(0.08,toss_release_time(),time)
-	var scale_: float = rig.global_basis.get_scale().y
+	var scale_: float = rig.global_basis.y.length()
 	var chest: Vector3 = author.point(pose,"spine_03")
 	var center := chest+Vector3(0.0,-0.24+0.60*lift,0.47)/scale_
 	for side in ["l","r"]:

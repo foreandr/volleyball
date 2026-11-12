@@ -1,7 +1,7 @@
 extends RefCounted
 
 const HandPose = preload("res://scripts/hand_setting_pose.gd")
-const START := 0.13
+const START := 0.16
 const AIR := 0.74
 const HEIGHT := 1.16
 var actor: Node3D
@@ -25,7 +25,9 @@ func step(delta: float, world_ball: Vector3) -> bool:
 	age += delta*tempo
 	var phase := clampf((age-START)/AIR,0.0,1.0)
 	var lift := 4.0*jump_height*phase*(1.0-phase)
-	actor.position = base+Vector3.UP*(lift-0.12*sin(PI*clampf(age/START,0.0,1.0)))
+	var load := sin(PI*clampf(age/START,0.0,1.0))
+	var squat := 0.20*load*load
+	actor.position = base+Vector3.UP*(lift-squat)
 	actor.animator.seek(0.0,true)
 	var rig: Skeleton3D = actor.skeleton
 	var author: RefCounted = actor.get_pose_author()
@@ -33,7 +35,17 @@ func step(delta: float, world_ball: Vector3) -> bool:
 	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
 	var weight := smoothstep(0.04,0.30,age)*(1.0-smoothstep(0.71,0.97,age))
 	var aim := rig.to_local(world_ball)
-	var scale_: float = rig.global_basis.get_scale().y
+	var scale_: float = rig.global_basis.y.length()
+	if squat > 0.00001:
+		var drop := rig.global_basis.inverse()*(Vector3.UP*squat)
+		for side in ["l","r"]:
+			var thigh: String = "thigh_"+side
+			var knee: String = "calf_"+side
+			var foot: String = "foot_"+side
+			var ankle: Transform3D = author.world_pose(pose,rig.find_bone(foot))
+			var bend: Vector3 = author.point(pose,knee)-author.point(pose,thigh)
+			author.limb(pose,thigh,knee,foot,ankle.origin+drop,bend)
+			author.set_world_basis(pose,foot,ankle.basis)
 	previous_hands = hands.duplicate()
 	previous_wrists = wrists.duplicate()
 	hands.clear()
@@ -69,7 +81,7 @@ func step(delta: float, world_ball: Vector3) -> bool:
 		previous_wrists = wrists.duplicate()
 	for bone in rig.get_bone_count():
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.orthonormalized().get_rotation_quaternion())
-	if age < 0.89+landing_recovery: return true
+	if age < START+AIR+0.02+landing_recovery: return true
 	actor.position = base
 	actor.animator.seek(0.0,true)
 	return false
