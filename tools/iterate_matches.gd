@@ -65,6 +65,9 @@ func prepare_match() -> Node:
 func pause_match(_game: Node3D) -> bool:
 	return false
 
+func observation_batch_ticks() -> int:
+	return 30
+
 func keep_observation(_point: int, _event: Dictionary, _frames: Array) -> void:
 	pass
 
@@ -88,8 +91,11 @@ func run_match(page: Node, match_seed: int, review_point: int, output_dir: Strin
 	var stuck_frames := 0
 	var last_ball := Vector3.INF
 	var flags := []
+	var batch_ticks := observation_batch_ticks()
 	for tick in range(game.WIN_SCORE*TICKS_PER_TARGET_POINT):
-		if watching and tick%30 == 0 and await pause_match(game): break
+		if watching and tick%batch_ticks == 0:
+			if await pause_match(game): break
+			batch_ticks = observation_batch_ticks()
 		game.step_match(STEP,page.player_controls)
 		var replay_frame := {}
 		if watching:

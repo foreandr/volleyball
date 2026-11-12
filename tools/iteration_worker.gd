@@ -3,6 +3,9 @@ extends "res://tools/iterate_matches.gd"
 const Policy = preload("res://scripts/cpu_policy.gd")
 const Review = preload("res://scripts/match_review.gd")
 const IterationRun = preload("res://scripts/iteration_run.gd")
+const PATTERN_PATH := Policy.DIRECTORY+"/training-patterns.json"
+const SAMPLE_INTERVAL := 86400
+const SAMPLE_RETENTION := 14*86400
 var worker_lock := TCPServer.new()
 var run_dir := ""
 var started := 0
@@ -21,6 +24,13 @@ var batch_started := 0
 var next_status_at := 0
 var saved_matches := 0
 var faster := false
+var build := ""
+var patterns := {}
+var duplicate_findings := 0
+var next_pattern_save := 0
+var next_prune := 0
+var pattern_changes := false
+var simulated_seconds := 0.0
 
 func run() -> void:
 	var args := OS.get_cmdline_user_args()
@@ -48,6 +58,10 @@ func run() -> void:
 		quit()
 		return
 	var page := await prepare_match()
+	build = page.build_label
+	patterns = Policy.read_json(PATTERN_PATH)
+	if patterns.is_empty(): patterns = Policy.read_json(PATTERN_PATH+".bak")
+	prune_duplicate_replays()
 	var game: Node3D = page.demo_match
 	game.cpu_policy.training = true
 	game.cpu_policy.load_profile()
@@ -92,6 +106,7 @@ func run() -> void:
 	if should_stop():
 		scan_demo_findings()
 		update_status("stopped")
+	save_patterns()
 	unload_current_scene()
 	await process_frame
 	quit()
@@ -99,14 +114,22 @@ func run() -> void:
 func should_stop() -> bool:
 	return FileAccess.file_exists(run_dir+"/stop") or (limit_ms > 0 and Time.get_ticks_msec()-started >= limit_ms)
 
+func observation_batch_ticks() -> int:
+	return 120 if faster else 30
+
 func pause_match(game: Node3D) -> bool:
 	latest_score = game.score.duplicate()
+	simulated_seconds = game.match_clock
 	var now := Time.get_ticks_msec()
 	if now >= next_demo_scan: scan_demo_findings()
 	if now >= next_status_at: update_status("running")
+	if now >= next_pattern_save: save_patterns()
+	if now >= next_prune: prune_duplicate_replays()
 	if should_stop(): return true
-	var rest := IterationRun.training_rest(now-batch_started,faster)
-	await create_timer(rest).timeout
+	if faster:
+		await process_frame
+	else:
+		await create_timer(IterationRun.training_rest(now-batch_started,false)).timeout
 	batch_started = Time.get_ticks_msec()
 	return should_stop()
 
@@ -127,6 +150,28 @@ func scan_demo_findings() -> void:
 func keep_observation(point: int, event: Dictionary, frames: Array) -> void:
 	if frames.is_empty(): return
 	var event_time := float(event.get("time",frames.back().time))
+	var sample_frame: Dictionary = frames.back()
+	for frame in frames:
+		if float(frame.time) >= event_time:
+			sample_frame = frame
+			break
+	var action_label := ""
+	var player := int(event.get("player",-1))
+	var keys: Array = sample_frame.get("keys",[])
+	if player >= 0 and player < keys.size() and keys[player][1]:
+		action_label = str(keys[player][0])
+	var signature := JSON.stringify([build,event.get("category",""),event.get("type",""),
+		event.get("action",""),event.get("surface",""),event.get("reason",""),
+		str(sample_frame.get("info","")).get_slice(" | ",0),action_label])
+	var pattern: Dictionary = patterns.get_or_add(signature,{"count":0,"last_saved":0,"samples":[]})
+	pattern.count += 1
+	pattern_changes = true
+	event["pattern_count"] = pattern.count
+	var now := int(Time.get_unix_time_from_system())
+	var samples: Array = pattern.samples
+	if samples.size() >= 3 and now-int(pattern.last_saved) < SAMPLE_INTERVAL:
+		duplicate_findings += 1
+		return
 	var lookback := 2.65 if event.get("category","") == "setting" else 1.35
 	var nearby := frames.filter(func(frame: Dictionary): return float(frame.time) >= event_time-lookback and float(frame.time) <= event_time+0.40)
 	var path := run_dir+"/seed-%d-point-%d-%d.vreplay" % [active_seed,point,Time.get_ticks_usec()]
@@ -134,11 +179,39 @@ func keep_observation(point: int, event: Dictionary, frames: Array) -> void:
 	if file == null: return
 	file.store_var({"schema":1,"seed":active_seed,"point":point,"evidence":event,"frames":frames if nearby.size() < 2 else nearby})
 	file.close()
-	file.close()
 	event["replay"] = path
 	if append_row(run_dir+"/observations.jsonl",{"seed":active_seed,"point":point,"evidence":event}):
+		samples.append({"path":path,"saved":now})
+		pattern.last_saved = now
 		saved_findings += 1
 		latest_finding = {"number":saved_findings,"type":event.get("type","Finding saved"),"action":event.get("action",""),"replay":path}
+	else:
+		DirAccess.remove_absolute(path)
+
+func save_patterns() -> void:
+	next_pattern_save = Time.get_ticks_msec()+10000
+	if not pattern_changes: return
+	if Policy.write_json(PATTERN_PATH,patterns) == OK:
+		pattern_changes = false
+	else:
+		push_warning("Could not save training pattern counts")
+
+func prune_duplicate_replays() -> void:
+	next_prune = Time.get_ticks_msec()+3600000
+	var cutoff := int(Time.get_unix_time_from_system())-SAMPLE_RETENTION
+	for pattern in patterns.values():
+		var samples: Array = pattern.samples
+		# Preserve the first example and the two newest examples for each pattern.
+		for index in range(samples.size()-3,0,-1):
+			var sample: Dictionary = samples[index]
+			var path := str(sample.path).simplify_path()
+			if int(sample.saved) >= cutoff or not path.begins_with(Policy.DIRECTORY+"/runs/"):
+				continue
+			if not path.get_file().begins_with("seed-") or not path.ends_with(".vreplay"):
+				continue
+			if not FileAccess.file_exists(path) or DirAccess.remove_absolute(path) == OK:
+				samples.remove_at(index)
+				pattern_changes = true
 
 func append_summary(result: Dictionary) -> bool:
 	return append_row(run_dir+"/matches.jsonl",result)
@@ -158,4 +231,6 @@ func update_status(state: String) -> void:
 	Policy.write_json(Policy.DIRECTORY+"/status.json",{"state":state,"pid":OS.get_process_id(),
 		"run":run_dir,"matches":completed,"saved_matches":saved_matches,"observations":observations,
 		"heartbeat":Time.get_unix_time_from_system(),"faster":faster,
+		"unique_patterns":patterns.size(),"duplicate_findings":duplicate_findings,
+		"simulated_seconds":simulated_seconds,
 		"latest_finding":latest_finding,"demo_observations":demo_findings.size(),"player_markers":player_markers.size(),"score":latest_score})

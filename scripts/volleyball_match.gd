@@ -2275,7 +2275,7 @@ func report_review_evidence(evidence: Dictionary) -> void:
 
 func step_match(delta: float, controls: RefCounted) -> void:
 	match_clock += delta
-	if match_clock >= trace.next_sample: trace.sample(match_clock,trace_snapshot())
+	if trace.file != null and match_clock >= trace.next_sample: trace.sample(match_clock,trace_snapshot())
 	animated.fill(false)
 	update_player_guide()
 	if phase in [Phase.DEAD,Phase.FINISHED]:
