@@ -232,7 +232,10 @@ func refresh_status() -> void:
 		review_pid = -1
 		var message := FileAccess.get_file_as_string(result_log).strip_edges() if FileAccess.file_exists(result_log) else "Error: Review tool did not return a result."
 		refresh_proposals()
-		if message.begins_with("Error:"): details.text = message.get_slice("\n",0)
+		details.text = message.get_slice("\n",0)
+	elif review_pid < 0:
+		var pending := read_pending_proposals()
+		if pending != manifests: update_proposals(pending, true)
 
 func build_finding_popup() -> void:
 	finding_popup = label("",16)
@@ -323,30 +326,42 @@ func open_finding(path: String) -> void:
 	get_tree().change_scene_to_file("res://scenes/story_animations.tscn")
 
 func refresh_proposals() -> void:
-	proposal_list.clear()
-	manifests.clear()
-	frames.clear()
-	clear_comparison()
-	proposal_title.text = "Iteration Lab"
-	proposal_description.hide()
-	review_controls.hide()
-	details.text = "No proposals to review."
+	update_proposals(read_pending_proposals(), false)
+
+func read_pending_proposals() -> Array[Dictionary]:
+	var pending: Array[Dictionary] = []
 	var root := ProjectSettings.globalize_path("res://work/iterations")
-	if not DirAccess.dir_exists_absolute(root): return
-	var selected := -1
-	var next_index := 0
 	for id in DirAccess.get_directories_at(root):
 		var manifest := Policy.read_json(root.path_join(id).path_join("proposal.json"))
 		if manifest.get("status","") != "pending" or skipped.has(id): continue
 		manifest["directory"] = root.path_join(id)
-		if id == selected_id: selected = manifests.size()
-		if id == next_id: next_index = manifests.size()
-		manifests.append(manifest)
+		pending.append(manifest)
+	return pending
+
+func update_proposals(pending: Array[Dictionary], preserve_clip: bool) -> void:
+	var previous := proposal_list.get_selected_items()
+	var playing_entry := manifests[previous[0]] if preserve_clip and not previous.is_empty() else {}
+	proposal_list.clear()
+	manifests = pending
+	var selected := -1
+	var next_index := 0
+	for index in manifests.size():
+		var manifest := manifests[index]
+		var id := str(manifest.id)
+		if id == selected_id: selected = index
+		if id == next_id: next_index = index
 		proposal_list.add_item(str(manifest.get("title",id)))
 	if not manifests.is_empty():
 		if selected < 0: selected = next_index
 		proposal_list.select(selected)
-		select_proposal(selected)
+		if playing_entry != manifests[selected]: select_proposal(selected)
+	else:
+		frames.clear()
+		clear_comparison()
+		proposal_title.text = "Iteration Lab"
+		proposal_description.hide()
+		review_controls.hide()
+		details.text = "No proposals to review."
 
 func select_proposal(index: int) -> void:
 	var entry := manifests[index]
@@ -427,6 +442,6 @@ func decide(action: String) -> void:
 	var wrapper := ProjectSettings.globalize_path("res://tools/iteration_decision.ps1")
 	var feedback := Marshalls.utf8_to_base64(note.text)
 	review_pid = OS.create_process("pwsh.exe",["-NoProfile","-WindowStyle","Hidden","-File",wrapper,
-		script,action,str(entry.id),result_log,str(int(seed_input.value)),str(int(point_input.value)),feedback if not feedback.is_empty() else "-"])
+		script,action,str(entry.id),result_log,str(int(seed_input.value)),str(int(point_input.value)),feedback if not feedback.is_empty() else "-",str(entry.candidate)])
 	for choice in choices: choice.disabled = review_pid > 0
 	details.text = "Could not open the review tool." if review_pid < 0 else "Working…"

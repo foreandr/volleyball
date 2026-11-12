@@ -6,6 +6,7 @@ param(
     [ValidatePattern('^[a-z0-9][a-z0-9-]{0,39}$')][string]$Id,
     [string]$Title,
     [string]$Note,
+    [string]$ExpectedRevision,
     [ValidateRange(1,2000)][int]$Matches = 3,
     [int]$Seed = 41,
     [ValidateRange(1,100)][int]$Point = 1,
@@ -24,7 +25,13 @@ function Invoke-Git {
 }
 
 function Write-Entry {
-    $entry | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $manifest -Encoding UTF8
+    $temporary = "$manifest.$PID.tmp"
+    try {
+        $entry | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $temporary -Encoding UTF8
+        [IO.File]::Move($temporary, $manifest, $true)
+    } finally {
+        if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary }
+    }
 }
 
 function Invoke-Simulation($Project, $Result, $Count, $ReviewPoint = 0, $SimulationScript = $runner) {
@@ -223,6 +230,9 @@ if ($Action -eq 'New') {
 }
 
 $entry = Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
+if ($ExpectedRevision -and ($entry.status -ne 'pending' -or $entry.candidate -ne $ExpectedRevision)) {
+    throw [InvalidOperationException]::new('ProposalChanged')
+}
 if ($entry.status -in @('accepted','rejected')) { throw "Proposal is already $($entry.status)." }
 if ($Action -eq 'Feedback') {
     if (-not $Note) { throw 'Enter feedback before sending the proposal back.' }
@@ -253,7 +263,11 @@ if ($Action -eq 'Accept') {
     } else {
         $changed = @(Invoke-Git diff --name-only $entry.base $live)
         $overlap = @(Invoke-Git diff --name-only $entry.base $revision | Where-Object { $_ -in $changed })
-        if ($overlap.Count) { throw 'The live build changed in the same files. Run Review again to test this proposal against the latest build.' }
+        if ($overlap.Count) {
+            $entry.status = 'needs_review'
+            Write-Entry
+            throw [InvalidOperationException]::new('ProposalNeedsReview')
+        }
         Invoke-Git cherry-pick "$($entry.base)..$revision"
     }
     $entry.status = 'accepted'

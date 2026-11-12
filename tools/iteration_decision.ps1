@@ -1,7 +1,8 @@
-param([string]$Tool,[ValidateSet('Accept','Reject','Clip','Feedback','Review')][string]$Action,[string]$Id,[string]$Output,[int]$Seed,[int]$Point,[string]$Feedback)
+param([string]$Tool,[ValidateSet('Accept','Reject','Clip','Feedback','Review')][string]$Action,[string]$Id,[string]$Output,[int]$Seed,[int]$Point,[string]$Feedback,[string]$Revision)
 $ErrorActionPreference='Stop'
 try {
     $argsForReview = @{ Action=$Action; Id=$Id }
+    if ($Action -in @('Accept','Reject') -and $Revision) { $argsForReview.ExpectedRevision = $Revision }
     if ($Action -eq 'Clip') {
         $argsForReview.Seed = $Seed
         $argsForReview.Point = $Point
@@ -21,5 +22,10 @@ try {
     }
     $message | Set-Content -LiteralPath $Output -Encoding utf8
 } catch {
-    ('Error: ' + $_.Exception.Message) | Set-Content -LiteralPath $Output -Encoding utf8
+    $message = switch ($_.Exception.Message) {
+        'ProposalNeedsReview' { 'Proposal moved out of the queue for retesting.' }
+        'ProposalChanged' { 'Proposal updated. Review the latest comparison.' }
+        default { 'Error: ' + $_.Exception.Message }
+    }
+    $message | Set-Content -LiteralPath $Output -Encoding utf8
 }
