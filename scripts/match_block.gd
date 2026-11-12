@@ -36,7 +36,9 @@ func step(delta: float, world_ball: Vector3) -> bool:
 	var author: RefCounted = actor.get_pose_author()
 	var pose: Array = []
 	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
-	var weight := smoothstep(0.04,0.30,age)*(1.0-smoothstep(0.71,0.97,age))
+	var lower_start := 0.71 if overpass_swing else 0.79
+	var lower_end := 0.97 if overpass_swing else 1.02
+	var weight := smoothstep(0.04,0.30,age)*(1.0-smoothstep(lower_start,lower_end,age))
 	var aim := rig.to_local(world_ball)
 	var scale_: float = rig.global_basis.y.length()
 	if squat > 0.00001:
