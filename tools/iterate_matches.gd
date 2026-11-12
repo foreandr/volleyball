@@ -51,7 +51,7 @@ func prepare_match() -> Node:
 	await process_frame
 	var page := current_scene
 	page.set_process(false)
-	page.start_demo_match()
+	page.start_demo_match(2,false)
 	var game: Node3D = page.demo_match
 	game.set_spectator(true)
 	game.set_attack_vertical(40)

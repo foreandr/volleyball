@@ -152,13 +152,14 @@ var rally_hitter := -1
 var deep_defenders := [-1,-1]
 var support_lanes := [0.0,0.0]
 
-func configure(actor: Node3D, board: Label, status: Label, build := "", players_per_team := 2) -> void:
+func configure(actor: Node3D, board: Label, status: Label, build := "", players_per_team := 2, learn_from_demo := false) -> void:
 	team_size = clampi(players_per_team,2,3)
 	key_until.resize(team_size*2)
 	jump_set_started.resize(team_size*2)
 	animated.resize(team_size*2)
 	trace.open(build)
-	cpu_policy.load_profile()
+	cpu_policy.demo_recording = learn_from_demo
+	if not learn_from_demo: cpu_policy.load_profile()
 	human = actor
 	saved_transform = actor.transform
 	saved_callback = actor.animator.callback_mode_process
@@ -250,7 +251,8 @@ func configure(actor: Node3D, board: Label, status: Label, build := "", players_
 	floor_audio = make_ball_audio(preload("res://assets/audio/ball_floor.wav"),1.5)
 	net_audio = Net.contact_sound()
 	add_child(net_audio)
-	begin_point()
+	if learn_from_demo: reset_match()
+	else: begin_point()
 
 func stop() -> void:
 	if replay.active: toggle_replay()
@@ -309,6 +311,17 @@ func server_index() -> int:
 
 func reset_match() -> void:
 	if replay.active: toggle_replay()
+	if cpu_policy.demo_recording:
+		cpu_policy.load_profile()
+		cpu_policy.load_demo(team_size,spectator)
+		cpu_policy.demo_exploring = spectator
+		completed_read_matches = cpu_policy.demo_matches
+		carried_shot_reads = [{},{}]
+		for side in mini(2,cpu_policy.demo_shot_history.size()):
+			var history: Dictionary = cpu_policy.demo_shot_history[side]
+			for zone in history:
+				var sample: Array = history[zone]
+				carried_shot_reads[side][int(zone)] = Vector2(float(sample[0]),float(sample[1]))
 	replay.reset()
 	last_point.clear()
 	last_called_set_x = [INF,INF]
@@ -474,8 +487,9 @@ func start_serve() -> void:
 	if serve_pending: return
 	serve_pending = true
 	var serving_side := team(server_index())
-	cpu_policy.used(serving_side,"serve type")
-	cpu_policy.used(serving_side,"serve lane")
+	if not is_human(server_index()):
+		cpu_policy.used(serving_side,"serve type")
+		cpu_policy.used(serving_side,"serve lane")
 	show_key(server_index(),"Space")
 	serve.serve()
 
@@ -504,6 +518,10 @@ func award(side: int, reason: String) -> void:
 	if score[side] >= WIN_SCORE and score[side]-score[1-side] >= 2:
 		phase = Phase.FINISHED
 		remember_opponent_reads()
+		if cpu_policy.demo_recording:
+			var error: Error = cpu_policy.save_demo(team_size,spectator,carried_shot_reads)
+			trace.write("demo_learning_saved",match_clock,{"error":error},true)
+			if error != OK: push_warning("Could not save Demo Match learning: "+error_string(error))
 		var winner := ("Blue wins" if side == 0 else "Orange wins") if spectator else ("You win!" if side == 0 else "CPU wins")
 		info.text = winner+"\nUse Reset Match to play again"
 	else:
@@ -739,8 +757,9 @@ func on_spike(actor: Node3D, point: Vector3, motion: Vector3, spin_rate: float) 
 				stroke = "Free ball"
 				launch(point,frame.global_basis*safe,"free",index)
 				return
-	cpu_policy.used(team(index),"attack depth")
-	cpu_policy.used(team(index),"attack effort")
+	if not is_human(index):
+		cpu_policy.used(team(index),"attack depth")
+		cpu_policy.used(team(index),"attack effort")
 	observe_opponent_shot(1-team(index),point,motion,spin_rate)
 	launch(point,motion,"spike",index,spin_rate)
 
@@ -934,7 +953,7 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 	var point := frame.to_local(world_point)
 	var bump := platforms[index]
 	stroke = ["Forearm","Hands","Jump set"][technique]
-	if touches == 1:
+	if touches == 1 and not is_human(index):
 		cpu_policy.used(side,"pass depth")
 		cpu_policy.used(side,"pass height")
 	if defensive_ball() and not bump.contact_check.is_empty():
@@ -963,8 +982,9 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 			apex = driver.apex_for_set_time(point.y,apex,time_to_hit)
 		var contact_height: float = driver.set_contact_height(apex)
 		last_set_apex = apex
-		cpu_policy.used(side,"set lane")
-		cpu_policy.used(side,"set height")
+		if not is_human(index):
+			cpu_policy.used(side,"set lane")
+			cpu_policy.used(side,"set height")
 		var motion: Vector3 = driver.set_toward_pin(point,pin,apex,contact_height)
 		launch(world_point,frame.global_basis*motion,"set",index,1.0,hitter_for_set(index),frame.to_global(pin))
 		return
@@ -1595,7 +1615,7 @@ func start_block(index: int, remaining := INF, reads_second := false) -> void:
 	block.begin(actor)
 	if is_finite(remaining): block.tempo = clampf(0.49/maxf(remaining,0.18),1.13,1.70)
 	blocks[index] = block
-	cpu_policy.used(team(index),"block lane")
+	if not is_human(index): cpu_policy.used(team(index),"block lane")
 	show_key(index,"Space")
 
 func soft_block_rebound(rebound: Vector3, power: float) -> Vector3:

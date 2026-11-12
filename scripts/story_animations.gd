@@ -251,7 +251,7 @@ func show_categories() -> void:
 	content.add_child(match_button)
 	content.add_child(button("Iteration Lab",func(): get_tree().change_scene_to_file("res://scenes/iteration_lab.tscn")))
 
-func start_demo_match(team_size := 2) -> void:
+func start_demo_match(team_size := 2, learn_from_demo := true) -> void:
 	stop_blocking_practice()
 	stop_serving_session()
 	stop_setting_drill()
@@ -294,12 +294,11 @@ func start_demo_match(team_size := 2) -> void:
 	content.add_child(match_training)
 	refresh_match_training()
 	content.add_child(button("Reset Match",func():
-		demo_match.cpu_policy.load_profile()
 		demo_match.reset_match()
 		preview.grab_focus()))
 	demo_match = preload("res://scripts/volleyball_match.gd").new()
 	preview_player.get_parent().add_child(demo_match)
-	demo_match.configure(preview_player,board,status,build_label,team_size)
+	demo_match.configure(preview_player,board,status,build_label,team_size,learn_from_demo)
 	show_match_tuning()
 	styles.item_selected.connect(func(index: int): demo_match.set_serve_style(index))
 	player_controls.locomotion = ""
@@ -402,7 +401,7 @@ func open_lab_replay() -> void:
 	if not record is Dictionary or int(record.get("schema",0)) != 1: return
 	var frames: Variant = record.get("frames",[])
 	if not frames is Array or frames.size() < 2: return
-	start_demo_match()
+	start_demo_match(2,false)
 	demo_match.set_spectator(true)
 	demo_match.replay.previous.assign(frames)
 	toggle_match_replay()
