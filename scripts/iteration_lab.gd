@@ -13,6 +13,9 @@ var before_view: TextureRect
 var after_view: TextureRect
 var frames: Array[Texture2D] = []
 var playback := false
+var playback_speed := 0.0
+var slow_frames := Vector2i(-1,-1)
+var frame_duration := 1.0/12.0
 var frame_time := 0.0
 var current_frame := 0
 var view_index := 0
@@ -76,6 +79,13 @@ func _ready() -> void:
 	var timeline := HBoxContainer.new()
 	review.add_child(timeline)
 	timeline.add_child(button("Play / pause",func(): playback = not playback))
+	timeline.add_child(label("Clip speed",16))
+	var speed := OptionButton.new()
+	var rates := [0.0,1.0,0.5,0.25,0.125]
+	for caption in ["Auto","1×","½×","¼×","⅛×"]: speed.add_item(caption)
+	speed.select(0)
+	speed.item_selected.connect(func(index: int): playback_speed = rates[index])
+	timeline.add_child(speed)
 	timeline.add_child(button("Camera",toggle_camera))
 	timeline.add_child(label("Seed",16))
 	seed_input = number_box(41,0,2147483647,"")
@@ -136,11 +146,23 @@ func _process(delta: float) -> void:
 	if clock >= 0.8:
 		clock = 0.0
 		refresh_status()
-	if playback and frames.size() == 2:
-		frame_time += delta
-		var count := frames[0].get_width()/320
-		var next := floori(frame_time/(0.083333 if count >= 24 else 0.16))%count
-		if current_frame != next: show_frame(next)
+	if playback and frames.size() == 2: advance_clip(delta)
+
+func advance_clip(delta: float) -> void:
+	var count := frames[0].get_width()/320
+	var next := current_frame
+	frame_time += delta
+	var duration_ := clip_frame_duration(next)
+	while frame_time >= duration_:
+		frame_time -= duration_
+		next = (next+1)%count
+		duration_ = clip_frame_duration(next)
+	if current_frame != next: show_frame(next)
+
+func clip_frame_duration(index: int) -> float:
+	if playback_speed > 0.0: return frame_duration/playback_speed
+	if index >= slow_frames.x and index <= slow_frames.y: return frame_duration*4.0
+	return frame_duration
 
 func refresh_status() -> void:
 	var data := StorySession.iteration_run.status()
@@ -246,6 +268,10 @@ func select_proposal(index: int) -> void:
 				var sample := Image.load_from_file(directory.path_join(filename))
 				if not sample.is_empty(): frames.append(ImageTexture.create_from_image(sample))
 			if frames.size() == 2:
+				var settings := Policy.read_json(root.path_join(clip).path_join("clip.json"))
+				var count := frames[0].get_width()/320
+				frame_duration = clampf(float(settings.get("frame_seconds",1.0/12.0 if count >= 24 else 0.16)),0.01,1.0)
+				slow_frames = Vector2i(int(settings.get("slow_first",-1)),int(settings.get("slow_last",-1)))
 				frame_time = 0.0
 				show_frame(0)
 				return
