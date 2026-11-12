@@ -55,7 +55,11 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 	if not wide_arm.is_empty():
 		# Carry the lateral lunge farther before contact, then rejoin the normal slide.
 		travel += 0.14*smoothstep(0.12,0.40,time)*(1.0-smoothstep(0.40,0.62,time))
-	travel *= travel_scale
+	# The approach boost reaches the ball. Keep it out of the slide after release.
+	var travel_after_release := 0.0
+	if track_platform and time > brace_start:
+		travel_after_release = 1.35*(smoothstep(0.16,0.61,time)-smoothstep(0.16,0.61,brace_start))+slide
+	travel = (travel-travel_after_release)*travel_scale+travel_after_release*minf(travel_scale,1.25)
 	actor.position = start+(heading if wide_arm.is_empty() or slide_heading.is_zero_approx() else slide_heading)*travel
 	var facing_yaw := atan2(heading.x,heading.z)
 	if not wide_arm.is_empty() and not slide_heading.is_zero_approx():
