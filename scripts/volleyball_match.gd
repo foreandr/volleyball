@@ -317,6 +317,10 @@ func show_key(index: int, caption: String) -> void:
 func server_index() -> int:
 	return service_team*team_size+server_slot[service_team]
 
+func starting_lane(index: int) -> float:
+	var lane: float = [-1.0,1.0,0.0][index%team_size]
+	return -lane if team(index) == 0 else lane
+
 func reset_match() -> void:
 	if replay.active: toggle_replay()
 	if cpu_policy.demo_recording:
@@ -365,8 +369,7 @@ func begin_point() -> void:
 	for index in players.size():
 		var actor := players[index]
 		var slot := index%team_size
-		var start_x := [-2.1,2.1,0.0]
-		actor.position = Vector3(start_x[slot],0.04,0.70 if slot == 2 else -2.6)
+		actor.position = Vector3(2.1*starting_lane(index),0.04,0.70 if slot == 2 else -2.6)
 		actor.rotation.y = 0.0
 		actor.model.rotation.y = 0.0
 		actor.play_action("idle",0.0)
@@ -405,7 +408,7 @@ func prepare_serve(style: int) -> void:
 	var side := team(index)
 	serve = SERVES[style].new()
 	frames[side].add_child(serve)
-	var x: float = [-1.6,1.6,0.0][index%team_size]
+	var x := 1.6*starting_lane(index)
 	serve.configure(players[index],Vector3(x,0.04,SERVICE_START[style]))
 	if style == 3: serve.set_serve_speed(1.12)
 	if serve.has_method("set_jump_height"): serve.set_jump_height(serve_vertical*0.0254)
