@@ -93,7 +93,20 @@ func prepare_serve_reset() -> void:
 
 func float_step_pose(time: float) -> Array:
 	if time < APPROACH_START or approach_poses.is_empty():
-		return float_approach(time,SPIN_TAKEOFF,jump_landing_time(),active_jump_height,1.17,APPROACH_START,TOSS_STEP)
+		var pose := float_approach(time,SPIN_TAKEOFF,jump_landing_time(),active_jump_height,1.17,APPROACH_START,TOSS_STEP)
+		var load_weight := smoothstep(0.04,0.29,time)*(1.0-smoothstep(TOSS_STEP,APPROACH_START,time))
+		if load_weight <= 0.0: return pose
+		var rig: Skeleton3D = player.skeleton
+		var author: RefCounted = player.get_pose_author()
+		var foot_targets: Array[Vector3] = []
+		for side in ["l","r"]:
+			foot_targets.append(rig.to_global(author.point(pose,"foot_"+side)))
+		player.position += (forward*0.065+Vector3.DOWN*0.055)*load_weight
+		for index in 2:
+			var side := "l" if index == 0 else "r"
+			author.limb(pose,"thigh_"+side,"calf_"+side,"foot_"+side,rig.to_local(foot_targets[index]),
+				Vector3(0.12 if index == 0 else -0.12,0.2,1.0))
+		return pose
 	var frame := minf((time-APPROACH_START)*APPROACH_SAMPLE_RATE,approach_poses.size()-1)
 	var index := floori(frame)
 	var next := mini(index+1,approach_poses.size()-1)
