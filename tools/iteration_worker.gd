@@ -38,7 +38,6 @@ func run() -> void:
 	var previous_policy := Policy.read_json(Policy.PATH)
 	if previous_policy.is_empty(): previous_policy = Policy.read_json(Policy.PATH+".bak")
 	saved_matches = int(previous_policy.get("matches",0))
-	scan_demo_findings()
 	update_status("running")
 	await process_frame
 	if should_stop():
@@ -110,7 +109,7 @@ func pause_match(game: Node3D) -> bool:
 
 func scan_demo_findings() -> void:
 	next_demo_scan = Time.get_ticks_msec()+3000
-	Review.collect_findings(demo_findings)
+	Review.collect_findings(demo_findings,70)
 	Review.collect_player_markers(player_markers)
 	var path := run_dir+"/demo-findings.json"
 	var count := demo_findings.size()+player_markers.size()

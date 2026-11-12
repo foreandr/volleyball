@@ -1,6 +1,7 @@
 extends RefCounted
 
 const Trace = preload("res://scripts/setting_trace.gd")
+const Policy = preload("res://scripts/cpu_policy.gd")
 const DIRECTORY := "user://iteration_lab/demo-findings"
 const REVIEW_FOCUS := "Animation smoothing and cleanup"
 var flight := -1
@@ -8,6 +9,7 @@ var dig := {}
 var motion_samples := {}
 var pending_motion: Array[Dictionary] = []
 var motion_flags := {}
+var recent_motion_flags := {}
 var bone_indices := PackedInt32Array()
 const MOTION_BONES := ["pelvis","neck_01","lowerarm_l","hand_l","lowerarm_r","hand_r"]
 
@@ -110,9 +112,12 @@ func motion_action(game: Node3D, index: int) -> String:
 func flag_motion(game: Node3D, index: int, type: String, measures: Dictionary, instruction: String) -> void:
 	var action := motion_action(game,index)
 	var key := "%d:%s:%s" % [index,action,type]
-	if motion_flags.has(key): return
+	var signature := "%s:%s" % [action,type]
+	var time: float = game.match_clock
+	if motion_flags.has(key) or time-float(recent_motion_flags.get(signature,-INF)) < 10.0: return
 	motion_flags[key] = true
-	measures.merge({"type":type,"category":"animation","player":index,"action":action,"time":game.match_clock,"review":instruction})
+	recent_motion_flags[signature] = time
+	measures.merge({"type":type,"category":"animation","player":index,"action":action,"time":time,"review":instruction})
 	pending_motion.append(measures)
 
 func take_motion(time: float, flush: bool) -> Array[Dictionary]:
@@ -147,33 +152,59 @@ func save_finding(game: Node3D, evidence: Dictionary, samples := [], directory :
 	var path := directory.path_join("%d-%d.vreplay" % [int(Time.get_unix_time_from_system()*1000000),OS.get_process_id()])
 	var file := FileAccess.open(path+".tmp",FileAccess.WRITE)
 	if file == null: return ""
-	file.store_var({"schema":1,"team_size":game.team_size,"point":evidence.get("point",game.rallies),"evidence":evidence,"frames":frames,
-		"match_id":"%s:%d" % [game.trace.path,game.trace.feed-game.rallies],"score":game.score.duplicate()})
+	var record := {"schema":1,"team_size":game.team_size,"point":evidence.get("point",game.rallies),"evidence":evidence,"frames":frames,
+		"match_id":"%s:%d" % [game.trace.path,game.trace.feed-game.rallies],"score":game.score.duplicate()}
+	file.store_var(record)
 	file.close()
-	return path if DirAccess.rename_absolute(path+".tmp",path) == OK else ""
+	if directory == DIRECTORY: cache_finding(path,finding_summary(record,path))
+	if DirAccess.rename_absolute(path+".tmp",path) != OK: return ""
+	return path
 
-static func collect_findings(known: Dictionary) -> void:
+static func collect_findings(known: Dictionary, budget_ms := 0) -> void:
 	if not DirAccess.dir_exists_absolute(DIRECTORY): return
-	for name_ in DirAccess.get_files_at(DIRECTORY):
+	var names := DirAccess.get_files_at(DIRECTORY)
+	names.sort()
+	var deadline := Time.get_ticks_msec()+budget_ms
+	for index in range(names.size()-1,-1,-1):
+		var name_ := names[index]
 		if not name_.ends_with(".vreplay") or known.has(name_): continue
+		if budget_ms > 0 and Time.get_ticks_msec() >= deadline: break
 		var path := DIRECTORY.path_join(name_)
+		var summary := Policy.read_json(path+".json")
+		if not summary.is_empty():
+			known[name_] = summary
+			continue
 		var file := FileAccess.open(path,FileAccess.READ)
 		if file == null: continue
 		var record: Variant = file.get_var()
 		if not record is Dictionary or not record.get("evidence") is Dictionary: continue
-		var evidence: Dictionary = record.evidence.duplicate(true)
-		evidence["replay"] = ProjectSettings.globalize_path(path)
-		var nearest := {}
-		var distance := INF
-		for sample in record.get("frames",[]):
-			var gap := absf(float(sample.get("time",0.0))-float(evidence.get("time",0.0)))
-			if gap < distance and sample.get("trace") is Dictionary:
-				distance = gap
-				nearest = sample.trace
-		var priority := 1 if evidence.get("category","") == "animation" or evidence.get("type","") == "Possible swing snap" else 2
-		known[name_] = {"source":"demo_match","priority":priority,"type":evidence.get("type",""),"time":evidence.get("time",0.0),
-			"point":record.get("point",0),"team_size":record.get("team_size",2),"match_id":record.get("match_id",""),
-			"score":record.get("score",[]),"evidence":Trace.json_value(evidence),"contact_frame":Trace.json_value(nearest)}
+		summary = finding_summary(record,path)
+		known[name_] = summary
+		cache_finding(path,summary)
+
+static func cache_finding(path: String, summary: Dictionary) -> void:
+	var index_path := path+".json"
+	var temporary := "%s.%d.tmp" % [index_path,OS.get_process_id()]
+	var file := FileAccess.open(temporary,FileAccess.WRITE)
+	if file == null: return
+	file.store_string(JSON.stringify(summary))
+	file.close()
+	if DirAccess.rename_absolute(temporary,index_path) != OK: DirAccess.remove_absolute(temporary)
+
+static func finding_summary(record: Dictionary, path: String) -> Dictionary:
+	var evidence: Dictionary = record.evidence.duplicate(true)
+	evidence["replay"] = ProjectSettings.globalize_path(path)
+	var nearest := {}
+	var distance := INF
+	for sample in record.get("frames",[]):
+		var gap := absf(float(sample.get("time",0.0))-float(evidence.get("time",0.0)))
+		if gap < distance and sample.get("trace") is Dictionary:
+			distance = gap
+			nearest = sample.trace
+	var priority := 1 if evidence.get("category","") == "animation" or evidence.get("type","") == "Possible swing snap" else 2
+	return {"source":"demo_match","priority":priority,"type":evidence.get("type",""),"time":evidence.get("time",0.0),
+		"point":record.get("point",0),"team_size":record.get("team_size",2),"match_id":record.get("match_id",""),
+		"score":record.get("score",[]),"evidence":Trace.json_value(evidence),"contact_frame":Trace.json_value(nearest)}
 
 static func collect_player_markers(known: Dictionary) -> void:
 	if not DirAccess.dir_exists_absolute(Trace.MARKER_DIRECTORY): return
