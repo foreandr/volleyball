@@ -7,6 +7,7 @@ var run_path := ""
 
 func status() -> Dictionary:
 	var data := Policy.read_json(Policy.DIRECTORY+"/status.json")
+	if data.is_empty(): data = Policy.read_json(Policy.DIRECTORY+"/status.json.bak")
 	var worker := int(data.get("pid",0))
 	if pid > 0 and OS.is_process_running(pid) and worker != pid:
 		data = {"state":"starting","pid":pid,"run":run_path}

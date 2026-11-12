@@ -28,8 +28,11 @@ func load_profile() -> void:
 	if history is Array: shot_history = history
 
 static func read_json(path: String) -> Dictionary:
-	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(path)) if FileAccess.file_exists(path) else null
-	return data if data is Dictionary else {}
+	var file := FileAccess.open(path,FileAccess.READ)
+	if file == null: return {}
+	var json := JSON.new()
+	if json.parse(file.get_as_text()) != OK or not json.data is Dictionary: return {}
+	return json.data
 
 func load_demo(team_size: int, spectator: bool) -> void:
 	demo_table.clear()
