@@ -55,6 +55,13 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 	if not wide_arm.is_empty():
 		# Carry the lateral lunge farther before contact, then rejoin the normal slide.
 		travel += 0.14*smoothstep(0.12,0.40,time)*(1.0-smoothstep(0.40,0.62,time))
+	if track_platform and time < CONTACT_POSE_TIME:
+		var contact_travel := 0.23+1.35*smoothstep(0.16,0.61,CONTACT_POSE_TIME)
+		if not wide_arm.is_empty(): contact_travel += 0.14
+		var progress := clampf(time/CONTACT_POSE_TIME,0.0,1.0)
+		# Carry some sprint momentum into takeoff, with less acceleration just before contact.
+		var even_progress := smoothstep(0.0,1.0,progress)+progress*(1.0-progress)*(0.35-0.80*progress)
+		travel = lerpf(travel,contact_travel*even_progress,smoothstep(1.1,1.6,travel_scale))
 	# The approach boost reaches the ball. Keep it out of the slide after release.
 	var travel_after_release := 0.0
 	if track_platform and time > brace_start:
