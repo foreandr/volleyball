@@ -1100,6 +1100,8 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 		var motion: Vector3 = driver.set_toward_pin(point,pin,apex,contact_height)
 		launch(world_point,frame.global_basis*motion,"set",index,1.0,hitter_for_set(index),frame.to_global(pin))
 		return
+	if drill_pass_target.is_finite():
+		world_motion = drill_pass_motion(world_point,world_motion)
 	if not is_human(index) and touches == 3:
 		world_motion = frame.global_basis*cpu_free_ball_motion(point,frame.global_basis.inverse()*world_motion)
 	var crossing := (Net.NET_Z-world_point.z)/world_motion.z if absf(world_motion.z)>0.001 else -1.0
@@ -1109,6 +1111,18 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 		# A teammate can still play a low pass before it reaches the net.
 		over = crossing_point.y >= Net.NET_TOP+0.02
 	launch(world_point,world_motion,("dump" if touches == 2 and technique != 0 else "free") if over else "pass",index)
+
+func drill_pass_motion(contact: Vector3, motion: Vector3) -> Vector3:
+	# Keep the receiver's existing aim error and move the descending arrival to the target height.
+	var floor_time := Flight.landing_time(contact,motion)
+	var landing := contact+motion*floor_time
+	var height := drill_pass_target.y
+	var rise := sqrt(maxf(0.0,2.0*Flight.GRAVITY*(height+0.28-contact.y)))
+	var vertical := maxf(motion.y,rise)
+	var discriminant := vertical*vertical+2.0*Flight.GRAVITY*(contact.y-height)
+	var arrival_time := maxf(0.08,(vertical+sqrt(maxf(0.0,discriminant)))/Flight.GRAVITY)
+	var horizontal := (landing-contact).slide(Vector3.UP)/arrival_time
+	return horizontal+Vector3.UP*vertical
 
 func dump_can_land_in_court(point: Vector3, motion: Vector3) -> bool:
 	if motion.z <= 0.001: return false

@@ -10,7 +10,7 @@ const SPINS := ["No spin","Topspin","Backspin","Sidespin left","Sidespin right"]
 var game: Node3D
 var start := Vector3(0,0.04,-2.25)
 var source := Vector3(0,3.95,10.8)
-var target := Vector3(1.7,0.04,1.7)
+var target := Vector3(1.7,2.2,1.7)
 var heading := 0.0
 var angle := 2.0
 var speed := 18.0
@@ -24,6 +24,7 @@ var incoming_flight := -1
 var feed_spin_axis := Vector3.ZERO
 var feed_spin_speed := 0.0
 var contact_label := ""
+var target_crossing := Vector3.INF
 var technique_label := ""
 var drag_handle := ""
 var drag_plane: Plane
@@ -79,9 +80,12 @@ func build_controls(host: Control, parent: VBoxContainer) -> void:
 	host.content.add_child(launch)
 	host.content.add_child(host.label("Drag the receiver, orange ball, or blue target.",16))
 	var loop := CheckButton.new()
-	loop.text = "Repeat feed"
-	loop.toggled.connect(func(value: bool): repeat = value)
-	parent.add_child(loop)
+	loop.text = "Repeat launch"
+	loop.toggled.connect(func(value: bool):
+		repeat = value
+		if repeat and not running and not game.replay.active: launch_ball())
+	host.content.add_child(loop)
+	add_slider(host,parent,"target_height","Target height","m",0.15,4.5,0.05,target.y,func(v): target.y = v)
 	add_slider(host,parent,"skill","Passing skill","%",0,100,1,game.passing_skill,func(v): game.passing_skill = v)
 	parent.add_child(host.label("Ball feed",19))
 	add_slider(host,parent,"source_y","Source height","m",0.3,7.0,0.05,source.y,func(v): source.y = v)
@@ -223,6 +227,7 @@ func launch_ball() -> void:
 	incoming_flight = game.flight_number
 	technique_label = ""
 	contact_label = ""
+	target_crossing = Vector3.INF
 	drag_handle = ""
 	running = true
 	finish_delay = -1.0
@@ -251,6 +256,12 @@ func tick(delta: float) -> void:
 	var previous: float = game.elapsed
 	game.elapsed = minf(game.elapsed+delta,game.flight_end())
 	game.ball.global_position = game.path_point(game.elapsed)
+	if game.flight_number != incoming_flight and not target_crossing.is_finite():
+		var before: Vector3 = game.path_point(previous)
+		var after: Vector3 = game.ball.global_position
+		var height: float = game.drill_pass_target.y
+		if before.y >= height and after.y <= height and after.y < before.y:
+			target_crossing = before.lerp(after,(before.y-height)/(before.y-after.y))
 	game.animated.fill(false)
 	game.advance_recoveries(delta)
 	if game.flight_number == incoming_flight:
@@ -279,12 +290,12 @@ func reset_receiver() -> void:
 func finish() -> void:
 	running = false
 	game.phase = game.Phase.FINISHED
-	var point: Vector3 = game.ball.global_position
 	if contact_label.is_empty():
 		if game.platforms[RECEIVER].low_save.active: game.begin_recovery(RECEIVER)
 		game.info.text = "Missed feed" if game.net_hit.is_empty() else "Feed hit the net"
 	else:
-		var error: float = (point-game.drill_pass_target).slide(Vector3.UP).length()
-		var result := "On target" if error <= TARGET_RADIUS else "%.2f m from target" % error
+		var result_point: Vector3 = target_crossing if target_crossing.is_finite() else game.ball.global_position
+		var error: float = (result_point-game.drill_pass_target).length()
+		var result := "On target" if target_crossing.is_finite() and error <= TARGET_RADIUS else "%.2f m from target" % error
 		game.info.text = "%s · %s" % [contact_label,result]
 	finish_delay = 1.0
