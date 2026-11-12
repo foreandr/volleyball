@@ -6,6 +6,7 @@ const RECEIVER := 1
 const FEEDER := 2
 const TARGET_RADIUS := 0.90
 const BATCH_REPS := 10
+const PREFERENCE_PREFIX := "PassingDrill_"
 const SPINS := ["No spin","Topspin","Backspin","Sidespin left","Sidespin right"]
 
 var game: Node3D
@@ -102,9 +103,12 @@ func build_controls(host: Control, parent: VBoxContainer) -> void:
 	var selector := OptionButton.new()
 	selector.name = "PassingSpinType"
 	for style in SPINS: selector.add_item(style)
+	var saved_spin: String = StorySession.match_preference(PREFERENCE_PREFIX+"spin_type",spin)
+	if SPINS.has(saved_spin): spin = saved_spin
 	selector.select(SPINS.find(spin))
 	selector.item_selected.connect(func(index: int):
 		spin = SPINS[index]
+		StorySession.save_match_preference(PREFERENCE_PREFIX+"spin_type",spin)
 		update_spin_controls()
 		update_setup())
 	parent.add_child(selector)
@@ -120,7 +124,8 @@ func add_slider(host: Control, parent: VBoxContainer, id: String, caption: Strin
 	slider.min_value = lower
 	slider.max_value = upper
 	slider.step = step
-	slider.value = initial
+	var preference := PREFERENCE_PREFIX+id
+	slider.value = StorySession.match_preference(preference,initial)
 	slider.custom_minimum_size.y = 19
 	parent.add_child(slider)
 	sliders[id] = slider
@@ -128,7 +133,9 @@ func add_slider(host: Control, parent: VBoxContainer, id: String, caption: Strin
 		label.text = "%s  %.2f %s" % [caption,value,unit]
 		apply.call(value)
 		update_setup()
-	slider.value_changed.connect(update)
+	slider.value_changed.connect(func(value: float):
+		update.call(value)
+		StorySession.save_match_preference(preference,value))
 	update.call(slider.value)
 
 func update_spin_controls() -> void:
