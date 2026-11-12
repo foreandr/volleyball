@@ -740,14 +740,17 @@ func reach_platform(offset: Vector3, weight := 1.0, reach_limit := 0.26, steer_s
 	var grip: Vector3 = (author.point(pose,"hand_l")+author.point(pose,"hand_r"))*0.5
 	var shift := rig.global_basis.inverse()*global_basis*offset.limit_length(reach_limit)
 	var lateral := Vector3.RIGHT
+	var target := grip+shift
 	var weight_scale := 0.82
 	if steer_sideways:
 		var shoulders: Vector3 = (author.point(pose,"upperarm_l")+author.point(pose,"upperarm_r"))*0.5
-		var reach_direction := grip+shift-shoulders
+		# Keep the platform in front of the ribcage even when the steering axis turns.
+		target.z = maxf(target.z,shoulders.z+0.28/rig.global_basis.y.length())
+		var reach_direction := target-shoulders
 		var yaw := clampf(atan2(reach_direction.x,maxf(0.12,reach_direction.z)),-0.80,0.80)
 		lateral = lateral.rotated(Vector3.UP,yaw)
 		weight_scale = 1.0
-	PlatformPose.connect_arms(pose,author,grip+shift,weight_scale*weight,0.022,lateral)
+	PlatformPose.connect_arms(pose,author,target,weight_scale*weight,0.022,lateral)
 	for side in ["l","r"]:
 		for part in ["upperarm_","lowerarm_","hand_"]:
 			var bone := rig.find_bone(part+side)
