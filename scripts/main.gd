@@ -1,70 +1,48 @@
 extends Control
 
 func _ready() -> void:
+	StorySession.ensure_background_training()
 	if not StorySession.demo_launch_consumed and "--demo-match" in OS.get_cmdline_user_args():
 		StorySession.demo_launch_consumed = true
-		StorySession.home_match_size = 2
-		StorySession.home_match_spectator = true
-		get_tree().change_scene_to_file.call_deferred("res://scenes/story_animations.tscn")
+		open_simulation()
 		return
+
 	var background := ColorRect.new()
 	background.color = Color("102b40")
 	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(background)
+
 	var center := CenterContainer.new()
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(center)
 	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation",24)
+	column.add_theme_constant_override("separation",20)
 	center.add_child(column)
 	var title := Label.new()
 	title.text = "VOLLEYBALL"
 	title.add_theme_font_size_override("font_size",72)
 	title.add_theme_color_override("font_color",Color("ffce70"))
 	column.add_child(title)
-	var play := Button.new()
-	play.name = "Play"
-	play.text = "Play"
-	play.custom_minimum_size.y = 56
-	var match_size := OptionButton.new()
-	match_size.name = "MatchSize"
-	match_size.add_item("2v2",2)
-	match_size.add_item("3v3",3)
-	match_size.select(0)
-	play.pressed.connect(func():
-		StorySession.home_match_size = match_size.get_selected_id()
-		get_tree().change_scene_to_file("res://scenes/story_animations.tscn"))
-	var play_row := HBoxContainer.new()
-	play.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	play_row.add_child(play)
-	play_row.add_child(match_size)
-	column.add_child(play_row)
-	var lab := Button.new()
-	lab.name = "IterationLab"
-	lab.text = "Iteration Lab"
-	lab.custom_minimum_size.y = 56
-	lab.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/iteration_lab.tscn"))
-	column.add_child(lab)
-	var create := Button.new()
-	create.name = "Create"
-	create.text = "Create Player"
-	create.disabled = true
-	create.custom_minimum_size.y = 56
-	create.pressed.connect(func(): StorySession.cancel_creation(); get_tree().change_scene_to_file("res://scenes/create.tscn"))
-	column.add_child(create)
-	var story := Button.new()
-	story.name = "Story"
-	story.text = "Story"
-	story.custom_minimum_size.y = 56
-	story.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/story.tscn"))
-	column.add_child(story)
-	play.grab_focus()
-	var quit := Button.new()
-	quit.text = "Quit"
-	quit.custom_minimum_size.y = 48
-	quit.pressed.connect(func(): get_tree().quit())
-	column.add_child(quit)
+
+	var simulate := add_menu_button(column,"Simulate","Simulate",open_simulation)
+	add_menu_button(column,"Drills","Drills",func(): get_tree().change_scene_to_file("res://scenes/drills.tscn"))
+	add_menu_button(column,"IterationLab","Iteration Lab",func(): get_tree().change_scene_to_file("res://scenes/iteration_lab.tscn"))
+	add_menu_button(column,"Quit","Quit",func(): get_tree().quit())
+	simulate.grab_focus()
+
+func add_menu_button(parent: VBoxContainer, id: String, title: String, action: Callable) -> Button:
+	var item := Button.new()
+	item.name = id
+	item.text = title
+	item.custom_minimum_size.y = 56
+	item.pressed.connect(action)
+	parent.add_child(item)
+	return item
+
+func open_simulation() -> void:
+	StorySession.open_home_simulation = true
+	get_tree().change_scene_to_file.call_deferred("res://scenes/story_animations.tscn")
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
+	if event.is_action_pressed("ui_cancel"):
 		get_tree().quit()

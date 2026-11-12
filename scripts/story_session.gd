@@ -120,8 +120,7 @@ var preview_camera := {
 var preview_hash := 0
 var preview_path := "user://preview_setup.cfg"
 var lab_replay_path := ""
-var home_match_size := 0
-var home_match_spectator := false
+var open_home_simulation := false
 var demo_launch_consumed := false
 var iteration_run := preload("res://scripts/iteration_run.gd").new()
 const PREVIEW_FIELDS := ["pass_start","pass_distance","pass_output_angle","incoming_speed","incoming_angle","feed_spot","incoming_spin","spin_rate","float_strength","source_height","feed_fit","receive_direction","receive_distance_tier","ball_tab","pass_destination","pass_apex","destination_fit","preview_camera"]
@@ -135,6 +134,10 @@ func _ready() -> void:
 	if config.load(preview_path)==OK:
 		for field in PREVIEW_FIELDS:
 			if config.has_section_key("preview",field): set(field,config.get_value("preview",field))
+
+func ensure_background_training() -> void:
+	if DisplayServer.get_name() != "headless" and not iteration_run.status().running:
+		iteration_run.start(0)
 
 func match_preference(key: String, fallback: Variant) -> Variant:
 	return match_preferences.get_value("match",key,fallback)

@@ -26,9 +26,6 @@ var selected_category := ""
 var blocking_practice: Node3D
 var defense_active := false
 var demo_match: Node3D
-var match_training: Button
-var match_training_poll := 0.0
-var match_block_choice: OptionButton
 var blocking_frame: Node3D
 var underhand_serve: Node3D
 var serve_opponents: Node3D
@@ -75,7 +72,6 @@ var pass_timing_cue: Node3D
 var reception_review: VBoxContainer
 var setting_drill: Node3D
 var attack_position_panel: PanelContainer
-var match_sound: CheckButton
 var match_replay_panel: VBoxContainer
 var match_replay_seek: HSlider
 var match_replay_button: Button
@@ -114,13 +110,10 @@ func _ready() -> void:
 	preview_camera.fov = 42.0
 	preview_camera.far = 150.0
 	if not StorySession.lab_replay_path.is_empty(): call_deferred("open_lab_replay")
-	if StorySession.home_match_size > 0:
-		var size := StorySession.home_match_size
-		var cpu_only := StorySession.home_match_spectator
-		StorySession.home_match_size = 0
-		StorySession.home_match_spectator = false
+	if StorySession.open_home_simulation:
+		StorySession.open_home_simulation = false
 		match_from_home = true
-		start_demo_match.call_deferred(size,true,cpu_only)
+		start_demo_match.call_deferred()
 	if not StorySession.animation_return.is_empty():
 		var destination: Dictionary = StorySession.animation_return.duplicate()
 		StorySession.animation_return.clear()
@@ -255,7 +248,7 @@ func show_categories() -> void:
 	content.add_child(match_button)
 	content.add_child(button("Iteration Lab",func(): get_tree().change_scene_to_file("res://scenes/iteration_lab.tscn")))
 
-func start_demo_match(team_size := 2, learn_from_demo := true, cpu_only := false, mirror_blue_right := true) -> void:
+func start_demo_match(team_size := 2, learn_from_demo := true, _cpu_only := true, mirror_blue_right := true) -> void:
 	stop_blocking_practice()
 	stop_serving_session()
 	stop_setting_drill()
@@ -266,52 +259,25 @@ func start_demo_match(team_size := 2, learn_from_demo := true, cpu_only := false
 	right_panel.hide()
 	angle_control.hide()
 	clear_content()
-	set_title("DEMO MATCH | %dV%d" % [team_size,team_size])
+	set_title("SIMULATE")
 	selected_category = "Demo Match"
 	var board := label("",26)
 	content.add_child(board)
 	var status := label("",17)
 	status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(status)
-	content.add_child(label("WASD to move | Shift to sprint\nQ forearms | E hands | F jump set | C kick\nSpace serves, attacks, or blocks\nMouse aims | Scroll zooms\nShift + scroll changes height\nLeft-click or E to set the second ball\nB switches blocker | M mutes sound",16))
-	var styles := OptionButton.new()
-	for title in ["Underhand","Standing float","Jump float","Spin serve"]: styles.add_item(title)
-	styles.focus_mode = Control.FOCUS_NONE
-	content.add_child(styles)
-	match_block_choice = OptionButton.new()
-	match_block_choice.add_item("Blocker | Teammate")
-	match_block_choice.add_item("Blocker | You")
-	match_block_choice.focus_mode = Control.FOCUS_NONE
-	content.add_child(match_block_choice)
-	match_block_choice.item_selected.connect(func(index: int): demo_match.set_player_blocks(index == 1))
-	var watch := CheckButton.new()
-	watch.name = "WatchCPUMatch"
-	watch.text = "Watch CPU Match"
-	watch.focus_mode = Control.FOCUS_NONE
-	content.add_child(watch)
-	watch.toggled.connect(func(enabled: bool):
-		demo_match.set_spectator(enabled)
-		preview.grab_focus())
-	match_training = button("Start background training",toggle_match_training)
-	match_training.name = "MatchTraining"
-	match_training.focus_mode = Control.FOCUS_NONE
-	content.add_child(match_training)
-	if learn_from_demo and DisplayServer.get_name() != "headless" and not StorySession.iteration_run.status().running:
-		StorySession.iteration_run.start(0)
-	refresh_match_training()
-	content.add_child(button("Reset Match",func():
-		demo_match.reset_match()
-		preview.grab_focus()))
+	if learn_from_demo:
+		StorySession.ensure_background_training()
 	demo_match = preload("res://scripts/volleyball_match.gd").new()
+	demo_match.spectator = true
 	if learn_from_demo:
 		demo_match.win_score = 21
 		demo_match.auto_rematch = true
 	preview_player.get_parent().add_child(demo_match)
 	demo_match.configure(preview_player,board,status,build_label,team_size,learn_from_demo,mirror_blue_right)
 	demo_match.review_flagged.connect(show_marker_popup)
-	if cpu_only: watch.button_pressed = true
+	demo_match.set_ball_sound(false)
 	show_match_tuning()
-	styles.item_selected.connect(func(index: int): demo_match.set_serve_style(index))
 	player_controls.locomotion = ""
 	player_controls.setter_travel = Vector3.ZERO
 	player_controls.indicator.text = "You"
@@ -319,27 +285,6 @@ func start_demo_match(team_size := 2, learn_from_demo := true, cpu_only := false
 	setting_camera_focus = Vector3(0.0,1.55,3.9)
 	preview_camera.look_at(setting_camera_focus)
 	preview.grab_focus()
-
-func toggle_match_training() -> void:
-	var run := StorySession.iteration_run
-	var state := run.status()
-	var changed := run.stop() if state.running else run.start(0)
-	if changed: refresh_match_training()
-	else: match_training.text = "Could not stop training" if state.running else "Could not start training"
-	preview.grab_focus()
-
-func refresh_match_training() -> void:
-	match_training_poll = 0.8
-	var state := StorySession.iteration_run.status()
-	match_training.disabled = state.state == "stopping"
-	if state.state == "stopping":
-		match_training.text = "Stopping training…"
-	elif state.state == "starting":
-		match_training.text = "Starting training…"
-	elif state.running:
-		match_training.text = "Stop training  ·  %d saved" % int(state.get("saved_matches",0))
-	else:
-		match_training.text = "Start background training"
 
 func show_match_tuning() -> void:
 	attack_position_panel = panel()
@@ -360,21 +305,14 @@ func show_match_tuning() -> void:
 		func(value: float): demo_match.block_vertical = value)
 	add_attack_tuning_slider(tuning,"Serve vertical","MatchServeVertical","in",30,65,1,demo_match.serve_vertical,demo_match.set_serve_vertical)
 	add_attack_tuning_slider(tuning,"Spike strength","MatchSpikeStrength","%",40,175,5,demo_match.spike_strength*100.0,demo_match.set_spike_strength)
-	add_attack_tuning_slider(tuning,"Lift lean-back","MatchAttackLiftLean","°",0,110,1,demo_match.attack_lift_lean,demo_match.set_attack_lift_lean)
 	add_attack_tuning_slider(tuning,"Passing skill","MatchPassingSkill","",0,100,1,demo_match.passing_skill,
 		func(value: float): demo_match.passing_skill = value)
 	add_attack_tuning_slider(tuning,"Setting skill","MatchSettingSkill","",0,100,1,demo_match.setting_skill,
 		func(value: float): demo_match.setting_skill = value)
-	match_sound = CheckButton.new()
-	match_sound.text = "Ball sounds (M)"
-	match_sound.focus_mode = Control.FOCUS_NONE
-	match_sound.button_pressed = StorySession.match_preference("sound",true)
-	StorySession.attack_ball_audio_muted = not match_sound.button_pressed
-	AudioServer.set_bus_mute(AudioServer.get_bus_index("Master"),not match_sound.button_pressed)
-	match_sound.toggled.connect(func(enabled: bool):
-		StorySession.save_match_preference("sound",enabled)
-		demo_match.set_ball_sound(enabled))
-	tuning.add_child(match_sound)
+	tuning.add_child(button("Reset Match",func():
+		demo_match.reset_match()
+		update_match_replay_controls()
+		preview.grab_focus()))
 
 	match_replay_button = Button.new()
 	match_replay_button.text = "Replay rally (R)"
@@ -461,7 +399,6 @@ func stop_demo_match() -> void:
 	attack_position_panel.hide()
 	attack_position_panel.queue_free()
 	attack_position_panel = null
-	match_sound = null
 
 func select_category(category: String) -> void:
 	category = Catalog.category_name(category)
@@ -1212,9 +1149,6 @@ func _process(delta: float) -> void:
 	pass_timing_cue.hide()
 	if is_instance_valid(demo_match):
 		demo_match.tick_match(delta,player_controls)
-		if is_instance_valid(match_training):
-			match_training_poll -= delta
-			if match_training_poll <= 0.0: refresh_match_training()
 		if demo_match.replay.active:
 			move_match_replay_camera(delta)
 			update_match_replay_controls()
@@ -1633,21 +1567,12 @@ func begin_approach_setup_drag(event: InputEventMouseButton) -> bool:
 
 func handle_preview_input(event: InputEvent) -> void:
 	if is_instance_valid(demo_match):
-		if event is InputEventMouseMotion:
-			if event.button_mask & MOUSE_BUTTON_MASK_MIDDLE:
-				orbit_setting_camera(event.relative)
-			elif not demo_match.replay.active:
-				var hit: Variant = attack_floor_point(event.position)
-				if hit is Vector3: demo_match.set_aim(hit)
-		elif not demo_match.replay.active and event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-			var hit: Variant = attack_floor_point(event.position)
-			if hit is Vector3: demo_match.set_aim(hit)
-			demo_match.click_set()
+		if event is InputEventMouseMotion and (event.button_mask & MOUSE_BUTTON_MASK_MIDDLE):
+			orbit_setting_camera(event.relative)
 			preview.accept_event()
 		elif event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_WHEEL_UP,MOUSE_BUTTON_WHEEL_DOWN]:
 			var wheel := (1.0 if event.button_index == MOUSE_BUTTON_WHEEL_UP else -1.0)*maxf(0.1,event.factor)
-			if event.shift_pressed and not demo_match.replay.active: demo_match.change_arc(wheel*0.20)
-			else: zoom_attack_camera(wheel)
+			zoom_attack_camera(wheel)
 			preview.accept_event()
 		return
 	if is_instance_valid(blocking_practice):
@@ -2043,38 +1968,21 @@ func open_menu() -> void:
 		var previous := selected_category
 		show_categories()
 		if category_buttons.has(previous): category_buttons[previous].grab_focus()
-	else: get_tree().change_scene_to_file("res://scenes/story.tscn")
+	else: get_tree().change_scene_to_file("res://scenes/main.tscn")
 
 func _input(event: InputEvent) -> void:
 	if is_instance_valid(demo_match) and event is InputEventKey:
-		if event.echo: return
-		if event.keycode == KEY_R and event.pressed:
-			toggle_match_replay()
-			get_viewport().set_input_as_handled()
-			return
-		if demo_match.replay.active and event.keycode in [KEY_Q,KEY_E,KEY_I,KEY_F,KEY_C,KEY_B,KEY_SPACE]:
-			if event.keycode == KEY_SPACE and event.pressed: toggle_match_replay_playback()
-			get_viewport().set_input_as_handled()
-			return
-		if event.keycode == KEY_SPACE:
-			demo_match.input_space(event.pressed)
-			get_viewport().set_input_as_handled()
-		elif event.pressed:
-			match event.keycode:
-				KEY_Q: demo_match.input_receive(0)
-				KEY_E, KEY_I: demo_match.input_receive(1)
-				KEY_F: demo_match.input_receive(2)
-				KEY_C: demo_match.input_kick()
-				KEY_B:
-					var index := 0 if demo_match.player_blocks else 1
-					match_block_choice.select(index)
-					demo_match.set_player_blocks(index == 1)
-				KEY_M: match_sound.button_pressed = not match_sound.button_pressed
-				KEY_F8:
-					if demo_match.mark_trace(): show_marker_popup()
-				KEY_ESCAPE: open_menu()
-		if event.keycode in [KEY_Q,KEY_E,KEY_I,KEY_F,KEY_C,KEY_B,KEY_M,KEY_F8,KEY_ESCAPE]:
-			get_viewport().set_input_as_handled()
+		if not event.pressed or event.echo: return
+		match event.keycode:
+			KEY_R: toggle_match_replay()
+			KEY_SPACE:
+				if not demo_match.replay.active: return
+				toggle_match_replay_playback()
+			KEY_F8:
+				if demo_match.mark_trace(): show_marker_popup()
+			KEY_ESCAPE: open_menu()
+			_: return
+		get_viewport().set_input_as_handled()
 		return
 	if is_instance_valid(blocking_practice) and event is InputEventKey:
 		if event.echo: return

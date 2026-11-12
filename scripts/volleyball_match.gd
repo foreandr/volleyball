@@ -2239,7 +2239,7 @@ func update_player_guide() -> void:
 	player_label.visible = not spectator
 	for index in players.size():
 		key_labels[index].global_position = players[index].global_position+Vector3.UP*(2.43 if is_human(index) else 2.18)
-		key_labels[index].visible = match_clock < key_until[index]
+		key_labels[index].visible = not spectator and match_clock < key_until[index]
 	var show_guide := not spectator and (phase == Phase.LIVE or (phase == Phase.READY and server_index() != 0))
 	trajectory_node.visible = show_guide
 	aim_ring.visible = show_guide
