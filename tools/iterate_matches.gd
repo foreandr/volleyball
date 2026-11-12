@@ -91,11 +91,13 @@ func run_match(page: Node, match_seed: int, review_point: int, output_dir: Strin
 	for tick in range(game.WIN_SCORE*TICKS_PER_TARGET_POINT):
 		if watching and tick%30 == 0 and await pause_match(game): break
 		game.step_match(STEP,page.player_controls)
+		var replay_frame := {}
 		if watching:
 			if game.phase == game.Phase.LIVE or (game.phase == game.Phase.READY and game.serve_pending):
 				game.review.observe_motion(game,STEP)
 				if tick%3 == 0:
-					motion_frames.append(game.replay.capture(game))
+					replay_frame = game.replay.capture(game)
+					motion_frames.append(replay_frame)
 					if motion_frames.size() > 53: motion_frames.pop_front()
 			for motion in game.review.take_motion(game.match_clock,game.rallies != previous_rally):
 				motion["point"] = previous_rally+1
@@ -123,9 +125,7 @@ func run_match(page: Node, match_seed: int, review_point: int, output_dir: Strin
 			else:
 				stuck_frames = 0
 			last_ball = game.ball.global_position
-			if watching and not deflection.is_empty() and tick%3 == 0:
-				evidence_frames.append(game.replay.capture(game))
-				if evidence_frames.size() > 24: evidence_frames.pop_front()
+			var dig_frame := not deflection.is_empty()
 			if game.flight_kind in ["spike","dump","block"]:
 				var side: int = game.receiving_team
 				var ball: Vector3 = game.ball.global_position
@@ -133,9 +133,8 @@ func run_match(page: Node, match_seed: int, review_point: int, output_dir: Strin
 					for index in range(side*2,side*2+2):
 						if index == game.last_player: continue
 						var platform: Node3D = game.platforms[index]
-						if watching and tick%3 == 0 and game.players[index].global_position.distance_to(ball) < 2.65:
-							evidence_frames.append(game.replay.capture(game))
-							if evidence_frames.size() > 24: evidence_frames.pop_front()
+						if not replay_frame.is_empty() and game.players[index].global_position.distance_to(ball) < 2.65:
+							dig_frame = true
 						var check: Dictionary = platform.contact_check
 						if not check.is_empty() and not bool(check.accepted):
 							var margin := float(check.margin)
@@ -148,6 +147,9 @@ func run_match(page: Node, match_seed: int, review_point: int, output_dir: Strin
 							if distance <= 0.80 and distance < float(closest_unattempted.get("distance_m",INF)):
 								closest_unattempted = {"type":"ball near a defender without an attempt","player":index,
 									"time":game.match_clock,"distance_m":distance}
+			if dig_frame and not replay_frame.is_empty():
+				evidence_frames.append(replay_frame)
+				if evidence_frames.size() > 24: evidence_frames.pop_front()
 		if game.rallies != previous_rally:
 			previous_rally = game.rallies
 			var reason: String = game.last_point.reason

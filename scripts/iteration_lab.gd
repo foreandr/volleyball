@@ -47,6 +47,8 @@ func _ready() -> void:
 	stop = button("Stop",stop_run)
 	controls.add_child(play)
 	controls.add_child(stop)
+	controls.add_child(label("Training speed",16))
+	controls.add_child(StorySession.iteration_run.speed_picker())
 	duration = number_box(10,0,720,"min")
 	controls.add_child(duration)
 	controls.add_child(label("0 runs until Stop",16))

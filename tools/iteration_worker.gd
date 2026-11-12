@@ -18,6 +18,7 @@ var reported_demo_findings := -1
 var batch_started := 0
 var next_status_at := 0
 var saved_matches := 0
+var faster := false
 
 func run() -> void:
 	var args := OS.get_cmdline_user_args()
@@ -102,7 +103,7 @@ func pause_match(game: Node3D) -> bool:
 	if now >= next_demo_scan: scan_demo_findings()
 	if now >= next_status_at: update_status("running")
 	if should_stop(): return true
-	var rest := clampf(float(now-batch_started)*0.00055,0.008,0.10)
+	var rest := IterationRun.training_rest(now-batch_started,faster)
 	await create_timer(rest).timeout
 	batch_started = Time.get_ticks_msec()
 	return should_stop()
@@ -147,8 +148,9 @@ func append_row(path: String, data: Dictionary) -> bool:
 
 func update_status(state: String) -> void:
 	next_status_at = Time.get_ticks_msec()+1000
+	faster = IterationRun.faster_training()
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(run_dir))
 	Policy.write_json(Policy.DIRECTORY+"/status.json",{"state":state,"pid":OS.get_process_id(),
 		"run":run_dir,"matches":completed,"saved_matches":saved_matches,"observations":observations,
-		"heartbeat":Time.get_unix_time_from_system(),
+		"heartbeat":Time.get_unix_time_from_system(),"faster":faster,
 		"demo_observations":demo_findings.size(),"player_markers":player_markers.size(),"score":latest_score})

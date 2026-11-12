@@ -1,10 +1,29 @@
 extends RefCounted
 
 const Policy = preload("res://scripts/cpu_policy.gd")
+const SPEED_PATH := Policy.DIRECTORY+"/speed.json"
 
 var pid := -1
 var run_path := ""
 var started_at := -1
+
+static func faster_training() -> bool:
+	return bool(Policy.read_json(SPEED_PATH).get("faster",false))
+
+static func training_rest(batch_ms: int, faster: bool) -> float:
+	if faster: return clampf(float(batch_ms)*0.00020,0.004,0.06)
+	return clampf(float(batch_ms)*0.00055,0.008,0.10)
+
+func speed_picker() -> OptionButton:
+	var picker := OptionButton.new()
+	picker.name = "TrainingSpeed"
+	picker.add_item("Balanced")
+	picker.add_item("Faster")
+	picker.select(1 if faster_training() else 0)
+	picker.item_selected.connect(func(index: int):
+		if Policy.write_json(SPEED_PATH,{"faster":index == 1}) != OK:
+			picker.select(1 if faster_training() else 0))
+	return picker
 
 static func worker_port() -> int:
 	var profile := ProjectSettings.globalize_path(Policy.DIRECTORY).replace("\\","/").to_lower()

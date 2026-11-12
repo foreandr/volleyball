@@ -352,6 +352,8 @@ func show_match_tuning() -> void:
 	var tuning := VBoxContainer.new()
 	tuning.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(tuning)
+	tuning.add_child(label("Training speed",16))
+	tuning.add_child(StorySession.iteration_run.speed_picker())
 	add_attack_tuning_slider(tuning,"Attack vertical","MatchAttackVertical","in",30,65,1,demo_match.attack_vertical,demo_match.set_attack_vertical)
 	add_attack_tuning_slider(tuning,"Block vertical","MatchBlockVertical","in",20,65,1,demo_match.block_vertical,
 		func(value: float): demo_match.block_vertical = value)
