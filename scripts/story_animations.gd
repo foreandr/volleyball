@@ -397,7 +397,7 @@ func update_match_replay_controls() -> void:
 	match_replay_seek.max_value = replay.duration()
 	match_replay_seek.set_value_no_signal(replay.clock)
 
-func move_match_replay_camera(delta: float) -> void:
+func move_match_camera(delta: float) -> void:
 	var movement: Vector2 = player_controls.movement_input()
 	var forward := -preview_camera.global_basis.z.slide(Vector3.UP).normalized()
 	var right := preview_camera.global_basis.x.slide(Vector3.UP).normalized()
@@ -1164,10 +1164,9 @@ func _process(delta: float) -> void:
 	if is_instance_valid(demo_match):
 		if passing_drill != null: passing_drill.tick(delta)
 		else: demo_match.tick_match(delta,player_controls)
-		if demo_match.replay.active:
-			move_match_replay_camera(delta)
-			update_match_replay_controls()
-		elif match_replay_panel.visible:
+		if passing_drill != null or demo_match.replay.active:
+			move_match_camera(delta)
+		if demo_match.replay.active or match_replay_panel.visible:
 			update_match_replay_controls()
 		return
 	if is_instance_valid(blocking_practice):
