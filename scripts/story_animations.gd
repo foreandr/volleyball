@@ -354,6 +354,7 @@ func show_match_tuning() -> void:
 	scroll.add_child(tuning)
 	tuning.add_child(label("Training speed",16))
 	tuning.add_child(StorySession.iteration_run.speed_picker())
+	add_attack_tuning_slider(tuning,"Live match speed","MatchLiveSpeed","%",10,100,5,100,demo_match.set_live_speed)
 	add_attack_tuning_slider(tuning,"Attack vertical","MatchAttackVertical","in",30,65,1,demo_match.attack_vertical,demo_match.set_attack_vertical)
 	add_attack_tuning_slider(tuning,"Block vertical","MatchBlockVertical","in",20,65,1,demo_match.block_vertical,
 		func(value: float): demo_match.block_vertical = value)

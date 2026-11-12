@@ -151,6 +151,7 @@ var rear_chaser := -1
 var dig_switch_at := -INF
 var block_vertical := 30.0
 var serve_vertical := 30.0
+var live_speed := 1.0
 var attack_lift_lean := 42.0
 var spike_strength := 0.70
 var serve_pending := false
@@ -445,6 +446,9 @@ func set_serve_vertical(inches: float) -> void:
 	serve_vertical = inches
 	if phase == Phase.READY and not serve_pending and serve.has_method("set_jump_height"):
 		serve.set_jump_height(inches*0.0254)
+
+func set_live_speed(percent: float) -> void:
+	live_speed = clampf(percent*0.01,0.10,1.0)
 
 func set_attack_lift_lean(degrees: float) -> void:
 	attack_lift_lean = clampf(degrees,0.0,90.0)
@@ -1201,7 +1205,7 @@ func settle_point(delta: float) -> void:
 	advance_recoveries(delta)
 	advance_idle_players(delta)
 
-func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_facing := Vector3.INF, chase := false, turn_to_travel := false, turn_rate := 12.5) -> void:
+func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_facing := Vector3.INF, chase := false, turn_to_travel := false, turn_rate := 12.5, paced_run := false) -> void:
 	if recoveries.has(index) or owns_action(index,true): return
 	var actor := players[index]
 	var is_server: bool = serve.player == actor
@@ -1224,7 +1228,7 @@ func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_f
 		chase = true
 		turn_to_travel = true
 		speed = maxf(speed,6.5)
-	var run_distance := 0.48 if already_running else 0.85
+	var run_distance := 0.18 if paced_run else (0.48 if already_running else 0.85)
 	var run_alignment := 0.66 if already_running else 0.76
 	var may_run := chase and distance > run_distance
 	var yaw := 0.0
@@ -1235,7 +1239,9 @@ func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_f
 		if not turn_to_travel: yaw = clampf(yaw,-1.03,1.03)
 	actor.rotation.y = rotate_toward(actor.rotation.y,yaw,delta*(turn_rate if turn_to_travel else 8.0))
 	var sprint := may_run and heading.dot(actor.basis.z.normalized()) >= run_alignment
-	var pace := clampf(speed*1.24,5.85,CPU_SPRINT_SPEED) if sprint else minf(speed,4.35)
+	var pace := minf(speed,4.35)
+	if sprint:
+		pace = clampf(speed,0.65,CPU_SPRINT_SPEED) if paced_run else clampf(speed*1.24,5.85,CPU_SPRINT_SPEED)
 	var before := actor.position
 	var step_target := before+offset.limit_length(delta*pace)
 	var grounded := Court.clamp_setter(step_target,3.43)
@@ -1246,6 +1252,8 @@ func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_f
 	var movement := actor.basis.inverse()*(actor.position-before).slide(Vector3.UP)
 	if actor.mirror_animation: movement.x = -movement.x
 	actor.animator.speed_scale = lerpf(1.60,1.92,smoothstep(5.85,CPU_SPRINT_SPEED,pace)) if sprint else 1.0
+	if sprint and paced_run:
+		actor.animator.speed_scale = clampf(pace/3.7,0.22,2.05)
 	actor.play_action("run" if sprint else "idle",0.10)
 	actor.animator.advance(delta)
 	var steps := footwork[index]
@@ -1521,6 +1529,7 @@ func tick_receive(delta: float, previous: float) -> void:
 	var max_set_jump := attack_vertical*0.0254
 	var set_jump_height := clampf((catch_point.y-actor.global_position.y-1.72)*1.12,minf(0.56,max_set_jump),max_set_jump)
 	var set_jump_rise := 0.0
+	var set_jump_plant_gap := INF
 	if technique == 2: set_jump_rise = set_jumps[index].flight_duration(set_jump_height,true)*0.43
 	bump.low_save_approach_velocity = Vector3.ZERO
 	if not is_human(index):
@@ -1558,12 +1567,23 @@ func tick_receive(delta: float, previous: float) -> void:
 			var before_move := actor.position
 			move_cpu(index,target,delta,speed,face,not plant and (is_dig or cpu_setting or free_ball or flight_kind == "serve"),run_to_drop and not plant)
 			bump.low_save_approach_velocity = (actor.position-before_move)/maxf(delta,0.001)
+			set_jump_plant_gap = (target-actor.global_position).slide(Vector3.UP).length()
 		var prep := set_jump_rise+0.16 if technique == 2 else (0.40 if cpu_dig else (0.18 if cpu_setting and technique == 0 else 0.27))
 		if elapsed >= cue-prep: queue_receive(index,technique)
 	if not is_finite(bump.pressed_at): return
 	if touched_tape and not net_hit.is_empty() and elapsed < float(net_hit.release_time): return
 	if recovering: recoveries.erase(index)
 	if technique == 2 and not jump_set_started[index] and cue-elapsed <= set_jump_rise+0.13:
+		if not is_human(index) and set_jump_plant_gap > 0.38:
+			if cue-elapsed > set_jump_rise+0.045:
+				return
+			bump.reset()
+			cpu_technique = 1 if overhead_available(index,1) else 0
+			cpu_fake_dump = false
+			cpu_dump = cpu_dump and cpu_technique == 1
+			next_touch_cue = INF
+			queue_receive(index,cpu_technique)
+			return
 		jump_set_started[index] = true
 		set_jumps[index].front_limit = 3.35
 		set_jumps[index].begin_set_jump(actor,clampf(cue-elapsed-set_jump_rise,0.055,0.16),set_jump_height)
@@ -1904,9 +1924,8 @@ func peel_cpu_off_net(index: int, staging: Vector3, delta: float) -> void:
 
 func move_cpu_to_approach(hitter: int, staging: Vector3, delta: float, speed: float) -> void:
 	var offset := (staging-players[hitter].position).slide(Vector3.UP)
-	var running := offset.z > 0.28 and offset.length() > 0.52
-	var pace := maxf(speed,6.5) if running else speed
-	move_cpu(hitter,frames[team(hitter)].to_global(staging),delta,pace,Vector3.INF,running,running,17.0)
+	var running := offset.z > 0.12 and offset.length() > 0.18
+	move_cpu(hitter,frames[team(hitter)].to_global(staging),delta,speed,Vector3.INF,running,running,17.0,running)
 
 func prepare_cpu_approach(hitter: int, driver: Node3D, delta: float) -> void:
 	if driver.approach_jump_queued: return
@@ -1925,15 +1944,15 @@ func prepare_cpu_approach(hitter: int, driver: Node3D, delta: float) -> void:
 		return
 	if not driver.approach_space_held:
 		var intercept: Vector3 = driver.find_approach_intercept(true)
-		var run_up_gap := staging.z-actor.position.z
-		if intercept.is_finite() and ((gap <= 2.40 and run_up_gap <= 0.58) or time_left <= 0.90):
+		var run_up_gap := (staging-actor.position).slide(Vector3.UP).length()
+		if intercept.is_finite() and ((time_left <= 0.88 and gap <= 2.40 and run_up_gap <= 0.35) or time_left <= 0.68):
 			driver.queue_jump(Vector2.ZERO)
 			if driver.approach_jump_queued:
 				show_key(hitter,"Space")
 				return
 	var distance := (staging-actor.position).slide(Vector3.UP).length()
 	if distance > 0.12:
-		var speed := clampf(distance/maxf(0.10,time_left-0.69),2.4,5.3)
+		var speed := clampf(distance/maxf(0.05,time_left-0.82),0.65,CPU_SPRINT_SPEED)
 		move_cpu_to_approach(hitter,staging,delta,speed)
 
 func position_attack(delta: float) -> void:
@@ -1956,7 +1975,7 @@ func position_attack(delta: float) -> void:
 	if is_human(hitter) or blocks.has(hitter) or set_jumps[hitter].active: return
 	var receive_at := arrival(1.55)
 	var receive_depth := frames[receiving_team].to_local(path_point(receive_at)).z
-	var run_up := lerpf(2.02,1.54,smoothstep(1.55,2.85,receive_depth))
+	var run_up := lerpf(2.72,2.18,smoothstep(1.55,2.85,receive_depth))
 	var staging := set_pin_for(setter)-Vector3.BACK*run_up
 	var distance := (staging-players[hitter].position).slide(Vector3.UP).length()
 	var speed := clampf(distance/maxf(0.24,receive_at-elapsed+0.16),1.5,4.1)
@@ -2351,6 +2370,7 @@ func tick_match(delta: float, controls: RefCounted) -> void:
 	if replay.active:
 		replay.step(self,delta)
 		return
+	delta *= live_speed
 	var previous_rallies := rallies
 	step_match(delta,controls)
 	if (phase != Phase.FINISHED or dead_age <= 2.0) and match_clock+0.0005 >= next_replay_sample:

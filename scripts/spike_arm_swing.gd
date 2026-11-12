@@ -42,6 +42,9 @@ static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float,
 	var solve_weight := 1.0 if finish > 0.0 else weight
 	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",target,elbow_pole,solve_weight,elbow_limit)
 	drop_low_bow_elbow(pose,author,weight*draw_progress*(1.0-arm_lift)*(1.0-smoothstep(0.0,0.48,extension)),elbow_clearance)
+	if contact_palm:
+		var turnover := smoothstep(0.31,0.88,extension)*(1.0-smoothstep(0.23,0.83,follow))
+		rotate_strike_shoulder_inward(pose,author,deg_to_rad(42.0)*turnover*solve_weight)
 	var wrist_alignment := lerpf(0.90,0.68,smoothstep(0.04,0.70,extension))
 	wrist_alignment = lerpf(wrist_alignment,0.96,smoothstep(0.0,0.86,follow))
 	align_wrist_to_forearm(pose,author,wrist_alignment*solve_weight)
@@ -166,6 +169,15 @@ static func compact_finish_weight(target: Vector3, origin: Vector3, same_side: b
 	var slope := absf(target.x-origin.x)/maxf(target.z-origin.z,0.1)
 	return 1.0-smoothstep(0.30,0.55,slope) if same_side else 1.0-smoothstep(0.065,0.27,slope)
 
+static func rotate_strike_shoulder_inward(pose: Array, author: RefCounted, angle: float) -> void:
+	if is_zero_approx(angle):
+		return
+	var shoulder: Vector3 = author.point(pose,"upperarm_r")
+	var elbow: Vector3 = author.point(pose,"lowerarm_r")
+	var forearm_basis: Basis = author.world_pose(pose,author.rig.find_bone("lowerarm_r")).basis
+	author.rotate_world(pose,"upperarm_r",(elbow-shoulder).normalized(),-angle)
+	author.set_world_basis(pose,"lowerarm_r",forearm_basis)
+
 static func roll_finish_palm(pose: Array, author: RefCounted, amount: float, follow: float, cross_body: bool, previous_roll := 0.0, roll_step := INF, shot_direction := Vector3.ZERO, face_weight := 0.0, ball := Vector3.ZERO, forearm_turn := 0.0) -> float:
 	var weight := amount*smoothstep(0.05,0.84,follow)
 	if weight <= 0.0 and face_weight <= 0.0: return 0.0
@@ -202,10 +214,6 @@ static func roll_finish_palm(pose: Array, author: RefCounted, amount: float, fol
 			applied = rotate_toward(previous_roll,target_roll,roll_step)
 	if forearm_turn > 0.0:
 		var elbow: Vector3 = author.point(pose,"lowerarm_r")
-		var shoulder: Vector3 = author.point(pose,"upperarm_r")
-		var lowerarm_basis: Basis = author.world_pose(pose,author.rig.find_bone("lowerarm_r")).basis
-		author.rotate_world(pose,"upperarm_r",(elbow-shoulder).normalized(),applied*forearm_turn*0.20)
-		author.set_world_basis(pose,"lowerarm_r",lowerarm_basis)
 		var forearm_axis := (wrist-elbow).normalized()
 		author.rotate_world(pose,"lowerarm_r",forearm_axis,applied*forearm_turn)
 		# Correct the residual around the new hand axis while keeping the wrist on its swing path.
