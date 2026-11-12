@@ -1692,6 +1692,8 @@ func deflect_defender_body(previous: float) -> void:
 	if surface.is_zero_approx(): surface = -incoming.normalized()
 	var rebound := incoming.slide(surface)*0.48-surface*incoming.dot(surface)*0.46
 	trace.write("body_contact",match_clock,{"player":player,"body_part":body_part,"point":contact,"rebound":rebound})
+	if is_finite(platforms[player].pose_started_at) and not platforms[player].low_save.active and not owns_action(player):
+		begin_recovery(player)
 	stroke = "Body deflection"
 	transition_possession[team(player)] = true
 	play_touch()
