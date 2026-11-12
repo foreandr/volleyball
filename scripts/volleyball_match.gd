@@ -27,6 +27,7 @@ const SERVICE_START := [-6.40,-6.40,-7.4,-8.15]
 const CpuPolicy = preload("res://scripts/cpu_policy.gd")
 const WIN_SCORE := 15
 const RECOVERY_TIME := 0.32
+const SERVE_RUN_BLEND := 0.15
 const PLAYER_GROUND_Y := 0.04
 const CPU_SPRINT_SPEED := 8.4
 const HAND_DIG_REACH := 0.46
@@ -120,6 +121,8 @@ var flight_kind := ""
 var flight_number := 0
 var receiving_team := 1
 var possession_team := -1
+var serve_run_started := -INF
+var serve_run_rotations := {}
 var touches := 0
 var last_player := -1
 var last_was_block := false
@@ -406,6 +409,7 @@ func begin_point() -> void:
 	trace.begin_feed({"mode":"demo_match","score":score,"server":server_index(),"spectator":spectator,"team_size":team_size})
 
 func prepare_serve(style: int) -> void:
+	serve_run_rotations.clear()
 	if is_instance_valid(serve):
 		serve.hide()
 		serve.queue_free()
@@ -1148,6 +1152,13 @@ func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_f
 	var is_server: bool = serve.player == actor
 	if is_server:
 		if not serve.can_run_after_contact(): return
+		if not serve.moved_after_contact:
+			serve_run_started = match_clock
+			var rig: Skeleton3D = actor.skeleton
+			for bone in rig.get_bone_count():
+				var name_ := str(rig.get_bone_name(bone))
+				if name_.begins_with("spine_") or name_.begins_with("clavicle_") or name_.begins_with("upperarm_") or name_.begins_with("lowerarm_") or name_.begins_with("hand_"):
+					serve_run_rotations[bone] = rig.get_bone_pose_rotation(bone)
 		serve.moved_after_contact = true
 	var local := frames[team(index)].to_local(target)
 	var offset := (local-actor.position).slide(Vector3.UP)
@@ -1187,6 +1198,14 @@ func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_f
 		steps.weight = 0.0
 	else:
 		steps.step(movement.limit_length(delta*2.1)/maxf(delta*2.1,0.001),delta,clampf(pace/2.06,0.65,2.25),true)
+	if is_server and not serve_run_rotations.is_empty():
+		var blend := smoothstep(0.0,SERVE_RUN_BLEND,match_clock-serve_run_started)
+		if blend >= 1.0: serve_run_rotations.clear()
+		else:
+			var rig: Skeleton3D = actor.skeleton
+			for bone in serve_run_rotations:
+				var source: Quaternion = serve_run_rotations[bone]
+				rig.set_bone_pose_rotation(bone,source.slerp(rig.get_bone_pose_rotation(bone),blend))
 	animated[index] = true
 
 func arrival(height: float) -> float:
