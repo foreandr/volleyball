@@ -1017,7 +1017,9 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 	if not StorySession.attack_ball_audio_muted:
 		if technique != 0 and not transition: set_audio.play()
 		else: play_touch()
-	if touches == 2 and not (cpu_dump and index == cpu_choice) and (bump.destination.y < 4.0 or (is_human(index) and technique != 0)):
+	var cpu_dump_attempt := touches == 2 and cpu_dump and index == cpu_choice and not is_human(index)
+	var unsafe_dump := cpu_dump_attempt and not dump_can_land_in_court(point,frame.global_basis.inverse()*world_motion)
+	if touches == 2 and (unsafe_dump or (not (cpu_dump and index == cpu_choice) and (bump.destination.y < 4.0 or (is_human(index) and technique != 0)))):
 		var setter_x := players[index].position.x
 		var pin := set_pin_for(index,setter_x)
 		last_called_set_x[side] = pin.x
@@ -1053,6 +1055,15 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 		# A teammate can still play a low pass before it reaches the net.
 		over = crossing_point.y >= Net.NET_TOP+0.02
 	launch(world_point,world_motion,("dump" if touches == 2 and technique != 0 else "free") if over else "pass",index)
+
+func dump_can_land_in_court(point: Vector3, motion: Vector3) -> bool:
+	if motion.z <= 0.001: return false
+	var landing := Flight.landing_time(point,motion)
+	var cross := (Net.NET_Z-point.z)/motion.z
+	if cross <= 0.0 or cross >= landing: return false
+	var at_net := point+motion*cross+Vector3.DOWN*0.5*Flight.GRAVITY*cross*cross
+	var floor_point := point+motion*landing
+	return absf(at_net.x) <= Net.NET_HALF_WIDTH and at_net.y >= Net.NET_TOP+0.02 and absf(floor_point.x) <= 4.53 and floor_point.z <= 13.03
 
 func owns_action(index: int, allow_serve_move := false) -> bool:
 	if blocks.has(index) or set_jumps[index].active: return true
