@@ -80,6 +80,7 @@ var elbow_clearance := SpikeArm.DEFAULT_ELBOW_CLEARANCE
 var two_step_tilt := 40.0
 var force_contact_tilt := false
 var torso_forward_bias_degrees := 0.0
+var lift_lean_back_degrees := 0.0
 var backswing_bend := DEFAULT_BACKSWING_BEND
 var backswing_reach := DEFAULT_BACKSWING_REACH
 var stage_start := 0.0
@@ -1084,6 +1085,10 @@ func sync_approach_arm_lift() -> bool:
 func attack_arm_turn_rate() -> float:
 	return INF
 
+func lift_lean_offset(arm_lift: float, extension: float) -> float:
+	var lift := smoothstep(0.06,0.62,arm_lift)*(1.0-smoothstep(0.72,1.0,arm_lift))
+	return -deg_to_rad(lift_lean_back_degrees)*lift*(1.0-smoothstep(0.22,0.74,extension))
+
 func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0.0, follow := 0.0, draw_progress := 1.0, arm_lift := 1.0) -> void:
 	var rig: Skeleton3D = setter.skeleton
 	var pose: Array[Transform3D] = []
@@ -1181,6 +1186,8 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 		elif stage == Stage.HIT:
 			var hit_age := clock-stage_start
 			follow_crunch = smootherstep(0.0,0.11,hit_age)*(1.0-smootherstep(0.14,0.32,hit_age))
+	if stage == Stage.SET:
+		pitch += lift_lean_offset(arm_lift,extension)
 	var lean_blend := maxf(contact_crunch,follow_crunch)
 	if stage == Stage.HIT: lean_blend *= 1.0-smootherstep(0.14,0.34,clock-stage_start)
 	var torso_pitch := pitch+deg_to_rad(30.0)*follow_crunch+deg_to_rad(torso_forward_bias_degrees)*lean_blend

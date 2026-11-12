@@ -127,6 +127,8 @@ var iteration_run := preload("res://scripts/iteration_run.gd").new()
 const PREVIEW_FIELDS := ["pass_start","pass_distance","pass_output_angle","incoming_speed","incoming_angle","feed_spot","incoming_spin","spin_rate","float_strength","source_height","feed_fit","receive_direction","receive_distance_tier","ball_tab","pass_destination","pass_apex","destination_fit","preview_camera"]
 
 func _ready() -> void:
+	if DisplayServer.get_name() != "headless":
+		Engine.max_fps = 60
 	match_preferences.load(MATCH_SETTINGS_PATH)
 	AudioServer.set_bus_mute(AudioServer.get_bus_index("Master"),true)
 	var config := ConfigFile.new()
