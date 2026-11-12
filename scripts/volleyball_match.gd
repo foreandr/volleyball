@@ -1349,6 +1349,17 @@ func should_let_blockout_go() -> bool:
 	var landing := path_point(flight_end())
 	return absf(landing.x) > 4.72 or landing.z < -5.22 or landing.z > 13.22
 
+func cpu_can_lunge(index: int, contact: Vector3, lead: float) -> bool:
+	if contact.y < 0.42 or lead < -0.035: return false
+	var actor := players[index]
+	var gap := (contact-actor.global_position).slide(Vector3.UP).length()
+	var lunge_reach := lerpf(1.02,1.32,smoothstep(0.035,0.22,lead))
+	if gap <= lunge_reach: return true
+	if lead < 0.10 or gap > 1.55: return false
+	var bump := platforms[index]
+	var offset: Vector3 = bump.to_local(contact)-bump.ready_contact()
+	return Bump.Timing.practice_reach_tier(offset) == 2
+
 func tick_receive(delta: float, previous: float) -> void:
 	if spectator or not is_finite(platforms[0].pressed_at):
 		if should_let_blockout_go(): return
@@ -1497,10 +1508,7 @@ func tick_receive(delta: float, previous: float) -> void:
 		bump.lunge_bend_depth = lerpf(0.14,0.22,low)
 		bump.knee_bend_depth = bump.ready_knee_bend_depth*smoothstep(cue-0.33,cue-0.06,elapsed)
 		if cpu_dig:
-			var gap := (catch_point-actor.global_position).slide(Vector3.UP).length()
-			var lunge_reach := lerpf(1.02,1.32,smoothstep(0.035,0.22,cue-elapsed))
-			var can_lunge := catch_point.y >= 0.42 and gap <= lunge_reach and elapsed <= cue+0.035
-			bump.allow_auto_dive = not can_lunge
+			bump.allow_auto_dive = not cpu_can_lunge(index,catch_point,cue-elapsed)
 	if not is_human(index) and frame.to_local(path_point(end)).z > Net.NET_Z: bump.allow_auto_dive = false
 	var was_diving: bool = bump.low_save.active
 	bump.update_attempt(elapsed,previous,end,path,frame.global_basis.inverse()*motion,delta,timing_cue,spin,cue if is_dig else INF)
