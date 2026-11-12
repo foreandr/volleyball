@@ -89,7 +89,7 @@ func run_match(page: Node, match_seed: int, review_point: int, output_dir: Strin
 	var last_ball := Vector3.INF
 	var flags := []
 	for tick in range(game.WIN_SCORE*TICKS_PER_TARGET_POINT):
-		if watching and tick%120 == 0 and await pause_match(game): break
+		if watching and tick%30 == 0 and await pause_match(game): break
 		game.step_match(STEP,page.player_controls)
 		if watching:
 			if game.phase == game.Phase.LIVE or (game.phase == game.Phase.READY and game.serve_pending):

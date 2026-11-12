@@ -138,6 +138,7 @@ var setting_skill := 40.0
 var held_ball := false
 var last_point := {}
 var replay := Replay.new()
+var next_replay_sample := 0.0
 var overpass_flight := -1
 var overpass_plan_flight := -1
 var overpass_player := -1
@@ -2174,7 +2175,9 @@ func tick_match(delta: float, controls: RefCounted) -> void:
 		return
 	var previous_rallies := rallies
 	step_match(delta,controls)
-	if phase != Phase.FINISHED or dead_age <= 2.0: replay.record(self)
+	if (phase != Phase.FINISHED or dead_age <= 2.0) and match_clock+0.0005 >= next_replay_sample:
+		replay.record(self)
+		next_replay_sample = match_clock+1.0/30.0
 	if not cpu_policy.demo_recording: return
 	var point_finished := rallies > previous_rallies
 	if phase == Phase.LIVE:

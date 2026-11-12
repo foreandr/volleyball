@@ -2,6 +2,8 @@ extends "res://tools/iterate_matches.gd"
 
 const Policy = preload("res://scripts/cpu_policy.gd")
 const Review = preload("res://scripts/match_review.gd")
+const IterationRun = preload("res://scripts/iteration_run.gd")
+var worker_lock := TCPServer.new()
 var run_dir := ""
 var started := 0
 var limit_ms := 0
@@ -13,20 +15,29 @@ var demo_findings := {}
 var player_markers := {}
 var next_demo_scan := 0
 var reported_demo_findings := -1
+var batch_started := 0
+var next_status_at := 0
+var saved_matches := 0
 
 func run() -> void:
 	var args := OS.get_cmdline_user_args()
 	if args.size() < 2 or args.size() > 3:
 		quit(2)
 		return
+	if worker_lock.listen(IterationRun.worker_port(),"127.0.0.1") != OK:
+		quit(3)
+		return
 	var existing := Policy.read_json(Policy.DIRECTORY+"/status.json")
 	var worker := int(existing.get("pid",0))
-	if existing.get("state","") == "running" and worker > 0 and OS.is_process_running(worker):
+	if not existing.has("heartbeat") and existing.get("state","") == "running" and worker > 0 and OS.is_process_running(worker):
 		quit(3)
 		return
 	run_dir = Policy.DIRECTORY+"/runs/"+args[0]
 	limit_ms = maxi(0,int(args[1]))*60000
 	started = Time.get_ticks_msec()
+	var previous_policy := Policy.read_json(Policy.PATH)
+	if previous_policy.is_empty(): previous_policy = Policy.read_json(Policy.PATH+".bak")
+	saved_matches = int(previous_policy.get("matches",0))
 	scan_demo_findings()
 	update_status("running")
 	await process_frame
@@ -57,6 +68,7 @@ func run() -> void:
 			break
 		seed(active_seed)
 		game.reset_match()
+		batch_started = Time.get_ticks_msec()
 		var result := await run_match(page,active_seed,0,"")
 		latest_score = result.score
 		result["build"] = page.build_label
@@ -66,6 +78,7 @@ func run() -> void:
 			if game.cpu_policy.save_match(game.carried_shot_reads) != OK:
 				update_status("Could not save the learning profile")
 				break
+			saved_matches = game.cpu_policy.matches
 		observations += result.review_flags.size()
 		if not append_summary(result):
 			update_status("Could not save the run log")
@@ -86,9 +99,13 @@ func should_stop() -> bool:
 
 func pause_match(game: Node3D) -> bool:
 	latest_score = game.score.duplicate()
-	if Time.get_ticks_msec() >= next_demo_scan: scan_demo_findings()
-	update_status("running")
-	await process_frame
+	var now := Time.get_ticks_msec()
+	if now >= next_demo_scan: scan_demo_findings()
+	if now >= next_status_at: update_status("running")
+	if should_stop(): return true
+	var rest := clampf(float(now-batch_started)*0.00055,0.008,0.10)
+	await create_timer(rest).timeout
+	batch_started = Time.get_ticks_msec()
 	return should_stop()
 
 func scan_demo_findings() -> void:
@@ -130,7 +147,9 @@ func append_row(path: String, data: Dictionary) -> bool:
 	return true
 
 func update_status(state: String) -> void:
+	next_status_at = Time.get_ticks_msec()+1000
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(run_dir))
 	Policy.write_json(Policy.DIRECTORY+"/status.json",{"state":state,"pid":OS.get_process_id(),
-		"run":run_dir,"matches":completed,"observations":observations,
+		"run":run_dir,"matches":completed,"saved_matches":saved_matches,"observations":observations,
+		"heartbeat":Time.get_unix_time_from_system(),
 		"demo_observations":demo_findings.size(),"player_markers":player_markers.size(),"score":latest_score})

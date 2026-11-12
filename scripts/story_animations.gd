@@ -334,8 +334,10 @@ func refresh_match_training() -> void:
 	match_training.disabled = state.state == "stopping"
 	if state.state == "stopping":
 		match_training.text = "Stopping training…"
+	elif state.state == "starting":
+		match_training.text = "Starting training…"
 	elif state.running:
-		match_training.text = "Stop training  ·  %d matches" % int(state.get("matches",0))
+		match_training.text = "Stop training  ·  %d saved" % int(state.get("saved_matches",0))
 	else:
 		match_training.text = "Start background training"
 
