@@ -1167,7 +1167,10 @@ func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_f
 	var sprint := may_run and heading.dot(actor.basis.z.normalized()) >= run_alignment
 	var pace := clampf(speed*1.24,5.85,CPU_SPRINT_SPEED) if sprint else minf(speed,4.35)
 	var before := actor.position
-	var grounded := Court.clamp_setter(before+offset.limit_length(delta*pace),3.43)
+	var step_target := before+offset.limit_length(delta*pace)
+	var grounded := Court.clamp_setter(step_target,3.43)
+	if is_server and before.z < Court.RUNOFF_NEAR_BASELINE:
+		grounded.z = clampf(step_target.z,before.z,3.43)
 	grounded.y = move_toward(before.y,PLAYER_GROUND_Y,delta*1.25)
 	actor.position = grounded
 	var movement := actor.basis.inverse()*(actor.position-before).slide(Vector3.UP)
