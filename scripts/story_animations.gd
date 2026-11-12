@@ -85,6 +85,7 @@ var setter_animation_process: int
 var setter_animator_active: bool
 
 var match_from_home := false
+var passing_drill: RefCounted
 var match_from_lab_replay := false
 
 func _ready() -> void:
@@ -114,6 +115,9 @@ func _ready() -> void:
 		StorySession.open_home_simulation = false
 		match_from_home = true
 		start_demo_match.call_deferred()
+	if StorySession.open_passing_drill:
+		StorySession.open_passing_drill = false
+		start_passing_drill.call_deferred()
 	if not StorySession.animation_return.is_empty():
 		var destination: Dictionary = StorySession.animation_return.duplicate()
 		StorySession.animation_return.clear()
@@ -248,7 +252,10 @@ func show_categories() -> void:
 	content.add_child(match_button)
 	content.add_child(button("Iteration Lab",func(): get_tree().change_scene_to_file("res://scenes/iteration_lab.tscn")))
 
-func start_demo_match(team_size := 2, learn_from_demo := true, _cpu_only := true, mirror_blue_right := true) -> void:
+func start_passing_drill() -> void:
+	start_demo_match(2,false,true,true,true)
+
+func start_demo_match(team_size := 2, learn_from_demo := true, _cpu_only := true, mirror_blue_right := true, passing := false) -> void:
 	stop_blocking_practice()
 	stop_serving_session()
 	stop_setting_drill()
@@ -259,7 +266,7 @@ func start_demo_match(team_size := 2, learn_from_demo := true, _cpu_only := true
 	right_panel.hide()
 	angle_control.hide()
 	clear_content()
-	set_title("SIMULATE")
+	set_title("PASS TO TARGET" if passing else "SIMULATE")
 	selected_category = "Demo Match"
 	var board := label("",26)
 	content.add_child(board)
@@ -277,6 +284,7 @@ func start_demo_match(team_size := 2, learn_from_demo := true, _cpu_only := true
 	demo_match.configure(preview_player,board,status,build_label,team_size,learn_from_demo,mirror_blue_right)
 	demo_match.review_flagged.connect(show_marker_popup)
 	demo_match.set_ball_sound(false)
+	if passing: passing_drill = preload("res://scripts/passing_drill.gd").new(demo_match)
 	show_match_tuning()
 	player_controls.locomotion = ""
 	player_controls.setter_travel = Vector3.ZERO
@@ -297,6 +305,10 @@ func show_match_tuning() -> void:
 	var tuning := VBoxContainer.new()
 	tuning.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(tuning)
+	if passing_drill != null:
+		passing_drill.build_controls(self,tuning)
+		add_match_replay_controls(tuning)
+		return
 	tuning.add_child(label("Training speed",16))
 	tuning.add_child(StorySession.iteration_run.speed_picker())
 	add_attack_tuning_slider(tuning,"Live match speed","MatchLiveSpeed","%",10,100,5,100,demo_match.set_live_speed)
@@ -314,6 +326,7 @@ func show_match_tuning() -> void:
 		update_match_replay_controls()
 		preview.grab_focus()))
 
+func add_match_replay_controls(tuning: VBoxContainer) -> void:
 	match_replay_button = Button.new()
 	match_replay_button.text = "Replay rally (R)"
 	match_replay_button.focus_mode = Control.FOCUS_NONE
@@ -396,6 +409,7 @@ func stop_demo_match() -> void:
 	if not is_instance_valid(demo_match): return
 	demo_match.stop()
 	demo_match = null
+	passing_drill = null
 	attack_position_panel.hide()
 	attack_position_panel.queue_free()
 	attack_position_panel = null
@@ -1148,7 +1162,8 @@ func reception_drill_active() -> bool:
 func _process(delta: float) -> void:
 	pass_timing_cue.hide()
 	if is_instance_valid(demo_match):
-		demo_match.tick_match(delta,player_controls)
+		if passing_drill != null: passing_drill.tick(delta)
+		else: demo_match.tick_match(delta,player_controls)
 		if demo_match.replay.active:
 			move_match_replay_camera(delta)
 			update_match_replay_controls()
@@ -1570,6 +1585,10 @@ func handle_preview_input(event: InputEvent) -> void:
 		if event is InputEventMouseMotion and (event.button_mask & MOUSE_BUTTON_MASK_MIDDLE):
 			orbit_setting_camera(event.relative)
 			preview.accept_event()
+		elif passing_drill != null and event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			var point: Variant = attack_floor_point(event.position)
+			if point is Vector3: passing_drill.place(point)
+			preview.accept_event()
 		elif event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_WHEEL_UP,MOUSE_BUTTON_WHEEL_DOWN]:
 			var wheel := (1.0 if event.button_index == MOUSE_BUTTON_WHEEL_UP else -1.0)*maxf(0.1,event.factor)
 			zoom_attack_camera(wheel)
@@ -1958,6 +1977,10 @@ func cycle_type(direction: int) -> void:
 	refresh_type()
 
 func open_menu() -> void:
+	if passing_drill != null:
+		StorySession.drill_menu_category = "Passing"
+		get_tree().change_scene_to_file("res://scenes/drills.tscn")
+		return
 	if match_from_lab_replay and is_instance_valid(demo_match):
 		get_tree().change_scene_to_file("res://scenes/iteration_lab.tscn")
 		return

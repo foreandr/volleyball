@@ -152,6 +152,8 @@ var dig_switch_at := -INF
 var block_vertical := 30.0
 var serve_vertical := 30.0
 var live_speed := 1.0
+var drill_pass_target := Vector3.INF
+var drill_feed_acceleration := Vector3.INF
 var attack_lift_lean := 66.0
 var spike_strength := 0.70
 var serve_pending := false
@@ -580,7 +582,7 @@ func reset_receives() -> void:
 	requested = -1
 	request_age = -INF
 
-func launch(point: Vector3, motion: Vector3, kind: String, from: int, spin_rate := 0.0, hitter := -1, set_pin := Vector3.ZERO) -> void:
+func launch(point: Vector3, motion: Vector3, kind: String, from: int, spin_rate := 0.0, hitter := -1, set_pin := Vector3.ZERO, feed_acceleration := Vector3.INF) -> void:
 	# A deflection changes the ball's flight immediately, even during a player's slide.
 	for index in players.size():
 		var save: RefCounted = platforms[index].low_save
@@ -591,6 +593,7 @@ func launch(point: Vector3, motion: Vector3, kind: String, from: int, spin_rate 
 	elapsed = 0.0
 	spin = spin_rate
 	flight_kind = kind
+	drill_feed_acceleration = feed_acceleration
 	expected_hitter = hitter
 	crossed_net = false
 	touched_tape = false
@@ -629,11 +632,13 @@ func launch(point: Vector3, motion: Vector3, kind: String, from: int, spin_rate 
 	ball.show()
 
 func flight_gravity() -> float:
+	if drill_feed_acceleration.is_finite(): return -drill_feed_acceleration.y
 	return Flight.spike_gravity(spin) if flight_kind == "spike" else Flight.GRAVITY
 
 func flight_point(time: float) -> Vector3:
 	if flight_kind == "serve" and is_instance_valid(serve): return serve.to_global(serve.flight_point(time))
-	return origin+velocity*time+Vector3.DOWN*0.5*flight_gravity()*time*time
+	var acceleration := drill_feed_acceleration if drill_feed_acceleration.is_finite() else Vector3.DOWN*flight_gravity()
+	return origin+velocity*time+acceleration*0.5*time*time
 
 func path_point(time: float) -> Vector3:
 	if not net_hit.is_empty() and time >= float(net_hit.time): return Net.after_hit(net_hit,time)
@@ -1001,6 +1006,7 @@ func pass_support_receiver(index: int) -> int:
 	return nearest_on_team(side,frames[side].to_global(target),index)
 
 func cpu_pass_target(index: int) -> Vector3:
+	if drill_pass_target.is_finite(): return frames[team(index)].to_local(drill_pass_target)
 	var passer := players[index].position
 	var teammate := players[pass_support_receiver(index)].position
 	var x := lerpf(passer.x,teammate.x,0.82)

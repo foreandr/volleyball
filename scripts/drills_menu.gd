@@ -1,7 +1,7 @@
 extends Control
 
 const CATEGORIES := {
-	"Passing": [],
+	"Passing": [{"title":"Pass to Target","scene":"res://scenes/story_animations.tscn"}],
 	"Setting": [],
 	"Attacking": [],
 	"Serving": [],
@@ -49,7 +49,12 @@ func _ready() -> void:
 	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	list.add_theme_constant_override("separation",8)
 	scroll.add_child(list)
-	show_categories()
+	if StorySession.drill_menu_category.is_empty():
+		show_categories()
+	else:
+		var previous := StorySession.drill_menu_category
+		StorySession.drill_menu_category = ""
+		show_category(previous)
 
 func clear_list() -> void:
 	for entry in list.get_children():
@@ -81,7 +86,9 @@ func show_category(name_: String) -> void:
 		return
 	for drill in drills:
 		var scene_path: String = drill.scene
-		add_item(drill.title,func(): get_tree().change_scene_to_file(scene_path))
+		add_item(drill.title,func():
+			StorySession.open_passing_drill = name_ == "Passing"
+			get_tree().change_scene_to_file(scene_path))
 	list.get_child(0).grab_focus()
 
 func add_item(title: String, action: Callable) -> Button:
