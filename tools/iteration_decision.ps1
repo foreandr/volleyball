@@ -21,5 +21,5 @@ try {
     }
     $message | Set-Content -LiteralPath $Output -Encoding utf8
 } catch {
-    $_.Exception.Message | Set-Content -LiteralPath $Output -Encoding utf8
+    ('Error: ' + $_.Exception.Message) | Set-Content -LiteralPath $Output -Encoding utf8
 }

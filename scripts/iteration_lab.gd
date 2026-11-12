@@ -9,12 +9,21 @@ var clock := 0.0
 var proposal_list: ItemList
 var details: Label
 var manifests: Array[Dictionary] = []
-var before_view: TextureRect
-var after_view: TextureRect
+var preview: TextureRect
+var tool_panel: VBoxContainer
+var proposal_title: Label
+var take_label: Label
+var review_controls: HBoxContainer
+var accept: Button
+var take := 1
+var frame_size := Vector2i(320,180)
+var skipped := {}
+var next_id := ""
 var frames: Array[Texture2D] = []
 var playback := false
 var playback_speed := 0.0
 var slow_frames := Vector2i(-1,-1)
+var loop_focus := false
 var frame_duration := 1.0/12.0
 var frame_time := 0.0
 var current_frame := 0
@@ -28,7 +37,7 @@ var selected_id := ""
 
 func _ready() -> void:
 	var background := ColorRect.new()
-	background.color = Color("#111c28")
+	background.color = Color("#111821")
 	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(background)
 	var margin := MarginContainer.new()
@@ -36,16 +45,62 @@ func _ready() -> void:
 	for edge in ["left","right","top","bottom"]: margin.add_theme_constant_override("margin_"+edge,26)
 	add_child(margin)
 	var layout := VBoxContainer.new()
-	layout.add_theme_constant_override("separation",10)
+	layout.add_theme_constant_override("separation",14)
 	margin.add_child(layout)
 	var header := HBoxContainer.new()
 	layout.add_child(header)
-	var title := label("Iteration Lab",28)
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header.add_child(title)
+	proposal_title = label("Iteration Lab",24)
+	proposal_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(proposal_title)
+	tool_panel = VBoxContainer.new()
+	tool_panel.hide()
+	header.add_child(button("Tools",func(): tool_panel.visible = not tool_panel.visible))
 	header.add_child(button("Back",func(): get_tree().change_scene_to_file("res://scenes/main.tscn")))
+
+	var stage := PanelContainer.new()
+	stage.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var border := StyleBoxFlat.new()
+	border.bg_color = Color("#090d13")
+	border.set_corner_radius_all(10)
+	border.set_content_margin_all(4)
+	stage.add_theme_stylebox_override("panel",border)
+	layout.add_child(stage)
+	preview = TextureRect.new()
+	preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	stage.add_child(preview)
+
+	review_controls = HBoxContainer.new()
+	review_controls.alignment = BoxContainer.ALIGNMENT_CENTER
+	review_controls.add_theme_constant_override("separation",10)
+	layout.add_child(review_controls)
+	var left := button("‹",set_take.bind(0))
+	left.tooltip_text = "Original (Left arrow)"
+	left.custom_minimum_size = Vector2(42,38)
+	review_controls.add_child(left)
+	take_label = label("Proposed",16)
+	take_label.custom_minimum_size.x = 78
+	take_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	review_controls.add_child(take_label)
+	var right := button("›",set_take.bind(1))
+	right.tooltip_text = "Proposed (Right arrow)"
+	right.custom_minimum_size = Vector2(42,38)
+	review_controls.add_child(right)
+	accept = button("Accept",decide.bind("Accept"))
+	accept.custom_minimum_size = Vector2(100,38)
+	accept.add_theme_color_override("font_color",Color("#a3e7c9"))
+	review_controls.add_child(accept)
+	var skip_button := button("Skip",skip)
+	skip_button.custom_minimum_size = Vector2(76,38)
+	review_controls.add_child(skip_button)
+	details = label("",16)
+	details.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	layout.add_child(details)
+	layout.add_child(tool_panel)
+
 	var controls := HBoxContainer.new()
-	layout.add_child(controls)
+	tool_panel.add_child(controls)
 	play = button("Play",start_run)
 	stop = button("Stop",stop_run)
 	controls.add_child(play)
@@ -57,27 +112,13 @@ func _ready() -> void:
 	controls.add_child(label("0 runs until Stop",16))
 	controls.add_child(button("Watch latest finding",watch_latest))
 	status = label("",16)
-	layout.add_child(status)
-	var row := HSplitContainer.new()
-	row.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	layout.add_child(row)
+	tool_panel.add_child(status)
 	proposal_list = ItemList.new()
-	proposal_list.custom_minimum_size.x = 290
+	proposal_list.custom_minimum_size.y = 64
 	proposal_list.item_selected.connect(select_proposal)
-	row.add_child(proposal_list)
-	var review := VBoxContainer.new()
-	review.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(review)
-	details = label("",16)
-	details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	review.add_child(details)
-	var images := HBoxContainer.new()
-	images.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	review.add_child(images)
-	before_view = view_column(images,"Before")
-	after_view = view_column(images,"After")
+	tool_panel.add_child(proposal_list)
 	var timeline := HBoxContainer.new()
-	review.add_child(timeline)
+	tool_panel.add_child(timeline)
 	timeline.add_child(button("Play / pause",func(): playback = not playback))
 	timeline.add_child(label("Clip speed",16))
 	var speed := OptionButton.new()
@@ -95,12 +136,10 @@ func _ready() -> void:
 	timeline.add_child(point_input)
 	timeline.add_child(button("Render comparison",decide.bind("Clip")))
 	var actions := HBoxContainer.new()
-	review.add_child(actions)
-	actions.add_child(button("Refresh",refresh_proposals))
+	tool_panel.add_child(actions)
+	actions.add_child(button("Refresh queue",func(): skipped.clear(); refresh_proposals()))
 	actions.add_child(button("Re-test",decide.bind("Review")))
-	actions.add_child(button("Accept",decide.bind("Accept")))
 	actions.add_child(button("Reject",decide.bind("Reject")))
-	actions.add_child(button("Skip",skip))
 	note = LineEdit.new()
 	note.placeholder_text = "Feedback"
 	note.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -129,18 +168,6 @@ func button(caption: String, action: Callable) -> Button:
 	item.pressed.connect(action)
 	return item
 
-func view_column(parent: Node, caption: String) -> TextureRect:
-	var column := VBoxContainer.new()
-	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	parent.add_child(column)
-	column.add_child(label(caption,16))
-	var preview := TextureRect.new()
-	preview.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	column.add_child(preview)
-	return preview
-
 func _process(delta: float) -> void:
 	clock += delta
 	if clock >= 0.8:
@@ -149,13 +176,17 @@ func _process(delta: float) -> void:
 	if playback and frames.size() == 2: advance_clip(delta)
 
 func advance_clip(delta: float) -> void:
-	var count := frames[0].get_width()/320
-	var next := current_frame
+	var last := frames[0].get_width()/frame_size.x-1
+	var first := 0
+	if playback_speed == 0.0 and loop_focus and slow_frames.x >= 0:
+		first = slow_frames.x
+		last = slow_frames.y
+	var next := clampi(current_frame,first,last)
 	frame_time += delta
 	var duration_ := clip_frame_duration(next)
 	while frame_time >= duration_:
 		frame_time -= duration_
-		next = (next+1)%count
+		next = first if next >= last else next+1
 		duration_ = clip_frame_duration(next)
 	if current_frame != next: show_frame(next)
 
@@ -175,9 +206,9 @@ func refresh_status() -> void:
 		state,int(data.get("matches",0)),int(data.get("observations",0)),int(learned.get("matches",0))]
 	if review_pid > 0 and not OS.is_process_running(review_pid):
 		review_pid = -1
-		var message := FileAccess.get_file_as_string(result_log).strip_edges() if FileAccess.file_exists(result_log) else "Review tool did not return a result."
+		var message := FileAccess.get_file_as_string(result_log).strip_edges() if FileAccess.file_exists(result_log) else "Error: Review tool did not return a result."
 		refresh_proposals()
-		details.text = message
+		if message.begins_with("Error:"): details.text = message.get_slice("\n",0)
 
 func start_run() -> void:
 	if StorySession.iteration_run.start(int(duration.value)): refresh_status()
@@ -226,20 +257,24 @@ func refresh_proposals() -> void:
 	proposal_list.clear()
 	manifests.clear()
 	frames.clear()
-	before_view.texture = null
-	after_view.texture = null
-	details.text = "No proposals awaiting review."
+	preview.texture = null
+	proposal_title.text = "Iteration Lab"
+	review_controls.hide()
+	details.text = "No proposals to review."
 	var root := ProjectSettings.globalize_path("res://work/iterations")
 	if not DirAccess.dir_exists_absolute(root): return
-	var selected := 0
+	var selected := -1
+	var next_index := 0
 	for id in DirAccess.get_directories_at(root):
 		var manifest := Policy.read_json(root.path_join(id).path_join("proposal.json"))
-		if manifest.get("status","") != "pending": continue
+		if manifest.get("status","") != "pending" or skipped.has(id): continue
 		manifest["directory"] = root.path_join(id)
 		if id == selected_id: selected = manifests.size()
+		if id == next_id: next_index = manifests.size()
 		manifests.append(manifest)
 		proposal_list.add_item(str(manifest.get("title",id)))
 	if not manifests.is_empty():
+		if selected < 0: selected = next_index
 		proposal_list.select(selected)
 		select_proposal(selected)
 
@@ -248,12 +283,17 @@ func select_proposal(index: int) -> void:
 	selected_id = str(entry.id)
 	frames.clear()
 	playback = false
-	before_view.texture = null
-	after_view.texture = null
-	details.text = str(entry.get("note",""))
+	preview.texture = null
+	proposal_title.text = str(entry.get("short_title",entry.get("title",selected_id)))
+	details.text = ""
+	review_controls.show()
+	accept.disabled = review_pid > 0
+	take = 1
+	take_label.text = "Proposed"
+	view_index = 0
 	var root := str(entry.directory).path_join("clips").path_join(str(entry.candidate).left(12))
 	if not DirAccess.dir_exists_absolute(root):
-		details.text += "\nChoose a seed and point to render a comparison."
+		details.text = "No preview yet. Render it from Tools."
 		return
 	var clips := DirAccess.get_directories_at(root)
 	var requested := "seed-%d-point-%d" % [int(seed_input.value),int(point_input.value)]
@@ -267,41 +307,60 @@ func select_proposal(index: int) -> void:
 			for directory in [before,after]:
 				var sample := Image.load_from_file(directory.path_join(filename))
 				if not sample.is_empty(): frames.append(ImageTexture.create_from_image(sample))
-			if frames.size() == 2:
+			if frames.size() == 2 and frames[0].get_size() == frames[1].get_size():
 				var settings := Policy.read_json(root.path_join(clip).path_join("clip.json"))
-				var count := frames[0].get_width()/320
+				frame_size = Vector2i(clampi(int(settings.get("frame_width",320)),1,frames[0].get_width()),frames[0].get_height()/2)
+				var count := frames[0].get_width()/frame_size.x
 				frame_duration = clampf(float(settings.get("frame_seconds",1.0/12.0 if count >= 24 else 0.16)),0.01,1.0)
-				slow_frames = Vector2i(int(settings.get("slow_first",-1)),int(settings.get("slow_last",-1)))
+				slow_frames = Vector2i(clampi(int(settings.get("slow_first",-1)),-1,count-1),clampi(int(settings.get("slow_last",-1)),-1,count-1))
+				if slow_frames.y < slow_frames.x: slow_frames = Vector2i(-1,-1)
+				loop_focus = bool(settings.get("loop_focus",false))
 				frame_time = 0.0
-				show_frame(0)
+				playback = true
+				show_frame(maxi(0,slow_frames.x) if loop_focus and playback_speed == 0.0 else 0)
 				return
 			frames.clear()
-	details.text += "\nChoose a seed and point to render a comparison."
+	details.text = "No preview yet. Render it from Tools."
 
 func show_frame(index: int) -> void:
 	current_frame = index
-	for view in 2:
-		var source := frames[view]
-		var atlas := AtlasTexture.new()
-		atlas.atlas = source
-		atlas.region = Rect2(index*320,view_index*180,320,180)
-		if view == 0: before_view.texture = atlas
-		else: after_view.texture = atlas
+	var atlas := AtlasTexture.new()
+	atlas.atlas = frames[take]
+	atlas.region = Rect2(index*frame_size.x,view_index*frame_size.y,frame_size.x,frame_size.y)
+	preview.texture = atlas
+
+func set_take(index: int) -> void:
+	take = index
+	take_label.text = "Original" if index == 0 else "Proposed"
+	if frames.size() == 2: show_frame(current_frame)
+
+func _input(event: InputEvent) -> void:
+	if not review_controls.visible or tool_panel.visible or not event is InputEventKey or not event.pressed: return
+	match event.keycode:
+		KEY_LEFT: set_take(0)
+		KEY_RIGHT: set_take(1)
+		_: return
+	get_viewport().set_input_as_handled()
 
 func toggle_camera() -> void:
 	view_index = 1-view_index
 	if frames.size() == 2: show_frame(current_frame)
 
 func skip() -> void:
+	if manifests.is_empty() or review_pid > 0: return
+	queue_next()
+	skipped[selected_id] = true
+	refresh_proposals()
+
+func queue_next() -> void:
 	var selection := proposal_list.get_selected_items()
-	if selection.is_empty() or manifests.is_empty(): return
-	var next := (selection[0]+1)%manifests.size()
-	proposal_list.select(next)
-	select_proposal(next)
+	if not selection.is_empty():
+		next_id = str(manifests[(selection[0]+1)%manifests.size()].id)
 
 func decide(action: String) -> void:
 	var selection := proposal_list.get_selected_items()
 	if selection.is_empty() or review_pid > 0: return
+	if action in ["Accept","Reject"]: queue_next()
 	var entry := manifests[selection[0]]
 	var script := ProjectSettings.globalize_path("res://tools/iterate.ps1")
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(Policy.DIRECTORY))
@@ -310,4 +369,5 @@ func decide(action: String) -> void:
 	var feedback := Marshalls.utf8_to_base64(note.text)
 	review_pid = OS.create_process("pwsh.exe",["-NoProfile","-WindowStyle","Hidden","-File",wrapper,
 		script,action,str(entry.id),result_log,str(int(seed_input.value)),str(int(point_input.value)),feedback if not feedback.is_empty() else "-"])
+	accept.disabled = review_pid > 0
 	details.text = "Could not open the review tool." if review_pid < 0 else "Working…"
