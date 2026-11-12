@@ -11,7 +11,8 @@ param(
     [int]$Seed = 41,
     [ValidateRange(1,100)][int]$Point = 1,
     [string]$GodotPath,
-    [switch]$Series
+    [switch]$Series,
+    [switch]$DeferPublish
 )
 
 $ErrorActionPreference = 'Stop'
@@ -299,8 +300,8 @@ if (Test-Path -LiteralPath $baseline) {
         $baseline = Join-Path $directory ('baseline-' + $entry.base.Substring(0,12))
     }
 }
-if (-not (Test-Path -LiteralPath $baseline)) { Invoke-Git worktree add --detach $baseline $entry.base }
 if ($Action -eq 'Clip') {
+    if (-not (Test-Path -LiteralPath $baseline)) { Invoke-Git worktree add --detach $baseline $entry.base }
     $clip = Join-Path $directory "clips/$($revision.Substring(0,12))/seed-$Seed-point-$Point"
     Invoke-Simulation $baseline (Join-Path $clip 'before/matches.json') 1 $Point
     Invoke-Simulation $candidate (Join-Path $clip 'after/matches.json') 1 $Point
@@ -316,29 +317,55 @@ if ('tools/iterate_matches.gd' -in @(Invoke-Git diff --name-only $entry.base $re
     $candidateRunner = Join-Path $candidate 'tools/iterate_matches.gd'
 }
 # Separate PowerShell processes keep the two simulations' APPDATA profiles isolated.
-$baselineJob = Start-Job -ScriptBlock {
-    param($GitFunction,$SimulationFunction,$Project,$Result,$Count,$RunnerPath,$Executable,$FirstSeed,$UseSeries,$RepoPath)
-    $ErrorActionPreference = 'Stop'
-    ${function:Invoke-Git} = [scriptblock]::Create($GitFunction)
-    ${function:Invoke-Simulation} = [scriptblock]::Create($SimulationFunction)
-    $runner = $RunnerPath
-    $GodotPath = $Executable
-    $Seed = $FirstSeed
-    $Series = $UseSeries
-    $repo = $RepoPath
-    Invoke-Simulation $Project $Result $Count
-} -ArgumentList ${function:Invoke-Git}.ToString(),${function:Invoke-Simulation}.ToString(),$baseline,$before,$Matches,$runner,$GodotPath,$Seed,$Series.IsPresent,$repo
+$runnerHash = (Get-FileHash -LiteralPath $runner).Hash
+$engineHash = (Get-FileHash -LiteralPath $GodotPath).Hash
+$cacheInputs = @($entry.base, $runnerHash, $engineHash, $Seed, $Matches, $Series.IsPresent, ${function:Invoke-Simulation}.ToString())
+$cacheKey = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
+    [Text.Encoding]::UTF8.GetBytes(($cacheInputs -join "`n"))))
+$cacheDir = Join-Path $root '.review-cache'
+$cachedBefore = Join-Path $cacheDir "$cacheKey.json"
+$baselineJob = $null
+if (Test-Path -LiteralPath $cachedBefore) {
+    New-Item -ItemType Directory -Path (Split-Path -Parent $before) -Force | Out-Null
+    Copy-Item -LiteralPath $cachedBefore -Destination $before
+} else {
+    if (-not (Test-Path -LiteralPath $baseline)) { Invoke-Git worktree add --detach $baseline $entry.base }
+    $baselineJob = Start-Job -ScriptBlock {
+        param($GitFunction,$SimulationFunction,$Project,$Result,$Count,$RunnerPath,$Executable,$FirstSeed,$UseSeries,$RepoPath)
+        $ErrorActionPreference = 'Stop'
+        ${function:Invoke-Git} = [scriptblock]::Create($GitFunction)
+        ${function:Invoke-Simulation} = [scriptblock]::Create($SimulationFunction)
+        $runner = $RunnerPath
+        $GodotPath = $Executable
+        $Seed = $FirstSeed
+        $Series = $UseSeries
+        $repo = $RepoPath
+        Invoke-Simulation $Project $Result $Count
+    } -ArgumentList ${function:Invoke-Git}.ToString(),${function:Invoke-Simulation}.ToString(),$baseline,$before,$Matches,$runner,$GodotPath,$Seed,$Series.IsPresent,$repo
+}
 try {
     Invoke-Simulation $candidate $after $Matches 0 $candidateRunner
-    Receive-Job -Job $baselineJob -Wait -ErrorAction Stop
+    if ($baselineJob) {
+        Receive-Job -Job $baselineJob -Wait -ErrorAction Stop
+        New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null
+        $cacheTemp = "$cachedBefore.$PID.tmp"
+        try {
+            Copy-Item -LiteralPath $before -Destination $cacheTemp
+            [IO.File]::Move($cacheTemp, $cachedBefore, $true)
+        } finally {
+            if (Test-Path -LiteralPath $cacheTemp) { Remove-Item -LiteralPath $cacheTemp }
+        }
+    }
 } finally {
-    Wait-Job -Job $baselineJob | Out-Null
-    Remove-Job -Job $baselineJob
+    if ($baselineJob) {
+        Wait-Job -Job $baselineJob | Out-Null
+        Remove-Job -Job $baselineJob
+    }
 }
 $comparison = [ordered]@{ base = $entry.base; candidate = $revision; first_seed = $Seed; before = Read-Totals $before; after = Read-Totals $after }
 $comparison | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $review 'comparison.json') -Encoding UTF8
 Invoke-Git diff $entry.base $revision | Set-Content -LiteralPath (Join-Path $review 'changes.diff') -Encoding UTF8
 $entry.candidate = $revision
-$entry.status = 'pending'
+$entry.status = if ($DeferPublish) { 'needs_review' } else { 'pending' }
 Write-Entry
 Write-Output $review
