@@ -19,10 +19,26 @@ func _ready() -> void:
 	var play := Button.new()
 	play.name = "Play"
 	play.text = "Play"
-	play.disabled = true
 	play.custom_minimum_size.y = 56
-	play.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/court.tscn"))
-	column.add_child(play)
+	var match_size := OptionButton.new()
+	match_size.name = "MatchSize"
+	match_size.add_item("2v2",2)
+	match_size.add_item("3v3",3)
+	match_size.select(0)
+	play.pressed.connect(func():
+		StorySession.home_match_size = match_size.get_selected_id()
+		get_tree().change_scene_to_file("res://scenes/story_animations.tscn"))
+	var play_row := HBoxContainer.new()
+	play.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	play_row.add_child(play)
+	play_row.add_child(match_size)
+	column.add_child(play_row)
+	var lab := Button.new()
+	lab.name = "IterationLab"
+	lab.text = "Iteration Lab"
+	lab.custom_minimum_size.y = 56
+	lab.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/iteration_lab.tscn"))
+	column.add_child(lab)
 	var create := Button.new()
 	create.name = "Create"
 	create.text = "Create Player"
@@ -36,8 +52,7 @@ func _ready() -> void:
 	story.custom_minimum_size.y = 56
 	story.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/story.tscn"))
 	column.add_child(story)
-	column.move_child(story,1)
-	story.grab_focus()
+	play.grab_focus()
 	var quit := Button.new()
 	quit.text = "Quit"
 	quit.custom_minimum_size.y = 48

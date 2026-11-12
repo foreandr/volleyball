@@ -42,7 +42,7 @@ func _ready() -> void:
 	var title := label("Iteration Lab",28)
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(title)
-	header.add_child(button("Back",func(): get_tree().change_scene_to_file("res://scenes/story_animations.tscn")))
+	header.add_child(button("Back",func(): get_tree().change_scene_to_file("res://scenes/main.tscn")))
 	var controls := HBoxContainer.new()
 	layout.add_child(controls)
 	play = button("Play",start_run)

@@ -146,8 +146,17 @@ var crossed_net := false
 var next_touch_cue := INF
 var touched_tape := false
 var stroke := ""
+var team_size := 2
+var rally_setter := -1
+var rally_hitter := -1
+var deep_defenders := [-1,-1]
+var support_lanes := [0.0,0.0]
 
-func configure(actor: Node3D, board: Label, status: Label, build := "") -> void:
+func configure(actor: Node3D, board: Label, status: Label, build := "", players_per_team := 2) -> void:
+	team_size = clampi(players_per_team,2,3)
+	key_until.resize(team_size*2)
+	jump_set_started.resize(team_size*2)
+	animated.resize(team_size*2)
 	trace.open(build)
 	cpu_policy.load_profile()
 	human = actor
@@ -163,10 +172,10 @@ func configure(actor: Node3D, board: Label, status: Label, build := "") -> void:
 			frame.rotation.y = PI
 		add_child(frame)
 		frames.append(frame)
-		for slot in 2:
+		for slot in team_size:
 			var avatar := actor if side == 0 and slot == 0 else Player.new()
 			if avatar != actor:
-				avatar.name = "Teammate" if side == 0 else "Opponent%d" % (slot+1)
+				avatar.name = ("Teammate" if slot == 1 else "Teammate2") if side == 0 else "Opponent%d" % (slot+1)
 				avatar.team_color = Color("287fda") if side == 0 else Color("d9874e")
 				frame.add_child(avatar)
 			avatar.animator.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
@@ -189,7 +198,7 @@ func configure(actor: Node3D, board: Label, status: Label, build := "") -> void:
 		var hidden_status := Label.new()
 		hidden_status.hide()
 		add_child(hidden_status)
-		driver.configure_for_match(players[side*2],hidden_status)
+		driver.configure_for_match(players[side*team_size],hidden_status)
 		driver.struck.connect(on_spike)
 		attackers.append(driver)
 	ball = MeshInstance3D.new()
@@ -251,7 +260,35 @@ func stop() -> void:
 	queue_free()
 
 func team(index: int) -> int:
-	return index >> 1
+	return floori(float(index)/team_size)
+
+func nearest_on_team(side: int, target: Vector3, exclude := -1, also_exclude := -1) -> int:
+	var best := -1
+	var best_cost := INF
+	for index in range(side*team_size,(side+1)*team_size):
+		if index == exclude or index == also_exclude: continue
+		var cost := players[index].global_position.distance_squared_to(target)
+		if blocks.has(index) or recoveries.has(index): cost += 2.0
+		if cost < best_cost:
+			best = index
+			best_cost = cost
+	return best
+
+func setter_for_pass(passer: int) -> int:
+	if team_size == 2: return passer^1
+	if rally_setter >= 0 and team(rally_setter) == team(passer) and rally_setter != passer:
+		return rally_setter
+	return nearest_on_team(team(passer),path_point(arrival(1.92)),passer)
+
+func hitter_for_set(setter: int) -> int:
+	if team_size == 2: return setter^1
+	if rally_hitter >= 0 and team(rally_hitter) == team(setter) and rally_hitter != setter:
+		return rally_hitter
+	var side := team(setter)
+	return nearest_on_team(side,frames[side].to_global(Vector3(0.0,0.04,1.45)),setter)
+
+func human_can_set() -> bool:
+	return last_player > 0 and team(last_player) == 0 and (team_size == 2 or rally_setter == 0)
 
 func is_human(index: int) -> bool:
 	return index == 0 and not spectator
@@ -268,7 +305,7 @@ func show_key(index: int, caption: String) -> void:
 	key_until[index] = match_clock+0.64
 
 func server_index() -> int:
-	return service_team*2+server_slot[service_team]
+	return service_team*team_size+server_slot[service_team]
 
 func reset_match() -> void:
 	if replay.active: toggle_replay()
@@ -296,13 +333,18 @@ func begin_point() -> void:
 	bounce_end = 0.0
 	bounce_start = 0.0
 	dead_flight_from = INF
-	key_until = [0.0,0.0,0.0,0.0]
+	key_until.fill(0.0)
+	rally_setter = -1
+	rally_hitter = -1
+	deep_defenders.fill(-1)
 	defender_assignment = [-1,-1]
 	block_lane_flight = [-1,-1]
 	last_set_apex = 0.0
 	for index in players.size():
 		var actor := players[index]
-		actor.position = Vector3(-2.1 if index%2 == 0 else 2.1,0.04,-2.6)
+		var slot := index%team_size
+		var start_x := [-2.1,2.1,0.0]
+		actor.position = Vector3(start_x[slot],0.04,0.70 if slot == 2 else -2.6)
 		actor.rotation.y = 0.0
 		actor.model.rotation.y = 0.0
 		actor.play_action("idle",0.0)
@@ -331,7 +373,7 @@ func begin_point() -> void:
 	var style: int = serve_style if is_human(server) else cpu_policy.choose(team(server),"serve type",[0,1,2,3],rallies%SERVES.size())
 	prepare_serve(style)
 	update_score()
-	trace.begin_feed({"mode":"demo_match","score":score,"server":server_index(),"spectator":spectator})
+	trace.begin_feed({"mode":"demo_match","score":score,"server":server_index(),"spectator":spectator,"team_size":team_size})
 
 func prepare_serve(style: int) -> void:
 	if is_instance_valid(serve):
@@ -341,7 +383,7 @@ func prepare_serve(style: int) -> void:
 	var side := team(index)
 	serve = SERVES[style].new()
 	frames[side].add_child(serve)
-	var x := -1.6 if index%2 == 0 else 1.6
+	var x: float = [-1.6,1.6,0.0][index%team_size]
 	serve.configure(players[index],Vector3(x,0.04,SERVICE_START[style]))
 	if style == 3: serve.set_serve_speed(1.12)
 	if serve.has_method("set_jump_height"): serve.set_jump_height(serve_vertical*0.0254)
@@ -403,7 +445,7 @@ func input_space(pressed: bool) -> void:
 		else: driver.release_approach_jump()
 	elif pressed and player_blocks and phase == Phase.LIVE and receiving_team == 0 and human.position.z >= 2.25:
 		if flight_kind in ["spike","dump"] or (flight_kind == "pass" and possession_team == 1 and touches == 1): start_block(0,INF,flight_kind == "pass")
-	elif pressed and player_blocks and phase == Phase.LIVE and expected_hitter >= 2 and human.position.z >= 2.25:
+	elif pressed and player_blocks and phase == Phase.LIVE and expected_hitter >= 0 and team(expected_hitter) == 1 and human.position.z >= 2.25:
 		start_block(0)
 
 func click_set() -> void:
@@ -446,7 +488,7 @@ func award(side: int, reason: String) -> void:
 	cpu_policy.finish_point(side)
 	if side != service_team:
 		service_team = side
-		if rallies > 0: server_slot[side] = 1-int(server_slot[side])
+		if rallies > 0: server_slot[side] = (int(server_slot[side])+1)%team_size
 	rallies += 1
 	dead_age = 0.0
 	if bounce_end <= 0.0 and elapsed < flight_end(): dead_flight_from = elapsed
@@ -481,7 +523,7 @@ func reset_receives() -> void:
 	cpu_choice = -1
 	cpu_dump = false
 	cpu_fake_dump = false
-	jump_set_started = [false,false,false,false]
+	jump_set_started.fill(false)
 	next_touch_cue = INF
 	requested = -1
 	request_age = -INF
@@ -517,7 +559,11 @@ func launch(point: Vector3, motion: Vector3, kind: String, from: int, spin_rate 
 	if kind in ["spike","free","dump"]: receiving_team = 1-team(from)
 	if last_was_block and kind in ["block","free"]:
 		receiving_team = 0 if path_point(flight_end()).z < Net.NET_Z else 1
-	if not spectator and kind == "pass" and from == 1 and receiving_team == 0 and match_clock-last_input_at <= 0.35:
+	if team_size == 3 and kind == "pass" and touches == 1 and possession_team == receiving_team:
+		rally_setter = nearest_on_team(receiving_team,path_point(arrival(1.92)),from)
+		rally_hitter = -1
+		rally_hitter = hitter_for_set(rally_setter)
+	if not spectator and kind == "pass" and human_can_set() and receiving_team == 0 and match_clock-last_input_at <= 0.35:
 		requested = last_input_technique
 		request_age = 0.0
 		queue_receive(0,requested)
@@ -555,7 +601,8 @@ func choose_shot(index: int, contact := Vector3.INF, block_at := Vector3.INF, pr
 	var frame := frames[side]
 	var defending := 1-side
 	var blocker: int = defender_assignment[defending]
-	var defender := (blocker^1) if blocker >= 0 else defending*2
+	var defender := (blocker^1) if team_size == 2 and blocker >= 0 else defending*team_size
+	if defender == blocker: defender += 1
 	var backcourt := frame.to_local(players[defender].global_position)
 	if not contact.is_finite():
 		return Vector3(clampf(-backcourt.x,-3.8,3.8),Flight.FLOOR,10.7)
@@ -568,6 +615,11 @@ func choose_shot(index: int, contact := Vector3.INF, block_at := Vector3.INF, pr
 			var crossing := lane_at_depth(contact,target,Net.NET_Z)
 			if absf(crossing) > Net.NET_HALF_WIDTH-Net.RADIUS-0.12: continue
 			var defender_gap := (target-backcourt).slide(Vector3.UP).length()
+			if team_size == 3:
+				for index_ in range(defending*team_size,(defending+1)*team_size):
+					if index_ == blocker: continue
+					var cover := frame.to_local(players[index_].global_position)
+					defender_gap = minf(defender_gap,(target-cover).slide(Vector3.UP).length())
 			var shot_score := minf(5.0,defender_gap)*0.19
 			shot_score -= absf(x)*0.038
 			if previous_shot.is_finite():
@@ -760,7 +812,7 @@ func set_pin_for(index: int, setter_x := INF) -> Vector3:
 	if is_human(index) and aim_point.is_finite():
 		var point := frame.to_local(aim_point)
 		if point.z <= Net.NET_Z: return Vector3(clampf(point.x,-4.6,4.6),0.065,clampf(point.z,-1.6,3.62))
-	var hitter := players[index^1]
+	var hitter := players[hitter_for_set(index)]
 	if is_human(index) or (flight_kind != "pass" and not defensive_ball()):
 		return Vector3(clampf(hitter.position.x,-3.75,3.75),0.065,3.20)
 	if called_pin_flight == flight_number and (not is_finite(setter_x) or absf(called_pin.x-setter_x) >= 1.0):
@@ -827,7 +879,9 @@ func queue_receive(index: int, technique: int) -> void:
 
 func cpu_pass_target(index: int) -> Vector3:
 	var passer := players[index].position
-	var teammate := players[index^1].position
+	var receiver := index^1 if team_size == 2 else nearest_on_team(team(index),
+		frames[team(index)].to_global(Vector3(players[index].position.x*0.5,0.04,2.0)),index)
+	var teammate := players[receiver].position
 	var x := lerpf(passer.x,teammate.x,0.82)
 	var forward := maxf(1.05,absf(x-passer.x)*tan(deg_to_rad(40.0)))
 	if not is_human(index):
@@ -853,7 +907,7 @@ func aim_receive(index: int) -> void:
 	bump.height = pass_height if is_human(index) else (3.65 if cpu_dump and index == cpu_choice else pass_apex)
 
 func cpu_set_apex(index: int, point: Vector3, pin: Vector3, pace: float) -> float:
-	var hitter := players[index^1]
+	var hitter := players[hitter_for_set(index)]
 	var tight := smoothstep(0.40,1.35,point.z)
 	var distance := (pin-hitter.position).slide(Vector3.UP).length()
 	var ready := 1.0-smoothstep(2.15,3.80,distance)
@@ -912,7 +966,7 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 		cpu_policy.used(side,"set lane")
 		cpu_policy.used(side,"set height")
 		var motion: Vector3 = driver.set_toward_pin(point,pin,apex,contact_height)
-		launch(world_point,frame.global_basis*motion,"set",index,1.0,index^1,frame.to_global(pin))
+		launch(world_point,frame.global_basis*motion,"set",index,1.0,hitter_for_set(index),frame.to_global(pin))
 		return
 	if not is_human(index) and touches == 3:
 		world_motion = frame.global_basis*cpu_free_ball_motion(point,frame.global_basis.inverse()*world_motion)
@@ -1075,12 +1129,12 @@ func arrival(height: float) -> float:
 func select_receiver() -> void:
 	var side := receiving_team
 	var point := path_point(arrival(1.10))
-	var first := side*2
+	var first := side*team_size
 	if side == possession_team and touches > 0 and not last_was_block:
-		cpu_choice = last_player^1
+		cpu_choice = setter_for_pass(last_player) if touches == 1 else (last_player^1 if team_size == 2 else nearest_on_team(side,point,last_player))
 	elif defensive_ball():
 		var best_cost := INF
-		for index in range(first,first+2):
+		for index in range(first,first+team_size):
 			var at := dig_intercept(index)
 			var contact := path_point(at)
 			var distance := (contact-players[index].global_position).slide(Vector3.UP).length()
@@ -1091,11 +1145,14 @@ func select_receiver() -> void:
 			if cost < best_cost:
 				cpu_choice = index
 				best_cost = cost
+	elif team_size == 3:
+		cpu_choice = nearest_on_team(side,point)
 	elif point.distance_squared_to(players[first].global_position) <= point.distance_squared_to(players[first+1].global_position):
 		cpu_choice = first
 	else: cpu_choice = first+1
 	if not spectator and side == 0 and cpu_choice == 0 and side != possession_team and not is_finite(platforms[0].pressed_at):
-		if point.slide(Vector3.UP).distance_to(human.global_position.slide(Vector3.UP)) > 1.65: cpu_choice = 1
+		if point.slide(Vector3.UP).distance_to(human.global_position.slide(Vector3.UP)) > 1.65:
+			cpu_choice = 1 if team_size == 2 else nearest_on_team(0,point,0)
 	cpu_technique = 0
 	cpu_dump = false
 	cpu_fake_dump = false
@@ -1398,7 +1455,7 @@ func try_foot_save(previous: float) -> void:
 	var lookahead := path_point(minf(end,elapsed+0.060))
 	if minf(last.y,lookahead.y) > 0.42 or maxf(first.y,last.y) < Flight.FLOOR: return
 	var side := receiving_team
-	for index in range(side*2,side*2+2):
+	for index in range(side*team_size,(side+1)*team_size):
 		if is_human(index) and match_clock > kick_pressed_until: continue
 		if index == last_player and not last_was_block: continue
 		if not can_play_forearms(index) or owns_action(index) or recoveries.has(index): continue
@@ -1473,7 +1530,7 @@ func deflect_defender_body(previous: float) -> void:
 	var surface := Vector3.ZERO
 	var first_fraction := INF
 	var body_part := ""
-	for index in range(receiving_team*2,receiving_team*2+2):
+	for index in range(receiving_team*team_size,(receiving_team+1)*team_size):
 		if index == last_player: continue
 		var actor := players[index]
 		if actor.global_position.slide(Vector3.UP).distance_to(last.slide(Vector3.UP)) > 1.1+travel.length(): continue
@@ -1657,18 +1714,19 @@ func position_attack(delta: float) -> void:
 				peel_cpu_off_net(blocker,stage_from,delta)
 		return
 	if flight_kind != "pass" or possession_team != receiving_team or touches != 1: return
-	var passer := last_player
-	if is_human(passer) or blocks.has(passer) or set_jumps[passer].active: return
+	var setter := setter_for_pass(last_player)
+	var hitter := hitter_for_set(setter)
+	if is_human(hitter) or blocks.has(hitter) or set_jumps[hitter].active: return
 	var receive_at := arrival(1.55)
 	var receive_depth := frames[receiving_team].to_local(path_point(receive_at)).z
 	var run_up := lerpf(2.02,1.54,smoothstep(1.55,2.85,receive_depth))
-	var staging := set_pin_for(passer^1)-Vector3.BACK*run_up
-	var distance := (staging-players[passer].position).slide(Vector3.UP).length()
+	var staging := set_pin_for(setter)-Vector3.BACK*run_up
+	var distance := (staging-players[hitter].position).slide(Vector3.UP).length()
 	var speed := clampf(distance/maxf(0.24,receive_at-elapsed+0.16),1.5,4.1)
-	if players[passer].position.z-staging.z > 0.45:
-		peel_cpu_off_net(passer,staging,delta)
+	if players[hitter].position.z-staging.z > 0.45:
+		peel_cpu_off_net(hitter,staging,delta)
 	else:
-		move_cpu(passer,frames[receiving_team].to_global(staging),delta,speed)
+		move_cpu(hitter,frames[receiving_team].to_global(staging),delta,speed)
 
 func dig_cover_x(frame: Node3D, attacker: Vector3, blocker: Vector3, depth: float, digger_x: float) -> float:
 	var attack := frame.to_local(attacker)
@@ -1692,7 +1750,7 @@ func position_defense(delta: float) -> void:
 	var second_ball := flight_kind == "pass" and possession_team == hitter_side and touches == 1
 	var second_ball_eta := INF
 	if second_ball:
-		var setter := last_player^1
+		var setter := setter_for_pass(last_player)
 		var attack_frame := frames[hitter_side]
 		var setter_approaching: bool = driver.enabled and driver.setter == players[setter] and (driver.approach_jump_queued or driver.jump.active)
 		var jump_setting: bool = set_jumps[setter].active
@@ -1708,7 +1766,7 @@ func position_defense(delta: float) -> void:
 			threat = contact
 			second_ball_eta = contact_time-elapsed
 		else:
-			var hitter_x := players[last_player].position.x
+			var hitter_x := players[hitter_for_set(setter)].position.x
 			if not is_human(setter):
 				hitter_x = move_toward(hitter_x,set_pin_for(setter).x,0.65)
 			threat = attack_frame.to_global(Vector3(hitter_x,0.04,3.20))
@@ -1717,16 +1775,24 @@ func position_defense(delta: float) -> void:
 	var overpass_ready := flight_kind in ["pass","set"] and net_hit.is_empty() and net_time >= elapsed and net_time-elapsed <= 0.33 and net_point.y >= Net.NET_TOP and net_point.y <= 3.33 and absf(net_point.x) < Net.NET_HALF_WIDTH
 	if overpass_ready: threat = net_point
 	var x := frame.to_local(threat).x
-	var first := defense_side*2
+	var first := defense_side*team_size
 	var near: int = defender_assignment[defense_side]
 	if defense_side == 0 and not spectator:
 		near = 0 if player_blocks else 1
 	elif near < 0:
 		near = first if absf(players[first].position.x-x) < absf(players[first+1].position.x-x) else first+1
+		if team_size == 3:
+			near = nearest_on_team(defense_side,frame.to_global(Vector3(x,0.04,3.42)))
 	defender_assignment[defense_side] = near
-	var deep := near^1
 	var depth := -2.15
 	var cover := -x*0.48
+	var deep := near^1
+	if team_size == 3:
+		deep = deep_defenders[defense_side]
+		if deep < 0 or deep == near:
+			deep = nearest_on_team(defense_side,frame.to_global(Vector3(cover,0.04,depth)),near)
+			deep_defenders[defense_side] = deep
+			support_lanes[defense_side] = 3.6 if cover < 0.0 else -3.6
 	var remaining := INF
 	if tracking_set and not overpass_ready:
 		var attack := frame.to_local(threat)
@@ -1783,6 +1849,11 @@ func position_defense(delta: float) -> void:
 			start_block(near,timing,dump_ready and not overpass_ready)
 	if not is_human(deep) and not blocks.has(deep) and not set_jumps[deep].active:
 		move_cpu(deep,frame.to_global(Vector3(clampf(cover,-4.05,4.05),0.04,depth)),delta)
+	if team_size == 3:
+		var support := nearest_on_team(defense_side,frame.to_global(Vector3.ZERO),near,deep)
+		if not is_human(support) and not blocks.has(support) and not set_jumps[support].active:
+			var opposite := lerpf(cover,support_lanes[defense_side],0.78)
+			move_cpu(support,frame.to_global(Vector3(opposite,0.04,depth+1.05)),delta)
 
 func update_air_attack_read(hitter: int, blocker: int, driver: Node3D) -> void:
 	if is_human(hitter) or not driver.jump.active: return
@@ -1836,7 +1907,7 @@ func update_player_guide() -> void:
 		var travel := target-start
 		var air_time := maxf(0.1,travel.slide(Vector3.UP).length()/24.0)
 		launch = travel/air_time+Vector3.UP*0.5*Flight.GRAVITY*air_time
-	elif receiving_team == 0 and possession_team == 0 and touches == 1 and last_player == 1:
+	elif receiving_team == 0 and possession_team == 0 and touches == 1 and human_can_set():
 		target = set_pin_for(0)
 		launch = attackers[0].set_toward_pin(start,target,maxf(maxf(3.60,start.y+0.18),pass_height),attackers[0].set_contact_height())
 	else:
@@ -1915,7 +1986,7 @@ func tick_match(delta: float, controls: RefCounted) -> void:
 func step_match(delta: float, controls: RefCounted) -> void:
 	match_clock += delta
 	if match_clock >= trace.next_sample: trace.sample(match_clock,trace_snapshot())
-	animated = [false,false,false,false]
+	animated.fill(false)
 	update_player_guide()
 	if phase in [Phase.DEAD,Phase.FINISHED]:
 		dead_age += delta
@@ -2014,7 +2085,7 @@ func step_match(delta: float, controls: RefCounted) -> void:
 			return
 		var cue := "Opponent's ball"
 		if receiving_team == 0:
-			cue = "Hold Space to attack" if expected_hitter == 0 else ("Set to your teammate" if possession_team == 0 and touches == 1 and last_player == 1 else "Receive or cover")
+			cue = "Hold Space to attack" if expected_hitter == 0 else ("Set to your teammate" if possession_team == 0 and touches == 1 and human_can_set() else "Receive or cover")
 		elif flight_kind == "set": cue = "Move up to block | Space" if player_blocks else "Teammate blocking | Cover the court"
 		info.text = "%s | %s" % [stroke,cue]
 

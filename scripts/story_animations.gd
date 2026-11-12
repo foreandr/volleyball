@@ -86,6 +86,8 @@ var setter_original_height: float
 var setter_animation_process: int
 var setter_animator_active: bool
 
+var match_from_home := false
+
 func _ready() -> void:
 	process_priority = 10
 	build_label = current_build_label()
@@ -109,6 +111,11 @@ func _ready() -> void:
 	preview_camera.fov = 42.0
 	preview_camera.far = 150.0
 	if not StorySession.lab_replay_path.is_empty(): call_deferred("open_lab_replay")
+	if StorySession.home_match_size > 0:
+		var size := StorySession.home_match_size
+		StorySession.home_match_size = 0
+		match_from_home = true
+		start_demo_match.call_deferred(size)
 	if not StorySession.animation_return.is_empty():
 		var destination: Dictionary = StorySession.animation_return.duplicate()
 		StorySession.animation_return.clear()
@@ -242,7 +249,7 @@ func show_categories() -> void:
 	content.add_child(match_button)
 	content.add_child(button("Iteration Lab",func(): get_tree().change_scene_to_file("res://scenes/iteration_lab.tscn")))
 
-func start_demo_match() -> void:
+func start_demo_match(team_size := 2) -> void:
 	stop_blocking_practice()
 	stop_serving_session()
 	stop_setting_drill()
@@ -253,7 +260,7 @@ func start_demo_match() -> void:
 	right_panel.hide()
 	angle_control.hide()
 	clear_content()
-	set_title("DEMO MATCH")
+	set_title("DEMO MATCH | %dV%d" % [team_size,team_size])
 	selected_category = "Demo Match"
 	var board := label("",26)
 	content.add_child(board)
@@ -284,7 +291,7 @@ func start_demo_match() -> void:
 		preview.grab_focus()))
 	demo_match = preload("res://scripts/volleyball_match.gd").new()
 	preview_player.get_parent().add_child(demo_match)
-	demo_match.configure(preview_player,board,status,build_label)
+	demo_match.configure(preview_player,board,status,build_label,team_size)
 	show_match_tuning()
 	styles.item_selected.connect(func(index: int): demo_match.set_serve_style(index))
 	player_controls.locomotion = ""
@@ -1977,6 +1984,9 @@ func cycle_type(direction: int) -> void:
 	refresh_type()
 
 func open_menu() -> void:
+	if match_from_home and is_instance_valid(demo_match):
+		get_tree().change_scene_to_file("res://scenes/main.tscn")
+		return
 	if not selected_category.is_empty():
 		var previous := selected_category
 		show_categories()

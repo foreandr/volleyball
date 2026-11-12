@@ -120,6 +120,7 @@ var preview_camera := {
 var preview_hash := 0
 var preview_path := "user://preview_setup.cfg"
 var lab_replay_path := ""
+var home_match_size := 0
 const PREVIEW_FIELDS := ["pass_start","pass_distance","pass_output_angle","incoming_speed","incoming_angle","feed_spot","incoming_spin","spin_rate","float_strength","source_height","feed_fit","receive_direction","receive_distance_tier","ball_tab","pass_destination","pass_apex","destination_fit","preview_camera"]
 
 func _ready() -> void:
@@ -134,7 +135,7 @@ func match_preference(key: String, fallback: Variant) -> Variant:
 	return match_preferences.get_value("match",key,fallback)
 
 func save_match_preference(key: String, value: Variant) -> void:
-	if match_preferences.get_value("match",key,null) == value: return
+	if match_preferences.has_section_key("match",key) and match_preferences.get_value("match",key) == value: return
 	match_preferences.set_value("match",key,value)
 	match_preferences.save(MATCH_SETTINGS_PATH)
 
