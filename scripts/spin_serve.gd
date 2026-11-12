@@ -185,7 +185,10 @@ func shape_float_strike(pose: Array, rig: Skeleton3D, author: RefCounted, time: 
 	spike_pose_driver.approach_expected_hit_at = SPIN_CONTACT
 	spike_pose_driver.swing_palm_roll = 0.0
 	spike_pose_driver.swing_finish_pose.clear()
-	spike_pose_driver.approach_arm_transition.assign(approach_poses[source_index])
+	# The takeoff pose is only the entry to the swing, not its finish.
+	spike_pose_driver.approach_arm_transition.clear()
+	if hit_age <= 0.0:
+		spike_pose_driver.approach_arm_transition.assign(approach_poses[source_index])
 	var hand_lift := smoothstep(0.08,0.26,time-swing_start)
 	var strike_pose: Array[Transform3D] = []
 	strike_pose.assign(pose)
