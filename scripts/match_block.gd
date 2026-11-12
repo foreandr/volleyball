@@ -27,7 +27,9 @@ func step(delta: float, world_ball: Vector3) -> bool:
 	var phase := clampf((age-START)/AIR,0.0,1.0)
 	var lift := 4.0*jump_height*phase*(1.0-phase)
 	var load := sin(PI*clampf(age/START,0.0,1.0))
-	var squat := 0.20*load*load
+	var since_landing := age-START-AIR
+	var absorb := smoothstep(0.0,0.055,since_landing)*(1.0-smoothstep(0.055,0.145,since_landing))
+	var squat := 0.20*load*load+0.14*absorb
 	actor.position = base+Vector3.UP*(lift-squat)
 	actor.animator.seek(0.0,true)
 	var rig: Skeleton3D = actor.skeleton
