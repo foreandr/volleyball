@@ -55,7 +55,8 @@ func prepare_toss_hands(pose: Array, rig: Skeleton3D, author: RefCounted, time: 
 		var shoulder: Vector3 = author.point(pose,"upperarm_"+side)
 		var back := Vector3(0.10*outward,-0.39,-0.44)
 		var up := Vector3(0.07*outward,0.43,0.33)
-		var hand := shoulder+back.lerp(up,lift)/scale_
+		var arm_path := back.lerp(up,lift)+Vector3.RIGHT*outward*0.22*sin(PI*lift)
+		var hand := shoulder+arm_path/scale_
 		author.limb(pose,"upperarm_"+side,"lowerarm_"+side,"hand_"+side,hand,Vector3(outward,-0.30,0.28),drive_weight)
 
 func shape_float_strike(pose: Array, rig: Skeleton3D, author: RefCounted, time: float) -> void:
