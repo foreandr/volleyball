@@ -97,14 +97,15 @@ func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time
 		var reach := (ball_target-start-heading*(stride+entry_distance+lead_distance)).slide(Vector3.UP)
 		approach_lunge = reach.normalized()*clampf(reach.length()-0.055,0.0,0.95)
 		if toward_ball.is_zero_approx(): toward_ball = heading.slide(Vector3.UP).normalized()
-		left_plant = right_plant+toward_ball*0.43+Vector3.UP.cross(toward_ball)*0.19
+		var plant_width := -0.19 if actor.mirror_animation else 0.19
+		left_plant = right_plant+toward_ball*0.43+Vector3.UP.cross(toward_ball)*plant_width
 		right_plant.y = minf(right_foot_start.y,left_foot_start.y)
 		left_plant.y = right_plant.y
 	if not from_sprint: actor.play_action("idle")
 
-func begin_set_jump(actor: Node3D, load: float) -> void:
+func begin_set_jump(actor: Node3D, load: float, jump_height := 0.56) -> void:
 	if active: return
-	begin(actor,Vector2.ZERO,Vector3.INF,APPROACH_LOAD_TIME,0.56,2,false,1.0,true)
+	begin(actor,Vector2.ZERO,Vector3.INF,APPROACH_LOAD_TIME,jump_height,2,false,1.0,true)
 	standing_load_time = load
 	stride = 0.0
 
@@ -181,6 +182,7 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 	pose[pelvis].origin -= hips.basis.inverse()*Vector3.UP*(0.15*load+0.14*impact+0.035*lead_plant_load)/scale_
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,(0.16+load_bend_extra)*load+0.13*impact-0.22*arm_drive)
 	var travel := actor.basis.inverse()*heading*stride/scale_
+	if actor.mirror_animation: travel.x = -travel.x
 	var stagger := 0.34*(first-second)
 	var tuck := sin(PI*flight)
 	for side in ["l","r"]:

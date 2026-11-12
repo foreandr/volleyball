@@ -29,6 +29,11 @@ func run() -> void:
 	started = Time.get_ticks_msec()
 	scan_demo_findings()
 	update_status("running")
+	await process_frame
+	if should_stop():
+		update_status("stopped")
+		quit()
+		return
 	var page := await prepare_match()
 	var game: Node3D = page.demo_match
 	game.cpu_policy.training = true
@@ -102,19 +107,25 @@ func scan_demo_findings() -> void:
 
 func keep_observation(point: int, event: Dictionary, frames: Array) -> void:
 	if frames.is_empty(): return
-	var path := run_dir+"/seed-%d-point-%d.vreplay" % [active_seed,point]
+	var event_time := float(event.get("time",frames.back().time))
+	var lookback := 2.65 if event.get("category","") == "setting" else 1.35
+	var nearby := frames.filter(func(frame: Dictionary): return float(frame.time) >= event_time-lookback and float(frame.time) <= event_time+0.40)
+	var path := run_dir+"/seed-%d-point-%d-%d.vreplay" % [active_seed,point,Time.get_ticks_usec()]
 	var file := FileAccess.open(path,FileAccess.WRITE)
 	if file == null: return
-	file.store_var({"schema":1,"seed":active_seed,"point":point,"evidence":event,"frames":frames})
+	file.store_var({"schema":1,"seed":active_seed,"point":point,"evidence":event,"frames":frames if nearby.size() < 2 else nearby})
 	file.close()
 	event["replay"] = path
+	append_row(run_dir+"/observations.jsonl",{"seed":active_seed,"point":point,"evidence":event})
 
 func append_summary(result: Dictionary) -> bool:
-	var path := run_dir+"/matches.jsonl"
+	return append_row(run_dir+"/matches.jsonl",result)
+
+func append_row(path: String, data: Dictionary) -> bool:
 	var file := FileAccess.open(path,FileAccess.READ_WRITE if FileAccess.file_exists(path) else FileAccess.WRITE)
 	if file == null: return false
 	file.seek_end()
-	file.store_line(JSON.stringify(result))
+	file.store_line(JSON.stringify(data))
 	file.close()
 	return true
 

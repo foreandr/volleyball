@@ -296,6 +296,8 @@ func start_demo_match(team_size := 2, learn_from_demo := true, cpu_only := false
 	match_training.name = "MatchTraining"
 	match_training.focus_mode = Control.FOCUS_NONE
 	content.add_child(match_training)
+	if learn_from_demo and DisplayServer.get_name() != "headless" and not StorySession.iteration_run.status().running:
+		StorySession.iteration_run.start(0)
 	refresh_match_training()
 	content.add_child(button("Reset Match",func():
 		demo_match.reset_match()

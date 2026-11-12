@@ -174,7 +174,8 @@ if ($Action -in @('Measure','Scout')) {
         $live = Get-Content -LiteralPath $demoReport -Raw | ConvertFrom-Json
         $simulated = foreach ($match in $report.matches) {
             foreach ($flag in $match.review_flags) {
-                [pscustomobject]@{ source='simulation'; priority=2; match_id="seed:$($match.seed)"; seed=$match.seed; point=$flag.point; time=$flag.time; type=$flag.type; evidence=$flag }
+                $priority = if ($flag.category -eq 'animation') { 1 } else { 2 }
+                [pscustomobject]@{ source='simulation'; priority=$priority; match_id="seed:$($match.seed)"; seed=$match.seed; point=$flag.point; time=$flag.time; type=$flag.type; evidence=$flag }
             }
         }
         $findings = @($simulated | Where-Object { $_ }) + @($live.findings | Where-Object { $_ })

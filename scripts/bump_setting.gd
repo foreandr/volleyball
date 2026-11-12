@@ -221,8 +221,10 @@ func accuracy_bounds(error: float, incoming: Vector3, spin_rps: float) -> Vector
 	var bounds := Accuracy.spread(error,incoming.length(),spin_rps,skill,setting)
 	if hand_setting and defensive_hand_dig: bounds = bounds*1.32+Vector2(0.30,0.25)
 	if hard_dig:
-		var pace := smoothstep(7.0,24.0,incoming.length())
-		bounds = (bounds*1.48+Vector2(1.45,1.0)+Vector2(1.65,0.75)*pace).min(Vector2(7.2,3.65))
+		var pace := smoothstep(4.0,38.0,incoming.length())
+		bounds = bounds.min(Vector2(3.40,2.30))*1.25+Vector2(0.75,0.50)+Vector2(3.60,1.95)*pace
+		if low_save.active and not low_save.wide_arm.is_empty():
+			bounds = bounds*1.30+Vector2(0.85,0.60)
 	return bounds
 
 func update_aim() -> void:

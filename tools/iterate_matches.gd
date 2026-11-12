@@ -83,6 +83,7 @@ func run_match(page: Node, match_seed: int, review_point: int, output_dir: Strin
 	var closest_unattempted := {}
 	var deflection := {}
 	var evidence_frames := []
+	var motion_frames := []
 	var watching: bool = game.has_method("set_cpu_swing_power") and bool(game.cpu_policy.training)
 	var stuck_frames := 0
 	var last_ball := Vector3.INF
@@ -90,6 +91,16 @@ func run_match(page: Node, match_seed: int, review_point: int, output_dir: Strin
 	for tick in range(game.WIN_SCORE*TICKS_PER_TARGET_POINT):
 		if watching and tick%120 == 0 and await pause_match(game): break
 		game.step_match(STEP,page.player_controls)
+		if watching:
+			if game.phase == game.Phase.LIVE or (game.phase == game.Phase.READY and game.serve_pending):
+				game.review.observe_motion(game,STEP)
+				if tick%3 == 0:
+					motion_frames.append(game.replay.capture(game))
+					if motion_frames.size() > 53: motion_frames.pop_front()
+			for motion in game.review.take_motion(game.match_clock,game.rallies != previous_rally):
+				motion["point"] = previous_rally+1
+				keep_observation(previous_rally+1,motion,motion_frames)
+				flags.append(motion)
 		if game.phase == game.Phase.LIVE:
 			if review_point == game.rallies+1 and DisplayServer.get_name() != "headless":
 				review_frames.append(game.replay.capture(game))
@@ -140,6 +151,11 @@ func run_match(page: Node, match_seed: int, review_point: int, output_dir: Strin
 		if game.rallies != previous_rally:
 			previous_rally = game.rallies
 			var reason: String = game.last_point.reason
+			var bad_set: Dictionary = game.review.unplayed_set(game)
+			if not bad_set.is_empty():
+				bad_set["point"] = previous_rally
+				if watching: keep_observation(previous_rally,bad_set,motion_frames)
+				flags.append(bad_set)
 			rallies.append({"point":previous_rally,"score":game.score.duplicate(),"reason":reason,
 				"seconds":snappedf(game.match_clock-rally_started,0.001),
 				"floor_rebound_m":snappedf(game.bounce_velocity.y**2/(2.0*game.Flight.GRAVITY),0.0001) if game.bounce_end > 0.0 else null})
@@ -152,6 +168,7 @@ func run_match(page: Node, match_seed: int, review_point: int, output_dir: Strin
 					if watching: keep_observation(previous_rally,opportunity,evidence_frames)
 					flags.append(opportunity)
 			evidence_frames.clear()
+			motion_frames.clear()
 			closest_attempt = {}
 			closest_unattempted = {}
 			deflection = {}

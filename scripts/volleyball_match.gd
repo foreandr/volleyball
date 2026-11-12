@@ -102,6 +102,7 @@ var recoveries := {}
 var trace := Trace.new()
 var block_lane_flight := [-1,-1]
 var opponent_shot_reads: Array[Dictionary] = [{},{}]
+var repeated_shot_landings: Array[Dictionary] = [{},{}]
 var carried_shot_reads: Array[Dictionary] = [{},{}]
 var completed_read_matches := 0
 var cpu_policy := CpuPolicy.new()
@@ -309,6 +310,7 @@ func set_spectator(value: bool) -> void:
 	if spectator == value: return
 	spectator = value
 	carried_shot_reads = [{},{}]
+	repeated_shot_landings = [{},{}]
 	completed_read_matches = 0
 	reset_match()
 
@@ -805,6 +807,27 @@ func learned_cover(side: int, attack_x: float, base_cover: float) -> float:
 	var limit := 1.10+0.11*mini(completed_read_matches,5)
 	return base_cover+clampf(read.x-base_cover,-limit,limit)*confidence
 
+func record_uncovered_shot(side: int, point: Vector3) -> void:
+	var frame := frames[side]
+	var zone := shot_read_zone(frame.to_local(origin).x)
+	var landing := frame.to_local(point)
+	var recent: Array = repeated_shot_landings[side].get_or_add(zone,[])
+	recent.append(Vector2(landing.x,landing.z))
+	if recent.size() > 6: recent.pop_front()
+
+func repeat_shot_read(side: int, attack_x: float) -> Vector3:
+	var recent: Array = repeated_shot_landings[side].get(shot_read_zone(attack_x),[])
+	if recent.size() < 2: return Vector3.ZERO
+	var latest: Vector2 = recent.back()
+	var total := Vector2.ZERO
+	var count := 0
+	for landing: Vector2 in recent:
+		if landing.distance_to(latest) <= 1.65:
+			total += landing
+			count += 1
+	var center := total/maxf(count,1)
+	return Vector3(center.x,smoothstep(1.0,4.0,count),center.y)
+
 func remember_opponent_reads() -> void:
 	completed_read_matches += 1
 	for side in opponent_shot_reads.size():
@@ -1226,7 +1249,9 @@ func cpu_is_setting(index: int) -> bool:
 	return team(index) == possession_team and touches == 1 and flight_kind == "pass"
 
 func hand_contact_height(technique: int) -> float:
-	if technique == 2: return 2.35
+	if technique == 2:
+		var apex := origin.y+maxf(velocity.y,0.0)**2/(2.0*Flight.GRAVITY)
+		return clampf(apex-0.15,2.35,maxf(2.35,Bump.HandPose.CONTACT_HEIGHT+attack_vertical*0.0254-0.08))
 	return Bump.HandPose.CONTACT_HEIGHT if defensive_ball() or flight_kind == "serve" else 1.92
 
 func hand_receive_reach() -> float:
@@ -1258,15 +1283,17 @@ func dig_intercept(index: int) -> float:
 	var actor := players[index]
 	var best := arrival(0.96)
 	var best_cost := INF
-	for height in [0.96,1.13,0.78,0.60]:
+	for height in [0.96,1.13,0.78,0.60,0.46]:
 		var at := arrival(height)
 		if at >= flight_end()-0.025: continue
 		var point := path_point(at)
 		if frames[team(index)].to_local(point).z > Net.NET_Z: continue
 		var approach := (path_point(maxf(0.0,at-0.06))-point).slide(Vector3.UP).normalized()
 		var body_target := point-approach*FOREARM_DIG_REACH
-		var distance := (body_target-actor.global_position).slide(Vector3.UP).length()
-		var cost := maxf(0.0,distance-5.0*maxf(0.0,at-elapsed-0.04))+absf(height-0.96)*0.48
+		var offset := (body_target-actor.global_position).slide(Vector3.UP)
+		var aligned := offset.normalized().dot(actor.global_basis.z.normalized())
+		var pace := lerpf(4.35,7.2,smoothstep(0.50,0.85,aligned))
+		var cost := maxf(0.0,offset.length()-pace*maxf(0.0,at-elapsed-0.06))+absf(height-0.86)*0.46
 		if cost < best_cost:
 			best = at
 			best_cost = cost
@@ -1397,6 +1424,10 @@ func tick_receive(delta: float, previous: float) -> void:
 	var catch_point := path_point(cue)
 	if not is_human(index) and frame.to_local(catch_point).z > Net.NET_Z+0.07: return
 	var actor := players[index]
+	var max_set_jump := attack_vertical*0.0254
+	var set_jump_height := clampf((catch_point.y-actor.global_position.y-1.72)*1.12,minf(0.56,max_set_jump),max_set_jump)
+	var set_jump_rise := 0.0
+	if technique == 2: set_jump_rise = set_jumps[index].flight_duration(set_jump_height,true)*0.43
 	bump.low_save_approach_velocity = Vector3.ZERO
 	if not is_human(index):
 		if technique != 0 and not is_finite(bump.pressed_at) and not overhead_available(index,technique):
@@ -1433,17 +1464,15 @@ func tick_receive(delta: float, previous: float) -> void:
 			var before_move := actor.position
 			move_cpu(index,target,delta,speed,face,not plant and (is_dig or cpu_setting or free_ball or flight_kind == "serve"),run_to_drop and not plant)
 			bump.low_save_approach_velocity = (actor.position-before_move)/maxf(delta,0.001)
-		var prep := 0.39 if technique == 2 else (0.40 if cpu_dig else (0.18 if cpu_setting and technique == 0 else 0.27))
+		var prep := set_jump_rise+0.16 if technique == 2 else (0.40 if cpu_dig else (0.18 if cpu_setting and technique == 0 else 0.27))
 		if elapsed >= cue-prep: queue_receive(index,technique)
 	if not is_finite(bump.pressed_at): return
 	if touched_tape and not net_hit.is_empty() and elapsed < float(net_hit.release_time): return
 	if recovering: recoveries.erase(index)
-	var jump_lead := 0.29 if is_human(index) else 0.35
-	var air_lead := 0.13 if is_human(index) else 0.20
-	if technique == 2 and not jump_set_started[index] and cue-elapsed <= jump_lead:
+	if technique == 2 and not jump_set_started[index] and cue-elapsed <= set_jump_rise+0.13:
 		jump_set_started[index] = true
 		set_jumps[index].front_limit = 3.35
-		set_jumps[index].begin_set_jump(actor,clampf(cue-elapsed-air_lead,0.055,0.16))
+		set_jumps[index].begin_set_jump(actor,clampf(cue-elapsed-set_jump_rise,0.055,0.16),set_jump_height)
 	var end := flight_end()
 	var path := func(t: float) -> Vector3: return frame.to_local(path_point(t))
 	var motion := (path_point(minf(end,elapsed+0.003))-path_point(maxf(0.0,elapsed-0.003)))/0.006
@@ -1453,10 +1482,17 @@ func tick_receive(delta: float, previous: float) -> void:
 		bump.show()
 		bump.update_aim()
 	var timing_cue := cue if is_human(index) and technique == 0 else INF
+	bump.knee_bend_depth = 0.0
 	if forearm_dig:
-		bump.ready_knee_bend_depth = 0.16
-		bump.lunge_bend_depth = 0.12
-		bump.knee_bend_depth = bump.ready_knee_bend_depth*smoothstep(cue-0.20,cue-0.035,elapsed)
+		var low := 1.0-smoothstep(0.48,1.12,catch_point.y)
+		bump.ready_knee_bend_depth = lerpf(0.21,0.35,low)
+		bump.lunge_bend_depth = lerpf(0.14,0.22,low)
+		bump.knee_bend_depth = bump.ready_knee_bend_depth*smoothstep(cue-0.33,cue-0.06,elapsed)
+		if cpu_dig:
+			var gap := (catch_point-actor.global_position).slide(Vector3.UP).length()
+			var lunge_reach := lerpf(1.02,1.32,smoothstep(0.035,0.22,cue-elapsed))
+			var can_lunge := catch_point.y >= 0.42 and gap <= lunge_reach and elapsed <= cue+0.035
+			bump.allow_auto_dive = not can_lunge
 	if not is_human(index) and frame.to_local(path_point(end)).z > Net.NET_Z: bump.allow_auto_dive = false
 	var was_diving: bool = bump.low_save.active
 	bump.update_attempt(elapsed,previous,end,path,frame.global_basis.inverse()*motion,delta,timing_cue,spin,cue if is_dig else INF)
@@ -1898,7 +1934,7 @@ func position_defense(delta: float) -> void:
 		var attack_frame := frames[hitter_side]
 		var setter_approaching: bool = driver.enabled and driver.setter == players[setter] and (driver.approach_jump_queued or driver.jump.active)
 		var jump_setting: bool = set_jumps[setter].active
-		var contact_time := arrival(2.35) if jump_setting else arrival(driver.set_contact_height())
+		var contact_time := arrival(hand_contact_height(2)) if jump_setting else arrival(driver.set_contact_height())
 		var contact := path_point(contact_time)
 		var contact_depth := attack_frame.to_local(contact).z
 		if setter_approaching:
@@ -1936,6 +1972,7 @@ func position_defense(delta: float) -> void:
 	var remaining := INF
 	if tracking_set:
 		var attack := frame.to_local(threat)
+		var repeated := repeat_shot_read(defense_side,attack.x)
 		var line_goal := Vector3(attack.x,0.0,depth)
 		var cross_goal := Vector3(clampf(-attack.x*0.80,-3.7,3.7),0.0,depth)
 		var sideline := signf(attack.x) if absf(attack.x) > 0.20 else (1.0 if players[near].position.x >= 0.0 else -1.0)
@@ -1948,6 +1985,8 @@ func position_defense(delta: float) -> void:
 			if not is_human(near):
 				var lane := cpu_policy.choose(defense_side,"block lane",[0,-1,1],0)
 				if lane != 0: prefer_line = lane > 0
+				if repeated.y >= 0.50:
+					prefer_line = absf(repeated.x-line_goal.x) < absf(repeated.x-cross_goal.x)
 			var preferred_cost := line_cost if prefer_line else cross_cost
 			var alternate_cost := cross_cost if prefer_line else line_cost
 			block_line[defense_side] = prefer_line if preferred_cost <= alternate_cost+1.8 else not prefer_line
@@ -1958,7 +1997,12 @@ func position_defense(delta: float) -> void:
 			take_line = absf(players[near].position.x-line_x) <= absf(players[near].position.x-cross_x)
 		x = line_x if take_line else cross_x
 		cover = cross_goal.x if take_line else line_goal.x
-		if not is_human(deep): cover = learned_cover(defense_side,attack.x,cover)
+		if not is_human(deep):
+			cover = learned_cover(defense_side,attack.x,cover)
+			if repeated.y > 0.0:
+				var intercept := attack.lerp(Vector3(repeated.x,0.0,repeated.z),0.80)
+				cover = lerpf(cover,intercept.x,repeated.y*0.82)
+				depth = lerpf(depth,clampf(intercept.z,-3.85,1.10),repeated.y*0.82)
 		var hit_at: float = driver.approach_expected_hit_at
 		update_air_attack_read(expected_hitter,near,driver)
 		if is_finite(driver.swing_drive_started):
@@ -1968,7 +2012,8 @@ func position_defense(delta: float) -> void:
 			x += clampf(crossing-x,-0.27,0.27)*(0.15 if take_line else 0.45)
 		if attack_aim_flight == flight_number or is_finite(driver.swing_drive_started):
 			var read := frame.to_local(frames[hitter_side].to_global(driver.swing_aim))
-			var read_depth := clampf(lerpf(attack.z,read.z,0.72),-3.25,-1.30)
+			var front_limit := 0.25 if is_finite(driver.swing_drive_started) else -1.30
+			var read_depth := clampf(lerpf(attack.z,read.z,0.72),-3.25,front_limit)
 			var read_x := lane_at_depth(attack,read,read_depth)
 			cover += clampf(read_x-cover,-2.30,2.30)
 			depth = lerpf(depth,read_depth,0.72)
@@ -1977,7 +2022,12 @@ func position_defense(delta: float) -> void:
 		if is_human(near) and players[near].position.z > 2.7: wall = players[near].position
 		var shadow := lane_at_depth(attack,wall,depth)
 		if absf(cover-shadow) < 0.88:
-			cover = dig_cover_x(frame,threat,frame.to_global(wall),depth,players[deep].position.x)
+			if repeated.y >= 0.50:
+				var preferred_side := -1.0 if repeated.x < shadow else 1.0
+				cover = shadow+preferred_side*0.90
+				if absf(cover) > 4.05: cover = shadow-preferred_side*0.90
+			else:
+				cover = dig_cover_x(frame,threat,frame.to_global(wall),depth,players[deep].position.x)
 	pocket_x[defense_side] = cover
 	if not is_human(near) and not blocks.has(near):
 		var target := frame.to_global(Vector3(clampf(x,-4.15,4.15),0.04,3.42))
@@ -2082,7 +2132,7 @@ func begin_ball_bounce() -> void:
 	var before_impact := path_point(maxf(0.0,flight_end()-0.015))
 	var impact_velocity := (bounce_origin-before_impact)/0.015
 	bounce_velocity = impact_velocity.slide(Vector3.UP)*0.37
-	bounce_velocity.y = clampf(absf(impact_velocity.y)*0.55,1.85,6.35)*sqrt(1.25)
+	bounce_velocity.y = clampf(absf(impact_velocity.y)*0.64,2.10,7.35)*sqrt(1.25)
 	bounce_end = Flight.landing_time(bounce_origin,bounce_velocity)
 
 func check_floor(previous: float) -> void:
@@ -2109,6 +2159,8 @@ func check_floor(previous: float) -> void:
 	if in_bounds:
 		var court_side := 0 if point.z < Net.NET_Z else 1
 		var reason := "Into the net" if not net_hit.is_empty() and not net_hit.rollover else "Ball down"
+		if reason == "Ball down" and flight_kind == "spike" and last_player >= 0 and court_side != team(last_player):
+			record_uncovered_shot(court_side,point)
 		award(1-court_side,reason)
 	else:
 		award(1-team(last_player),"Out")
@@ -2124,14 +2176,25 @@ func tick_match(delta: float, controls: RefCounted) -> void:
 	step_match(delta,controls)
 	if phase != Phase.FINISHED or dead_age <= 2.0: replay.record(self)
 	if not cpu_policy.demo_recording: return
+	var point_finished := rallies > previous_rallies
 	if phase == Phase.LIVE:
 		review.observe(self,delta)
-	elif rallies > previous_rallies:
+	elif phase == Phase.READY and serve_pending:
+		review.observe_motion(self,delta)
+	for motion in review.take_motion(match_clock,point_finished):
+		report_review_evidence(motion)
+	if point_finished:
 		var evidence := review.finding(last_point)
-		if not evidence.is_empty():
-			var path := review.save_finding(self,evidence)
-			trace.write("automatic_review_marker",match_clock,{"point":rallies,"evidence":evidence,"replay":path},true)
-			review_flagged.emit(str(evidence.type))
+		if not evidence.is_empty(): report_review_evidence(evidence)
+		var bad_set := review.unplayed_set(self)
+		if not bad_set.is_empty(): report_review_evidence(bad_set)
+
+func report_review_evidence(evidence: Dictionary) -> void:
+	var point := rallies+1 if phase in [Phase.READY,Phase.LIVE] else rallies
+	evidence["point"] = point
+	var path := review.save_finding(self,evidence)
+	trace.write("automatic_review_marker",match_clock,{"point":point,"evidence":evidence,"replay":path},true)
+	review_flagged.emit(str(evidence.type))
 
 func step_match(delta: float, controls: RefCounted) -> void:
 	match_clock += delta
