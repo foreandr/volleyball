@@ -10,4 +10,5 @@ func _initialize() -> void:
 		return
 	var findings := {}
 	Review.collect_findings(findings)
-	quit(0 if Policy.write_json(args[0],{"findings":findings.values()}) == OK else 1)
+	Review.collect_player_markers(findings)
+	quit(0 if Policy.write_json(args[0],{"review_focus":Review.REVIEW_FOCUS,"findings":Review.ordered_findings(findings)}) == OK else 1)

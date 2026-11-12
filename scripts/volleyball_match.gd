@@ -2169,9 +2169,16 @@ func mark_trace() -> bool:
 	if trace.file == null: return false
 	var snapshot: Dictionary = replay.frames[replay.index].trace.duplicate(true) if replay.active else trace_snapshot()
 	snapshot["last_point"] = last_point
+	snapshot["point"] = rallies if phase != Phase.LIVE else rallies+1
+	var samples := replay.frames if replay.active else replay.current
 	if replay.active:
 		snapshot["replay_time"] = replay.clock
 		snapshot["recorded_at"] = replay.frames[replay.index].time
+	elif phase == Phase.READY and not replay.previous.is_empty() and not last_point.is_empty():
+		samples = replay.previous
+		snapshot["recorded_at"] = last_point.time
+	var path := review.save_finding(self,{"type":"Player debug marker","time":snapshot.get("recorded_at",match_clock)},samples,Trace.MARKER_REPLAYS)
+	if not path.is_empty(): snapshot["replay"] = path
 	trace.write("player_marker",match_clock,snapshot,true)
 	return true
 

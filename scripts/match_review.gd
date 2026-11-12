@@ -2,6 +2,7 @@ extends RefCounted
 
 const Trace = preload("res://scripts/setting_trace.gd")
 const DIRECTORY := "user://iteration_lab/demo-findings"
+const REVIEW_FOCUS := "Animation smoothing and cleanup"
 var flight := -1
 var dig := {}
 var pose := {}
@@ -65,13 +66,14 @@ func finding(point: Dictionary) -> Dictionary:
 	if point.get("reason") == "Ball down" and not dig.is_empty(): return dig
 	return pose
 
-func save_finding(game: Node3D, evidence: Dictionary) -> String:
+func save_finding(game: Node3D, evidence: Dictionary, samples := [], directory := DIRECTORY) -> String:
 	var frames: Array = []
-	for sample in game.replay.current:
-		if float(sample.time) >= float(evidence.time)-1.35 and float(sample.time) <= float(evidence.time)+0.85:
+	var lookback := 2.1 if directory == Trace.MARKER_REPLAYS else 1.35
+	for sample in (game.replay.current if samples.is_empty() else samples):
+		if float(sample.time) >= float(evidence.time)-lookback and float(sample.time) <= float(evidence.time)+0.85:
 			frames.append(sample)
-	if frames.size() < 2 or DirAccess.make_dir_recursive_absolute(DIRECTORY) != OK: return ""
-	var path := DIRECTORY.path_join("%d-%d.vreplay" % [int(Time.get_unix_time_from_system()*1000000),OS.get_process_id()])
+	if frames.size() < 2 or DirAccess.make_dir_recursive_absolute(directory) != OK: return ""
+	var path := directory.path_join("%d-%d.vreplay" % [int(Time.get_unix_time_from_system()*1000000),OS.get_process_id()])
 	var file := FileAccess.open(path+".tmp",FileAccess.WRITE)
 	if file == null: return ""
 	file.store_var({"schema":1,"team_size":game.team_size,"point":game.rallies,"evidence":evidence,"frames":frames,
@@ -97,6 +99,33 @@ static func collect_findings(known: Dictionary) -> void:
 			if gap < distance and sample.get("trace") is Dictionary:
 				distance = gap
 				nearest = sample.trace
-		known[name_] = {"source":"demo_match","type":evidence.get("type",""),"time":evidence.get("time",0.0),
+		var priority := 1 if evidence.get("type","") == "Possible swing snap" else 2
+		known[name_] = {"source":"demo_match","priority":priority,"type":evidence.get("type",""),"time":evidence.get("time",0.0),
 			"point":record.get("point",0),"team_size":record.get("team_size",2),"match_id":record.get("match_id",""),
 			"score":record.get("score",[]),"evidence":evidence,"contact_frame":Trace.json_value(nearest)}
+
+static func collect_player_markers(known: Dictionary) -> void:
+	if not DirAccess.dir_exists_absolute(Trace.MARKER_DIRECTORY): return
+	for name_ in DirAccess.get_files_at(Trace.MARKER_DIRECTORY):
+		if not name_.ends_with(".json") or known.has(name_): continue
+		var file := FileAccess.open(Trace.MARKER_DIRECTORY.path_join(name_),FileAccess.READ)
+		if file == null: continue
+		var json := JSON.new()
+		if json.parse(file.get_as_text()) != OK or not json.data is Dictionary: continue
+		var archived: Dictionary = json.data
+		var event: Dictionary = archived.marker
+		var evidence: Dictionary = event.data
+		evidence["review"] = "Review the marked action, including the transition into it and the recovery out of it."
+		if evidence.has("replay"): evidence.replay = ProjectSettings.globalize_path(str(evidence.replay))
+		known[name_] = {"source":"player_marker","priority":0,"type":"Player debug marker",
+			"time":evidence.get("recorded_at",event.time),"point":evidence.get("point",event.feed),
+			"match_id":archived.trace,"trace":archived.trace,"feed":event.feed,"session_ms":event.session_ms,
+			"evidence":evidence,"context":archived.get("context",[])}
+
+static func ordered_findings(known: Dictionary) -> Array:
+	var names := known.keys()
+	names.sort_custom(func(a: String,b: String):
+		var left: int = known[a].priority
+		var right: int = known[b].priority
+		return a > b if left == right else left < right)
+	return names.map(func(name_: String): return known[name_])

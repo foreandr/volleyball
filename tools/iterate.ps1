@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)]
-    [ValidateSet('Measure','Scout','Findings','New','Review','Clip','List','Accept','Reject','Feedback')]
+    [ValidateSet('Measure','Scout','Findings','ImportMarkers','New','Review','Clip','List','Accept','Reject','Feedback')]
     [string]$Action,
     [ValidatePattern('^[a-z0-9][a-z0-9-]{0,39}$')][string]$Id,
     [string]$Title,
@@ -94,6 +94,55 @@ function Export-DemoFindings($Result) {
     }
 }
 
+function Import-PlayerMarkers {
+    $profile = Join-Path $env:APPDATA 'Godot/app_userdata/Volleyball'
+    $traces = Join-Path $profile 'debug/setting'
+    if (-not (Test-Path -LiteralPath $traces)) { return }
+    $markers = Join-Path $profile 'iteration_lab/player-markers'
+    New-Item -ItemType Directory -Path $markers -Force | Out-Null
+    $count = 0
+    $rg = Get-Command rg -ErrorAction SilentlyContinue
+    $traceHits = if ($rg) {
+        $context = [System.Collections.Generic.Queue[string]]::new()
+        & $rg.Source --json -B 20 -F 'player_marker' -g '*.jsonl' -- $traces | ForEach-Object {
+            $row = $_ | ConvertFrom-Json
+            if ($row.type -eq 'begin') { $context.Clear() }
+            if ($row.type -eq 'match') {
+                [pscustomobject]@{Path=$row.data.path.text; Line=$row.data.lines.text; Before=$context.ToArray()}
+            }
+            if ($row.type -in @('context','match')) {
+                $context.Enqueue($row.data.lines.text)
+                if ($context.Count -gt 20) { $null=$context.Dequeue() }
+            }
+        }
+        if ($LASTEXITCODE -gt 1) { throw "Reading debug traces failed ($LASTEXITCODE)." }
+    } else {
+        Get-ChildItem -LiteralPath $traces -Filter '*.jsonl' | Select-String -SimpleMatch 'player_marker' -Context 20,0 |
+            ForEach-Object { [pscustomobject]@{Path=$_.Path; Line=$_.Line; Before=$_.Context.PreContext} }
+    }
+    foreach ($match in $traceHits) {
+        try { $event = $match.Line | ConvertFrom-Json } catch { continue }
+        if ($event.event -ne 'player_marker') { continue }
+        $stem = [IO.Path]::GetFileNameWithoutExtension($match.Path)
+        $path = Join-Path $markers "$stem-$($event.session_ms)-$($event.feed).json"
+        if ((Test-Path -LiteralPath $path) -and ((Get-Content -LiteralPath $path -Raw | ConvertFrom-Json).PSObject.Properties.Name -contains 'context')) { continue }
+        $before = foreach ($line in $match.Before) {
+            try { $line | ConvertFrom-Json } catch { continue }
+        }
+        $temporary = "$path.$PID.tmp"
+        $data = @{trace=$match.Path; marker=$event; context=@($before)} | ConvertTo-Json -Depth 30 -Compress
+        [IO.File]::WriteAllText($temporary,$data)
+        Move-Item -LiteralPath $temporary -Destination $path -Force
+        $count++
+    }
+    Write-Output "$count historical player markers imported."
+}
+
+if ($Action -eq 'ImportMarkers') {
+    Import-PlayerMarkers
+    return
+}
+
 if ($Action -eq 'List') {
     Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue | ForEach-Object {
         $path = Join-Path $_.FullName 'proposal.json'
@@ -125,11 +174,11 @@ if ($Action -in @('Measure','Scout')) {
         $live = Get-Content -LiteralPath $demoReport -Raw | ConvertFrom-Json
         $simulated = foreach ($match in $report.matches) {
             foreach ($flag in $match.review_flags) {
-                [pscustomobject]@{ source='simulation'; match_id="seed:$($match.seed)"; seed=$match.seed; point=$flag.point; time=$flag.time; type=$flag.type; evidence=$flag }
+                [pscustomobject]@{ source='simulation'; priority=2; match_id="seed:$($match.seed)"; seed=$match.seed; point=$flag.point; time=$flag.time; type=$flag.type; evidence=$flag }
             }
         }
         $findings = @($simulated | Where-Object { $_ }) + @($live.findings | Where-Object { $_ })
-        $leads = @($findings | Group-Object -Property type | Sort-Object -Property Count -Descending | ForEach-Object {
+        $leads = @($findings | Group-Object -Property type | ForEach-Object {
             $examples = @($_.Group | Sort-Object -Property @{ Expression={
                 if ($null -ne $_.evidence.margin_m) { $_.evidence.margin_m }
                 elseif ($null -ne $_.evidence.distance_m) { $_.evidence.distance_m }
@@ -144,8 +193,8 @@ if ($Action -in @('Measure','Scout')) {
                     default { 'Inspect the flagged frame before proposing a change.' }
                 }
             }
-            [pscustomobject]@{ type=$_.Name; occurrences=$_.Count; matches=@($_.Group.match_id | Where-Object { $_ } | Sort-Object -Unique).Count; review=$nextCheck; examples=$examples }
-        })
+            [pscustomobject]@{ type=$_.Name; priority=($_.Group.priority | Measure-Object -Minimum).Minimum; occurrences=$_.Count; matches=@($_.Group.match_id | Where-Object { $_ } | Sort-Object -Unique).Count; review=$nextCheck; examples=$examples }
+        } | Sort-Object -Property priority,@{Expression='occurrences';Descending=$true})
         $scouting = Join-Path (Split-Path -Parent $result) 'scouting.json'
         ConvertTo-Json -InputObject $leads -Depth 10 | Set-Content -LiteralPath $scouting -Encoding UTF8
         Write-Output $scouting

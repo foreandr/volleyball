@@ -10,6 +10,7 @@ var observations := 0
 var latest_score: Array = []
 var active_seed := 0
 var demo_findings := {}
+var player_markers := {}
 var next_demo_scan := 0
 var reported_demo_findings := -1
 
@@ -88,10 +89,14 @@ func pause_match(game: Node3D) -> bool:
 func scan_demo_findings() -> void:
 	next_demo_scan = Time.get_ticks_msec()+3000
 	Review.collect_findings(demo_findings)
+	Review.collect_player_markers(player_markers)
 	var path := run_dir+"/demo-findings.json"
-	if reported_demo_findings != demo_findings.size() or not FileAccess.file_exists(path):
-		if Policy.write_json(path,{"findings":demo_findings.values()}) == OK:
-			reported_demo_findings = demo_findings.size()
+	var count := demo_findings.size()+player_markers.size()
+	if reported_demo_findings != count or not FileAccess.file_exists(path):
+		var findings := demo_findings.duplicate()
+		findings.merge(player_markers)
+		if Policy.write_json(path,{"review_focus":Review.REVIEW_FOCUS,"findings":Review.ordered_findings(findings)}) == OK:
+			reported_demo_findings = count
 		else:
 			push_warning("Could not write Demo Match review findings")
 
@@ -117,4 +122,4 @@ func update_status(state: String) -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(run_dir))
 	Policy.write_json(Policy.DIRECTORY+"/status.json",{"state":state,"pid":OS.get_process_id(),
 		"run":run_dir,"matches":completed,"observations":observations,
-		"demo_observations":demo_findings.size(),"score":latest_score})
+		"demo_observations":demo_findings.size(),"player_markers":player_markers.size(),"score":latest_score})
