@@ -942,11 +942,15 @@ func queue_receive(index: int, technique: int) -> void:
 	bump.queue_bump(elapsed)
 	show_key(index,["Q","E","F"][technique])
 
+func pass_support_receiver(index: int) -> int:
+	if team_size == 2: return index^1
+	var side := team(index)
+	var target := Vector3(players[index].position.x*0.5,PLAYER_GROUND_Y,2.0)
+	return nearest_on_team(side,frames[side].to_global(target),index)
+
 func cpu_pass_target(index: int) -> Vector3:
 	var passer := players[index].position
-	var receiver := index^1 if team_size == 2 else nearest_on_team(team(index),
-		frames[team(index)].to_global(Vector3(players[index].position.x*0.5,0.04,2.0)),index)
-	var teammate := players[receiver].position
+	var teammate := players[pass_support_receiver(index)].position
 	var x := lerpf(passer.x,teammate.x,0.82)
 	var forward := maxf(1.05,absf(x-passer.x)*tan(deg_to_rad(40.0)))
 	if not is_human(index):
@@ -1859,6 +1863,32 @@ func position_attack(delta: float) -> void:
 	else:
 		move_cpu(hitter,frames[receiving_team].to_global(staging),delta,speed)
 
+func position_receive_support(delta: float) -> void:
+	if last_player < 0 or team(last_player) == receiving_team: return
+	if flight_kind not in ["serve","free","spike","dump","block"]: return
+	if cpu_choice < 0 or (not net_hit.is_empty() and not touched_tape): return
+	var primary := cpu_choice
+	if not spectator and receiving_team == 0 and is_finite(platforms[0].pressed_at) and not blocks.has(0):
+		primary = 0
+	if team(primary) != receiving_team or blocks.has(primary): return
+	var frame := frames[receiving_team]
+	var passer := players[primary]
+	var support := pass_support_receiver(primary)
+	if is_human(support) or animated[support] or is_finite(platforms[support].pressed_at): return
+	var receive_at := dig_intercept(primary) if defensive_ball() else arrival(1.10)
+	var lead := receive_at-elapsed
+	if lead <= 0.08: return
+	var contact := frame.to_local(path_point(receive_at))
+	if contact.z >= Net.NET_Z: return
+	var actor := players[support]
+	var primary_gap := (contact-passer.position).slide(Vector3.UP).length()
+	var support_gap := (contact-actor.position).slide(Vector3.UP).length()
+	if primary_gap > 0.62+lead*3.8 or support_gap < maxf(1.35,primary_gap+0.95): return
+	var side := 1.0 if actor.position.x >= contact.x else -1.0
+	var target := Vector3(clampf(contact.x+side*1.55,-3.85,3.85),PLAYER_GROUND_Y,clampf(contact.z+1.35,-1.35,2.35))
+	if target.z <= actor.position.z+0.10: return
+	move_cpu(support,frame.to_global(target),delta,2.7,contact-actor.position)
+
 func dig_cover_x(frame: Node3D, attacker: Vector3, blocker: Vector3, depth: float, digger_x: float) -> float:
 	var attack := frame.to_local(attacker)
 	var wall := frame.to_local(blocker)
@@ -2294,6 +2324,7 @@ func step_match(delta: float, controls: RefCounted) -> void:
 	held_ball = false
 	tick_receive(delta,previous)
 	if flight_number != current_flight or phase != Phase.LIVE: return
+	position_receive_support(delta)
 	try_foot_save(previous)
 	if flight_number != current_flight or phase != Phase.LIVE: return
 	deflect_defender_body(previous)
