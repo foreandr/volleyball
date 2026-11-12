@@ -98,6 +98,7 @@ var cpu_second_spike := false
 var cpu_fake_dump := false
 var second_ball_options := 0
 var block_calls := [0,0]
+var block_crossing_reads: Array[Dictionary] = [{},{}]
 var jump_set_started := [false,false,false,false]
 var recoveries := {}
 var trace := Trace.new()
@@ -403,7 +404,7 @@ func begin_point() -> void:
 	aim_ring.hide()
 	trajectory_node.hide()
 	var server := server_index()
-	var style: int = serve_style if is_human(server) else cpu_policy.choose(team(server),"serve type",[0,1,2,3],rallies%SERVES.size())
+	var style: int = serve_style if is_human(server) else cpu_policy.choose_serve(team(server))
 	prepare_serve(style)
 	update_score()
 	trace.begin_feed({"mode":"demo_match","score":score,"server":server_index(),"spectator":spectator,"team_size":team_size})
@@ -800,7 +801,17 @@ func observe_opponent_shot(side: int, point: Vector3, motion: Vector3, spin_rate
 	var time := Flight.landing_time(point,motion,Flight.spike_gravity(spin_rate))
 	var landing := frame.to_local(point+motion*time)
 	if absf(landing.x) > 4.53 or landing.z < -5.03 or landing.z > Net.NET_Z: return
-	var zone := shot_read_zone(frame.to_local(point).x)
+	var contact := frame.to_local(point)
+	var zone := shot_read_zone(contact.x)
+	var local_motion := frame.global_basis.inverse()*motion
+	if local_motion.z < -0.01 and contact.z >= Net.NET_Z:
+		var cross_time := (Net.NET_Z-contact.z)/local_motion.z
+		var height := contact.y+local_motion.y*cross_time-0.5*Flight.spike_gravity(spin_rate)*cross_time*cross_time
+		var crossing := contact.x+local_motion.x*cross_time
+		if height >= Net.NET_TOP and absf(crossing) < Net.NET_HALF_WIDTH:
+			var offset := crossing-contact.x
+			var old: Vector2 = block_crossing_reads[side].get(zone,Vector2(offset,0.0))
+			block_crossing_reads[side][zone] = Vector2(lerpf(old.x,offset,0.34),minf(10.0,old.y+1.0))
 	var reads := opponent_shot_reads[side]
 	var count := int(reads.get(zone,Vector2.ZERO).y)
 	var previous := float(reads.get(zone,Vector2(landing.x,0.0)).x)
@@ -1734,6 +1745,7 @@ func start_block(index: int, remaining := INF, reads_second := false, overpass_s
 	block.jump_height = block_vertical*0.0254
 	block.landing_recovery = 0.43 if reads_second else 0.13
 	block.overpass_swing = overpass_swing
+	block.aggressive_press = not is_human(index) and not overpass_swing
 	block.begin(actor)
 	if is_finite(remaining): block.tempo = clampf((Block.START+Block.AIR*0.5)/maxf(remaining,0.18),1.13,1.80)
 	blocks[index] = block
@@ -1779,7 +1791,7 @@ func tick_blocks(delta: float, previous: float) -> void:
 				var wrist: Vector3 = block.previous_wrists[hand].lerp(block.wrists[hand],fraction)
 				var center := Geometry3D.get_closest_point_to_segment(point,wrist,tip)
 				var gap := point.distance_to(center)
-				var reach := 0.20 if block.overpass_swing else 0.27
+				var reach := 0.20 if block.overpass_swing else (0.30 if block.aggressive_press else 0.27)
 				if gap > reach or center.y < Net.NET_TOP or absf(point.z-Net.NET_Z) > 0.9: continue
 				if block.overpass_swing:
 					if hit_overpass(index,point): return
@@ -2071,6 +2083,10 @@ func position_defense(delta: float) -> void:
 		if is_human(near):
 			take_line = absf(players[near].position.x-line_x) <= absf(players[near].position.x-cross_x)
 		x = line_x if take_line else cross_x
+		if not is_human(near):
+			var read: Vector2 = block_crossing_reads[defense_side].get(shot_read_zone(attack.x),Vector2.ZERO)
+			var learned_x := attack.x+read.x
+			x += clampf(learned_x-x,-0.80,0.80)*smoothstep(1.0,5.0,read.y)
 		cover = cross_goal.x if take_line else line_goal.x
 		if not is_human(deep):
 			cover = learned_cover(defense_side,attack.x,cover)
@@ -2084,7 +2100,8 @@ func position_defense(delta: float) -> void:
 			hit_at = driver.swing_drive_started+driver.swing_drive_duration*0.95
 			var shot: Vector3 = frame.to_local(frames[hitter_side].to_global(driver.swing_aim))
 			var crossing := lane_at_depth(attack,shot,3.42)
-			x += clampf(crossing-x,-0.27,0.27)*(0.15 if take_line else 0.45)
+			if not is_human(near):
+				x += clampf(crossing-x,-0.60,0.60)*0.60
 		if attack_aim_flight == flight_number or is_finite(driver.swing_drive_started):
 			var read := frame.to_local(frames[hitter_side].to_global(driver.swing_aim))
 			var front_limit := 0.25 if is_finite(driver.swing_drive_started) else -1.30
@@ -2092,7 +2109,7 @@ func position_defense(delta: float) -> void:
 			var read_x := lane_at_depth(attack,read,read_depth)
 			cover += clampf(read_x-cover,-2.30,2.30)
 			depth = lerpf(depth,read_depth,0.72)
-		if is_finite(hit_at): remaining = hit_at-driver.clock+0.065
+		if is_finite(hit_at): remaining = hit_at-driver.clock+0.045
 		var wall := Vector3(x,0.04,3.42)
 		if is_human(near) and players[near].position.z > 2.7: wall = players[near].position
 		var shadow := lane_at_depth(attack,wall,depth)
@@ -2106,10 +2123,10 @@ func position_defense(delta: float) -> void:
 	pocket_x[defense_side] = cover
 	if not is_human(near) and not blocks.has(near):
 		var target := frame.to_global(Vector3(clampf(x,-4.15,4.15),0.04,3.42))
-		move_cpu(near,target,delta,7.6 if players[near].position.z < 2.7 else 6.8,Vector3.INF,true)
-		var attack_ready := remaining <= 0.37
+		move_cpu(near,target,delta,8.6 if tracking_set else 7.6,Vector3.INF,true)
+		var attack_ready := remaining >= -0.04 and remaining <= 0.41
 		var dump_ready := second_ball_eta >= -0.06 and second_ball_eta <= 0.30
-		if absf(players[near].position.x-x) < 0.70 and (attack_ready or dump_ready):
+		if absf(players[near].position.x-clampf(x,-4.15,4.15)) < 0.62 and (attack_ready or dump_ready):
 			var timing := remaining if attack_ready else second_ball_eta+0.035
 			start_block(near,timing,dump_ready)
 	if not is_human(deep) and not blocks.has(deep) and not set_jumps[deep].active:

@@ -10,6 +10,7 @@ var tempo := 1.0
 var jump_height := HEIGHT
 var landing_recovery := 0.13
 var overpass_swing := false
+var aggressive_press := false
 var base: Vector3
 var previous_hands: Array[Vector3] = []
 var hands: Array[Vector3] = []
@@ -59,10 +60,11 @@ func step(delta: float, world_ball: Vector3) -> bool:
 		var arm: String = "upperarm_"+side
 		var shoulder: Vector3 = author.point(pose,arm)
 		var outward := 1.0 if side == "l" else -1.0
-		var press := smoothstep(0.45,0.95,lift)
+		var press := smoothstep(0.32,0.70,lift) if aggressive_press else smoothstep(0.45,0.95,lift)
 		var below_tape := 1.0-smoothstep(2.50,2.80,rig.to_global(shoulder).y+0.62)
 		var depth := lerpf(lerpf(0.20,0.55,press),0.17,below_tape)
-		var target := shoulder+Vector3(clampf(aim.x-shoulder.x,-0.18,0.18)-outward*0.06,0.62,depth)/scale_
+		var lateral_limit := 0.24 if aggressive_press else 0.18
+		var target := shoulder+Vector3(clampf(aim.x-shoulder.x,-lateral_limit,lateral_limit)-outward*0.06,0.62,depth)/scale_
 		var pole := Vector3(outward*0.38,-0.55,0.30)
 		if overpass_swing and side == "r":
 			var draw := smoothstep(0.11,0.30,age)*(1.0-smoothstep(0.30,0.47,age))

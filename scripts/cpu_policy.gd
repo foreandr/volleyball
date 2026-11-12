@@ -14,6 +14,7 @@ var demo_table := {}
 var demo_pending := {}
 var demo_matches := 0
 var demo_shot_history: Array = []
+var live_serves: Array[Dictionary] = [{},{}]
 var decisions: Array[Dictionary] = [{},{}]
 var applied: Array[Dictionary] = [{},{}]
 
@@ -85,8 +86,35 @@ func choose(side: int, context: String, options: Array[int], fallback: int) -> i
 	decisions[side][context] = selected
 	return selected
 
+func choose_serve(side: int) -> int:
+	var context := "serve type"
+	var history: Dictionary = table.get(context,{})
+	var demonstrations: Dictionary = demo_table.get(context,{})
+	var selected := 2
+	var best := -INF
+	for option in [2,3,1,0]:
+		var prior: Vector2 = {0:Vector2(0.35,16),1:Vector2(0.47,8),2:Vector2(0.54,8),3:Vector2(0.52,8)}[option]
+		var sample: Vector2 = live_serves[side].get(option,Vector2.ZERO)
+		var past: Array = history.get(str(option),[0.0,0.0])
+		var demo: Array = demonstrations.get(str(option),[0.0,0.0])
+		var historical_count := float(past[0])+float(demo[0])
+		var historical_weight := minf(historical_count,36.0)/maxf(historical_count,1.0)
+		var count := sample.x+historical_count*historical_weight
+		var wins := sample.y+(float(past[1])+float(demo[1]))*historical_weight
+		if option == 0 and count < 24.0: continue
+		var value := (wins+prior.x*prior.y)/(count+prior.y)
+		if option == 0: value -= 0.045
+		else: value += 0.14/sqrt(count+1.0)
+		if value > best:
+			best = value
+			selected = option
+	if training and randf() < 0.18:
+		selected = randi_range(0,3)
+	decisions[side][context] = selected
+	return selected
+
 func used(side: int, context: String) -> void:
-	if (training or demo_recording) and decisions[side].has(context): applied[side][context] = decisions[side][context]
+	if (context == "serve type" or training or demo_recording) and decisions[side].has(context): applied[side][context] = decisions[side][context]
 
 func begin_point() -> void:
 	for side in decisions.size():
@@ -94,6 +122,12 @@ func begin_point() -> void:
 		applied[side].clear()
 
 func finish_point(winner: int) -> void:
+	if not training:
+		for side in applied.size():
+			if not applied[side].has("serve type"): continue
+			var style: int = applied[side]["serve type"]
+			var recent: Vector2 = live_serves[side].get(style,Vector2.ZERO)
+			live_serves[side][style] = recent*0.97+Vector2(1.0,1.0 if side == winner else 0.0)
 	if not training and not demo_recording: return
 	var outcomes := table if training else demo_pending
 	for side in applied.size():
