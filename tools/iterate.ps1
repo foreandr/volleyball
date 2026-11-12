@@ -329,9 +329,8 @@ if (Test-Path -LiteralPath $cachedBefore) {
     New-Item -ItemType Directory -Path (Split-Path -Parent $before) -Force | Out-Null
     Copy-Item -LiteralPath $cachedBefore -Destination $before
 } else {
-    if (-not (Test-Path -LiteralPath $baseline)) { Invoke-Git worktree add --detach $baseline $entry.base }
     $baselineJob = Start-Job -ScriptBlock {
-        param($GitFunction,$SimulationFunction,$Project,$Result,$Count,$RunnerPath,$Executable,$FirstSeed,$UseSeries,$RepoPath)
+        param($GitFunction,$SimulationFunction,$Project,$Result,$Count,$RunnerPath,$Executable,$FirstSeed,$UseSeries,$RepoPath,$Base,$CacheFile,$Key)
         $ErrorActionPreference = 'Stop'
         ${function:Invoke-Git} = [scriptblock]::Create($GitFunction)
         ${function:Invoke-Simulation} = [scriptblock]::Create($SimulationFunction)
@@ -340,21 +339,39 @@ if (Test-Path -LiteralPath $cachedBefore) {
         $Seed = $FirstSeed
         $Series = $UseSeries
         $repo = $RepoPath
-        Invoke-Simulation $Project $Result $Count
-    } -ArgumentList ${function:Invoke-Git}.ToString(),${function:Invoke-Simulation}.ToString(),$baseline,$before,$Matches,$runner,$GodotPath,$Seed,$Series.IsPresent,$repo
+        $lock = [Threading.Mutex]::new($false, "Volleyball-review-$Key")
+        try {
+            try { [void]$lock.WaitOne() } catch [Threading.AbandonedMutexException] {}
+            try {
+                if (Test-Path -LiteralPath $CacheFile) {
+                    New-Item -ItemType Directory -Path (Split-Path -Parent $Result) -Force | Out-Null
+                    Copy-Item -LiteralPath $CacheFile -Destination $Result
+                    return
+                }
+                if (-not (Test-Path -LiteralPath $Project)) {
+                    Invoke-Git worktree add --detach $Project $Base 2>&1 | Out-Null
+                }
+                Invoke-Simulation $Project $Result $Count
+                New-Item -ItemType Directory -Path (Split-Path -Parent $CacheFile) -Force | Out-Null
+                $cacheTemp = "$CacheFile.$PID.tmp"
+                try {
+                    Copy-Item -LiteralPath $Result -Destination $cacheTemp
+                    [IO.File]::Move($cacheTemp, $CacheFile, $true)
+                } finally {
+                    if (Test-Path -LiteralPath $cacheTemp) { Remove-Item -LiteralPath $cacheTemp }
+                }
+            } finally {
+                $lock.ReleaseMutex()
+            }
+        } finally {
+            $lock.Dispose()
+        }
+    } -ArgumentList ${function:Invoke-Git}.ToString(),${function:Invoke-Simulation}.ToString(),$baseline,$before,$Matches,$runner,$GodotPath,$Seed,$Series.IsPresent,$repo,$entry.base,$cachedBefore,$cacheKey
 }
 try {
     Invoke-Simulation $candidate $after $Matches 0 $candidateRunner
     if ($baselineJob) {
         Receive-Job -Job $baselineJob -Wait -ErrorAction Stop
-        New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null
-        $cacheTemp = "$cachedBefore.$PID.tmp"
-        try {
-            Copy-Item -LiteralPath $before -Destination $cacheTemp
-            [IO.File]::Move($cacheTemp, $cachedBefore, $true)
-        } finally {
-            if (Test-Path -LiteralPath $cacheTemp) { Remove-Item -LiteralPath $cacheTemp }
-        }
     }
 } finally {
     if ($baselineJob) {
