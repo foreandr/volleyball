@@ -146,7 +146,7 @@ func pose(time: float) -> void:
 		var contact_right := right_shoulder+Vector3(-0.045,0.53,0.28+SERVE_CONTACT_LEAD)/scale_
 		var follow_right := right_shoulder+Vector3(0.36,-0.42,0.30)/scale_
 		var right_wrist := low_right.lerp(drawn_right,windup).lerp(contact_right,drive).lerp(follow_right,follow)
-		author.limb(bones,"upperarm_r","lowerarm_r","hand_r",right_wrist,Vector3(-0.62,0.12,-0.91).lerp(Vector3(-0.35,-0.3,0.6),drive),1.0,176.0)
+		author.limb(bones,"upperarm_r","lowerarm_r","hand_r",right_wrist,Vector3(-0.62,-0.55,-0.35).slerp(Vector3(-0.35,-0.3,0.6),drive),1.0,176.0)
 	prepare_toss_hands(bones,rig,author,time)
 	shape_float_strike(bones,rig,author,time)
 	finish_float_wrist(bones,rig,author,time)
