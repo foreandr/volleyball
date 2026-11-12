@@ -9,6 +9,8 @@ var started := 0
 var limit_ms := 0
 var completed := 0
 var observations := 0
+var saved_findings := 0
+var latest_finding := {}
 var latest_score: Array = []
 var active_seed := 0
 var demo_findings := {}
@@ -132,8 +134,11 @@ func keep_observation(point: int, event: Dictionary, frames: Array) -> void:
 	if file == null: return
 	file.store_var({"schema":1,"seed":active_seed,"point":point,"evidence":event,"frames":frames if nearby.size() < 2 else nearby})
 	file.close()
+	file.close()
 	event["replay"] = path
-	append_row(run_dir+"/observations.jsonl",{"seed":active_seed,"point":point,"evidence":event})
+	if append_row(run_dir+"/observations.jsonl",{"seed":active_seed,"point":point,"evidence":event}):
+		saved_findings += 1
+		latest_finding = {"number":saved_findings,"type":event.get("type","Finding saved"),"action":event.get("action",""),"replay":path}
 
 func append_summary(result: Dictionary) -> bool:
 	return append_row(run_dir+"/matches.jsonl",result)
@@ -153,4 +158,4 @@ func update_status(state: String) -> void:
 	Policy.write_json(Policy.DIRECTORY+"/status.json",{"state":state,"pid":OS.get_process_id(),
 		"run":run_dir,"matches":completed,"saved_matches":saved_matches,"observations":observations,
 		"heartbeat":Time.get_unix_time_from_system(),"faster":faster,
-		"demo_observations":demo_findings.size(),"player_markers":player_markers.size(),"score":latest_score})
+		"latest_finding":latest_finding,"demo_observations":demo_findings.size(),"player_markers":player_markers.size(),"score":latest_score})

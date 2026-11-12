@@ -6,6 +6,7 @@ const SPEED_PATH := Policy.DIRECTORY+"/speed.json"
 var pid := -1
 var run_path := ""
 var started_at := -1
+var lab_auto_started := false
 
 static func faster_training() -> bool:
 	return bool(Policy.read_json(SPEED_PATH).get("faster",false))

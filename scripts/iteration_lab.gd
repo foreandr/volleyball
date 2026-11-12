@@ -32,6 +32,9 @@ var seed_input: SpinBox
 var point_input: SpinBox
 var note: LineEdit
 var selected_id := ""
+var finding_popup: Label
+var finding_fade: Tween
+var last_finding := ""
 
 func _ready() -> void:
 	var background := ColorRect.new()
@@ -89,7 +92,7 @@ func _ready() -> void:
 	tool_panel.add_child(controls)
 	controls.add_child(label("Training speed",16))
 	controls.add_child(StorySession.iteration_run.speed_picker())
-	duration = number_box(10,0,720,"min")
+	duration = number_box(0,0,720,"min")
 	controls.add_child(duration)
 	controls.add_child(label("0 runs until Stop",16))
 	controls.add_child(button("Watch latest finding",watch_latest))
@@ -126,7 +129,14 @@ func _ready() -> void:
 	note.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	actions.add_child(note)
 	actions.add_child(button("Send back",decide.bind("Feedback")))
+	build_finding_popup()
 	refresh_proposals()
+	var run = StorySession.iteration_run
+	last_finding = finding_key(run.status())
+	if not run.lab_auto_started and DisplayServer.get_name() != "headless":
+		run.lab_auto_started = true
+		if not run.status().running and not run.start(int(duration.value)):
+			details.text = "Could not start training."
 	refresh_status()
 
 func number_box(value: int, minimum: int, maximum: int, suffix: String) -> SpinBox:
@@ -211,6 +221,7 @@ func clip_frame_duration(index: int) -> float:
 func refresh_status() -> void:
 	var data := StorySession.iteration_run.status()
 	var running: bool = data.running
+	show_new_finding(data)
 	var learned := Policy.read_json(Policy.PATH)
 	background_task.disabled = data.state == "stopping"
 	background_task.text = "Stopping…" if background_task.disabled else ("Stop background task" if running else "Start background task")
@@ -223,6 +234,45 @@ func refresh_status() -> void:
 		refresh_proposals()
 		if message.begins_with("Error:"): details.text = message.get_slice("\n",0)
 
+func build_finding_popup() -> void:
+	finding_popup = label("",16)
+	finding_popup.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	finding_popup.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	finding_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var badge := StyleBoxFlat.new()
+	badge.bg_color = Color("#24384b")
+	badge.set_corner_radius_all(8)
+	finding_popup.add_theme_stylebox_override("normal",badge)
+	add_child(finding_popup)
+	finding_popup.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+	finding_popup.offset_left = -240
+	finding_popup.offset_right = 240
+	finding_popup.offset_top = 108
+	finding_popup.offset_bottom = 146
+	finding_popup.hide()
+
+func finding_key(data: Dictionary) -> String:
+	var finding: Dictionary = data.get("latest_finding",{})
+	if finding.is_empty(): return ""
+	return "%s:%s" % [data.get("run",""),finding.get("number",0)]
+
+func show_new_finding(data: Dictionary) -> void:
+	var key := finding_key(data)
+	if key.is_empty() or key == last_finding: return
+	last_finding = key
+	var finding: Dictionary = data.latest_finding
+	var action := str(finding.get("action",""))
+	finding_popup.text = str(finding.type)
+	if not action.is_empty() and not action.contains("/"):
+		finding_popup.text += " · "+action.capitalize()
+	if finding_fade != null: finding_fade.kill()
+	finding_popup.modulate.a = 1.0
+	finding_popup.show()
+	finding_fade = create_tween()
+	finding_fade.tween_interval(2.3)
+	finding_fade.tween_property(finding_popup,"modulate:a",0.0,0.35)
+	finding_fade.tween_callback(finding_popup.hide)
+
 func toggle_background_task() -> void:
 	var run = StorySession.iteration_run
 	var running: bool = run.status().running
@@ -231,6 +281,8 @@ func toggle_background_task() -> void:
 	if not changed: details.text = "Could not stop training." if running else "Could not start training."
 
 func watch_latest() -> void:
+	var latest: Dictionary = StorySession.iteration_run.status().get("latest_finding",{})
+	var worker_replay := str(latest.get("replay",""))
 	var demo_directory: String = preload("res://scripts/match_review.gd").DIRECTORY
 	var demo_path := ""
 	if DirAccess.dir_exists_absolute(demo_directory):
@@ -240,6 +292,11 @@ func watch_latest() -> void:
 			if clips[index].ends_with(".vreplay"):
 				demo_path = demo_directory.path_join(clips[index])
 				break
+	if not worker_replay.is_empty() and FileAccess.file_exists(worker_replay):
+		if demo_path.is_empty() or FileAccess.get_modified_time(worker_replay) >= FileAccess.get_modified_time(demo_path):
+			open_finding(worker_replay)
+		else: open_finding(demo_path)
+		return
 	var data := Policy.read_json(Policy.DIRECTORY+"/status.json")
 	var run := str(data.get("run",""))
 	var path := run+"/matches.jsonl"
