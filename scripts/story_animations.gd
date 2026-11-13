@@ -344,11 +344,12 @@ func add_match_replay_controls(tuning: VBoxContainer) -> void:
 	match_replay_play.pressed.connect(toggle_match_replay_playback)
 	match_replay_panel.add_child(match_replay_play)
 	match_replay_seek = HSlider.new()
-	match_replay_seek.step = 0.0
+	match_replay_seek.step = 1.0
 	match_replay_seek.focus_mode = Control.FOCUS_NONE
+	match_replay_seek.drag_started.connect(func(): demo_match.replay.playing = false)
 	match_replay_seek.value_changed.connect(func(value: float):
 		demo_match.replay.playing = false
-		demo_match.replay.seek(demo_match,value)
+		demo_match.replay.seek_frame(demo_match,roundi(value))
 		update_match_replay_controls())
 	match_replay_panel.add_child(match_replay_seek)
 	match_replay_frame = label("",16)
@@ -442,8 +443,8 @@ func update_match_replay_controls() -> void:
 		review_rep_label.text = "Rep %d / %d" % [rep+1,total]
 	match_replay_play.text = "Pause (Space)" if replay.playing else "Play (Space)"
 	match_replay_frame.text = "Frame %d / %d" % [replay.index,replay.frames.size()-1]
-	match_replay_seek.max_value = replay.duration()
-	match_replay_seek.set_value_no_signal(replay.clock)
+	match_replay_seek.max_value = replay.frames.size()-1
+	match_replay_seek.set_value_no_signal(replay.index)
 
 func edit_passing_replay() -> void:
 	var replay = demo_match.replay

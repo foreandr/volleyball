@@ -235,9 +235,12 @@ func build_review(panel: VBoxContainer) -> void:
 	panel.add_child(replay_panel)
 	playback = review_control(replay_panel,"Play (Space)",toggle_playback)
 	seek = HSlider.new()
+	seek.step = 1.0
+	seek.focus_mode = Control.FOCUS_NONE
+	seek.drag_started.connect(func(): replay.playing = false)
 	seek.value_changed.connect(func(value: float):
 		replay.playing = false
-		replay.seek(game,value))
+		replay.seek_frame(game,roundi(value)))
 	replay_panel.add_child(seek)
 	frame_label = Label.new()
 	replay_panel.add_child(frame_label)
@@ -274,8 +277,8 @@ func update_review() -> void:
 	replay_panel.visible = replay.active
 	if not replay.active: return
 	playback.text = "Pause (Space)" if replay.playing else "Play (Space)"
-	seek.max_value = replay.duration()
-	seek.set_value_no_signal(replay.clock)
+	seek.max_value = replay.frames.size()-1
+	seek.set_value_no_signal(replay.index)
 	frame_label.text = "Rep %d / %d | Frame %d / %d" % [target_drill.review_index+1,count,replay.index,replay.frames.size()-1]
 	previous_rep.disabled = target_drill.review_index <= 0
 	next_rep.disabled = target_drill.review_index >= count-1
