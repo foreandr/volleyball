@@ -124,7 +124,7 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 		var upper_length := hip.distance_to(knee)
 		var lower_length := knee.distance_to(author.point(pose,foot_name))
 		var thigh_lift := deg_to_rad(20.0 if side == "l" else 17.0)
-		var shin_lift := deg_to_rad(66.0 if side == "l" else 62.0)
+		var shin_lift := deg_to_rad(80.0 if side == "l" else 76.0)
 		var raised_ankle := hip+Vector3(0.0,sin(thigh_lift),-cos(thigh_lift))*upper_length
 		raised_ankle += Vector3(0.0,sin(shin_lift),-cos(shin_lift))*lower_length
 		trail = trail.lerp(raised_ankle,kick)
@@ -142,7 +142,7 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 		var leg_axis := (ankle-hip).normalized()
 		var dive_pole := leg_axis.cross(Vector3.RIGHT).normalized()
 		var pole := (dive_pole+Vector3.RIGHT*lateral).lerp(dive_pole,airborne)
-		var knee_limit := lerpf(lerpf(180.0,134.0,kick),136.0,descent)
+		var knee_limit := lerpf(lerpf(180.0,120.0,kick),136.0,descent)
 		author.limb(pose,thigh,calf,foot_name,ankle,pole,1.0,knee_limit)
 		var ready_shin: Vector3 = foot.origin-author.point(ready,calf)
 		var posed_shin: Vector3 = author.point(pose,foot_name)-author.point(pose,calf)
