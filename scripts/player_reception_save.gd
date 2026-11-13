@@ -107,7 +107,10 @@ func sample(actor: Node3D, time: float, release: float, intercept := Vector3.INF
 			rig.set_bone_pose_rotation(bone,value.basis.get_rotation_quaternion())
 
 func finished(time: float) -> bool:
-	return time-contact_time+Dive.WINDUP >= Dive.DURATION
+	return time >= end_time()
+
+func end_time() -> float:
+	return contact_time+Dive.DURATION-Dive.WINDUP
 
 static func sample_clip(rig: Skeleton3D, clip: Animation, time: float) -> Array[Transform3D]:
 	var pose: Array[Transform3D] = []

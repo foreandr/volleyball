@@ -1204,7 +1204,7 @@ func advance_recoveries(delta: float) -> void:
 				recovery.save.sample(players[index],time,recovery.save_release)
 				animated[index] = true
 				continue
-			var final_time: float = recovery.save.contact_time+recovery.save.Dive.DURATION-recovery.save.Dive.WINDUP
+			var final_time: float = recovery.save.end_time()
 			recovery.save.sample(players[index],final_time,recovery.save_release)
 			begin_recovery(index)
 			animated[index] = true
