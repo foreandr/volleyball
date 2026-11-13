@@ -487,6 +487,8 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 		var keep_platform_low := rushed_cpu_receive and not hand_setting and not low_save.active and not reach.has("custom_clip")
 		if keep_platform_low: lower_rushed_platform()
 		var hold_arms := rushed_cpu_receive and not hand_setting and not low_save.active and not reach.has("custom_clip") and time > 12.0/60.0+0.00001 and time <= 15.0/60.0+0.00001
+		if deep_squat and not hold_arms:
+			reach_platform(Vector3.ZERO,smoothstep(0.025,0.14,elapsed))
 		if hold_arms: restore_early_dig_arms()
 		var pancake := low_save.active and low_save.pancake
 		var center := to_local(LowSave.palm_center(setter)) if pancake else platform_center()

@@ -1184,7 +1184,7 @@ func begin_recovery(index: int) -> void:
 	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
 	var recovery := {"started":match_clock,"pose":pose}
 	var bump := platforms[index]
-	if is_finite(bump.touch_time) and (bump.fast_back_receive or bump.reach.get("tier",0) == 2) and not bump.low_save.active:
+	if is_finite(bump.touch_time) and (bump.deep_squat or bump.fast_back_receive or bump.reach.get("tier",0) == 2) and not bump.low_save.active:
 		recovery["hold"] = FAST_RECEIVE_HOLD
 		recovery["rise"] = FAST_RECEIVE_RISE
 	if bump.low_save.active:
