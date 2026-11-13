@@ -369,7 +369,7 @@ func apply_knee_bend(time := INF) -> void:
 		var side := "l" if index == 0 else "r"
 		var thigh := "thigh_"+side
 		var calf := "calf_"+side
-		var foot := "foot_"+side
+		var foot: String = "foot_"+side
 		for joint in [thigh,calf,foot]:
 			var bone := rig.find_bone(joint)
 			changed_bones.append(bone)
@@ -873,7 +873,7 @@ func reach_platform(offset: Vector3, weight := 1.0, reach_limit := 0.26, steer_s
 		var yaw := clampf(atan2(reach_direction.x,maxf(0.12,reach_direction.z)),-0.80,0.80)
 		lateral = lateral.rotated(Vector3.UP,yaw)
 		weight_scale = 1.0
-	var compact: bool = fast_back_receive or reach.get("tier",0) == 2
+	var compact: bool = not reach.has("custom_clip") and (fast_back_receive or reach.get("tier",0) == 2)
 	PlatformPose.connect_arms(pose,author,target,weight_scale*weight,0.0 if compact else 0.022,lateral,false,compact)
 	for side in ["l","r"]:
 		for part in ["upperarm_","lowerarm_","hand_"]:
@@ -888,7 +888,11 @@ func pose_adaptive_back_lift(ball_point: Vector3) -> void:
 	var weight := smoothstep(0.0,0.32,reach_progress)
 	var low := 1.0-smoothstep(0.65,1.30,to_global(ball_point).y-setter.global_position.y)
 	var ready_rotations: Dictionary = {}
+	var ready_toes: Dictionary = {}
 	for side in ["l","r"]:
+		var foot := rig.find_bone("foot_"+side)
+		var toe := rig.find_bone("ball_"+side)
+		ready_toes[side] = (rig.get_bone_global_pose(toe).origin-rig.get_bone_global_pose(foot).origin).slide(Vector3.UP).normalized()
 		for joint in ["thigh_","calf_","foot_"]:
 			var bone := rig.find_bone(joint+side)
 			ready_rotations[bone] = rig.get_bone_pose_rotation(bone)
@@ -899,14 +903,23 @@ func pose_adaptive_back_lift(ball_point: Vector3) -> void:
 		var lift := smoothstep(0.04,0.22,left-right if side == "l" else right-left)
 		for joint in ["thigh_","calf_","foot_"]:
 			var bone := rig.find_bone(joint+side)
-			rig.set_bone_pose_rotation(bone,rig.get_bone_pose_rotation(bone).slerp(ready_rotations[bone],low*lift*0.55))
+			rig.set_bone_pose_rotation(bone,rig.get_bone_pose_rotation(bone).slerp(ready_rotations[bone],maxf(low*lift*0.55,0.12*weight if joint == "thigh_" else 0.0)))
 	var pose: Array = []
 	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
 	var author: RefCounted = setter.get_pose_author()
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,deg_to_rad(32.0)*low*weight)
+	for side in ["l","r"]:
+		var foot: String = "foot_"+side
+		var toe: Vector3 = (author.point(pose,"ball_"+side)-author.point(pose,foot)).slide(Vector3.UP).normalized()
+		var ready_toe: Vector3 = ready_toes[side]
+		if not toe.is_zero_approx() and not ready_toe.is_zero_approx():
+			var turn := toe.signed_angle_to(ready_toe,Vector3.UP)
+			author.rotate_world(pose,foot,Vector3.UP,clampf(turn,-0.40,0.40)*0.65*weight)
+		var bone := rig.find_bone(foot)
+		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
 	var chest := rig.find_bone("spine_02")
 	rig.set_bone_pose_rotation(chest,pose[chest].basis.get_rotation_quaternion())
-	reach_platform(ball_point-platform_center(),low*weight,0.50,true)
+	reach_platform(ball_point-platform_center(),low*smoothstep(0.18,0.80,reach_progress),0.50,true)
 
 func apply_custom_backward(time: float, weight: float) -> void:
 	sample_pose(custom_backward,custom_backward_mirror_tracks if reach.get("mirror_backward",false) else custom_backward_tracks,time,weight,true,reach.get("mirror_backward",false))
