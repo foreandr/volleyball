@@ -116,7 +116,7 @@ func pose_reception_reach(step: Vector3, travel: Vector3, weight: float, progres
 	if mirror_animation:
 		step.x = -step.x
 		travel.x = -travel.x
-		if reach.side_lunge or reach.rear_diagonal or absf(step.x) > 0.10 and absf(step.x) > absf(step.z)*0.55:
+		if reach.get("court_lead",false) or reach.side_lunge or reach.rear_diagonal or absf(step.x) > 0.10 and absf(step.x) > absf(step.z)*0.55:
 			reach = reach.duplicate()
 			reach.lead = animation_side(reach.lead)
 	ForearmReach.sample(skeleton,get_pose_author(),step,travel,weight,progress,ready,reach,knee_slide,direction,contact)

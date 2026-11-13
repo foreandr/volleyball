@@ -695,7 +695,7 @@ func plan_reach(offset: Vector3) -> void:
 	reach = {
 		"tier":tier,"back":back and not rear_side,"rear_diagonal":false,
 		"short_straight_back":short_back,"forward_lunge":forward,
-		"lead":"r" if straight_back or (tier == 1 and forward) or local.x < 0.0 else "l",
+		"lead":"r" if (setter.position+offset).x <= 0.0 else "l","court_lead":true,
 		"side_lunge":side or rear_side,"height":offset.y if tier == 2 else 0.0,
 		"centered_back":straight_back,"backward":back,
 	}
