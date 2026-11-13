@@ -689,7 +689,7 @@ func advance_reach(path: Callable, time: float, end: float, delta: float, quick_
 	if not reach.is_empty():
 		var before := reach_progress
 		var duration := 0.27 if reach.side_lunge and not rear_setup.is_zero_approx() else (0.19 if reach.tier == 2 else 0.15)
-		if quick_dig and (reach.side_lunge or absf(reach_step.x) > 0.45): duration *= 0.68
+		if quick_dig and not rushed_cpu_receive and (reach.side_lunge or absf(reach_step.x) > 0.45): duration *= 0.68
 		reach_progress = minf(1.0,reach_progress+delta/duration)
 		var origin := setter.position
 		var setup := rear_setup*(smoothstep(0.0,0.50,reach_progress)-smoothstep(0.0,0.50,before))
