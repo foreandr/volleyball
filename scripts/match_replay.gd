@@ -1,5 +1,7 @@
 extends RefCounted
 
+const SAVED_DIRECTORY := "user://saved-replays"
+
 var current: Array[Dictionary] = []
 var previous: Array[Dictionary] = []
 var frames: Array[Dictionary] = []
@@ -11,6 +13,7 @@ var speed := 0.5
 var index := 0
 var ball_offset := Vector3.ZERO
 var actor_offsets := {}
+var saved_evidence := {}
 
 func capture(match_: Node3D) -> Dictionary:
 	var actors := []
@@ -50,6 +53,7 @@ func toggle(match_: Node3D, current_finished: bool, rep_frames: Array[Dictionary
 		playing = false
 		ball_offset = Vector3.ZERO
 		actor_offsets.clear()
+		saved_evidence.clear()
 		apply(match_,restore,restore,0.0)
 		match_.ball.global_transform = restore.match_ball
 		match_.ball.visible = restore.match_visible
@@ -125,6 +129,42 @@ func apply(match_: Node3D, first: Dictionary, second: Dictionary, blend: float) 
 	match_.score_label.text = first.score
 	match_.info.text = first.info
 	match_.player_label.global_position = match_.human.global_position+Vector3.UP*2.17
+
+static func saved_directory(title: String) -> String:
+	return SAVED_DIRECTORY.path_join(title.to_snake_case())
+
+static func latest_saved(title: String) -> Dictionary:
+	var directory := saved_directory(title)
+	if not DirAccess.dir_exists_absolute(directory): return {}
+	var names := DirAccess.get_files_at(directory)
+	names.sort()
+	for i in range(names.size()-1,-1,-1):
+		if not names[i].ends_with(".vreplay"): continue
+		var file := FileAccess.open(directory.path_join(names[i]),FileAccess.READ)
+		if file == null: continue
+		var record: Variant = file.get_var()
+		if record is Dictionary and record.get("schema") == 1 and record.get("evidence",{}).get("drill") == title:
+			return record
+	return {}
+
+func open_saved(match_: Node3D, record: Dictionary, camera: Camera3D) -> bool:
+	var selected: Array[Dictionary] = []
+	selected.assign(record.get("frames",[]))
+	if selected.size() < 2: return false
+	if active: toggle(match_,true)
+	toggle(match_,true,selected)
+	restore_saved_view(match_,record.evidence,camera)
+	return true
+
+func restore_saved_view(match_: Node3D, evidence: Dictionary, camera: Camera3D) -> void:
+	saved_evidence = evidence.duplicate()
+	playing = false
+	ball_offset = evidence.get("ball_offset",Vector3.ZERO)
+	actor_offsets = evidence.get("actor_offsets",{}).duplicate()
+	speed = float(evidence.get("speed",speed))
+	camera.global_transform = evidence.get("camera",camera.global_transform)
+	camera.fov = float(evidence.get("fov",camera.fov))
+	seek(match_,float(evidence.get("clock",0.0)))
 
 func drill_rep_count(history: Array) -> int:
 	return history.size()+int(current.size() >= 2)

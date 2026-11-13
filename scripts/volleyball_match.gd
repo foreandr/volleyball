@@ -2783,6 +2783,14 @@ func trace_snapshot() -> Dictionary:
 		"receiving_team":receiving_team,"last_touch":last_player,"touches":touches,"set_apex":last_set_apex,"set_zone":SET_ZONES.find(called_pin.x)+1,
 		"blocker":defender_assignment,"takes_line":block_line,"dig_pocket":pocket_x,"players":actors}
 
+func save_reviewed_rep(title: String, rep: int, camera: Camera3D, camera_focus: Vector3) -> String:
+	if not replay.active: return ""
+	var evidence := {"type":"Saved replay","drill":title,"rep":rep,"frame":replay.index,
+		"time":replay.frames[replay.index].time,"clock":replay.clock,"speed":replay.speed,
+		"camera":camera.global_transform,"camera_focus":camera_focus,"fov":camera.fov,"ball_offset":replay.ball_offset,
+		"actor_offsets":replay.actor_offsets}
+	return review.write_replay(self,evidence,replay.frames,replay.saved_directory(title))
+
 func mark_trace() -> bool:
 	if trace.file == null: return false
 	var snapshot: Dictionary = replay.frames[replay.index].trace.duplicate(true) if replay.active else trace_snapshot()

@@ -312,6 +312,7 @@ func add_match_replay_controls(tuning: VBoxContainer) -> void:
 	match_replay_button.focus_mode = Control.FOCUS_NONE
 	match_replay_button.pressed.connect(toggle_match_replay)
 	tuning.add_child(match_replay_button)
+	tuning.add_child(button("Open latest save",open_latest_saved_rep))
 	match_replay_panel = VBoxContainer.new()
 	match_replay_panel.hide()
 	tuning.add_child(match_replay_panel)
@@ -361,7 +362,25 @@ func add_match_replay_controls(tuning: VBoxContainer) -> void:
 		StorySession.save_match_preference("replay_speed",value)
 		speed_label.text = "Replay speed  %.2f×" % value)
 	match_replay_panel.add_child(speed)
+	match_replay_panel.add_child(button("Save replay",save_reviewed_rep))
 	match_replay_panel.add_child(label("Middle drag or WASD to move camera\nScroll to zoom",15))
+
+func open_latest_saved_rep() -> void:
+	var title := "Pass to Target" if passing_drill != null else "Match"
+	var record := preload("res://scripts/match_replay.gd").latest_saved(title)
+	if record.is_empty():
+		show_marker_popup("No saved replay")
+		return
+	if demo_match.replay.open_saved(demo_match,record,preview_camera):
+		setting_camera_focus = record.evidence.get("camera_focus",setting_camera_focus)
+		update_match_replay_controls()
+
+func save_reviewed_rep() -> void:
+	var title := "Pass to Target" if passing_drill != null else "Match"
+	var current_rep: int = passing_drill.review_rep+1 if passing_drill != null else 0
+	var rep: int = demo_match.replay.saved_evidence.get("rep",current_rep)
+	var path: String = demo_match.save_reviewed_rep(title,rep,preview_camera,setting_camera_focus)
+	show_marker_popup("Replay saved" if not path.is_empty() else "Could not save replay")
 
 func open_lab_replay() -> void:
 	var path := StorySession.lab_replay_path
@@ -378,6 +397,10 @@ func open_lab_replay() -> void:
 	demo_match.replay.previous.assign(frames)
 	toggle_match_replay()
 	var evidence: Dictionary = record.get("evidence",{})
+	if evidence.get("type") == "Saved replay":
+		demo_match.replay.restore_saved_view(demo_match,evidence,preview_camera)
+		setting_camera_focus = evidence.get("camera_focus",setting_camera_focus)
+		update_match_replay_controls()
 	if evidence.has("type"): show_marker_popup(str(evidence.type).capitalize())
 
 func toggle_match_replay() -> void:
@@ -414,9 +437,10 @@ func update_match_replay_controls() -> void:
 	if passing_drill != null:
 		var total: int = passing_drill.review_count()
 		var rep: int = passing_drill.review_rep
-		previous_rep_button.disabled = rep <= 0
-		next_rep_button.disabled = rep >= total-1
-		review_rep_label.text = "Rep %d / %d" % [rep+1,total]
+		var showing_saved_rep: bool = not replay.saved_evidence.is_empty()
+		previous_rep_button.disabled = showing_saved_rep or rep <= 0
+		next_rep_button.disabled = showing_saved_rep or rep >= total-1
+		review_rep_label.text = "Saved rep %d" % replay.saved_evidence.rep if showing_saved_rep else "Rep %d / %d" % [rep+1,total]
 	match_replay_play.text = "Pause (Space)" if replay.playing else "Play (Space)"
 	match_replay_frame.text = "Frame %d / %d" % [replay.index,replay.frames.size()-1]
 	match_replay_seek.max_value = replay.frames.size()-1

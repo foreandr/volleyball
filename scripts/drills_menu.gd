@@ -1,5 +1,7 @@
 extends Control
 
+const Replay = preload("res://scripts/match_replay.gd")
+
 const CATEGORIES := {
 	"Passing": [{"title":"Pass to Target","scene":"res://scenes/story_animations.tscn"}],
 	"Setting": [{"title":"Set to Target"}],
@@ -264,6 +266,7 @@ func build_review(panel: VBoxContainer) -> void:
 	var game: Node3D = target_drill.game
 	var replay = game.replay
 	review_button = review_control(panel,"Review rep (R)",toggle_review)
+	review_control(panel,"Open latest save",open_latest_saved_rep)
 	replay_panel = VBoxContainer.new()
 	panel.add_child(replay_panel)
 	playback = review_control(replay_panel,"Play (Space)",toggle_playback)
@@ -285,6 +288,7 @@ func build_review(panel: VBoxContainer) -> void:
 	replay_panel.add_child(reps)
 	previous_rep = review_control(reps,"Previous rep",func(): target_drill.open_review(target_drill.review_index-1,true))
 	next_rep = review_control(reps,"Next rep",func(): target_drill.open_review(target_drill.review_index+1,true))
+	review_control(replay_panel,"Save replay",save_reviewed_rep)
 	add_speed(replay_panel,"Replay speed",replay.speed,func(value: float): replay.speed = value)
 	review_control(replay_panel,"Edit setter",target_drill.edit_setter)
 	if target_drill.drill_title() == "Butterfly":
@@ -293,9 +297,26 @@ func build_review(panel: VBoxContainer) -> void:
 		review_control(replay_panel,"Edit hitter",target_drill.edit_role.bind(1,"Butterfly spike","Attacking","Line Hit","hitter"))
 	update_review()
 
+func save_reviewed_rep() -> void:
+	var rep: int = target_drill.game.replay.saved_evidence.get("rep",target_drill.review_index+1)
+	var path: String = target_drill.game.save_reviewed_rep(target_drill.drill_title(),rep,setting_camera,camera_focus)
+	marker_popup.flash("Replay saved" if not path.is_empty() else "Could not save replay")
+
+func open_latest_saved_rep() -> void:
+	var record := Replay.latest_saved(target_drill.drill_title())
+	if record.is_empty():
+		marker_popup.flash("No saved replay")
+		return
+	var game: Node3D = target_drill.game
+	if game.replay.open_saved(game,record,setting_camera):
+		camera_focus = record.evidence.get("camera_focus",camera_focus)
+		target_drill.show_rep_target(game.replay.frames)
+		update_review()
+
 func toggle_review() -> void:
 	var game: Node3D = target_drill.game
-	if game.replay.active: target_drill.close_review()
+	if game.replay.active:
+		target_drill.close_review()
 	else: target_drill.open_review(target_drill.review_count()-1)
 	update_review()
 
@@ -309,7 +330,7 @@ func toggle_playback() -> void:
 func update_review() -> void:
 	var replay = target_drill.game.replay
 	var count: int = target_drill.review_count()
-	review_button.disabled = count == 0
+	review_button.disabled = count == 0 and not replay.active
 	review_button.text = "Back to drill (R)" if replay.active else "Review rep (R)"
 	replay_panel.visible = replay.active
 	if not replay.active: return
@@ -317,8 +338,11 @@ func update_review() -> void:
 	seek.max_value = replay.frames.size()-1
 	seek.set_value_no_signal(replay.index)
 	frame_label.text = "Rep %d / %d | Frame %d / %d" % [target_drill.review_index+1,count,replay.index,replay.frames.size()-1]
-	previous_rep.disabled = target_drill.review_index <= 0
-	next_rep.disabled = target_drill.review_index >= count-1
+	var showing_saved_rep: bool = not replay.saved_evidence.is_empty()
+	if showing_saved_rep:
+		frame_label.text = "Saved rep %d | Frame %d / %d" % [replay.saved_evidence.rep,replay.index,replay.frames.size()-1]
+	previous_rep.disabled = showing_saved_rep or target_drill.review_index <= 0
+	next_rep.disabled = showing_saved_rep or target_drill.review_index >= count-1
 
 func setting_panel(width: float) -> VBoxContainer:
 	var panel := PanelContainer.new()

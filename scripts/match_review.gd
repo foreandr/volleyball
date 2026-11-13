@@ -148,16 +148,24 @@ func save_finding(game: Node3D, evidence: Dictionary, samples := [], directory :
 	for sample in (game.replay.current if samples.is_empty() else samples):
 		if float(sample.time) >= float(evidence.time)-lookback and float(sample.time) <= float(evidence.time)+0.85:
 			frames.append(sample)
+	return write_replay(game,evidence,frames,directory)
+
+func write_replay(game: Node3D, evidence: Dictionary, frames: Array, directory: String) -> String:
 	if frames.size() < 2 or DirAccess.make_dir_recursive_absolute(directory) != OK: return ""
 	var path := directory.path_join("%d-%d.vreplay" % [int(Time.get_unix_time_from_system()*1000000),OS.get_process_id()])
 	var file := FileAccess.open(path+".tmp",FileAccess.WRITE)
 	if file == null: return ""
 	var record := {"schema":1,"team_size":game.team_size,"point":evidence.get("point",game.rallies),"evidence":evidence,"frames":frames,
 		"match_id":"%s:%d" % [game.trace.path,game.trace.feed-game.rallies],"score":game.score.duplicate()}
-	file.store_var(record)
+	var written := file.store_var(record)
 	file.close()
+	if not written:
+		DirAccess.remove_absolute(path+".tmp")
+		return ""
+	if DirAccess.rename_absolute(path+".tmp",path) != OK:
+		DirAccess.remove_absolute(path+".tmp")
+		return ""
 	if directory == DIRECTORY: cache_finding(path,finding_summary(record,path))
-	if DirAccess.rename_absolute(path+".tmp",path) != OK: return ""
 	return path
 
 static func collect_findings(known: Dictionary, budget_ms := 0) -> void:
