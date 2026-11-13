@@ -8,7 +8,7 @@ const GREEN_CONTACT_ALLOWANCE := 0.17
 const RELEASE_TIME := 0.125
 const FRONT_WRIST_FOLLOW_TIME := 0.14
 const SET_WRIST_LOAD_PITCH := -16.0
-const SET_PALM_LOAD_ANGLE := 28.0
+const SET_PALM_LOAD_ANGLE := 48.0
 
 static func contact_center(actor: Node3D) -> Vector3:
 	var rig: Skeleton3D = actor.skeleton
