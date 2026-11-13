@@ -22,8 +22,9 @@ static func connect_arms(pose: Array, author: RefCounted, desired: Vector3, weig
 	var span := a.distance_to(b)
 	if span <= 0.001: return
 	var axis := (b-a)/span
-	var left_range := arm_range(pose,author,"l")
-	var right_range := arm_range(pose,author,"r")
+	var elbow_angle := ELBOW_ANGLE
+	var left_range := arm_range(pose,author,"l",elbow_angle)
+	var right_range := arm_range(pose,author,"r",elbow_angle)
 	var along := (left_range*left_range-right_range*right_range+span*span)/(2.0*span)
 	var center := a+axis*along
 	var radius := sqrt(maxf(0.0,left_range*left_range-along*along))
@@ -32,8 +33,7 @@ static func connect_arms(pose: Array, author: RefCounted, desired: Vector3, weig
 	var aim := (desired-center).slide(axis).normalized()
 	var grip := center+aim*radius
 	if dive:
-		# Let one arm bend more so the joined wrists can follow an off-center ball.
-		grip = grip.lerp(desired,0.55)
+		grip = grip.lerp(desired,0.55*smoothstep(0.65,1.0,weight))
 		for iteration in 4:
 			grip = a+(grip-a).limit_length(left_range)
 			grip = b+(grip-b).limit_length(right_range)
@@ -48,7 +48,10 @@ static func connect_arms(pose: Array, author: RefCounted, desired: Vector3, weig
 		var upper_before: Transform3D = author.world_pose(pose,rig.find_bone(arm))
 		var lower_before: Transform3D = author.world_pose(pose,rig.find_bone(elbow))
 		var wrist_before: Vector3 = author.point(pose,hand)
-		author.limb(pose,arm,elbow,hand,old_hand.origin.lerp(target,weight),pole,1.0,174.0)
+		if dive:
+			author.limb(pose,arm,elbow,hand,target,pole,smoothstep(0.0,0.65,weight),174.0)
+		else:
+			author.limb(pose,arm,elbow,hand,old_hand.origin.lerp(target,weight),pole,1.0,174.0)
 		var elbow_after: Vector3 = author.point(pose,elbow)
 		var wrist_after: Vector3 = author.point(pose,hand)
 		# Retain the rig's authored axial twist. The IK bend plane can flip it through the shirt.
@@ -68,10 +71,10 @@ static func platform_axis(pose: Array, author: RefCounted) -> Vector3:
 	var elbows: Vector3 = author.point(pose,"lowerarm_l")+author.point(pose,"lowerarm_r")
 	return (wrists-elbows).normalized()
 
-static func arm_range(pose: Array, author: RefCounted, side: String) -> float:
+static func arm_range(pose: Array, author: RefCounted, side: String, elbow_angle: float) -> float:
 	var shoulder: Vector3 = author.point(pose,"upperarm_"+side)
 	var elbow: Vector3 = author.point(pose,"lowerarm_"+side)
 	var wrist: Vector3 = author.point(pose,"hand_"+side)
 	var upper := shoulder.distance_to(elbow)
 	var lower := elbow.distance_to(wrist)
-	return sqrt(upper*upper+lower*lower-2.0*upper*lower*cos(deg_to_rad(ELBOW_ANGLE)))
+	return sqrt(upper*upper+lower*lower-2.0*upper*lower*cos(deg_to_rad(elbow_angle)))
