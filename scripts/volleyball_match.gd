@@ -1683,6 +1683,7 @@ func tick_receive(delta: float, previous: float) -> void:
 		bump.knee_bend_depth = bump.ready_knee_bend_depth*smoothstep(cue-0.33,cue-0.06,elapsed)
 		if cpu_dig:
 			bump.allow_auto_dive = not backshuffle and (bump.emergency_low_save or not cpu_can_lunge(index,catch_point,cue-elapsed))
+	bump.rushed_cpu_receive = not is_human(index) and technique == 0 and (is_dig or flight_kind == "serve") and cpu_hand_receive_too_fast(cue) and cue-elapsed <= 0.25
 	if square_receive and technique == 0 and not bump.low_save.active:
 		var reach_offset: Vector3 = bump.to_local(catch_point)-bump.ready_contact()
 		if bump.reach.is_empty() and cue-elapsed <= 0.22 and Bump.Timing.practice_reach_tier(reach_offset) == 2:

@@ -29,6 +29,7 @@ var defensive_hand_dig := false
 var hard_dig := false
 var fast_hand_dig := false
 var fast_back_receive := false
+var rushed_cpu_receive := false
 var back_receive_steer := Vector3.ZERO
 var allow_auto_dive := true
 var tracked_hand_dig := Vector3.INF
@@ -130,6 +131,7 @@ func reset() -> void:
 	hard_dig = false
 	fast_hand_dig = false
 	fast_back_receive = false
+	rushed_cpu_receive = false
 	back_receive_steer = Vector3.ZERO
 	entry_pose.clear()
 	reach_changed_at = -INF
@@ -712,11 +714,18 @@ func plan_reach(offset: Vector3) -> void:
 	var rear_side := tier == 2 and back and not straight_back
 	var forward := local.z > absf(local.x)*1.4
 	var side := tier == 2 and absf(local.x) > absf(local.z)*1.4
+	var intercept := ready_contact()+offset
+	var lead := "r" if intercept.x <= 0.0 else "l"
+	if rushed_cpu_receive:
+		var rig: Skeleton3D = setter.skeleton
+		var left := to_local(rig.to_global(rig.get_bone_global_pose(rig.find_bone("foot_"+setter.animation_side("l"))).origin))
+		var right := to_local(rig.to_global(rig.get_bone_global_pose(rig.find_bone("foot_"+setter.animation_side("r"))).origin))
+		lead = "l" if (left-intercept).slide(Vector3.UP).length_squared() < (right-intercept).slide(Vector3.UP).length_squared() else "r"
 	reach = {
 		"tier":tier,"back":back and not rear_side,"rear_diagonal":false,
-		"intercept":ready_contact()+offset,
+		"intercept":intercept,
 		"short_straight_back":short_back,"forward_lunge":forward,
-		"lead":"r" if (setter.position+offset).x <= 0.0 else "l","court_lead":true,
+		"lead":lead,"court_lead":true,
 		"side_lunge":side or rear_side,"height":offset.y if tier == 2 else 0.0,
 		"centered_back":straight_back,"backward":back,
 	}
