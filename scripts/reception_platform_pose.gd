@@ -31,6 +31,12 @@ static func connect_arms(pose: Array, author: RefCounted, desired: Vector3, weig
 	desired += forward*maxf(0.0,0.24-(desired-center).dot(forward))
 	var aim := (desired-center).slide(axis).normalized()
 	var grip := center+aim*radius
+	if dive:
+		# Let one arm bend more so the joined wrists can follow an off-center ball.
+		grip = grip.lerp(desired,0.55)
+		for iteration in 4:
+			grip = a+(grip-a).limit_length(left_range)
+			grip = b+(grip-b).limit_length(right_range)
 	for side in ["l","r"]:
 		var arm: String = "upperarm_"+side
 		var elbow: String = "lowerarm_"+side

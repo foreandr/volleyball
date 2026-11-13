@@ -173,14 +173,14 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 		author.limb(pose,upper,"lowerarm_"+wide_arm,"hand_"+wide_arm,target,
 			Vector3(side*0.38,-0.65,0.24),reach,172.0)
 	elif reach > 0.0:
-		var bias := Vector3.ZERO if track_platform else Vector3(0,-0.14,0.18)
+		var bias := Vector3(0,-0.055,0.12)/scale_
 		var target := rig.global_transform.affine_inverse()*ball_point+bias
 		var head_height: float = author.point(pose,"Head").y
 		if not pancake:
 			var shoulder_height: float = (author.point(pose,"upperarm_l").y+author.point(pose,"upperarm_r").y)*0.5
 			head_height = minf(head_height-(0.09 if track_platform else 0.17),shoulder_height-(0.04 if track_platform else 0.12))
 		target.y = clampf(target.y,0.13,maxf(0.13,head_height))
-		PlatformPose.connect_arms(pose,author,grip.lerp(target,reach),reach,0.0,Vector3.RIGHT,true)
+		PlatformPose.connect_arms(pose,author,target,reach,0.0,Vector3.RIGHT,true)
 		var turn := Quaternion(PlatformPose.platform_axis(clasp,author),PlatformPose.platform_axis(pose,author))
 		for side in ["l","r"]:
 			var wrist: String = "hand_"+side
