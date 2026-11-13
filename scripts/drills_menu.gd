@@ -15,6 +15,7 @@ var back: Button
 var category := ""
 var setting_stage: SubViewportContainer
 var setting_camera: Camera3D
+var setting_row: HBoxContainer
 var camera_focus := Vector3.ZERO
 
 func _ready() -> void:
@@ -105,16 +106,32 @@ func open_setting_stage(title: String) -> void:
 	setting_stage = SubViewportContainer.new()
 	setting_stage.stretch = true
 	setting_stage.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.get_parent().add_child(setting_stage)
+	setting_row = HBoxContainer.new()
+	setting_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.get_parent().add_child(setting_row)
+	var left := VBoxContainer.new()
+	left.custom_minimum_size.x = 200
+	setting_row.add_child(left)
+	setting_stage.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	setting_row.add_child(setting_stage)
+	var right := VBoxContainer.new()
+	right.custom_minimum_size.x = 200
+	setting_row.add_child(right)
+	var status := Label.new()
+	right.add_child(status)
 	var viewport := SubViewport.new()
 	viewport.own_world_3d = true
 	setting_stage.add_child(viewport)
 	preload("res://scripts/preview_court.gd").add_preview_lighting(viewport)
 	viewport.add_child(preload("res://scripts/preview_court.gd").new())
-	var player := preload("res://scripts/volleyball_player.gd").new()
-	player.position = Vector3(0,0.04,1.4)
-	viewport.add_child(player)
-	player.get_node("DirectionArrows").hide()
+	var drill := preload("res://scripts/set_to_target.gd").new()
+	viewport.add_child(drill)
+	drill.configure(status)
+	var launch := Button.new()
+	launch.text = "Launch float serve"
+	launch.custom_minimum_size.y = 48
+	launch.pressed.connect(drill.launch_rep)
+	left.add_child(launch)
 	setting_camera = Camera3D.new()
 	setting_camera.fov = 42.0
 	setting_camera.far = 150.0
@@ -167,7 +184,7 @@ func add_item(title: String, action: Callable) -> Button:
 
 func go_back() -> void:
 	if is_instance_valid(setting_stage):
-		setting_stage.queue_free()
+		setting_row.queue_free()
 		setting_stage = null
 		scroll.show()
 		show_category(category)

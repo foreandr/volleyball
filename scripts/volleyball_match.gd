@@ -167,6 +167,7 @@ var block_vertical := 30.0
 var serve_vertical := 30.0
 var live_speed := 1.0
 var drill_pass_target := Vector3.INF
+var drill_set_pin := Vector3.INF
 var drill_feed_acceleration := Vector3.INF
 var attack_lift_lean := 66.0
 var spike_strength := 0.70
@@ -961,6 +962,7 @@ func play_touch(strong := false) -> void:
 	player.play()
 
 func set_pin_for(index: int, setter_x := INF) -> Vector3:
+	if drill_set_pin.is_finite(): return frames[team(index)].to_local(drill_set_pin)
 	var side := team(index)
 	var frame := frames[side]
 	if is_human(index) and aim_point.is_finite():
@@ -1181,7 +1183,7 @@ func dump_can_land_in_court(point: Vector3, motion: Vector3) -> bool:
 func owns_action(index: int, allow_serve_move := false) -> bool:
 	if blocks.has(index) or set_jumps[index].active: return true
 	var actor := players[index]
-	if serve.player == actor and not serve.moved_after_contact and serve.swing_time < serve.recovery_end():
+	if not drill_set_pin.is_finite() and serve.player == actor and not serve.moved_after_contact and serve.swing_time < serve.recovery_end():
 		if not allow_serve_move or not serve.can_run_after_contact(): return true
 	var driver := attackers[team(index)]
 	return driver.enabled and driver.setter == actor and (driver.jump.active or driver.stage == driver.Stage.HIT)
@@ -1312,7 +1314,7 @@ func settle_point(delta: float) -> void:
 func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_facing := Vector3.INF, chase := false, turn_to_travel := false, turn_rate := 12.5, paced_run := false) -> void:
 	if recoveries.has(index) or owns_action(index,true): return
 	var actor := players[index]
-	var is_server: bool = serve.player == actor
+	var is_server: bool = not drill_set_pin.is_finite() and serve.player == actor
 	if is_server:
 		if not serve.can_run_after_contact(): return
 		if not serve.moved_after_contact:
@@ -1605,7 +1607,7 @@ func tick_receive(delta: float, previous: float) -> void:
 	if cpu_second_spike: return
 	if not is_human(index) and not is_finite(platforms[index].pressed_at):
 		var planned_attack := cpu_dump or overpass_flight == flight_number
-		var opportunistic_attack := cpu_is_setting(index) and not cpu_fake_dump
+		var opportunistic_attack := cpu_is_setting(index) and not cpu_fake_dump and not drill_set_pin.is_finite()
 		if (planned_attack or opportunistic_attack) and start_second_ball_spike(index,not planned_attack): return
 	var frame := frames[team(index)]
 	var bump := platforms[index]
