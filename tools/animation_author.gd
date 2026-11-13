@@ -185,7 +185,7 @@ func aim_joint(pose: Array, joint: String, end: String, target: Vector3) -> void
 	var rotation := Quaternion(from,to)
 	set_world_basis(pose,joint,Basis(rotation)*world_pose(pose,rig.find_bone(joint)).basis)
 
-func limb(pose: Array, start: String, middle: String, end: String, target: Vector3, pole: Vector3, blend := 1.0, extension_limit := 180.0) -> void:
+func limb(pose: Array, start: String, middle: String, end: String, target: Vector3, pole: Vector3, blend := 1.0, extension_limit := 180.0, preserve_twist := false) -> void:
 	var origin := point(pose,start)
 	var old_middle := point(pose,middle)
 	var old_end := point(pose,end)
@@ -210,6 +210,12 @@ func limb(pose: Array, start: String, middle: String, end: String, target: Vecto
 	var bend := (pole-axis*axis.dot(pole)).normalized()
 	var elbow := origin+axis*along+bend*sqrt(maxf(0,upper*upper-along*along))
 	var end_point := origin+axis*distance
+	if preserve_twist:
+		var upper_swing := Quaternion((old_middle-origin).normalized(),(elbow-origin).normalized())
+		var lower_swing := Quaternion((old_end-old_middle).normalized(),(end_point-elbow).normalized())
+		set_world_basis(pose,start,Basis(upper_swing)*old_upper_basis)
+		set_world_basis(pose,middle,Basis(lower_swing)*old_lower_basis)
+		return
 	var normal := (elbow-origin).cross(end_point-elbow).normalized()
 	set_world_basis(pose,start,limb_frame(elbow-origin,normal)*reference_upper.inverse()*old_upper_basis)
 	set_world_basis(pose,middle,limb_frame(end_point-elbow,normal)*reference_lower.inverse()*old_lower_basis)

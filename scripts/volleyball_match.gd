@@ -1386,10 +1386,12 @@ func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_f
 		if not turn_to_travel: yaw = clampf(yaw,-1.03,1.03)
 	actor.rotation.y = rotate_toward(actor.rotation.y,yaw,delta*(turn_rate if turn_to_travel else 8.0))
 	var sprint := may_run and heading.dot(actor.basis.z.normalized()) >= run_alignment
-	var previous_rotations: Array[Quaternion] = []
+	var previous_legs := {}
 	if paced_run:
 		var rig: Skeleton3D = actor.skeleton
-		for bone in rig.get_bone_count(): previous_rotations.append(rig.get_bone_pose_rotation(bone))
+		for joint in ["pelvis","thigh_l","thigh_r","calf_l","calf_r","foot_l","foot_r","ball_l","ball_r"]:
+			var bone := rig.find_bone(joint)
+			previous_legs[bone] = rig.get_bone_pose(bone)
 	var pace := minf(speed,4.35)*CPU_SHUFFLE_SPEED_SCALE
 	if sprint:
 		pace = clampf(speed,0.65,CPU_SPRINT_SPEED) if paced_run else clampf(speed*1.24,5.85,CPU_SPRINT_SPEED)
@@ -1412,11 +1414,13 @@ func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_f
 		steps.weight = 0.0
 	else:
 		steps.step(movement.limit_length(delta*2.1)/maxf(delta*2.1,0.001),delta,clampf(pace/2.06,0.65,2.25),true)
-	if not previous_rotations.is_empty():
+	if not previous_legs.is_empty():
 		var rig: Skeleton3D = actor.skeleton
-		var weight := 1.0-exp(-delta/0.028)
-		for bone in rig.get_bone_count():
-			rig.set_bone_pose_rotation(bone,previous_rotations[bone].slerp(rig.get_bone_pose_rotation(bone),weight))
+		var weight := 1.0-exp(-delta/0.05)
+		for bone in previous_legs:
+			var pose: Transform3D = previous_legs[bone].interpolate_with(rig.get_bone_pose(bone),weight)
+			rig.set_bone_pose_rotation(bone,pose.basis.get_rotation_quaternion())
+			rig.set_bone_pose_position(bone,pose.origin)
 	if is_server and not serve_run_rotations.is_empty():
 		var blend := smoothstep(0.0,SERVE_RUN_BLEND,match_clock-serve_run_started)
 		if blend >= 1.0: serve_run_rotations.clear()

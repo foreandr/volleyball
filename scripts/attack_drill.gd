@@ -1060,7 +1060,7 @@ func play_spike(time: float, delta: float) -> void:
 		if time-delta < bounce_end and time >= bounce_end: play_floor_sound()
 		ball.position = flight_point(ground,bounce_velocity,minf(time-landing_time,bounce_time))
 	if time < SWING_FOLLOW_TIME:
-		var follow := swing_follow_progress(time)
+		var follow := 1.0-pow(1.0-clampf(time/0.19,0.0,1.0),2.0)
 		pose_bow_draw(delta,1.0-smoothstep(0.19,SWING_FOLLOW_TIME,time),swing_contact,swing_contact_extension,follow)
 	if time >= maxf(SWING_FOLLOW_TIME,bounce_end) and not jump.active: finish_attack_rep()
 
@@ -1076,11 +1076,11 @@ func uses_front_right_lift() -> bool:
 func uses_air_reach_assist() -> bool:
 	return false
 
-func swing_follow_progress(age: float) -> float:
-	return smootherstep(0.0,0.22,age) if uses_assisted_approach() else 1.0-pow(1.0-clampf(age/0.19,0.0,1.0),2.0)
-
 func attack_pose_smoothing_time() -> float:
 	return 0.016
+
+func sync_approach_arm_lift() -> bool:
+	return false
 
 func attack_arm_turn_rate() -> float:
 	return INF
@@ -1104,13 +1104,9 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 		var rotation := pose[bone].basis.get_rotation_quaternion()
 		if smoothing > 0.0:
 			var previous := approach_render_rotations[bone]
-			var bone_name := str(rig.get_bone_name(bone))
-			var retention := smoothing
-			if bone_name.begins_with("spine_"):
-				retention = exp(-delta/0.035)*smoothstep(0.0,0.32,weight)
-			rotation = rotation.slerp(previous,retention)
+			rotation = rotation.slerp(previous,smoothing)
 			var rate := attack_arm_turn_rate()
-			if is_finite(rate) and bone_name in ["upperarm_r","lowerarm_r","hand_r"]:
+			if is_finite(rate) and rig.get_bone_name(bone) in ["upperarm_r","lowerarm_r","hand_r"]:
 				var angle := previous.angle_to(rotation)
 				if angle > rate*delta: rotation = previous.slerp(rotation,rate*delta/angle)
 			approach_render_rotations[bone] = rotation
@@ -1130,14 +1126,15 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 	var leg_release := smoothstep(0.0,1.0,rotation_phase)
 	var leg_turn := tanh(turn*rotation_weight*0.75)*0.32*leg_release*leg_rotation_scale*airborne
 	var kick_release := 0.32*leg_release*smoothstep(0.0,1.5,leg_rotation_scale)
-	var straighten := smoothstep(0.12,0.88,follow)*weight*smoothstep(0.03,0.22,setter.position.y-jump.start.y)
+	var leg_follow := smootherstep(0.0,0.30,clock-stage_start) if stage == Stage.HIT and uses_assisted_approach() else follow
+	var straighten := smoothstep(0.12,0.88,leg_follow)*weight*smoothstep(0.03,0.22,setter.position.y-jump.start.y)
 	if not is_zero_approx(leg_turn):
 		var spine: Transform3D = author.world_pose(pose,rig.find_bone("spine_01"))
 		var hips: Vector3 = author.point(pose,"pelvis")
 		author.rotate_world(pose,"pelvis",(spine.origin-hips).normalized(),leg_turn)
 		author.set_world_basis(pose,"spine_01",spine.basis)
 	var kick_load := smoothstep(0.0,0.30,clock-swing_charge_started)
-	var tuck := airborne*weight*kick_load*minf(leg_kickback_scale,1.0)*(1.0-0.75*follow)
+	var tuck := airborne*weight*kick_load*minf(leg_kickback_scale,1.0)*(1.0-0.75*leg_follow)
 	if tuck > 0.0 or straighten > 0.0:
 		for side in ["l","r"]:
 			var thigh: String = "thigh_"+side
@@ -1240,7 +1237,7 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 			swing_finish_pose = pose.duplicate()
 	if uses_assisted_approach() and not approach_arm_transition.is_empty():
 		var handoff_age := clock-stage_start if stage == Stage.HIT else clock-swing_started
-		if stage == Stage.SET:
+		if stage == Stage.SET and handoff_age < 0.43:
 			var front_pose := pose.duplicate()
 			var across: Vector3 = (author.point(pose,"upperarm_l")-author.point(pose,"upperarm_r")).normalized()
 			var up: Vector3 = (author.point(pose,"neck_01")-author.point(pose,"spine_01")).normalized()
@@ -1252,7 +1249,7 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 				var elbow: Vector3 = author.point(pose,"lowerarm_"+side)
 				var wrist: Vector3 = author.point(pose,"hand_"+side)
 				var arm_length := shoulder.distance_to(elbow)+elbow.distance_to(wrist)
-				var overhead := smootherstep(0.06,0.27,handoff_age)
+				var overhead := clampf((handoff_age-0.08)/0.18,0.0,1.0)
 				var front := (forward*sin(deg_to_rad(80.0))-up*cos(deg_to_rad(80.0))).normalized()
 				var lift_direction := front.slerp(Vector3.UP,overhead)
 				var front_reach := 0.43 if side == "r" else 0.54
@@ -1264,37 +1261,28 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 				var front_weight := 1.0-smootherstep(0.20 if side == "r" else 0.21,0.34 if side == "r" else 0.40,handoff_age)
 				var source_weight := 1.0-smootherstep(0.0,0.12,handoff_age)
 				if side == "r" and uses_front_right_lift():
-					# Move from the last backswing through the front of the shoulder into the chamber.
+					# Trace one arc from the loaded pose through the front of the right shoulder.
 					front_pose = pose.duplicate()
 					SpikeArm.blend_arm(front_pose,approach_arm_transition,author,1.0)
 					var source_wrist: Vector3 = author.point(front_pose,"hand_r")
 					var source_elbow: Vector3 = author.point(front_pose,"lowerarm_r")
 					var source_axis := (source_wrist-shoulder).normalized()
 					var source_pole := (source_elbow-shoulder).slide(source_axis).normalized()
-					var rise := smootherstep(0.0,0.29,handoff_age)
-					var entry_forward := Vector3.BACK
-					var entry_outward := Vector3.LEFT
-					var start := source_wrist-shoulder
-					var carry := entry_forward*0.32+Vector3.DOWN*0.37+entry_outward*0.05
-					var lift := entry_forward*0.46+Vector3.UP*0.30+entry_outward*0.05
-					var chamber := entry_forward*0.09+Vector3.UP*0.43+entry_outward*0.10
-					target = shoulder+start.bezier_interpolate(carry,lift,chamber,rise)
-					var lift_axis := (target-shoulder).normalized()
-					var lift_pole := (entry_outward+Vector3.DOWN*0.32).slide(lift_axis).normalized()
-					var carried_pole := Quaternion(source_axis,lift_axis)*source_pole
-					var pole_turn := carried_pole.signed_angle_to(lift_pole,lift_axis)
-					var pole := carried_pole.rotated(lift_axis,pole_turn*rise)
-					var upper_basis: Basis = author.world_pose(front_pose,rig.find_bone(upper)).basis
-					var lower_basis: Basis = author.world_pose(front_pose,rig.find_bone("lowerarm_r")).basis
-					author.limb(front_pose,upper,"lowerarm_r","hand_r",target,pole,1.0,172.0)
-					var lifted_elbow: Vector3 = author.point(front_pose,"lowerarm_r")
-					var lifted_wrist: Vector3 = author.point(front_pose,"hand_r")
-					var upper_swing := Quaternion((source_elbow-shoulder).normalized(),(lifted_elbow-shoulder).normalized())
-					var lower_swing := Quaternion((source_wrist-source_elbow).normalized(),(lifted_wrist-lifted_elbow).normalized())
-					author.set_world_basis(front_pose,upper,Basis(upper_swing)*upper_basis)
-					author.set_world_basis(front_pose,"lowerarm_r",Basis(lower_swing)*lower_basis)
-					SpikeArm.align_wrist_to_forearm(front_pose,author,rise*0.65)
-					front_weight = 1.0-smootherstep(0.04,0.72,extension)
+					var rise := smootherstep(0.015,0.35,handoff_age)
+					var angle := lerpf(-0.48,PI*0.5,rise)
+					var arc := (forward*cos(angle)+up*sin(angle)).normalized()
+					if sync_approach_arm_lift():
+						rise = overhead
+						arc = lift_direction
+					var reach := lerpf(0.43,arm_length*0.96,rise)
+					var entry := smootherstep(0.0,0.12 if sync_approach_arm_lift() else 0.17,handoff_age)
+					target = source_wrist.lerp(shoulder+arc*reach+outward*0.015,entry)
+					var pole := source_pole.lerp((forward*0.30-up*(1.0-rise)+outward*0.55).normalized(),entry)
+					author.limb(front_pose,upper,"lowerarm_r","hand_r",target,pole,1.0,lerpf(165.0,174.0,rise))
+					SpikeArm.align_wrist_to_forearm(front_pose,author,entry*0.65)
+					front_weight = 1.0-smootherstep(0.24,0.42,handoff_age)
+					if keeps_strike_palm_presented():
+						front_weight *= 1.0-smootherstep(0.18,0.67,extension)
 					source_weight = 0.0
 				else:
 					author.limb(front_pose,upper,"lowerarm_"+side,"hand_"+side,target,bend,1.0,lerpf(155.0,174.0,overhead))
@@ -1303,8 +1291,8 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 		elif stage == Stage.HIT:
 			var source_weight := 1.0-smootherstep(0.0,0.09,handoff_age)
 			if source_weight > 0.0:
-				for bone in rig.get_bone_count():
-					pose[bone].basis = pose[bone].basis.slerp(approach_arm_transition[bone].basis,source_weight)
+				SpikeArm.blend_arm(pose,approach_arm_transition,author,source_weight)
+				SpikeArm.blend_arm(pose,approach_arm_transition,author,source_weight,"l")
 	return pose
 
 func shot_line_weight(target: Vector3, origin: Vector3) -> float:

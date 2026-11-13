@@ -45,9 +45,9 @@ var right_foot_start: Vector3
 var left_foot_start: Vector3
 var right_plant: Vector3
 var left_plant: Vector3
-var plant_entry_pose: Array[Transform3D] = []
-var plant_rotations: Array[Quaternion] = []
-var plant_entry_yaw := 0.0
+var plant_legs := {}
+var plant_ground := 0.0
+var entry_leg_rotations := {}
 
 func load_lead_arm_clip() -> void:
 	var copies := AnimationCatalog.custom_entries()
@@ -82,15 +82,19 @@ func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time
 	entry_time = lead_step_duration if approach_steps == 4 else 0.0
 	entry_distance = 0.0
 	lead_distance = 0.0
-	plant_entry_pose.clear()
-	plant_rotations.clear()
+	plant_legs.clear()
+	entry_leg_rotations.clear()
 	if approach_plant and not setting_jump:
 		var rig: Skeleton3D = actor.skeleton
-		plant_entry_yaw = actor.model.rotation.y
-		for bone in rig.get_bone_count():
-			plant_entry_pose.append(rig.get_bone_pose(bone))
-			plant_rotations.append(rig.get_bone_pose_rotation(bone))
-	if from_sprint and plant_entry_pose.is_empty():
+		var parent := actor.get_parent_node_3d()
+		for side in ["l","r"]:
+			var foot := rig.find_bone("foot_"+side)
+			plant_legs[side] = parent.global_transform.affine_inverse()*rig.global_transform*rig.get_bone_global_pose(foot)
+		plant_ground = minf(plant_legs.l.origin.y,plant_legs.r.origin.y)
+		for joint in ["thigh_l","thigh_r","calf_l","calf_r","foot_l","foot_r","ball_l","ball_r"]:
+			var bone := rig.find_bone(joint)
+			entry_leg_rotations[bone] = rig.get_bone_pose_rotation(bone)
+	if from_sprint:
 		actor.model.rotation.y = 0.0
 		actor.animator.speed_scale = 1.0
 		actor.play_action("idle",0.0)
@@ -103,6 +107,9 @@ func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time
 		var rig: Skeleton3D = actor.skeleton
 		right_foot_start = actor.get_parent_node_3d().to_local(rig.to_global(rig.get_bone_global_pose(rig.find_bone("foot_r")).origin))
 		left_foot_start = actor.get_parent_node_3d().to_local(rig.to_global(rig.get_bone_global_pose(rig.find_bone("foot_l")).origin))
+		if not plant_legs.is_empty():
+			right_foot_start = plant_legs.r.origin
+			left_foot_start = plant_legs.l.origin
 		right_plant = right_foot_start+heading*(entry_distance+lead_distance+stride*0.68)
 		var toward_ball := (ball_target-right_plant).slide(Vector3.UP).normalized()
 		var reach := (ball_target-start-heading*(stride+entry_distance+lead_distance)).slide(Vector3.UP)
@@ -112,7 +119,15 @@ func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time
 		left_plant = right_plant+toward_ball*0.43+Vector3.UP.cross(toward_ball)*plant_width
 		right_plant.y = minf(right_foot_start.y,left_foot_start.y)
 		left_plant.y = right_plant.y
-	if not from_sprint or not plant_entry_pose.is_empty(): actor.play_action("idle")
+		if not plant_legs.is_empty():
+			# Aim the last two steps around the body's takeoff spot.
+			var center := start+heading*(entry_distance+lead_distance+stride)
+			var width := heading.cross(Vector3.UP)*plant_width
+			right_plant = center-heading*0.19+width
+			left_plant = center+heading*0.20-width
+			right_plant.y = plant_ground
+			left_plant.y = plant_ground
+	if not from_sprint: actor.play_action("idle")
 
 func begin_set_jump(actor: Node3D, load: float, jump_height := 0.56) -> void:
 	if active: return
@@ -159,6 +174,12 @@ func step(actor: Node3D, delta: float, input: Vector2) -> void:
 	var transfer_hop := 0.0
 	if lead_time > 0.0:
 		transfer_hop = 0.05*smoothstep(lead_step_duration*0.82,lead_step_duration,lead_age)*(1.0-smoothstep(0.0,0.135,pose_time))
+	if not plant_legs.is_empty() and lead_time > 0.0:
+		# Carry momentum between the lead step and the final plant.
+		var bridge := smoothstep(lead_time*0.78,load_time,elapsed)
+		var old_progress := 0.34*first+0.66*second
+		var travel_fraction := lerpf(old_progress,bridge,sin(PI*bridge))
+		distance += stride*(travel_fraction-old_progress)
 	var base := start+heading*distance+Vector3.UP*(4.0*height*flight*(1.0-flight)+transfer_hop)
 	var lunge := approach_lunge*smoothstep(0.0,air_glide_duration,elapsed-load_time)
 	var position := base+air_offset+lunge
@@ -168,26 +189,36 @@ func step(actor: Node3D, delta: float, input: Vector2) -> void:
 	var landing := elapsed-load_time-air_time
 	if landing >= LAND_TIME:
 		active = false
-		if plant_entry_pose.is_empty(): return
+		return
 	var lead_load := 0.70*smoothstep(0.0,lead_step_duration*0.78,lead_age) if lead_time > 0.0 else 0.0
 	var load_in := lerpf(lead_load,1.0,smoothstep(0.035 if lead_time > 0.0 else 0.02,0.12 if lead_time > 0.0 else 0.19,pose_time))
 	var load := load_in*(1.0-smoothstep(0.19,LOAD_TIME+0.055,pose_time))
 	var impact := smoothstep(-0.025,0.04,landing)*(1.0-smoothstep(0.04,LAND_TIME,landing))
 	var arm_drive := smoothstep(0.17,0.37,pose_time)*(1.0-smoothstep(LOAD_TIME+air_time*0.56,LOAD_TIME+air_time*0.93,pose_time))
-	if not plant_entry_pose.is_empty():
-		actor.model.rotation.y = lerp_angle(plant_entry_yaw,0.0,smoothstep(0.0,0.14,elapsed))
-	pose_jump(actor,first,second,load,impact,arm_drive,pose_time,flight,load_in,transfer_hop,delta)
+	pose_jump(actor,first,second,load,impact,arm_drive,pose_time,flight,load_in,transfer_hop)
 
-func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: float, arm_drive: float, pose_time: float, flight: float, load_in: float, transfer_hop: float, delta: float) -> void:
+func attack_plant_foot(side: String) -> Vector3:
+	var left := side == "l"
+	var from: Vector3 = plant_legs[side].origin
+	var to := left_plant if left else right_plant
+	var end := load_duration()
+	var start_step := lead_time*0.60 if not left else lead_time+(end-lead_time)*0.34
+	var end_step := lead_time+(end-lead_time)*(0.58 if not left else 0.90)
+	if (left and lead_time > 0.0) or (not left and entry_time > 0.0):
+		var early_start := entry_time*0.70 if left else 0.0
+		var early_end := lead_time*0.86 if left else entry_time*0.88
+		var early := smoothstep(early_start,early_end,elapsed)
+		var step_end := from+heading*(entry_distance+lead_distance if left else entry_distance)
+		step_end.y = plant_ground
+		from = from.lerp(step_end,early)+Vector3.UP*(0.10*sin(PI*early))
+	var step := smoothstep(start_step,end_step,elapsed)
+	return from.lerp(to,step)+Vector3.UP*((0.10 if left else 0.08)*sin(PI*step))
+
+func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: float, arm_drive: float, pose_time: float, flight: float, load_in: float, transfer_hop: float) -> void:
 	var rig: Skeleton3D = actor.skeleton
 	var author: RefCounted = actor.get_pose_author()
 	var pose: Array = []
 	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
-	if not plant_entry_pose.is_empty():
-		var entry := 1.0-smoothstep(0.0,minf(0.15,load_duration()),elapsed)
-		if entry > 0.0:
-			for bone in rig.get_bone_count():
-				pose[bone] = pose[bone].interpolate_with(plant_entry_pose[bone],entry)
 	var original := pose.duplicate()
 	var pelvis := rig.find_bone("pelvis")
 	var parent := rig.get_bone_parent(pelvis)
@@ -219,7 +250,17 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 		var foot_pose: Transform3D = author.world_pose(original,rig.find_bone(foot))
 		var lift := sin(PI*first) if left else sin(PI*second)
 		var target := foot_pose.origin+travel*stagger*(1.0 if left else -1.0)+Vector3.UP*(0.085*lift+0.07*tuck)
-		if approach_plant and pose_time < LOAD_TIME+0.08:
+		if not plant_legs.is_empty() and pose_time < LOAD_TIME+0.14:
+			var takeoff := smoothstep(LOAD_TIME,LOAD_TIME+0.14,pose_time)
+			var planted := attack_plant_foot(side)
+			# Once airborne, carry the feet up with the body before folding the knees.
+			planted.y += maxf(0.0,actor.position.y-start.y)*smoothstep(LOAD_TIME-0.04,LOAD_TIME+0.035,pose_time)
+			target = rig.to_local(actor.get_parent_node_3d().to_global(planted)).lerp(target,takeoff)
+			var entry_basis: Basis = plant_legs[side].basis
+			var entry_world := actor.get_parent_node_3d().global_basis*entry_basis
+			var entry_local := (rig.global_basis.inverse()*entry_world).orthonormalized()
+			foot_pose.basis = entry_local.slerp(foot_pose.basis,smoothstep(0.0,0.16,elapsed))
+		elif approach_plant and pose_time < LOAD_TIME+0.08:
 			var step_progress := smoothstep(0.105,0.21,pose_time) if left else smoothstep(0.015,0.105,pose_time)
 			if lead_time > 0.0:
 				step_progress = smoothstep(0.135,0.21,pose_time) if left else smoothstep(0.045,0.135,pose_time)
@@ -235,7 +276,11 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 			planted.y += transfer_hop+sin(PI*step_progress)*(0.12 if left else 0.09)
 			var release_weight := smoothstep(LOAD_TIME,LOAD_TIME+0.08,pose_time)
 			target = rig.to_local(actor.get_parent_node_3d().to_global(planted)).lerp(target,release_weight)
-		author.limb(pose,"thigh_"+side,"calf_"+side,foot,target,Vector3(0.09 if left else -0.09,0.25,1.0))
+		var pole := Vector3(0.15 if left else -0.15,0.08,1.0) if not plant_legs.is_empty() else Vector3(0.09 if left else -0.09,0.25,1.0)
+		if plant_legs.is_empty():
+			author.limb(pose,"thigh_"+side,"calf_"+side,foot,target,pole)
+		else:
+			author.limb(pose,"thigh_"+side,"calf_"+side,foot,target,pole,1.0,162.0,true)
 		author.set_world_basis(pose,foot,foot_pose.basis)
 		if setting_jump: continue
 		var upper_arm: String = "upperarm_"+side
@@ -292,12 +337,9 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 			var blend := smoothstep(0.0,0.035,lead_age)*(1.0-smoothstep(lead_time,lead_time+0.10,elapsed))
 			pose[bone].basis = Basis(pose[bone].basis.get_rotation_quaternion().slerp(edited,blend))
 	rig.set_bone_pose_position(pelvis,pose[pelvis].origin)
+	var entry := 1.0-smoothstep(0.0,0.085,elapsed)
 	for bone in rig.get_bone_count():
 		var rotation: Quaternion = pose[bone].basis.get_rotation_quaternion()
-		if not plant_rotations.is_empty() and flight <= 0.0:
-			var name_ := str(rig.get_bone_name(bone))
-			# Let the foot solver hold the plant while easing the upper body's weight transfer.
-			if name_.begins_with("spine_") or name_.begins_with("upperarm_") or name_.begins_with("lowerarm_"):
-				rotation = plant_rotations[bone].slerp(rotation,1.0-exp(-delta/0.035))
-			plant_rotations[bone] = rotation
+		if entry > 0.0 and entry_leg_rotations.has(bone):
+			rotation = rotation.slerp(entry_leg_rotations[bone],entry)
 		rig.set_bone_pose_rotation(bone,rotation)
