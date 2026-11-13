@@ -1227,7 +1227,7 @@ func advance_recoveries(delta: float) -> void:
 			if flick > 0.001: pose_kick_leg(actor,recovery.kick_foot,(Vector3.UP*0.15+actor.global_basis.z*0.11)*flick)
 
 func apply_fast_dig_elbow_bend(rig: Skeleton3D, age: float) -> void:
-	var bend := deg_to_rad(40.0)*smoothstep(0.0,0.095,age)*(1.0-smoothstep(0.12,FAST_DIG_ELBOW_DURATION,age))
+	var bend := deg_to_rad(50.0)*smoothstep(0.0,0.095,age)*(1.0-smoothstep(0.12,FAST_DIG_ELBOW_DURATION,age))
 	var up := (rig.global_basis.inverse()*Vector3.UP).normalized()
 	var left := rig.get_bone_global_pose(rig.find_bone("lowerarm_l")).origin
 	var right := rig.get_bone_global_pose(rig.find_bone("lowerarm_r")).origin
