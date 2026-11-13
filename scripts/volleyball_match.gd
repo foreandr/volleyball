@@ -32,7 +32,6 @@ const WIN_SCORE := 15
 const RECOVERY_TIME := 0.32
 const FAST_DIG_ELBOW_SPEED := 25.0
 const FAST_DIG_ELBOW_DURATION := 0.32
-const SQUAT_EXTRA_HOLD := 0.30
 const FAST_RECEIVE_HOLD := 0.28
 const FAST_RECEIVE_RISE := 0.75
 const SERVE_RUN_BLEND := 0.15
@@ -101,7 +100,7 @@ var bounce_end := 0.0
 var bounce_start := 0.0
 var dead_flight_from := INF
 var spectator := false
-var squat_rise_duration := FAST_RECEIVE_RISE
+var squat_rise_duration := 0.20
 var receive_animation_labels := {}
 var key_labels: Array[Label3D] = []
 var key_until := [0.0,0.0,0.0,0.0]
@@ -1104,7 +1103,7 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 	if fast_forearm:
 		recoveries[index]["fast_elbow_bend"] = true
 		if bump.knee_bend_depth > 0.001:
-			recoveries[index]["hold"] = FAST_DIG_ELBOW_DURATION+SQUAT_EXTRA_HOLD
+			recoveries[index]["hold"] = FAST_DIG_ELBOW_DURATION
 	if not StorySession.attack_ball_audio_muted:
 		if technique != 0 and not transition: set_audio.play()
 		else: play_touch()
@@ -1190,7 +1189,7 @@ func begin_recovery(index: int) -> void:
 	var recovery := {"started":match_clock,"pose":pose}
 	var bump := platforms[index]
 	if is_finite(bump.touch_time) and (bump.knee_bend_depth > 0.001 or bump.fast_back_receive or bump.reach.get("tier",0) == 2) and not bump.low_save.active:
-		recovery["hold"] = FAST_RECEIVE_HOLD+(SQUAT_EXTRA_HOLD if bump.knee_bend_depth > 0.001 else 0.0)
+		recovery["hold"] = FAST_RECEIVE_HOLD
 		recovery["rise"] = squat_rise_duration if bump.knee_bend_depth > 0.001 else FAST_RECEIVE_RISE
 	if bump.low_save.active:
 		recovery["save"] = bump.low_save
