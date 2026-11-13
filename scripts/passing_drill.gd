@@ -49,6 +49,9 @@ func _init(match_: Node3D) -> void:
 	if saved_source is Vector2 and saved_source.is_finite():
 		source.x = clampf(saved_source.x,-6.5,6.5)
 		source.z = clampf(saved_source.y,-6.5,15.0)
+	var saved_receiver: Variant = StorySession.match_preference(PREFERENCE_PREFIX+"receiver_position",Vector2(start.x,start.z))
+	if saved_receiver is Vector2 and saved_receiver.is_finite():
+		set_receiver_start(Vector3(saved_receiver.x,start.y,saved_receiver.y))
 	game.phase = game.Phase.FINISHED
 	game.update_player_guide()
 	game.score_label.hide()
@@ -153,6 +156,8 @@ func update_spin_controls() -> void:
 func handle_drag(event: InputEvent, camera: Camera3D, screen: Vector2) -> bool:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and not event.pressed:
 		var was_dragging := not drag_handle.is_empty()
+		if drag_handle == "receiver":
+			StorySession.save_match_preference(PREFERENCE_PREFIX+"receiver_position",Vector2(start.x,start.z))
 		drag_handle = ""
 		return was_dragging
 	if game.replay.active: return handle_replay_drag(event,camera,screen)
@@ -175,7 +180,7 @@ func handle_drag(event: InputEvent, camera: Camera3D, screen: Vector2) -> bool:
 		if hit is Vector3:
 			var point: Vector3 = hit+grab_offset
 			match drag_handle:
-				"receiver": start = Vector3(clampf(point.x,-4.4,4.4),start.y,clampf(point.z,-4.9,3.4))
+				"receiver": set_receiver_start(point)
 				"source":
 					source = Vector3(clampf(point.x,-6.5,6.5),source.y,clampf(point.z,-6.5,15.0))
 					StorySession.save_match_preference(PREFERENCE_PREFIX+"source_position",Vector2(source.x,source.z))
@@ -183,6 +188,9 @@ func handle_drag(event: InputEvent, camera: Camera3D, screen: Vector2) -> bool:
 			update_setup()
 		return true
 	return false
+
+func set_receiver_start(point: Vector3) -> void:
+	start = Vector3(clampf(point.x,-4.4,4.4),start.y,clampf(point.z,-4.9,3.4))
 
 func handle_replay_drag(event: InputEvent, camera: Camera3D, screen: Vector2) -> bool:
 	var replay: RefCounted = game.replay
