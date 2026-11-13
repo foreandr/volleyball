@@ -17,6 +17,13 @@ var setting_stage: SubViewportContainer
 var setting_camera: Camera3D
 var setting_row: HBoxContainer
 var target_drill: Node3D
+var review_button: Button
+var replay_panel: VBoxContainer
+var frame_label: Label
+var playback: Button
+var previous_rep: Button
+var next_rep: Button
+var seek: HSlider
 var camera_focus := Vector3.ZERO
 
 func _ready() -> void:
@@ -141,6 +148,8 @@ func open_setting_stage(title: String) -> void:
 	ten.custom_minimum_size.y = 38
 	ten.pressed.connect(drill.launch_ten)
 	left.add_child(ten)
+	add_speed(left,"Slow motion",1.0,func(value: float): drill.live_speed = value)
+	build_review(right)
 	for button in [launch,ten]:
 		button.pressed.connect(func(): repeat.set_pressed_no_signal(false))
 	setting_camera = Camera3D.new()
@@ -160,6 +169,7 @@ func _process(delta: float) -> void:
 		float(Input.is_physical_key_pressed(KEY_D))-float(Input.is_physical_key_pressed(KEY_A)),
 		float(Input.is_physical_key_pressed(KEY_W))-float(Input.is_physical_key_pressed(KEY_S))).limit_length()
 	pan_setting_camera(movement,delta)
+	update_review()
 
 func pan_setting_camera(movement: Vector2, delta: float) -> void:
 	var forward := -setting_camera.global_basis.z.slide(Vector3.UP).normalized()
@@ -186,6 +196,83 @@ func handle_setting_camera(event: InputEvent) -> void:
 	setting_camera.position = camera_focus+offset
 	setting_camera.look_at(camera_focus)
 	setting_stage.accept_event()
+
+func add_speed(panel: VBoxContainer, title: String, initial: float, apply: Callable) -> void:
+	var caption := Label.new()
+	panel.add_child(caption)
+	var slider := HSlider.new()
+	slider.min_value = 0.1
+	slider.max_value = 1.0
+	slider.step = 0.05
+	slider.value = initial
+	panel.add_child(slider)
+	var update := func(value: float):
+		caption.text = "%s %.2fx" % [title,value]
+		apply.call(value)
+	slider.value_changed.connect(update)
+	update.call(initial)
+
+func review_control(panel: Container, title: String, action: Callable) -> Button:
+	var button := Button.new()
+	button.text = title
+	button.custom_minimum_size.y = 38
+	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	button.pressed.connect(action)
+	panel.add_child(button)
+	return button
+
+func build_review(panel: VBoxContainer) -> void:
+	var game: Node3D = target_drill.game
+	var replay = game.replay
+	review_button = review_control(panel,"Review rep (R)",toggle_review)
+	replay_panel = VBoxContainer.new()
+	panel.add_child(replay_panel)
+	playback = review_control(replay_panel,"Play (Space)",toggle_playback)
+	seek = HSlider.new()
+	seek.value_changed.connect(func(value: float):
+		replay.playing = false
+		replay.seek(game,value))
+	replay_panel.add_child(seek)
+	frame_label = Label.new()
+	replay_panel.add_child(frame_label)
+	var steps := HBoxContainer.new()
+	replay_panel.add_child(steps)
+	review_control(steps,"Previous frame",func(): replay.step_frame(game,-1))
+	review_control(steps,"Next frame",func(): replay.step_frame(game,1))
+	var reps := HBoxContainer.new()
+	replay_panel.add_child(reps)
+	previous_rep = review_control(reps,"Previous rep",func(): target_drill.open_review(target_drill.review_index-1,true))
+	next_rep = review_control(reps,"Next rep",func(): target_drill.open_review(target_drill.review_index+1,true))
+	add_speed(replay_panel,"Replay speed",replay.speed,func(value: float): replay.speed = value)
+	review_control(replay_panel,"Edit setter",target_drill.edit_setter)
+	update_review()
+
+func toggle_review() -> void:
+	var game: Node3D = target_drill.game
+	if game.replay.active: game.replay.toggle(game,true)
+	else: target_drill.open_review(target_drill.review_count()-1)
+	update_review()
+
+func toggle_playback() -> void:
+	var game: Node3D = target_drill.game
+	var replay = game.replay
+	if not replay.active: return
+	if not replay.playing and replay.clock >= replay.duration(): replay.seek(game,0.0)
+	replay.playing = not replay.playing
+
+func update_review() -> void:
+	var replay = target_drill.game.replay
+	var count: int = target_drill.review_count()
+	review_button.disabled = count == 0
+	review_button.text = "Back to drill (R)" if replay.active else "Review rep (R)"
+	replay_panel.visible = replay.active
+	if not replay.active: return
+	playback.text = "Pause (Space)" if replay.playing else "Play (Space)"
+	seek.max_value = replay.duration()
+	seek.set_value_no_signal(replay.clock)
+	frame_label.text = "Rep %d / %d | Frame %d / %d" % [target_drill.review_index+1,count,replay.index,replay.frames.size()-1]
+	previous_rep.disabled = target_drill.review_index <= 0
+	next_rep.disabled = target_drill.review_index >= count-1
 
 func setting_panel(width: float) -> VBoxContainer:
 	var panel := PanelContainer.new()
@@ -224,6 +311,15 @@ func go_back() -> void:
 		get_tree().change_scene_to_file("res://scenes/main.tscn")
 	else:
 		show_categories()
+
+func _input(event: InputEvent) -> void:
+	if not is_instance_valid(setting_stage) or not event is InputEventKey or not event.pressed or event.echo: return
+	if event.physical_keycode == KEY_R:
+		toggle_review()
+		get_viewport().set_input_as_handled()
+	elif event.physical_keycode == KEY_SPACE and target_drill.game.replay.active:
+		toggle_playback()
+		get_viewport().set_input_as_handled()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):

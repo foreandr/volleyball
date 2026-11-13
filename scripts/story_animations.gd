@@ -449,25 +449,7 @@ func edit_passing_replay() -> void:
 	var replay = demo_match.replay
 	if not replay.active: return
 	replay.playing = false
-	var receiver: int = passing_drill.RECEIVER
-	var actor: Node3D = demo_match.players[receiver]
-	var start_pose: Transform3D = replay.frames[0].actors[receiver].root
-	var selected: int = replay.index
-	var first_time: float = replay.frames[0].time
-	var sample := func(time: float) -> Array[Transform3D]:
-		var capture: Dictionary = replay.frames[mini(roundi(time*60.0),replay.frames.size()-1)].actors[receiver]
-		var pose: Array[Transform3D] = []
-		pose.assign(capture.bones)
-		var root_bone: int = actor.skeleton.find_bone("root")
-		var rig_to_actor: Transform3D = actor.global_transform.affine_inverse()*actor.skeleton.global_transform
-		pose[root_bone] = rig_to_actor.affine_inverse()*start_pose.affine_inverse()*capture.root*rig_to_actor*pose[root_bone]
-		return pose
-	var clip: Animation = actor.get_pose_author().bake({"name":"Passing replay","duration":replay.duration(),
-		"contact_time":float(replay.frames[selected].time)-first_time},sample)
-	clip.loop_mode = Animation.LOOP_NONE
-	clip.set_meta("editor_group","Both Arms")
-	clip.set_meta("editor_start",actor.get_parent().to_global(start_pose.origin))
-	clip.set_meta("editor_initial_frame",selected)
+	var clip: Animation = replay.bake_actor(demo_match,passing_drill.RECEIVER,"Passing replay")
 	StorySession.edit_entry = {"id":"passing_replay_edit","name":"Passing replay","category":"Forearm reception","type":"Forearm"}
 	StorySession.animation_draft.clear()
 	StorySession.edit_animation = clip

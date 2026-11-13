@@ -13,6 +13,10 @@ const STEP := 1.0/60.0
 var game: Node3D
 var trail: MultiMeshInstance3D
 var running := false
+var live_speed := 1.0
+var rep_history: Array = []
+var review_index := -1
+const HISTORY_LIMIT := 10
 var budget := 0.0
 var passer_start := RECEIVE_START
 var setter_start := SETTER_START
@@ -95,6 +99,10 @@ func feed_motion() -> Vector3:
 	return (feed_landing-feed_origin())/feed_duration+Vector3.UP*Flight.GRAVITY*feed_duration*0.5
 
 func launch_rep() -> void:
+	if game.replay.active: game.replay.toggle(game,true)
+	if game.replay.current.size() >= 2:
+		rep_history.append(game.replay.current)
+		if rep_history.size() >= HISTORY_LIMIT: rep_history.pop_front()
 	next_rep = -1.0
 	if remaining > 0: remaining -= 1
 	pass_preview.hide()
@@ -112,8 +120,13 @@ func launch_rep() -> void:
 	game.cpu_technique = 0
 	set_status("Float feed")
 	running = true
+	game.replay.record(game)
 
 func _physics_process(delta: float) -> void:
+	if game.replay.active:
+		game.replay.step(game,delta)
+		return
+	delta *= live_speed
 	if not running:
 		if next_rep >= 0.0:
 			next_rep -= delta
@@ -152,6 +165,7 @@ func step_rep() -> void:
 		if repeating or remaining > 0: next_rep = 0.7
 		if kind == "serve": set_status("Missed feed")
 		elif kind == "pass": set_status("Missed set")
+	game.replay.record(game)
 
 func set_status(message: String) -> void:
 	game.info.text = "%d/10 · %s" % [batch_rep,message] if batch_rep > 0 else message
@@ -208,7 +222,7 @@ func refresh_setup() -> void:
 	show_preview(trail,contact,set_motion,Flight.landing_time(contact,set_motion))
 
 func handle_setup_input(event: InputEvent, camera: Camera3D) -> bool:
-	if running or not event is InputEventMouse: return false
+	if running or game.replay.active or not event is InputEventMouse: return false
 	var mouse: Vector2 = event.position
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		dragging = event.pressed
@@ -267,3 +281,25 @@ func move_selection(point: Vector3) -> void:
 		"pass": pass_target = Vector3(x,pass_target.y,z)
 		"set": set_target = Vector3(x,set_target.y,z)
 	refresh_setup()
+
+func review_count() -> int:
+	return rep_history.size()+int(game.replay.current.size() >= 2)
+
+func open_review(index: int, autoplay := false) -> void:
+	if index < 0 or index >= review_count(): return
+	var replay = game.replay
+	var frames: Array[Dictionary] = rep_history[index] if index < rep_history.size() else replay.current
+	if replay.active: replay.toggle(game,true)
+	replay.toggle(game,true,frames)
+	review_index = index
+	replay.playing = autoplay
+	if not autoplay: replay.seek(game,replay.duration())
+
+func edit_setter() -> void:
+	var replay = game.replay
+	if not replay.active: return
+	replay.playing = false
+	StorySession.edit_animation = replay.bake_actor(game,0,"Setting replay")
+	StorySession.edit_entry = {"id":"setting_replay_edit","name":"Setting replay","category":"Setting","type":"Overhead"}
+	StorySession.animation_draft.clear()
+	get_tree().change_scene_to_file("res://scenes/animation_editor.tscn")

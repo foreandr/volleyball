@@ -121,3 +121,22 @@ func apply(match_: Node3D, first: Dictionary, second: Dictionary, blend: float) 
 	match_.score_label.text = first.score
 	match_.info.text = first.info
 	match_.player_label.global_position = match_.human.global_position+Vector3.UP*2.17
+
+func bake_actor(match_: Node3D, actor_index: int, title: String) -> Animation:
+	var actor: Node3D = match_.players[actor_index]
+	var start: Transform3D = frames[0].actors[actor_index].root
+	var rig_to_actor: Transform3D = actor.global_transform.affine_inverse()*actor.skeleton.global_transform
+	var root_bone: int = actor.skeleton.find_bone("root")
+	var sample := func(time: float) -> Array[Transform3D]:
+		var capture: Dictionary = frames[mini(roundi(time*60.0),frames.size()-1)].actors[actor_index]
+		var pose: Array[Transform3D] = []
+		pose.assign(capture.bones)
+		pose[root_bone] = rig_to_actor.affine_inverse()*start.affine_inverse()*capture.root*rig_to_actor*pose[root_bone]
+		return pose
+	var clip: Animation = actor.get_pose_author().bake({"name":title,"duration":duration(),
+		"contact_time":float(frames[index].time)-float(frames[0].time)},sample)
+	clip.loop_mode = Animation.LOOP_NONE
+	clip.set_meta("editor_group","Both Arms")
+	clip.set_meta("editor_start",actor.get_parent().to_global(start.origin))
+	clip.set_meta("editor_initial_frame",index)
+	return clip
