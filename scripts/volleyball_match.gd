@@ -1734,7 +1734,7 @@ func tick_receive(delta: float, previous: float) -> void:
 		if cpu_dig:
 			bump.allow_auto_dive = not backshuffle and (bump.emergency_low_save or not cpu_can_lunge(index,catch_point,cue-elapsed))
 	bump.rushed_cpu_receive = not is_human(index) and technique == 0 and (is_dig or flight_kind == "serve") and cpu_hand_receive_too_fast(cue) and cue-elapsed <= RUSHED_RECEIVE_WINDOW
-	if square_receive and technique == 0 and not bump.low_save.active:
+	if square_receive and technique == 0 and not bump.low_save.active and not bump.deep_squat:
 		var reach_offset: Vector3 = bump.to_local(catch_point)-bump.ready_contact()
 		if bump.reach.is_empty() and cue-elapsed <= 0.22 and Bump.Timing.practice_reach_tier(reach_offset) == 2:
 			bump.plan_reach(reach_offset)
@@ -1743,14 +1743,14 @@ func tick_receive(delta: float, previous: float) -> void:
 		var holds_lunge: bool = bump.reach.get("tier",0) == 2 and committed.is_finite() and committed.distance_to(bump.to_local(catch_point)) <= bump.contact_radius()
 		# Decide before the dive windup runs out. A viable grounded receive keeps priority.
 		bump.allow_auto_dive = not holds_lunge and (not lunge_in_range or elapsed > cue+0.035)
-	bump.deep_squat = false
-	if cpu_dig and forearm_dig and not backshuffle and not bump.low_save.active:
+	if cpu_dig and forearm_dig and not backshuffle and not bump.low_save.active and not bump.deep_squat:
 		var low_point := path_point(maxf(elapsed,arrival(0.45)))
 		var offset := actor.to_local(low_point)
 		bump.deep_squat = offset.z >= 0.10 and offset.z <= 1.22 and absf(offset.x) <= 0.60 and low_point.y <= 0.55
-		if bump.deep_squat:
-			bump.allow_auto_dive = false
-			bump.knee_bend_depth = maxf(bump.knee_bend_depth,0.62*smoothstep(cue-0.33,cue-0.06,elapsed))
+		if bump.deep_squat: bump.clear_reach()
+	if bump.deep_squat:
+		bump.allow_auto_dive = false
+		bump.knee_bend_depth = maxf(bump.knee_bend_depth,0.62*smoothstep(cue-0.33,cue-0.06,elapsed))
 	if not is_human(index) and frame.to_local(path_point(end)).z > Net.NET_Z: bump.allow_auto_dive = false
 	var was_diving: bool = bump.low_save.active
 	bump.fast_back_receive = backshuffle and technique == 0 and is_dig

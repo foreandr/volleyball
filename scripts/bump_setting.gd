@@ -138,6 +138,7 @@ func reset() -> void:
 	early_dig_arms.clear()
 	hard_dig = false
 	fast_hand_dig = false
+	deep_squat = false
 	fast_back_receive = false
 	rushed_cpu_receive = false
 	back_receive_steer = Vector3.ZERO
@@ -473,7 +474,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 			var pose_time := 0.045 if strict_dig else 0.09
 			var windup := 0.0 if rushed_cpu_receive else lerpf(-0.14,0.0,smoothstep(0.0,pose_time,elapsed))
 			apply_pose(contact_frame+windup,smoothstep(0.0,pose_time,elapsed))
-			if not setter_jumping:
+			if not setter_jumping and not deep_squat:
 				var intercept := advance_reach(path,time,end,delta,is_finite(dig_cue))
 				if reach.has("custom_clip"):
 					var contact := float(custom_backward.get_meta("contact_time"))
