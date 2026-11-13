@@ -147,6 +147,9 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 		# Keep the knee hinge on the player's lateral axis throughout the tuck.
 		var pole := leg_axis.cross(Vector3.RIGHT).normalized()
 		var knee_limit := lerpf(lerpf(180.0,120.0,kick),136.0,descent)
+		if side == "r" and not pancake and wide_arm.is_empty():
+			var planted_step := smoothstep(0.015,0.065,time)*(1.0-smoothstep(0.15,0.28,time))
+			knee_limit = minf(knee_limit,lerpf(180.0,148.0,planted_step))
 		author.limb(pose,thigh,calf,foot_name,ankle,pole,1.0,knee_limit)
 		var ready_shin: Vector3 = foot.origin-author.point(ready,calf)
 		var posed_shin: Vector3 = author.point(pose,foot_name)-author.point(pose,calf)
