@@ -658,7 +658,9 @@ func advance_reach(path: Callable, time: float, end: float, delta: float, quick_
 		intercept = Geometry3D.get_closest_point_to_segment(ready_contact(),now,future)
 		var offset := intercept-ready_contact()
 		var direction := offset.slide(Vector3.UP)
-		if quick_dig and not reach.is_empty() and time-reach_changed_at > 0.12 and direction.length() > 0.32 and reach_step.normalized().dot(direction.normalized()) < 0.48:
+		var planned: Vector3 = reach.get("intercept",Vector3.INF)
+		var still_reachable := planned.is_finite() and Geometry3D.get_closest_point_to_segment(planned,path.call(maxf(0.0,time-delta)),future).distance_to(planned) <= contact_radius()
+		if quick_dig and not still_reachable and not reach.is_empty() and time-reach_changed_at > 0.12 and direction.length() > 0.32 and reach_step.normalized().dot(direction.normalized()) < 0.48:
 			begin_dig_transition(time)
 			clear_reach()
 			reach_changed_at = time
@@ -694,6 +696,7 @@ func plan_reach(offset: Vector3) -> void:
 	var side := tier == 2 and absf(local.x) > absf(local.z)*1.4
 	reach = {
 		"tier":tier,"back":back and not rear_side,"rear_diagonal":false,
+		"intercept":ready_contact()+offset,
 		"short_straight_back":short_back,"forward_lunge":forward,
 		"lead":"r" if (setter.position+offset).x <= 0.0 else "l","court_lead":true,
 		"side_lunge":side or rear_side,"height":offset.y if tier == 2 else 0.0,
