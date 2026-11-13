@@ -48,6 +48,7 @@ var left_plant: Vector3
 var plant_legs := {}
 var plant_ground := 0.0
 var entry_leg_rotations := {}
+var entry_body_pose := {}
 
 func load_lead_arm_clip() -> void:
 	var copies := AnimationCatalog.custom_entries()
@@ -84,6 +85,7 @@ func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time
 	lead_distance = 0.0
 	plant_legs.clear()
 	entry_leg_rotations.clear()
+	entry_body_pose.clear()
 	if approach_plant and not setting_jump:
 		var rig: Skeleton3D = actor.skeleton
 		var parent := actor.get_parent_node_3d()
@@ -91,6 +93,9 @@ func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time
 			var foot := rig.find_bone("foot_"+side)
 			plant_legs[side] = parent.global_transform.affine_inverse()*rig.global_transform*rig.get_bone_global_pose(foot)
 		plant_ground = minf(plant_legs.l.origin.y,plant_legs.r.origin.y)
+		for joint in ["pelvis","spine_01","spine_02","spine_03","neck_01","head"]:
+			var bone := rig.find_bone(joint)
+			if bone >= 0: entry_body_pose[bone] = rig.get_bone_pose(bone)
 		for joint in ["thigh_l","thigh_r","calf_l","calf_r","foot_l","foot_r","ball_l","ball_r"]:
 			var bone := rig.find_bone(joint)
 			entry_leg_rotations[bone] = rig.get_bone_pose_rotation(bone)
@@ -176,10 +181,10 @@ func step(actor: Node3D, delta: float, input: Vector2) -> void:
 		transfer_hop = 0.05*smoothstep(lead_step_duration*0.82,lead_step_duration,lead_age)*(1.0-smoothstep(0.0,0.135,pose_time))
 	if not plant_legs.is_empty() and lead_time > 0.0:
 		# Carry momentum between the lead step and the final plant.
-		var bridge := smoothstep(lead_time*0.78,load_time,elapsed)
-		var old_progress := 0.34*first+0.66*second
-		var travel_fraction := lerpf(old_progress,bridge,sin(PI*bridge))
-		distance += stride*(travel_fraction-old_progress)
+		var ground_distance := entry_distance+lead_distance+stride
+		var stepped_distance := distance-stride*AIR_TRAVEL_FRACTION*flight
+		var continuous_distance := ground_distance*smoothstep(0.0,load_time,elapsed)
+		distance += (continuous_distance-stepped_distance)*0.32
 	var base := start+heading*distance+Vector3.UP*(4.0*height*flight*(1.0-flight)+transfer_hop)
 	var lunge := approach_lunge*smoothstep(0.0,air_glide_duration,elapsed-load_time)
 	var position := base+air_offset+lunge
@@ -240,9 +245,15 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 			rise = 0.58*smoothstep(0.045,penultimate_plant,pose_time)
 		rise = lerpf(rise,1.0,smoothstep(penultimate_plant,LOAD_TIME,pose_time))
 		var upright := rise*(1.0-smoothstep(LOAD_TIME,LOAD_TIME+0.12,pose_time))
+		# Start unfolding during the penultimate step and finish over the push-off.
+		upright = lerpf(upright,smoothstep(0.07,LOAD_TIME+0.055,pose_time)*(1.0-smoothstep(LOAD_TIME+0.055,LOAD_TIME+0.15,pose_time)),0.75)
 		var torso: Vector3 = author.point(pose,"neck_01")-author.point(pose,"spine_02")
 		var pitch := atan2(torso.z,torso.y)
 		author.rotate_world(pose,"spine_02",Vector3.RIGHT,(-deg_to_rad(5.0)-pitch)*upright)
+	var body_entry := 1.0-smoothstep(0.0,0.14,elapsed)
+	if body_entry > 0.0:
+		for bone in entry_body_pose:
+			pose[bone] = pose[bone].interpolate_with(entry_body_pose[bone],body_entry)
 	var travel := actor.basis.inverse()*heading*stride/scale_
 	if actor.mirror_animation: travel.x = -travel.x
 	var stagger := 0.34*(first-second)

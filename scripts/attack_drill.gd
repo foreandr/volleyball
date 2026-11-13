@@ -110,6 +110,8 @@ var swing_contact_aim: Vector3
 var swing_finish_pose: Array[Transform3D] = []
 var approach_arm_transition: Array[Transform3D] = []
 var approach_render_rotations: Array[Quaternion] = []
+var approach_entry_yaw := 0.0
+const ATTACK_BODY_BONES := ["pelvis","spine_01","spine_02","spine_03","neck_01","head"]
 var swing_palm_roll := 0.0
 var swing_contact: Vector3
 var swing_contact_extension := 1.0
@@ -615,6 +617,7 @@ func spike_body_target(ball_target: Vector3) -> Vector3:
 
 func begin_attack_jump(direction: Vector2, plant_time := 0.36, jump_height := 0.0, tempo := 1.0) -> void:
 	takeoff_yaw = setter.rotation.y
+	approach_entry_yaw = takeoff_yaw
 	var ball_target := Vector3.INF
 	if uses_assisted_approach():
 		ball_target = spike_body_target(approach_intercept)
@@ -628,7 +631,8 @@ func step_jump(delta: float) -> void:
 	jump.load_arm_extra = backswing_reach*0.85 if uses_assisted_approach() else 0.0
 	if uses_assisted_approach() and jump.active and jump.elapsed < jump.load_duration():
 		var yaw := atan2(jump.heading.x,jump.heading.z)
-		setter.rotation.y = rotate_toward(setter.rotation.y,yaw,delta*12.0)
+		var turn_time := minf(0.22,jump.load_duration())
+		setter.rotation.y = lerp_angle(approach_entry_yaw,yaw,smootherstep(0.0,turn_time,jump.elapsed+delta))
 		takeoff_yaw = setter.rotation.y
 	super.step_jump(delta)
 
@@ -894,7 +898,10 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 			var glance := clampf(angle_difference(takeoff_yaw,incoming_yaw),-deg_to_rad(25.0),deg_to_rad(25.0))
 			incoming_yaw = takeoff_yaw+glance
 		var turn_rate := 420.0 if uses_assisted_approach() else 720.0
-		setter.rotation.y = rotate_toward(setter.rotation.y,incoming_yaw,deg_to_rad(turn_rate)*delta)
+		if uses_assisted_approach():
+			setter.rotation.y = lerp_angle(takeoff_yaw,incoming_yaw,smoothstep(0.0,0.14,air_age))
+		else:
+			setter.rotation.y = rotate_toward(setter.rotation.y,incoming_yaw,deg_to_rad(turn_rate)*delta)
 	if is_finite(swing_started) and in_air:
 		if not is_finite(swing_charge_started): swing_charge_started = clock
 		var charge := swing_charge()
@@ -1104,9 +1111,14 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 		var rotation := pose[bone].basis.get_rotation_quaternion()
 		if smoothing > 0.0:
 			var previous := approach_render_rotations[bone]
-			rotation = rotation.slerp(previous,smoothing)
+			var bone_name := str(rig.get_bone_name(bone))
+			var retention := smoothing
+			if bone_name in ATTACK_BODY_BONES:
+				var response := 0.047 if stage == Stage.SET else 0.036
+				retention = exp(-delta/response)*smoothstep(0.0,0.32,weight)
+			rotation = rotation.slerp(previous,retention)
 			var rate := attack_arm_turn_rate()
-			if is_finite(rate) and rig.get_bone_name(bone) in ["upperarm_r","lowerarm_r","hand_r"]:
+			if is_finite(rate) and bone_name in ["upperarm_r","lowerarm_r","hand_r"]:
 				var angle := previous.angle_to(rotation)
 				if angle > rate*delta: rotation = previous.slerp(rotation,rate*delta/angle)
 			approach_render_rotations[bone] = rotation
