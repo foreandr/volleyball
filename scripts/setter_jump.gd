@@ -45,6 +45,9 @@ var right_foot_start: Vector3
 var left_foot_start: Vector3
 var right_plant: Vector3
 var left_plant: Vector3
+var plant_entry_pose: Array[Transform3D] = []
+var plant_rotations: Array[Quaternion] = []
+var plant_entry_yaw := 0.0
 
 func load_lead_arm_clip() -> void:
 	var copies := AnimationCatalog.custom_entries()
@@ -79,7 +82,15 @@ func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time
 	entry_time = lead_step_duration if approach_steps == 4 else 0.0
 	entry_distance = 0.0
 	lead_distance = 0.0
-	if from_sprint:
+	plant_entry_pose.clear()
+	plant_rotations.clear()
+	if approach_plant and not setting_jump:
+		var rig: Skeleton3D = actor.skeleton
+		plant_entry_yaw = actor.model.rotation.y
+		for bone in rig.get_bone_count():
+			plant_entry_pose.append(rig.get_bone_pose(bone))
+			plant_rotations.append(rig.get_bone_pose_rotation(bone))
+	if from_sprint and plant_entry_pose.is_empty():
 		actor.model.rotation.y = 0.0
 		actor.animator.speed_scale = 1.0
 		actor.play_action("idle",0.0)
@@ -101,7 +112,7 @@ func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time
 		left_plant = right_plant+toward_ball*0.43+Vector3.UP.cross(toward_ball)*plant_width
 		right_plant.y = minf(right_foot_start.y,left_foot_start.y)
 		left_plant.y = right_plant.y
-	if not from_sprint: actor.play_action("idle")
+	if not from_sprint or not plant_entry_pose.is_empty(): actor.play_action("idle")
 
 func begin_set_jump(actor: Node3D, load: float, jump_height := 0.56) -> void:
 	if active: return
@@ -157,19 +168,26 @@ func step(actor: Node3D, delta: float, input: Vector2) -> void:
 	var landing := elapsed-load_time-air_time
 	if landing >= LAND_TIME:
 		active = false
-		return
+		if plant_entry_pose.is_empty(): return
 	var lead_load := 0.70*smoothstep(0.0,lead_step_duration*0.78,lead_age) if lead_time > 0.0 else 0.0
 	var load_in := lerpf(lead_load,1.0,smoothstep(0.035 if lead_time > 0.0 else 0.02,0.12 if lead_time > 0.0 else 0.19,pose_time))
 	var load := load_in*(1.0-smoothstep(0.19,LOAD_TIME+0.055,pose_time))
 	var impact := smoothstep(-0.025,0.04,landing)*(1.0-smoothstep(0.04,LAND_TIME,landing))
 	var arm_drive := smoothstep(0.17,0.37,pose_time)*(1.0-smoothstep(LOAD_TIME+air_time*0.56,LOAD_TIME+air_time*0.93,pose_time))
-	pose_jump(actor,first,second,load,impact,arm_drive,pose_time,flight,load_in,transfer_hop)
+	if not plant_entry_pose.is_empty():
+		actor.model.rotation.y = lerp_angle(plant_entry_yaw,0.0,smoothstep(0.0,0.14,elapsed))
+	pose_jump(actor,first,second,load,impact,arm_drive,pose_time,flight,load_in,transfer_hop,delta)
 
-func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: float, arm_drive: float, pose_time: float, flight: float, load_in: float, transfer_hop: float) -> void:
+func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: float, arm_drive: float, pose_time: float, flight: float, load_in: float, transfer_hop: float, delta: float) -> void:
 	var rig: Skeleton3D = actor.skeleton
 	var author: RefCounted = actor.get_pose_author()
 	var pose: Array = []
 	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
+	if not plant_entry_pose.is_empty():
+		var entry := 1.0-smoothstep(0.0,minf(0.15,load_duration()),elapsed)
+		if entry > 0.0:
+			for bone in rig.get_bone_count():
+				pose[bone] = pose[bone].interpolate_with(plant_entry_pose[bone],entry)
 	var original := pose.duplicate()
 	var pelvis := rig.find_bone("pelvis")
 	var parent := rig.get_bone_parent(pelvis)
@@ -275,4 +293,11 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 			pose[bone].basis = Basis(pose[bone].basis.get_rotation_quaternion().slerp(edited,blend))
 	rig.set_bone_pose_position(pelvis,pose[pelvis].origin)
 	for bone in rig.get_bone_count():
-		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
+		var rotation: Quaternion = pose[bone].basis.get_rotation_quaternion()
+		if not plant_rotations.is_empty() and flight <= 0.0:
+			var name_ := str(rig.get_bone_name(bone))
+			# Let the foot solver hold the plant while easing the upper body's weight transfer.
+			if name_.begins_with("spine_") or name_.begins_with("upperarm_") or name_.begins_with("lowerarm_"):
+				rotation = plant_rotations[bone].slerp(rotation,1.0-exp(-delta/0.035))
+			plant_rotations[bone] = rotation
+		rig.set_bone_pose_rotation(bone,rotation)
