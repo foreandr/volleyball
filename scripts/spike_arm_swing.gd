@@ -28,6 +28,7 @@ static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float,
 	var across: Vector3 = (author.point(pose,"upperarm_l")-shoulder).normalized()
 	var chest_center: Vector3 = shoulder.lerp(author.point(pose,"upperarm_l"),0.5)
 	var cross_body := (finish_point-chest_center).dot(across) > 0.0
+	target = follow_through_target(pose,author,shoulder,target,finish_point,finish,same_side,compact_finish)
 	if reach > 0.0:
 		var elbow: Vector3 = author.point(pose,"lowerarm_r")
 		var wrist: Vector3 = author.point(pose,"hand_r")
@@ -35,7 +36,6 @@ static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float,
 		var reach_vector := target-shoulder
 		var extended := shoulder+reach_vector.normalized()*maxf(reach_vector.length(),arm_length*0.998)
 		target = target.lerp(extended,reach)
-	target = follow_through_target(pose,author,shoulder,target,finish_point,finish,same_side,compact_finish)
 	var elbow_pole := Vector3(-1.0,0.16,-0.84).lerp(Vector3(-0.75,0.38,-0.28),smoothstep(0.62,1.0,extension))
 	var draw_elbow_limit := 112.0+42.0*smoothstep(0.0,0.60,backswing_reach)
 	var elbow_limit := lerpf(draw_elbow_limit,178.0 if contact_palm else 158.0,smoothstep(0.29,0.98,extension))
@@ -46,7 +46,7 @@ static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float,
 		if fallback.length_squared() < 0.08: fallback = Vector3.DOWN.slide(wrist_axis)
 		natural_pole = natural_pole.lerp(fallback,1.0-smoothstep(0.09,0.32,natural_pole.length()))
 		elbow_pole = elbow_pole.lerp(natural_pole.normalized(),smoothstep(0.16,0.78,extension))
-	elbow_limit = lerpf(elbow_limit,164.0 if same_side else 172.0,finish)
+	elbow_limit = lerpf(lerpf(elbow_limit,179.0,reach),164.0 if same_side else 172.0,finish)
 	elbow_pole = elbow_pole.lerp(finish_elbow_pole(same_side),finish)
 	var base := pose
 	if finish > 0.0:

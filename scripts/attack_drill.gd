@@ -1118,11 +1118,32 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 				retention = exp(-delta/response)*smoothstep(0.0,0.32,weight)
 			rotation = rotation.slerp(previous,retention)
 			var rate := attack_arm_turn_rate()
+			if keeps_strike_palm_presented() and stage == Stage.SET:
+				rate = lerpf(deg_to_rad(1080.0),rate,smootherstep(0.14,0.28,clock-swing_started))
 			if is_finite(rate) and bone_name in ["upperarm_r","lowerarm_r","hand_r"]:
 				var angle := previous.angle_to(rotation)
 				if angle > rate*delta: rotation = previous.slerp(rotation,rate*delta/angle)
 			approach_render_rotations[bone] = rotation
 		rig.set_bone_pose_rotation(bone,rotation)
+	var contact_reach := smootherstep(0.68,0.98,extension)*(1.0-smoothstep(0.0,0.22,follow))
+	if keeps_strike_palm_presented() and stage == Stage.SET and contact_reach > 0.0 and not approach_render_rotations.is_empty():
+		var author: RefCounted = setter.get_pose_author()
+		for bone in rig.get_bone_count(): pose[bone] = rig.get_bone_pose(bone)
+		var shoulder: Vector3 = author.point(pose,"upperarm_r")
+		var elbow: Vector3 = author.point(pose,"lowerarm_r")
+		var wrist: Vector3 = author.point(pose,"hand_r")
+		var arm_length := shoulder.distance_to(elbow)+elbow.distance_to(wrist)
+		var ball_target := rig.to_local(to_global(contact))
+		var direction := (ball_target-shoulder).normalized()
+		var target := shoulder+direction*arm_length
+		var pole := (elbow-shoulder).slide((wrist-shoulder).normalized()).normalized()
+		if pole.is_zero_approx(): pole = Vector3.LEFT
+		author.limb(pose,"upperarm_r","lowerarm_r","hand_r",target,pole,contact_reach,179.0,true)
+		for joint in ["upperarm_r","lowerarm_r"]:
+			var bone := rig.find_bone(joint)
+			var rotation := pose[bone].basis.get_rotation_quaternion()
+			rig.set_bone_pose_rotation(bone,rotation)
+			approach_render_rotations[bone] = rotation
 
 func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, weight: float, contact: Vector3, extension: float, follow: float, draw_progress: float, arm_lift: float) -> Array[Transform3D]:
 	var rig: Skeleton3D = setter.skeleton
@@ -1206,7 +1227,7 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 		pitch += lift_lean_offset(arm_lift,extension)
 	var lean_blend := maxf(contact_crunch,follow_crunch)
 	if stage == Stage.HIT: lean_blend *= 1.0-smootherstep(0.14,0.34,clock-stage_start)
-	var torso_pitch := pitch-deg_to_rad(20.0)*strike_reach+deg_to_rad(30.0)*follow_crunch+deg_to_rad(torso_forward_bias_degrees)*lean_blend
+	var torso_pitch := pitch-deg_to_rad(12.0)*strike_reach+deg_to_rad(30.0)*follow_crunch+deg_to_rad(torso_forward_bias_degrees)*lean_blend
 	author.rotate_world(pose,"spine_01",Vector3.RIGHT,torso_pitch*0.45*weight)
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,torso_pitch*0.55*weight)
 	if uses_air_reach_assist() and stage == Stage.SET:
@@ -1223,7 +1244,7 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 		author.rotate_world(pose,"spine_01",chest_forward,deg_to_rad(-two_step_tilt)*tilt_weight*weight)
 	if strike_reach > 0.0:
 		# Raise the hitting shoulder and leave space between the arm and head.
-		var roll := deg_to_rad(-29.0)*strike_reach*weight
+		var roll := deg_to_rad(-36.0)*strike_reach*weight
 		author.rotate_world(pose,"spine_01",Vector3.BACK,roll*0.45)
 		author.rotate_world(pose,"spine_02",Vector3.BACK,roll*0.55)
 	var neck: Vector3 = author.point(pose,"neck_01")
@@ -1297,9 +1318,17 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 						arc = lift_direction
 					var reach := lerpf(0.43,arm_length*0.96,rise)
 					var entry := smootherstep(0.0,0.12 if sync_approach_arm_lift() else 0.17,handoff_age)
-					target = source_wrist.lerp(shoulder+arc*reach+outward*0.015,entry)
-					var pole := source_pole.lerp((forward*0.30-up*(1.0-rise)+outward*0.55).normalized(),entry)
-					author.limb(front_pose,upper,"lowerarm_r","hand_r",target,pole,1.0,lerpf(165.0,174.0,rise))
+					# Keep the wrist outside the shoulder as the backswing passes the hip.
+					var sweep := (outward*0.58-up*0.82).normalized()
+					var outgoing := (arc*reach+outward*0.015).normalized()
+					var lift_direction_from_load := source_axis.slerp(sweep,smoothstep(0.0,0.55,entry))
+					lift_direction_from_load = lift_direction_from_load.slerp(outgoing,smoothstep(0.28,1.0,entry))
+					target = shoulder+lift_direction_from_load*lerpf(source_wrist.distance_to(shoulder),reach,entry)
+					var lift_axis := (target-shoulder).normalized()
+					var carried_pole := Quaternion(source_axis,lift_axis)*source_pole
+					var lift_pole := (forward*0.30-up*(1.0-rise)+outward*0.55).slide(lift_axis).normalized()
+					var pole := carried_pole.rotated(lift_axis,carried_pole.signed_angle_to(lift_pole,lift_axis)*entry)
+					author.limb(front_pose,upper,"lowerarm_r","hand_r",target,pole,1.0,lerpf(165.0,174.0,rise),true)
 					SpikeArm.align_wrist_to_forearm(front_pose,author,entry*0.65)
 					front_weight = 1.0-smootherstep(0.24,0.42,handoff_age)
 					if keeps_strike_palm_presented():
