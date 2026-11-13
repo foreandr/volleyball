@@ -14,7 +14,7 @@ static func contact_center(actor: Node3D) -> Vector3:
 		center += rig.get_bone_global_pose(rig.find_bone("thumb_03_"+side)).origin
 	return rig.to_global(center*0.25+Vector3(0,0.075,0.07))
 
-static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.ZERO, cushion := 0.0, torso_follow := 0.0, face_save := false, ball_direction := Vector3.ZERO, set_extension := -1.0) -> void:
+static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.ZERO, cushion := 0.0, torso_follow := 0.0, face_save := false, ball_direction := Vector3.ZERO, set_extension := -1.0, set_offset := Vector3.INF, arch_progress := 0.0) -> void:
 	if blend <= 0.0: return
 	var rig: Skeleton3D = actor.skeleton
 	var author: RefCounted = actor.get_pose_author()
@@ -39,12 +39,12 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 	var horizontal_push := local_push.slide(Vector3.UP)
 	var set_depth := horizontal_push.normalized().z
 	var backset := smoothstep(0.0,0.65,-set_depth)
-	var wrist_depth := local_push.normalized().z
-	var forward_set := smoothstep(0.12,0.70,wrist_depth)
-	var backward_set := smoothstep(0.12,0.70,-wrist_depth)
-	var wrist_pitch := deg_to_rad(28.0)*(forward_set-backward_set)*maxf(set_extension,0.0)
-	if set_extension > 0.0 and backset > 0.0:
-		var arch := deg_to_rad(48.0)*backset*set_extension*blend
+	var set_depth_m := rig.global_basis.z.normalized().dot(set_offset.slide(Vector3.UP)) if set_offset.is_finite() else 0.0
+	var wrist_direction := smoothstep(0.12,0.70,absf(set_depth_m))
+	var wrist_distance := smoothstep(0.0,4.0,absf(set_depth_m))
+	var back_arch := smoothstep(0.0,4.0,-set_depth_m)
+	if arch_progress > 0.0 and back_arch > 0.0:
+		var arch := deg_to_rad(48.0)*back_arch*arch_progress*blend
 		author.rotate_world(pose,"spine_01",Vector3.RIGHT,-arch*0.45)
 		author.rotate_world(pose,"spine_02",Vector3.RIGHT,-arch*0.55)
 	var turn := 0.0
@@ -98,12 +98,18 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 		var across: Vector3 = author.point(pose,"index_01_"+side)-author.point(pose,"pinky_01_"+side)
 		var target_fingers := Vector3(-sign_*0.52,0.82,0.23)
 		var follow := smoothstep(0.04,0.20,push.length())
-		# Keep the same cup as the wrist rolls through the release.
 		var target_across := Vector3(-sign_*0.72,-0.30,-0.54)
-		if set_extension >= 0.0:
-			target_fingers = target_fingers.rotated(Vector3.RIGHT,wrist_pitch)
-			target_across = target_across.rotated(Vector3.RIGHT,wrist_pitch)
-		else:
+		var wrist_follow := wrist_direction*maxf(set_extension,0.0)
+		if wrist_follow > 0.0:
+			# Pitch the palm from the solved forearm so it follows the arm past the head.
+			var forearm: Vector3 = base.origin-author.point(pose,lower)
+			var forearm_pitch := atan2(forearm.z,forearm.y)
+			var neutral_pitch := atan2(target_fingers.z,target_fingers.y)
+			var flex := signf(set_depth_m)*deg_to_rad(8.0+14.0*wrist_distance)
+			var pitch := angle_difference(neutral_pitch,forearm_pitch+flex)*wrist_follow
+			target_fingers = target_fingers.rotated(Vector3.RIGHT,pitch)
+			target_across = target_across.rotated(Vector3.RIGHT,pitch)
+		elif set_extension < 0.0:
 			target_fingers = target_fingers.lerp(local_push.normalized(),0.46*follow)
 		if face_save and not ball_direction.is_zero_approx():
 			var incoming := (rig.global_basis.inverse()*ball_direction).normalized()
@@ -111,9 +117,16 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 			target_fingers = target_fingers.slide(palm_normal).normalized()
 			target_across = palm_normal.cross(target_fingers)*sign_
 		author.set_world_basis(pose,hand,hand_basis(target_fingers,target_across)*hand_basis(fingers,across).inverse()*base.basis)
-		shape_digit(author,pose,"index",side,diamond+Vector3(sign_*0.018,0.065,0.025))
-		shape_digit(author,pose,"thumb",side,diamond+Vector3(sign_*0.016,-0.047,0.045))
-		shape_outer_fingers(author,pose,side,diamond+Vector3(0,0.075,0.07))
+		var index_tip := diamond+Vector3(sign_*0.018,0.065,0.025)
+		var thumb_tip := diamond+Vector3(sign_*0.016,-0.047,0.045)
+		var finger_cup := diamond+Vector3(0,0.075,0.07)
+		if wrist_follow > 0.0:
+			index_tip = index_tip.lerp(author.point(pose,"index_03_"+side),wrist_follow)
+			thumb_tip = thumb_tip.lerp(author.point(pose,"thumb_03_"+side),wrist_follow)
+			finger_cup = finger_cup.lerp(base.origin+target_fingers*0.16+target_across*0.06,wrist_follow)
+		shape_digit(author,pose,"index",side,index_tip)
+		shape_digit(author,pose,"thumb",side,thumb_tip)
+		shape_outer_fingers(author,pose,side,finger_cup)
 	for bone in rig.get_bone_count():
 		var before: Quaternion = original[bone].basis.orthonormalized().get_rotation_quaternion().normalized()
 		var after: Quaternion = pose[bone].basis.orthonormalized().get_rotation_quaternion().normalized()

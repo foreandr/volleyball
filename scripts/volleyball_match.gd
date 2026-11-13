@@ -1205,6 +1205,7 @@ func begin_recovery(index: int) -> void:
 	if bump.hand_setting and not bump.defensive_hand_dig and is_finite(bump.release_time):
 		recovery["hold"] = 0.08
 		recovery["rise"] = 0.65
+		recovery["spine_rise"] = 0.80
 	if bump.low_save.active:
 		recovery["save"] = bump.low_save
 		recovery["save_time"] = elapsed
@@ -1231,7 +1232,8 @@ func advance_recoveries(delta: float) -> void:
 			continue
 		var hold: float = recovery.get("hold",0.0)
 		var rise: float = recovery.get("rise",RECOVERY_TIME)
-		if age >= hold+rise:
+		var spine_rise: float = recovery.get("spine_rise",rise)
+		if age >= hold+maxf(rise,spine_rise):
 			recoveries.erase(index)
 			continue
 		var landing_set: bool = set_jumps[index].active
@@ -1241,15 +1243,17 @@ func advance_recoveries(delta: float) -> void:
 		if not landing_set: actor.animator.advance(delta)
 		animated[index] = true
 		var weight := 1.0-smoothstep(hold,hold+rise,age)
+		var spine_weight := 1.0-smoothstep(hold,hold+spine_rise,age)
 		for bone in rig.get_bone_count():
 			if landing_set:
 				var name_ := rig.get_bone_name(bone)
 				if name_.begins_with("thigh_") or name_.begins_with("calf_") or name_.begins_with("foot_") or name_.begins_with("ball_") or name_ in ["root","pelvis"]: continue
+			var bone_weight := spine_weight if spine_rise > rise and rig.get_bone_name(bone).begins_with("spine_") else weight
 			var pose: Transform3D = recovery.pose[bone]
 			var idle := rig.get_bone_pose(bone)
-			rig.set_bone_pose_position(bone,idle.origin.lerp(pose.origin,weight))
+			rig.set_bone_pose_position(bone,idle.origin.lerp(pose.origin,bone_weight))
 			var rotation := pose.basis.orthonormalized().get_rotation_quaternion().normalized()
-			rig.set_bone_pose_rotation(bone,idle.basis.orthonormalized().get_rotation_quaternion().normalized().slerp(rotation,weight))
+			rig.set_bone_pose_rotation(bone,idle.basis.orthonormalized().get_rotation_quaternion().normalized().slerp(rotation,bone_weight))
 		if recovery.get("fast_elbow_bend",false) and age > 0.0 and age < FAST_DIG_ELBOW_DURATION:
 			apply_fast_dig_elbow_bend(rig,age)
 		if recovery.has("kick_foot"):
