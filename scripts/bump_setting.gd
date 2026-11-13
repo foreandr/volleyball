@@ -81,6 +81,7 @@ var approach_progress := -1.0
 var contact_spread := Vector2.ZERO
 var forearm_setting := false
 var deep_squat := false
+var lowest_receive_hips := INF
 var knee_bend_depth := 0.0
 var ready_knee_bend_depth := 0.0
 var lunge_bend_depth := 0.0
@@ -139,6 +140,7 @@ func reset() -> void:
 	hard_dig = false
 	fast_hand_dig = false
 	deep_squat = false
+	lowest_receive_hips = INF
 	fast_back_receive = false
 	rushed_cpu_receive = false
 	back_receive_steer = Vector3.ZERO
@@ -336,6 +338,11 @@ func apply_knee_bend(time := INF) -> void:
 		var world_hip := rig.to_global(hip)
 		# Limit the extra drop for a leg already deeply compressed by the directional clip.
 		depth = minf(depth,maxf(0.0,world_hip.y-world_foot.y-(0.30 if deep_squat else 0.40)))
+	var holding_squat := not hand_setting and not setter_jumping and is_finite(pressed_at) and not is_finite(touch_time) and grade == Timing.Grade.WAITING
+	if holding_squat:
+		var hips_y: float = rig.to_global(author.point(pose,"pelvis")).y
+		lowest_receive_hips = minf(lowest_receive_hips,hips_y-depth)
+		depth = maxf(depth,hips_y-lowest_receive_hips)
 	if depth <= 0.001: return
 	if defensive_hand_dig:
 		var separation := (floor_targets[0]-floor_targets[1]).dot(hips_across)
@@ -482,8 +489,8 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 					apply_custom_backward(custom_backward_time,smoothstep(0.0,0.32,reach_progress))
 				else:
 					pose_reach(smoothstep(0.0,1.0,reach_progress),intercept)
-		if not hand_setting: apply_knee_bend(time)
 		blend_dig_transition(time)
+		if not hand_setting: apply_knee_bend(time)
 		var keep_platform_low := rushed_cpu_receive and not hand_setting and not low_save.active and not reach.has("custom_clip")
 		if keep_platform_low: lower_rushed_platform()
 		var arm_hold := smoothstep(12.0/60.0,13.0/60.0,time)*(1.0-smoothstep(15.0/60.0,19.0/60.0,time)) if rushed_cpu_receive and not hand_setting and not low_save.active and not reach.has("custom_clip") else 0.0
