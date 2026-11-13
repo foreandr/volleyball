@@ -1155,6 +1155,12 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 			rig.set_bone_pose_rotation(bone,rotation)
 			approach_render_rotations[bone] = rotation
 
+	if stage == Stage.SET and keeps_strike_palm_presented():
+		var turnover := smootherstep(0.16,0.72,extension)
+		if turnover > 0.0:
+			# Begin pronation during the drive, while the wrist is still rising to contact.
+			rotate_strike_wrist(rig,strike_hand_axis(rig),deg_to_rad(105.0)*turnover)
+
 func strike_hand_axis(rig: Skeleton3D) -> Vector3:
 	var wrist := rig.get_bone_global_pose(rig.find_bone("hand_r")).origin
 	var middle := rig.get_bone_global_pose(rig.find_bone("middle_01_r")).origin
@@ -1176,9 +1182,12 @@ func apply_pinky_down_finish(rig: Skeleton3D) -> void:
 	# Pick the roll once, when down has a meaningful projection across the hand.
 	if not is_finite(finish_hand_turn) and down.length_squared() > 0.16:
 		finish_hand_turn = finish_hand_edge.signed_angle_to(down.normalized(),axis)
-	var turn := finish_hand_turn*smootherstep(0.025,0.19,age) if is_finite(finish_hand_turn) else 0.0
+	var turn := finish_hand_turn*smoothstep(0.0,0.09,age) if is_finite(finish_hand_turn) else 0.0
 	var desired := finish_hand_edge.rotated(axis,turn)
 	var correction := strike_hand_edge(rig,axis).signed_angle_to(desired,axis)*weight
+	rotate_strike_wrist(rig,axis,correction)
+
+func rotate_strike_wrist(rig: Skeleton3D, axis: Vector3, correction: float) -> void:
 	var hand := rig.find_bone("hand_r")
 	var parent := rig.get_bone_parent(hand)
 	var parent_axis := (rig.get_bone_global_pose(parent).basis.inverse()*axis).normalized()
