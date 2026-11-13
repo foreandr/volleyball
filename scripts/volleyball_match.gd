@@ -1219,14 +1219,14 @@ func advance_recoveries(delta: float) -> void:
 			rig.set_bone_pose_position(bone,idle.origin.lerp(pose.origin,weight))
 			var rotation := pose.basis.orthonormalized().get_rotation_quaternion().normalized()
 			rig.set_bone_pose_rotation(bone,idle.basis.orthonormalized().get_rotation_quaternion().normalized().slerp(rotation,weight))
-		if recovery.get("fast_elbow_bend",false) and age < 0.20:
+		if recovery.get("fast_elbow_bend",false) and age > 0.0 and age < 0.20:
 			apply_fast_dig_elbow_bend(rig,age)
 		if recovery.has("kick_foot"):
 			var flick := smoothstep(0.0,0.070,age)*(1.0-smoothstep(0.07,0.22,age))
 			if flick > 0.001: pose_kick_leg(actor,recovery.kick_foot,(Vector3.UP*0.15+actor.global_basis.z*0.11)*flick)
 
 func apply_fast_dig_elbow_bend(rig: Skeleton3D, age: float) -> void:
-	var bend := deg_to_rad(30.0)*smoothstep(0.0,0.045,age)*(1.0-smoothstep(0.075,0.20,age))
+	var bend := deg_to_rad(40.0)*smoothstep(0.0,0.045,age)*(1.0-smoothstep(0.075,0.20,age))
 	for side in ["l","r"]:
 		var elbow := rig.find_bone("lowerarm_"+side)
 		var wrist := rig.find_bone("hand_"+side)
