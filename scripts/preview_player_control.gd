@@ -1,8 +1,9 @@
 extends RefCounted
 const QUICK_STEP_RATE := 1.5
-const SHUFFLE_SPEED := 2.06
+const SHUFFLE_SPEED_SCALE := 0.75
+const SHUFFLE_SPEED := 2.06*SHUFFLE_SPEED_SCALE
 const RUN_SPEED := 7.20
-const SHUFFLE_CLIP_RATE := 1.25
+const SHUFFLE_CLIP_RATE := 1.25*SHUFFLE_SPEED_SCALE
 const Court = preload("res://scripts/preview_court.gd")
 const Stamina = preload("res://scripts/player_stamina.gd")
 const LowSave = preload("res://scripts/player_reception_save.gd")
@@ -532,7 +533,7 @@ func move_player(direction: Vector2, delta: float, track_ball := true, setting_t
 	side_steps.sampled = false
 	if shuffle_step:
 		if lateral: shuffle_heading = travel.normalized()
-		var distance_: float = side_steps.advance(step_direction,delta*step_rate*SHUFFLE_CLIP_RATE)*actor.scale.y
+		var distance_: float = side_steps.advance(step_direction,delta*step_rate*(SHUFFLE_CLIP_RATE if approach_speed <= 0.0 else 1.25))*actor.scale.y
 		movement = shuffle_heading*distance_
 	else: side_steps.active = false
 	if setting:

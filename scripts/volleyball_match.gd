@@ -35,6 +35,7 @@ const PLAYER_GROUND_Y := 0.04
 const CPU_HAND_RECEIVE_MAX_SPEED := 16.0
 const RUSHED_RECEIVE_WINDOW := 0.35
 const CPU_SPRINT_SPEED := 6.05
+const CPU_SHUFFLE_SPEED_SCALE := 0.75
 const HAND_DIG_REACH := 0.46
 const FOREARM_DIG_REACH := 0.66
 const BODY_CONTACT_SEGMENTS := [
@@ -1274,7 +1275,7 @@ func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_f
 		if not turn_to_travel: yaw = clampf(yaw,-1.03,1.03)
 	actor.rotation.y = rotate_toward(actor.rotation.y,yaw,delta*(turn_rate if turn_to_travel else 8.0))
 	var sprint := may_run and heading.dot(actor.basis.z.normalized()) >= run_alignment
-	var pace := minf(speed,4.35)
+	var pace := minf(speed,4.35)*CPU_SHUFFLE_SPEED_SCALE
 	if sprint:
 		pace = clampf(speed,0.65,CPU_SPRINT_SPEED) if paced_run else clampf(speed*1.24,5.85,CPU_SPRINT_SPEED)
 	var before := actor.position
