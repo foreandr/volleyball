@@ -115,9 +115,6 @@ func keeps_strike_palm_presented() -> bool:
 func spike_assist_radius() -> float:
 	return 0.19
 
-func sync_approach_arm_lift() -> bool:
-	return true
-
 func attack_arm_turn_rate() -> float:
 	if stage == Stage.SET:
 		return deg_to_rad(lerpf(960.0,1480.0,smootherstep(0.14,0.35,clock-swing_started)))
