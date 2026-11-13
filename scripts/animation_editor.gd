@@ -85,6 +85,8 @@ func _ready() -> void:
 		session.position_edits = draft.get("position_edits",{}).duplicate(true)
 		copy_name.text = draft.name
 		frame = draft.frame
+	if draft.get("source","") != entry.id:
+		frame = int(session.source.get_meta("editor_initial_frame",0))
 	refresh_ball_angle()
 	select_group(draft.get("group",session.source.get_meta("editor_group","Both Arms")))
 	set_frame(frame)

@@ -22,7 +22,7 @@ static func connect_arms(pose: Array, author: RefCounted, desired: Vector3, weig
 	var span := a.distance_to(b)
 	if span <= 0.001: return
 	var axis := (b-a)/span
-	var elbow_angle := 176.0 if compact else ELBOW_ANGLE
+	var elbow_angle := 178.0 if compact else ELBOW_ANGLE
 	var left_range := arm_range(pose,author,"l",elbow_angle)
 	var right_range := arm_range(pose,author,"r",elbow_angle)
 	var along := (left_range*left_range-right_range*right_range+span*span)/(2.0*span)
@@ -49,7 +49,9 @@ static func connect_arms(pose: Array, author: RefCounted, desired: Vector3, weig
 		var upper_before: Transform3D = author.world_pose(pose,rig.find_bone(arm))
 		var lower_before: Transform3D = author.world_pose(pose,rig.find_bone(elbow))
 		var wrist_before: Vector3 = author.point(pose,hand)
-		if dive:
+		if compact:
+			author.limb(pose,arm,elbow,hand,target,pole,1.0,elbow_angle)
+		elif dive:
 			author.limb(pose,arm,elbow,hand,target,pole,smoothstep(0.0,0.65,weight),174.0)
 		else:
 			author.limb(pose,arm,elbow,hand,old_hand.origin.lerp(target,weight),pole,1.0,elbow_angle if compact else 174.0)

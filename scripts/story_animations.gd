@@ -74,6 +74,7 @@ var setting_drill: Node3D
 var attack_position_panel: PanelContainer
 var match_replay_panel: VBoxContainer
 var match_replay_seek: HSlider
+var match_replay_frame: Label
 var match_replay_button: Button
 var match_replay_play: Button
 var attack_playback_speed := 1.0
@@ -347,6 +348,10 @@ func add_match_replay_controls(tuning: VBoxContainer) -> void:
 		demo_match.replay.seek(demo_match,value)
 		update_match_replay_controls())
 	match_replay_panel.add_child(match_replay_seek)
+	match_replay_frame = label("",16)
+	match_replay_panel.add_child(match_replay_frame)
+	if passing_drill != null:
+		match_replay_panel.add_child(button("Edit",edit_passing_replay))
 	var frames := HBoxContainer.new()
 	match_replay_panel.add_child(frames)
 	for direction in [-1,1]:
@@ -417,8 +422,37 @@ func update_match_replay_controls() -> void:
 		match_replay_button.text = "Back to match (R)" if replay.active else "Replay rally (R)"
 	if not replay.active: return
 	match_replay_play.text = "Pause (Space)" if replay.playing else "Play (Space)"
+	match_replay_frame.text = "Frame %d / %d" % [replay.index,replay.frames.size()-1]
 	match_replay_seek.max_value = replay.duration()
 	match_replay_seek.set_value_no_signal(replay.clock)
+
+func edit_passing_replay() -> void:
+	var replay = demo_match.replay
+	if not replay.active: return
+	replay.playing = false
+	var receiver: int = passing_drill.RECEIVER
+	var actor: Node3D = demo_match.players[receiver]
+	var start_pose: Transform3D = replay.frames[0].actors[receiver].root
+	var selected: int = replay.index
+	var first_time: float = replay.frames[0].time
+	var sample := func(time: float) -> Array[Transform3D]:
+		var capture: Dictionary = replay.frames[mini(roundi(time*60.0),replay.frames.size()-1)].actors[receiver]
+		var pose: Array[Transform3D] = []
+		pose.assign(capture.bones)
+		var root_bone: int = actor.skeleton.find_bone("root")
+		var rig_to_actor: Transform3D = actor.global_transform.affine_inverse()*actor.skeleton.global_transform
+		pose[root_bone] = rig_to_actor.affine_inverse()*start_pose.affine_inverse()*capture.root*rig_to_actor*pose[root_bone]
+		return pose
+	var clip: Animation = actor.get_pose_author().bake({"name":"Passing replay","duration":replay.duration(),
+		"contact_time":float(replay.frames[selected].time)-first_time},sample)
+	clip.loop_mode = Animation.LOOP_NONE
+	clip.set_meta("editor_group","Both Arms")
+	clip.set_meta("editor_start",actor.get_parent().to_global(start_pose.origin))
+	clip.set_meta("editor_initial_frame",selected)
+	StorySession.edit_entry = {"id":"passing_replay_edit","name":"Passing replay","category":"Forearm reception","type":"Forearm"}
+	StorySession.animation_draft.clear()
+	StorySession.edit_animation = clip
+	get_tree().change_scene_to_file("res://scenes/animation_editor.tscn")
 
 func move_match_camera(delta: float) -> void:
 	var movement: Vector2 = player_controls.movement_input()
