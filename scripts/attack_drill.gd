@@ -626,8 +626,11 @@ func begin_attack_jump(direction: Vector2, plant_time := 0.36, jump_height := 0.
 		ball_target = spike_body_target(approach_intercept)
 		var toward := (ball_target-setter.position).slide(Vector3.UP).normalized()
 		direction = Vector2(-toward.x,toward.z)
-	jump.begin(setter,direction,ball_target,plant_time,jump_height,approach_steps if uses_assisted_approach() else 2,approach_from_sprint,tempo)
+	jump.begin(setter,direction,ball_target,plant_time,jump_height,approach_steps if uses_assisted_approach() else 2,approach_from_sprint,tempo,false,approach_glide_distance())
 	trace.write("jump",clock,{"position":setter.position,"direction":jump.heading,"plant_time":jump.load_duration(),"assisted_height":jump_height},true)
+
+func approach_glide_distance() -> float:
+	return 0.0
 
 func step_jump(delta: float) -> void:
 	jump.load_bend_extra = deg_to_rad(backswing_bend)*0.36 if uses_assisted_approach() else 0.0

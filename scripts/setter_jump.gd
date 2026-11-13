@@ -50,6 +50,7 @@ var plant_ground := 0.0
 var entry_leg_rotations := {}
 var entry_body_pose := {}
 var incoming_plant_speed := 0.0
+var attack_glide := 0.0
 
 func load_lead_arm_clip() -> void:
 	var copies := AnimationCatalog.custom_entries()
@@ -59,7 +60,7 @@ func load_lead_arm_clip() -> void:
 			lead_arm_clip = load(entry.path) as Animation
 			return
 
-func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time := APPROACH_LOAD_TIME, jump_height := 0.0, approach_steps := 2, from_sprint := false, tempo := 1.0, for_setting := false) -> void:
+func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time := APPROACH_LOAD_TIME, jump_height := 0.0, approach_steps := 2, from_sprint := false, tempo := 1.0, for_setting := false, glide := 0.0) -> void:
 	if active: return
 	active = true
 	held = true
@@ -88,6 +89,7 @@ func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time
 	entry_leg_rotations.clear()
 	entry_body_pose.clear()
 	incoming_plant_speed = 0.0
+	attack_glide = 0.0
 	if approach_plant and not setting_jump:
 		var rig: Skeleton3D = actor.skeleton
 		var parent := actor.get_parent_node_3d()
@@ -121,6 +123,8 @@ func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time
 		var toward_ball := (ball_target-right_plant).slide(Vector3.UP).normalized()
 		var reach := (ball_target-start-heading*(stride+entry_distance+lead_distance)).slide(Vector3.UP)
 		approach_lunge = reach.normalized()*clampf(reach.length()-0.055,0.0,0.95)
+		attack_glide = minf(glide,stride*0.48)
+		stride -= attack_glide
 		if toward_ball.is_zero_approx(): toward_ball = heading.slide(Vector3.UP).normalized()
 		var plant_width := -0.19 if actor.mirror_animation else 0.19
 		left_plant = right_plant+toward_ball*0.43+Vector3.UP.cross(toward_ball)*plant_width
@@ -149,7 +153,10 @@ func release() -> void:
 	held = false
 
 func horizontal_velocity() -> Vector3:
-	return air_velocity+heading*(stride*AIR_TRAVEL_FRACTION/air_time)
+	return air_velocity+heading*(stride*AIR_TRAVEL_FRACTION/air_time+attack_glide*glide_speed())
+
+func glide_speed() -> float:
+	return (1.0-smoothstep(0.46,0.66,elapsed-load_duration()))/0.46
 
 func load_duration() -> float:
 	return assisted_load_time+lead_time if approach_plant else standing_load_time
@@ -199,7 +206,12 @@ func step(actor: Node3D, delta: float, input: Vector2) -> void:
 		distance = plant_distance+stride*AIR_TRAVEL_FRACTION*flight
 	var base := start+heading*distance+Vector3.UP*(4.0*height*flight*(1.0-flight)+transfer_hop)
 	var lunge := approach_lunge*smoothstep(0.0,air_glide_duration,elapsed-load_time)
-	var position := base+air_offset+lunge
+	# Carry part of the approach stride through the air and ease it out after the strike.
+	var air_age := maxf(0.0,elapsed-load_time)
+	var fade := clampf((air_age-0.46)/0.20,0.0,1.0)
+	var glide_fraction := (minf(air_age,0.46)+0.20*(fade-fade**3+0.5*fade**4))/0.46
+	var glide := heading*attack_glide*(glide_fraction+AIR_TRAVEL_FRACTION*flight)
+	var position := base+air_offset+lunge+glide
 	actor.position = Court.clamp_setter(position,front_limit)
 	if air_delta > 0.0: air_offset += actor.position-position
 	actor.animator.advance(delta)

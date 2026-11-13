@@ -132,6 +132,9 @@ func spike_body_target(ball_target: Vector3) -> Vector3:
 	target.z = minf(target.z,jump.front_limit)
 	return target
 
+func approach_glide_distance() -> float:
+	return 0.19
+
 func uses_air_reach_assist() -> bool:
 	return true
 
