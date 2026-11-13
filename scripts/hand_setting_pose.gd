@@ -39,7 +39,7 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 	var horizontal_push := local_push.slide(Vector3.UP)
 	var backset := smoothstep(0.0,0.65,-horizontal_push.normalized().z)
 	if set_extension > 0.0 and backset > 0.0:
-		var arch := deg_to_rad(12.0)*backset*smoothstep(0.0,1.0,set_extension)*blend
+		var arch := deg_to_rad(22.0)*backset*smoothstep(0.0,1.0,set_extension)*blend
 		author.rotate_world(pose,"spine_01",Vector3.RIGHT,-arch*0.45)
 		author.rotate_world(pose,"spine_02",Vector3.RIGHT,-arch*0.55)
 	var turn := 0.0
@@ -76,7 +76,9 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 			var hand_point: Vector3 = author.point(pose,hand)
 			var length := shoulder.distance_to(elbow)+elbow.distance_to(hand_point)
 			var aim_weight := smoothstep(0.0,1.0,set_extension)
-			var direction := (wrist-shoulder).normalized().slerp(local_push.normalized(),lerpf(0.65,0.96,backset)*aim_weight)
+			var release_direction := local_push.normalized()
+			release_direction = (release_direction+Vector3.FORWARD*0.10*backset).normalized()
+			var direction := (wrist-shoulder).normalized().slerp(release_direction,lerpf(0.65,1.0,backset)*aim_weight)
 			wrist = shoulder+direction*lerpf(wrist.distance_to(shoulder),length*0.997,aim_weight)
 		author.limb(pose,upper,lower,hand,wrist,pole,1.0,elbow_limit)
 		for digit in ["thumb","index","middle","ring","pinky"]:
