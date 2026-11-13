@@ -490,6 +490,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 				point = contact[0]
 				center = contact[1]
 				cutoff = Net.RADIUS+(0.04 if hand_setting or pancake else 0.05)
+				if near_dive_contact and low_save.wide_arm.is_empty(): cutoff += 0.015
 				if not hand_setting and not low_save.active:
 					# Bring the platform toward the approaching ball, then test the posed bones again.
 					var preview: Vector3 = path.call(minf(end,sweep_end+0.070))
