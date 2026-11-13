@@ -460,6 +460,8 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 			var pose_time := 0.045 if strict_dig else 0.09
 			var windup := 0.0 if rushed_cpu_receive else lerpf(-0.14,0.0,smoothstep(0.0,pose_time,elapsed))
 			apply_pose(contact_frame+windup,smoothstep(0.0,pose_time,elapsed))
+			if rushed_cpu_receive and not reach.has("custom_clip"):
+				lower_rushed_platform()
 			if not setter_jumping:
 				var intercept := advance_reach(path,time,end,delta,is_finite(dig_cue))
 				if reach.has("custom_clip"):
@@ -506,6 +508,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 					if fast_back_receive or (steer > 0.0 and offset.length() > 0.07):
 						var lift := clampf(-incoming.y*0.016,0.0,0.0 if rushed_cpu_receive else 0.16)
 						var adjustment := offset*1.85+Vector3.UP*lift
+						if rushed_cpu_receive: adjustment.y = minf(0.0,adjustment.y)
 						if fast_back_receive:
 							# Move the joined platform as a unit instead of snapping to each preview point.
 							back_receive_steer = back_receive_steer.lerp(adjustment.limit_length(0.48)*steer,1.0-exp(-delta*30.0))
@@ -765,6 +768,15 @@ func pose_reach(weight: float, intercept: Vector3) -> void:
 		var planted_travel := reach_travel
 		if is_finite(touch_time): planted_travel *= 1.0-smoothstep(0.10,0.40,rear_follow)
 		setter.pose_reception_reach(local*reach_step,local*planted_travel,weight,pose_progress,ready_pose,reach,false,0,intercept)
+
+func lower_rushed_platform() -> void:
+	var rig: Skeleton3D = setter.skeleton
+	var left := rig.get_bone_global_pose(rig.find_bone("hand_l")).origin
+	var right := rig.get_bone_global_pose(rig.find_bone("hand_r")).origin
+	var hips := rig.get_bone_global_pose(rig.find_bone("pelvis")).origin
+	var excess := rig.to_global((left+right)*0.5).y-rig.to_global(hips).y
+	if excess > 0.0:
+		reach_platform(Vector3.DOWN*excess,1.0,0.35)
 
 func reach_platform(offset: Vector3, weight := 1.0, reach_limit := 0.26, steer_sideways := false) -> void:
 	var rig: Skeleton3D = setter.skeleton
