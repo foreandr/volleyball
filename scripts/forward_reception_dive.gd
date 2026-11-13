@@ -33,8 +33,8 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 	var rig: Skeleton3D = actor.skeleton
 	var brace_start := maxf(0.41,release_time-WINDUP+CONTACT_POSE_TIME)
 	var since_brace := time-brace_start
-	var slide := 0.34*smoothstep(0.18,0.43,since_brace)
-	var kick := smoothstep(0.13,0.25,since_brace)*(1.0-smoothstep(0.28,0.49,since_brace))
+	var slide := 0.95*smoothstep(0.18,0.56,since_brace)
+	var kick := smoothstep(0.14,0.28,since_brace)*(1.0-smoothstep(0.34,0.52,since_brace))
 	var travel := 0.23*smoothstep(0.02,0.20,time)+1.35*smoothstep(0.16,0.61,time)+slide
 	var drop := 0.0
 	var pitch := 0.0
@@ -91,7 +91,7 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 		var low := smoothstep(0.23,0.40,time)*(1.0-smoothstep(0.82,POSE_DURATION,time))
 		author.rotate_world(pose,"spine_02",Vector3.RIGHT,0.18*low)
 		author.rotate_world(pose,"neck_01",Vector3.RIGHT,-0.38*low)
-	var chest_settle := landing*(1.0-smoothstep(0.39,0.66,since_brace))
+	var chest_settle := landing*(1.0-smoothstep(0.49,0.71,since_brace))
 	var get_up := smoothstep(0.89,POSE_DURATION,time)
 	author.rotate_world(pose,"spine_03",Vector3.RIGHT,-0.22*extension*(1.0-get_up))
 	author.rotate_world(pose,"neck_01",Vector3.RIGHT,-0.24*extension*(1.0-get_up)-0.36*chest_settle)
@@ -114,16 +114,21 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 			ankle.y += 0.09*sin(PI*plant)
 		var trail := foot.origin-Vector3.BACK*(0.69 if side == "l" else 0.81)
 		trail.x = foot.origin.x*0.48
-		trail.y += kick*(0.52 if side == "l" else 0.43)
-		trail.z += kick*0.27
+		var thigh: String = "thigh_"+side
+		var calf: String = "calf_"+side
+		var hip: Vector3 = author.point(pose,thigh)
+		var knee: Vector3 = author.point(pose,calf)
+		var leg_length: float = hip.distance_to(knee)+knee.distance_to(author.point(pose,foot_name))
+		var lift := deg_to_rad(64.0 if side == "l" else 59.0)
+		var raised_ankle := hip+(Vector3.UP*sin(lift)-Vector3.BACK*cos(lift))*leg_length*0.98
+		trail = trail.lerp(raised_ankle,kick)
 		var step_start := 0.46 if side == "r" else 0.68
 		var step := smoothstep(step_start,step_start+0.24,since_brace)
 		ankle = ankle.lerp(trail,extension).lerp(foot.origin,step)
 		ankle.y += sin(PI*step)*0.19
 		var lateral := 0.09 if side == "l" else -0.09
-		var calf: String = "calf_"+side
 		var pole := Vector3(lateral,0.18,1.0).lerp(Vector3(lateral,-0.75,0.10),kick)
-		author.limb(pose,"thigh_"+side,calf,foot_name,ankle,pole)
+		author.limb(pose,thigh,calf,foot_name,ankle,pole,1.0,lerpf(180.0,166.0,kick))
 		var ready_shin: Vector3 = foot.origin-author.point(ready,calf)
 		var posed_shin: Vector3 = author.point(pose,foot_name)-author.point(pose,calf)
 		var ankle_swing := Quaternion(ready_shin.normalized(),posed_shin.normalized())
