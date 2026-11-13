@@ -1689,7 +1689,7 @@ func tick_receive(delta: float, previous: float) -> void:
 		elif run_to_drop: face = drop_heading if drop_distance > 0.45 else actor.basis.z
 		elif turn_for_save: face = face.lerp(drop_heading,0.68).normalized()
 		var offset := (FOREARM_DIG_REACH if cpu_dig else 0.52) if technique == 0 else hand_receive_reach()
-		if not recovering and not set_jumps[index].active and not bump.low_save.active:
+		if not recovering and not set_jumps[index].active and not bump.low_save.active and not bump.reach.get("deep_side",false):
 			var spacing := 0.88 if square_receive and cpu_dig and cue < 0.40 else offset
 			var target := catch_point-frame.global_basis*face*spacing
 			if backshuffle:
