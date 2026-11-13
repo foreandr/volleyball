@@ -30,7 +30,7 @@ const WIN_SCORE := 15
 const RECOVERY_TIME := 0.32
 const SERVE_RUN_BLEND := 0.15
 const PLAYER_GROUND_Y := 0.04
-const CPU_SPRINT_SPEED := 8.4
+const CPU_SPRINT_SPEED := 6.72
 const HAND_DIG_REACH := 0.46
 const FOREARM_DIG_REACH := 0.66
 const BODY_CONTACT_SEGMENTS := [
@@ -1271,7 +1271,7 @@ func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_f
 	actor.position = grounded
 	var movement := actor.basis.inverse()*(actor.position-before).slide(Vector3.UP)
 	if actor.mirror_animation: movement.x = -movement.x
-	actor.animator.speed_scale = lerpf(1.60,1.92,smoothstep(5.85,CPU_SPRINT_SPEED,pace)) if sprint else 1.0
+	actor.animator.speed_scale = lerpf(1.60,1.92,smoothstep(5.85,8.4,pace)) if sprint else 1.0
 	if sprint and paced_run:
 		actor.animator.speed_scale = clampf(pace/3.7,0.22,2.05)
 	actor.play_action("run" if sprint else "idle",0.10)
