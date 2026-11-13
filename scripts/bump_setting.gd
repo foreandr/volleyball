@@ -1,5 +1,7 @@
 extends MeshInstance3D
 
+const D2_FINISH = preload("res://assets/animations/d2_back_lift_finish.tres")
+
 const FRONT_LUNGE_STEP = preload("res://assets/animations/front_lunge_step.tres")
 const FRONT_LUNGE_ARMS = preload("res://assets/animations/front_lunge_arms.tres")
 const ReachPose = preload("res://scripts/forearm_reach_pose.gd")
@@ -505,6 +507,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 					pose_reach(smoothstep(0.0,1.0,reach_progress),intercept)
 		blend_dig_transition(time)
 		if not hand_setting: apply_knee_bend(time)
+		if reach.has("custom_clip"): apply_d2_finish(time)
 		var keep_platform_low := rushed_cpu_receive and not hand_setting and not low_save.active and not reach.has("custom_clip")
 		if keep_platform_low: lower_rushed_platform()
 		var arm_hold := smoothstep(12.0/60.0,13.0/60.0,time)*(1.0-smoothstep(15.0/60.0,19.0/60.0,time)) if rushed_cpu_receive and not hand_setting and not low_save.active and not reach.has("custom_clip") else 0.0
@@ -920,6 +923,19 @@ func pose_adaptive_back_lift(ball_point: Vector3) -> void:
 	var chest := rig.find_bone("spine_02")
 	rig.set_bone_pose_rotation(chest,pose[chest].basis.get_rotation_quaternion())
 	reach_platform(ball_point-platform_center(),low*smoothstep(0.18,0.80,reach_progress),0.50,true)
+
+func apply_d2_finish(time: float) -> void:
+	var rig: Skeleton3D = setter.skeleton
+	for track in D2_FINISH.get_track_count():
+		var source := rig.find_bone(D2_FINISH.track_get_path(track).get_subname(0))
+		var bone := source
+		var offset := D2_FINISH.rotation_track_interpolate(track,clampf(time,0.0,D2_FINISH.length))
+		if reach.get("mirror_backward",false):
+			bone = custom_backward_mirror_bones[source]
+			var reflection := Basis.from_scale(Vector3(-1,1,1))
+			var axes := rig.get_bone_global_rest(bone).basis.orthonormalized().inverse()*reflection*rig.get_bone_global_rest(source).basis.orthonormalized()
+			offset = (axes*Basis(offset)*axes.inverse()).get_rotation_quaternion()
+		rig.set_bone_pose_rotation(bone,(rig.get_bone_pose_rotation(bone)*offset).normalized())
 
 func apply_custom_backward(time: float, weight: float) -> void:
 	sample_pose(custom_backward,custom_backward_mirror_tracks if reach.get("mirror_backward",false) else custom_backward_tracks,time,weight,true,reach.get("mirror_backward",false))
