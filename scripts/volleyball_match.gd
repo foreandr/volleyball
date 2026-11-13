@@ -1202,6 +1202,9 @@ func begin_recovery(index: int) -> void:
 	if is_finite(bump.touch_time) and (bump.knee_bend_depth > 0.001 or bump.fast_back_receive or bump.reach.get("tier",0) == 2) and not bump.low_save.active:
 		recovery["hold"] = FAST_RECEIVE_HOLD
 		recovery["rise"] = squat_rise_duration if bump.knee_bend_depth > 0.001 else FAST_RECEIVE_RISE
+	if bump.forearm_setting and bump.reach.has("custom_clip") and is_finite(bump.touch_time):
+		recovery["hold"] = 0.02
+		recovery["rise"] = Bump.FOREARM_RECOVERY_TIME
 	if bump.hand_setting and not bump.defensive_hand_dig and is_finite(bump.release_time):
 		recovery["hold"] = 0.08
 		recovery["rise"] = 0.65

@@ -941,7 +941,11 @@ func pose_adaptive_back_lift(ball_point: Vector3) -> void:
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
 	var chest := rig.find_bone("spine_02")
 	rig.set_bone_pose_rotation(chest,pose[chest].basis.get_rotation_quaternion())
-	reach_platform(ball_point-platform_center(),low*smoothstep(0.18,0.80,reach_progress),0.50,true)
+	var platform_weight := low*smoothstep(0.18,0.80,reach_progress)
+	if forearm_setting:
+		# Keep the two-arm platform together through the high backward save.
+		platform_weight = maxf(platform_weight,smoothstep(0.0,0.28,reach_progress))
+	reach_platform(ball_point-platform_center(),platform_weight,0.50,true)
 
 func apply_d2_finish(time: float) -> void:
 	var rig: Skeleton3D = setter.skeleton
