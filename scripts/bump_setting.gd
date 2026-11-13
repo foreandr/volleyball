@@ -500,7 +500,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 				if reach.has("custom_clip"):
 					var contact := float(custom_backward.get_meta("contact_time"))
 					custom_backward_time = lerpf(maxf(0.0,contact-0.50),contact,smoothstep(0.0,0.85,reach_progress))
-					apply_custom_backward(custom_backward_time,smoothstep(0.0,0.32,reach_progress))
+					pose_adaptive_back_lift(path.call(dig_cue) if strict_dig else intercept)
 				else:
 					pose_reach(smoothstep(0.0,1.0,reach_progress),intercept)
 		blend_dig_transition(time)
@@ -879,6 +879,34 @@ func reach_platform(offset: Vector3, weight := 1.0, reach_limit := 0.26, steer_s
 		for part in ["upperarm_","lowerarm_","hand_"]:
 			var bone := rig.find_bone(part+side)
 			rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
+
+func pose_adaptive_back_lift(ball_point: Vector3) -> void:
+	if not ball_point.is_finite():
+		apply_custom_backward(custom_backward_time,smoothstep(0.0,0.32,reach_progress))
+		return
+	var rig: Skeleton3D = setter.skeleton
+	var weight := smoothstep(0.0,0.32,reach_progress)
+	var low := 1.0-smoothstep(0.65,1.30,to_global(ball_point).y-setter.global_position.y)
+	var ready_rotations: Dictionary = {}
+	for side in ["l","r"]:
+		for joint in ["thigh_","calf_","foot_"]:
+			var bone := rig.find_bone(joint+side)
+			ready_rotations[bone] = rig.get_bone_pose_rotation(bone)
+	apply_custom_backward(custom_backward_time,weight)
+	var left := rig.to_global(rig.get_bone_global_pose(rig.find_bone("foot_l")).origin).y
+	var right := rig.to_global(rig.get_bone_global_pose(rig.find_bone("foot_r")).origin).y
+	for side in ["l","r"]:
+		var lift := smoothstep(0.04,0.22,left-right if side == "l" else right-left)
+		for joint in ["thigh_","calf_","foot_"]:
+			var bone := rig.find_bone(joint+side)
+			rig.set_bone_pose_rotation(bone,rig.get_bone_pose_rotation(bone).slerp(ready_rotations[bone],low*lift*0.55))
+	var pose: Array = []
+	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
+	var author: RefCounted = setter.get_pose_author()
+	author.rotate_world(pose,"spine_02",Vector3.RIGHT,deg_to_rad(32.0)*low*weight)
+	var chest := rig.find_bone("spine_02")
+	rig.set_bone_pose_rotation(chest,pose[chest].basis.get_rotation_quaternion())
+	reach_platform(ball_point-platform_center(),low*weight,0.50,true)
 
 func apply_custom_backward(time: float, weight: float) -> void:
 	sample_pose(custom_backward,custom_backward_mirror_tracks if reach.get("mirror_backward",false) else custom_backward_tracks,time,weight,true,reach.get("mirror_backward",false))
