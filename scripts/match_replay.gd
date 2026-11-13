@@ -20,7 +20,10 @@ func capture(match_: Node3D) -> Dictionary:
 		actors.append({"root":actor.transform,"model":actor.model.transform,"bones":bones,"mirrored":actor.mirror_animation})
 	var shown: Node3D = match_.ball if match_.ball.visible else match_.serve.ball
 	var keys := []
-	for key in match_.key_labels: keys.append([key.text,key.visible])
+	for i in match_.key_labels.size():
+		var key: Label3D = match_.key_labels[i]
+		var animation_label: Label3D = match_.animation_labels[i]
+		keys.append([key.text,key.visible,animation_label.text,animation_label.visible])
 	return {"time":match_.match_clock,"actors":actors,"ball":shown.global_transform,"visible":shown.visible,
 		"match_ball":match_.ball.global_transform,"match_visible":match_.ball.visible,"serve_visible":match_.serve.ball.visible,
 		"score":match_.score_label.text,"info":match_.info.text,"keys":keys,"aim":match_.aim_ring.visible,"guide":match_.trajectory_node.visible}
@@ -108,6 +111,10 @@ func apply(match_: Node3D, first: Dictionary, second: Dictionary, blend: float) 
 		key.text = first.keys[i][0]
 		key.visible = first.keys[i][1]
 		key.global_position = actor.global_position+Vector3.UP*2.18
+		var animation_label: Label3D = match_.animation_labels[i]
+		animation_label.text = first.keys[i][2] if first.keys[i].size() > 2 else ""
+		animation_label.visible = first.keys[i].size() > 3 and first.keys[i][3]
+		animation_label.global_position = key.global_position+Vector3.UP*0.32
 	match_.ball.global_transform = first.ball.interpolate_with(second.ball,blend)
 	match_.ball.global_position += ball_offset
 	match_.ball.visible = first.visible

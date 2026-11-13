@@ -411,6 +411,8 @@ func simulate_step(delta: float) -> void:
 func reset_receiver() -> void:
 	var receiver: Node3D = game.players[RECEIVER]
 	game.recoveries.erase(RECEIVER)
+	game.receive_animation_labels.erase(RECEIVER)
+	game.update_action_labels()
 	receiver.rotation.y = 0.0
 	receiver.play_action("idle",0.0)
 	receiver.animator.advance(0.0)

@@ -447,7 +447,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 			begin_dig_transition(time-delta,clampf(low_save.contact_time-time,delta,0.13))
 		if not low_save.active and not is_finite(pose_started_at) and (start_dig or start_jump_set or progress >= 1.0-PLATFORM_PREP_TIME/APPROACH_TIME):
 			var platform_in_range := true
-			if strict_dig and quick_low_save and not hand_setting:
+			if strict_dig and quick_low_save and not hand_setting and not reach.get("deep_side",false):
 				var intercept: Vector3 = path.call(clampf(dig_cue,time,end))
 				platform_in_range = (intercept-setter.position).slide(Vector3.UP).length() <= 1.35
 			if platform_in_range and (not fast_back_receive or time >= dig_cue-0.14):

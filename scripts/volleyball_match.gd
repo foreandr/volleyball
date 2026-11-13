@@ -102,6 +102,7 @@ var dead_flight_from := INF
 var spectator := false
 var squat_rise_duration := 0.20
 var receive_animation_labels := {}
+var animation_labels: Array[Label3D] = []
 var key_labels: Array[Label3D] = []
 var key_until := [0.0,0.0,0.0,0.0]
 var defender_assignment := [-1,-1]
@@ -279,6 +280,10 @@ func configure(actor: Node3D, board: Label, status: Label, build := "", players_
 		key.modulate = Color("ffd278")
 		add_child(key)
 		key_labels.append(key)
+		var animation_label := key.duplicate() as Label3D
+		animation_label.modulate = Color("86f2ff")
+		add_child(animation_label)
+		animation_labels.append(animation_label)
 	trajectory = ImmediateMesh.new()
 	trajectory_node = MeshInstance3D.new()
 	trajectory_node.mesh = trajectory
@@ -1186,7 +1191,7 @@ func begin_recovery(index: int) -> void:
 	var rig: Skeleton3D = actor.skeleton
 	var pose: Array[Transform3D] = []
 	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
-	var recovery := {"started":match_clock,"pose":pose}
+	var recovery := {"started":match_clock,"pose":pose,"animation":receive_animation_labels.get(index,"")}
 	var bump := platforms[index]
 	if is_finite(bump.touch_time) and (bump.knee_bend_depth > 0.001 or bump.fast_back_receive or bump.reach.get("tier",0) == 2) and not bump.low_save.active:
 		recovery["hold"] = FAST_RECEIVE_HOLD
@@ -1771,7 +1776,7 @@ func tick_receive(delta: float, previous: float) -> void:
 	bump.update_attempt(elapsed,previous,end,path,frame.global_basis.inverse()*motion,delta,timing_cue,spin,cue if is_dig else INF)
 	if bump.low_save.active and not was_diving:
 		var save := "Pancake" if bump.low_save.pancake else ("One-arm dive" if not bump.low_save.wide_arm.is_empty() else "Dive")
-		show_key(index,"Q | "+save)
+		show_key(index,"Q")
 		trace.write("low_save",match_clock,{"player":index,"type":save,"target":frame.to_global(bump.low_save.aim),"flight":flight_kind})
 	if is_finite(bump.pose_started_at) or bump.low_save.active:
 		var animation := "Forearm receive"
@@ -1791,7 +1796,6 @@ func tick_receive(delta: float, previous: float) -> void:
 		if receive_animation_labels.get(index,"") != animation:
 			receive_animation_labels[index] = animation
 			trace.write("receive_animation",match_clock,{"player":index,"animation":animation,"flight":flight_kind})
-		show_key(index,animation)
 	animated[index] = true
 	if cpu_fake_dump and not is_human(index) and technique == 2 and not is_finite(bump.touch_time):
 		pose_fake_dump(actor,cue-elapsed)
@@ -2419,6 +2423,10 @@ func update_action_labels() -> void:
 	for index in players.size():
 		key_labels[index].global_position = players[index].global_position+Vector3.UP*(2.43 if is_human(index) else 2.18)
 		key_labels[index].visible = (not spectator or drill_pass_target.is_finite()) and players[index].visible and match_clock < key_until[index]
+		animation_labels[index].global_position = key_labels[index].global_position+Vector3.UP*0.32
+		var animation: String = recoveries.get(index,{}).get("animation",receive_animation_labels.get(index,""))
+		animation_labels[index].text = animation
+		animation_labels[index].visible = (not spectator or drill_pass_target.is_finite()) and players[index].visible and not animation.is_empty()
 
 func update_player_guide() -> void:
 	player_label.global_position = human.global_position+Vector3.UP*2.17
@@ -2699,6 +2707,7 @@ func trace_snapshot() -> Dictionary:
 	for index in players.size():
 		actors.append({"position":Trace.json_value(players[index].global_position),"yaw":players[index].rotation.y,
 			"key":key_labels[index].text if match_clock < key_until[index] else "",
+			"animation":animation_labels[index].text,
 			"contact":Trace.json_value(platforms[index].contact_check)})
 	return {"phase":phase,"score":score,"flight":flight_kind,"ball":ball.global_position,"velocity":velocity,
 		"receiving_team":receiving_team,"last_touch":last_player,"touches":touches,"set_apex":last_set_apex,"set_zone":SET_ZONES.find(called_pin.x)+1,
