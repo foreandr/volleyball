@@ -227,7 +227,8 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 		author.set_world_basis(pose,hand,wrist_basis)
 	if since_brace > 0.0:
 		for side in ["l","r"]:
-			var delay := 0.38 if side == wide_arm else (0.055 if pancake and side == "r" else 0.0)
+			if side == wide_arm: continue
+			var delay := 0.055 if pancake and side == "r" else 0.0
 			var support := smoothstep(delay,delay+0.085,since_brace)*hands_release
 			if support <= 0.0: continue
 			var hand: String = "hand_"+side
