@@ -104,6 +104,19 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 			var direction := (wrist-shoulder).normalized().slerp(set_axis,lerpf(0.65,1.0,backset)*aim_weight)
 			wrist = shoulder+direction*lerpf(wrist.distance_to(shoulder),length*0.997,aim_weight)
 		author.limb(pose,upper,lower,hand,wrist,pole,1.0,elbow_limit)
+		if overhead_set:
+			var skull: Vector3 = author.point(pose,"Head")+Vector3(0,0.095,0.025)/rig.global_basis.y.length()
+			var shoulder: Vector3 = author.point(pose,upper)
+			var clearance := 0.16/rig.global_basis.y.length()
+			for attempt in 4:
+				var elbow: Vector3 = author.point(pose,lower)
+				var solved_wrist: Vector3 = author.point(pose,hand)
+				var upper_gap := skull.distance_to(Geometry3D.get_closest_point_to_segment(skull,shoulder,elbow))
+				var lower_gap := skull.distance_to(Geometry3D.get_closest_point_to_segment(skull,elbow,solved_wrist))
+				var deficit := clearance-minf(upper_gap,lower_gap)
+				if deficit <= 0.001: break
+				wrist.x += sign_*deficit*1.4
+				author.limb(pose,upper,lower,hand,wrist,pole,1.0,elbow_limit)
 		for digit in ["thumb","index","middle","ring","pinky"]:
 			for joint in ["01","02","03"]:
 				var finger := rig.find_bone("%s_%s_%s" % [digit,joint,side])

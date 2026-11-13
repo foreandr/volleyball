@@ -603,6 +603,12 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 				"margin":gap_after_adjustment-cutoff,"assist":assisted or hand_assisted,"hand_assist":hand_assisted,
 				"accepted":face_aligned and (assisted or hand_assisted or gap_after_adjustment <= cutoff),
 			}
+			if hand_setting and forearm_setting and not face_dig:
+				var rig: Skeleton3D = setter.skeleton
+				var head := rig.to_global(rig.get_bone_global_pose(rig.find_bone("Head")).origin)
+				var from_head := setter.global_basis.orthonormalized().inverse()*(to_global(point)-head)
+				# Wait for the pass to reach the hands above the forehead before holding it.
+				contact_check.accepted = contact_check.accepted and from_head.y <= 0.53 and gap_after_adjustment <= 0.27
 			if contact_check.accepted:
 				var fraction := first.distance_to(point)/maxf(0.00001,first.distance_to(last))
 				touch_time = lerpf(sweep_start,sweep_end,clampf(fraction,0.0,1.0))
