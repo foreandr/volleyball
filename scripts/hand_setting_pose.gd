@@ -37,7 +37,12 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 	var diamond := head+Vector3(clampf(aim.x,-0.28 if face_save else -0.22,0.28 if face_save else 0.22),clampf(aim.y-0.075,-0.10 if face_save else 0.12,0.20 if face_save else 0.27),clampf(aim.z-0.07,0.16 if face_save else 0.09,0.35))
 	var local_push := rig.global_basis.inverse()*push
 	var horizontal_push := local_push.slide(Vector3.UP)
-	var backset := smoothstep(0.0,0.65,-horizontal_push.normalized().z)
+	var set_depth := horizontal_push.normalized().z
+	var backset := smoothstep(0.0,0.65,-set_depth)
+	var wrist_depth := local_push.normalized().z
+	var forward_set := smoothstep(0.12,0.70,wrist_depth)
+	var backward_set := smoothstep(0.12,0.70,-wrist_depth)
+	var wrist_pitch := deg_to_rad(28.0)*(forward_set-backward_set)*maxf(set_extension,0.0)
 	if set_extension > 0.0 and backset > 0.0:
 		var arch := deg_to_rad(48.0)*backset*set_extension*blend
 		author.rotate_world(pose,"spine_01",Vector3.RIGHT,-arch*0.45)
@@ -93,9 +98,13 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 		var across: Vector3 = author.point(pose,"index_01_"+side)-author.point(pose,"pinky_01_"+side)
 		var target_fingers := Vector3(-sign_*0.52,0.82,0.23)
 		var follow := smoothstep(0.04,0.20,push.length())
-		target_fingers = target_fingers.lerp(local_push.normalized(),0.46*follow)
-		# Index side stays inward and back so the pinky edge cups forward.
+		# Keep the same cup as the wrist rolls through the release.
 		var target_across := Vector3(-sign_*0.72,-0.30,-0.54)
+		if set_extension >= 0.0:
+			target_fingers = target_fingers.rotated(Vector3.RIGHT,wrist_pitch)
+			target_across = target_across.rotated(Vector3.RIGHT,wrist_pitch)
+		else:
+			target_fingers = target_fingers.lerp(local_push.normalized(),0.46*follow)
 		if face_save and not ball_direction.is_zero_approx():
 			var incoming := (rig.global_basis.inverse()*ball_direction).normalized()
 			var palm_normal := Vector3(clampf(incoming.x,-0.45,0.45),clampf(incoming.y,-0.18,0.40),maxf(0.55,incoming.z)).normalized()
