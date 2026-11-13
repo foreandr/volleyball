@@ -1135,6 +1135,9 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 	var drive_turn := lerpf(-0.57,0.36,rotation_phase)
 	var turn := lerpf(drive_turn,0.0,follow)
 	var airborne := smoothstep(0.08,0.45,setter.position.y-jump.start.y)
+	var strike_reach := smootherstep(0.24,0.83,extension)*(1.0-smoothstep(0.0,0.58,follow)) if keeps_strike_palm_presented() else 0.0
+	if stage == Stage.HIT: strike_reach *= 1.0-smootherstep(0.0,0.14,clock-stage_start)
+	author.rotate_world(pose,"pelvis",Vector3.UP,deg_to_rad(9.0)*strike_reach*weight)
 	var leg_release := smoothstep(0.0,1.0,rotation_phase)
 	var leg_turn := tanh(turn*rotation_weight*0.75)*0.32*leg_release*leg_rotation_scale*airborne
 	var kick_release := 0.32*leg_release*smoothstep(0.0,1.5,leg_rotation_scale)
@@ -1177,7 +1180,7 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 	var ball_target := rig.to_local(frame.to_global(contact))
 	# Twist the ribcage around its own axis so the lean stays independent.
 	var chest_axis: Vector3 = (author.point(pose,"neck_01")-author.point(pose,"spine_03")).normalized()
-	var chest_yaw := clampf(turn*rotation_weight,-1.45,1.45)
+	var chest_yaw := clampf(turn*rotation_weight-deg_to_rad(12.0)*strike_reach*weight,-1.45,1.45)
 	author.rotate_world(pose,"spine_03",chest_axis,chest_yaw)
 	var load_back := 1.0-smoothstep(0.04,0.55,extension)
 	var backswing_weight := draw_progress*(1.0-arm_lift)*(1.0-smoothstep(0.0,0.38,extension))
@@ -1203,8 +1206,6 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 		pitch += lift_lean_offset(arm_lift,extension)
 	var lean_blend := maxf(contact_crunch,follow_crunch)
 	if stage == Stage.HIT: lean_blend *= 1.0-smootherstep(0.14,0.34,clock-stage_start)
-	var strike_reach := smootherstep(0.24,0.83,extension)*(1.0-smoothstep(0.0,0.58,follow)) if keeps_strike_palm_presented() else 0.0
-	if stage == Stage.HIT: strike_reach *= 1.0-smootherstep(0.0,0.14,clock-stage_start)
 	var torso_pitch := pitch-deg_to_rad(20.0)*strike_reach+deg_to_rad(30.0)*follow_crunch+deg_to_rad(torso_forward_bias_degrees)*lean_blend
 	author.rotate_world(pose,"spine_01",Vector3.RIGHT,torso_pitch*0.45*weight)
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,torso_pitch*0.55*weight)
@@ -1222,11 +1223,9 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 		author.rotate_world(pose,"spine_01",chest_forward,deg_to_rad(-two_step_tilt)*tilt_weight*weight)
 	if strike_reach > 0.0:
 		# Raise the hitting shoulder and leave space between the arm and head.
-		var across: Vector3 = (author.point(pose,"upperarm_l")-author.point(pose,"upperarm_r")).normalized()
-		var chest_up: Vector3 = (author.point(pose,"neck_01")-author.point(pose,"spine_01")).normalized()
-		var chest_forward := across.cross(chest_up).normalized()
-		author.rotate_world(pose,"spine_01",chest_forward,deg_to_rad(-10.0)*strike_reach*weight)
-		author.rotate_world(pose,"spine_02",chest_forward,deg_to_rad(-14.0)*strike_reach*weight)
+		var roll := deg_to_rad(-29.0)*strike_reach*weight
+		author.rotate_world(pose,"spine_01",Vector3.BACK,roll*0.45)
+		author.rotate_world(pose,"spine_02",Vector3.BACK,roll*0.55)
 	var neck: Vector3 = author.point(pose,"neck_01")
 	var gaze := ball_target-neck
 	var flat_gaze := gaze.slide(Vector3.UP)

@@ -12,10 +12,11 @@ static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float,
 	var shoulder: Vector3 = author.point(pose,"upperarm_r")
 	var draw := Vector3(-0.04,0.40,0.08).lerp(Vector3(0.02,0.05,-0.12),draw_progress)
 	var wrist_target := ball-(ball-shoulder).normalized()*0.06-shot_direction*0.11
+	var reach := 0.0
 	if contact_palm:
-		var reach := smoothstep(0.30,0.84,extension)*(1.0-smoothstep(0.0,0.58,follow))
+		reach = smoothstep(0.30,0.84,extension)*(1.0-smoothstep(0.0,0.58,follow))
 		# Set the wrist underneath the ball so the palm can meet it at full reach.
-		wrist_target = wrist_target.lerp(ball-(ball-shoulder).normalized()*0.09-shot_direction*0.025,reach)
+		wrist_target = wrist_target.lerp(ball-(ball-shoulder).normalized()*0.09,reach)
 	var lift_target := Vector3(-0.095,0.035,-0.065) if overhead_entry else Vector3(-0.08,0.40,0.22)
 	var raised_draw := draw.lerp(lift_target,arm_lift)
 	raised_draw.z -= backswing_reach
@@ -27,10 +28,17 @@ static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float,
 	var across: Vector3 = (author.point(pose,"upperarm_l")-shoulder).normalized()
 	var chest_center: Vector3 = shoulder.lerp(author.point(pose,"upperarm_l"),0.5)
 	var cross_body := (finish_point-chest_center).dot(across) > 0.0
+	if reach > 0.0:
+		var elbow: Vector3 = author.point(pose,"lowerarm_r")
+		var wrist: Vector3 = author.point(pose,"hand_r")
+		var arm_length := shoulder.distance_to(elbow)+elbow.distance_to(wrist)
+		var reach_vector := target-shoulder
+		var extended := shoulder+reach_vector.normalized()*maxf(reach_vector.length(),arm_length*0.998)
+		target = target.lerp(extended,reach)
 	target = follow_through_target(pose,author,shoulder,target,finish_point,finish,same_side,compact_finish)
 	var elbow_pole := Vector3(-1.0,0.16,-0.84).lerp(Vector3(-0.75,0.38,-0.28),smoothstep(0.62,1.0,extension))
 	var draw_elbow_limit := 112.0+42.0*smoothstep(0.0,0.60,backswing_reach)
-	var elbow_limit := lerpf(draw_elbow_limit,168.0 if contact_palm else 158.0,smoothstep(0.29,0.98,extension))
+	var elbow_limit := lerpf(draw_elbow_limit,178.0 if contact_palm else 158.0,smoothstep(0.29,0.98,extension))
 	if contact_palm:
 		var wrist_axis := (target-shoulder).normalized()
 		var natural_pole := Vector3(-0.78,0.22,0.32).slide(wrist_axis)
