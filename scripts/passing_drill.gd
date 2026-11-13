@@ -32,6 +32,7 @@ var incoming_flight := -1
 var feed_spin_axis := Vector3.ZERO
 var feed_spin_speed := 0.0
 var contact_label := ""
+var closest_check := {}
 var target_crossing := Vector3.INF
 var technique_label := ""
 var drag_handle := ""
@@ -45,6 +46,7 @@ var trajectory: MeshInstance3D
 func _init(match_: Node3D) -> void:
 	game = match_
 	game.phase = game.Phase.FINISHED
+	game.update_player_guide()
 	game.score_label.hide()
 	game.info.text = "Set up the feed, then launch."
 	game.serve.ball.hide()
@@ -257,6 +259,7 @@ func launch_ball() -> void:
 	target_marker.global_position = target
 	origin_marker.global_position = source
 	trajectory.hide()
+	game.update_player_guide()
 	game.score_label.hide()
 	game.info.text = "Ball in flight"
 	var plan := feed()
@@ -269,10 +272,16 @@ func launch_ball() -> void:
 	incoming_flight = game.flight_number
 	technique_label = ""
 	contact_label = ""
+	closest_check.clear()
 	target_crossing = Vector3.INF
 	drag_handle = ""
 	running = true
 	finish_delay = -1.0
+	game.trace.write("passing_drill_feed",game.match_clock,{
+		"rep":completed_reps+1,"receiver":start,"source":source,"target":target,
+		"direction":heading,"angle":angle,"speed":speed,"spin":spin,
+		"spin_rate":spin_rate if spin != "No spin" else 0.0,"passing_skill":game.passing_skill
+	},true)
 	game.replay.record(game)
 
 func tick(delta: float) -> void:
@@ -310,6 +319,9 @@ func tick(delta: float) -> void:
 		if not feed_spin_axis.is_zero_approx(): game.ball.rotate(feed_spin_axis,feed_spin_speed*delta)
 		var platform: Node3D = game.platforms[RECEIVER]
 		game.tick_receive(delta,previous)
+		var check: Dictionary = platform.contact_check
+		if check.has("gap") and float(check.gap) < float(closest_check.get("gap",INF)):
+			closest_check = check.duplicate()
 		if platform.low_save.active:
 			technique_label = "Pancake" if platform.low_save.pancake else ("One-arm dive" if not platform.low_save.wide_arm.is_empty() else "Dive")
 		if game.flight_number != incoming_flight:
@@ -350,4 +362,9 @@ func finish() -> void:
 			batch_button.text = "Run 10 reps"
 			launch_button.disabled = false
 		update_rep_readout()
+	game.trace.write("passing_drill_result",game.match_clock,{
+		"rep":completed_reps,"successful":success,"result":game.info.text,
+		"technique":contact_label if not contact_label.is_empty() else technique_label,
+		"target_crossing":target_crossing,"ball_end":game.ball.global_position,"closest_contact":closest_check
+	},true)
 	finish_delay = 1.0
