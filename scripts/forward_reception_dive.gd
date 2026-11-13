@@ -138,15 +138,8 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 		ankle.y += swing*(0.18 if lead else 0.12)/scale_
 		var descent := smoothstep(0.19,0.28,since_brace)*(1.0-smoothstep(0.37,0.52,since_brace))
 		var leg_axis := (ankle-hip).normalized()
-		var dive_pole := leg_axis.cross(Vector3.RIGHT).normalized()
-		var ready_hip: Vector3 = author.point(ready,thigh)
-		var ready_axis := (foot.origin-ready_hip).normalized()
-		var ready_bend: Vector3 = (author.point(ready,calf)-ready_hip).slide(ready_axis).normalized()
-		var recovery_bend := Quaternion(ready_axis,leg_axis)*ready_bend
-		# Carry the ready stance's knee direction into the tuck, around the leg axis.
-		var recovery := smoothstep(0.39,0.62,since_brace)
-		var bend_angle := dive_pole.signed_angle_to(recovery_bend,leg_axis)
-		var pole := dive_pole.rotated(leg_axis,bend_angle*recovery)
+		# Keep the knee hinge on the player's lateral axis throughout the tuck.
+		var pole := leg_axis.cross(Vector3.RIGHT).normalized()
 		var knee_limit := lerpf(lerpf(180.0,120.0,kick),136.0,descent)
 		author.limb(pose,thigh,calf,foot_name,ankle,pole,1.0,knee_limit)
 		var ready_shin: Vector3 = foot.origin-author.point(ready,calf)
