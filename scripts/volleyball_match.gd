@@ -1062,6 +1062,7 @@ func aim_receive(index: int) -> void:
 	bump.hard_dig = flight_kind in ["spike","dump","block"]
 	if is_human(index) and aim_point.is_finite(): destination = frame.to_local(aim_point)
 	elif side == possession_team and (touches >= 2 or (cpu_dump and index == cpu_choice)): destination = choose_shot(index)
+	bump.set_follow_target = set_pin_for(index) if cpu_is_setting(index) and not cpu_dump else Vector3.INF
 	bump.destination = Vector2(clampf(destination.x,-6.5,6.5),clampf(destination.z,-6.0,13.0))
 	var variety := float(posmod(flight_number+index*3,7))/6.0
 	var difficulty := smoothstep(7.0,25.0,velocity.length())

@@ -14,7 +14,7 @@ static func contact_center(actor: Node3D) -> Vector3:
 		center += rig.get_bone_global_pose(rig.find_bone("thumb_03_"+side)).origin
 	return rig.to_global(center*0.25+Vector3(0,0.075,0.07))
 
-static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.ZERO, cushion := 0.0, torso_follow := 0.0, face_save := false, ball_direction := Vector3.ZERO) -> void:
+static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.ZERO, cushion := 0.0, torso_follow := 0.0, face_save := false, ball_direction := Vector3.ZERO, set_extension := -1.0) -> void:
 	if blend <= 0.0: return
 	var rig: Skeleton3D = actor.skeleton
 	var author: RefCounted = actor.get_pose_author()
@@ -48,6 +48,8 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 		author.rotate_world(pose,"spine_02",Vector3.RIGHT,clampf(local_push.z,-0.17,0.17)*0.55*torso_follow)
 	diamond += local_push-Vector3.UP*0.055*cushion
 	var elbow_limit := lerpf(152.0,176.0,clampf(push.length()/0.24,0.0,1.0))-12.0*cushion
+	if set_extension >= 0.0:
+		elbow_limit = lerpf(143.0,178.0,set_extension)-8.0*cushion
 	for side in ["l","r"]:
 		var sign_ := 1.0 if side == "l" else -1.0
 		var hand: String = "hand_"+side
@@ -63,6 +65,14 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 			pole = start_pole.normalized().slerp(pole.normalized(),smoothstep(0.0,0.46,blend))
 			# Lead with the hands through the space in front of the chest.
 			wrist = start.lerp(wrist,blend)+Vector3.BACK*sin(PI*blend)*0.16/rig.global_basis.y.length()
+		if set_extension > 0.0 and not local_push.is_zero_approx():
+			var shoulder: Vector3 = author.point(pose,upper)
+			var elbow: Vector3 = author.point(pose,lower)
+			var hand_point: Vector3 = author.point(pose,hand)
+			var length := shoulder.distance_to(elbow)+elbow.distance_to(hand_point)
+			var aim_weight := smoothstep(0.0,1.0,set_extension)
+			var direction := (wrist-shoulder).normalized().slerp(local_push.normalized(),0.65*aim_weight)
+			wrist = shoulder+direction*lerpf(wrist.distance_to(shoulder),length*0.997,aim_weight)
 		author.limb(pose,upper,lower,hand,wrist,pole,1.0,elbow_limit)
 		for digit in ["thumb","index","middle","ring","pinky"]:
 			for joint in ["01","02","03"]:

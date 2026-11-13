@@ -96,6 +96,7 @@ var touch: Vector3
 var hand_anchor: Vector3
 var hand_catch_from := Vector3.INF
 var hand_target := {}
+var set_follow_target := Vector3.INF
 var release_time := -INF
 var release_point: Vector3
 var outgoing: Vector3
@@ -174,6 +175,7 @@ func reset() -> void:
 	touch_time = -INF
 	release_time = -INF
 	hand_target.clear()
+	set_follow_target = Vector3.INF
 	net_hit.clear()
 	clear_reach()
 
@@ -477,7 +479,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 			apply_knee_bend(time)
 			var target := track_hand_dig(path,time,end,delta) if face_dig else hand_intercept(path,time,end)
 			var lift_time := 0.048 if face_dig else (0.062 if quick_hand_receive else (0.155 if setter_jumping else 0.105))
-			HandPose.apply(setter,to_global(target),smoothstep(0.0,lift_time,elapsed),Vector3.ZERO,0.0,0.0,face_dig,-(global_basis*incoming))
+			HandPose.apply(setter,to_global(target),smoothstep(0.0,lift_time,elapsed),Vector3.ZERO,0.0,0.0,face_dig,-(global_basis*incoming),-1.0 if face_dig else 0.0)
 		elif low_save.active:
 			var intercept := Vector3.INF
 			if low_save.tracks_platform:
@@ -684,13 +686,17 @@ func update_hand_push(time: float, follow: float) -> void:
 	var cushion := smoothstep(0.0,0.045*scale_,follow)*(1.0-smoothstep(0.045*scale_,0.11*scale_,follow))
 	var extension := smoothstep(0.045*scale_,delay,follow)
 	var force := smoothstep(4.0,10.0,outgoing.length())
-	var push := outgoing.normalized()*lerpf(0.12,0.33,force)*extension
+	var direction := outgoing.normalized()
+	if set_follow_target.is_finite():
+		var toward := set_follow_target-touch
+		direction = (toward.slide(Vector3.UP).normalized()*outgoing.slide(Vector3.UP).length()+Vector3.UP*outgoing.y).normalized()
+	var push := direction*lerpf(0.12,0.33,force)*extension
 	var blend := 1.0-smoothstep(0.22,0.32,follow)
 	var after_release := time-release_time if is_finite(release_time) else 0.0
 	var torso_follow := smoothstep(0.0,0.10,after_release)
 	var anchor := hand_anchor
 	if setter_jumping and hand_catch_from.is_finite(): anchor = hand_catch_from.lerp(anchor,smoothstep(0.0,0.065,follow))
-	HandPose.apply(setter,setter.to_global(anchor),blend,global_basis*push,cushion,torso_follow)
+	HandPose.apply(setter,setter.to_global(anchor),blend,global_basis*push,cushion,torso_follow,false,Vector3.ZERO,extension)
 	if follow >= delay and not is_finite(release_time):
 		release_time = time
 		release_point = platform_center()
