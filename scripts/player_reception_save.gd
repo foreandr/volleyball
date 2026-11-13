@@ -77,6 +77,10 @@ func plan(actor: Node3D, path: Callable, time: float, end: float, clip: Animatio
 		var reach_ahead := 0.72 if tracks_platform else 0.40
 		travel_scale = clampf((distance-reach_ahead)/(1.22 if low_save else 0.74),0.18,lerpf(1.18,2.65,momentum)) if quick_save else 1.0
 		if wide: travel_scale = clampf((distance-0.76)/0.78,0.60,2.25+0.35*momentum)
+		if quick_save:
+			# Limit body travel to the time available to push off. The arm can still reach for a miss.
+			var travel_budget := lerpf(0.55,1.40,smoothstep(0.045,Dive.WINDUP,high-time))
+			travel_scale = minf(travel_scale,travel_budget/Dive.unscaled_contact_travel(low_save,wide))
 		entry_blend = 0.075 if quick_save else ENTRY_BLEND
 		entry_pose.clear()
 		var rig: Skeleton3D = actor.skeleton

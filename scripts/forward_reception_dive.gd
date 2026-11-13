@@ -22,6 +22,12 @@ const KEYS := [
 	[1.28,0.00,0.0],
 ]
 
+static func unscaled_contact_travel(pancake: bool, wide: bool) -> float:
+	var travel := 0.23+1.35*smoothstep(0.16,0.61,CONTACT_POSE_TIME)
+	if pancake: travel += 0.70
+	if wide: travel += 0.14
+	return travel
+
 static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D], clasp: Array[Transform3D], start: Vector3, heading: Vector3, time: float, ball_point: Vector3, release_time: float, pancake := false, travel_scale := 1.0, track_platform := false, wide_arm := "", slide_heading := Vector3.ZERO) -> void:
 	var kick_time := time-WINDUP-LEG_KICK_OFFSET
 	var kick := smoothstep(0.0,0.13,kick_time)*(1.0-smoothstep(0.22,0.22+LEG_LOWER_DURATION,kick_time))
@@ -56,8 +62,7 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 		# Carry the lateral lunge farther before contact, then rejoin the normal slide.
 		travel += 0.14*smoothstep(0.12,0.40,time)*(1.0-smoothstep(0.40,0.62,time))
 	if track_platform and time < CONTACT_POSE_TIME:
-		var contact_travel := 0.23+1.35*smoothstep(0.16,0.61,CONTACT_POSE_TIME)
-		if not wide_arm.is_empty(): contact_travel += 0.14
+		var contact_travel := unscaled_contact_travel(pancake,not wide_arm.is_empty())
 		var progress := clampf(time/CONTACT_POSE_TIME,0.0,1.0)
 		# Carry some sprint momentum into takeoff, with less acceleration just before contact.
 		var even_progress := smoothstep(0.0,1.0,progress)+progress*(1.0-progress)*(0.35-0.80*progress)
