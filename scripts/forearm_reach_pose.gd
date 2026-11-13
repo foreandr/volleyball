@@ -2,6 +2,16 @@ extends RefCounted
 
 const PlatformPose = preload("res://scripts/reception_platform_pose.gd")
 
+static func outward_knee_pole(pole: Vector3, axis: Vector3, outward: Vector3) -> Vector3:
+	var out := outward.slide(axis).normalized()
+	var bend := pole.slide(axis).normalized()
+	if out.is_zero_approx() or bend.dot(out) >= 0.55: return bend
+	var forward := bend.slide(out)
+	if forward.length_squared() < 0.0001:
+		forward = out.cross(axis)
+		if forward.z < 0.0: forward = -forward
+	return forward.normalized()*sqrt(1.0-0.55*0.55)+out*0.55
+
 static func sample(rig: Skeleton3D, author: RefCounted, step: Vector3, travel: Vector3, weight: float, progress: float, ready: Array[Transform3D], reach: Dictionary, knee_slide: bool, cpu_direction: int, contact: Vector3) -> void:
 	var tier: int = reach.tier
 	var back: bool = reach.back
@@ -119,6 +129,9 @@ static func sample(rig: Skeleton3D, author: RefCounted, step: Vector3, travel: V
 			pole = pole.normalized()+Vector3.LEFT*0.09*weight
 		elif forward_lunge and tier == 2 and side == "r":
 			pole = pole.normalized()+Vector3.LEFT*0.09*weight
+		var hip: Vector3 = author.point(pose,"thigh_"+side)
+		var outward: Vector3 = hip-author.point(pose,"thigh_"+("r" if side == "l" else "l"))
+		pole = outward_knee_pole(pole,(target-hip).normalized(),outward)
 		author.limb(pose,"thigh_"+side,"calf_"+side,foot_name,target,pole)
 		author.set_world_basis(pose,foot_name,foot.basis)
 	if high or tier == 2 or side_receive or forward_lunge or back:

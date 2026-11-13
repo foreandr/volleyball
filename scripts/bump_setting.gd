@@ -1,4 +1,5 @@
 extends MeshInstance3D
+const ReachPose = preload("res://scripts/forearm_reach_pose.gd")
 
 const HandPose = preload("res://scripts/hand_setting_pose.gd")
 const Court = preload("res://scripts/preview_court.gd")
@@ -353,15 +354,7 @@ func apply_knee_bend(time := INF) -> void:
 			var span := sqrt(maxf(0.0,length*length-height*height))
 			target = hip+(target-hip).slide(Vector3.UP).limit_length(span)+Vector3.UP*height
 		var axis := (target-hip).normalized()
-		var out := (hips_across if index == 0 else -hips_across).slide(axis).normalized()
-		var pole := knee_poles[index].slide(axis).normalized()
-		var lateral := pole.dot(out)
-		if lateral < 0.32:
-			var bend := pole.slide(out)
-			if bend.length_squared() < 0.0001:
-				bend = out.cross(axis)
-				if bend.z < 0.0: bend = -bend
-			pole = bend.normalized()*sqrt(1.0-0.32*0.32)+out*0.32
+		var pole := ReachPose.outward_knee_pole(knee_poles[index],axis,hips_across if index == 0 else -hips_across)
 		author.limb(pose,thigh,calf,foot,target,pole)
 		author.set_world_basis(pose,foot,feet[index].basis)
 	for bone in changed_bones:
