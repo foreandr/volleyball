@@ -647,7 +647,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 				HandPose.apply(setter,setter.to_global(hand_anchor),relax,push,recoil,0.0,true,-(global_basis*incoming))
 		elif hand_setting:
 			# The airborne receiving pose already owns the contact frame.
-			if not (setter_jumping and striking): update_hand_push(time,follow)
+			if not (setter_jumping and striking): update_hand_push(time,follow,incoming)
 		elif not (striking and is_finite(lowest_receive_hips)):
 			# Let match recovery capture the crouched contact pose before any follow-through.
 			follow_forearm(time,incoming)
@@ -684,7 +684,7 @@ func begin_hand_contact(point: Vector3, time: float, spread := Vector2.ZERO) -> 
 func hand_release_delay() -> float:
 	return 0.078 if quick_hand_receive else HandPose.RELEASE_TIME
 
-func update_hand_push(time: float, follow: float) -> void:
+func update_hand_push(time: float, follow: float, incoming: Vector3) -> void:
 	if follow >= 0.32 and is_finite(release_time): return
 	var delay := hand_release_delay()
 	var scale_ := delay/HandPose.RELEASE_TIME
@@ -709,7 +709,8 @@ func update_hand_push(time: float, follow: float) -> void:
 	var capture_wrist := follow >= delay and not is_finite(release_time) and forearm_setting
 	if capture_wrist: release_wrist_elapsed = follow
 	HandPose.apply(setter,setter.to_global(anchor),blend,global_basis*push,cushion,torso_follow,false,Vector3.ZERO,extension,set_offset,smoothstep(0.0,delay,follow),forearm_setting,
-		smoothstep(0.0,turnover_end,follow),release_wrist_goals if capture_wrist else null)
+		smoothstep(0.0,turnover_end,follow),release_wrist_goals if capture_wrist else null,
+		-(global_basis*incoming).slide(Vector3.UP).normalized() if set_follow_target.is_finite() else Vector3.ZERO)
 	if follow >= delay and not is_finite(release_time):
 		release_time = time
 		release_point = platform_center()

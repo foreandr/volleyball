@@ -18,7 +18,7 @@ static func contact_center(actor: Node3D) -> Vector3:
 		center += rig.get_bone_global_pose(rig.find_bone("thumb_03_"+side)).origin
 	return rig.to_global(center*0.25+Vector3(0,0.075,0.07))
 
-static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.ZERO, cushion := 0.0, torso_follow := 0.0, face_save := false, ball_direction := Vector3.ZERO, set_extension := -1.0, set_offset := Vector3.INF, arch_progress := 0.0, overhead_set := false, wrist_turn := -1.0, wrist_finish: Variant = null) -> void:
+static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.ZERO, cushion := 0.0, torso_follow := 0.0, face_save := false, ball_direction := Vector3.ZERO, set_extension := -1.0, set_offset := Vector3.INF, arch_progress := 0.0, overhead_set := false, wrist_turn := -1.0, wrist_finish: Variant = null, receive_facing := Vector3.ZERO) -> void:
 	if blend <= 0.0: return
 	var rig: Skeleton3D = actor.skeleton
 	var author: RefCounted = actor.get_pose_author()
@@ -43,8 +43,18 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 	var local_push := rig.global_basis.inverse()*push
 	var horizontal_push := local_push.slide(Vector3.UP)
 	var set_depth := horizontal_push.normalized().z
+	var set_depth_m := 0.0
+	if set_offset.is_finite():
+		var travel := set_offset.slide(Vector3.UP)
+		var body_forward := actor.global_basis.z.slide(Vector3.UP).normalized()
+		set_depth_m = body_forward.dot(travel)
+		# A side-on stance can leave the rig nearly perpendicular to the target.
+		# Use the direction the setter is receiving from to resolve that case.
+		var side_on := 1.0-smoothstep(0.10,0.35,absf(body_forward.dot(travel.normalized())))
+		if not receive_facing.is_zero_approx():
+			set_depth_m = lerpf(set_depth_m,receive_facing.dot(travel),side_on)
+		set_depth = set_depth_m/maxf(0.001,travel.length())
 	var backset := smoothstep(0.0,0.65,-set_depth)
-	var set_depth_m := rig.global_basis.z.normalized().dot(set_offset.slide(Vector3.UP)) if set_offset.is_finite() else 0.0
 	var wrist_direction := smoothstep(0.12,0.70,absf(set_depth_m))
 	var wrist_distance := smoothstep(0.0,4.0,absf(set_depth_m))
 	var frontset := smoothstep(0.12,0.70,set_depth_m)*maxf(set_extension,0.0)
