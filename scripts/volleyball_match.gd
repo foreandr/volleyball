@@ -1249,19 +1249,24 @@ func advance_recoveries(delta: float) -> void:
 
 func apply_fast_dig_elbow_bend(rig: Skeleton3D, age: float) -> void:
 	var bend := deg_to_rad(50.0)*smoothstep(0.0,0.095,age)*(1.0-smoothstep(0.12,FAST_DIG_ELBOW_DURATION,age))
-	var up := (rig.global_basis.inverse()*Vector3.UP).normalized()
-	var left := rig.get_bone_global_pose(rig.find_bone("lowerarm_l")).origin
-	var right := rig.get_bone_global_pose(rig.find_bone("lowerarm_r")).origin
-	var axis := (left-right).slide(up).normalized()
-	if axis.is_zero_approx(): return
-	var wrists := rig.get_bone_global_pose(rig.find_bone("hand_l")).origin+rig.get_bone_global_pose(rig.find_bone("hand_r")).origin
-	if axis.cross(wrists-left-right).dot(up) < 0.0: axis = -axis
-	# A shared hinge keeps each wrist on its side of the platform during recoil.
+	var chest := rig.get_bone_global_pose(rig.find_bone("spine_03")).origin
 	for side in ["l","r"]:
-		var elbow := rig.find_bone("lowerarm_"+side)
-		var parent_basis := rig.get_bone_global_pose(rig.get_bone_parent(elbow)).basis.orthonormalized()
-		var rotation := Quaternion(parent_basis.inverse()*axis,bend)
-		rig.set_bone_pose_rotation(elbow,(rotation*rig.get_bone_pose_rotation(elbow)).normalized())
+		var elbow_bone := rig.find_bone("lowerarm_"+side)
+		var elbow := rig.get_bone_global_pose(elbow_bone).origin
+		var shoulder := rig.get_bone_global_pose(rig.find_bone("upperarm_"+side)).origin
+		var wrist := rig.get_bone_global_pose(rig.find_bone("hand_"+side)).origin
+		var upper := (elbow-shoulder).normalized()
+		var forearm := (wrist-elbow).normalized()
+		# Follow each elbow's existing flexion plane. A straight arm uses the chest as its reference.
+		var hinge := upper.cross(forearm)
+		if hinge.length_squared() < 0.0001:
+			hinge = forearm.cross((chest-wrist).normalized())
+		if hinge.is_zero_approx(): continue
+		var flexion := minf(bend,maxf(0.0,deg_to_rad(100.0)-upper.angle_to(forearm)))
+		var parent_basis := rig.get_bone_global_pose(rig.get_bone_parent(elbow_bone)).basis.orthonormalized()
+		var rotation := Quaternion(parent_basis.inverse()*hinge.normalized(),flexion)
+		rig.set_bone_pose_rotation(elbow_bone,(rotation*rig.get_bone_pose_rotation(elbow_bone)).normalized())
+
 
 func advance_set_jumps(delta: float) -> void:
 	for index in players.size():
