@@ -45,6 +45,7 @@ var grab_offset := Vector3.ZERO
 var sliders := {}
 var origin_marker: MeshInstance3D
 var target_marker: MeshInstance3D
+var landing_marker: MeshInstance3D
 var trajectory: MeshInstance3D
 
 func _init(match_: Node3D) -> void:
@@ -75,6 +76,7 @@ func _init(match_: Node3D) -> void:
 	origin_marker.material_override = material(Color("#ffa95b"))
 	game.add_child(origin_marker)
 	target_marker = marker(TARGET_RADIUS,TARGET_RADIUS-0.06,Color("#54d9e3"))
+	landing_marker = marker(0.28,0.20,Color("#ff9750"))
 	trajectory = MeshInstance3D.new()
 	game.add_child(trajectory)
 	update_setup()
@@ -275,6 +277,11 @@ func update_setup() -> void:
 	mesh.surface_end()
 	trajectory.mesh = mesh
 	trajectory.show()
+	show_landing(Net.after_hit(hit,duration) if not hit.is_empty() else flight.call(duration))
+
+func show_landing(point: Vector3) -> void:
+	landing_marker.global_position = Vector3(point.x,0.055,point.z)
+	landing_marker.show()
 
 func start_single() -> void:
 	if batch_active: return
@@ -338,12 +345,15 @@ func launch_ball() -> void:
 		"direction":heading,"angle":angle,"speed":speed,"spin":spin,
 		"spin_rate":spin_rate if spin != "No spin" else 0.0,"passing_skill":game.passing_skill
 	},true)
+	show_landing(game.path_point(game.flight_end()))
 	game.replay.record(game)
 
 func tick(delta: float) -> void:
 	if game.replay.active:
+		landing_marker.hide()
 		game.replay.step(game,delta)
 		return
+	landing_marker.show()
 	if not running and finish_delay < 0.0:
 		pending_sim_time = 0.0
 		return
@@ -388,6 +398,7 @@ func simulate_step(delta: float) -> void:
 		if platform.low_save.active:
 			technique_label = "Pancake" if platform.low_save.pancake else ("One-arm dive" if not platform.low_save.wide_arm.is_empty() else "Dive")
 		if game.flight_number != incoming_flight:
+			show_landing(game.path_point(game.flight_end()))
 			contact_label = technique_label if not technique_label.is_empty() else game.stroke
 			game.info.text = contact_label
 	game.advance_idle_players(delta)
