@@ -130,23 +130,19 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 		trail = trail.lerp(raised_ankle,kick)
 		var lead: bool = side == "r"
 		var step_start := 0.41 if lead else 0.60
-		var plant_time := 0.60 if lead else 0.78
+		var plant_time := 0.60 if lead else 0.84
 		var step := smoothstep(step_start,plant_time,since_brace)
 		var swing := sin(PI*step)
 		# Bring one foot under the hips, then step the trailing foot up after the weight transfer.
 		ankle = ankle.lerp(trail,maxf(extension,kick)).lerp(foot.origin,step)
-		ankle.y += swing*(0.18 if lead else 0.21)/scale_
+		ankle.y += swing*(0.18 if lead else 0.12)/scale_
 		var descent := smoothstep(0.19,0.28,since_brace)*(1.0-smoothstep(0.37,0.52,since_brace))
 		var airborne := maxf(kick,descent)*(1.0-step)
 		var lateral := 0.09 if side == "l" else -0.09
 		var leg_axis := (ankle-hip).normalized()
 		var dive_pole := leg_axis.cross(Vector3.RIGHT).normalized()
-		var ready_pole: Vector3 = author.point(ready,calf)-author.point(ready,thigh)
-		ready_pole = ready_pole.slide((foot.origin-author.point(ready,thigh)).normalized()).normalized()
-		var recovery_pole := (dive_pole+Vector3.RIGHT*ready_pole.x).normalized()
 		var pole := (dive_pole+Vector3.RIGHT*lateral).lerp(dive_pole,airborne)
-		# Keep the trailing knee in its bend plane as the foot swings under the hip.
-		pole = pole.lerp(recovery_pole,smoothstep(0.52,0.63,since_brace))
+		# Keep the bend plane stable until the foot is planted.
 		var knee_limit := lerpf(lerpf(180.0,120.0,kick),136.0,descent)
 		author.limb(pose,thigh,calf,foot_name,ankle,pole,1.0,knee_limit)
 		var ready_shin: Vector3 = foot.origin-author.point(ready,calf)
@@ -157,6 +153,10 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 		var toe_pitch := -angle_difference(ready_pitch,posed_pitch)*maxf(extension,kick)*(1.0-step)
 		toe_pitch = lerpf(toe_pitch,0.22*swing,smoothstep(0.42,0.57,since_brace))
 		author.set_world_basis(pose,foot_name,Basis(Vector3.RIGHT,toe_pitch)*foot.basis)
+		var settle := smoothstep(plant_time-0.04,plant_time+0.05,since_brace)*get_up
+		for joint in [thigh,calf,foot_name]:
+			var bone := rig.find_bone(joint)
+			pose[bone].basis = pose[bone].basis.slerp(ready[bone].basis,settle)
 	var brace_pose := pose.duplicate()
 	var grip: Vector3 = (author.point(pose,"hand_l")+author.point(pose,"hand_r"))*0.5
 	var reach := smoothstep(0.11,0.31,time)
