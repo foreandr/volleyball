@@ -177,9 +177,18 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 		var ground_weight := smoothstep(0.0,0.23,after_release)
 		if ground_weight > 0.0:
 			var forward := slide_heading if not slide_heading.is_zero_approx() else heading
-			var ground := ball_point+forward*0.30
-			ground.y = 0.075
-			target = target.lerp(rig.to_local(ground),ground_weight)
+			var elbow: Vector3 = author.point(pose,"lowerarm_"+wide_arm)
+			var wrist: Vector3 = author.point(pose,"hand_"+wide_arm)
+			var reach_length := (shoulder.distance_to(elbow)+elbow.distance_to(wrist))*0.985
+			var shoulder_world := rig.to_global(shoulder)
+			var drop_to_court := clampf((shoulder_world.y-0.075)/scale_,0.0,reach_length*0.94)
+			var forward_distance := sqrt(reach_length*reach_length-drop_to_court*drop_to_court)
+			var ground := shoulder_world+(forward*forward_distance+Vector3.DOWN*drop_to_court)*scale_
+			var grounded_direction := (rig.to_local(ground)-shoulder).normalized()
+			var contact_direction := (target-shoulder).normalized()
+			var direction := contact_direction.slerp(grounded_direction,ground_weight).normalized()
+			var distance := lerpf(target.distance_to(shoulder),reach_length,ground_weight)
+			target = shoulder+direction*distance
 		var arm_pose := pose.duplicate()
 		var reach_weight := smoothstep(0.0,0.65,smoothstep(0.06,0.25,time))
 		author.limb(arm_pose,upper,"lowerarm_"+wide_arm,"hand_"+wide_arm,target,
@@ -232,7 +241,7 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 		var elbow_point: Vector3 = author.point(pose,elbow)
 		var straight := (wrist-shoulder).normalized()
 		var extension_weight := smoothstep(0.025,0.12,time)*(1.0-smoothstep(0.16,0.27,since_brace))
-		if side == wide_arm: extension_weight *= 1.0-smoothstep(0.0,0.23,after_release)
+		if side == wide_arm: extension_weight = maxf(extension_weight,smoothstep(0.0,0.10,after_release)*(1.0-smoothstep(0.30,0.53,after_release)))
 		var wrist_basis: Basis = author.world_pose(pose,rig.find_bone(hand)).basis
 		author.aim_joint(pose,upper,elbow,shoulder+(elbow_point-shoulder).normalized().slerp(straight,extension_weight))
 		elbow_point = author.point(pose,elbow)
