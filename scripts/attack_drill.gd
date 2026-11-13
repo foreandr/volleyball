@@ -113,6 +113,9 @@ var approach_render_rotations: Array[Quaternion] = []
 var approach_entry_yaw := 0.0
 const ATTACK_BODY_BONES := ["pelvis","spine_01","spine_02","spine_03","neck_01","head"]
 var swing_palm_roll := 0.0
+var finish_hand_axis := Vector3.ZERO
+var finish_hand_edge := Vector3.ZERO
+var finish_hand_turn := INF
 var swing_contact: Vector3
 var swing_contact_extension := 1.0
 var swing_power := 0.0
@@ -1009,6 +1012,11 @@ func spike_speed_multiplier() -> float:
 
 func hit_spike(charge: float, point: Vector3, palm_gap := 0.0) -> void:
 	if uses_assisted_approach(): capture_approach_arm_pose()
+	if keeps_strike_palm_presented():
+		var rig: Skeleton3D = setter.skeleton
+		finish_hand_axis = strike_hand_axis(rig)
+		finish_hand_edge = strike_hand_edge(rig,finish_hand_axis)
+		finish_hand_turn = INF
 	spike_bounce_speed = 0.0
 	if not ball_audio_muted: spike_audio.play()
 	swing_contact = point
@@ -1125,6 +1133,8 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 				if angle > rate*delta: rotation = previous.slerp(rotation,rate*delta/angle)
 			approach_render_rotations[bone] = rotation
 		rig.set_bone_pose_rotation(bone,rotation)
+	if stage == Stage.HIT and keeps_strike_palm_presented():
+		apply_pinky_down_finish(rig)
 	var contact_reach := smootherstep(0.68,0.98,extension)*(1.0-smoothstep(0.0,0.22,follow))
 	if keeps_strike_palm_presented() and stage == Stage.SET and contact_reach > 0.0 and not approach_render_rotations.is_empty():
 		var author: RefCounted = setter.get_pose_author()
@@ -1144,6 +1154,35 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 			var rotation := pose[bone].basis.get_rotation_quaternion()
 			rig.set_bone_pose_rotation(bone,rotation)
 			approach_render_rotations[bone] = rotation
+
+func strike_hand_axis(rig: Skeleton3D) -> Vector3:
+	var wrist := rig.get_bone_global_pose(rig.find_bone("hand_r")).origin
+	var middle := rig.get_bone_global_pose(rig.find_bone("middle_01_r")).origin
+	return (middle-wrist).normalized()
+
+func strike_hand_edge(rig: Skeleton3D, axis: Vector3) -> Vector3:
+	var pinky := rig.get_bone_global_pose(rig.find_bone("pinky_01_r")).origin
+	var thumb := rig.get_bone_global_pose(rig.find_bone("thumb_01_r")).origin
+	return (pinky-thumb).slide(axis).normalized()
+
+func apply_pinky_down_finish(rig: Skeleton3D) -> void:
+	var age := clock-stage_start
+	var weight := 1.0-smootherstep(0.22,0.42,age)
+	if weight <= 0.0 or finish_hand_axis.is_zero_approx(): return
+	var axis := strike_hand_axis(rig)
+	finish_hand_edge = Quaternion(finish_hand_axis,axis)*finish_hand_edge
+	finish_hand_axis = axis
+	var down := (rig.global_basis.inverse()*Vector3.DOWN).slide(axis)
+	# Pick the roll once, when down has a meaningful projection across the hand.
+	if not is_finite(finish_hand_turn) and down.length_squared() > 0.16:
+		finish_hand_turn = finish_hand_edge.signed_angle_to(down.normalized(),axis)
+	var turn := finish_hand_turn*smootherstep(0.025,0.19,age) if is_finite(finish_hand_turn) else 0.0
+	var desired := finish_hand_edge.rotated(axis,turn)
+	var correction := strike_hand_edge(rig,axis).signed_angle_to(desired,axis)*weight
+	var hand := rig.find_bone("hand_r")
+	var parent := rig.get_bone_parent(hand)
+	var parent_axis := (rig.get_bone_global_pose(parent).basis.inverse()*axis).normalized()
+	rig.set_bone_pose_rotation(hand,(Quaternion(parent_axis,correction)*rig.get_bone_pose_rotation(hand)).normalized())
 
 func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, weight: float, contact: Vector3, extension: float, follow: float, draw_progress: float, arm_lift: float) -> Array[Transform3D]:
 	var rig: Skeleton3D = setter.skeleton
@@ -1269,7 +1308,7 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 		var shot_direction := (rig.to_local(frame.to_global(shot_aim))-ball_target).normalized()
 		var compact_finish := SpikeArm.compact_finish_weight(shot_aim,contact,line_weight < 0.5)
 		var arm_weight := 1.0 if uses_assisted_approach() and stage == Stage.SET else weight
-		swing_palm_roll = SpikeArm.apply(pose,author,ball_target,arm_weight,extension,follow,draw_progress,arm_lift,line_weight,elbow_clearance,swing_palm_roll,roll_step,shot_direction,compact_finish,backswing_reach*backswing_weight,uses_assisted_approach(),keeps_strike_palm_presented())
+		swing_palm_roll = SpikeArm.apply(pose,author,ball_target,arm_weight,extension,follow,draw_progress,arm_lift,line_weight,elbow_clearance,swing_palm_roll,roll_step,shot_direction,compact_finish,backswing_reach*backswing_weight,uses_assisted_approach(),keeps_strike_palm_presented(),stage == Stage.HIT and keeps_strike_palm_presented())
 		var guide_drop := maxf(smoothstep(0.07,0.83,extension),smoothstep(0.0,0.62,follow))
 		if uses_assisted_approach() and stage == Stage.SET:
 			guide_drop = maxf(guide_drop*0.75,0.72*smootherstep(0.28,0.49,clock-swing_started))

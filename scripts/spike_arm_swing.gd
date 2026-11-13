@@ -8,7 +8,7 @@ static func follow_heading(target: Vector3, origin: Vector3, facing := 0.0) -> f
 	var direction := target-origin
 	return clampf(angle_difference(facing,atan2(direction.x,direction.z)),-0.95,0.95)
 
-static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float, extension: float, follow: float, draw_progress: float, arm_lift: float, line_weight: float, elbow_clearance: float, previous_roll: float, roll_step: float, shot_direction: Vector3, compact_finish: float, backswing_reach: float, overhead_entry := false, contact_palm := false) -> float:
+static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float, extension: float, follow: float, draw_progress: float, arm_lift: float, line_weight: float, elbow_clearance: float, previous_roll: float, roll_step: float, shot_direction: Vector3, compact_finish: float, backswing_reach: float, overhead_entry := false, contact_palm := false, preserve_finish_roll := false) -> float:
 	var shoulder: Vector3 = author.point(pose,"upperarm_r")
 	var draw := Vector3(-0.04,0.40,0.08).lerp(Vector3(0.02,0.05,-0.12),draw_progress)
 	var wrist_target := ball-(ball-shoulder).normalized()*0.06-shot_direction*0.11
@@ -66,7 +66,9 @@ static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float,
 		var at_strike := smoothstep(0.36,0.79,extension)*(1.0-smoothstep(0.015,0.38,follow))
 		face_weight = maxf(face_weight,at_strike)
 		palm_progress = lerpf(palm_progress,follow,at_strike)
-	var roll := roll_finish_palm(pose,author,1.0,palm_progress,cross_body,previous_roll,roll_step,shot_direction,face_weight,ball,0.72*smoothstep(0.015,0.25,follow) if contact_palm else 0.0)
+	var roll := previous_roll
+	if not preserve_finish_roll:
+		roll = roll_finish_palm(pose,author,1.0,palm_progress,cross_body,previous_roll,roll_step,shot_direction,face_weight,ball,0.72*smoothstep(0.015,0.25,follow) if contact_palm else 0.0)
 	if finish > 0.0:
 		blend_arm(base,pose,author,weight)
 	open_strike_hand(base,author,weight*lerpf(0.70,0.94,smoothstep(0.12,0.85,extension)))
