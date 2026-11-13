@@ -100,6 +100,7 @@ var bounce_end := 0.0
 var bounce_start := 0.0
 var dead_flight_from := INF
 var spectator := false
+var receive_animation_labels := {}
 var key_labels: Array[Label3D] = []
 var key_until := [0.0,0.0,0.0,0.0]
 var defender_assignment := [-1,-1]
@@ -584,6 +585,7 @@ func award(side: int, reason: String) -> void:
 		info.text = winner+" · "+reason
 
 func reset_receives() -> void:
+	receive_animation_labels.clear()
 	dig_switch_at = -INF
 	rear_chaser = -1
 	backshuffle_receiver = -1
@@ -1745,7 +1747,7 @@ func tick_receive(delta: float, previous: float) -> void:
 	if cpu_dig and forearm_dig and not backshuffle and not bump.low_save.active:
 		var low_point := path_point(maxf(elapsed,arrival(0.45)))
 		var offset := actor.to_local(low_point)
-		bump.deep_squat = offset.z >= 0.10 and offset.z <= 1.08 and absf(offset.x) <= 0.45 and low_point.y <= 0.55
+		bump.deep_squat = offset.z >= 0.10 and offset.z <= 1.22 and absf(offset.x) <= 0.60 and low_point.y <= 0.55
 		if bump.deep_squat:
 			bump.allow_auto_dive = false
 			bump.knee_bend_depth = maxf(bump.knee_bend_depth,0.62*smoothstep(cue-0.32,cue-0.035,elapsed))
@@ -1757,6 +1759,23 @@ func tick_receive(delta: float, previous: float) -> void:
 		var save := "Pancake" if bump.low_save.pancake else ("One-arm dive" if not bump.low_save.wide_arm.is_empty() else "Dive")
 		show_key(index,"Q | "+save)
 		trace.write("low_save",match_clock,{"player":index,"type":save,"target":frame.to_global(bump.low_save.aim),"flight":flight_kind})
+	if is_finite(bump.pose_started_at) or bump.low_save.active:
+		var animation := "Forearm receive"
+		if bump.low_save.active:
+			animation = "Pancake" if bump.low_save.pancake else ("One-arm dive" if not bump.low_save.wide_arm.is_empty() else "Two-arm dive")
+		elif technique != 0:
+			animation = "Jump set" if technique == 2 else ("Overhead dig" if is_dig else "Hands receive")
+		elif bump.deep_squat:
+			animation = "Deep squat"
+		elif bump.reach.get("tier",0) == 2:
+			animation = "Lunge"
+			if bump.reach.get("forward_lunge",false): animation = "Forward lunge"
+			elif bump.reach.get("backward",false): animation = "Backward lunge"
+			elif bump.reach.get("side_lunge",false): animation = "Side lunge"
+		if receive_animation_labels.get(index,"") != animation:
+			receive_animation_labels[index] = animation
+			trace.write("receive_animation",match_clock,{"player":index,"animation":animation,"flight":flight_kind})
+		show_key(index,animation)
 	animated[index] = true
 	if cpu_fake_dump and not is_human(index) and technique == 2 and not is_finite(bump.touch_time):
 		pose_fake_dump(actor,cue-elapsed)
@@ -2380,12 +2399,15 @@ func lane_at_depth(from: Vector3, to: Vector3, depth: float) -> float:
 	if absf(span) < 0.02: return to.x
 	return lerpf(from.x,to.x,(depth-from.z)/span)
 
+func update_action_labels() -> void:
+	for index in players.size():
+		key_labels[index].global_position = players[index].global_position+Vector3.UP*(2.43 if is_human(index) else 2.18)
+		key_labels[index].visible = (not spectator or drill_pass_target.is_finite()) and players[index].visible and match_clock < key_until[index]
+
 func update_player_guide() -> void:
 	player_label.global_position = human.global_position+Vector3.UP*2.17
 	player_label.visible = not spectator
-	for index in players.size():
-		key_labels[index].global_position = players[index].global_position+Vector3.UP*(2.43 if is_human(index) else 2.18)
-		key_labels[index].visible = not spectator and match_clock < key_until[index]
+	update_action_labels()
 	var show_guide := not spectator and (phase == Phase.LIVE or (phase == Phase.READY and server_index() != 0))
 	trajectory_node.visible = show_guide
 	aim_ring.visible = show_guide

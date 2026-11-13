@@ -342,6 +342,7 @@ func launch_ball() -> void:
 		"spin_rate":spin_rate if spin != "No spin" else 0.0,"passing_skill":game.passing_skill
 	},true)
 	show_landing(game.path_point(game.flight_end()))
+	game.update_action_labels()
 	game.replay.record(game)
 
 func tick(delta: float) -> void:
@@ -365,6 +366,7 @@ func simulate_step(delta: float) -> void:
 			game.animated.fill(false)
 			game.advance_recoveries(delta)
 			game.advance_idle_players(delta)
+			game.update_action_labels()
 			game.replay.record(game)
 			finish_delay = maxf(0.0,finish_delay-delta)
 			if game.recoveries.has(RECEIVER):
@@ -402,6 +404,7 @@ func simulate_step(delta: float) -> void:
 	game.advance_idle_players(delta)
 	if game.elapsed >= game.flight_end():
 		finish()
+	game.update_action_labels()
 	game.replay.record(game)
 
 func reset_receiver() -> void:
