@@ -8,6 +8,7 @@ const RECEIVE_START := Vector3(0,0.04,-2.7)
 const SETTER_START := Vector3(-1.45,0.04,0.4)
 const PASS_TARGET := Vector3(0.55,3.35,1.50)
 const LEFT_PIN := Vector3(3.55,0.065,3.28)
+const NET_TARGET_COUNT := 7
 const STEP := 1.0/60.0
 const SETUP_KEY := "SetToTarget"
 
@@ -32,6 +33,8 @@ var grab := Vector3.ZERO
 var markers := {}
 var remaining := 0
 var batch_rep := 0
+var batch_size := 0
+var net_sweep := false
 var successful_reps := 0
 var completed_reps := 0
 var replay_drag := -2
@@ -97,19 +100,33 @@ func reset_players() -> void:
 	game.players[1].position = passer_start
 
 func launch_single() -> void:
+	net_sweep = false
+	batch_rep = 0
+	batch_size = 0
 	repeating = false
 	remaining = 1
 	launch_rep()
 
 func launch_ten() -> void:
+	start_batch(10,false)
+
+func launch_net_sweep() -> void:
+	start_batch(NET_TARGET_COUNT,true)
+
+func start_batch(count: int, sweep: bool) -> void:
 	repeating = false
-	remaining = 10
+	net_sweep = sweep
+	batch_size = count
+	remaining = count
 	batch_rep = 1
 	completed_reps = 0
 	successful_reps = 0
 	launch_rep()
 
 func toggle_repeat() -> void:
+	net_sweep = false
+	batch_rep = 0
+	batch_size = 0
 	repeating = not repeating
 	remaining = 0
 	if repeating and not running: launch_rep()
@@ -135,7 +152,11 @@ func launch_rep() -> void:
 	budget = 0.0
 	game.phase = game.Phase.LIVE
 	game.drill_pass_target = pass_target
-	game.drill_set_pin = set_target
+	var target := set_target
+	if net_sweep:
+		target = Vector3(lerpf(LEFT_PIN.x,-LEFT_PIN.x,float(batch_rep-1)/(NET_TARGET_COUNT-1)),LEFT_PIN.y,LEFT_PIN.z)
+	game.drill_set_pin = target
+	markers.set.position = Vector3(target.x,0.055,target.z)
 	game.drill_set_apex = set_apex
 	game.launch(feed_origin(),feed_motion(),"serve",2,0.0,-1,Vector3.ZERO,Vector3.DOWN*Flight.GRAVITY)
 	game.receiving_team = 0
@@ -143,8 +164,11 @@ func launch_rep() -> void:
 	game.cpu_technique = 0
 	set_status("Float feed")
 	running = true
-	game.trace.write("setting_drill_feed",game.match_clock,setup_snapshot(),true)
+	var feed := setup_snapshot()
+	feed["set"] = target
+	game.trace.write("setting_drill_feed",game.match_clock,feed,true)
 	game.replay.record(game)
+	game.replay.current[0]["set_pin"] = target
 
 func _physics_process(delta: float) -> void:
 	if game.replay.active:
@@ -198,7 +222,7 @@ func step_rep() -> void:
 	game.replay.record(game)
 
 func set_status(message: String) -> void:
-	game.info.text = "%d/10 · %s" % [batch_rep,message] if batch_rep > 0 else message
+	game.info.text = "%d/%d · %s" % [batch_rep,batch_size,message] if batch_rep > 0 else message
 
 func make_dots(color: Color) -> MultiMeshInstance3D:
 	var node := MultiMeshInstance3D.new()
@@ -224,6 +248,25 @@ func draw_path(node: MultiMeshInstance3D, path: Callable, duration: float) -> vo
 
 func show_set_path() -> void:
 	draw_path(trail,game.path_point,game.flight_end())
+	var points := PackedVector3Array()
+	for index in trail.multimesh.instance_count:
+		points.append(trail.multimesh.get_instance_transform(index).origin)
+	game.replay.current[0]["set_path"] = points
+
+func show_rep_target(frames: Array[Dictionary]) -> void:
+	if frames.is_empty(): return
+	var pin: Vector3 = frames[0].get("set_pin",set_target)
+	markers.set.position = Vector3(pin.x,0.055,pin.z)
+	var points: PackedVector3Array = frames[0].get("set_path",PackedVector3Array())
+	trail.visible = not points.is_empty()
+	if points.is_empty(): return
+	trail.multimesh.instance_count = points.size()
+	for index in points.size():
+		trail.multimesh.set_instance_transform(index,Transform3D(Basis.IDENTITY,points[index]))
+
+func close_review() -> void:
+	game.replay.toggle(game,true)
+	show_rep_target(game.replay.current)
 
 func show_preview(node: MultiMeshInstance3D, origin: Vector3, velocity: Vector3, duration: float) -> void:
 	draw_path(node,func(t: float): return origin+velocity*t+Vector3.DOWN*Flight.GRAVITY*0.5*t*t,duration)
@@ -356,6 +399,7 @@ func open_review(index: int, autoplay := false) -> void:
 	if game.replay.open_drill_rep(game,rep_history,index,autoplay):
 		review_index = index
 		replay_drag = -2
+		show_rep_target(game.replay.frames)
 
 func edit_setter() -> void:
 	var replay = game.replay

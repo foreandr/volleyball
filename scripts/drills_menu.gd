@@ -152,11 +152,16 @@ func open_setting_stage(title: String) -> void:
 	ten.custom_minimum_size.y = 38
 	ten.pressed.connect(drill.launch_ten)
 	left.add_child(ten)
+	var sweep := Button.new()
+	sweep.text = "Set to all 7 positions"
+	sweep.custom_minimum_size.y = 38
+	sweep.pressed.connect(drill.launch_net_sweep)
+	left.add_child(sweep)
 	add_speed(left,"Slow motion",drill.live_speed,func(value: float): drill.live_speed = value)
 	var slow_motion := left.get_child(left.get_child_count()-1) as HSlider
 	slow_motion.value_changed.connect(func(_value: float): drill.save_setup())
 	build_review(right)
-	for button in [launch,ten]:
+	for button in [launch,ten,sweep]:
 		button.pressed.connect(func(): repeat.set_pressed_no_signal(false))
 	setting_camera = Camera3D.new()
 	setting_camera.fov = 42.0
@@ -258,7 +263,7 @@ func build_review(panel: VBoxContainer) -> void:
 
 func toggle_review() -> void:
 	var game: Node3D = target_drill.game
-	if game.replay.active: game.replay.toggle(game,true)
+	if game.replay.active: target_drill.close_review()
 	else: target_drill.open_review(target_drill.review_count()-1)
 	update_review()
 
