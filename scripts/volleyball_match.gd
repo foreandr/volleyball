@@ -1752,7 +1752,7 @@ func tick_receive(delta: float, previous: float) -> void:
 		var holds_lunge: bool = bump.reach.get("tier",0) == 2 and committed.is_finite() and committed.distance_to(bump.to_local(catch_point)) <= bump.contact_radius()
 		# Decide before the dive windup runs out. A viable grounded receive keeps priority.
 		bump.allow_auto_dive = not holds_lunge and (not lunge_in_range or elapsed > cue+0.035)
-	if cpu_dig and not backshuffle and not bump.low_save.active and not bump.deep_squat and not bump.reach.get("deep_side",false):
+	if cpu_dig and not backshuffle and not bump.low_save.active and not bump.deep_squat and not bump.reach.has("custom_clip") and not bump.reach.get("deep_side",false):
 		var low_at := maxf(elapsed,arrival(0.60))
 		var low_point := path_point(low_at)
 		var offset := actor.to_local(low_point)
@@ -1767,6 +1767,7 @@ func tick_receive(delta: float, previous: float) -> void:
 	if bump.reach.get("deep_side",false):
 		bump.allow_auto_dive = false
 		bump.lunge_bend_depth = 0.36
+	if bump.reach.has("custom_clip"): bump.allow_auto_dive = false
 	if bump.deep_squat:
 		bump.allow_auto_dive = false
 		bump.knee_bend_depth = maxf(bump.knee_bend_depth,0.62*smoothstep(cue-0.33,cue-0.06,elapsed))
@@ -1791,7 +1792,7 @@ func tick_receive(delta: float, previous: float) -> void:
 		elif bump.reach.get("tier",0) == 2:
 			animation = "Lunge"
 			if bump.reach.get("forward_lunge",false): animation = "Forward lunge"
-			elif bump.reach.get("backward",false): animation = "Backward lunge"
+			elif bump.reach.get("backward",false): animation = "D2 back-leg lift" if bump.reach.has("custom_clip") else "Backward lunge"
 			elif bump.reach.get("side_lunge",false): animation = "Side lunge"
 		if receive_animation_labels.get(index,"") != animation:
 			receive_animation_labels[index] = animation

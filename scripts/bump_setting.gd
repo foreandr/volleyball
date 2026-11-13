@@ -46,6 +46,8 @@ var contact_frame: float
 var tracks: Array[Vector2i] = []
 var custom_backward: Animation
 var custom_backward_tracks: Array[Vector2i] = []
+var custom_backward_mirror_tracks: Array[Vector2i] = []
+var custom_backward_mirror_bones := PackedInt32Array()
 var custom_backward_time := 0.0
 var ready_pose: Array[Transform3D] = []
 var reach := {}
@@ -133,7 +135,19 @@ func animation_tracks(animation: Animation) -> Array[Vector2i]:
 
 func set_custom_backward(animation: Animation) -> void:
 	custom_backward = animation
-	if animation != null: custom_backward_tracks = animation_tracks(animation)
+	custom_backward_mirror_tracks.clear()
+	custom_backward_mirror_bones.clear()
+	if animation == null: return
+	custom_backward_tracks = animation_tracks(animation)
+	var rig: Skeleton3D = setter.skeleton
+	for bone in rig.get_bone_count():
+		var name_ := String(rig.get_bone_name(bone))
+		var opposite := bone
+		if name_.ends_with("_l") or name_.ends_with("_r"):
+			var other := rig.find_bone(name_.left(-1)+("r" if name_.ends_with("_l") else "l"))
+			if other >= 0: opposite = other
+		custom_backward_mirror_bones.append(opposite)
+		custom_backward_mirror_tracks.append(custom_backward_tracks[opposite])
 
 func reset() -> void:
 	early_dig_arms.clear()
@@ -710,7 +724,7 @@ func advance_reach(path: Callable, time: float, end: float, delta: float, quick_
 		var direction := offset.slide(Vector3.UP)
 		var planned: Vector3 = reach.get("intercept",Vector3.INF)
 		var still_reachable := planned.is_finite() and Geometry3D.get_closest_point_to_segment(planned,path.call(maxf(0.0,time-delta)),future).distance_to(planned) <= contact_radius()
-		if quick_dig and not reach.get("deep_side",false) and reach_progress < 0.75 and not still_reachable and not reach.is_empty() and time-reach_changed_at > 0.12 and direction.length() > 0.32 and reach_step.normalized().dot(direction.normalized()) < 0.48:
+		if quick_dig and not reach.has("custom_clip") and not reach.get("deep_side",false) and reach_progress < 0.75 and not still_reachable and not reach.is_empty() and time-reach_changed_at > 0.12 and direction.length() > 0.32 and reach_step.normalized().dot(direction.normalized()) < 0.48:
 			begin_dig_transition(time)
 			clear_reach()
 			reach_changed_at = time
@@ -768,7 +782,9 @@ func plan_reach(offset: Vector3, deep_side := false) -> void:
 	elif straight_back and tier == 2:
 		rear_setup = reach_step.normalized()*minf(0.28,reach_step.length()*0.52)
 		reach_step -= rear_setup
-		if custom_backward != null: reach.custom_clip = custom_backward.resource_name
+		if custom_backward != null:
+			reach.custom_clip = custom_backward.resource_name
+			reach.mirror_backward = (local.x < -0.03) != setter.mirror_animation
 
 func backward_reach_active() -> bool:
 	return reach.get("backward",false) and (grade == Timing.Grade.WAITING or (is_finite(touch_time) and rear_follow < 0.25))
@@ -865,18 +881,30 @@ func reach_platform(offset: Vector3, weight := 1.0, reach_limit := 0.26, steer_s
 			rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
 
 func apply_custom_backward(time: float, weight: float) -> void:
-	sample_pose(custom_backward,custom_backward_tracks,time,weight,true)
+	sample_pose(custom_backward,custom_backward_mirror_tracks if reach.get("mirror_backward",false) else custom_backward_tracks,time,weight,true,reach.get("mirror_backward",false))
 
 func apply_pose(time: float, weight: float) -> void:
 	sample_pose(clip,tracks,time,weight,false)
 
-func sample_pose(animation: Animation, pose_tracks: Array[Vector2i], time: float, weight: float, in_place: bool) -> void:
+func sample_pose(animation: Animation, pose_tracks: Array[Vector2i], time: float, weight: float, in_place: bool, mirrored := false) -> void:
 	var rig: Skeleton3D = setter.skeleton
 	time = clampf(time,0.0,animation.length)
 	for bone in pose_tracks.size():
 		var track := pose_tracks[bone]
 		if defensive_hand_dig and bone == 0: continue
+		var position := animation.position_track_interpolate(track.x,time) if track.x >= 0 else Vector3.ZERO
+		var rotation := animation.rotation_track_interpolate(track.y,time) if track.y >= 0 else Quaternion.IDENTITY
+		if mirrored:
+			var source := custom_backward_mirror_bones[bone]
+			var source_rest := rig.get_bone_rest(source)
+			var target_rest := rig.get_bone_rest(bone)
+			# Reflect in model space, then express the motion in the opposite joint's rest axes.
+			var reflection := Basis.from_scale(Vector3(-1,1,1))
+			var axes := rig.get_bone_global_rest(bone).basis.orthonormalized().inverse()*reflection*rig.get_bone_global_rest(source).basis.orthonormalized()
+			var delta := source_rest.basis.orthonormalized().inverse()*Basis(rotation)
+			rotation = (target_rest.basis.orthonormalized()*axes*delta*axes.inverse()).get_rotation_quaternion()
+			position = target_rest.origin+target_rest.basis*axes*source_rest.basis.inverse()*(position-source_rest.origin)
 		if track.x >= 0 and (not in_place or bone != 0):
-			rig.set_bone_pose_position(bone,rig.get_bone_pose_position(bone).lerp(animation.position_track_interpolate(track.x,time),weight))
+			rig.set_bone_pose_position(bone,rig.get_bone_pose_position(bone).lerp(position,weight))
 		if track.y >= 0:
-			rig.set_bone_pose_rotation(bone,rig.get_bone_pose_rotation(bone).slerp(animation.rotation_track_interpolate(track.y,time),weight))
+			rig.set_bone_pose_rotation(bone,rig.get_bone_pose_rotation(bone).slerp(rotation,weight))
