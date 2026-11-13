@@ -37,9 +37,7 @@ static func connect_arms(pose: Array, author: RefCounted, desired: Vector3, weig
 		var hand: String = "hand_"+side
 		var old_hand: Transform3D = author.world_pose(original,rig.find_bone(hand))
 		var target := grip+(left_hand if side == "l" else right_hand)
-		var looseness: float = author.reception_elbow_looseness
-		var outward := lerpf(-0.18,0.82,looseness)
-		var pole := lateral*(outward if side == "l" else -outward)+Vector3.DOWN*0.55+forward*0.30
+		var pole := lateral*(0.32 if side == "l" else -0.32)+Vector3.DOWN*0.55+forward*0.30
 		if dive: pole = lateral*(-0.62 if side == "l" else 0.62)+Vector3.DOWN*0.24+forward*0.46
 		var upper_before: Transform3D = author.world_pose(pose,rig.find_bone(arm))
 		var lower_before: Transform3D = author.world_pose(pose,rig.find_bone(elbow))

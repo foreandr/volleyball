@@ -5,7 +5,6 @@ var rig: Skeleton3D
 var baseline: Array = []
 var feet := {}
 var recipe: Dictionary
-var reception_elbow_looseness := 0.5
 
 func _init(skeleton: Skeleton3D, starting_pose: Animation) -> void:
 	rig = skeleton
