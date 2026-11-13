@@ -142,6 +142,10 @@ func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time
 
 func carry_run_into_plant(velocity: Vector3) -> void:
 	incoming_plant_speed = clampf(velocity.dot(heading)*1.15,0.0,3.0*stride/load_duration())
+	if incoming_plant_speed <= 0.0: return
+	# Keep both takeoff plants ahead of the running left foot instead of pulling it back.
+	right_plant += heading*0.29
+	left_plant += heading*0.34
 
 func begin_set_jump(actor: Node3D, load: float, jump_height := 0.56) -> void:
 	if active: return
@@ -240,8 +244,10 @@ func attack_plant_foot(side: String) -> Vector3:
 	var to := left_plant if left else right_plant
 	var end := load_duration()
 	var start_step := lead_time*0.48 if not left else lead_time*0.92
-	if incoming_plant_speed > 0.0 and left: start_step = end*0.48
 	var end_step := lead_time+(end-lead_time)*(0.53 if not left else 0.96)
+	if incoming_plant_speed > 0.0:
+		if left: start_step = end*0.36
+		end_step = end*(0.91 if left else 0.65)
 	if (left and lead_time > 0.0) or (not left and entry_time > 0.0):
 		var early_start := entry_time*0.70 if left else 0.0
 		var early_end := lead_time*0.86 if left else entry_time*0.88
