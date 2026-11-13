@@ -4,7 +4,7 @@ const PlatformPose = preload("res://scripts/reception_platform_pose.gd")
 const WINDUP := 0.33
 const CONTACT_POSE_TIME := 0.40
 const POSE_DURATION := 1.28
-const GET_UP_EXTENSION := 0.30
+const GET_UP_EXTENSION := 0.40
 const DURATION := POSE_DURATION-CONTACT_POSE_TIME+WINDUP+GET_UP_EXTENSION
 
 # Time from load, hip drop and body pitch, from the side-view reference.
@@ -92,7 +92,10 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 		author.rotate_world(pose,"spine_02",Vector3.RIGHT,0.18*low)
 		author.rotate_world(pose,"neck_01",Vector3.RIGHT,-0.38*low)
 	var chest_settle := landing*(1.0-smoothstep(0.49,0.71,since_brace))
-	var get_up := smoothstep(0.89,POSE_DURATION,time)
+	var get_up := smoothstep(0.64,0.83,since_brace)
+	# Keep the hips low until the lead foot can take weight.
+	var support_drop := 0.16*smoothstep(0.47,0.63,since_brace)*(1.0-get_up)
+	pose[pelvis].origin -= author.world_pose(pose,parent).basis.inverse()*Vector3.UP*support_drop/scale_
 	author.rotate_world(pose,"spine_03",Vector3.RIGHT,-0.22*extension*(1.0-get_up))
 	author.rotate_world(pose,"neck_01",Vector3.RIGHT,-0.24*extension*(1.0-get_up)-0.36*chest_settle)
 	author.rotate_world(pose,"Head",Vector3.RIGHT,-pitch*0.24)
@@ -102,7 +105,7 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 	var head: Vector3 = author.point(pose,"Head")
 	var head_lift := maxf(0.0,0.24-0.02*chest_settle-(rig.global_transform*head).y)
 	pose[pelvis].origin += author.world_pose(pose,parent).basis.inverse()*Vector3.UP*head_lift/scale_
-	var hands_release := 1.0-smoothstep(0.56,0.72,since_brace)
+	var hands_release := 1.0-smoothstep(0.65,0.79,since_brace)
 	var push := smoothstep(0.08,0.40,since_brace)
 	for side in ["l","r"]:
 		var foot_name: String = "foot_"+side
@@ -118,21 +121,28 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 		var calf: String = "calf_"+side
 		var hip: Vector3 = author.point(pose,thigh)
 		var knee: Vector3 = author.point(pose,calf)
-		var leg_length: float = hip.distance_to(knee)+knee.distance_to(author.point(pose,foot_name))
-		var lift := deg_to_rad(64.0 if side == "l" else 59.0)
-		var raised_ankle := hip+(Vector3.UP*sin(lift)-Vector3.BACK*cos(lift))*leg_length*0.98
+		var upper_length := hip.distance_to(knee)
+		var lower_length := knee.distance_to(author.point(pose,foot_name))
+		var thigh_lift := deg_to_rad(20.0 if side == "l" else 17.0)
+		var shin_lift := deg_to_rad(66.0 if side == "l" else 62.0)
+		var raised_ankle := hip+Vector3(0.0,sin(thigh_lift),-cos(thigh_lift))*upper_length
+		raised_ankle += Vector3(0.0,sin(shin_lift),-cos(shin_lift))*lower_length
 		trail = trail.lerp(raised_ankle,kick)
-		var step_start := 0.46 if side == "r" else 0.68
-		var step := smoothstep(step_start,step_start+0.24,since_brace)
+		var lead: bool = side == "r"
+		var step_start := 0.45 if lead else 0.67
+		var plant_time := 0.65 if lead else 0.84
+		var step := smoothstep(step_start,plant_time,since_brace)
+		var swing := sin(PI*step)
+		# Bring one foot under the hips, then step the trailing foot up after the weight transfer.
 		ankle = ankle.lerp(trail,maxf(extension,kick)).lerp(foot.origin,step)
-		ankle.y += sin(PI*step)*0.19
+		ankle.y += swing*(0.18 if lead else 0.11)/scale_
 		var descent := smoothstep(0.19,0.28,since_brace)*(1.0-smoothstep(0.37,0.52,since_brace))
 		var airborne := maxf(kick,descent)*(1.0-step)
 		var lateral := 0.09 if side == "l" else -0.09
 		var leg_axis := (ankle-hip).normalized()
 		var dive_pole := leg_axis.cross(Vector3.RIGHT).normalized()
-		var pole := Vector3(lateral,0.18,1.0).lerp(dive_pole,airborne)
-		var knee_limit := lerpf(lerpf(180.0,166.0,kick),136.0,descent)
+		var pole := (dive_pole+Vector3.RIGHT*lateral).lerp(dive_pole,airborne)
+		var knee_limit := lerpf(lerpf(180.0,134.0,kick),136.0,descent)
 		author.limb(pose,thigh,calf,foot_name,ankle,pole,1.0,knee_limit)
 		var ready_shin: Vector3 = foot.origin-author.point(ready,calf)
 		var posed_shin: Vector3 = author.point(pose,foot_name)-author.point(pose,calf)
@@ -140,6 +150,7 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 		var ready_pitch := atan2(ready_shin.z,-ready_shin.y)
 		var posed_pitch := atan2(posed_shin.z,-posed_shin.y)
 		var toe_pitch := -angle_difference(ready_pitch,posed_pitch)*maxf(extension,kick)*(1.0-step)
+		toe_pitch = lerpf(toe_pitch,0.22*swing,smoothstep(0.42,0.57,since_brace))
 		author.set_world_basis(pose,foot_name,Basis(Vector3.RIGHT,toe_pitch)*foot.basis)
 	var grip: Vector3 = (author.point(pose,"hand_l")+author.point(pose,"hand_r"))*0.5
 	var reach := smoothstep(0.11,0.31,time)
