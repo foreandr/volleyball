@@ -1203,7 +1203,9 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 		pitch += lift_lean_offset(arm_lift,extension)
 	var lean_blend := maxf(contact_crunch,follow_crunch)
 	if stage == Stage.HIT: lean_blend *= 1.0-smootherstep(0.14,0.34,clock-stage_start)
-	var torso_pitch := pitch+deg_to_rad(30.0)*follow_crunch+deg_to_rad(torso_forward_bias_degrees)*lean_blend
+	var strike_reach := smootherstep(0.24,0.83,extension)*(1.0-smoothstep(0.0,0.58,follow)) if keeps_strike_palm_presented() else 0.0
+	if stage == Stage.HIT: strike_reach *= 1.0-smootherstep(0.0,0.14,clock-stage_start)
+	var torso_pitch := pitch-deg_to_rad(20.0)*strike_reach+deg_to_rad(30.0)*follow_crunch+deg_to_rad(torso_forward_bias_degrees)*lean_blend
 	author.rotate_world(pose,"spine_01",Vector3.RIGHT,torso_pitch*0.45*weight)
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,torso_pitch*0.55*weight)
 	if uses_air_reach_assist() and stage == Stage.SET:
@@ -1218,6 +1220,13 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 		var torso_up: Vector3 = author.point(pose,"neck_01")-author.point(pose,"spine_01")
 		var chest_forward := across.cross(torso_up).normalized()
 		author.rotate_world(pose,"spine_01",chest_forward,deg_to_rad(-two_step_tilt)*tilt_weight*weight)
+	if strike_reach > 0.0:
+		# Raise the hitting shoulder and leave space between the arm and head.
+		var across: Vector3 = (author.point(pose,"upperarm_l")-author.point(pose,"upperarm_r")).normalized()
+		var chest_up: Vector3 = (author.point(pose,"neck_01")-author.point(pose,"spine_01")).normalized()
+		var chest_forward := across.cross(chest_up).normalized()
+		author.rotate_world(pose,"spine_01",chest_forward,deg_to_rad(-10.0)*strike_reach*weight)
+		author.rotate_world(pose,"spine_02",chest_forward,deg_to_rad(-14.0)*strike_reach*weight)
 	var neck: Vector3 = author.point(pose,"neck_01")
 	var gaze := ball_target-neck
 	var flat_gaze := gaze.slide(Vector3.UP)
@@ -1225,7 +1234,7 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 	var ball_yaw := clampf(atan2(gaze.x,gaze.z),-0.85,0.85)
 	var yaw_weight := smoothstep(0.05,0.45,flat_gaze.length())
 	author.rotate_world(pose,"neck_01",Vector3.UP,(ball_yaw*0.5-chest_yaw*0.55)*yaw_weight*weight)
-	author.rotate_world(pose,"neck_01",Vector3.RIGHT,(-pitch*0.72-ball_pitch*0.32+deg_to_rad(16.0)*follow_crunch)*weight)
+	author.rotate_world(pose,"neck_01",Vector3.RIGHT,(-pitch*0.72-ball_pitch*(0.32+0.42*strike_reach)+deg_to_rad(16.0)*follow_crunch)*weight)
 	var line_weight := shot_line_weight(shot_aim,contact)
 	if stage == Stage.HIT and weight < 1.0 and not swing_finish_pose.is_empty():
 		if line_weight < 0.5:
@@ -1244,7 +1253,8 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 		var guide_drop := maxf(smoothstep(0.07,0.83,extension),smoothstep(0.0,0.62,follow))
 		if uses_assisted_approach() and stage == Stage.SET:
 			guide_drop = maxf(guide_drop*0.75,0.72*smootherstep(0.28,0.49,clock-swing_started))
-		SpikeArm.apply_guide_arm(pose,author,Vector3(0.06,0.43,0.64-backswing_reach*backswing_weight*0.6),Vector3(0.26,-0.55,0.15),guide_drop,arm_weight,172.0)
+		guide_drop = lerpf(guide_drop,1.0,0.90*strike_reach)
+		SpikeArm.apply_guide_arm(pose,author,Vector3(0.06,0.43,0.64-backswing_reach*backswing_weight*0.6),Vector3(0.26,-0.55,0.15),guide_drop,arm_weight,172.0,strike_reach)
 		if stage == Stage.HIT and follow >= 0.90:
 			swing_finish_pose = pose.duplicate()
 	if uses_assisted_approach() and not approach_arm_transition.is_empty():

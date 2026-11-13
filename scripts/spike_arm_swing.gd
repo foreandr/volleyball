@@ -12,6 +12,10 @@ static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float,
 	var shoulder: Vector3 = author.point(pose,"upperarm_r")
 	var draw := Vector3(-0.04,0.40,0.08).lerp(Vector3(0.02,0.05,-0.12),draw_progress)
 	var wrist_target := ball-(ball-shoulder).normalized()*0.06-shot_direction*0.11
+	if contact_palm:
+		var reach := smoothstep(0.30,0.84,extension)*(1.0-smoothstep(0.0,0.58,follow))
+		# Set the wrist underneath the ball so the palm can meet it at full reach.
+		wrist_target = wrist_target.lerp(ball-(ball-shoulder).normalized()*0.09-shot_direction*0.025,reach)
 	var lift_target := Vector3(-0.095,0.035,-0.065) if overhead_entry else Vector3(-0.08,0.40,0.22)
 	var raised_draw := draw.lerp(lift_target,arm_lift)
 	raised_draw.z -= backswing_reach
@@ -69,7 +73,7 @@ static func open_strike_hand(pose: Array, author: RefCounted, weight: float) -> 
 			var relaxed: Quaternion = author.rig.get_bone_rest(index).basis.get_rotation_quaternion()
 			pose[index].basis = Basis(current.slerp(relaxed,weight))
 
-static func apply_guide_arm(pose: Array, author: RefCounted, reach: Vector3, reach_pole: Vector3, drop: float, weight: float, reach_limit: float) -> void:
+static func apply_guide_arm(pose: Array, author: RefCounted, reach: Vector3, reach_pole: Vector3, drop: float, weight: float, reach_limit: float, strike_reach := 0.0) -> void:
 	if weight <= 0.0: return
 	var shoulder: Vector3 = author.point(pose,"upperarm_l")
 	var elbow: Vector3 = author.point(pose,"lowerarm_l")
@@ -79,7 +83,7 @@ static func apply_guide_arm(pose: Array, author: RefCounted, reach: Vector3, rea
 	var forward := outside.cross(up).normalized()
 	var tuck_pole := (outside.cross(forward)+outside*0.10).normalized()
 	var tuck := tuck_pole*shoulder.distance_to(elbow)+forward*elbow.distance_to(wrist)
-	var target := shoulder+reach.lerp(tuck,drop)
+	var target := shoulder+reach.lerp(tuck,drop).lerp(Vector3(0.12,-0.42,0.18),strike_reach)
 	author.limb(pose,"upperarm_l","lowerarm_l","hand_l",target,reach_pole.lerp(tuck_pole,drop),weight,lerpf(reach_limit,90.0,drop))
 
 static func blend_arm(base: Array, target: Array, author: RefCounted, weight: float, side := "r") -> void:
