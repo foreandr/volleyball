@@ -126,14 +126,21 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 		var step := smoothstep(step_start,step_start+0.24,since_brace)
 		ankle = ankle.lerp(trail,maxf(extension,kick)).lerp(foot.origin,step)
 		ankle.y += sin(PI*step)*0.19
+		var descent := smoothstep(0.19,0.28,since_brace)*(1.0-smoothstep(0.37,0.52,since_brace))
+		var airborne := maxf(kick,descent)*(1.0-step)
 		var lateral := 0.09 if side == "l" else -0.09
-		var pole := Vector3(lateral,0.18,1.0).lerp(Vector3(lateral,-0.75,0.10),kick)
-		author.limb(pose,thigh,calf,foot_name,ankle,pole,1.0,lerpf(180.0,166.0,kick))
+		var leg_axis := (ankle-hip).normalized()
+		var dive_pole := leg_axis.cross(Vector3.RIGHT).normalized()
+		var pole := Vector3(lateral,0.18,1.0).lerp(dive_pole,airborne)
+		var knee_limit := lerpf(lerpf(180.0,166.0,kick),136.0,descent)
+		author.limb(pose,thigh,calf,foot_name,ankle,pole,1.0,knee_limit)
 		var ready_shin: Vector3 = foot.origin-author.point(ready,calf)
 		var posed_shin: Vector3 = author.point(pose,foot_name)-author.point(pose,calf)
-		var ankle_swing := Quaternion(ready_shin.normalized(),posed_shin.normalized())
-		var toe_rotation := Quaternion.IDENTITY.slerp(ankle_swing,extension*(1.0-step))
-		author.set_world_basis(pose,foot_name,Basis(toe_rotation)*foot.basis)
+		# Rotate around the lateral axis so the soles stay aligned instead of twisting across one another.
+		var ready_pitch := atan2(ready_shin.z,-ready_shin.y)
+		var posed_pitch := atan2(posed_shin.z,-posed_shin.y)
+		var toe_pitch := -angle_difference(ready_pitch,posed_pitch)*maxf(extension,kick)*(1.0-step)
+		author.set_world_basis(pose,foot_name,Basis(Vector3.RIGHT,toe_pitch)*foot.basis)
 	var grip: Vector3 = (author.point(pose,"hand_l")+author.point(pose,"hand_r"))*0.5
 	var reach := smoothstep(0.11,0.31,time)
 	if not pancake:
