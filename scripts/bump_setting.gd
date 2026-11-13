@@ -217,7 +217,9 @@ func hand_dig_height(origin: Vector3, speed: float) -> float:
 
 func ready_contact() -> Vector3:
 	if hand_setting and defensive_hand_dig: return hand_dig_face()+global_basis.inverse()*setter.global_basis.z.normalized()*0.30
-	if hand_setting: return to_local(setter.to_global(Vector3(0,HandPose.CONTACT_HEIGHT,HandPose.CONTACT_FORWARD)))
+	if hand_setting:
+		var spacing := HandPose.SET_CONTACT_FORWARD if forearm_setting else HandPose.CONTACT_FORWARD
+		return to_local(setter.to_global(Vector3(0,HandPose.CONTACT_HEIGHT,spacing)))
 	return to_local(setter.to_global(Vector3(0,1.04,0.62)))
 
 func contact_radius() -> float:
@@ -479,7 +481,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 			apply_knee_bend(time)
 			var target := track_hand_dig(path,time,end,delta) if face_dig else hand_intercept(path,time,end)
 			var lift_time := 0.048 if face_dig else (0.062 if quick_hand_receive else (0.155 if setter_jumping else 0.105))
-			HandPose.apply(setter,to_global(target),smoothstep(0.0,lift_time,elapsed),Vector3.ZERO,0.0,0.0,face_dig,-(global_basis*incoming),-1.0 if face_dig else 0.0)
+			HandPose.apply(setter,to_global(target),smoothstep(0.0,lift_time,elapsed),Vector3.ZERO,0.0,0.0,face_dig,-(global_basis*incoming),-1.0 if face_dig else 0.0,Vector3.INF,0.0,forearm_setting)
 		elif low_save.active:
 			var intercept := Vector3.INF
 			if low_save.tracks_platform:
@@ -700,7 +702,7 @@ func update_hand_push(time: float, follow: float) -> void:
 	var torso_follow := smoothstep(0.0,0.10,after_release)
 	var anchor := hand_anchor
 	if setter_jumping and hand_catch_from.is_finite(): anchor = hand_catch_from.lerp(anchor,smoothstep(0.0,0.065,follow))
-	HandPose.apply(setter,setter.to_global(anchor),blend,global_basis*push,cushion,torso_follow,false,Vector3.ZERO,extension,set_offset,smoothstep(0.0,delay,follow))
+	HandPose.apply(setter,setter.to_global(anchor),blend,global_basis*push,cushion,torso_follow,false,Vector3.ZERO,extension,set_offset,smoothstep(0.0,delay,follow),forearm_setting)
 	if follow >= delay and not is_finite(release_time):
 		release_time = time
 		release_point = platform_center()

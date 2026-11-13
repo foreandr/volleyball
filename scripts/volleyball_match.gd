@@ -1461,7 +1461,8 @@ func hand_contact_height(technique: int) -> float:
 		return clampf(apex-0.15,2.35,maxf(2.35,Bump.HandPose.CONTACT_HEIGHT+attack_vertical*0.0254-0.08))
 	return Bump.HandPose.CONTACT_HEIGHT if defensive_ball() or flight_kind == "serve" else 1.92
 
-func hand_receive_reach() -> float:
+func hand_receive_reach(index: int) -> float:
+	if cpu_is_setting(index): return Bump.HandPose.SET_CONTACT_FORWARD
 	if defensive_ball(): return HAND_DIG_REACH
 	return Bump.HandPose.CONTACT_FORWARD if flight_kind == "serve" else 0.28
 
@@ -1506,7 +1507,7 @@ func overhead_available(index: int, technique: int) -> bool:
 		var approach := frame.global_basis.inverse()*(path_point(maxf(elapsed,at-0.08))-path_point(at))
 		var forward := approach.slide(Vector3.UP).normalized()
 		if forward.is_zero_approx(): forward = actor.basis.z
-		offset -= forward*hand_receive_reach()
+		offset -= forward*hand_receive_reach(index)
 		var reserve := 0.32 if technique == 2 else 0.10
 		var pace := 4.35*CPU_SHUFFLE_SPEED_SCALE if first_contact and (flight_kind == "serve" or cpu_hand_receive_too_fast(at)) else 4.15
 		range_ = (0.48 if first_contact else 0.55)+maxf(0.0,at-elapsed-reserve)*pace
@@ -1701,7 +1702,7 @@ func tick_receive(delta: float, previous: float) -> void:
 		if backshuffle: face = Vector3.BACK
 		elif run_to_drop: face = drop_heading if drop_distance > 0.45 else actor.basis.z
 		elif turn_for_save: face = face.lerp(drop_heading,0.68).normalized()
-		var offset := (FOREARM_DIG_REACH if cpu_dig else 0.52) if technique == 0 else hand_receive_reach()
+		var offset := (FOREARM_DIG_REACH if cpu_dig else 0.52) if technique == 0 else hand_receive_reach(index)
 		if not recovering and not set_jumps[index].active and not bump.low_save.active and not bump.reach.get("deep_side",false):
 			var spacing := 0.88 if square_receive and cpu_dig and cue < 0.40 else offset
 			var target := catch_point-frame.global_basis*face*spacing

@@ -2,6 +2,7 @@ extends RefCounted
 
 const CONTACT_HEIGHT := 1.83
 const CONTACT_FORWARD := 0.23
+const SET_CONTACT_FORWARD := 0.05
 const CONTACT_RADIUS := 0.40
 const GREEN_CONTACT_ALLOWANCE := 0.17
 const RELEASE_TIME := 0.125
@@ -14,7 +15,7 @@ static func contact_center(actor: Node3D) -> Vector3:
 		center += rig.get_bone_global_pose(rig.find_bone("thumb_03_"+side)).origin
 	return rig.to_global(center*0.25+Vector3(0,0.075,0.07))
 
-static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.ZERO, cushion := 0.0, torso_follow := 0.0, face_save := false, ball_direction := Vector3.ZERO, set_extension := -1.0, set_offset := Vector3.INF, arch_progress := 0.0) -> void:
+static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.ZERO, cushion := 0.0, torso_follow := 0.0, face_save := false, ball_direction := Vector3.ZERO, set_extension := -1.0, set_offset := Vector3.INF, arch_progress := 0.0, overhead_set := false) -> void:
 	if blend <= 0.0: return
 	var rig: Skeleton3D = actor.skeleton
 	var author: RefCounted = actor.get_pose_author()
@@ -34,7 +35,8 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,forward_lean*0.19*lean_weight)
 	head = author.point(pose,"Head")
 	var aim := target_local-head
-	var diamond := head+Vector3(clampf(aim.x,-0.28 if face_save else -0.22,0.28 if face_save else 0.22),clampf(aim.y-0.075,-0.10 if face_save else 0.12,0.20 if face_save else 0.27),clampf(aim.z-0.07,0.16 if face_save else 0.09,0.35))
+	var minimum_depth := 0.16 if face_save else (-0.055 if overhead_set else 0.09)
+	var diamond := head+Vector3(clampf(aim.x,-0.28 if face_save else -0.22,0.28 if face_save else 0.22),clampf(aim.y-0.075,-0.10 if face_save else 0.12,0.20 if face_save else 0.27),clampf(aim.z-0.07,minimum_depth,0.35))
 	var local_push := rig.global_basis.inverse()*push
 	var horizontal_push := local_push.slide(Vector3.UP)
 	var set_depth := horizontal_push.normalized().z
@@ -105,7 +107,7 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 			var forearm: Vector3 = base.origin-author.point(pose,lower)
 			var forearm_pitch := atan2(forearm.z,forearm.y)
 			var neutral_pitch := atan2(target_fingers.z,target_fingers.y)
-			var flex := signf(set_depth_m)*deg_to_rad(8.0+14.0*wrist_distance)
+			var flex := deg_to_rad(8.0+14.0*wrist_distance) if set_depth_m > 0.0 else -deg_to_rad(13.0+19.0*wrist_distance)
 			var pitch := angle_difference(neutral_pitch,forearm_pitch+flex)*wrist_follow
 			target_fingers = target_fingers.rotated(Vector3.RIGHT,pitch)
 			target_across = target_across.rotated(Vector3.RIGHT,pitch)
