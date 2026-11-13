@@ -1634,7 +1634,7 @@ func tick_receive(delta: float, previous: float) -> void:
 			if lateral_run: speed = CPU_SPRINT_SPEED
 			var before_move := actor.position
 			# Leave the final step to the lunge when the receive pose can cover it.
-			if square_receive and technique == 0 and lead >= -0.035:
+			if square_receive and technique == 0 and lead <= 0.16 and lead >= -0.035:
 				var reach_offset: Vector3 = bump.to_local(catch_point)-bump.ready_contact()
 				var reach_tier: int = Bump.Timing.practice_reach_tier(reach_offset)
 				if reach_tier == 2 or bump.reach.get("tier",0) == 2:
@@ -1684,7 +1684,7 @@ func tick_receive(delta: float, previous: float) -> void:
 		var reach_offset: Vector3 = bump.to_local(catch_point)-bump.ready_contact()
 		if bump.reach.is_empty() and cue-elapsed <= 0.22 and Bump.Timing.practice_reach_tier(reach_offset) == 2:
 			bump.plan_reach(reach_offset)
-		if bump.reach.get("tier",0) == 2: bump.allow_auto_dive = false
+		if bump.reach.get("tier",0) == 2 or elapsed <= cue+0.035: bump.allow_auto_dive = false
 	if not is_human(index) and frame.to_local(path_point(end)).z > Net.NET_Z: bump.allow_auto_dive = false
 	var was_diving: bool = bump.low_save.active
 	bump.fast_back_receive = backshuffle and technique == 0 and is_dig
