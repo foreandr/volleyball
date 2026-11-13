@@ -1138,6 +1138,8 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 		rig.set_bone_pose_rotation(bone,rotation)
 	if stage == Stage.HIT and keeps_strike_palm_presented():
 		apply_pinky_down_finish(rig)
+	if stage == Stage.SET and sync_approach_arm_lift() and not approach_render_rotations.is_empty():
+		keep_hitting_elbow_long(rig,pose,clock-swing_started)
 	var contact_reach := smootherstep(0.68,0.98,extension)*(1.0-smoothstep(0.0,0.22,follow))
 	if keeps_strike_palm_presented() and stage == Stage.SET and contact_reach > 0.0 and not approach_render_rotations.is_empty():
 		var author: RefCounted = setter.get_pose_author()
@@ -1395,13 +1397,41 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 				SpikeArm.blend_arm(pose,approach_arm_transition,author,source_weight,"l")
 	return pose
 
+func keep_hitting_elbow_long(rig: Skeleton3D, pose: Array[Transform3D], age: float) -> void:
+	var frame := age*60.0
+	if frame < 5.0 or frame >= 25.0: return
+	# Keep the elbow extended across the blend into the strike.
+	var influence := smoothstep(5.0,8.0,frame)*(1.0-smoothstep(22.0,25.0,frame))
+	var author: RefCounted = setter.get_pose_author()
+	for bone in rig.get_bone_count(): pose[bone] = rig.get_bone_pose(bone)
+	var shoulder: Vector3 = author.point(pose,"upperarm_r")
+	var elbow: Vector3 = author.point(pose,"lowerarm_r")
+	var wrist: Vector3 = author.point(pose,"hand_r")
+	var upper := elbow-shoulder
+	var lower := wrist-elbow
+	var axis := (wrist-shoulder).normalized()
+	var pole := upper.slide(axis).normalized()
+	if pole.is_zero_approx(): pole = Vector3.LEFT
+	var reach := sqrt(upper.length_squared()+lower.length_squared()-2.0*upper.length()*lower.length()*cos(deg_to_rad(174.0)))
+	var target := shoulder+axis*maxf(reach,shoulder.distance_to(wrist))
+	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",target,pole,influence,180.0,true)
+	for joint in ["upperarm_r","lowerarm_r"]:
+		var bone := rig.find_bone(joint)
+		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
+
+# Shoulder-to-wrist pitch for each 60 fps frame of the paired lift.
+const ARM_LIFT_PITCH := [-153.0,-148.0,-142.0,-134.0,-124.0,-113.0,-101.0,-88.0,-74.0,-59.0,-44.0,-29.0,-14.0,0.0,14.0,27.0,39.0,49.0,54.0]
+
 func apply_two_arm_lift(pose: Array, author: RefCounted, age: float, extension: float) -> void:
 	var source := pose.duplicate()
 	for side in ["r","l"]:
 		SpikeArm.blend_arm(source,approach_arm_transition,author,1.0,side)
 	var raise := smootherstep(0.0,0.28,age)
 	var together := smoothstep(0.0,0.14,age)
-	var shared_angle := lerpf(deg_to_rad(-153.0),deg_to_rad(54.0),raise)
+	var last_key := ARM_LIFT_PITCH.size()-1
+	var lift_frame := clampf(age*60.0,0.0,float(last_key))
+	var key := floori(lift_frame)
+	var shared_angle := deg_to_rad(lerpf(ARM_LIFT_PITCH[key],ARM_LIFT_PITCH[mini(key+1,last_key)],lift_frame-key))
 	for side in ["r","l"]:
 		var upper: String = "upperarm_"+side
 		var lower: String = "lowerarm_"+side
