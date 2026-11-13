@@ -1182,7 +1182,7 @@ func begin_recovery(index: int) -> void:
 	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
 	var recovery := {"started":match_clock,"pose":pose}
 	var bump := platforms[index]
-	if is_finite(bump.touch_time) and (bump.fast_back_receive or bump.reach.get("tier",0) == 2) and not bump.low_save.active:
+	if is_finite(bump.touch_time) and (bump.deep_squat or bump.fast_back_receive or bump.reach.get("tier",0) == 2) and not bump.low_save.active:
 		recovery["hold"] = FAST_RECEIVE_HOLD
 		recovery["rise"] = FAST_RECEIVE_RISE
 	if bump.low_save.active:
@@ -1741,6 +1741,14 @@ func tick_receive(delta: float, previous: float) -> void:
 		var holds_lunge: bool = bump.reach.get("tier",0) == 2 and committed.is_finite() and committed.distance_to(bump.to_local(catch_point)) <= bump.contact_radius()
 		# Decide before the dive windup runs out. A viable grounded receive keeps priority.
 		bump.allow_auto_dive = not holds_lunge and (not lunge_in_range or elapsed > cue+0.035)
+	bump.deep_squat = false
+	if cpu_dig and forearm_dig and not backshuffle and not bump.low_save.active:
+		var low_point := path_point(maxf(elapsed,arrival(0.45)))
+		var offset := actor.to_local(low_point)
+		bump.deep_squat = offset.z >= 0.10 and offset.z <= 1.08 and absf(offset.x) <= 0.45 and low_point.y <= 0.55
+		if bump.deep_squat:
+			bump.allow_auto_dive = false
+			bump.knee_bend_depth = maxf(bump.knee_bend_depth,0.62*smoothstep(cue-0.32,cue-0.035,elapsed))
 	if not is_human(index) and frame.to_local(path_point(end)).z > Net.NET_Z: bump.allow_auto_dive = false
 	var was_diving: bool = bump.low_save.active
 	bump.fast_back_receive = backshuffle and technique == 0 and is_dig

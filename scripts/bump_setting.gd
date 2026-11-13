@@ -80,6 +80,7 @@ var contact_check := {}
 var approach_progress := -1.0
 var contact_spread := Vector2.ZERO
 var forearm_setting := false
+var deep_squat := false
 var knee_bend_depth := 0.0
 var ready_knee_bend_depth := 0.0
 var lunge_bend_depth := 0.0
@@ -333,7 +334,7 @@ func apply_knee_bend(time := INF) -> void:
 		knee_poles.append(forward if pole.length_squared() < 0.0004 else pole.normalized())
 		var world_hip := rig.to_global(hip)
 		# Limit the extra drop for a leg already deeply compressed by the directional clip.
-		depth = minf(depth,maxf(0.0,world_hip.y-world_foot.y-0.40))
+		depth = minf(depth,maxf(0.0,world_hip.y-world_foot.y-(0.30 if deep_squat else 0.40)))
 	if depth <= 0.001: return
 	if defensive_hand_dig:
 		var separation := (floor_targets[0]-floor_targets[1]).dot(hips_across)
@@ -486,6 +487,11 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 		if keep_platform_low: lower_rushed_platform()
 		var hold_arms := rushed_cpu_receive and not hand_setting and not low_save.active and not reach.has("custom_clip") and time > 12.0/60.0+0.00001 and time <= 15.0/60.0+0.00001
 		if hold_arms: restore_early_dig_arms()
+		if deep_squat and not hold_arms:
+			var low_ball: Vector3 = path.call(clampf(dig_cue,time,end))
+			var platform := platform_center()
+			var shift := low_ball-platform
+			reach_platform(shift,smoothstep(0.0,0.14,elapsed),0.65,true)
 		var pancake := low_save.active and low_save.pancake
 		var center := to_local(LowSave.palm_center(setter)) if pancake else platform_center()
 		var radius := 0.16 if pancake else (0.33 if face_dig else contact_radius())
