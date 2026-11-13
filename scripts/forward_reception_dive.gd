@@ -137,12 +137,16 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 		ankle = ankle.lerp(trail,maxf(extension,kick)).lerp(foot.origin,step)
 		ankle.y += swing*(0.18 if lead else 0.12)/scale_
 		var descent := smoothstep(0.19,0.28,since_brace)*(1.0-smoothstep(0.37,0.52,since_brace))
-		var airborne := maxf(kick,descent)*(1.0-step)
-		var lateral := 0.09 if side == "l" else -0.09
 		var leg_axis := (ankle-hip).normalized()
 		var dive_pole := leg_axis.cross(Vector3.RIGHT).normalized()
-		var pole := (dive_pole+Vector3.RIGHT*lateral).lerp(dive_pole,airborne)
-		# Keep the bend plane stable until the foot is planted.
+		var ready_hip: Vector3 = author.point(ready,thigh)
+		var ready_axis := (foot.origin-ready_hip).normalized()
+		var ready_bend: Vector3 = (author.point(ready,calf)-ready_hip).slide(ready_axis).normalized()
+		var recovery_bend := Quaternion(ready_axis,leg_axis)*ready_bend
+		# Carry the ready stance's knee direction into the tuck, around the leg axis.
+		var recovery := smoothstep(0.39,0.62,since_brace)
+		var bend_angle := dive_pole.signed_angle_to(recovery_bend,leg_axis)
+		var pole := dive_pole.rotated(leg_axis,bend_angle*recovery)
 		var knee_limit := lerpf(lerpf(180.0,120.0,kick),136.0,descent)
 		author.limb(pose,thigh,calf,foot_name,ankle,pole,1.0,knee_limit)
 		var ready_shin: Vector3 = foot.origin-author.point(ready,calf)
@@ -153,10 +157,6 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 		var toe_pitch := -angle_difference(ready_pitch,posed_pitch)*maxf(extension,kick)*(1.0-step)
 		toe_pitch = lerpf(toe_pitch,0.22*swing,smoothstep(0.42,0.57,since_brace))
 		author.set_world_basis(pose,foot_name,Basis(Vector3.RIGHT,toe_pitch)*foot.basis)
-		var settle := smoothstep(plant_time-0.04,plant_time+0.05,since_brace)*get_up
-		for joint in [thigh,calf,foot_name]:
-			var bone := rig.find_bone(joint)
-			pose[bone].basis = pose[bone].basis.slerp(ready[bone].basis,settle)
 	var brace_pose := pose.duplicate()
 	var grip: Vector3 = (author.point(pose,"hand_l")+author.point(pose,"hand_r"))*0.5
 	var reach := smoothstep(0.11,0.31,time)
