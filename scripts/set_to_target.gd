@@ -170,8 +170,8 @@ func step_rep() -> void:
 	game.elapsed = minf(previous+STEP,game.flight_end())
 	game.ball.global_position = game.path_point(game.elapsed)
 	game.animated.fill(false)
-	game.advance_recoveries(STEP)
 	game.advance_set_jumps(STEP)
+	game.advance_recoveries(STEP)
 	game.advance_ball_spin(STEP)
 	if kind in ["serve","pass"]:
 		game.tick_receive(STEP,previous)
