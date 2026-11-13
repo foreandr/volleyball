@@ -6,6 +6,9 @@ const RECEIVER := 1
 const FEEDER := 2
 const TARGET_RADIUS := 0.90
 const BATCH_REPS := 10
+const ZONES := [1,6,5]
+const ZONE_X := {1:2.8,6:0.0,5:-2.8}
+const SEQUENCE_TYPES := ["Float serve","Spin serve","Attack"]
 const SIM_STEP := 1.0/60.0
 const SOURCE_MIN_Z := -8.5
 const SOURCE_MAX_Z := 17.0
@@ -27,8 +30,8 @@ var planned_reps := 0
 var completed_reps := 0
 var successful_reps := 0
 var batch_active := false
-var random_feeds: Array[String] = []
-var random_button: Button
+var sequence_feeds: Array[Dictionary] = []
+var sequence_button: Button
 var rep_readout: Label
 var batch_button: Button
 var launch_button: Button
@@ -104,8 +107,8 @@ func build_controls(host: Control, parent: VBoxContainer) -> void:
 	batch_button = host.button("Run 10 reps",toggle_batch)
 	batch_button.name = "RunPassingBatch"
 	host.content.add_child(batch_button)
-	random_button = host.button("Random 10",toggle_batch.bind(true))
-	host.content.add_child(random_button)
+	sequence_button = host.button("Run 27 reps",toggle_batch.bind(true))
+	host.content.add_child(sequence_button)
 	rep_readout = host.label("",18)
 	rep_readout.hide()
 	host.content.add_child(rep_readout)
@@ -290,74 +293,67 @@ func start_single() -> void:
 	if batch_active: return
 	start_reps(1)
 
-func toggle_batch(randomize_feeds := false) -> void:
+func toggle_batch(use_sequence := false) -> void:
 	if batch_active:
 		planned_reps = completed_reps+int(running)
 		end_batch()
 		update_rep_readout()
 		return
-	start_reps(BATCH_REPS,randomize_feeds)
+	start_reps(SEQUENCE_TYPES.size()*ZONES.size()*ZONES.size() if use_sequence else BATCH_REPS,use_sequence)
 
 func end_batch() -> void:
 	batch_active = false
-	random_feeds.clear()
+	sequence_feeds.clear()
 	batch_button.text = "Run 10 reps"
-	random_button.text = "Random 10"
+	sequence_button.text = "Run 27 reps"
 	batch_button.disabled = false
-	random_button.disabled = false
+	sequence_button.disabled = false
 	launch_button.disabled = false
 
-func start_reps(count: int, randomize_feeds := false) -> void:
+func start_reps(count: int, use_sequence := false) -> void:
 	pending_sim_time = 0.0
 	planned_reps = count
 	completed_reps = 0
 	successful_reps = 0
 	batch_active = count > 1
-	if randomize_feeds:
-		var kinds: Array[String] = ["Float serve","Spin serve","Free ball","Attack"]
-		while random_feeds.size() < count:
-			kinds.shuffle()
-			random_feeds.append_array(kinds.slice(0,count-random_feeds.size()))
+	if use_sequence:
+		for kind in SEQUENCE_TYPES:
+			for receiver_zone in ZONES:
+				for source_zone in ZONES:
+					sequence_feeds.append({"kind":kind,"receiver_zone":receiver_zone,"source_zone":source_zone})
 	launch_button.disabled = batch_active
-	batch_button.disabled = randomize_feeds
-	random_button.disabled = batch_active and not randomize_feeds
+	batch_button.disabled = use_sequence
+	sequence_button.disabled = batch_active and not use_sequence
 	if batch_active:
-		var stop_button := random_button if randomize_feeds else batch_button
+		var stop_button := sequence_button if use_sequence else batch_button
 		stop_button.text = "Stop after this rep"
 	update_rep_readout()
 	launch_ball()
 
-func random_feed(kind: String) -> Dictionary:
-	for attempt in 64:
-		var from := Vector3(randf_range(-4.3,4.3),randf_range(2.8,3.8),randf_range(5.0,12.7))
-		if kind.ends_with("serve"): from.z = randf_range(11.0,12.7)
-		var landing := Vector3(randf_range(-4.3,4.3),Flight.FLOOR,randf_range(-4.7,3.3))
-		var span := landing-from
-		var pace := randf_range(6.0,10.0)
-		var spin_type := "No spin"
-		if kind == "Float serve": pace = randf_range(9.0,15.0)
-		if kind == "Spin serve":
-			pace = randf_range(13.0,22.0)
-			spin_type = SPINS.pick_random() if randf() < 0.4 else "Topspin"
-			if spin_type == "No spin": spin_type = "Topspin"
-		if kind == "Attack":
-			pace = randf_range(15.0,31.0)
-			spin_type = "Topspin" if randf() < 0.85 else "No spin"
-		if kind == "Free ball" and randf() < 0.45: spin_type = SPINS.pick_random()
-		var rate := randf_range(2.0,13.0) if spin_type != "No spin" else 0.0
-		var forward := span.slide(Vector3.UP).normalized()
-		var time := span.slide(Vector3.UP).length()/pace
-		var air := Flight.air(forward,{"angle":0.0,"speed":pace,"spin":spin_type,"spin_rate":rate})
-		var acceleration: Vector3 = air.acceleration
+func sequence_feed(rep: Dictionary) -> Dictionary:
+	var kind: String = rep.kind
+	var attack := kind == "Attack"
+	var receiver := Vector3(ZONE_X[rep.receiver_zone],start.y,randf_range(-4.0,-1.4))
+	# Source lanes are numbered from the other team's perspective.
+	var from := Vector3(-ZONE_X[rep.source_zone],randf_range(3.15,3.75),randf_range(4.8,6.0) if attack else 12.8)
+	var landing := Vector3(receiver.x+randf_range(-0.9,0.9),Flight.FLOOR,clampf(receiver.z+randf_range(-1.1,1.4),-4.7,3.3))
+	var span := landing-from
+	var pace := randf_range(18.0,29.0) if attack else (randf_range(13.0,21.0) if kind == "Spin serve" else randf_range(9.0,14.0))
+	var spin_type := "Topspin" if kind != "Float serve" else "No spin"
+	var rate := randf_range(3.0,11.0) if spin_type == "Topspin" else 0.0
+	var forward := span.slide(Vector3.UP).normalized()
+	var air := Flight.air(forward,{"angle":0.0,"speed":pace,"spin":spin_type,"spin_rate":rate})
+	var acceleration: Vector3 = air.acceleration
+	var time := span.slide(Vector3.UP).length()/pace
+	# Lengthen the flight only as much as needed to clear the tape.
+	while true:
 		var incoming := span/time-acceleration*0.5*time
 		var path := func(t: float) -> Vector3: return from+incoming*t+acceleration*0.5*t*t
-		if not Net.first_hit(path,0.0,time).is_empty(): continue
-		return {"source":from,"incoming":incoming,"acceleration":acceleration,
-			"spin_axis":air.spin_axis,"spin_rate":air.spin_rate,"spin_type":spin_type}
-	# A high feed from the far half always clears the net.
-	var fallback := Vector3(0,3.2,11.0)
-	return {"source":fallback,"incoming":Vector3(0,6.285,-6.5),"acceleration":Vector3.DOWN*Flight.GRAVITY,
-		"spin_axis":Vector3.ZERO,"spin_rate":0.0,"spin_type":"No spin"}
+		if Net.first_hit(path,0.0,time).is_empty():
+			return {"receiver":receiver,"source":from,"incoming":incoming,"acceleration":acceleration,
+				"spin_axis":air.spin_axis,"spin_rate":air.spin_rate,"spin_type":spin_type}
+		time *= 1.1
+	return {}
 
 func update_rep_readout() -> void:
 	rep_readout.show()
@@ -368,10 +364,11 @@ func launch_ball() -> void:
 	game.begin_point()
 	game.phase = game.Phase.LIVE
 	game.serve.ball.hide()
-	var randomized := not random_feeds.is_empty()
-	var kind: String = random_feeds.pop_front() if randomized else ""
-	var plan := random_feed(kind) if randomized else feed()
-	var receiver := Vector3(randf_range(-4.3,4.3),start.y,randf_range(-4.7,3.3)) if randomized else start
+	var randomized := not sequence_feeds.is_empty()
+	var rep: Dictionary = sequence_feeds.pop_front() if randomized else {}
+	var kind: String = rep.get("kind","")
+	var plan := sequence_feed(rep) if randomized else feed()
+	var receiver: Vector3 = plan.receiver if randomized else start
 	var ball_source: Vector3 = plan.source if randomized else source
 	game.players[RECEIVER].global_position = receiver
 	game.drill_pass_target = target
@@ -380,10 +377,10 @@ func launch_ball() -> void:
 	trajectory.hide()
 	game.update_player_guide()
 	game.score_label.hide()
-	game.info.text = kind if randomized else "Ball in flight"
+	game.info.text = "%s · Receive %d · From %d" % [kind,rep.receiver_zone,rep.source_zone] if randomized else "Ball in flight"
 	var motion: Vector3 = plan.incoming
 	var rate: float = plan.spin_rate/TAU if not plan.spin_axis.is_zero_approx() else 0.0
-	var flight_kind := "serve" if kind.ends_with("serve") else ("free" if kind == "Free ball" else "spike")
+	var flight_kind := "serve" if kind.ends_with("serve") else "spike"
 	game.launch(ball_source,motion,flight_kind,FEEDER,rate,-1,Vector3.ZERO,plan.acceleration,plan.spin_axis*rate)
 	game.receiving_team = 0
 	game.cpu_choice = RECEIVER
@@ -398,7 +395,7 @@ func launch_ball() -> void:
 	finish_delay = -1.0
 	game.trace.write("passing_drill_feed",game.match_clock,{
 		"rep":completed_reps+1,"receiver":receiver,"source":ball_source,"target":target,
-		"feed_type":kind,"direction":rad_to_deg(atan2(motion.x,-motion.z)),"angle":rad_to_deg(atan2(-motion.y,motion.slide(Vector3.UP).length())),"speed":motion.length(),"spin":plan.get("spin_type",spin),
+		"feed_type":kind,"receiver_zone":rep.get("receiver_zone"),"source_zone":rep.get("source_zone"),"direction":rad_to_deg(atan2(motion.x,-motion.z)),"angle":rad_to_deg(atan2(-motion.y,motion.slide(Vector3.UP).length())),"speed":motion.length(),"spin":plan.get("spin_type",spin),
 		"spin_rate":rate,"passing_skill":game.passing_skill
 	},true)
 	show_landing(game.path_point(game.flight_end()))
