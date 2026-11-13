@@ -1744,7 +1744,9 @@ func tick_receive(delta: float, previous: float) -> void:
 				var reach_tier: int = Bump.Timing.practice_reach_tier(reach_offset)
 				if bump.reach.get("tier",0) == 2 or (reach_tier == 2 and cue >= 0.40):
 					target = actor.global_position
-			move_cpu(index,target,delta,speed,face,not square_receive and not backshuffle and not plant and (is_dig or cpu_setting or free_ball or flight_kind == "serve"),(run_to_drop or turn_for_save or lateral_run) and not plant and not backshuffle,18.0 if lateral_run else 12.5)
+			var set_travel := (target-actor.global_position).slide(Vector3.UP).length()
+			var setting_run := cpu_setting and technique != 0 and lead > 0.24 and set_travel > 0.85
+			move_cpu(index,target,delta,speed,face,not square_receive and not backshuffle and not plant and (is_dig or cpu_setting or free_ball or flight_kind == "serve"),(run_to_drop or turn_for_save or lateral_run or setting_run) and not plant and not backshuffle,18.0 if lateral_run else 12.5)
 			bump.low_save_approach_velocity = (actor.position-before_move)/maxf(delta,0.001)
 			set_jump_plant_gap = (target-actor.global_position).slide(Vector3.UP).length()
 		var prep := set_jump_rise+0.16 if technique == 2 else (0.40 if cpu_dig else (0.18 if cpu_setting and technique == 0 else 0.27))
