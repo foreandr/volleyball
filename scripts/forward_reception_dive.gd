@@ -208,6 +208,11 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 			var shoulder_height: float = (author.point(pose,"upperarm_l").y+author.point(pose,"upperarm_r").y)*0.5
 			head_height = minf(head_height-(0.09 if track_platform else 0.17),shoulder_height-(0.04 if track_platform else 0.12))
 		target.y = clampf(target.y,0.13,maxf(0.13,head_height))
+		if after_release > 0.0:
+			var floor_target := rig.to_local(Vector3(ball_point.x,0.085,ball_point.z))
+			var shoulders: Vector3 = (author.point(pose,"upperarm_l")+author.point(pose,"upperarm_r"))*0.5
+			floor_target.z = maxf(floor_target.z,shoulders.z+0.34/scale_)
+			target = target.lerp(floor_target,smoothstep(0.0,0.18,after_release))
 		var entry := pose.duplicate()
 		for pass_index in 3:
 			if pass_index > 0: pose = entry.duplicate()
