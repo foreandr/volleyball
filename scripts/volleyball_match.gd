@@ -168,6 +168,9 @@ var serve_vertical := 30.0
 var live_speed := 1.0
 var drill_pass_target := Vector3.INF
 var drill_set_pin := Vector3.INF
+var drill_force_forearm_serve_receive := false
+var drill_spike_target := Vector3.INF
+var drill_spike_pace := 1.0
 var drill_set_apex := INF
 var drill_feed_acceleration := Vector3.INF
 var attack_lift_lean := 66.0
@@ -655,8 +658,10 @@ func launch(point: Vector3, motion: Vector3, kind: String, from: int, spin_rate 
 	if hitter >= 0:
 		var side := team(hitter)
 		var frame := frames[side]
-		var shot := choose_shot(hitter)
-		set_cpu_swing_power(hitter)
+		var shot := frame.to_local(drill_spike_target) if drill_spike_target.is_finite() else choose_shot(hitter)
+		if drill_spike_target.is_finite():
+			attackers[side].spike_strength = drill_spike_pace
+		else: set_cpu_swing_power(hitter)
 		attackers[side].start_set(players[hitter],frame.to_local(origin),frame.global_basis.inverse()*velocity,frame.to_local(set_pin),shot,0.0,is_human(hitter) and space_held)
 	ball.global_position = point
 	ball.show()
@@ -821,6 +826,10 @@ func on_spike(actor: Node3D, point: Vector3, motion: Vector3, spin_rate: float) 
 	var index := players.find(actor)
 	if index < 0 or not can_touch(index): return
 	play_touch(true)
+	if drill_spike_target.is_finite():
+		stroke = "Spike"
+		launch(point,motion,"spike",index,spin_rate)
+		return
 	stroke = "Second-ball spike" if cpu_second_spike and overpass_flight != flight_number else "Spike"
 	if not is_human(index):
 		var frame := frames[team(index)]
@@ -1640,7 +1649,8 @@ func tick_receive(delta: float, previous: float) -> void:
 	var frame := frames[team(index)]
 	var bump := platforms[index]
 	var technique := requested if is_human(index) else cpu_technique
-	if not is_human(index) and (defensive_ball() or flight_kind == "serve") and is_finite(bump.pressed_at) and not is_finite(bump.touch_time) and not bump.low_save.active and elapsed-dig_switch_at > 0.16:
+	var force_forearms := drill_force_forearm_serve_receive and flight_kind == "serve"
+	if not force_forearms and not is_human(index) and (defensive_ball() or flight_kind == "serve") and is_finite(bump.pressed_at) and not is_finite(bump.touch_time) and not bump.low_save.active and elapsed-dig_switch_at > 0.16:
 		var hands_at := arrival(hand_contact_height(1))
 		var hands_lead := hands_at-elapsed
 		var alternate := technique
@@ -1658,7 +1668,7 @@ func tick_receive(delta: float, previous: float) -> void:
 			queue_receive(index,alternate)
 	var cpu_setting := not is_human(index) and cpu_is_setting(index)
 	var free_ball := not is_human(index) and flight_kind == "set" and expected_hitter < 0
-	if not is_human(index) and not is_finite(bump.pressed_at):
+	if not force_forearms and not is_human(index) and not is_finite(bump.pressed_at):
 		var preferred := technique
 		if cpu_setting and technique < 2 and overhead_available(index,2):
 			preferred = 2

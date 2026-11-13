@@ -57,7 +57,7 @@ func _ready() -> void:
 	if session.source.has_meta("editor_start"):
 		preview_player.set_height_cm(float(session.source.get_meta("editor_height_cm",Profile.DEFAULTS.height_cm)))
 		preview_player.position = session.source.get_meta("editor_start")
-		preview_player.rotation.y = 0.0
+		preview_player.rotation.y = float(session.source.get_meta("editor_yaw",0.0))
 		if spike:
 			preview_player.position += ATTACK_EDITOR_OFFSET
 			editor_feed.start += ATTACK_EDITOR_OFFSET
@@ -217,12 +217,12 @@ func build_controls(controls: VBoxContainer) -> void:
 func refresh_ball_angle() -> void:
 	ball_preview.configure(preview_player,session.source,session)
 	if is_instance_valid(reception_controls): reception_controls.show_result(session.source)
-	right_panel.visible = ball_preview.active and not session.source.has_meta("editor_feed")
-	if ball_preview.active:
+	right_panel.visible = ball_preview.active and not session.source.has_meta("editor_feed") and not session.source.has_meta("editor_ball_frames")
+	if ball_preview.active and not session.source.has_meta("editor_ball_frames"):
 		angle_control.sync_feed(ball_preview.feed_info)
 		angle_control.sync_output(ball_preview)
-	angle_control.visible = ball_preview.active
-	if ball_preview.active: angle_control.display_result(float(session.source.get_meta("desired_output_angle",ball_preview.output_angle())),ball_preview.output_angle(),Flight.distance(ball_preview.impact_point,ball_preview.outgoing))
+	angle_control.visible = ball_preview.active and not session.source.has_meta("editor_ball_frames")
+	if angle_control.visible: angle_control.display_result(float(session.source.get_meta("desired_output_angle",ball_preview.output_angle())),ball_preview.output_angle(),Flight.distance(ball_preview.impact_point,ball_preview.outgoing))
 
 func apply_output_angle(value: float) -> void:
 	if session == null or not session.source.has_meta("contact_time") or session.source.has_meta("editor_feed"): return
@@ -299,7 +299,7 @@ func _process(delta: float) -> void:
 	if is_instance_valid(ball_preview):
 		ball_preview.tick((playhead if playing else float(frame))/session.frame_rate,playing)
 		refresh_contact_frame()
-	if is_instance_valid(angle_control) and ball_preview.active: angle_control.set_actual(ball_preview.output_angle(),Flight.distance(ball_preview.impact_point,ball_preview.outgoing))
+	if is_instance_valid(angle_control) and angle_control.visible: angle_control.set_actual(ball_preview.output_angle(),Flight.distance(ball_preview.impact_point,ball_preview.outgoing))
 	if is_instance_valid(overlay): overlay.queue_redraw()
 
 func select_group(group: String) -> void:
@@ -563,13 +563,13 @@ func save_copy() -> void:
 	StorySession.edit_animation = null
 	StorySession.animation_draft.clear()
 	StorySession.animation_return = {"category":saved.category,"type":saved.type,"id":saved.id}
-	get_tree().change_scene_to_file("res://scenes/drills.tscn" if StorySession.return_to_set_to_target else "res://scenes/story_animations.tscn")
+	get_tree().change_scene_to_file("res://scenes/drills.tscn" if not StorySession.return_to_drill.is_empty() else "res://scenes/story_animations.tscn")
 
 func open_menu() -> void:
 	if session != null:
 		StorySession.animation_draft = {"source":entry.id,"animation":session.source,"edits":session.edits.duplicate(true),"position_edits":session.position_edits.duplicate(true),"name":copy_name.text,"frame":frame,"group":selected_group}
 	StorySession.animation_return = {"category":entry.category,"type":entry.type,"id":entry.id}
-	get_tree().change_scene_to_file("res://scenes/drills.tscn" if StorySession.return_to_set_to_target else "res://scenes/story_animations.tscn")
+	get_tree().change_scene_to_file("res://scenes/drills.tscn" if not StorySession.return_to_drill.is_empty() else "res://scenes/story_animations.tscn")
 
 func handle_keyboard(event: InputEventKey) -> void:
 	if event.ctrl_pressed and event.keycode == KEY_Z:

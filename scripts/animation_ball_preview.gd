@@ -158,7 +158,10 @@ func configure(player: Node3D, animation: Animation, edits: RefCounted = null) -
 		var path := NodePath("Armature/Skeleton3D:"+rig.get_bone_name(bone))
 		positions[bone] = clip.find_track(path,Animation.TYPE_POSITION_3D)
 		rotations[bone] = clip.find_track(path,Animation.TYPE_ROTATION_3D)
-	if active: recalculate()
+	if clip.has_meta("editor_ball_frames"):
+		feed_duration = contact_time
+		missed = false
+	elif active: recalculate()
 	else: stop()
 
 func stop() -> void:
@@ -571,6 +574,7 @@ func animation_time(time: float) -> float:
 	return clampf(time,0,clip.length) if incoming_net.is_empty() else 0.0
 
 func cycle_end() -> float:
+	if clip.has_meta("editor_ball_frames"): return clip.length
 	if not recovery.is_empty():
 		var last: float = recovery_net.end_time if not recovery_net.is_empty() else recovery.end_time
 		return maxf(clip.length,contact_time+last+0.5)
@@ -675,6 +679,14 @@ func update_guide() -> void:
 	guide.visible = active
 
 func tick(time: float, audible: bool) -> void:
+	if clip != null and clip.has_meta("editor_ball_frames"):
+		var samples: Array = clip.get_meta("editor_ball_frames")
+		var sample := clampf(time*60.0,0.0,samples.size()-1)
+		var first := floori(sample)
+		global_transform = samples[first].interpolate_with(samples[mini(first+1,samples.size()-1)],sample-first)
+		ball.show()
+		show()
+		return
 	if not active:
 		hide()
 		if is_instance_valid(guide): guide.hide()

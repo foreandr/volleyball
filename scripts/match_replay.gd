@@ -139,7 +139,7 @@ func open_drill_rep(match_: Node3D, history: Array, rep: int, autoplay: bool) ->
 	if not autoplay: seek(match_,duration())
 	return true
 
-func bake_actor(match_: Node3D, actor_index: int, title: String) -> Animation:
+func bake_actor(match_: Node3D, actor_index: int, title: String, contact_frame := -1, include_ball := false) -> Animation:
 	var actor: Node3D = match_.players[actor_index]
 	var start: Transform3D = frames[0].actors[actor_index].root
 	var rig_to_actor: Transform3D = actor.global_transform.affine_inverse()*actor.skeleton.global_transform
@@ -151,9 +151,16 @@ func bake_actor(match_: Node3D, actor_index: int, title: String) -> Animation:
 		pose[root_bone] = rig_to_actor.affine_inverse()*start.affine_inverse()*capture.root*rig_to_actor*pose[root_bone]
 		return pose
 	var clip: Animation = actor.get_pose_author().bake({"name":title,"duration":duration(),
-		"contact_time":float(frames[index].time)-float(frames[0].time)},sample)
+		"contact_time":float(frames[index if contact_frame < 0 else contact_frame].time)-float(frames[0].time)},sample)
 	clip.loop_mode = Animation.LOOP_NONE
 	clip.set_meta("editor_group","Both Arms")
 	clip.set_meta("editor_start",actor.get_parent().to_global(start.origin))
 	clip.set_meta("editor_initial_frame",index)
+	if include_ball:
+		var world_start: Transform3D = actor.get_parent().global_transform*start
+		clip.set_meta("editor_yaw",world_start.basis.get_euler().y)
+		clip.set_meta("editor_height_cm",actor.height_cm)
+		var samples: Array[Transform3D] = []
+		for frame in frames: samples.append(frame.ball)
+		clip.set_meta("editor_ball_frames",samples)
 	return clip

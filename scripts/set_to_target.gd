@@ -43,9 +43,10 @@ var repeating := false
 var next_rep := -1.0
 var pass_preview: MultiMeshInstance3D
 var feed_preview: MultiMeshInstance3D
+var contact_frames: Dictionary
 
 func configure(status: Label) -> void:
-	var setup := StorySession.load_drill_setup(SETUP_KEY)
+	var setup := StorySession.load_drill_setup(setup_key())
 	passer_start = setup.get("passer",passer_start)
 	setter_start = setup.get("setter",setter_start)
 	feed_landing = setup.get("feed",feed_landing)
@@ -62,7 +63,7 @@ func configure(status: Label) -> void:
 	var score := Label.new()
 	add_child(score)
 	score.hide()
-	game.configure(setter,score,status,"Set to Target",2,false,false)
+	game.configure(setter,score,status,drill_title(),2,false,false)
 	game.set_ball_sound(false)
 	game.passing_skill = 100.0
 	game.setting_skill = 100.0
@@ -70,8 +71,9 @@ func configure(status: Label) -> void:
 	trail = make_dots(Color("3bafff"))
 	pass_preview = make_dots(Color("68dfbb"))
 	feed_preview = make_dots(Color("ffa95b"))
-	for key in ["feed","pass","set"]:
-		var marker := make_dots({"feed":Color("ffa95b"),"pass":Color("68dfbb"),"set":Color("3bafff")}[key])
+	var colors := target_colors()
+	for key in colors:
+		var marker := make_dots(colors[key])
 		marker.multimesh.instance_count = 16
 		markers[key] = marker
 	reset_players()
@@ -80,12 +82,24 @@ func configure(status: Label) -> void:
 	status.text = "Ready"
 	refresh_setup()
 
+func setup_key() -> String:
+	return SETUP_KEY
+
+func drill_title() -> String:
+	return "Set to Target"
+
+func target_colors() -> Dictionary:
+	return {"feed":Color("ffa95b"),"pass":Color("68dfbb"),"set":Color("3bafff")}
+
+func player_slots() -> Dictionary:
+	return {"setter":0,"passer":1}
+
 func setup_snapshot() -> Dictionary:
 	return {"passer":passer_start,"setter":setter_start,"feed":feed_landing,"pass":pass_target,
 		"set":set_target,"set_apex":set_apex,"feed_duration":feed_duration,"live_speed":live_speed}
 
 func save_setup() -> void:
-	StorySession.save_drill_setup(SETUP_KEY,setup_snapshot())
+	StorySession.save_drill_setup(setup_key(),setup_snapshot())
 
 func reset_players() -> void:
 	game.begin_point()
@@ -158,17 +172,28 @@ func launch_rep() -> void:
 	game.drill_set_pin = target
 	markers.set.position = Vector3(target.x,0.055,target.z)
 	game.drill_set_apex = set_apex
-	game.launch(feed_origin(),feed_motion(),"serve",2,0.0,-1,Vector3.ZERO,Vector3.DOWN*Flight.GRAVITY)
-	game.receiving_team = 0
-	game.cpu_choice = 1
-	game.cpu_technique = 0
-	set_status("Float feed")
+	start_feed()
 	running = true
 	var feed := setup_snapshot()
 	feed["set"] = target
 	game.trace.write("setting_drill_feed",game.match_clock,feed,true)
 	game.replay.record(game)
 	game.replay.current[0]["set_pin"] = target
+	contact_frames = {}
+	game.replay.current[0]["contacts"] = contact_frames
+
+func start_feed() -> void:
+	game.launch(feed_origin(),feed_motion(),"serve",2,0.0,-1,Vector3.ZERO,Vector3.DOWN*Flight.GRAVITY)
+	game.receiving_team = 0
+	game.cpu_choice = 1
+	game.cpu_technique = 0
+	set_status("Float feed")
+
+func step_serve() -> bool:
+	return false
+
+func step_attack(_kind: String) -> void:
+	pass
 
 func _physics_process(delta: float) -> void:
 	if game.replay.active:
@@ -189,37 +214,52 @@ func _physics_process(delta: float) -> void:
 
 func step_rep() -> void:
 	game.match_clock += STEP
+	game.animated.fill(false)
+	if step_serve():
+		game.replay.record(game)
+		return
 	var previous: float = game.elapsed
 	var kind: String = game.flight_kind
 	game.elapsed = minf(previous+STEP,game.flight_end())
 	game.ball.global_position = game.path_point(game.elapsed)
-	game.animated.fill(false)
 	game.advance_set_jumps(STEP)
 	game.advance_recoveries(STEP)
 	game.advance_ball_spin(STEP)
+	step_attack(kind)
 	if kind in ["serve","pass"]:
 		game.tick_receive(STEP,previous)
 		if game.flight_kind == "pass" and kind == "serve":
 			game.cpu_choice = 0
 			game.cpu_technique = 1
+			contact_frames["passer"] = game.replay.current.size()
 			set_status("Pass to setter")
 		elif game.flight_kind == "set":
+			contact_frames["setter"] = game.replay.current.size()
 			show_set_path()
 			set_status("Set to target")
 	game.advance_idle_players(STEP)
-	if game.elapsed >= game.flight_end():
+	if game.elapsed >= game.flight_end() and finish_rep():
 		running = false
 		game.phase = game.Phase.FINISHED
 		if repeating or remaining > 0: next_rep = 0.7
-		if kind == "serve": set_status("Missed feed")
-		elif kind == "pass": set_status("Missed set")
-		var success: bool = kind == "set" and game.net_hit.is_empty()
+		if game.flight_kind == "serve": set_status("Missed feed")
+		elif game.flight_kind == "pass": set_status("Missed set")
+		var success := rep_success(game.flight_kind)
 		if batch_rep > 0:
 			completed_reps += 1
 			successful_reps += int(success)
-			game.info.text += "\n%d/%d sets completed" % [successful_reps,completed_reps]
+			game.info.text += "\n%d/%d %s completed" % [successful_reps,completed_reps,result_label()]
 		game.trace.write("setting_drill_result",game.match_clock,{"rep":batch_rep,"set_completed":success,"result":game.info.text},true)
 	game.replay.record(game)
+
+func finish_rep() -> bool:
+	return true
+
+func rep_success(kind: String) -> bool:
+	return kind == "set" and game.net_hit.is_empty()
+
+func result_label() -> String:
+	return "sets"
 
 func set_status(message: String) -> void:
 	game.info.text = "%d/%d · %s" % [batch_rep,batch_size,message] if batch_rep > 0 else message
@@ -247,22 +287,28 @@ func draw_path(node: MultiMeshInstance3D, path: Callable, duration: float) -> vo
 	node.show()
 
 func show_set_path() -> void:
-	draw_path(trail,game.path_point,game.flight_end())
+	record_path(trail,"set_path")
+
+func record_path(node: MultiMeshInstance3D, key: String) -> void:
+	draw_path(node,game.path_point,game.flight_end())
 	var points := PackedVector3Array()
-	for index in trail.multimesh.instance_count:
-		points.append(trail.multimesh.get_instance_transform(index).origin)
-	game.replay.current[0]["set_path"] = points
+	for index in node.multimesh.instance_count:
+		points.append(node.multimesh.get_instance_transform(index).origin)
+	game.replay.current[0][key] = points
 
 func show_rep_target(frames: Array[Dictionary]) -> void:
 	if frames.is_empty(): return
 	var pin: Vector3 = frames[0].get("set_pin",set_target)
 	markers.set.position = Vector3(pin.x,0.055,pin.z)
-	var points: PackedVector3Array = frames[0].get("set_path",PackedVector3Array())
-	trail.visible = not points.is_empty()
+	restore_path(trail,frames[0],"set_path")
+
+func restore_path(node: MultiMeshInstance3D, metadata: Dictionary, key: String) -> void:
+	var points: PackedVector3Array = metadata.get(key,PackedVector3Array())
+	node.visible = not points.is_empty()
 	if points.is_empty(): return
-	trail.multimesh.instance_count = points.size()
+	node.multimesh.instance_count = points.size()
 	for index in points.size():
-		trail.multimesh.set_instance_transform(index,Transform3D(Basis.IDENTITY,points[index]))
+		node.multimesh.set_instance_transform(index,Transform3D(Basis.IDENTITY,points[index]))
 
 func close_review() -> void:
 	game.replay.toggle(game,true)
@@ -276,10 +322,9 @@ func refresh_setup() -> void:
 	game.players[0].position = setter_start
 	game.players[1].position = passer_start
 	game.ball.global_position = feed_origin()
-	var points := {"feed":feed_landing,"pass":pass_target,"set":set_target}
-	for key in points:
+	for key in markers:
 		var marker: MultiMeshInstance3D = markers[key]
-		var point: Vector3 = points[key]
+		var point := setup_position(key)
 		marker.position = Vector3(point.x,0.055,point.z)
 		for index in 16:
 			var angle := TAU*index/16.0
@@ -289,15 +334,18 @@ func refresh_setup() -> void:
 	var arrival := (vertical+sqrt(maxf(0.0,vertical*vertical+2.0*Flight.GRAVITY*(launch.y-pass_target.y))))/Flight.GRAVITY
 	var motion := (pass_target-launch).slide(Vector3.UP)/arrival+Vector3.UP*vertical
 	show_preview(pass_preview,launch,motion,Flight.landing_time(launch,motion))
-	show_preview(feed_preview,feed_origin(),feed_motion(),feed_duration)
+	show_feed_preview()
 	var contact := Vector3(pass_target.x,2.0,pass_target.z)
 	var set_motion: Vector3 = game.attackers[0].set_toward_pin(contact,set_target,set_apex,game.attackers[0].set_contact_height(set_apex))
 	show_preview(trail,contact,set_motion,Flight.landing_time(contact,set_motion))
 
+func show_feed_preview() -> void:
+	show_preview(feed_preview,feed_origin(),feed_motion(),feed_duration)
+
 func handle_setup_input(event: InputEvent, camera: Camera3D) -> bool:
 	if not event is InputEventMouse: return false
 	if game.replay.active: return handle_replay_drag(event,camera)
-	if running: return false
+	if running or next_rep >= 0.0: return false
 	var mouse: Vector2 = event.position
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		dragging = event.pressed
@@ -306,9 +354,9 @@ func handle_setup_input(event: InputEvent, camera: Camera3D) -> bool:
 			return not selected.is_empty()
 		selected = ""
 		var distance := 28.0
-		for key in ["passer","setter","feed","pass","set"]:
+		for key in player_slots().keys()+markers.keys():
 			var point := setup_position(key)
-			if key in ["passer","setter"]: point.y += 0.78
+			if player_slots().has(key): point.y += 0.78
 			if camera.is_position_behind(point): continue
 			var gap := camera.unproject_position(point).distance_to(mouse)
 			if gap < distance:
@@ -329,13 +377,16 @@ func handle_setup_input(event: InputEvent, camera: Camera3D) -> bool:
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP: arc = 0.15
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN: arc = -0.15
 	if is_zero_approx(arc): return false
+	adjust_arc(arc)
+	refresh_setup()
+	save_setup()
+	return true
+
+func adjust_arc(arc: float) -> void:
 	if selected in ["setter","set"]: set_apex = clampf(set_apex+arc,3.35,7.0)
 	elif selected == "feed":
 		feed_duration = clampf(feed_duration+arc*0.12,0.70,1.35)
 	else: pass_target.y = clampf(pass_target.y+arc,2.3,6.0)
-	refresh_setup()
-	save_setup()
-	return true
 
 func court_hit(camera: Camera3D, mouse: Vector2) -> Variant:
 	return Plane(Vector3.UP,0.055).intersects_ray(camera.project_ray_origin(mouse),camera.project_ray_normal(mouse))
@@ -367,7 +418,7 @@ func handle_replay_drag(event: InputEvent, camera: Camera3D) -> bool:
 		replay_drag = -2
 		if not event.pressed: return was_dragging
 		var closest := 30.0
-		for index in [-1,0,1]:
+		for index in [-1]+player_slots().values():
 			if index == -1 and not game.ball.visible: continue
 			var point: Vector3 = game.ball.global_position if index == -1 else game.players[index].global_position+Vector3.UP*0.78
 			if camera.is_position_behind(point): continue
@@ -402,12 +453,16 @@ func open_review(index: int, autoplay := false) -> void:
 		show_rep_target(game.replay.frames)
 
 func edit_setter() -> void:
+	edit_role(0,"Setting replay","Setting","Overhead","setter")
+
+func edit_role(actor: int, title: String, category: String, type: String, role: String) -> void:
 	var replay = game.replay
 	if not replay.active: return
 	replay.playing = false
 	save_setup()
-	StorySession.return_to_set_to_target = true
-	StorySession.edit_animation = replay.bake_actor(game,0,"Setting replay")
-	StorySession.edit_entry = {"id":"setting_replay_edit","name":"Setting replay","category":"Setting","type":"Overhead"}
+	StorySession.return_to_drill = drill_title()
+	var contacts: Dictionary = replay.frames[0].get("contacts",{})
+	StorySession.edit_animation = replay.bake_actor(game,actor,title,contacts.get(role,replay.index),setup_key() == "Butterfly")
+	StorySession.edit_entry = {"id":setup_key()+"_"+title,"name":title,"category":category,"type":type}
 	StorySession.animation_draft.clear()
 	get_tree().change_scene_to_file("res://scenes/animation_editor.tscn")

@@ -3,7 +3,7 @@ extends Control
 const CATEGORIES := {
 	"Passing": [{"title":"Pass to Target","scene":"res://scenes/story_animations.tscn"}],
 	"Setting": [{"title":"Set to Target"}],
-	"Attacking": [],
+	"Attacking": [{"title":"Butterfly"}],
 	"Serving": [],
 	"Digging": [],
 }
@@ -61,10 +61,11 @@ func _ready() -> void:
 	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	list.add_theme_constant_override("separation",8)
 	scroll.add_child(list)
-	if StorySession.return_to_set_to_target:
-		StorySession.return_to_set_to_target = false
-		show_category("Setting")
-		open_setting_stage("Set to Target")
+	if not StorySession.return_to_drill.is_empty():
+		var drill := StorySession.return_to_drill
+		StorySession.return_to_drill = ""
+		show_category("Attacking" if drill == "Butterfly" else "Setting")
+		open_setting_stage(drill)
 	elif StorySession.drill_menu_category.is_empty():
 		show_categories()
 	else:
@@ -132,12 +133,13 @@ func open_setting_stage(title: String) -> void:
 	setting_stage.add_child(viewport)
 	preload("res://scripts/preview_court.gd").add_preview_lighting(viewport)
 	viewport.add_child(preload("res://scripts/preview_court.gd").new())
-	var drill := preload("res://scripts/set_to_target.gd").new()
+	var butterfly := title == "Butterfly"
+	var drill: Node3D = preload("res://scripts/butterfly_drill.gd").new() if butterfly else preload("res://scripts/set_to_target.gd").new()
 	target_drill = drill
 	viewport.add_child(drill)
 	drill.configure(status)
 	var launch := Button.new()
-	launch.text = "Launch float feed"
+	launch.text = "Underhand serve" if butterfly else "Launch float feed"
 	launch.custom_minimum_size.y = 48
 	launch.pressed.connect(drill.launch_single)
 	left.add_child(launch)
@@ -148,7 +150,7 @@ func open_setting_stage(title: String) -> void:
 	repeat.pressed.connect(drill.toggle_repeat)
 	left.add_child(repeat)
 	var ten := Button.new()
-	ten.text = "Serve 10 times"
+	ten.text = "Run 10 reps" if butterfly else "Serve 10 times"
 	ten.custom_minimum_size.y = 38
 	ten.pressed.connect(drill.launch_ten)
 	left.add_child(ten)
@@ -160,6 +162,11 @@ func open_setting_stage(title: String) -> void:
 	add_speed(left,"Slow motion",drill.live_speed,func(value: float): drill.live_speed = value)
 	var slow_motion := left.get_child(left.get_child_count()-1) as HSlider
 	slow_motion.value_changed.connect(func(_value: float): drill.save_setup())
+	if butterfly:
+		add_drill_value(left,"Serve apex",3.5,9.0,"serve_apex")
+		add_drill_value(left,"Pass height",2.3,6.0,"pass_height")
+		add_drill_value(left,"Set apex",3.35,7.0,"set_apex")
+		add_drill_value(left,"Spike pace",0.5,1.4,"spike_pace")
 	build_review(right)
 	for button in [launch,ten,sweep]:
 		button.pressed.connect(func(): repeat.set_pressed_no_signal(false))
@@ -223,6 +230,23 @@ func add_speed(panel: VBoxContainer, title: String, initial: float, apply: Calla
 	slider.value_changed.connect(update)
 	update.call(initial)
 
+func add_drill_value(panel: VBoxContainer, title: String, minimum: float, maximum: float, key: String) -> void:
+	var drill := target_drill
+	var caption := Label.new()
+	panel.add_child(caption)
+	var slider := HSlider.new()
+	slider.min_value = minimum
+	slider.max_value = maximum
+	slider.step = 0.05
+	panel.add_child(slider)
+	var sync := func():
+		var value: float = drill.trajectory_value(key)
+		slider.set_value_no_signal(value)
+		caption.text = "%s %.2f%s" % [title,value,"×" if key == "spike_pace" else " m"]
+	drill.trajectory_changed.connect(sync)
+	slider.value_changed.connect(func(value: float): drill.set_trajectory_value(key,value))
+	sync.call()
+
 func review_control(panel: Container, title: String, action: Callable) -> Button:
 	var button := Button.new()
 	button.text = title
@@ -259,6 +283,10 @@ func build_review(panel: VBoxContainer) -> void:
 	next_rep = review_control(reps,"Next rep",func(): target_drill.open_review(target_drill.review_index+1,true))
 	add_speed(replay_panel,"Replay speed",replay.speed,func(value: float): replay.speed = value)
 	review_control(replay_panel,"Edit setter",target_drill.edit_setter)
+	if target_drill.drill_title() == "Butterfly":
+		review_control(replay_panel,"Edit server",target_drill.edit_role.bind(2,"Butterfly serve","Serving","Underhand","server"))
+		review_control(replay_panel,"Edit passer",target_drill.edit_role.bind(1,"Butterfly pass","Forearm reception","Forearm","passer"))
+		review_control(replay_panel,"Edit hitter",target_drill.edit_role.bind(1,"Butterfly spike","Attacking","Line Hit","hitter"))
 	update_review()
 
 func toggle_review() -> void:
