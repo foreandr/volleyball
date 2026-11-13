@@ -39,7 +39,7 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 	var horizontal_push := local_push.slide(Vector3.UP)
 	var backset := smoothstep(0.0,0.65,-horizontal_push.normalized().z)
 	if set_extension > 0.0 and backset > 0.0:
-		var arch := deg_to_rad(40.0)*backset*smoothstep(0.0,1.0,set_extension)*blend
+		var arch := deg_to_rad(48.0)*backset*set_extension*blend
 		author.rotate_world(pose,"spine_01",Vector3.RIGHT,-arch*0.45)
 		author.rotate_world(pose,"spine_02",Vector3.RIGHT,-arch*0.55)
 	var turn := 0.0

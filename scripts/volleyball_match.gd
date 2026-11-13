@@ -1204,7 +1204,7 @@ func begin_recovery(index: int) -> void:
 		recovery["rise"] = squat_rise_duration if bump.knee_bend_depth > 0.001 else FAST_RECEIVE_RISE
 	if bump.hand_setting and not bump.defensive_hand_dig and is_finite(bump.release_time):
 		recovery["hold"] = 0.08
-		recovery["rise"] = 0.48
+		recovery["rise"] = 0.65
 	if bump.low_save.active:
 		recovery["save"] = bump.low_save
 		recovery["save_time"] = elapsed
