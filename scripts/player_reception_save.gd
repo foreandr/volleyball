@@ -57,7 +57,12 @@ func plan(actor: Node3D, path: Callable, time: float, end: float, clip: Animatio
 		maximum += 0.80*momentum
 		if emergency: maximum += 0.48
 		var facing_limit := -0.45 if emergency else (-0.12 if wide else (0.30 if quick_save else 0.62))
-		if distance < minimum or distance > maximum or offset.normalized().dot(actor.basis.z) < facing_limit: continue
+		if distance < minimum: continue
+		if not emergency and (distance > maximum or offset.normalized().dot(actor.basis.z) < facing_limit): continue
+		if emergency and distance > maximum:
+			# Commit toward the ball while keeping the animation within its reachable envelope.
+			point = actor.position + offset.limit_length(maximum) + Vector3.UP*(point.y-actor.position.y)
+			distance = maximum
 		pancake = low_save
 		wide_arm = actor.animation_side("l" if local.x > 0.0 else "r") if wide else ""
 		active = true
