@@ -16,6 +16,7 @@ var category := ""
 var setting_stage: SubViewportContainer
 var setting_camera: Camera3D
 var setting_row: HBoxContainer
+var target_drill: Node3D
 var camera_focus := Vector3.ZERO
 
 func _ready() -> void:
@@ -109,14 +110,10 @@ func open_setting_stage(title: String) -> void:
 	setting_row = HBoxContainer.new()
 	setting_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.get_parent().add_child(setting_row)
-	var left := VBoxContainer.new()
-	left.custom_minimum_size.x = 200
-	setting_row.add_child(left)
+	var left := setting_panel(290)
 	setting_stage.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	setting_row.add_child(setting_stage)
-	var right := VBoxContainer.new()
-	right.custom_minimum_size.x = 200
-	setting_row.add_child(right)
+	var right := setting_panel(250)
 	var status := Label.new()
 	right.add_child(status)
 	var viewport := SubViewport.new()
@@ -125,13 +122,27 @@ func open_setting_stage(title: String) -> void:
 	preload("res://scripts/preview_court.gd").add_preview_lighting(viewport)
 	viewport.add_child(preload("res://scripts/preview_court.gd").new())
 	var drill := preload("res://scripts/set_to_target.gd").new()
+	target_drill = drill
 	viewport.add_child(drill)
 	drill.configure(status)
 	var launch := Button.new()
-	launch.text = "Launch float serve"
+	launch.text = "Launch float feed"
 	launch.custom_minimum_size.y = 48
-	launch.pressed.connect(drill.launch_rep)
+	launch.pressed.connect(drill.launch_single)
 	left.add_child(launch)
+	var repeat := Button.new()
+	repeat.text = "Repeat"
+	repeat.toggle_mode = true
+	repeat.custom_minimum_size.y = 38
+	repeat.pressed.connect(drill.toggle_repeat)
+	left.add_child(repeat)
+	var ten := Button.new()
+	ten.text = "Serve 10 times"
+	ten.custom_minimum_size.y = 38
+	ten.pressed.connect(drill.launch_ten)
+	left.add_child(ten)
+	for button in [launch,ten]:
+		button.pressed.connect(func(): repeat.set_pressed_no_signal(false))
 	setting_camera = Camera3D.new()
 	setting_camera.fov = 42.0
 	setting_camera.far = 150.0
@@ -158,6 +169,9 @@ func pan_setting_camera(movement: Vector2, delta: float) -> void:
 	camera_focus += travel
 
 func handle_setting_camera(event: InputEvent) -> void:
+	if target_drill.handle_setup_input(event,setting_camera):
+		setting_stage.accept_event()
+		return
 	var offset := setting_camera.position-camera_focus
 	var distance := offset.length()
 	if event is InputEventMouseMotion and event.button_mask & MOUSE_BUTTON_MASK_MIDDLE:
@@ -172,6 +186,24 @@ func handle_setting_camera(event: InputEvent) -> void:
 	setting_camera.position = camera_focus+offset
 	setting_camera.look_at(camera_focus)
 	setting_stage.accept_event()
+
+func setting_panel(width: float) -> VBoxContainer:
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size.x = width
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color("192938")
+	style.border_color = Color("304657")
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(8)
+	panel.add_theme_stylebox_override("panel",style)
+	setting_row.add_child(panel)
+	var scrolling := ScrollContainer.new()
+	scrolling.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	panel.add_child(scrolling)
+	var content := VBoxContainer.new()
+	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scrolling.add_child(content)
+	return content
 
 func add_item(title: String, action: Callable) -> Button:
 	var item := Button.new()

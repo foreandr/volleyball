@@ -3,7 +3,7 @@ extends Node3D
 const Flight = preload("res://scripts/pass_flight.gd")
 const Match = preload("res://scripts/volleyball_match.gd")
 const Player = preload("res://scripts/volleyball_player.gd")
-const SOURCE := Vector3(0,2.85,12.95)
+const SOURCE := Vector3(0,2.85,3.5)
 const RECEIVE_START := Vector3(0,0.04,-2.7)
 const SETTER_START := Vector3(-1.45,0.04,0.4)
 const PASS_TARGET := Vector3(0.55,3.35,1.50)
@@ -14,6 +14,23 @@ var game: Node3D
 var trail: MultiMeshInstance3D
 var running := false
 var budget := 0.0
+var passer_start := RECEIVE_START
+var setter_start := SETTER_START
+var feed_landing := Vector3(0,Flight.FLOOR,-4.0)
+var pass_target := PASS_TARGET
+var set_target := LEFT_PIN
+var set_apex := 4.1
+var feed_duration := 0.95
+var selected := ""
+var dragging := false
+var grab := Vector3.ZERO
+var markers := {}
+var remaining := 0
+var batch_rep := 0
+var repeating := false
+var next_rep := -1.0
+var pass_preview: MultiMeshInstance3D
+var feed_preview: MultiMeshInstance3D
 
 func configure(status: Label) -> void:
 	var setter := Player.new()
@@ -29,22 +46,18 @@ func configure(status: Label) -> void:
 	game.passing_skill = 100.0
 	game.setting_skill = 100.0
 	game.drill_set_pin = LEFT_PIN
-	trail = MultiMeshInstance3D.new()
-	trail.multimesh = MultiMesh.new()
-	trail.multimesh.transform_format = MultiMesh.TRANSFORM_3D
-	var dot := SphereMesh.new()
-	dot.radius = 0.035
-	dot.height = 0.07
-	var blue := StandardMaterial3D.new()
-	blue.albedo_color = Color("3bafff")
-	blue.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	dot.material = blue
-	trail.multimesh.mesh = dot
-	add_child(trail)
+	trail = make_dots(Color("3bafff"))
+	pass_preview = make_dots(Color("68dfbb"))
+	feed_preview = make_dots(Color("ffa95b"))
+	for key in ["feed","pass","set"]:
+		var marker := make_dots({"feed":Color("ffa95b"),"pass":Color("68dfbb"),"set":Color("3bafff")}[key])
+		marker.multimesh.instance_count = 16
+		markers[key] = marker
 	reset_players()
 	game.ball.global_position = SOURCE
 	game.ball.show()
 	status.text = "Ready"
+	refresh_setup()
 
 func reset_players() -> void:
 	game.begin_point()
@@ -55,28 +68,59 @@ func reset_players() -> void:
 	game.score_label.hide()
 	for index in game.players.size():
 		game.players[index].visible = index < 2
-	game.players[0].position = SETTER_START
-	game.players[1].position = RECEIVE_START
+	game.players[0].position = setter_start
+	game.players[1].position = passer_start
+
+func launch_single() -> void:
+	repeating = false
+	remaining = 1
+	launch_rep()
+
+func launch_ten() -> void:
+	repeating = false
+	remaining = 10
+	batch_rep = 1
+	launch_rep()
+
+func toggle_repeat() -> void:
+	repeating = not repeating
+	remaining = 0
+	if repeating and not running: launch_rep()
+	elif not repeating: next_rep = -1.0
+
+func feed_origin() -> Vector3:
+	return Vector3(feed_landing.x, SOURCE.y, SOURCE.z)
+
+func feed_motion() -> Vector3:
+	return (feed_landing-feed_origin())/feed_duration+Vector3.UP*Flight.GRAVITY*feed_duration*0.5
 
 func launch_rep() -> void:
+	next_rep = -1.0
+	if remaining > 0: remaining -= 1
+	pass_preview.hide()
+	feed_preview.hide()
 	reset_players()
 	trail.hide()
 	budget = 0.0
 	game.phase = game.Phase.LIVE
-	game.drill_pass_target = PASS_TARGET
-	var duration := 1.62
-	var landing := Vector3(0,Flight.FLOOR,-4.0)
-	var acceleration := Vector3.DOWN*Flight.GRAVITY
-	var velocity := (landing-SOURCE)/duration-acceleration*duration*0.5
-	game.launch(SOURCE,velocity,"serve",2,0.0,-1,Vector3.ZERO,acceleration)
+	game.drill_pass_target = pass_target
+	game.drill_set_pin = set_target
+	game.drill_set_apex = set_apex
+	game.launch(feed_origin(),feed_motion(),"serve",2,0.0,-1,Vector3.ZERO,Vector3.DOWN*Flight.GRAVITY)
 	game.receiving_team = 0
 	game.cpu_choice = 1
 	game.cpu_technique = 0
-	game.info.text = "Float serve"
+	set_status("Float feed")
 	running = true
 
 func _physics_process(delta: float) -> void:
-	if not running: return
+	if not running:
+		if next_rep >= 0.0:
+			next_rep -= delta
+			if next_rep <= 0.0:
+				if batch_rep > 0: batch_rep += 1
+				launch_rep()
+		return
 	budget += delta
 	while running and budget+0.000001 >= STEP:
 		budget -= STEP
@@ -97,21 +141,129 @@ func step_rep() -> void:
 		if game.flight_kind == "pass" and kind == "serve":
 			game.cpu_choice = 0
 			game.cpu_technique = 1
-			game.info.text = "Pass to setter"
+			set_status("Pass to setter")
 		elif game.flight_kind == "set":
 			show_set_path()
-			game.info.text = "Set to left pin"
+			set_status("Set to target")
 	game.advance_idle_players(STEP)
 	if game.elapsed >= game.flight_end():
 		running = false
 		game.phase = game.Phase.FINISHED
-		if kind == "serve": game.info.text = "Missed serve"
-		elif kind == "pass": game.info.text = "Missed set"
+		if repeating or remaining > 0: next_rep = 0.7
+		if kind == "serve": set_status("Missed feed")
+		elif kind == "pass": set_status("Missed set")
+
+func set_status(message: String) -> void:
+	game.info.text = "%d/10 · %s" % [batch_rep,message] if batch_rep > 0 else message
+
+func make_dots(color: Color) -> MultiMeshInstance3D:
+	var node := MultiMeshInstance3D.new()
+	node.multimesh = MultiMesh.new()
+	node.multimesh.transform_format = MultiMesh.TRANSFORM_3D
+	var dot := SphereMesh.new()
+	dot.radius = 0.035
+	dot.height = 0.07
+	var style := StandardMaterial3D.new()
+	style.albedo_color = color
+	style.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	dot.material = style
+	node.multimesh.mesh = dot
+	add_child(node)
+	return node
+
+func draw_path(node: MultiMeshInstance3D, path: Callable, duration: float) -> void:
+	node.multimesh.instance_count = 32
+	for index in 32:
+		var point: Vector3 = path.call(duration*index/31.0)
+		node.multimesh.set_instance_transform(index,Transform3D(Basis.IDENTITY,point))
+	node.show()
 
 func show_set_path() -> void:
-	var duration: float = game.flight_end()
-	trail.multimesh.instance_count = 32
-	for index in 32:
-		var point: Vector3 = game.path_point(duration*index/31.0)
-		trail.multimesh.set_instance_transform(index,Transform3D(Basis.IDENTITY,point))
-	trail.show()
+	draw_path(trail,game.path_point,game.flight_end())
+
+func show_preview(node: MultiMeshInstance3D, origin: Vector3, velocity: Vector3, duration: float) -> void:
+	draw_path(node,func(t: float): return origin+velocity*t+Vector3.DOWN*Flight.GRAVITY*0.5*t*t,duration)
+
+func refresh_setup() -> void:
+	if running: return
+	game.players[0].position = setter_start
+	game.players[1].position = passer_start
+	game.ball.global_position = feed_origin()
+	var points := {"feed":feed_landing,"pass":pass_target,"set":set_target}
+	for key in points:
+		var marker: MultiMeshInstance3D = markers[key]
+		var point: Vector3 = points[key]
+		marker.position = Vector3(point.x,0.055,point.z)
+		for index in 16:
+			var angle := TAU*index/16.0
+			marker.multimesh.set_instance_transform(index,Transform3D(Basis.IDENTITY,Vector3(cos(angle),0,sin(angle))*0.22))
+	var launch := passer_start+Vector3(0,1,0.48)
+	var vertical := sqrt(2.0*Flight.GRAVITY*maxf(0.28,pass_target.y+0.28-launch.y))
+	var arrival := (vertical+sqrt(maxf(0.0,vertical*vertical+2.0*Flight.GRAVITY*(launch.y-pass_target.y))))/Flight.GRAVITY
+	var motion := (pass_target-launch).slide(Vector3.UP)/arrival+Vector3.UP*vertical
+	show_preview(pass_preview,launch,motion,Flight.landing_time(launch,motion))
+	show_preview(feed_preview,feed_origin(),feed_motion(),feed_duration)
+	var contact := Vector3(pass_target.x,2.0,pass_target.z)
+	var set_motion: Vector3 = game.attackers[0].set_toward_pin(contact,set_target,set_apex,game.attackers[0].set_contact_height(set_apex))
+	show_preview(trail,contact,set_motion,Flight.landing_time(contact,set_motion))
+
+func handle_setup_input(event: InputEvent, camera: Camera3D) -> bool:
+	if running or not event is InputEventMouse: return false
+	var mouse: Vector2 = event.position
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		dragging = event.pressed
+		if not dragging: return not selected.is_empty()
+		selected = ""
+		var distance := 28.0
+		for key in ["passer","setter","feed","pass","set"]:
+			var point := setup_position(key)
+			if key in ["passer","setter"]: point.y += 0.78
+			if camera.is_position_behind(point): continue
+			var gap := camera.unproject_position(point).distance_to(mouse)
+			if gap < distance:
+				distance = gap
+				selected = key
+		var hit: Variant = court_hit(camera,mouse)
+		grab = setup_position(selected)-hit if hit is Vector3 and not selected.is_empty() else Vector3.ZERO
+		return true
+	if selected.is_empty(): return false
+	var arc := 0.0
+	if event is InputEventMouseMotion:
+		if event.button_mask & MOUSE_BUTTON_MASK_MIDDLE: arc = -event.relative.y*0.018
+		elif dragging and event.button_mask & MOUSE_BUTTON_MASK_LEFT:
+			var hit: Variant = court_hit(camera,mouse)
+			if hit is Vector3: move_selection(hit+grab)
+			return true
+	elif event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP: arc = 0.15
+		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN: arc = -0.15
+	if is_zero_approx(arc): return false
+	if selected in ["setter","set"]: set_apex = clampf(set_apex+arc,3.35,7.0)
+	elif selected == "feed":
+		feed_duration = clampf(feed_duration+arc*0.12,0.70,1.35)
+	else: pass_target.y = clampf(pass_target.y+arc,2.3,6.0)
+	refresh_setup()
+	return true
+
+func court_hit(camera: Camera3D, mouse: Vector2) -> Variant:
+	return Plane(Vector3.UP,0.055).intersects_ray(camera.project_ray_origin(mouse),camera.project_ray_normal(mouse))
+
+func setup_position(key: String) -> Vector3:
+	match key:
+		"passer": return passer_start
+		"setter": return setter_start
+		"feed": return Vector3(feed_landing.x,0.055,feed_landing.z)
+		"pass": return Vector3(pass_target.x,0.055,pass_target.z)
+		"set": return Vector3(set_target.x,0.055,set_target.z)
+	return Vector3.ZERO
+
+func move_selection(point: Vector3) -> void:
+	var x := clampf(point.x,-4.4,4.4)
+	var z := clampf(point.z,-4.85,3.72)
+	match selected:
+		"passer": passer_start = Vector3(x,passer_start.y,z)
+		"setter": setter_start = Vector3(x,setter_start.y,z)
+		"feed": feed_landing = Vector3(x,Flight.FLOOR,z)
+		"pass": pass_target = Vector3(x,pass_target.y,z)
+		"set": set_target = Vector3(x,set_target.y,z)
+	refresh_setup()

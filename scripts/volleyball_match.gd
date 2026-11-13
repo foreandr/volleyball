@@ -168,6 +168,7 @@ var serve_vertical := 30.0
 var live_speed := 1.0
 var drill_pass_target := Vector3.INF
 var drill_set_pin := Vector3.INF
+var drill_set_apex := INF
 var drill_feed_acceleration := Vector3.INF
 var attack_lift_lean := 66.0
 var spike_strength := 0.70
@@ -1135,6 +1136,7 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 			var span := (pin-point).slide(Vector3.UP).length()
 			var time_to_hit := maxf(0.68,span/6.2)
 			apex = driver.apex_for_set_time(point.y,apex,time_to_hit)
+		if is_finite(drill_set_apex): apex = maxf(point.y+0.18,drill_set_apex)
 		var contact_height: float = driver.set_contact_height(apex)
 		last_set_apex = apex
 		if not is_human(index):
@@ -1165,10 +1167,11 @@ func drill_pass_motion(contact: Vector3, motion: Vector3) -> Vector3:
 	var landing := contact+motion*floor_time
 	var height := drill_pass_target.y
 	var rise := sqrt(maxf(0.0,2.0*Flight.GRAVITY*(height+0.28-contact.y)))
-	var vertical := maxf(motion.y,rise)
+	var vertical := rise if drill_set_pin.is_finite() else maxf(motion.y,rise)
 	var discriminant := vertical*vertical+2.0*Flight.GRAVITY*(contact.y-height)
 	var arrival_time := maxf(0.08,(vertical+sqrt(maxf(0.0,discriminant)))/Flight.GRAVITY)
-	var horizontal := (landing-contact).slide(Vector3.UP)/arrival_time
+	var destination := drill_pass_target if drill_set_pin.is_finite() else landing
+	var horizontal := (destination-contact).slide(Vector3.UP)/arrival_time
 	return horizontal+Vector3.UP*vertical
 
 func dump_can_land_in_court(point: Vector3, motion: Vector3) -> bool:
