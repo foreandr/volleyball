@@ -114,6 +114,11 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 			target_across = target_across.rotated(Vector3.RIGHT,pitch)
 		elif set_extension < 0.0:
 			target_fingers = target_fingers.lerp(local_push.normalized(),0.46*follow)
+		if overhead_set and set_extension >= 0.0:
+			# Cock the wrists during the lift, then let the release pose take over.
+			var load_pitch := deg_to_rad(-26.0)*(1.0-set_extension)
+			target_fingers = target_fingers.rotated(Vector3.RIGHT,load_pitch)
+			target_across = target_across.rotated(Vector3.RIGHT,load_pitch)
 		if frontset > 0.0:
 			var palm_normal := target_fingers.cross(target_across).normalized()*sign_
 			var lift_axis := palm_normal.cross(Vector3.UP)
