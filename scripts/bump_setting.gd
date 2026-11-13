@@ -458,7 +458,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 			low_save.sample(setter,time,low_save.contact_time+0.07,intercept)
 		else:
 			var pose_time := 0.045 if strict_dig else 0.09
-			var windup := lerpf(-0.14,0.0,smoothstep(0.0,pose_time,elapsed))
+			var windup := 0.0 if rushed_cpu_receive else lerpf(-0.14,0.0,smoothstep(0.0,pose_time,elapsed))
 			apply_pose(contact_frame+windup,smoothstep(0.0,pose_time,elapsed))
 			if not setter_jumping:
 				var intercept := advance_reach(path,time,end,delta,is_finite(dig_cue))
@@ -504,7 +504,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 					var offset := live_contact[0]-live_contact[1]
 					var steer := (1.0-smoothstep(0.40,0.74,offset.length()))*smoothstep(0.0,0.055,elapsed)
 					if fast_back_receive or (steer > 0.0 and offset.length() > 0.07):
-						var lift := clampf(-incoming.y*0.016,0.0,0.04 if rushed_cpu_receive else 0.16)
+						var lift := clampf(-incoming.y*0.016,0.0,0.0 if rushed_cpu_receive else 0.16)
 						var adjustment := offset*1.85+Vector3.UP*lift
 						if fast_back_receive:
 							# Move the joined platform as a unit instead of snapping to each preview point.
