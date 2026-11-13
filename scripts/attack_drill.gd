@@ -1401,7 +1401,7 @@ func apply_two_arm_lift(pose: Array, author: RefCounted, age: float, extension: 
 		SpikeArm.blend_arm(source,approach_arm_transition,author,1.0,side)
 	var raise := smootherstep(0.0,0.28,age)
 	var together := smoothstep(0.0,0.14,age)
-	var shared_angle := lerpf(deg_to_rad(-153.0),deg_to_rad(78.0),raise)
+	var shared_angle := lerpf(deg_to_rad(-153.0),deg_to_rad(54.0),raise)
 	for side in ["r","l"]:
 		var upper: String = "upperarm_"+side
 		var lower: String = "lowerarm_"+side
@@ -1415,7 +1415,7 @@ func apply_two_arm_lift(pose: Array, author: RefCounted, age: float, extension: 
 		angle = lerpf(angle,shared_angle,together)
 		# Carry both long arms past the hips and up in front, with room between the hands.
 		var arm_length := shoulder.distance_to(elbow)+elbow.distance_to(wrist)
-		var radius := lerpf(Vector2(initial.y,initial.z).length(),arm_length*0.95,raise)
+		var radius := lerpf(Vector2(initial.y,initial.z).length(),arm_length*0.985,together)
 		var lateral := lerpf(initial.x,0.07 if side == "l" else -0.07,together)
 		var target := shoulder+Vector3(lateral,sin(angle)*radius,cos(angle)*radius)
 		var initial_axis := initial.normalized()
@@ -1425,7 +1425,7 @@ func apply_two_arm_lift(pose: Array, author: RefCounted, age: float, extension: 
 		var stable_pole := (outward+Vector3.BACK*0.35).slide(axis).normalized()
 		pole = pole.rotated(axis,pole.signed_angle_to(stable_pole,axis)*raise)
 		author.limb(source,upper,lower,hand,target,pole,1.0,174.0,true)
-		var release := smootherstep(0.24,0.42,age) if side == "r" else smootherstep(0.26,0.43,age)
+		var release := smootherstep(0.24,0.42,age) if side == "r" else smootherstep(0.22,0.39,age)
 		if side == "r": release = maxf(release,smootherstep(0.18,0.67,extension))
 		SpikeArm.blend_arm(pose,source,author,1.0-release,side)
 
