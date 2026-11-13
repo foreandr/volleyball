@@ -1668,6 +1668,7 @@ func tick_receive(delta: float, previous: float) -> void:
 			bump.allow_auto_dive = not backshuffle and (bump.emergency_low_save or not cpu_can_lunge(index,catch_point,cue-elapsed))
 	if not is_human(index) and frame.to_local(path_point(end)).z > Net.NET_Z: bump.allow_auto_dive = false
 	var was_diving: bool = bump.low_save.active
+	bump.fast_back_receive = backshuffle and technique == 0 and is_dig
 	bump.update_attempt(elapsed,previous,end,path,frame.global_basis.inverse()*motion,delta,timing_cue,spin,cue if is_dig else INF)
 	if bump.low_save.active and not was_diving:
 		var save := "Pancake" if bump.low_save.pancake else ("One-arm dive" if not bump.low_save.wide_arm.is_empty() else "Dive")

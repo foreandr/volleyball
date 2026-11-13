@@ -28,6 +28,7 @@ var quick_hand_receive := false
 var defensive_hand_dig := false
 var hard_dig := false
 var fast_hand_dig := false
+var fast_back_receive := false
 var allow_auto_dive := true
 var tracked_hand_dig := Vector3.INF
 var catch_only := false
@@ -127,6 +128,7 @@ func set_custom_backward(animation: Animation) -> void:
 func reset() -> void:
 	hard_dig = false
 	fast_hand_dig = false
+	fast_back_receive = false
 	entry_pose.clear()
 	reach_changed_at = -INF
 	previous_dig_pose.clear()
@@ -428,7 +430,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 			if strict_dig and quick_low_save and not hand_setting:
 				var intercept: Vector3 = path.call(clampf(dig_cue,time,end))
 				platform_in_range = (intercept-setter.position).slide(Vector3.UP).length() <= 1.35
-			if platform_in_range:
+			if platform_in_range and (not fast_back_receive or time >= dig_cue-0.14):
 				pose_started_at = maxf(pressed_at,time-delta)
 	var elapsed := time-pose_started_at
 	var striking := attempted and grade == Timing.Grade.WAITING and (low_save.active or is_finite(pose_started_at)) and (time < end or (strict_dig and previous < end)) and (not catch_only or catch_airborne)
@@ -768,7 +770,7 @@ func reach_platform(offset: Vector3, weight := 1.0, reach_limit := 0.26, steer_s
 		var yaw := clampf(atan2(reach_direction.x,maxf(0.12,reach_direction.z)),-0.80,0.80)
 		lateral = lateral.rotated(Vector3.UP,yaw)
 		weight_scale = 1.0
-	PlatformPose.connect_arms(pose,author,target,weight_scale*weight,0.022,lateral)
+	PlatformPose.connect_arms(pose,author,target,weight_scale*weight,0.022,lateral,false,fast_back_receive)
 	for side in ["l","r"]:
 		for part in ["upperarm_","lowerarm_","hand_"]:
 			var bone := rig.find_bone(part+side)
