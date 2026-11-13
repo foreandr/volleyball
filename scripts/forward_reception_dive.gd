@@ -167,14 +167,14 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 		flatten_palm(pose,author,rig,reach)
 	elif not wide_arm.is_empty() and reach > 0.0:
 		var side := 1.0 if wide_arm == "l" else -1.0
-		var lift := smoothstep(0.0,0.12,since_brace)
+		var release_reach := 1.0-smoothstep(release_time,release_time+0.085,time)
 		var upper: String = "upperarm_"+wide_arm
 		var shoulder: Vector3 = author.point(pose,upper)
 		var ball := rig.to_local(ball_point)
 		# Put the forearm under the ball, with the wrist extending just past it.
-		var target := ball+(ball-shoulder).normalized()*(0.10/scale_)+Vector3.UP*(-0.055+0.31*lift)/scale_
+		var target := ball+(ball-shoulder).normalized()*(0.10/scale_)+Vector3.DOWN*0.055/scale_
 		author.limb(pose,upper,"lowerarm_"+wide_arm,"hand_"+wide_arm,target,
-			Vector3(side*0.38,-0.65,0.24),smoothstep(0.0,0.65,reach),174.0)
+			Vector3(side*0.38,-0.65,0.24),smoothstep(0.0,0.65,reach)*release_reach,174.0)
 	elif reach > 0.0:
 		var bias := Vector3(0,-0.055,0.12)/scale_
 		var local_ball := rig.to_local(ball_point)
@@ -227,7 +227,7 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 		author.set_world_basis(pose,hand,wrist_basis)
 	if since_brace > 0.0:
 		for side in ["l","r"]:
-			var delay := 0.055 if side == wide_arm or (pancake and side == "r") else 0.0
+			var delay := 0.055 if pancake and side == "r" else 0.0
 			var support := smoothstep(delay,delay+0.085,since_brace)*hands_release
 			if support <= 0.0: continue
 			var hand: String = "hand_"+side
