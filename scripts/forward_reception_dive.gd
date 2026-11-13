@@ -109,6 +109,7 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 	pose[pelvis].origin += author.world_pose(pose,parent).basis.inverse()*Vector3.UP*head_lift/scale_
 	var hands_release := 1.0-smoothstep(0.65,0.79,since_brace)
 	var push := smoothstep(0.08,0.40,since_brace)
+	var lead_leg := wide_arm if not wide_arm.is_empty() else "r"
 	for side in ["l","r"]:
 		var foot_name: String = "foot_"+side
 		var foot: Transform3D = author.world_pose(ready,rig.find_bone(foot_name))
@@ -130,13 +131,16 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 		var raised_ankle := hip+Vector3(0.0,sin(thigh_lift),-cos(thigh_lift))*upper_length
 		raised_ankle += Vector3(0.0,sin(shin_lift),-cos(shin_lift))*lower_length
 		trail = trail.lerp(raised_ankle,kick)
-		var lead: bool = side == "r"
+		var lead: bool = side == lead_leg
 		var step_start := 0.41 if lead else 0.60
 		var plant_time := 0.60 if lead else 0.84
 		var step := smoothstep(step_start,plant_time,since_brace)
 		var swing := sin(PI*step)
 		# Bring one foot under the hips, then step the trailing foot up after the weight transfer.
 		ankle = ankle.lerp(trail,maxf(extension,kick)).lerp(foot.origin,step)
+		# Set the outside foot slightly ahead while it takes the player's weight.
+		if not wide_arm.is_empty() and lead:
+			ankle.z += 0.20/scale_*step*(1.0-get_up)
 		ankle.y += swing*(0.18 if lead else 0.12)/scale_
 		var descent := smoothstep(0.19,0.28,since_brace)*(1.0-smoothstep(0.37,0.52,since_brace))
 		var leg_axis := (ankle-hip).normalized()
