@@ -27,6 +27,9 @@ static func unscaled_contact_travel(pancake: bool, wide: bool) -> float:
 	if wide: travel += 0.14
 	return travel
 
+static func outside_leg(actor: Node3D, court_x: float) -> String:
+	return actor.animation_side("r" if court_x <= 0.0 else "l")
+
 static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D], clasp: Array[Transform3D], start: Vector3, heading: Vector3, time: float, ball_point: Vector3, release_time: float, pancake := false, travel_scale := 1.0, track_platform := false, wide_arm := "", slide_heading := Vector3.ZERO) -> void:
 	var correction_time := time-WINDUP+float(RECOVERY_CORRECTION.get_meta("contact_time"))
 	# Start later while preserving the reach at the intended ball contact.
@@ -109,7 +112,9 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 	pose[pelvis].origin += author.world_pose(pose,parent).basis.inverse()*Vector3.UP*head_lift/scale_
 	var hands_release := 1.0-smoothstep(0.65,0.79,since_brace)
 	var push := smoothstep(0.08,0.40,since_brace)
-	var lead_leg := wide_arm if not wide_arm.is_empty() else "r"
+	var travel_direction := heading if wide_arm.is_empty() or slide_heading.is_zero_approx() else slide_heading
+	# Use the landing side in the team's court frame, independent of the reaching arm.
+	var lead_leg := outside_leg(actor,start.x+travel_direction.x*unscaled_contact_travel(pancake,not wide_arm.is_empty())*travel_scale)
 	for side in ["l","r"]:
 		var foot_name: String = "foot_"+side
 		var foot: Transform3D = author.world_pose(ready,rig.find_bone(foot_name))
@@ -139,7 +144,7 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 		# Bring one foot under the hips, then step the trailing foot up after the weight transfer.
 		ankle = ankle.lerp(trail,maxf(extension,kick)).lerp(foot.origin,step)
 		# Set the outside foot slightly ahead while it takes the player's weight.
-		if not wide_arm.is_empty() and lead:
+		if lead:
 			ankle.z += 0.20/scale_*step*(1.0-get_up)
 		ankle.y += swing*(0.18 if lead else 0.12)/scale_
 		var descent := smoothstep(0.19,0.28,since_brace)*(1.0-smoothstep(0.37,0.52,since_brace))
