@@ -510,7 +510,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 						if fast_back_receive:
 							# Move the joined platform as a unit instead of snapping to each preview point.
 							back_receive_steer = back_receive_steer.lerp(adjustment.limit_length(0.48)*steer,1.0-exp(-delta*30.0))
-							reach_platform(back_receive_steer,1.0,0.48)
+							reach_platform(back_receive_steer,smoothstep(0.0,0.055,elapsed),0.48)
 						else:
 							reach_platform(adjustment,steer,0.54,true)
 						previous_dig_pose = dig_bones()

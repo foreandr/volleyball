@@ -28,6 +28,8 @@ const CpuShots = preload("res://scripts/cpu_attack_shots.gd")
 const CpuPolicy = preload("res://scripts/cpu_policy.gd")
 const WIN_SCORE := 15
 const RECOVERY_TIME := 0.32
+const FAST_RECEIVE_HOLD := 0.10
+const FAST_RECEIVE_RISE := 0.44
 const SERVE_RUN_BLEND := 0.15
 const PLAYER_GROUND_Y := 0.04
 const CPU_HAND_RECEIVE_MAX_SPEED := 16.0
@@ -1152,6 +1154,9 @@ func begin_recovery(index: int) -> void:
 	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
 	var recovery := {"started":match_clock,"pose":pose}
 	var bump := platforms[index]
+	if bump.fast_back_receive and is_finite(bump.touch_time):
+		recovery["hold"] = FAST_RECEIVE_HOLD
+		recovery["rise"] = FAST_RECEIVE_RISE
 	if bump.low_save.active:
 		recovery["save"] = bump.low_save
 		recovery["save_time"] = elapsed
@@ -1173,7 +1178,9 @@ func advance_recoveries(delta: float) -> void:
 				continue
 			begin_recovery(index)
 			continue
-		if age >= RECOVERY_TIME:
+		var hold: float = recovery.get("hold",0.0)
+		var rise: float = recovery.get("rise",RECOVERY_TIME)
+		if age >= hold+rise:
 			recoveries.erase(index)
 			continue
 		var landing_set: bool = set_jumps[index].active
@@ -1182,7 +1189,7 @@ func advance_recoveries(delta: float) -> void:
 		var rig: Skeleton3D = actor.skeleton
 		if not landing_set: actor.animator.advance(delta)
 		animated[index] = true
-		var weight := 1.0-smoothstep(0.0,RECOVERY_TIME,age)
+		var weight := 1.0-smoothstep(hold,hold+rise,age)
 		for bone in rig.get_bone_count():
 			if landing_set:
 				var name_ := rig.get_bone_name(bone)
