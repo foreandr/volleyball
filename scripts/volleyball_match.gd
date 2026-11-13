@@ -31,6 +31,7 @@ const CpuPolicy = preload("res://scripts/cpu_policy.gd")
 const WIN_SCORE := 15
 const RECOVERY_TIME := 0.32
 const FAST_DIG_ELBOW_SPEED := 25.0
+const FAST_DIG_ELBOW_DURATION := 0.32
 const FAST_RECEIVE_HOLD := 0.28
 const FAST_RECEIVE_RISE := 0.75
 const SERVE_RUN_BLEND := 0.15
@@ -1219,21 +1220,25 @@ func advance_recoveries(delta: float) -> void:
 			rig.set_bone_pose_position(bone,idle.origin.lerp(pose.origin,weight))
 			var rotation := pose.basis.orthonormalized().get_rotation_quaternion().normalized()
 			rig.set_bone_pose_rotation(bone,idle.basis.orthonormalized().get_rotation_quaternion().normalized().slerp(rotation,weight))
-		if recovery.get("fast_elbow_bend",false) and age > 0.0 and age < 0.20:
+		if recovery.get("fast_elbow_bend",false) and age > 0.0 and age < FAST_DIG_ELBOW_DURATION:
 			apply_fast_dig_elbow_bend(rig,age)
 		if recovery.has("kick_foot"):
 			var flick := smoothstep(0.0,0.070,age)*(1.0-smoothstep(0.07,0.22,age))
 			if flick > 0.001: pose_kick_leg(actor,recovery.kick_foot,(Vector3.UP*0.15+actor.global_basis.z*0.11)*flick)
 
 func apply_fast_dig_elbow_bend(rig: Skeleton3D, age: float) -> void:
-	var bend := deg_to_rad(40.0)*smoothstep(0.0,0.045,age)*(1.0-smoothstep(0.075,0.20,age))
+	var bend := deg_to_rad(40.0)*smoothstep(0.0,0.095,age)*(1.0-smoothstep(0.12,FAST_DIG_ELBOW_DURATION,age))
+	var up := (rig.global_basis.inverse()*Vector3.UP).normalized()
+	var left := rig.get_bone_global_pose(rig.find_bone("lowerarm_l")).origin
+	var right := rig.get_bone_global_pose(rig.find_bone("lowerarm_r")).origin
+	var axis := (left-right).slide(up).normalized()
+	if axis.is_zero_approx(): return
+	var wrists := rig.get_bone_global_pose(rig.find_bone("hand_l")).origin+rig.get_bone_global_pose(rig.find_bone("hand_r")).origin
+	if axis.cross(wrists-left-right).dot(up) < 0.0: axis = -axis
+	# A shared hinge keeps each wrist on its side of the platform during recoil.
 	for side in ["l","r"]:
 		var elbow := rig.find_bone("lowerarm_"+side)
-		var wrist := rig.find_bone("hand_"+side)
 		var parent_basis := rig.get_bone_global_pose(rig.get_bone_parent(elbow)).basis.orthonormalized()
-		var forearm := rig.get_bone_global_pose(wrist).origin-rig.get_bone_global_pose(elbow).origin
-		var axis := forearm.cross(rig.global_basis.inverse()*Vector3.UP).normalized()
-		if axis.is_zero_approx(): continue
 		var rotation := Quaternion(parent_basis.inverse()*axis,bend)
 		rig.set_bone_pose_rotation(elbow,(rotation*rig.get_bone_pose_rotation(elbow)).normalized())
 
