@@ -1099,7 +1099,10 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 	var fast_forearm: bool = technique == 0 and not bump.low_save.active and sample_after > sample_before
 	fast_forearm = fast_forearm and path_point(sample_before).distance_to(path_point(sample_after)) >= FAST_DIG_ELBOW_SPEED*(sample_after-sample_before)
 	begin_recovery(index)
-	if fast_forearm: recoveries[index]["fast_elbow_bend"] = true
+	if fast_forearm:
+		recoveries[index]["fast_elbow_bend"] = true
+		if bump.knee_bend_depth > 0.001:
+			recoveries[index]["hold"] = FAST_DIG_ELBOW_DURATION
 	if not StorySession.attack_ball_audio_muted:
 		if technique != 0 and not transition: set_audio.play()
 		else: play_touch()
@@ -1184,7 +1187,7 @@ func begin_recovery(index: int) -> void:
 	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
 	var recovery := {"started":match_clock,"pose":pose}
 	var bump := platforms[index]
-	if is_finite(bump.touch_time) and (bump.deep_squat or bump.fast_back_receive or bump.reach.get("tier",0) == 2) and not bump.low_save.active:
+	if is_finite(bump.touch_time) and (bump.knee_bend_depth > 0.001 or bump.fast_back_receive or bump.reach.get("tier",0) == 2) and not bump.low_save.active:
 		recovery["hold"] = FAST_RECEIVE_HOLD
 		recovery["rise"] = FAST_RECEIVE_RISE
 	if bump.low_save.active:
