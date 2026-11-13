@@ -1162,7 +1162,7 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 	if stage == Stage.HIT and keeps_strike_palm_presented():
 		apply_pinky_down_finish(rig)
 	if stage == Stage.SET and sync_approach_arm_lift() and not approach_render_rotations.is_empty():
-		keep_hitting_elbow_long(rig,pose,clock-swing_started)
+		pose_hitting_elbow_before_strike(rig,pose,clock-swing_started)
 	var contact_reach := smootherstep(0.68,0.98,extension)*(1.0-smoothstep(0.0,0.22,follow))
 	if keeps_strike_palm_presented() and stage == Stage.SET and contact_reach > 0.0 and not approach_render_rotations.is_empty():
 		var author: RefCounted = setter.get_pose_author()
@@ -1420,10 +1420,10 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 				SpikeArm.blend_arm(pose,approach_arm_transition,author,source_weight,"l")
 	return pose
 
-func keep_hitting_elbow_long(rig: Skeleton3D, pose: Array[Transform3D], age: float) -> void:
+func pose_hitting_elbow_before_strike(rig: Skeleton3D, pose: Array[Transform3D], age: float) -> void:
 	var frame := age*60.0
 	if frame < 5.0 or frame >= 25.0: return
-	# Keep the elbow extended across the blend into the strike.
+	# Load the elbow after the lift, then extend into the strike.
 	var influence := smoothstep(5.0,8.0,frame)*(1.0-smoothstep(22.0,25.0,frame))
 	var author: RefCounted = setter.get_pose_author()
 	for bone in rig.get_bone_count(): pose[bone] = rig.get_bone_pose(bone)
@@ -1435,8 +1435,10 @@ func keep_hitting_elbow_long(rig: Skeleton3D, pose: Array[Transform3D], age: flo
 	var axis := (wrist-shoulder).normalized()
 	var pole := upper.slide(axis).normalized()
 	if pole.is_zero_approx(): pole = Vector3.LEFT
-	var reach := sqrt(upper.length_squared()+lower.length_squared()-2.0*upper.length()*lower.length()*cos(deg_to_rad(174.0)))
-	var target := shoulder+axis*maxf(reach,shoulder.distance_to(wrist))
+	var bend := smoothstep(6.0,15.0,frame)*(1.0-smoothstep(15.0,24.0,frame))
+	var angle := deg_to_rad(lerpf(174.0,143.0,bend))
+	var reach := sqrt(upper.length_squared()+lower.length_squared()-2.0*upper.length()*lower.length()*cos(angle))
+	var target := shoulder+axis*reach
 	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",target,pole,influence,180.0,true)
 	for joint in ["upperarm_r","lowerarm_r"]:
 		var bone := rig.find_bone(joint)

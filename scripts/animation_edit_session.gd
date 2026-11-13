@@ -36,46 +36,24 @@ func source_rotation(bone: int, frame: float) -> Quaternion:
 	return source.rotation_track_interpolate(track,time_at(frame)) if track >= 0 else rig.get_bone_rest(bone).basis.get_rotation_quaternion()
 
 func offset_at(bone: int, frame: float) -> Quaternion:
-	var name_ := str(rig.get_bone_name(bone))
-	if not edits.has(name_): return Quaternion.IDENTITY
-	var keys: Dictionary = edits[name_]
-	var frames: Array = keys.keys()
-	if not keys.has(0): frames.append(0)
-	if not keys.has(last_frame): frames.append(last_frame)
-	frames.sort()
-	var before := 0
-	var after := last_frame
-	for key in frames:
-		if key <= frame: before = key
-		if key >= frame:
-			after = key
-			break
+	var keys: Dictionary = edits.get(str(rig.get_bone_name(bone)),{})
+	var bounded := clampf(frame,0.0,float(last_frame))
+	var before := floori(bounded)
 	var a: Quaternion = keys.get(before,Quaternion.IDENTITY)
-	var b: Quaternion = keys.get(after,Quaternion.IDENTITY)
-	return a if before == after else a.slerp(b,smoothstep(float(before),float(after),frame)).normalized()
+	var b: Quaternion = keys.get(mini(before+1,last_frame),Quaternion.IDENTITY)
+	return a.slerp(b,bounded-before).normalized()
 
 func source_position(bone: int, frame: float) -> Vector3:
 	var track: int = position_tracks[bone]
 	return source.position_track_interpolate(track,time_at(frame)) if track >= 0 else rig.get_bone_rest(bone).origin
 
 func position_offset_at(bone: int, frame: float) -> Vector3:
-	var name_ := str(rig.get_bone_name(bone))
-	if not position_edits.has(name_): return Vector3.ZERO
-	var keys: Dictionary = position_edits[name_]
-	var frames: Array = keys.keys()
-	if not keys.has(0): frames.append(0)
-	if not keys.has(last_frame): frames.append(last_frame)
-	frames.sort()
-	var before := 0
-	var after := last_frame
-	for key in frames:
-		if key <= frame: before = key
-		if key >= frame:
-			after = key
-			break
+	var keys: Dictionary = position_edits.get(str(rig.get_bone_name(bone)),{})
+	var bounded := clampf(frame,0.0,float(last_frame))
+	var before := floori(bounded)
 	var a: Vector3 = keys.get(before,Vector3.ZERO)
-	var b: Vector3 = keys.get(after,Vector3.ZERO)
-	return a if before == after else a.lerp(b,smoothstep(float(before),float(after),frame))
+	var b: Vector3 = keys.get(mini(before+1,last_frame),Vector3.ZERO)
+	return a.lerp(b,bounded-before)
 
 func state() -> Dictionary:
 	return {"source":source,"rotations":edits.duplicate(true),"positions":position_edits.duplicate(true)}
@@ -119,9 +97,6 @@ func set_offset(bone: int, frame: int, value: Quaternion) -> void:
 	var name_ := str(rig.get_bone_name(bone))
 	if not edits.has(name_): edits[name_] = {}
 	edits[name_][clampi(frame,0,last_frame)] = value.normalized()
-	if frame == 0 or frame == last_frame:
-		edits[name_][0] = value.normalized()
-		edits[name_][last_frame] = value.normalized()
 
 func set_rotation(bone: int, frame: int, value: Quaternion) -> void:
 	set_offset(bone,frame,source_rotation(bone,frame).inverse()*value)
