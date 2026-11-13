@@ -1248,7 +1248,7 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 				var elbow: Vector3 = author.point(pose,"lowerarm_"+side)
 				var wrist: Vector3 = author.point(pose,"hand_"+side)
 				var arm_length := shoulder.distance_to(elbow)+elbow.distance_to(wrist)
-				var overhead := clampf((handoff_age-0.08)/0.18,0.0,1.0)
+				var overhead := smootherstep(0.06,0.27,handoff_age)
 				var front := (forward*sin(deg_to_rad(80.0))-up*cos(deg_to_rad(80.0))).normalized()
 				var lift_direction := front.slerp(Vector3.UP,overhead)
 				var front_reach := 0.43 if side == "r" else 0.54
@@ -1277,7 +1277,16 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 					var entry := smootherstep(0.0,0.12 if sync_approach_arm_lift() else 0.17,handoff_age)
 					target = source_wrist.lerp(shoulder+arc*reach+outward*0.015,entry)
 					var pole := source_pole.lerp((forward*0.30-up*(1.0-rise)+outward*0.55).normalized(),entry)
+					var upper_basis: Basis = author.world_pose(front_pose,rig.find_bone(upper)).basis
+					var lower_basis: Basis = author.world_pose(front_pose,rig.find_bone("lowerarm_r")).basis
 					author.limb(front_pose,upper,"lowerarm_r","hand_r",target,pole,1.0,lerpf(165.0,174.0,rise))
+					var lifted_elbow: Vector3 = author.point(front_pose,"lowerarm_r")
+					var lifted_wrist: Vector3 = author.point(front_pose,"hand_r")
+					# The arm lift changes direction while retaining the authored axial twist.
+					var upper_swing := Quaternion((source_elbow-shoulder).normalized(),(lifted_elbow-shoulder).normalized())
+					var lower_swing := Quaternion((source_wrist-source_elbow).normalized(),(lifted_wrist-lifted_elbow).normalized())
+					author.set_world_basis(front_pose,upper,Basis(upper_swing)*upper_basis)
+					author.set_world_basis(front_pose,"lowerarm_r",Basis(lower_swing)*lower_basis)
 					SpikeArm.align_wrist_to_forearm(front_pose,author,entry*0.65)
 					front_weight = 1.0-smootherstep(0.24,0.42,handoff_age)
 					if keeps_strike_palm_presented():

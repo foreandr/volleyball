@@ -522,6 +522,15 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 			reach_platform(Vector3.ZERO,smoothstep(0.025,0.14,elapsed))
 		var pancake := low_save.active and low_save.pancake
 		var center := to_local(LowSave.palm_center(setter)) if pancake else platform_center()
+		var guided_pass := defer_forearm_follow and not strict_dig and not hand_setting and not low_save.active and reach.is_empty()
+		if guided_pass:
+			# Steer the joined platform while the ball is still approaching.
+			var approach_end: Vector3 = path.call(minf(end,time+0.14))
+			var approach_start: Vector3 = path.call(time)
+			var adjustment := Geometry3D.get_closest_point_to_segment(center,approach_start,approach_end)-center
+			var aim_weight := smoothstep(0.0,0.12,elapsed)*(1.0-smoothstep(0.35,0.68,adjustment.length()))
+			reach_platform(adjustment,aim_weight,0.26,false,true)
+			center = platform_center()
 		var radius := 0.16 if pancake else (0.33 if face_dig else contact_radius())
 		var near_dive_contact := low_save.active and not pancake and absf(time-low_save.contact_time)<=0.12
 		var allowance := DIVE_CONTACT_ALLOWANCE if near_dive_contact else 0.0
@@ -534,7 +543,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 			if not center.is_finite(): center = first
 			var point := Geometry3D.get_closest_point_to_segment(center,first,last)
 			var gap := point.distance_to(center)
-			if not strict_dig and not hand_setting and not low_save.active and gap > PLATFORM_RADIUS and gap <= 0.58:
+			if not guided_pass and not strict_dig and not hand_setting and not low_save.active and gap > PLATFORM_RADIUS and gap <= 0.58:
 				reach_platform(point-center)
 				center = platform_center()
 				point = Geometry3D.get_closest_point_to_segment(center,first,last)
@@ -614,7 +623,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 				touch_time = lerpf(sweep_start,sweep_end,clampf(fraction,0.0,1.0))
 				touch = point
 				if not is_finite(cue_arrival) or low_save.active: timing = touch_time-pressed_at
-				if assisted: reach_platform(point-center,1.0,0.26,false,true)
+				if assisted and not guided_pass: reach_platform(point-center,1.0,0.26,false,true)
 				grade = Timing.Grade.LATE if timing < green_start else (Timing.Grade.EARLY if timing > green_end else Timing.Grade.PERFECT)
 				var error := timing_error(timing)*(Timing.PANCAKE_ERROR_SCALE if pancake else 1.0)
 				contact_spread = accuracy_bounds(error,incoming,spin_rps)

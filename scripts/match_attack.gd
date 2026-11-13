@@ -78,7 +78,7 @@ func tick_attack(delta: float) -> void:
 	if stage == Stage.SET:
 		play_pin_ball(age,maxf(0.0,age-delta),delta)
 	elif stage == Stage.HIT and age < SWING_FOLLOW_TIME:
-		var follow := 1.0-pow(1.0-clampf(age/0.19,0.0,1.0),2.0)
+		var follow := smootherstep(0.0,0.22,age)
 		pose_bow_draw(delta,1.0-smoothstep(0.19,SWING_FOLLOW_TIME,age),swing_contact,swing_contact_extension,follow)
 	elif not jump.active:
 		enabled = false
@@ -119,8 +119,8 @@ func sync_approach_arm_lift() -> bool:
 	return true
 
 func attack_arm_turn_rate() -> float:
-	if stage == Stage.SET and clock-swing_started <= 0.26: return deg_to_rad(3200.0)
-	return deg_to_rad(1580.0)
+	if stage == Stage.SET and clock-swing_started <= 0.26: return deg_to_rad(1500.0)
+	return deg_to_rad(1320.0)
 
 func spike_speed_multiplier() -> float:
 	return spike_strength
