@@ -34,7 +34,7 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 	var brace_start := maxf(0.41,release_time-WINDUP+CONTACT_POSE_TIME)
 	var since_brace := time-brace_start
 	var slide := 0.95*smoothstep(0.18,0.56,since_brace)
-	var kick := smoothstep(-0.04,0.12,since_brace)*(1.0-smoothstep(0.19,0.39,since_brace))
+	var kick := smoothstep(-0.24,-0.08,since_brace)*(1.0-smoothstep(0.19,0.39,since_brace))
 	var travel := 0.23*smoothstep(0.02,0.20,time)+1.35*smoothstep(0.16,0.61,time)+slide
 	var drop := 0.0
 	var pitch := 0.0
@@ -124,7 +124,7 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 		trail = trail.lerp(raised_ankle,kick)
 		var step_start := 0.46 if side == "r" else 0.68
 		var step := smoothstep(step_start,step_start+0.24,since_brace)
-		ankle = ankle.lerp(trail,extension).lerp(foot.origin,step)
+		ankle = ankle.lerp(trail,maxf(extension,kick)).lerp(foot.origin,step)
 		ankle.y += sin(PI*step)*0.19
 		var lateral := 0.09 if side == "l" else -0.09
 		var pole := Vector3(lateral,0.18,1.0).lerp(Vector3(lateral,-0.75,0.10),kick)
