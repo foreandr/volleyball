@@ -460,8 +460,6 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 			var pose_time := 0.045 if strict_dig else 0.09
 			var windup := 0.0 if rushed_cpu_receive else lerpf(-0.14,0.0,smoothstep(0.0,pose_time,elapsed))
 			apply_pose(contact_frame+windup,smoothstep(0.0,pose_time,elapsed))
-			if rushed_cpu_receive and not reach.has("custom_clip"):
-				lower_rushed_platform()
 			if not setter_jumping:
 				var intercept := advance_reach(path,time,end,delta,is_finite(dig_cue))
 				if reach.has("custom_clip"):
@@ -472,6 +470,8 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 					pose_reach(smoothstep(0.0,1.0,reach_progress),intercept)
 		if not hand_setting: apply_knee_bend(time)
 		blend_dig_transition(time)
+		var keep_platform_low := rushed_cpu_receive and not hand_setting and not low_save.active and not reach.has("custom_clip")
+		if keep_platform_low: lower_rushed_platform()
 		var pancake := low_save.active and low_save.pancake
 		var center := to_local(LowSave.palm_center(setter)) if pancake else platform_center()
 		var radius := 0.16 if pancake else (0.33 if face_dig else contact_radius())
@@ -515,6 +515,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 							reach_platform(back_receive_steer,smoothstep(0.0,0.055,elapsed),0.48)
 						else:
 							reach_platform(adjustment,steer,0.54,true)
+						if keep_platform_low: lower_rushed_platform()
 						previous_dig_pose = dig_bones()
 						contact = dig_contact_segment(first,last,false,initial_pose,previous_dig_pose)
 						point = contact[0]

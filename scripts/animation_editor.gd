@@ -5,7 +5,6 @@ const Flight = preload("res://scripts/pass_flight.gd")
 const Catalog = preload("res://scripts/volleyball_animations.gd")
 const ATTACK_EDITOR_OFFSET := Vector3(0.0,0.0,-0.50)
 var ball_preview: Node3D
-var setup_drag: RefCounted
 var reception_controls: VBoxContainer
 var replace_body_layer := false
 var angle_control: VBoxContainer
@@ -45,7 +44,7 @@ var shoulder_start_offset := Vector3.ZERO
 func _ready() -> void:
 	entry = (StorySession.edit_entry if not StorySession.edit_entry.is_empty() else Catalog.ENTRIES[0]).duplicate(true)
 	super._ready()
-	setup_drag = preload("res://scripts/court_setup_drag.gd").new(self)
+	player_controls = null
 	preview_camera.fov = 42.0
 	preview_camera.far = 150.0
 	preview_player.animator.stop()
@@ -289,9 +288,8 @@ func set_playing(value: bool) -> void:
 
 func _process(delta: float) -> void:
 	super._process(delta)
-	if player_controls!=null and player_controls.active: return
 	if session == null: return
-	if playing and setup_drag.mode.is_empty():
+	if playing:
 		var first: float = minf(0,ball_preview.contact_time-ball_preview.feed_duration)*session.frame_rate
 		var last: float = ball_preview.cycle_end()*session.frame_rate
 		playhead = first+fposmod(playhead-first+delta*session.frame_rate,last-first)
@@ -454,14 +452,6 @@ func pick_handle(position: Vector2) -> int:
 	return selected
 
 func handle_preview_input(event: InputEvent) -> void:
-	if player_controls!=null and player_controls.active:
-		super.handle_preview_input(event)
-		return
-	if setup_drag != null and not gizmo_drag and (session == null or not session.source.has_meta("editor_feed")):
-		var joint_click: bool = event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT and pick_handle(event.position)>=0
-		if (not joint_click or not setup_drag.mode.is_empty()) and setup_drag.handle(event):
-			preview.accept_event()
-			return
 	if session != null and event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if event.pressed:
 			var index := pick_handle(event.position)
