@@ -7,6 +7,8 @@ const FEEDER := 2
 const TARGET_RADIUS := 0.90
 const BATCH_REPS := 10
 const SIM_STEP := 1.0/60.0
+const SOURCE_MIN_Z := -8.5
+const SOURCE_MAX_Z := 17.0
 const PREFERENCE_PREFIX := "PassingDrill_"
 const SPINS := ["No spin","Topspin","Backspin","Sidespin left","Sidespin right"]
 
@@ -50,7 +52,7 @@ func _init(match_: Node3D) -> void:
 	var saved_source: Variant = StorySession.match_preference(PREFERENCE_PREFIX+"source_position",Vector2(source.x,source.z))
 	if saved_source is Vector2 and saved_source.is_finite():
 		source.x = clampf(saved_source.x,-6.5,6.5)
-		source.z = clampf(saved_source.y,-6.5,15.0)
+		source.z = clampf(saved_source.y,SOURCE_MIN_Z,SOURCE_MAX_Z)
 	var saved_receiver: Variant = StorySession.match_preference(PREFERENCE_PREFIX+"receiver_position",Vector2(start.x,start.z))
 	if saved_receiver is Vector2 and saved_receiver.is_finite():
 		set_receiver_start(Vector3(saved_receiver.x,start.y,saved_receiver.y))
@@ -184,7 +186,7 @@ func handle_drag(event: InputEvent, camera: Camera3D, screen: Vector2) -> bool:
 			match drag_handle:
 				"receiver": set_receiver_start(point)
 				"source":
-					source = Vector3(clampf(point.x,-6.5,6.5),source.y,clampf(point.z,-6.5,15.0))
+					source = Vector3(clampf(point.x,-6.5,6.5),source.y,clampf(point.z,SOURCE_MIN_Z,SOURCE_MAX_Z))
 					StorySession.save_match_preference(PREFERENCE_PREFIX+"source_position",Vector2(source.x,source.z))
 				"target": target = Vector3(clampf(point.x,-4.4,4.4),target.y,clampf(point.z,-4.9,3.8))
 			update_setup()
