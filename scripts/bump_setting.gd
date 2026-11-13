@@ -784,7 +784,7 @@ func reach_platform(offset: Vector3, weight := 1.0, reach_limit := 0.26, steer_s
 		var yaw := clampf(atan2(reach_direction.x,maxf(0.12,reach_direction.z)),-0.80,0.80)
 		lateral = lateral.rotated(Vector3.UP,yaw)
 		weight_scale = 1.0
-	var compact := fast_back_receive or reach.get("tier",0) == 2
+	var compact: bool = fast_back_receive or reach.get("tier",0) == 2
 	PlatformPose.connect_arms(pose,author,target,weight_scale*weight,0.0 if compact else 0.022,lateral,false,compact)
 	for side in ["l","r"]:
 		for part in ["upperarm_","lowerarm_","hand_"]:
