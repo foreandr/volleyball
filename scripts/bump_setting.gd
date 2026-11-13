@@ -337,7 +337,7 @@ func apply_knee_bend(time := INF) -> void:
 		knee_poles.append(forward if pole.length_squared() < 0.0004 else pole.normalized())
 		var world_hip := rig.to_global(hip)
 		# Limit the extra drop for a leg already deeply compressed by the directional clip.
-		depth = minf(depth,maxf(0.0,world_hip.y-world_foot.y-(0.30 if deep_squat else 0.40)))
+		depth = minf(depth,maxf(0.0,world_hip.y-world_foot.y-(0.30 if deep_squat or reach.get("deep_side",false) else 0.40)))
 	var holding_squat := not hand_setting and not setter_jumping and is_finite(pressed_at) and not is_finite(touch_time) and grade == Timing.Grade.WAITING
 	if holding_squat:
 		var hips_y: float = rig.to_global(author.point(pose,"pelvis")).y
@@ -710,7 +710,7 @@ func advance_reach(path: Callable, time: float, end: float, delta: float, quick_
 		var direction := offset.slide(Vector3.UP)
 		var planned: Vector3 = reach.get("intercept",Vector3.INF)
 		var still_reachable := planned.is_finite() and Geometry3D.get_closest_point_to_segment(planned,path.call(maxf(0.0,time-delta)),future).distance_to(planned) <= contact_radius()
-		if quick_dig and reach_progress < 0.75 and not still_reachable and not reach.is_empty() and time-reach_changed_at > 0.12 and direction.length() > 0.32 and reach_step.normalized().dot(direction.normalized()) < 0.48:
+		if quick_dig and not reach.get("deep_side",false) and reach_progress < 0.75 and not still_reachable and not reach.is_empty() and time-reach_changed_at > 0.12 and direction.length() > 0.32 and reach_step.normalized().dot(direction.normalized()) < 0.48:
 			begin_dig_transition(time)
 			clear_reach()
 			reach_changed_at = time
@@ -732,18 +732,18 @@ func advance_reach(path: Callable, time: float, end: float, delta: float, quick_
 		reach_travel += setter.position-origin
 	return intercept
 
-func plan_reach(offset: Vector3) -> void:
+func plan_reach(offset: Vector3, deep_side := false) -> void:
 	var local := setter.basis.inverse()*offset
 	var horizontal := offset.slide(Vector3.UP)
 	if offset.length() <= PLATFORM_RADIUS or horizontal.length() < 0.12: return
-	var tier := Timing.practice_reach_tier(offset)
+	var tier := 2 if deep_side else Timing.practice_reach_tier(offset)
 	if tier == 3: return
 	var back := local.z < -absf(local.x)*0.65
 	var straight_back := back and -local.z > absf(local.x)*1.4
 	var short_back := tier == 1 and straight_back
 	var rear_side := tier == 2 and back and not straight_back
 	var forward := local.z > absf(local.x)*1.4
-	var side := tier == 2 and absf(local.x) > absf(local.z)*1.4
+	var side := deep_side or (tier == 2 and absf(local.x) > absf(local.z)*1.4)
 	var intercept := ready_contact()+offset
 	var lead := "r" if intercept.x <= 0.0 else "l"
 	if rushed_cpu_receive:
@@ -752,7 +752,7 @@ func plan_reach(offset: Vector3) -> void:
 		var right := to_local(rig.to_global(rig.get_bone_global_pose(rig.find_bone("foot_"+setter.animation_side("r"))).origin))
 		lead = "l" if (left-intercept).slide(Vector3.UP).length_squared() < (right-intercept).slide(Vector3.UP).length_squared() else "r"
 	reach = {
-		"tier":tier,"back":back and not rear_side,"rear_diagonal":false,
+		"deep_side":deep_side,"tier":tier,"back":back and not rear_side,"rear_diagonal":false,
 		"intercept":intercept,
 		"short_straight_back":short_back,"forward_lunge":forward,
 		"lead":lead,"court_lead":true,

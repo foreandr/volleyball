@@ -1747,11 +1747,21 @@ func tick_receive(delta: float, previous: float) -> void:
 		var holds_lunge: bool = bump.reach.get("tier",0) == 2 and committed.is_finite() and committed.distance_to(bump.to_local(catch_point)) <= bump.contact_radius()
 		# Decide before the dive windup runs out. A viable grounded receive keeps priority.
 		bump.allow_auto_dive = not holds_lunge and (not lunge_in_range or elapsed > cue+0.035)
-	if cpu_dig and forearm_dig and not backshuffle and not bump.low_save.active and not bump.deep_squat:
-		var low_point := path_point(maxf(elapsed,arrival(0.60)))
+	if cpu_dig and not backshuffle and not bump.low_save.active and not bump.deep_squat and not bump.reach.get("deep_side",false):
+		var low_at := maxf(elapsed,arrival(0.60))
+		var low_point := path_point(low_at)
 		var offset := actor.to_local(low_point)
-		bump.deep_squat = offset.z >= 0.10 and offset.z <= 1.22 and absf(offset.x) <= 0.60 and low_point.y <= 0.61
-		if bump.deep_squat: bump.clear_reach()
+		var low_in_front := offset.z >= 0.10 and low_point.y <= 0.61
+		var side_gap := absf(offset.x)
+		if low_in_front and side_gap > 0.45 and side_gap <= 1.12 and offset.z <= 0.95 and low_at-elapsed >= 0.14:
+			bump.clear_reach()
+			bump.plan_reach(bump.to_local(low_point)-bump.ready_contact(),true)
+		elif low_in_front and offset.z <= 1.22 and side_gap <= 0.60:
+			bump.deep_squat = true
+			bump.clear_reach()
+	if bump.reach.get("deep_side",false):
+		bump.allow_auto_dive = false
+		bump.lunge_bend_depth = 0.36
 	if bump.deep_squat:
 		bump.allow_auto_dive = false
 		bump.knee_bend_depth = maxf(bump.knee_bend_depth,0.62*smoothstep(cue-0.33,cue-0.06,elapsed))
@@ -1771,6 +1781,8 @@ func tick_receive(delta: float, previous: float) -> void:
 			animation = "Jump set" if technique == 2 else ("Overhead dig" if is_dig else "Hands receive")
 		elif bump.deep_squat:
 			animation = "Deep squat"
+		elif bump.reach.get("deep_side",false):
+			animation = "Deep side lunge"
 		elif bump.reach.get("tier",0) == 2:
 			animation = "Lunge"
 			if bump.reach.get("forward_lunge",false): animation = "Forward lunge"
