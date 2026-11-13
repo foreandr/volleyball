@@ -1,4 +1,6 @@
 extends MeshInstance3D
+
+const FRONT_LUNGE_ARMS = preload("res://assets/animations/front_lunge_arms.tres")
 const ReachPose = preload("res://scripts/forearm_reach_pose.gd")
 
 const HandPose = preload("res://scripts/hand_setting_pose.gd")
@@ -782,6 +784,13 @@ func pose_reach(weight: float, intercept: Vector3) -> void:
 		var planted_travel := reach_travel
 		if is_finite(touch_time): planted_travel *= 1.0-smoothstep(0.10,0.40,rear_follow)
 		setter.pose_reception_reach(local*reach_step,local*planted_travel,weight,pose_progress,ready_pose,reach,false,0,intercept)
+
+		if reach.get("forward_lunge",false) and reach.get("tier",0) == 2:
+			var rig: Skeleton3D = setter.skeleton
+			for track in FRONT_LUNGE_ARMS.get_track_count():
+				var bone := rig.find_bone(FRONT_LUNGE_ARMS.track_get_path(track).get_subname(0))
+				var saved := FRONT_LUNGE_ARMS.rotation_track_interpolate(track,0.0)
+				rig.set_bone_pose_rotation(bone,rig.get_bone_pose_rotation(bone).slerp(saved,weight))
 
 func capture_early_dig_arms() -> void:
 	var rig: Skeleton3D = setter.skeleton
