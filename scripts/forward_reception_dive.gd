@@ -168,12 +168,18 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 		flatten_palm(pose,author,rig,reach)
 	elif not wide_arm.is_empty():
 		var side := 1.0 if wide_arm == "l" else -1.0
-		var release_reach := 1.0-smoothstep(0.0,0.48,after_release)
+		var release_reach := 1.0-smoothstep(0.30,0.53,after_release)
 		var upper: String = "upperarm_"+wide_arm
 		var shoulder: Vector3 = author.point(pose,upper)
 		var ball := rig.to_local(ball_point)
 		# Put the forearm under the ball, with the wrist extending just past it.
 		var target := ball+(ball-shoulder).normalized()*(0.10/scale_)+Vector3.DOWN*0.055/scale_
+		var ground_weight := smoothstep(0.0,0.23,after_release)
+		if ground_weight > 0.0:
+			var forward := slide_heading if not slide_heading.is_zero_approx() else heading
+			var ground := ball_point+forward*0.30
+			ground.y = 0.075
+			target = target.lerp(rig.to_local(ground),ground_weight)
 		var arm_pose := pose.duplicate()
 		var reach_weight := smoothstep(0.0,0.65,smoothstep(0.06,0.25,time))
 		author.limb(arm_pose,upper,"lowerarm_"+wide_arm,"hand_"+wide_arm,target,
@@ -226,7 +232,7 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 		var elbow_point: Vector3 = author.point(pose,elbow)
 		var straight := (wrist-shoulder).normalized()
 		var extension_weight := smoothstep(0.025,0.12,time)*(1.0-smoothstep(0.16,0.27,since_brace))
-		if side == wide_arm: extension_weight *= 1.0-smoothstep(0.0,0.48,after_release)
+		if side == wide_arm: extension_weight *= 1.0-smoothstep(0.0,0.23,after_release)
 		var wrist_basis: Basis = author.world_pose(pose,rig.find_bone(hand)).basis
 		author.aim_joint(pose,upper,elbow,shoulder+(elbow_point-shoulder).normalized().slerp(straight,extension_weight))
 		elbow_point = author.point(pose,elbow)
