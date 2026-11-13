@@ -44,7 +44,7 @@ static func connect_arms(pose: Array, author: RefCounted, desired: Vector3, weig
 		var old_hand: Transform3D = author.world_pose(original,rig.find_bone(hand))
 		var target := grip+(left_hand if side == "l" else right_hand)
 		var pole := lateral*(0.32 if side == "l" else -0.32)+Vector3.DOWN*0.55+forward*0.30
-		if compact: pole = lateral*(-0.40 if side == "l" else 0.40)+Vector3.DOWN*0.55+forward*0.30
+		if compact: pole = lateral*(0.08 if side == "l" else -0.08)+Vector3.DOWN*0.55+forward*0.30
 		if dive: pole = lateral*(0.30 if side == "l" else -0.30)+Vector3.DOWN*0.42+forward*0.46
 		var upper_before: Transform3D = author.world_pose(pose,rig.find_bone(arm))
 		var lower_before: Transform3D = author.world_pose(pose,rig.find_bone(elbow))

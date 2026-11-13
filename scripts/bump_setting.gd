@@ -29,6 +29,7 @@ var defensive_hand_dig := false
 var hard_dig := false
 var fast_hand_dig := false
 var fast_back_receive := false
+var back_receive_steer := Vector3.ZERO
 var allow_auto_dive := true
 var tracked_hand_dig := Vector3.INF
 var catch_only := false
@@ -129,6 +130,7 @@ func reset() -> void:
 	hard_dig = false
 	fast_hand_dig = false
 	fast_back_receive = false
+	back_receive_steer = Vector3.ZERO
 	entry_pose.clear()
 	reach_changed_at = -INF
 	previous_dig_pose.clear()
@@ -502,9 +504,15 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 					var live_contact := dig_contact_segment(first,preview,false,previous_dig_pose,previous_dig_pose)
 					var offset := live_contact[0]-live_contact[1]
 					var steer := (1.0-smoothstep(0.40,0.74,offset.length()))*smoothstep(0.0,0.055,elapsed)
-					if steer > 0.0 and offset.length() > 0.07:
+					if fast_back_receive or (steer > 0.0 and offset.length() > 0.07):
 						var lift := clampf(-incoming.y*0.016,0.0,0.16)
-						reach_platform(offset*1.85+Vector3.UP*lift,steer,0.54,true)
+						var adjustment := offset*1.85+Vector3.UP*lift
+						if fast_back_receive:
+							# Move the joined platform as a unit instead of snapping to each preview point.
+							back_receive_steer = back_receive_steer.lerp(adjustment.limit_length(0.48)*steer,1.0-exp(-delta*30.0))
+							reach_platform(back_receive_steer,1.0,0.48)
+						else:
+							reach_platform(adjustment,steer,0.54,true)
 						previous_dig_pose = dig_bones()
 						contact = dig_contact_segment(first,last,false,initial_pose,previous_dig_pose)
 						point = contact[0]
