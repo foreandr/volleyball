@@ -27,9 +27,6 @@ static func unscaled_contact_travel(pancake: bool, wide: bool) -> float:
 	if wide: travel += 0.14
 	return travel
 
-static func outside_leg(actor: Node3D, court_x: float) -> String:
-	return actor.animation_side("r" if court_x <= 0.0 else "l")
-
 static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D], clasp: Array[Transform3D], start: Vector3, heading: Vector3, time: float, ball_point: Vector3, release_time: float, pancake := false, travel_scale := 1.0, track_platform := false, wide_arm := "", slide_heading := Vector3.ZERO) -> void:
 	var correction_time := time-WINDUP+float(RECOVERY_CORRECTION.get_meta("contact_time"))
 	# Start later while preserving the reach at the intended ball contact.
@@ -112,9 +109,6 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 	pose[pelvis].origin += author.world_pose(pose,parent).basis.inverse()*Vector3.UP*head_lift/scale_
 	var hands_release := 1.0-smoothstep(0.65,0.79,since_brace)
 	var push := smoothstep(0.08,0.40,since_brace)
-	var travel_direction := heading if wide_arm.is_empty() or slide_heading.is_zero_approx() else slide_heading
-	# Use the landing side in the team's court frame, independent of the reaching arm.
-	var lead_leg := outside_leg(actor,start.x+travel_direction.x*unscaled_contact_travel(pancake,not wide_arm.is_empty())*travel_scale)
 	for side in ["l","r"]:
 		var foot_name: String = "foot_"+side
 		var foot: Transform3D = author.world_pose(ready,rig.find_bone(foot_name))
@@ -136,16 +130,13 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 		var raised_ankle := hip+Vector3(0.0,sin(thigh_lift),-cos(thigh_lift))*upper_length
 		raised_ankle += Vector3(0.0,sin(shin_lift),-cos(shin_lift))*lower_length
 		trail = trail.lerp(raised_ankle,kick)
-		var lead: bool = side == lead_leg
+		var lead: bool = side == "r"
 		var step_start := 0.41 if lead else 0.60
 		var plant_time := 0.60 if lead else 0.84
 		var step := smoothstep(step_start,plant_time,since_brace)
 		var swing := sin(PI*step)
 		# Bring one foot under the hips, then step the trailing foot up after the weight transfer.
 		ankle = ankle.lerp(trail,maxf(extension,kick)).lerp(foot.origin,step)
-		# Set the outside foot slightly ahead while it takes the player's weight.
-		if lead:
-			ankle.z += 0.20/scale_*step*(1.0-get_up)
 		ankle.y += swing*(0.18 if lead else 0.12)/scale_
 		var descent := smoothstep(0.19,0.28,since_brace)*(1.0-smoothstep(0.37,0.52,since_brace))
 		var leg_axis := (ankle-hip).normalized()
