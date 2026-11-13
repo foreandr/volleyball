@@ -111,6 +111,7 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 	pose[pelvis].origin += author.world_pose(pose,parent).basis.inverse()*Vector3.UP*head_lift/scale_
 	var hands_release := 1.0-smoothstep(0.69,0.83,since_brace)
 	var push := smoothstep(0.08,0.53,since_brace)
+	var travel_local := rig.global_basis.inverse()*(actor.position-start)
 	for side in ["l","r"]:
 		var foot_name: String = "foot_"+side
 		var foot: Transform3D = author.world_pose(ready,rig.find_bone(foot_name))
