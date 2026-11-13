@@ -101,6 +101,7 @@ var bounce_end := 0.0
 var bounce_start := 0.0
 var dead_flight_from := INF
 var spectator := false
+var squat_rise_duration := FAST_RECEIVE_RISE
 var receive_animation_labels := {}
 var key_labels: Array[Label3D] = []
 var key_until := [0.0,0.0,0.0,0.0]
@@ -1190,7 +1191,7 @@ func begin_recovery(index: int) -> void:
 	var bump := platforms[index]
 	if is_finite(bump.touch_time) and (bump.knee_bend_depth > 0.001 or bump.fast_back_receive or bump.reach.get("tier",0) == 2) and not bump.low_save.active:
 		recovery["hold"] = FAST_RECEIVE_HOLD+(SQUAT_EXTRA_HOLD if bump.knee_bend_depth > 0.001 else 0.0)
-		recovery["rise"] = FAST_RECEIVE_RISE
+		recovery["rise"] = squat_rise_duration if bump.knee_bend_depth > 0.001 else FAST_RECEIVE_RISE
 	if bump.low_save.active:
 		recovery["save"] = bump.low_save
 		recovery["save_time"] = elapsed

@@ -109,6 +109,7 @@ func build_controls(host: Control, parent: VBoxContainer) -> void:
 	add_slider(host,left,"speed_scale","Slow motion","%",10,100,5,100,func(v): playback_speed = v*0.01)
 	add_slider(host,parent,"target_height","Target height","m",0.15,4.5,0.05,target.y,func(v): target.y = v)
 	add_slider(host,parent,"skill","Passing skill","%",0,100,1,game.passing_skill,func(v): game.passing_skill = v)
+	add_slider(host,parent,"squat_rise","Squat rise time","s",0.10,3.0,0.05,game.squat_rise_duration,func(v): game.squat_rise_duration = v)
 	left.add_child(host.label("Ball feed",19))
 	add_slider(host,left,"source_y","Source height","m",0.3,7.0,0.05,source.y,func(v): source.y = v)
 	add_slider(host,left,"heading","Direction","°",-180,180,1,heading,func(v): heading = v)
