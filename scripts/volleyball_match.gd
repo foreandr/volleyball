@@ -630,7 +630,7 @@ func launch(point: Vector3, motion: Vector3, kind: String, from: int, spin_rate 
 	last_player = from
 	receiving_team = team(from)
 	reset_receives()
-	if kind == "serve":
+	if kind == "serve" and not feed_acceleration.is_finite():
 		receiving_team = 1-team(from)
 		net_hit = serve.net_hit.duplicate()
 		if not net_hit.is_empty():
@@ -668,7 +668,7 @@ func flight_gravity() -> float:
 	return Flight.spike_gravity(spin) if flight_kind == "spike" else Flight.GRAVITY
 
 func flight_point(time: float) -> Vector3:
-	if flight_kind == "serve" and is_instance_valid(serve): return serve.to_global(serve.flight_point(time))
+	if flight_kind == "serve" and not drill_feed_acceleration.is_finite() and is_instance_valid(serve): return serve.to_global(serve.flight_point(time))
 	var acceleration := drill_feed_acceleration if drill_feed_acceleration.is_finite() else Vector3.DOWN*flight_gravity()
 	return origin+velocity*time+acceleration*0.5*time*time
 
@@ -1478,7 +1478,7 @@ func cpu_should_backshuffle(index: int, contact: Vector3, cue: float) -> bool:
 	return depth < -0.25 and approach.z < -0.05 and cpu_hand_receive_too_fast(cue)
 
 func overhead_available(index: int, technique: int) -> bool:
-	if not is_human(index) and flight_kind == "serve" and serve.get_script() == SERVES[3]: return false
+	if not is_human(index) and flight_kind == "serve" and not drill_feed_acceleration.is_finite() and serve.get_script() == SERVES[3]: return false
 	var first_contact := technique == 1 and (defensive_ball() or flight_kind == "serve")
 	var setting := cpu_is_setting(index)
 	var height := hand_contact_height(technique)

@@ -27,6 +27,8 @@ var planned_reps := 0
 var completed_reps := 0
 var successful_reps := 0
 var batch_active := false
+var random_feeds: Array[String] = []
+var random_button: Button
 var rep_readout: Label
 var batch_button: Button
 var launch_button: Button
@@ -102,6 +104,8 @@ func build_controls(host: Control, parent: VBoxContainer) -> void:
 	batch_button = host.button("Run 10 reps",toggle_batch)
 	batch_button.name = "RunPassingBatch"
 	host.content.add_child(batch_button)
+	random_button = host.button("Random 10",toggle_batch.bind(true))
+	host.content.add_child(random_button)
 	rep_readout = host.label("",18)
 	rep_readout.hide()
 	host.content.add_child(rep_readout)
@@ -286,26 +290,74 @@ func start_single() -> void:
 	if batch_active: return
 	start_reps(1)
 
-func toggle_batch() -> void:
+func toggle_batch(randomize_feeds := false) -> void:
 	if batch_active:
-		batch_active = false
-		batch_button.text = "Run 10 reps"
-		launch_button.disabled = false
 		planned_reps = completed_reps+int(running)
+		end_batch()
 		update_rep_readout()
 		return
-	start_reps(BATCH_REPS)
+	start_reps(BATCH_REPS,randomize_feeds)
 
-func start_reps(count: int) -> void:
+func end_batch() -> void:
+	batch_active = false
+	random_feeds.clear()
+	batch_button.text = "Run 10 reps"
+	random_button.text = "Random 10"
+	batch_button.disabled = false
+	random_button.disabled = false
+	launch_button.disabled = false
+
+func start_reps(count: int, randomize_feeds := false) -> void:
 	pending_sim_time = 0.0
 	planned_reps = count
 	completed_reps = 0
 	successful_reps = 0
 	batch_active = count > 1
+	if randomize_feeds:
+		var kinds: Array[String] = ["Float serve","Spin serve","Free ball","Attack"]
+		while random_feeds.size() < count:
+			kinds.shuffle()
+			random_feeds.append_array(kinds.slice(0,count-random_feeds.size()))
 	launch_button.disabled = batch_active
-	batch_button.text = "Stop after this rep" if batch_active else "Run 10 reps"
+	batch_button.disabled = randomize_feeds
+	random_button.disabled = batch_active and not randomize_feeds
+	if batch_active:
+		var stop_button := random_button if randomize_feeds else batch_button
+		stop_button.text = "Stop after this rep"
 	update_rep_readout()
 	launch_ball()
+
+func random_feed(kind: String) -> Dictionary:
+	for attempt in 64:
+		var from := Vector3(randf_range(-4.3,4.3),randf_range(2.8,3.8),randf_range(5.0,12.7))
+		if kind.ends_with("serve"): from.z = randf_range(11.0,12.7)
+		var landing := Vector3(randf_range(-4.3,4.3),Flight.FLOOR,randf_range(-4.7,3.3))
+		var span := landing-from
+		var pace := randf_range(6.0,10.0)
+		var spin_type := "No spin"
+		if kind == "Float serve": pace = randf_range(9.0,15.0)
+		if kind == "Spin serve":
+			pace = randf_range(13.0,22.0)
+			spin_type = SPINS.pick_random() if randf() < 0.4 else "Topspin"
+			if spin_type == "No spin": spin_type = "Topspin"
+		if kind == "Attack":
+			pace = randf_range(15.0,31.0)
+			spin_type = "Topspin" if randf() < 0.85 else "No spin"
+		if kind == "Free ball" and randf() < 0.45: spin_type = SPINS.pick_random()
+		var rate := randf_range(2.0,13.0) if spin_type != "No spin" else 0.0
+		var forward := span.slide(Vector3.UP).normalized()
+		var time := span.slide(Vector3.UP).length()/pace
+		var air := Flight.air(forward,{"angle":0.0,"speed":pace,"spin":spin_type,"spin_rate":rate})
+		var acceleration: Vector3 = air.acceleration
+		var incoming := span/time-acceleration*0.5*time
+		var path := func(t: float) -> Vector3: return from+incoming*t+acceleration*0.5*t*t
+		if not Net.first_hit(path,0.0,time).is_empty(): continue
+		return {"source":from,"incoming":incoming,"acceleration":acceleration,
+			"spin_axis":air.spin_axis,"spin_rate":air.spin_rate,"spin_type":spin_type}
+	# A high feed from the far half always clears the net.
+	var fallback := Vector3(0,3.2,11.0)
+	return {"source":fallback,"incoming":Vector3(0,6.285,-6.5),"acceleration":Vector3.DOWN*Flight.GRAVITY,
+		"spin_axis":Vector3.ZERO,"spin_rate":0.0,"spin_type":"No spin"}
 
 func update_rep_readout() -> void:
 	rep_readout.show()
@@ -316,16 +368,23 @@ func launch_ball() -> void:
 	game.begin_point()
 	game.phase = game.Phase.LIVE
 	game.serve.ball.hide()
-	game.players[RECEIVER].global_position = start
+	var randomized := not random_feeds.is_empty()
+	var kind: String = random_feeds.pop_front() if randomized else ""
+	var plan := random_feed(kind) if randomized else feed()
+	var receiver := Vector3(randf_range(-4.3,4.3),start.y,randf_range(-4.7,3.3)) if randomized else start
+	var ball_source: Vector3 = plan.source if randomized else source
+	game.players[RECEIVER].global_position = receiver
 	game.drill_pass_target = target
 	target_marker.global_position = target
-	origin_marker.global_position = source
+	origin_marker.global_position = ball_source
 	trajectory.hide()
 	game.update_player_guide()
 	game.score_label.hide()
-	game.info.text = "Ball in flight"
-	var plan := feed()
-	game.launch(source,plan.incoming,"spike",FEEDER,spin_rate if spin != "No spin" else 0.0,-1,Vector3.ZERO,plan.acceleration,plan.spin_axis*plan.spin_rate/TAU)
+	game.info.text = kind if randomized else "Ball in flight"
+	var motion: Vector3 = plan.incoming
+	var rate: float = plan.spin_rate/TAU if not plan.spin_axis.is_zero_approx() else 0.0
+	var flight_kind := "serve" if kind.ends_with("serve") else ("free" if kind == "Free ball" else "spike")
+	game.launch(ball_source,motion,flight_kind,FEEDER,rate,-1,Vector3.ZERO,plan.acceleration,plan.spin_axis*rate)
 	game.receiving_team = 0
 	game.cpu_choice = RECEIVER
 	game.cpu_technique = 1 if game.overhead_available(RECEIVER,1) else 0
@@ -338,9 +397,9 @@ func launch_ball() -> void:
 	running = true
 	finish_delay = -1.0
 	game.trace.write("passing_drill_feed",game.match_clock,{
-		"rep":completed_reps+1,"receiver":start,"source":source,"target":target,
-		"direction":heading,"angle":angle,"speed":speed,"spin":spin,
-		"spin_rate":spin_rate if spin != "No spin" else 0.0,"passing_skill":game.passing_skill
+		"rep":completed_reps+1,"receiver":receiver,"source":ball_source,"target":target,
+		"feed_type":kind,"direction":rad_to_deg(atan2(motion.x,-motion.z)),"angle":rad_to_deg(atan2(-motion.y,motion.slide(Vector3.UP).length())),"speed":motion.length(),"spin":plan.get("spin_type",spin),
+		"spin_rate":rate,"passing_skill":game.passing_skill
 	},true)
 	show_landing(game.path_point(game.flight_end()))
 	game.update_action_labels()
@@ -436,9 +495,7 @@ func finish() -> void:
 		completed_reps += 1
 		successful_reps += int(success)
 		if completed_reps >= planned_reps:
-			batch_active = false
-			batch_button.text = "Run 10 reps"
-			launch_button.disabled = false
+			end_batch()
 		update_rep_readout()
 	game.trace.write("passing_drill_result",game.match_clock,{
 		"rep":completed_reps,"successful":success,"result":game.info.text,
