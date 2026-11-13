@@ -1340,6 +1340,15 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 		var roll := deg_to_rad(-36.0)*strike_reach*weight
 		author.rotate_world(pose,"spine_01",Vector3.BACK,roll*0.45)
 		author.rotate_world(pose,"spine_02",Vector3.BACK,roll*0.55)
+	if stage == Stage.SET and plant_arm_lift_started and clock > swing_started:
+		# Carry one continuous arch from the arm lift into the loaded swing.
+		var rise_age := clock-swing_started
+		var bridge := smootherstep(0.0,0.065,rise_age)*(1.0-smootherstep(0.21,0.30,rise_age))
+		bridge *= 1.0-smootherstep(0.0,0.45,extension)
+		var spine: Vector3 = author.point(pose,"neck_01")-author.point(pose,"pelvis")
+		var pitch_now := atan2(spine.z,spine.y)
+		var pitch_target := deg_to_rad(lerpf(-7.0,-23.0,smootherstep(0.035,0.21,rise_age)))
+		author.rotate_world(pose,"spine_01",Vector3.RIGHT,(pitch_target-pitch_now)*bridge)
 	var neck: Vector3 = author.point(pose,"neck_01")
 	var gaze := ball_target-neck
 	var flat_gaze := gaze.slide(Vector3.UP)
