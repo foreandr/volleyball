@@ -141,7 +141,7 @@ func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time
 	if not from_sprint: actor.play_action("idle")
 
 func carry_run_into_plant(velocity: Vector3) -> void:
-	incoming_plant_speed = clampf(velocity.dot(heading),0.0,3.0*stride/load_duration())
+	incoming_plant_speed = clampf(velocity.dot(heading)*1.15,0.0,3.0*stride/load_duration())
 
 func begin_set_jump(actor: Node3D, load: float, jump_height := 0.56) -> void:
 	if active: return
@@ -221,7 +221,8 @@ func step(actor: Node3D, delta: float, input: Vector2) -> void:
 		return
 	var lead_load := 0.70*smoothstep(0.0,lead_step_duration*0.78,lead_age) if lead_time > 0.0 else 0.0
 	var load_in := lerpf(lead_load,1.0,smoothstep(0.035 if lead_time > 0.0 else 0.02,0.12 if lead_time > 0.0 else 0.19,pose_time))
-	var load := load_in*(1.0-smoothstep(0.19,LOAD_TIME+0.055,pose_time))
+	var entry_load := run_entry_load(pose_time)
+	var load := maxf(load_in,entry_load*0.66)*(1.0-smoothstep(0.19,LOAD_TIME+0.055,pose_time))
 	var impact := smoothstep(-0.025,0.04,landing)*(1.0-smoothstep(0.04,LAND_TIME,landing))
 	var knee_impact := impact
 	if not plant_legs.is_empty():
@@ -229,13 +230,17 @@ func step(actor: Node3D, delta: float, input: Vector2) -> void:
 	var arm_drive := smoothstep(0.17,0.37,pose_time)*(1.0-smoothstep(LOAD_TIME+air_time*0.56,LOAD_TIME+air_time*0.93,pose_time))
 	pose_jump(actor,first,second,load,impact,arm_drive,pose_time,flight,load_in,transfer_hop,knee_impact)
 
+func run_entry_load(pose_time: float) -> float:
+	if incoming_plant_speed <= 0.0: return 0.0
+	return smoothstep(0.0,0.075,pose_time)*(1.0-smoothstep(0.095,0.17,pose_time))
+
 func attack_plant_foot(side: String) -> Vector3:
 	var left := side == "l"
 	var from: Vector3 = plant_legs[side].origin
 	var to := left_plant if left else right_plant
 	var end := load_duration()
 	var start_step := lead_time*0.48 if not left else lead_time*0.92
-	if incoming_plant_speed > 0.0 and left: start_step = end*0.38
+	if incoming_plant_speed > 0.0 and left: start_step = end*0.48
 	var end_step := lead_time+(end-lead_time)*(0.53 if not left else 0.96)
 	if (left and lead_time > 0.0) or (not left and entry_time > 0.0):
 		var early_start := entry_time*0.70 if left else 0.0
@@ -335,7 +340,7 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 		var arm_load := load
 		if approach_plant:
 			# Carry the plant's backswing into the spike instead of pumping overhead first.
-			arm_load = load_in*(1.0-smoothstep(LOAD_TIME,LOAD_TIME+0.17,pose_time))
+			arm_load = maxf(load_in,run_entry_load(pose_time)*0.58)*(1.0-smoothstep(LOAD_TIME,LOAD_TIME+0.17,pose_time))
 		var front_swing := 0.0
 		if lead_time > 0.0:
 			var sweep_back := smoothstep(0.0,0.12,pose_time)
