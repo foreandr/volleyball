@@ -302,8 +302,8 @@ func tick(delta: float) -> void:
 			game.advance_recoveries(delta)
 			game.advance_idle_players(delta)
 			game.replay.record(game)
-			finish_delay -= delta
-			if finish_delay <= 0.0:
+			finish_delay = maxf(0.0,finish_delay-delta)
+			if finish_delay <= 0.0 and not game.recoveries.get(RECEIVER,{}).has("save"):
 				finish_delay = -1.0
 				if batch_active: launch_ball()
 				else: reset_receiver()
