@@ -30,6 +30,7 @@ const WIN_SCORE := 15
 const RECOVERY_TIME := 0.32
 const SERVE_RUN_BLEND := 0.15
 const PLAYER_GROUND_Y := 0.04
+const CPU_HAND_RECEIVE_MAX_SPEED := 16.0
 const CPU_SPRINT_SPEED := 6.05
 const HAND_DIG_REACH := 0.46
 const FOREARM_DIG_REACH := 0.66
@@ -1368,12 +1369,18 @@ func hand_receive_reach() -> float:
 	if defensive_ball(): return HAND_DIG_REACH
 	return Bump.HandPose.CONTACT_FORWARD if flight_kind == "serve" else 0.28
 
+func cpu_hand_receive_too_fast(at: float) -> bool:
+	var before := maxf(0.0,at-0.003)
+	var after := minf(flight_end(),at+0.003)
+	return after > before and path_point(before).distance_to(path_point(after)) > CPU_HAND_RECEIVE_MAX_SPEED*(after-before)
+
 func overhead_available(index: int, technique: int) -> bool:
 	if not is_human(index) and flight_kind == "serve" and serve.get_script() == SERVES[3]: return false
 	var first_contact := technique == 1 and (defensive_ball() or flight_kind == "serve")
 	var setting := cpu_is_setting(index)
 	var height := hand_contact_height(technique)
 	var at := arrival(height)
+	if first_contact and not is_human(index) and cpu_hand_receive_too_fast(at): return false
 	var frame := frames[team(index)]
 	var point := frame.to_local(path_point(at))
 	var actor := players[index]
@@ -1500,13 +1507,13 @@ func tick_receive(delta: float, previous: float) -> void:
 	var frame := frames[team(index)]
 	var bump := platforms[index]
 	var technique := requested if is_human(index) else cpu_technique
-	if not is_human(index) and defensive_ball() and is_finite(bump.pressed_at) and not is_finite(bump.touch_time) and not bump.low_save.active and elapsed-dig_switch_at > 0.16:
+	if not is_human(index) and (defensive_ball() or flight_kind == "serve") and is_finite(bump.pressed_at) and not is_finite(bump.touch_time) and not bump.low_save.active and elapsed-dig_switch_at > 0.16:
 		var hands_at := arrival(hand_contact_height(1))
 		var hands_lead := hands_at-elapsed
 		var alternate := technique
-		if technique == 0 and hands_lead >= 0.065 and hands_lead <= 0.30 and overhead_available(index,1):
+		if technique == 0 and defensive_ball() and hands_lead >= 0.065 and hands_lead <= 0.30 and overhead_available(index,1):
 			alternate = 1
-		elif technique == 1 and (path_point(elapsed).y < players[index].global_position.y+1.54 or (hands_lead < 0.17 and not overhead_available(index,1) and path_point(elapsed).y < 2.10)):
+		elif technique == 1 and (cpu_hand_receive_too_fast(hands_at) or (defensive_ball() and (path_point(elapsed).y < players[index].global_position.y+1.54 or (hands_lead < 0.17 and not overhead_available(index,1) and path_point(elapsed).y < 2.10)))):
 			alternate = 0
 		if alternate != technique:
 			bump.reset()
