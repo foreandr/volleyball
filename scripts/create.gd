@@ -196,25 +196,7 @@ func show_save_error() -> void:
 func build_preview(viewport: SubViewport) -> void:
 	var world := Node3D.new()
 	viewport.add_child(world)
-	var environment := WorldEnvironment.new()
-	var settings := Environment.new()
-	settings.background_mode = Environment.BG_COLOR
-	settings.background_color = Color("1b2a38")
-	settings.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	settings.ambient_light_color = Color("dce9f2")
-	settings.ambient_light_energy = 0.4
-	environment.environment = settings
-	world.add_child(environment)
-	var key := DirectionalLight3D.new()
-	key.rotation_degrees = Vector3(-35,-35,0)
-	key.light_energy = 0.65
-	key.shadow_enabled = true
-	world.add_child(key)
-	var fill := DirectionalLight3D.new()
-	fill.rotation_degrees = Vector3(-20,145,0)
-	fill.light_color = Color("91bfe6")
-	fill.light_energy = 0.3
-	world.add_child(fill)
+	preload("res://scripts/preview_court.gd").add_preview_lighting(world)
 	build_preview_stage(world)
 	preview_player = preload("res://scripts/volleyball_player.gd").new()
 	preview_player.name = "PreviewPlayer"

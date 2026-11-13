@@ -14,6 +14,8 @@ var scroll: ScrollContainer
 var back: Button
 var category := ""
 var setting_stage: SubViewportContainer
+var setting_camera: Camera3D
+var camera_focus := Vector3.ZERO
 
 func _ready() -> void:
 	var background := ColorRect.new()
@@ -107,29 +109,52 @@ func open_setting_stage(title: String) -> void:
 	var viewport := SubViewport.new()
 	viewport.own_world_3d = true
 	setting_stage.add_child(viewport)
-	var environment := WorldEnvironment.new()
-	environment.environment = Environment.new()
-	environment.environment.background_mode = Environment.BG_COLOR
-	environment.environment.background_color = Color("192936")
-	environment.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	environment.environment.ambient_light_color = Color.WHITE
-	environment.environment.ambient_light_energy = 0.65
-	viewport.add_child(environment)
-	var sun := DirectionalLight3D.new()
-	sun.rotation_degrees = Vector3(-52,-32,0)
-	sun.shadow_enabled = true
-	viewport.add_child(sun)
+	preload("res://scripts/preview_court.gd").add_preview_lighting(viewport)
 	viewport.add_child(preload("res://scripts/preview_court.gd").new())
 	var player := preload("res://scripts/volleyball_player.gd").new()
 	player.position = Vector3(0,0.04,1.4)
 	viewport.add_child(player)
 	player.get_node("DirectionArrows").hide()
-	var camera := Camera3D.new()
-	camera.position = Vector3(7.0,6.8,-10.0)
-	viewport.add_child(camera)
-	camera.look_at(Vector3(0,1,3.2))
-	camera.make_current()
+	setting_camera = Camera3D.new()
+	setting_camera.fov = 42.0
+	setting_camera.far = 150.0
+	setting_camera.position = Vector3(0,8.2,-12.2)
+	camera_focus = Vector3(0,1.55,3.9)
+	viewport.add_child(setting_camera)
+	setting_camera.look_at(camera_focus)
+	setting_camera.make_current()
+	setting_stage.gui_input.connect(handle_setting_camera)
 	back.grab_focus()
+
+func _process(delta: float) -> void:
+	if not is_instance_valid(setting_stage): return
+	var movement := Vector2(
+		float(Input.is_physical_key_pressed(KEY_D))-float(Input.is_physical_key_pressed(KEY_A)),
+		float(Input.is_physical_key_pressed(KEY_W))-float(Input.is_physical_key_pressed(KEY_S))).limit_length()
+	pan_setting_camera(movement,delta)
+
+func pan_setting_camera(movement: Vector2, delta: float) -> void:
+	var forward := -setting_camera.global_basis.z.slide(Vector3.UP).normalized()
+	var right := setting_camera.global_basis.x.slide(Vector3.UP).normalized()
+	var travel := (right*movement.x+forward*movement.y)*delta*6.0
+	setting_camera.position += travel
+	camera_focus += travel
+
+func handle_setting_camera(event: InputEvent) -> void:
+	var offset := setting_camera.position-camera_focus
+	var distance := offset.length()
+	if event is InputEventMouseMotion and event.button_mask & MOUSE_BUTTON_MASK_MIDDLE:
+		var yaw: float = atan2(offset.x,offset.z)-event.relative.x*0.008
+		var pitch := clampf(asin(offset.y/distance)+event.relative.y*0.006,0.08,1.22)
+		offset = Vector3(sin(yaw)*cos(pitch),sin(pitch),cos(yaw)*cos(pitch))*distance
+	elif event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_WHEEL_UP,MOUSE_BUTTON_WHEEL_DOWN]:
+		var wheel := (1.0 if event.button_index == MOUSE_BUTTON_WHEEL_UP else -1.0)*maxf(0.1,event.factor)
+		offset = offset.normalized()*clampf(distance*exp(-wheel*0.17),2.8,36.0)
+	else:
+		return
+	setting_camera.position = camera_focus+offset
+	setting_camera.look_at(camera_focus)
+	setting_stage.accept_event()
 
 func add_item(title: String, action: Callable) -> Button:
 	var item := Button.new()

@@ -63,3 +63,24 @@ func _ready() -> void:
 	box("LeftWall",Vector3(0.2,3.5,68),Vector3(-12,1.65,16),wall)
 	box("RightWall",Vector3(0.2,3.5,68),Vector3(12,1.65,16),wall)
 	box("FarWallStripe",Vector3(24,0.18,0.03),Vector3(0,1.1,48.88),material("4f7c8b"))
+
+static func add_preview_lighting(world: Node) -> void:
+	var environment := WorldEnvironment.new()
+	var settings := Environment.new()
+	settings.background_mode = Environment.BG_COLOR
+	settings.background_color = Color("1b2a38")
+	settings.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	settings.ambient_light_color = Color("dce9f2")
+	settings.ambient_light_energy = 0.4
+	environment.environment = settings
+	world.add_child(environment)
+	var key := DirectionalLight3D.new()
+	key.rotation_degrees = Vector3(-35,-35,0)
+	key.light_energy = 0.65
+	key.shadow_enabled = true
+	world.add_child(key)
+	var fill := DirectionalLight3D.new()
+	fill.rotation_degrees = Vector3(-20,145,0)
+	fill.light_color = Color("91bfe6")
+	fill.light_energy = 0.3
+	world.add_child(fill)
