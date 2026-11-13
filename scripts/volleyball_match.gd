@@ -1154,7 +1154,7 @@ func begin_recovery(index: int) -> void:
 	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
 	var recovery := {"started":match_clock,"pose":pose}
 	var bump := platforms[index]
-	if bump.fast_back_receive and is_finite(bump.touch_time):
+	if is_finite(bump.touch_time) and (bump.fast_back_receive or bump.reach.get("tier",0) == 2) and not bump.low_save.active:
 		recovery["hold"] = FAST_RECEIVE_HOLD
 		recovery["rise"] = FAST_RECEIVE_RISE
 	if bump.low_save.active:
@@ -1176,7 +1176,10 @@ func advance_recoveries(delta: float) -> void:
 				recovery.save.sample(players[index],time,recovery.save_release)
 				animated[index] = true
 				continue
+			var final_time: float = recovery.save.contact_time+recovery.save.Dive.DURATION-recovery.save.Dive.WINDUP
+			recovery.save.sample(players[index],final_time,recovery.save_release)
 			begin_recovery(index)
+			animated[index] = true
 			continue
 		var hold: float = recovery.get("hold",0.0)
 		var rise: float = recovery.get("rise",RECOVERY_TIME)

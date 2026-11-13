@@ -371,7 +371,9 @@ func simulate_step(delta: float) -> void:
 			game.advance_idle_players(delta)
 			game.replay.record(game)
 			finish_delay = maxf(0.0,finish_delay-delta)
-			if finish_delay <= 0.0 and not game.recoveries.get(RECEIVER,{}).has("save"):
+			if game.recoveries.has(RECEIVER):
+				finish_delay = maxf(0.15,finish_delay)
+			if finish_delay <= 0.0:
 				finish_delay = -1.0
 				if batch_active: launch_ball()
 				else: reset_receiver()
