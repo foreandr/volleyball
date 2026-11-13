@@ -114,7 +114,7 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 	for side in ["l","r"]:
 		var foot_name: String = "foot_"+side
 		var foot: Transform3D = author.world_pose(ready,rig.find_bone(foot_name))
-		var ankle := foot.origin-Vector3.BACK*travel/scale_
+		var ankle := foot.origin-travel_local
 		if side == "r":
 			var plant := smoothstep(0.015,0.15,time)
 			ankle.z += (0.42 if pancake else 0.66)*plant
