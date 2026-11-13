@@ -1,5 +1,6 @@
 extends MeshInstance3D
 
+const FRONT_LUNGE_STEP = preload("res://assets/animations/front_lunge_step.tres")
 const FRONT_LUNGE_ARMS = preload("res://assets/animations/front_lunge_arms.tres")
 const ReachPose = preload("res://scripts/forearm_reach_pose.gd")
 
@@ -787,6 +788,12 @@ func pose_reach(weight: float, intercept: Vector3) -> void:
 
 		if reach.get("forward_lunge",false) and reach.get("tier",0) == 2:
 			var rig: Skeleton3D = setter.skeleton
+			# Sample the edited foot lift and plant across the lunge, in place.
+			var step_time := clampf(pose_progress,0.0,1.0)*FRONT_LUNGE_STEP.length
+			for track in FRONT_LUNGE_STEP.get_track_count():
+				var bone := rig.find_bone(FRONT_LUNGE_STEP.track_get_path(track).get_subname(0))
+				var saved := FRONT_LUNGE_STEP.rotation_track_interpolate(track,step_time)
+				rig.set_bone_pose_rotation(bone,rig.get_bone_pose_rotation(bone).slerp(saved,weight))
 			for track in FRONT_LUNGE_ARMS.get_track_count():
 				var bone := rig.find_bone(FRONT_LUNGE_ARMS.track_get_path(track).get_subname(0))
 				var saved := FRONT_LUNGE_ARMS.rotation_track_interpolate(track,0.0)
