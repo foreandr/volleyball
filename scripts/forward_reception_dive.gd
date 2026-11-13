@@ -107,8 +107,8 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 	var head: Vector3 = author.point(pose,"Head")
 	var head_lift := maxf(0.0,0.24-0.02*chest_settle-(rig.global_transform*head).y)
 	pose[pelvis].origin += author.world_pose(pose,parent).basis.inverse()*Vector3.UP*head_lift/scale_
-	var hands_release := 1.0-smoothstep(0.65,0.79,since_brace)
-	var push := smoothstep(0.08,0.40,since_brace)
+	var hands_release := 1.0-smoothstep(0.69,0.83,since_brace)
+	var push := smoothstep(0.08,0.53,since_brace)
 	for side in ["l","r"]:
 		var foot_name: String = "foot_"+side
 		var foot: Transform3D = author.world_pose(ready,rig.find_bone(foot_name))
@@ -210,11 +210,14 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 			var outward := 1.0 if side == "l" else -1.0
 			var shoulder: Vector3 = author.point(brace_pose,"upperarm_"+side)
 			# The chest moves past the palms as they slide, then the hands push the torso up.
-			var palm := shoulder+Vector3(outward*0.13,0.0,lerpf(0.32,-0.17,push)/scale_)
+			var ribs: Vector3 = author.point(brace_pose,"spine_02")
+			var catch_palm := shoulder+Vector3(outward*0.13,0.0,0.32/scale_)
+			var push_palm := Vector3(shoulder.x+outward*0.09,0.0,ribs.z)
+			var palm := catch_palm.lerp(push_palm,push)
 			palm.y = rig.to_local(Vector3(0.0,0.065,0.0)).y
 			# Solve the floor brace from the neutral arm, independent of the moving ball target.
 			author.limb(brace_pose,"upperarm_"+side,"lowerarm_"+side,hand,palm,
-				Vector3(outward*0.48,0.56,-0.16),1.0,166.0)
+				Vector3(outward*0.38,0.58,lerpf(-0.16,-0.48,push)),1.0,166.0)
 			flatten_palm(brace_pose,author,rig,1.0,side)
 			for joint in ["upperarm_"+side,"lowerarm_"+side,hand]:
 				var bone := rig.find_bone(joint)
