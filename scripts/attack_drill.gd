@@ -113,6 +113,8 @@ var approach_render_rotations: Array[Quaternion] = []
 var approach_entry_yaw := 0.0
 const ATTACK_BODY_BONES := ["pelvis","spine_01","spine_02","spine_03","neck_01","head"]
 var swing_palm_roll := 0.0
+var plant_arm_lift_started := false
+const PLANT_ARM_LIFT_TIME := 0.19
 var finish_hand_axis := Vector3.ZERO
 var finish_hand_edge := Vector3.ZERO
 var finish_hand_turn := INF
@@ -289,6 +291,7 @@ func reset_feed() -> void:
 	approach_arm_transition.clear()
 	approach_render_rotations.clear()
 	swing_palm_roll = 0.0
+	plant_arm_lift_started = false
 	if swing_target == null:
 		swing_target = region.duplicate()
 		add_child(swing_target)
@@ -467,7 +470,7 @@ func capture_approach_arm_pose() -> void:
 	for bone in rig.get_bone_count(): approach_arm_transition.append(rig.get_bone_pose(bone))
 
 func start_attack_swing() -> void:
-	if uses_assisted_approach(): capture_approach_arm_pose()
+	if uses_assisted_approach() and not plant_arm_lift_started: capture_approach_arm_pose()
 	swing_started = clock
 	swing_charge_started = -INF
 	swing_released = -INF
@@ -641,6 +644,26 @@ func step_jump(delta: float) -> void:
 		setter.rotation.y = lerp_angle(approach_entry_yaw,yaw,smootherstep(0.0,turn_time,jump.elapsed+delta))
 		takeoff_yaw = setter.rotation.y
 	super.step_jump(delta)
+	if stage == Stage.SET and jump.active and sync_approach_arm_lift() and not is_finite(swing_started):
+		lift_arms_during_plant()
+
+func lift_arms_during_plant() -> void:
+	var window := minf(PLANT_ARM_LIFT_TIME,jump.load_duration())
+	var progress := clampf((jump.elapsed-jump.load_duration()+window)/window,0.0,1.0)
+	if progress <= 0.0: return
+	if not plant_arm_lift_started:
+		capture_approach_arm_pose()
+		plant_arm_lift_started = true
+	var rig: Skeleton3D = setter.skeleton
+	var pose: Array[Transform3D] = []
+	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
+	apply_two_arm_lift(pose,setter.get_pose_author(),0.0,0.0,progress*0.30)
+	approach_render_rotations.clear()
+	for bone in rig.get_bone_count():
+		var rotation := pose[bone].basis.get_rotation_quaternion()
+		approach_render_rotations.append(rotation)
+		if rig.get_bone_name(bone) in ["upperarm_r","lowerarm_r","hand_r","upperarm_l","lowerarm_l","hand_l"]:
+			rig.set_bone_pose_rotation(bone,rotation)
 
 func setter_movement_scale() -> float:
 	if stage == Stage.SERVE:
@@ -1333,7 +1356,7 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 	if uses_assisted_approach() and not approach_arm_transition.is_empty():
 		var handoff_age := clock-stage_start if stage == Stage.HIT else clock-swing_started
 		if stage == Stage.SET and handoff_age < 0.43 and sync_approach_arm_lift():
-			apply_two_arm_lift(pose,author,handoff_age,extension)
+			apply_two_arm_lift(pose,author,handoff_age,extension,handoff_age+0.30 if plant_arm_lift_started else handoff_age)
 		elif stage == Stage.SET and handoff_age < 0.43:
 			var front_pose := pose.duplicate()
 			var across: Vector3 = (author.point(pose,"upperarm_l")-author.point(pose,"upperarm_r")).normalized()
@@ -1422,14 +1445,14 @@ func keep_hitting_elbow_long(rig: Skeleton3D, pose: Array[Transform3D], age: flo
 # Shoulder-to-wrist pitch for each 60 fps frame of the paired lift.
 const ARM_LIFT_PITCH := [-153.0,-148.0,-142.0,-134.0,-124.0,-113.0,-101.0,-88.0,-74.0,-59.0,-44.0,-29.0,-14.0,0.0,14.0,27.0,39.0,49.0,54.0]
 
-func apply_two_arm_lift(pose: Array, author: RefCounted, age: float, extension: float) -> void:
+func apply_two_arm_lift(pose: Array, author: RefCounted, age: float, extension: float, lift_age: float) -> void:
 	var source := pose.duplicate()
 	for side in ["r","l"]:
 		SpikeArm.blend_arm(source,approach_arm_transition,author,1.0,side)
-	var raise := smootherstep(0.0,0.28,age)
-	var together := smoothstep(0.0,0.14,age)
+	var raise := smootherstep(0.0,0.28,lift_age)
+	var together := smoothstep(0.0,0.14,lift_age)
 	var last_key := ARM_LIFT_PITCH.size()-1
-	var lift_frame := clampf(age*60.0,0.0,float(last_key))
+	var lift_frame := clampf(lift_age*60.0,0.0,float(last_key))
 	var key := floori(lift_frame)
 	var shared_angle := deg_to_rad(lerpf(ARM_LIFT_PITCH[key],ARM_LIFT_PITCH[mini(key+1,last_key)],lift_frame-key))
 	for side in ["r","l"]:
