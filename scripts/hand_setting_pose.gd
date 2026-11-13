@@ -44,6 +44,7 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 	var set_depth_m := rig.global_basis.z.normalized().dot(set_offset.slide(Vector3.UP)) if set_offset.is_finite() else 0.0
 	var wrist_direction := smoothstep(0.12,0.70,absf(set_depth_m))
 	var wrist_distance := smoothstep(0.0,4.0,absf(set_depth_m))
+	var frontset := smoothstep(0.12,0.70,set_depth_m)*maxf(set_extension,0.0)
 	var back_arch := smoothstep(0.0,4.0,-set_depth_m)
 	if arch_progress > 0.0 and back_arch > 0.0:
 		var arch := deg_to_rad(48.0)*back_arch*arch_progress*blend
@@ -65,10 +66,10 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 	for side in ["l","r"]:
 		var sign_ := 1.0 if side == "l" else -1.0
 		var hand: String = "hand_"+side
-		var wrist := diamond+Vector3(sign_*0.14,-0.08,-0.015).rotated(Vector3.UP,turn*0.65)
+		var wrist := diamond+Vector3(sign_*lerpf(0.14,0.11,frontset),-0.08,-0.015).rotated(Vector3.UP,turn*0.65)
 		var upper: String = "upperarm_"+side
 		var lower: String = "lowerarm_"+side
-		var pole := Vector3(sign_*0.9,-0.55,0.30)
+		var pole := Vector3(sign_*lerpf(0.9,0.45,frontset),-0.55,0.30)
 		if not face_save and blend < 1.0:
 			var shoulder: Vector3 = author.point(pose,upper)
 			var elbow: Vector3 = author.point(pose,lower)
@@ -86,7 +87,7 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 			var release_direction := local_push.normalized()
 			release_direction = (release_direction+Vector3.FORWARD*0.10*backset).normalized()
 			var set_axis := release_direction
-			set_axis = (set_axis-Vector3.RIGHT*sign_*0.30*backset).normalized()
+			set_axis = (set_axis-Vector3.RIGHT*sign_*(0.30*backset+0.24*frontset)).normalized()
 			var direction := (wrist-shoulder).normalized().slerp(set_axis,lerpf(0.65,1.0,backset)*aim_weight)
 			wrist = shoulder+direction*lerpf(wrist.distance_to(shoulder),length*0.997,aim_weight)
 		author.limb(pose,upper,lower,hand,wrist,pole,1.0,elbow_limit)
@@ -107,7 +108,7 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 			var forearm: Vector3 = base.origin-author.point(pose,lower)
 			var forearm_pitch := atan2(forearm.z,forearm.y)
 			var neutral_pitch := atan2(target_fingers.z,target_fingers.y)
-			var flex := deg_to_rad(8.0+14.0*wrist_distance) if set_depth_m > 0.0 else -deg_to_rad(17.0+27.0*wrist_distance)
+			var flex := deg_to_rad(8.0+14.0*wrist_distance) if set_depth_m > 0.0 else -deg_to_rad(24.0+36.0*wrist_distance)
 			var pitch := angle_difference(neutral_pitch,forearm_pitch+flex)*wrist_follow
 			target_fingers = target_fingers.rotated(Vector3.RIGHT,pitch)
 			target_across = target_across.rotated(Vector3.RIGHT,pitch)
