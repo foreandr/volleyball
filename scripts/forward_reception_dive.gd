@@ -203,6 +203,27 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 			var name_ := str(rig.get_bone_name(bone))
 			if name_.begins_with("thumb") or name_.begins_with("index") or name_.begins_with("middle") or name_.begins_with("ring") or name_.begins_with("pinky"):
 				pose[bone].basis = pose[bone].basis.slerp(clasp[bone].basis,reach)
+	if not pancake and wide_arm.is_empty() and reach_edit_time >= 0.0 and reach_edit_time < 13.0/60.0:
+		for track in TWO_ARM_REACH_EDIT.get_track_count():
+			var bone := rig.find_bone(TWO_ARM_REACH_EDIT.track_get_path(track).get_subname(0))
+			var edit: Quaternion = TWO_ARM_REACH_EDIT.rotation_track_interpolate(track,reach_edit_time)
+			pose[bone].basis *= Basis(edit)
+	# Extend each elbow before blending that arm into its floor brace.
+	for side in ["l","r"]:
+		var upper := "upperarm_"+str(side)
+		var elbow := "lowerarm_"+str(side)
+		var hand := "hand_"+str(side)
+		var shoulder: Vector3 = author.point(pose,upper)
+		var wrist: Vector3 = author.point(pose,hand)
+		var elbow_point: Vector3 = author.point(pose,elbow)
+		var straight := (wrist-shoulder).normalized()
+		var extension_weight := smoothstep(0.025,0.12,time)*(1.0-smoothstep(0.16,0.27,since_brace))
+		var wrist_basis: Basis = author.world_pose(pose,rig.find_bone(hand)).basis
+		author.aim_joint(pose,upper,elbow,shoulder+(elbow_point-shoulder).normalized().slerp(straight,extension_weight))
+		elbow_point = author.point(pose,elbow)
+		var forearm: Vector3 = (author.point(pose,hand)-elbow_point).normalized()
+		author.aim_joint(pose,elbow,hand,elbow_point+forearm.slerp(straight,extension_weight))
+		author.set_world_basis(pose,hand,wrist_basis)
 	if since_brace > 0.0:
 		for side in ["l","r"]:
 			var delay := 0.055 if side == wide_arm or (pancake and side == "r") else 0.0
@@ -232,11 +253,6 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 			if height < 0.055:
 				wrist.y += (0.055-height)/scale_
 				author.limb(pose,"upperarm_"+side,"lowerarm_"+side,hand,wrist,Vector3(0.65 if side == "l" else -0.65,0.4,-0.25))
-	if not pancake and wide_arm.is_empty() and reach_edit_time >= 0.0 and reach_edit_time < 13.0/60.0:
-		for track in TWO_ARM_REACH_EDIT.get_track_count():
-			var bone := rig.find_bone(TWO_ARM_REACH_EDIT.track_get_path(track).get_subname(0))
-			var edit: Quaternion = TWO_ARM_REACH_EDIT.rotation_track_interpolate(track,reach_edit_time)
-			pose[bone].basis *= Basis(edit)
 	# Apply the editor changes as local joint offsets over the live dive.
 	for track in RECOVERY_CORRECTION.get_track_count():
 		var bone := rig.find_bone(RECOVERY_CORRECTION.track_get_path(track).get_subname(0))
