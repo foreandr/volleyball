@@ -9,6 +9,8 @@ var playing := false
 var clock := 0.0
 var speed := 0.5
 var index := 0
+var ball_offset := Vector3.ZERO
+var actor_offsets := {}
 
 func capture(match_: Node3D) -> Dictionary:
 	var actors := []
@@ -43,6 +45,8 @@ func toggle(match_: Node3D, current_finished: bool) -> void:
 	if active:
 		active = false
 		playing = false
+		ball_offset = Vector3.ZERO
+		actor_offsets.clear()
 		apply(match_,restore,restore,0.0)
 		match_.ball.global_transform = restore.match_ball
 		match_.ball.visible = restore.match_visible
@@ -94,6 +98,7 @@ func apply(match_: Node3D, first: Dictionary, second: Dictionary, blend: float) 
 		var a: Dictionary = first.actors[i]
 		var b: Dictionary = second.actors[i]
 		actor.transform = a.root.interpolate_with(b.root,blend)
+		actor.global_position += Vector3(actor_offsets.get(i,Vector3.ZERO))
 		actor.model.transform = a.model.interpolate_with(b.model,blend)
 		for bone in actor.skeleton.get_bone_count():
 			var pose: Transform3D = a.bones[bone].interpolate_with(b.bones[bone],blend)
@@ -104,6 +109,7 @@ func apply(match_: Node3D, first: Dictionary, second: Dictionary, blend: float) 
 		key.visible = first.keys[i][1]
 		key.global_position = actor.global_position+Vector3.UP*2.18
 	match_.ball.global_transform = first.ball.interpolate_with(second.ball,blend)
+	match_.ball.global_position += ball_offset
 	match_.ball.visible = first.visible
 	match_.score_label.text = first.score
 	match_.info.text = first.info

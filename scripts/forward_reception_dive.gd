@@ -2,8 +2,6 @@ extends RefCounted
 
 const PlatformPose = preload("res://scripts/reception_platform_pose.gd")
 const WINDUP := 0.33
-const LEG_KICK_OFFSET := -0.15
-const LEG_LOWER_DURATION := 0.42
 const CONTACT_POSE_TIME := 0.40
 const POSE_DURATION := 1.28
 const GET_UP_EXTENSION := 0.30
@@ -29,15 +27,14 @@ static func unscaled_contact_travel(pancake: bool, wide: bool) -> float:
 	return travel
 
 static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D], clasp: Array[Transform3D], start: Vector3, heading: Vector3, time: float, ball_point: Vector3, release_time: float, pancake := false, travel_scale := 1.0, track_platform := false, wide_arm := "", slide_heading := Vector3.ZERO) -> void:
-	var kick_time := time-WINDUP-LEG_KICK_OFFSET
-	var kick := smoothstep(0.0,0.13,kick_time)*(1.0-smoothstep(0.22,0.22+LEG_LOWER_DURATION,kick_time))
 	# Start later while preserving the reach at the intended ball contact.
 	time = time*CONTACT_POSE_TIME/WINDUP if time < WINDUP else time-WINDUP+CONTACT_POSE_TIME
 	time -= GET_UP_EXTENSION*smoothstep(0.82,POSE_DURATION+GET_UP_EXTENSION,time)
 	var rig: Skeleton3D = actor.skeleton
 	var brace_start := maxf(0.41,release_time-WINDUP+CONTACT_POSE_TIME)
 	var since_brace := time-brace_start
-	var slide := 0.26*smoothstep(0.075,0.40,since_brace)
+	var slide := 0.34*smoothstep(0.18,0.43,since_brace)
+	var kick := smoothstep(0.13,0.25,since_brace)*(1.0-smoothstep(0.28,0.49,since_brace))
 	var travel := 0.23*smoothstep(0.02,0.20,time)+1.35*smoothstep(0.16,0.61,time)+slide
 	var drop := 0.0
 	var pitch := 0.0
@@ -117,8 +114,8 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 			ankle.y += 0.09*sin(PI*plant)
 		var trail := foot.origin-Vector3.BACK*(0.69 if side == "l" else 0.81)
 		trail.x = foot.origin.x*0.48
-		trail.y += kick*(0.38 if side == "l" else 0.32)
-		trail.z += kick*0.20
+		trail.y += kick*(0.52 if side == "l" else 0.43)
+		trail.z += kick*0.27
 		var step_start := 0.46 if side == "r" else 0.68
 		var step := smoothstep(step_start,step_start+0.24,since_brace)
 		ankle = ankle.lerp(trail,extension).lerp(foot.origin,step)

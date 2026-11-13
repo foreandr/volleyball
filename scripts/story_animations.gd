@@ -389,6 +389,7 @@ func open_lab_replay() -> void:
 
 func toggle_match_replay() -> void:
 	var replay = demo_match.replay
+	if passing_drill != null: passing_drill.drag_handle = ""
 	var opening_drill_review: bool = passing_drill != null and not replay.active
 	demo_match.toggle_replay(passing_drill != null)
 	if opening_drill_review and replay.active:

@@ -155,7 +155,8 @@ func handle_drag(event: InputEvent, camera: Camera3D, screen: Vector2) -> bool:
 		var was_dragging := not drag_handle.is_empty()
 		drag_handle = ""
 		return was_dragging
-	if running or finish_delay >= 0.0 or game.replay.active: return false
+	if game.replay.active: return handle_replay_drag(event,camera,screen)
+	if running or finish_delay >= 0.0: return false
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
 		var handle := pick_handle(camera,screen)
 		if handle.is_empty(): return false
@@ -180,6 +181,42 @@ func handle_drag(event: InputEvent, camera: Camera3D, screen: Vector2) -> bool:
 					StorySession.save_match_preference(PREFERENCE_PREFIX+"source_position",Vector2(source.x,source.z))
 				"target": target = Vector3(clampf(point.x,-4.4,4.4),target.y,clampf(point.z,-4.9,3.8))
 			update_setup()
+		return true
+	return false
+
+func handle_replay_drag(event: InputEvent, camera: Camera3D, screen: Vector2) -> bool:
+	var replay: RefCounted = game.replay
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+		var rig: Skeleton3D = game.players[RECEIVER].skeleton
+		var hips := rig.to_global(rig.get_bone_global_pose(rig.find_bone("pelvis")).origin)
+		var head := rig.to_global(rig.get_bone_global_pose(rig.find_bone("Head")).origin)
+		var ball: Vector3 = game.ball.global_position
+		var handle := ""
+		var point := hips
+		if game.ball.visible and not camera.is_position_behind(ball) and camera.unproject_position(ball).distance_to(screen) <= 22.0:
+			handle = "replay_ball"
+			point = ball
+		elif not camera.is_position_behind(hips) and not camera.is_position_behind(head):
+			var body := Geometry2D.get_closest_point_to_segment(screen,camera.unproject_position(hips),camera.unproject_position(head))
+			if body.distance_to(screen) <= 32.0: handle = "replay_receiver"
+		if handle.is_empty(): return false
+		drag_plane = Plane(Vector3.UP,point.y)
+		var hit: Variant = drag_point(camera,screen)
+		if hit == null: return false
+		var offset: Vector3 = replay.ball_offset if handle == "replay_ball" else replay.actor_offsets.get(RECEIVER,Vector3.ZERO)
+		grab_offset = offset-hit
+		drag_handle = handle
+		return true
+	if event is InputEventMouseMotion and drag_handle in ["replay_ball","replay_receiver"]:
+		if not (event.button_mask & MOUSE_BUTTON_MASK_LEFT):
+			drag_handle = ""
+			return false
+		var hit: Variant = drag_point(camera,screen)
+		if hit is Vector3:
+			var offset: Vector3 = (hit+grab_offset).slide(Vector3.UP)
+			if drag_handle == "replay_ball": replay.ball_offset = offset
+			else: replay.actor_offsets[RECEIVER] = offset
+			replay.seek(game,replay.clock)
 		return true
 	return false
 
