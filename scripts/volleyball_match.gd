@@ -2220,21 +2220,21 @@ func follow_run_into_plant(hitter: int, driver: Node3D, staging: Vector3, time_l
 	var animator: AnimationPlayer = actor.animator
 	var run: String = actor.animation_slots["run"]
 	if recoveries.has(hitter) or animator.current_animation != run or time_left < 0.58 or time_left > 1.2: return false
-	# Give the runner space to land its last left step beyond the old staging point.
-	var entry_target := staging+Vector3.BACK*1.13
+	# Hand off on an earlier running plant to leave room for both takeoff steps.
+	var entry_target := staging+Vector3.BACK*0.43
 	var offset := (entry_target-actor.position).slide(Vector3.UP)
-	if offset.z < -0.05 or offset.length() > 2.2: return false
+	if offset.z < -0.35 or offset.length() > 2.2: return false
 	var before := animator.current_animation_position
 	var length := animator.current_animation_length
 	var until_left: float = driver.run_left_plant_distance()
-	var window := clampf(time_left-0.72,0.09,0.36)
+	var window := clampf(time_left-0.89,0.09,0.36)
 	var cadence := move_toward(animator.speed_scale,clampf(until_left/window,1.4,1.85),delta*6.0)
 	var speed := clampf(offset.length()/maxf(window,until_left/maxf(cadence,0.1)),1.45,4.6)
 	var before_position := actor.position
-	var run_target := entry_target+Vector3.BACK*0.24
+	var run_target := entry_target+Vector3.BACK*0.75
 	move_cpu(hitter,frames[team(hitter)].to_global(run_target),delta,speed,Vector3.INF,true,true,17.0,true,cadence)
 	if animator.current_animation != run: return true
-	if driver.record_run_footfalls(before,animator.current_animation_position,length) and time_left <= 0.85:
+	if driver.record_run_footfalls(before,animator.current_animation_position,length) and time_left <= 1.03:
 		driver.queue_run_plant((actor.position-before_position)/delta)
 		if driver.approach_jump_queued: show_key(hitter,"Space")
 	return true

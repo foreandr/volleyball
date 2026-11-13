@@ -141,11 +141,29 @@ func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time
 	if not from_sprint: actor.play_action("idle")
 
 func carry_run_into_plant(velocity: Vector3) -> void:
-	incoming_plant_speed = clampf(velocity.dot(heading)*1.15,0.0,3.0*stride/load_duration())
-	if incoming_plant_speed <= 0.0: return
-	# Keep both takeoff plants ahead of the running left foot instead of pulling it back.
-	right_plant += heading*0.29
-	left_plant += heading*0.34
+	var entry_speed := velocity.dot(heading)
+	if entry_speed <= 0.0: return
+	# Reserve the longer stride for the right, then close through to the left.
+	var running_left := (left_foot_start-start).dot(heading)
+	var width := (right_plant-start).dot(heading.cross(Vector3.UP))
+	var lateral := heading.cross(Vector3.UP)*width
+	var right_step := 0.80
+	var left_step := 0.42
+	if heading.z > 0.0:
+		var available := (front_limit-start.z-absf(lateral.z))/heading.z-running_left
+		var fit := clampf(available/(right_step+left_step),0.0,1.0)
+		right_step *= fit
+		left_step *= fit
+	var right_distance := running_left+right_step
+	var left_distance := right_distance+left_step
+	right_plant = start+heading*right_distance+lateral
+	left_plant = start+heading*left_distance-lateral
+	right_plant.y = plant_ground
+	left_plant.y = plant_ground
+	var ground_advance := maxf(0.0,right_distance-0.16-stride)
+	stride += ground_advance
+	incoming_plant_speed = minf(entry_speed,3.0*stride/load_duration())
+	approach_lunge = approach_lunge.move_toward(Vector3.ZERO,ground_advance*(1.0+AIR_TRAVEL_FRACTION))
 
 func begin_set_jump(actor: Node3D, load: float, jump_height := 0.56) -> void:
 	if active: return
