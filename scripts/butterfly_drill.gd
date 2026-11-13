@@ -8,7 +8,9 @@ var server_start := Vector3(0,0.04,14.0)
 var spike_target := Vector3(1.5,Flight.FLOOR,11.8)
 var serve_apex := 5.6
 var spike_pace := 1.0
+var spike_jump_height := 42.0
 var spike_preview: MultiMeshInstance3D
+var tape_marker: MultiMeshInstance3D
 var landing_time := 0.0
 
 func _init() -> void:
@@ -25,7 +27,10 @@ func configure(status: Label) -> void:
 	spike_target = setup.get("spike",spike_target)
 	serve_apex = setup.get("serve_apex",serve_apex)
 	spike_pace = setup.get("spike_pace",spike_pace)
+	spike_jump_height = setup.get("spike_jump_height",spike_jump_height)
 	spike_preview = make_dots(Color("fa91b6"))
+	tape_marker = make_dots(Color("ffc24c"))
+	tape_marker.multimesh.instance_count = 16
 	super.configure(status)
 
 func setup_key() -> String:
@@ -46,7 +51,7 @@ func target_colors() -> Dictionary:
 
 func setup_snapshot() -> Dictionary:
 	var setup := super.setup_snapshot()
-	setup.merge({"server":server_start,"spike":spike_target,"serve_apex":serve_apex,"spike_pace":spike_pace})
+	setup.merge({"server":server_start,"spike":spike_target,"serve_apex":serve_apex,"spike_pace":spike_pace,"spike_jump_height":spike_jump_height})
 	return setup
 
 func reset_players() -> void:
@@ -73,8 +78,10 @@ func start_feed() -> void:
 	game.drill_force_forearm_serve_receive = true
 	game.drill_spike_target = spike_target
 	game.drill_spike_pace = spike_pace
+	apply_spike_jump_height()
 	landing_time = 0.0
 	spike_preview.hide()
+	tape_marker.hide()
 	game.phase = game.Phase.READY
 	game.ball.hide()
 	game.serve.serve()
@@ -120,7 +127,10 @@ func step_attack(kind: String) -> void:
 	if kind != "spike" and game.flight_kind == "spike":
 		contact_frames["hitter"] = game.replay.current.size()
 		record_path(spike_preview,"spike_path")
-		set_status("Spike")
+		var tape := tape_contact(game.net_hit)
+		show_tape_contact(tape)
+		game.replay.current[0]["spike_tape"] = tape
+		set_status("Spike hits tape" if tape.is_finite() else "Spike")
 
 func show_rep_target(frames: Array[Dictionary]) -> void:
 	super.show_rep_target(frames)
@@ -131,6 +141,7 @@ func show_rep_target(frames: Array[Dictionary]) -> void:
 	restore_path(feed_preview,frames[0],"serve_path")
 	restore_path(pass_preview,frames[0],"pass_path")
 	restore_path(spike_preview,frames[0],"spike_path")
+	show_tape_contact(frames[0].get("spike_tape",Vector3.INF))
 
 func finish_rep() -> bool:
 	if game.flight_kind != "spike": return true
@@ -149,7 +160,23 @@ func rep_success(kind: String) -> bool:
 func result_label() -> String:
 	return "spikes"
 
+func apply_spike_jump_height() -> void:
+	game.attackers[0].jump.max_height = spike_jump_height*0.0254+0.2032
+
+func tape_contact(hit: Dictionary) -> Vector3:
+	return hit.point if hit.get("kind","") == "tape" else Vector3.INF
+
+func show_tape_contact(point: Vector3) -> void:
+	tape_marker.visible = point.is_finite()
+	if not tape_marker.visible: return
+	tape_marker.position = point
+	for index in tape_marker.multimesh.instance_count:
+		var angle := TAU*index/tape_marker.multimesh.instance_count
+		var offset := Vector3(cos(angle),sin(angle),0)*0.15
+		tape_marker.multimesh.set_instance_transform(index,Transform3D(Basis.IDENTITY,offset))
+
 func show_feed_preview() -> void:
+	apply_spike_jump_height()
 	configure_serve()
 	game.ball.hide()
 	var duration: float = game.serve.flight_duration(game.serve.preview_origin)
@@ -159,7 +186,9 @@ func show_feed_preview() -> void:
 	var time := (spike_target-start).slide(Vector3.UP).length()/(22.0*spike_pace)
 	var gravity := Flight.spike_gravity(10.0)
 	var velocity := (spike_target-start)/time+Vector3.UP*gravity*time*0.5
-	draw_path(spike_preview,func(t: float): return start+velocity*t+Vector3.DOWN*gravity*t*t*0.5,time)
+	var path := func(t: float): return start+velocity*t+Vector3.DOWN*gravity*t*t*0.5
+	draw_path(spike_preview,path,time)
+	show_tape_contact(tape_contact(Net.first_hit(path,0.0,time)))
 
 func setup_position(key: String) -> Vector3:
 	match key:
@@ -182,6 +211,7 @@ func trajectory_value(key: String) -> float:
 		"serve_apex": return serve_apex
 		"pass_height": return pass_target.y
 		"set_apex": return set_apex
+		"spike_jump_height": return spike_jump_height
 		_: return spike_pace
 
 func set_trajectory_value(key: String, value: float) -> void:
@@ -193,6 +223,7 @@ func set_trajectory_value(key: String, value: float) -> void:
 		"pass_height": pass_target.y = clampf(value,2.3,6.0)
 		"set_apex": set_apex = clampf(value,3.35,7.0)
 		"spike_pace": spike_pace = clampf(value,0.5,1.4)
+		"spike_jump_height": spike_jump_height = clampf(value,30.0,65.0)
 	refresh_setup()
 	save_setup()
 	trajectory_changed.emit()

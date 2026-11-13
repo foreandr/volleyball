@@ -167,7 +167,8 @@ func open_setting_stage(title: String) -> void:
 		add_drill_value(left,"Serve apex",3.5,9.0,"serve_apex")
 		add_drill_value(left,"Pass height",2.3,6.0,"pass_height")
 		add_drill_value(left,"Set apex",3.35,7.0,"set_apex")
-		add_drill_value(left,"Spike pace",0.5,1.4,"spike_pace")
+		add_drill_value(left,"Spike pace",0.5,1.4,"spike_pace","×")
+		add_drill_value(left,"Spike jump height",30,65,"spike_jump_height"," in",1.0)
 	build_review(right)
 	for button in [launch,ten,sweep]:
 		button.pressed.connect(func(): repeat.set_pressed_no_signal(false))
@@ -233,19 +234,19 @@ func add_speed(panel: VBoxContainer, title: String, initial: float, apply: Calla
 	slider.value_changed.connect(update)
 	update.call(initial)
 
-func add_drill_value(panel: VBoxContainer, title: String, minimum: float, maximum: float, key: String) -> void:
+func add_drill_value(panel: VBoxContainer, title: String, minimum: float, maximum: float, key: String, units := " m", step := 0.05) -> void:
 	var drill := target_drill
 	var caption := Label.new()
 	panel.add_child(caption)
 	var slider := HSlider.new()
 	slider.min_value = minimum
 	slider.max_value = maximum
-	slider.step = 0.05
+	slider.step = step
 	panel.add_child(slider)
 	var sync := func():
 		var value: float = drill.trajectory_value(key)
 		slider.set_value_no_signal(value)
-		caption.text = "%s %.2f%s" % [title,value,"×" if key == "spike_pace" else " m"]
+		caption.text = ("%s %.0f%s" if step == 1.0 else "%s %.2f%s") % [title,value,units]
 	drill.trajectory_changed.connect(sync)
 	slider.value_changed.connect(func(value: float): drill.set_trajectory_value(key,value))
 	sync.call()
