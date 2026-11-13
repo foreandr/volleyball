@@ -1631,7 +1631,8 @@ func tick_receive(delta: float, previous: float) -> void:
 		elif turn_for_save: face = face.lerp(drop_heading,0.68).normalized()
 		var offset := (FOREARM_DIG_REACH if cpu_dig else 0.52) if technique == 0 else hand_receive_reach()
 		if not recovering and not set_jumps[index].active and not bump.low_save.active:
-			var target := catch_point-frame.global_basis*face*offset
+			var spacing := 0.88 if square_receive and cpu_dig and cue < 0.40 else offset
+			var target := catch_point-frame.global_basis*face*spacing
 			if backshuffle:
 				# Leave room to play the ball behind the hips after the backward steps.
 				target = catch_point+frame.global_basis.z*0.45
@@ -1652,7 +1653,7 @@ func tick_receive(delta: float, previous: float) -> void:
 			if square_receive and technique == 0 and lead <= 0.16 and lead >= -0.035:
 				var reach_offset: Vector3 = bump.to_local(catch_point)-bump.ready_contact()
 				var reach_tier: int = Bump.Timing.practice_reach_tier(reach_offset)
-				if reach_tier == 2 or bump.reach.get("tier",0) == 2:
+				if bump.reach.get("tier",0) == 2 or (reach_tier == 2 and cue >= 0.40):
 					target = actor.global_position
 			move_cpu(index,target,delta,speed,face,not square_receive and not backshuffle and not plant and (is_dig or cpu_setting or free_ball or flight_kind == "serve"),(run_to_drop or turn_for_save or lateral_run) and not plant and not backshuffle,18.0 if lateral_run else 12.5)
 			bump.low_save_approach_velocity = (actor.position-before_move)/maxf(delta,0.001)

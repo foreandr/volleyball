@@ -499,12 +499,12 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 				if near_dive_contact and low_save.wide_arm.is_empty(): cutoff += 0.015
 				if not hand_setting and not low_save.active:
 					# Bring the platform toward the approaching ball, then test the posed bones again.
-					var preview: Vector3 = path.call(minf(end,sweep_end+0.070))
+					var preview: Vector3 = path.call(minf(end,sweep_end+(0.025 if rushed_cpu_receive else 0.070)))
 					var live_contact := dig_contact_segment(first,preview,false,previous_dig_pose,previous_dig_pose)
 					var offset := live_contact[0]-live_contact[1]
 					var steer := (1.0-smoothstep(0.40,0.74,offset.length()))*smoothstep(0.0,0.055,elapsed)
 					if fast_back_receive or (steer > 0.0 and offset.length() > 0.07):
-						var lift := clampf(-incoming.y*0.016,0.0,0.16)
+						var lift := clampf(-incoming.y*0.016,0.0,0.04 if rushed_cpu_receive else 0.16)
 						var adjustment := offset*1.85+Vector3.UP*lift
 						if fast_back_receive:
 							# Move the joined platform as a unit instead of snapping to each preview point.
