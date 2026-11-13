@@ -1690,7 +1690,11 @@ func tick_receive(delta: float, previous: float) -> void:
 		var reach_offset: Vector3 = bump.to_local(catch_point)-bump.ready_contact()
 		if bump.reach.is_empty() and cue-elapsed <= 0.22 and Bump.Timing.practice_reach_tier(reach_offset) == 2:
 			bump.plan_reach(reach_offset)
-		if bump.reach.get("tier",0) == 2 or elapsed <= cue+0.035: bump.allow_auto_dive = false
+		var lunge_in_range := cpu_can_lunge(index,catch_point,cue-elapsed)
+		var committed: Vector3 = bump.reach.get("intercept",Vector3.INF)
+		var holds_lunge: bool = bump.reach.get("tier",0) == 2 and committed.is_finite() and committed.distance_to(bump.to_local(catch_point)) <= bump.contact_radius()
+		# Decide before the dive windup runs out. A viable grounded receive keeps priority.
+		bump.allow_auto_dive = not holds_lunge and (not lunge_in_range or elapsed > cue+0.035)
 	if not is_human(index) and frame.to_local(path_point(end)).z > Net.NET_Z: bump.allow_auto_dive = false
 	var was_diving: bool = bump.low_save.active
 	bump.fast_back_receive = backshuffle and technique == 0 and is_dig
