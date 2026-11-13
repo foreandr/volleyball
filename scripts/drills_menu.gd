@@ -20,6 +20,7 @@ var target_drill: Node3D
 var review_button: Button
 var replay_panel: VBoxContainer
 var frame_label: Label
+var marker_popup: Label
 var playback: Button
 var previous_rep: Button
 var next_rep: Button
@@ -179,6 +180,8 @@ func open_setting_stage(title: String) -> void:
 	setting_camera.look_at(camera_focus)
 	setting_camera.make_current()
 	setting_stage.gui_input.connect(handle_setting_camera)
+	marker_popup = preload("res://scripts/debug_marker_popup.gd").new()
+	setting_stage.add_child(marker_popup)
 	back.grab_focus()
 
 func _process(delta: float) -> void:
@@ -360,7 +363,7 @@ func _input(event: InputEvent) -> void:
 		toggle_review()
 		get_viewport().set_input_as_handled()
 	elif event.physical_keycode == KEY_F8:
-		if target_drill.game.mark_trace(): target_drill.game.info.text = "Debug marker saved"
+		if target_drill.game.mark_trace(): marker_popup.flash()
 		get_viewport().set_input_as_handled()
 	elif target_drill.game.replay.active and event.physical_keycode in [KEY_LEFT,KEY_RIGHT]:
 		target_drill.game.replay.step_frame(target_drill.game,-1 if event.physical_keycode == KEY_LEFT else 1)

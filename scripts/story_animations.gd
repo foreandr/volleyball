@@ -67,7 +67,6 @@ var distance_status: Label
 var preview_overlay: Control
 var jump_height_meter: Control
 var marker_popup: Label
-var marker_fade: Tween
 var pass_timing_cue: Node3D
 var reception_review: VBoxContainer
 var setting_drill: Node3D
@@ -138,34 +137,11 @@ func _ready() -> void:
 					break
 
 func build_marker_popup() -> void:
-	marker_popup = label("Debug marker saved",16)
-	marker_popup.name = "DebugMarkerPopup"
-	marker_popup.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	marker_popup.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	marker_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var badge := StyleBoxFlat.new()
-	badge.bg_color = Color("152331")
-	badge.border_color = Color("59d6ec")
-	badge.set_border_width_all(1)
-	badge.set_corner_radius_all(7)
-	marker_popup.add_theme_stylebox_override("normal",badge)
+	marker_popup = preload("res://scripts/debug_marker_popup.gd").new()
 	preview_overlay.add_child(marker_popup)
-	marker_popup.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
-	marker_popup.offset_left = -150
-	marker_popup.offset_right = 150
-	marker_popup.offset_top = 16
-	marker_popup.offset_bottom = 54
-	marker_popup.hide()
 
 func show_marker_popup(caption := "Debug marker saved") -> void:
-	if marker_fade != null: marker_fade.kill()
-	marker_popup.text = caption
-	marker_popup.modulate.a = 1.0
-	marker_popup.show()
-	marker_fade = create_tween()
-	marker_fade.tween_interval(1.45)
-	marker_fade.tween_property(marker_popup,"modulate:a",0.0,0.35)
-	marker_fade.tween_callback(marker_popup.hide)
+	marker_popup.flash(caption)
 
 func build_preview_stage(world: Node3D) -> void:
 	world.add_child(preload("res://scripts/preview_court.gd").new())
@@ -1030,8 +1006,7 @@ func stop_setting_drill() -> void:
 		attack_position_panel.hide()
 		attack_position_panel.queue_free()
 		attack_position_panel = null
-	if marker_fade != null: marker_fade.kill()
-	marker_popup.hide()
+	marker_popup.dismiss()
 	jump_height_meter.hide()
 	setting_drill.restore_torso_lean(preview_player)
 	setting_drill.queue_free()

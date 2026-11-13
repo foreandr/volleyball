@@ -1208,6 +1208,9 @@ func begin_recovery(index: int) -> void:
 	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
 	var recovery := {"started":match_clock,"pose":pose,"animation":receive_animation_labels.get(index,"")}
 	var bump := platforms[index]
+	if is_finite(bump.touch_time) and not bump.hand_setting and not bump.low_save.active:
+		recovery["hold"] = 0.06
+		recovery["rise"] = RECOVERY_TIME-0.06
 	if is_finite(bump.touch_time) and (bump.knee_bend_depth > 0.001 or bump.fast_back_receive or bump.reach.get("tier",0) == 2) and not bump.low_save.active:
 		recovery["hold"] = FAST_RECEIVE_HOLD
 		recovery["rise"] = squat_rise_duration if bump.knee_bend_depth > 0.001 else FAST_RECEIVE_RISE
@@ -1829,7 +1832,7 @@ func tick_receive(delta: float, previous: float) -> void:
 	if not is_human(index) and frame.to_local(path_point(end)).z > Net.NET_Z: bump.allow_auto_dive = false
 	var was_diving: bool = bump.low_save.active
 	bump.fast_back_receive = backshuffle and technique == 0 and is_dig
-	bump.update_attempt(elapsed,previous,end,path,frame.global_basis.inverse()*motion,delta,timing_cue,spin,cue if is_dig else INF)
+	bump.update_attempt(elapsed,previous,end,path,frame.global_basis.inverse()*motion,delta,timing_cue,spin,cue if is_dig else INF,true)
 	if bump.low_save.active and not was_diving:
 		var save := "Pancake" if bump.low_save.pancake else ("One-arm dive" if not bump.low_save.wide_arm.is_empty() else "Dive")
 		show_key(index,"Q")

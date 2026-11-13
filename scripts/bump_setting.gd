@@ -451,7 +451,7 @@ func blend_dig_transition(time: float) -> void:
 		rig.set_bone_pose_position(bone,pose.origin)
 		rig.set_bone_pose_rotation(bone,pose.basis.orthonormalized().get_rotation_quaternion())
 
-func update_attempt(time: float, previous: float, end: float, path: Callable, incoming: Vector3, delta: float, cue_arrival := INF, spin_rps := 0.0, dig_cue := INF) -> void:
+func update_attempt(time: float, previous: float, end: float, path: Callable, incoming: Vector3, delta: float, cue_arrival := INF, spin_rps := 0.0, dig_cue := INF, defer_forearm_follow := false) -> void:
 	contact_check.clear()
 	var progress := approach(path,time,end) if grade == Timing.Grade.WAITING else -1.0
 	approach_progress = progress
@@ -614,7 +614,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 				touch_time = lerpf(sweep_start,sweep_end,clampf(fraction,0.0,1.0))
 				touch = point
 				if not is_finite(cue_arrival) or low_save.active: timing = touch_time-pressed_at
-				if assisted: reach_platform(point-center)
+				if assisted: reach_platform(point-center,1.0,0.26,false,true)
 				grade = Timing.Grade.LATE if timing < green_start else (Timing.Grade.EARLY if timing > green_end else Timing.Grade.PERFECT)
 				var error := timing_error(timing)*(Timing.PANCAKE_ERROR_SCALE if pancake else 1.0)
 				contact_spread = accuracy_bounds(error,incoming,spin_rps)
@@ -654,7 +654,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 		elif hand_setting:
 			# The airborne receiving pose already owns the contact frame.
 			if not (setter_jumping and striking): update_hand_push(time,follow,incoming)
-		elif not (striking and is_finite(lowest_receive_hips)):
+		elif not (striking and (defer_forearm_follow or is_finite(lowest_receive_hips))):
 			# Let match recovery capture the crouched contact pose before any follow-through.
 			follow_forearm(time,incoming)
 	if not striking: apply_knee_bend(time)
@@ -884,7 +884,7 @@ func lower_rushed_platform() -> void:
 	if excess > 0.0:
 		reach_platform(Vector3.DOWN*excess,1.0,0.35)
 
-func reach_platform(offset: Vector3, weight := 1.0, reach_limit := 0.26, steer_sideways := false) -> void:
+func reach_platform(offset: Vector3, weight := 1.0, reach_limit := 0.26, steer_sideways := false, preserve_clasp := false) -> void:
 	var rig: Skeleton3D = setter.skeleton
 	var author: RefCounted = setter.get_pose_author()
 	var pose: Array = []
@@ -902,7 +902,7 @@ func reach_platform(offset: Vector3, weight := 1.0, reach_limit := 0.26, steer_s
 		var yaw := clampf(atan2(reach_direction.x,maxf(0.12,reach_direction.z)),-0.80,0.80)
 		lateral = lateral.rotated(Vector3.UP,yaw)
 		weight_scale = 1.0
-	var compact: bool = not reach.has("custom_clip") and (fast_back_receive or reach.get("tier",0) == 2)
+	var compact: bool = preserve_clasp or (not reach.has("custom_clip") and (fast_back_receive or reach.get("tier",0) == 2))
 	PlatformPose.connect_arms(pose,author,target,weight_scale*weight,0.0 if compact else 0.022,lateral,false,compact)
 	for side in ["l","r"]:
 		for part in ["upperarm_","lowerarm_","hand_"]:
