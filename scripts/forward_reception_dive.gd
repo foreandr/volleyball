@@ -174,13 +174,22 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 			Vector3(side*0.38,-0.65,0.24),reach,172.0)
 	elif reach > 0.0:
 		var bias := Vector3(0,-0.055,0.12)/scale_
-		var target := rig.global_transform.affine_inverse()*ball_point+bias
+		var local_ball := rig.to_local(ball_point)
+		var target := local_ball+bias
 		var head_height: float = author.point(pose,"Head").y
 		if not pancake:
 			var shoulder_height: float = (author.point(pose,"upperarm_l").y+author.point(pose,"upperarm_r").y)*0.5
 			head_height = minf(head_height-(0.09 if track_platform else 0.17),shoulder_height-(0.04 if track_platform else 0.12))
 		target.y = clampf(target.y,0.13,maxf(0.13,head_height))
-		PlatformPose.connect_arms(pose,author,target,reach,0.0,Vector3.RIGHT,true)
+		var entry := pose.duplicate()
+		for pass_index in 3:
+			if pass_index > 0: pose = entry.duplicate()
+			PlatformPose.connect_arms(pose,author,target,reach,0.0,Vector3.RIGHT,true)
+			if pass_index == 2 or reach < 0.55: break
+			var left := Geometry3D.get_closest_point_to_segment(local_ball,author.point(pose,"lowerarm_l"),author.point(pose,"hand_l"))
+			var right := Geometry3D.get_closest_point_to_segment(local_ball,author.point(pose,"lowerarm_r"),author.point(pose,"hand_r"))
+			var gap := local_ball-(left+right)*0.5
+			target += (gap-Vector3.UP*0.09/scale_).limit_length(0.16/scale_)
 		var turn := Quaternion(PlatformPose.platform_axis(clasp,author),PlatformPose.platform_axis(pose,author))
 		for side in ["l","r"]:
 			var wrist: String = "hand_"+side
