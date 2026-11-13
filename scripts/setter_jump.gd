@@ -194,27 +194,30 @@ func step(actor: Node3D, delta: float, input: Vector2) -> void:
 	var load_in := lerpf(lead_load,1.0,smoothstep(0.035 if lead_time > 0.0 else 0.02,0.12 if lead_time > 0.0 else 0.19,pose_time))
 	var load := load_in*(1.0-smoothstep(0.19,LOAD_TIME+0.055,pose_time))
 	var impact := smoothstep(-0.025,0.04,landing)*(1.0-smoothstep(0.04,LAND_TIME,landing))
+	var knee_impact := impact
+	if not plant_legs.is_empty():
+		knee_impact = smoothstep(-0.065,0.065,landing)*(1.0-smoothstep(0.065,LAND_TIME,landing))
 	var arm_drive := smoothstep(0.17,0.37,pose_time)*(1.0-smoothstep(LOAD_TIME+air_time*0.56,LOAD_TIME+air_time*0.93,pose_time))
-	pose_jump(actor,first,second,load,impact,arm_drive,pose_time,flight,load_in,transfer_hop)
+	pose_jump(actor,first,second,load,impact,arm_drive,pose_time,flight,load_in,transfer_hop,knee_impact)
 
 func attack_plant_foot(side: String) -> Vector3:
 	var left := side == "l"
 	var from: Vector3 = plant_legs[side].origin
 	var to := left_plant if left else right_plant
 	var end := load_duration()
-	var start_step := lead_time*0.60 if not left else lead_time+(end-lead_time)*0.34
-	var end_step := lead_time+(end-lead_time)*(0.58 if not left else 0.90)
+	var start_step := lead_time*0.48 if not left else lead_time*0.92
+	var end_step := lead_time+(end-lead_time)*(0.53 if not left else 0.96)
 	if (left and lead_time > 0.0) or (not left and entry_time > 0.0):
 		var early_start := entry_time*0.70 if left else 0.0
 		var early_end := lead_time*0.86 if left else entry_time*0.88
 		var early := smoothstep(early_start,early_end,elapsed)
 		var step_end := from+heading*(entry_distance+lead_distance if left else entry_distance)
 		step_end.y = plant_ground
-		from = from.lerp(step_end,early)+Vector3.UP*(0.10*sin(PI*early))
+		from = from.lerp(step_end,early)+Vector3.UP*(0.09*pow(sin(PI*early),2.0))
 	var step := smoothstep(start_step,end_step,elapsed)
-	return from.lerp(to,step)+Vector3.UP*((0.10 if left else 0.08)*sin(PI*step))
+	return from.lerp(to,step)+Vector3.UP*((0.095 if left else 0.075)*pow(sin(PI*step),2.0))
 
-func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: float, arm_drive: float, pose_time: float, flight: float, load_in: float, transfer_hop: float) -> void:
+func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: float, arm_drive: float, pose_time: float, flight: float, load_in: float, transfer_hop: float, knee_impact: float) -> void:
 	var rig: Skeleton3D = actor.skeleton
 	var author: RefCounted = actor.get_pose_author()
 	var pose: Array = []
@@ -244,6 +247,11 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 	if actor.mirror_animation: travel.x = -travel.x
 	var stagger := 0.34*(first-second)
 	var tuck := sin(PI*flight)
+	var leg_pose := pose
+	if not plant_legs.is_empty():
+		# Absorb the landing over more frames while keeping the torso and arm tracks intact.
+		leg_pose = pose.duplicate()
+		leg_pose[pelvis].origin -= hips.basis.inverse()*Vector3.UP*(0.14*(knee_impact-impact))/scale_
 	for side in ["l","r"]:
 		var left: bool = side == "l"
 		var foot: String = "foot_"+side
@@ -280,7 +288,10 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 		if plant_legs.is_empty():
 			author.limb(pose,"thigh_"+side,"calf_"+side,foot,target,pole)
 		else:
-			author.limb(pose,"thigh_"+side,"calf_"+side,foot,target,pole,1.0,162.0,true)
+			author.limb(leg_pose,"thigh_"+side,"calf_"+side,foot,target,pole,1.0,162.0,true)
+			for joint in ["thigh_"+side,"calf_"+side]:
+				var bone := rig.find_bone(joint)
+				pose[bone].basis = leg_pose[bone].basis
 		author.set_world_basis(pose,foot,foot_pose.basis)
 		if setting_jump: continue
 		var upper_arm: String = "upperarm_"+side

@@ -1416,7 +1416,7 @@ func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_f
 		steps.step(movement.limit_length(delta*2.1)/maxf(delta*2.1,0.001),delta,clampf(pace/2.06,0.65,2.25),true)
 	if not previous_legs.is_empty():
 		var rig: Skeleton3D = actor.skeleton
-		var weight := 1.0-exp(-delta/0.05)
+		var weight := 1.0-exp(-delta/0.066)
 		for bone in previous_legs:
 			var pose: Transform3D = previous_legs[bone].interpolate_with(rig.get_bone_pose(bone),weight)
 			rig.set_bone_pose_rotation(bone,pose.basis.get_rotation_quaternion())

@@ -1126,8 +1126,8 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 	var leg_release := smoothstep(0.0,1.0,rotation_phase)
 	var leg_turn := tanh(turn*rotation_weight*0.75)*0.32*leg_release*leg_rotation_scale*airborne
 	var kick_release := 0.32*leg_release*smoothstep(0.0,1.5,leg_rotation_scale)
-	var leg_follow := smootherstep(0.0,0.30,clock-stage_start) if stage == Stage.HIT and uses_assisted_approach() else follow
-	var straighten := smoothstep(0.12,0.88,leg_follow)*weight*smoothstep(0.03,0.22,setter.position.y-jump.start.y)
+	var leg_follow := smoothstep(0.0,0.42,clock-stage_start) if stage == Stage.HIT and uses_assisted_approach() else follow
+	var straighten := (leg_follow if stage == Stage.HIT and uses_assisted_approach() else smoothstep(0.12,0.88,leg_follow))*weight*smoothstep(0.03,0.22,setter.position.y-jump.start.y)
 	if not is_zero_approx(leg_turn):
 		var spine: Transform3D = author.world_pose(pose,rig.find_bone("spine_01"))
 		var hips: Vector3 = author.point(pose,"pelvis")
@@ -1151,7 +1151,7 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 			var shin_axis := (ankle-knee).normalized().slerp(release_axis.rotated(Vector3.UP,leg_turn),tuck)
 			author.aim_joint(pose,thigh,calf,hip+thigh_axis)
 			knee = author.point(pose,calf)
-			author.aim_joint(pose,calf,foot,knee+shin_axis.slerp(thigh_axis,straighten*0.98))
+			author.aim_joint(pose,calf,foot,knee+shin_axis.slerp(thigh_axis,straighten*(0.86 if uses_assisted_approach() else 0.98)))
 	# Tilt after the leg solve so the hips carry the tucked legs into the reach.
 	var reach_weight := airborne*weight*maxf(0.72*arm_lift,extension)
 	reach_weight *= 1.0-smoothstep(0.0,0.85,follow)
