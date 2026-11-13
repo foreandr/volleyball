@@ -33,7 +33,7 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 	var rig: Skeleton3D = actor.skeleton
 	var brace_start := maxf(0.41,release_time-WINDUP+CONTACT_POSE_TIME)
 	var since_brace := time-brace_start
-	var slide := 0.95*smoothstep(0.18,0.56,since_brace)
+	var slide := 0.95*smoothstep(0.08,0.56,since_brace)
 	var kick := smoothstep(-0.24,-0.08,since_brace)*(1.0-smoothstep(0.19,0.39,since_brace))
 	var travel := 0.23*smoothstep(0.02,0.20,time)+1.35*smoothstep(0.16,0.61,time)+slide
 	var drop := 0.0
@@ -86,7 +86,7 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 	if not pancake:
 		extension = smoothstep(-0.025,0.13,since_brace)
 
-	var landing := smoothstep(0.075,0.24,since_brace)
+	var landing := smoothstep(-0.10,0.10,since_brace)
 	if pancake:
 		var low := smoothstep(0.23,0.40,time)*(1.0-smoothstep(0.82,POSE_DURATION,time))
 		author.rotate_world(pose,"spine_02",Vector3.RIGHT,0.18*low)
