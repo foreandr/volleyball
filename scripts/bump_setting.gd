@@ -624,7 +624,8 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 		elif hand_setting:
 			# The airborne receiving pose already owns the contact frame.
 			if not (setter_jumping and striking): update_hand_push(time,follow)
-		else:
+		elif not (striking and is_finite(lowest_receive_hips)):
+			# Let match recovery capture the crouched contact pose before any follow-through.
 			follow_forearm(time,incoming)
 	if not striking: apply_knee_bend(time)
 	var recent_touch := is_finite(touch_time) and time-touch_time <= BallTimingRing.RESULT_DURATION
