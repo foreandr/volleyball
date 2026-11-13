@@ -2,7 +2,7 @@ extends Control
 
 const CATEGORIES := {
 	"Passing": [{"title":"Pass to Target","scene":"res://scenes/story_animations.tscn"}],
-	"Setting": [],
+	"Setting": [{"title":"Set to Target"}],
 	"Attacking": [],
 	"Serving": [],
 	"Digging": [],
@@ -13,6 +13,7 @@ var list: VBoxContainer
 var scroll: ScrollContainer
 var back: Button
 var category := ""
+var empty_drill_open := false
 
 func _ready() -> void:
 	var background := ColorRect.new()
@@ -85,8 +86,15 @@ func show_category(name_: String) -> void:
 		back.grab_focus()
 		return
 	for drill in drills:
-		var scene_path: String = drill.scene
-		add_item(drill.title,func():
+		var scene_path: String = drill.get("scene","")
+		var title: String = drill.title
+		add_item(title,func():
+			if scene_path.is_empty():
+				empty_drill_open = true
+				heading.text = title
+				clear_list()
+				back.grab_focus()
+				return
 			StorySession.open_passing_drill = name_ == "Passing"
 			get_tree().change_scene_to_file(scene_path))
 	list.get_child(0).grab_focus()
@@ -101,7 +109,10 @@ func add_item(title: String, action: Callable) -> Button:
 	return item
 
 func go_back() -> void:
-	if category.is_empty():
+	if empty_drill_open:
+		empty_drill_open = false
+		show_category(category)
+	elif category.is_empty():
 		get_tree().change_scene_to_file("res://scenes/main.tscn")
 	else:
 		show_categories()
