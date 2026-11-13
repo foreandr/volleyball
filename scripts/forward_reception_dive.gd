@@ -162,6 +162,8 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 	if not pancake:
 		reach = smoothstep(0.06,0.25,time)
 	reach *= 1.0-smoothstep(0.085,0.18,since_brace)
+	if not pancake and wide_arm.is_empty() and after_release > 0.0:
+		reach = smoothstep(0.06,0.25,time)*(1.0-smoothstep(0.12,0.27,since_brace))
 	if pancake and reach > 0.0:
 		var target := rig.global_transform.affine_inverse()*Vector3(ball_point.x,0.06,ball_point.z)-Vector3.BACK*0.095
 		author.limb(pose,"upperarm_r","lowerarm_r","hand_r",target,Vector3(-0.30,-0.55,0.10),reach,174.0)
@@ -214,7 +216,7 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 			var left := Geometry3D.get_closest_point_to_segment(local_ball,author.point(pose,"lowerarm_l"),author.point(pose,"hand_l"))
 			var right := Geometry3D.get_closest_point_to_segment(local_ball,author.point(pose,"lowerarm_r"),author.point(pose,"hand_r"))
 			var gap := local_ball-(left+right)*0.5
-			target += (gap-Vector3.UP*0.09/scale_).limit_length(0.16/scale_)
+			target += (gap-Vector3.UP*0.09/scale_).limit_length(0.16/scale_)*(1.0-smoothstep(0.0,0.12,after_release))
 		var turn := Quaternion(PlatformPose.platform_axis(clasp,author),PlatformPose.platform_axis(pose,author))
 		for side in ["l","r"]:
 			var wrist: String = "hand_"+side
