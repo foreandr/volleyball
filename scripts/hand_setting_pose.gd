@@ -114,6 +114,13 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 			target_across = target_across.rotated(Vector3.RIGHT,pitch)
 		elif set_extension < 0.0:
 			target_fingers = target_fingers.lerp(local_push.normalized(),0.46*follow)
+		if frontset > 0.0:
+			var palm_normal := target_fingers.cross(target_across).normalized()*sign_
+			var lift_axis := palm_normal.cross(Vector3.UP)
+			if not lift_axis.is_zero_approx():
+				var lift := minf(deg_to_rad(78.0),palm_normal.angle_to(Vector3.UP))*frontset
+				target_fingers = target_fingers.rotated(lift_axis.normalized(),lift)
+				target_across = target_across.rotated(lift_axis.normalized(),lift)
 		if face_save and not ball_direction.is_zero_approx():
 			var incoming := (rig.global_basis.inverse()*ball_direction).normalized()
 			var palm_normal := Vector3(clampf(incoming.x,-0.45,0.45),clampf(incoming.y,-0.18,0.40),maxf(0.55,incoming.z)).normalized()
