@@ -26,6 +26,8 @@ var spin_rate := 6.0
 var spin := "Topspin"
 var playback_speed := 1.0
 var pending_sim_time := 0.0
+var batch_replays: Array = []
+var review_rep := -1
 var planned_reps := 0
 var completed_reps := 0
 var successful_reps := 0
@@ -311,6 +313,7 @@ func end_batch() -> void:
 	launch_button.disabled = false
 
 func start_reps(count: int, use_sequence := false) -> void:
+	batch_replays.clear()
 	pending_sim_time = 0.0
 	planned_reps = count
 	completed_reps = 0
@@ -402,6 +405,21 @@ func launch_ball() -> void:
 	game.update_action_labels()
 	game.replay.record(game)
 
+func review_count() -> int:
+	return batch_replays.size()+int(game.replay.current.size() >= 2)
+
+func open_rep(index: int, autoplay: bool) -> void:
+	if index < 0 or index >= review_count(): return
+	var replay = game.replay
+	var selected: Array[Dictionary] = batch_replays[index] if index < batch_replays.size() else replay.current
+	drag_handle = ""
+	if replay.active: game.toggle_replay(true)
+	replay.toggle(game,true,selected)
+	if replay.active:
+		review_rep = index
+		replay.playing = autoplay
+		if not autoplay: replay.seek(game,replay.duration())
+
 func tick(delta: float) -> void:
 	if game.replay.active:
 		landing_marker.hide()
@@ -430,7 +448,9 @@ func simulate_step(delta: float) -> void:
 				finish_delay = maxf(0.15,finish_delay)
 			if finish_delay <= 0.0:
 				finish_delay = -1.0
-				if batch_active: launch_ball()
+				if batch_active:
+					batch_replays.append(game.replay.current)
+					launch_ball()
 				else: reset_receiver()
 		return
 	game.match_clock += delta

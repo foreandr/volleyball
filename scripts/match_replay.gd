@@ -44,7 +44,7 @@ func reset() -> void:
 func duration() -> float:
 	return frames.back().time-frames.front().time if frames.size() > 1 else 0.0
 
-func toggle(match_: Node3D, current_finished: bool) -> void:
+func toggle(match_: Node3D, current_finished: bool, rep_frames: Array[Dictionary] = []) -> void:
 	if active:
 		active = false
 		playing = false
@@ -59,7 +59,7 @@ func toggle(match_: Node3D, current_finished: bool) -> void:
 		restore.clear()
 		frames = []
 		return
-	frames = current if (current_finished or previous.is_empty()) and not current.is_empty() else previous
+	frames = rep_frames if not rep_frames.is_empty() else (current if (current_finished or previous.is_empty()) and not current.is_empty() else previous)
 	if frames.size() < 2: return
 	restore = capture(match_)
 	index = 0

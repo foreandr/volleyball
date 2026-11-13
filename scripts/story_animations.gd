@@ -72,6 +72,9 @@ var pass_timing_cue: Node3D
 var reception_review: VBoxContainer
 var setting_drill: Node3D
 var attack_position_panel: PanelContainer
+var previous_rep_button: Button
+var next_rep_button: Button
+var review_rep_label: Label
 var match_replay_panel: VBoxContainer
 var match_replay_seek: HSlider
 var match_replay_frame: Label
@@ -351,6 +354,14 @@ func add_match_replay_controls(tuning: VBoxContainer) -> void:
 	match_replay_frame = label("",16)
 	match_replay_panel.add_child(match_replay_frame)
 	if passing_drill != null:
+		var rep_nav := HBoxContainer.new()
+		match_replay_panel.add_child(rep_nav)
+		previous_rep_button = button("Previous rep",step_review_rep.bind(-1))
+		next_rep_button = button("Next rep",step_review_rep.bind(1))
+		rep_nav.add_child(previous_rep_button)
+		rep_nav.add_child(next_rep_button)
+		review_rep_label = label("",16)
+		match_replay_panel.add_child(review_rep_label)
 		match_replay_panel.add_child(button("Edit",edit_passing_replay))
 	var frames := HBoxContainer.new()
 	match_replay_panel.add_child(frames)
@@ -393,14 +404,16 @@ func open_lab_replay() -> void:
 	if evidence.has("type"): show_marker_popup(str(evidence.type).capitalize())
 
 func toggle_match_replay() -> void:
-	var replay = demo_match.replay
-	if passing_drill != null: passing_drill.drag_handle = ""
-	var opening_drill_review: bool = passing_drill != null and not replay.active
-	demo_match.toggle_replay(passing_drill != null)
-	if opening_drill_review and replay.active:
-		replay.playing = false
-		replay.seek(demo_match,replay.duration())
+	if passing_drill != null and not demo_match.replay.active:
+		passing_drill.open_rep(passing_drill.review_count()-1,false)
+	else:
+		demo_match.toggle_replay(passing_drill != null)
 	update_match_replay_controls()
+
+func step_review_rep(direction: int) -> void:
+	passing_drill.open_rep(passing_drill.review_rep+direction,true)
+	update_match_replay_controls()
+
 
 func step_match_replay(direction: int) -> void:
 	demo_match.replay.step_frame(demo_match,direction)
@@ -421,6 +434,12 @@ func update_match_replay_controls() -> void:
 	else:
 		match_replay_button.text = "Back to match (R)" if replay.active else "Replay rally (R)"
 	if not replay.active: return
+	if passing_drill != null:
+		var total: int = passing_drill.review_count()
+		var rep: int = passing_drill.review_rep
+		previous_rep_button.disabled = rep <= 0
+		next_rep_button.disabled = rep >= total-1
+		review_rep_label.text = "Rep %d / %d" % [rep+1,total]
 	match_replay_play.text = "Pause (Space)" if replay.playing else "Play (Space)"
 	match_replay_frame.text = "Frame %d / %d" % [replay.index,replay.frames.size()-1]
 	match_replay_seek.max_value = replay.duration()
