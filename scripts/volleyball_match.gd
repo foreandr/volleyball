@@ -1615,6 +1615,8 @@ func tick_receive(delta: float, previous: float) -> void:
 	if is_human(index):
 		bump.show()
 		bump.update_aim()
+	var floor_lead := end-elapsed
+	bump.emergency_low_save = drill_pass_target.is_finite() and cpu_dig and floor_lead <= 0.25
 	var timing_cue := cue if is_human(index) and technique == 0 else INF
 	bump.knee_bend_depth = 0.0
 	if forearm_dig:
@@ -1623,7 +1625,7 @@ func tick_receive(delta: float, previous: float) -> void:
 		bump.lunge_bend_depth = lerpf(0.14,0.22,low)
 		bump.knee_bend_depth = bump.ready_knee_bend_depth*smoothstep(cue-0.33,cue-0.06,elapsed)
 		if cpu_dig:
-			bump.allow_auto_dive = not cpu_can_lunge(index,catch_point,cue-elapsed)
+			bump.allow_auto_dive = bump.emergency_low_save or not cpu_can_lunge(index,catch_point,cue-elapsed)
 	if not is_human(index) and frame.to_local(path_point(end)).z > Net.NET_Z: bump.allow_auto_dive = false
 	var was_diving: bool = bump.low_save.active
 	bump.update_attempt(elapsed,previous,end,path,frame.global_basis.inverse()*motion,delta,timing_cue,spin,cue if is_dig else INF)

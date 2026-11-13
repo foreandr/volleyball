@@ -23,7 +23,7 @@ var entry_pose: Array[Transform3D] = []
 var ready: Array[Transform3D] = []
 var clasp: Array[Transform3D] = []
 
-func plan(actor: Node3D, path: Callable, time: float, end: float, clip: Animation, quick_save := false, allow_pancake := true, pancake_requires_chase := false, approach_velocity := Vector3.ZERO) -> bool:
+func plan(actor: Node3D, path: Callable, time: float, end: float, clip: Animation, quick_save := false, allow_pancake := true, pancake_requires_chase := false, approach_velocity := Vector3.ZERO, emergency := false) -> bool:
 	if active: return true
 	var lookahead := minf(time+Dive.WINDUP,end)
 	if lookahead <= time: return false
@@ -44,7 +44,8 @@ func plan(actor: Node3D, path: Callable, time: float, end: float, clip: Animatio
 		var offset := (point-actor.position).slide(Vector3.UP)
 		var distance := offset.length()
 		var momentum := smoothstep(2.6,7.7,approach_velocity.dot(offset.normalized())) if quick_save and not low_save else 0.0
-		if high-time < (lerpf(0.085,0.060,momentum) if quick_save else MIN_WINDUP): continue
+		var windup := lerpf(0.085,0.060,momentum) if quick_save else MIN_WINDUP
+		if high-time < (0.045 if emergency else windup): continue
 		if low_save and pancake_requires_chase and (point-first).slide(Vector3.UP).dot(offset.normalized()) <= 0.35*(high-time): continue
 		var local := actor.basis.inverse()*offset
 		var wide: bool = quick_save and not low_save and distance > 1.38 and absf(local.x) > absf(local.z)*0.64
@@ -54,7 +55,9 @@ func plan(actor: Node3D, path: Callable, time: float, end: float, clip: Animatio
 		var maximum := (2.55 if low_save else 1.88)+extra
 		if wide: maximum = 2.85+extra
 		maximum += 0.80*momentum
-		if distance < minimum or distance > maximum or offset.normalized().dot(actor.basis.z)<(-0.12 if wide else (0.30 if quick_save else 0.62)): continue
+		if emergency: maximum += 0.48
+		var facing_limit := -0.45 if emergency else (-0.12 if wide else (0.30 if quick_save else 0.62))
+		if distance < minimum or distance > maximum or offset.normalized().dot(actor.basis.z) < facing_limit: continue
 		pancake = low_save
 		wide_arm = actor.animation_side("l" if local.x > 0.0 else "r") if wide else ""
 		active = true
