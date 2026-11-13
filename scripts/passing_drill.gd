@@ -6,6 +6,7 @@ const RECEIVER := 1
 const FEEDER := 2
 const TARGET_RADIUS := 0.90
 const BATCH_REPS := 10
+const SIM_STEP := 1.0/60.0
 const PREFERENCE_PREFIX := "PassingDrill_"
 const SPINS := ["No spin","Topspin","Backspin","Sidespin left","Sidespin right"]
 
@@ -19,6 +20,7 @@ var speed := 18.0
 var spin_rate := 6.0
 var spin := "Topspin"
 var playback_speed := 1.0
+var pending_sim_time := 0.0
 var planned_reps := 0
 var completed_reps := 0
 var successful_reps := 0
@@ -287,6 +289,7 @@ func toggle_batch() -> void:
 	start_reps(BATCH_REPS)
 
 func start_reps(count: int) -> void:
+	pending_sim_time = 0.0
 	planned_reps = count
 	completed_reps = 0
 	successful_reps = 0
@@ -339,9 +342,17 @@ func tick(delta: float) -> void:
 	if game.replay.active:
 		game.replay.step(game,delta)
 		return
+	if not running and finish_delay < 0.0:
+		pending_sim_time = 0.0
+		return
+	pending_sim_time += delta*playback_speed
+	while pending_sim_time+0.0000001 >= SIM_STEP and (running or finish_delay >= 0.0):
+		pending_sim_time = maxf(0.0,pending_sim_time-SIM_STEP)
+		simulate_step(SIM_STEP)
+
+func simulate_step(delta: float) -> void:
 	if not running:
 		if finish_delay >= 0.0:
-			delta *= playback_speed
 			game.match_clock += delta
 			game.animated.fill(false)
 			game.advance_recoveries(delta)
@@ -353,7 +364,6 @@ func tick(delta: float) -> void:
 				if batch_active: launch_ball()
 				else: reset_receiver()
 		return
-	delta *= playback_speed
 	game.match_clock += delta
 	var previous: float = game.elapsed
 	game.elapsed = minf(game.elapsed+delta,game.flight_end())
