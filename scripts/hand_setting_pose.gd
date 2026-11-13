@@ -37,6 +37,7 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 	var diamond := head+Vector3(clampf(aim.x,-0.28 if face_save else -0.22,0.28 if face_save else 0.22),clampf(aim.y-0.075,-0.10 if face_save else 0.12,0.20 if face_save else 0.27),clampf(aim.z-0.07,0.16 if face_save else 0.09,0.35))
 	var local_push := rig.global_basis.inverse()*push
 	var horizontal_push := local_push.slide(Vector3.UP)
+	var backset := smoothstep(0.0,0.65,-horizontal_push.normalized().z)
 	var turn := 0.0
 	torso_follow *= blend
 	if torso_follow > 0.0 and horizontal_push.length_squared() > 0.0001:
@@ -71,7 +72,7 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 			var hand_point: Vector3 = author.point(pose,hand)
 			var length := shoulder.distance_to(elbow)+elbow.distance_to(hand_point)
 			var aim_weight := smoothstep(0.0,1.0,set_extension)
-			var direction := (wrist-shoulder).normalized().slerp(local_push.normalized(),0.65*aim_weight)
+			var direction := (wrist-shoulder).normalized().slerp(local_push.normalized(),lerpf(0.65,0.96,backset)*aim_weight)
 			wrist = shoulder+direction*lerpf(wrist.distance_to(shoulder),length*0.997,aim_weight)
 		author.limb(pose,upper,lower,hand,wrist,pole,1.0,elbow_limit)
 		for digit in ["thumb","index","middle","ring","pinky"]:
