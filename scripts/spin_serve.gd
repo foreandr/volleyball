@@ -278,6 +278,9 @@ func spin_lift(start: Vector3, launch: Vector3, duration: float, curve: float) -
 func reception_spin_rps() -> float:
 	return 8.0*Vector2(1.0,released_sidespin).length()
 
+func reception_spin_vector() -> Vector3:
+	return (Vector3.UP.cross(velocity.slide(Vector3.UP).normalized())+Vector3.UP*released_sidespin)*8.0
+
 func spin_serve_ball(delta: float) -> void:
-	var axis := Vector3.UP.cross(velocity.slide(Vector3.UP).normalized())+Vector3.UP*released_sidespin
-	ball.rotate(axis.normalized(),TAU*8.0*delta)
+	var rotation_rate := reception_spin_vector()
+	ball.rotate(rotation_rate.normalized(),TAU*rotation_rate.length()*delta)

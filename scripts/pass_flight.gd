@@ -10,6 +10,18 @@ static func spin_axis(forward: Vector3, type: String) -> Vector3:
 		"Sidespin right": return Vector3.DOWN
 	return Vector3.ZERO
 
+static func forearm_spin(incoming: Vector3, outgoing: Vector3, incoming_spin: Vector3, radius: float) -> Vector3:
+	# Estimate the platform normal from the change in velocity. Friction opposes
+	# the ball surface's slip at the contact patch and transfers spin.
+	var impulse := outgoing-incoming
+	if impulse.is_zero_approx(): return incoming_spin
+	var normal := impulse.normalized()
+	var contact_arm := -normal*radius
+	var slip := (incoming+(incoming_spin*TAU).cross(contact_arm)).slide(normal)
+	# Use a compliant contact and bound the friction impulse for clean deflections.
+	var friction := (-slip*0.12).limit_length(impulse.length()*0.15)
+	return (incoming_spin+contact_arm.cross(friction)/(0.67*radius*radius*TAU)).limit_length(12.0)
+
 static func air(forward: Vector3, settings: Dictionary) -> Dictionary:
 	var radians := deg_to_rad(float(settings.get("angle",40.0)))
 	var speed := float(settings.get("speed",14.0))

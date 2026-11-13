@@ -128,6 +128,7 @@ var velocity := Vector3.ZERO
 var duration := 0.0
 var net_hit := {}
 var spin := 0.0
+var ball_spin := Vector3.ZERO
 var flight_kind := ""
 var flight_number := 0
 var receiving_team := 1
@@ -600,7 +601,7 @@ func reset_receives() -> void:
 	requested = -1
 	request_age = -INF
 
-func launch(point: Vector3, motion: Vector3, kind: String, from: int, spin_rate := 0.0, hitter := -1, set_pin := Vector3.ZERO, feed_acceleration := Vector3.INF) -> void:
+func launch(point: Vector3, motion: Vector3, kind: String, from: int, spin_rate := 0.0, hitter := -1, set_pin := Vector3.ZERO, feed_acceleration := Vector3.INF, angular_spin := Vector3.INF) -> void:
 	# A deflection changes the ball's flight immediately, even during a player's slide.
 	for index in players.size():
 		var save: RefCounted = platforms[index].low_save
@@ -609,6 +610,7 @@ func launch(point: Vector3, motion: Vector3, kind: String, from: int, spin_rate 
 	origin = point
 	velocity = motion
 	elapsed = 0.0
+	ball_spin = angular_spin if angular_spin.is_finite() else Flight.spin_axis(motion,"Topspin")*spin_rate
 	spin = spin_rate
 	flight_kind = kind
 	drill_feed_acceleration = feed_acceleration
@@ -648,6 +650,10 @@ func launch(point: Vector3, motion: Vector3, kind: String, from: int, spin_rate 
 		attackers[side].start_set(players[hitter],frame.to_local(origin),frame.global_basis.inverse()*velocity,frame.to_local(set_pin),shot,0.0,is_human(hitter) and space_held)
 	ball.global_position = point
 	ball.show()
+
+func advance_ball_spin(delta: float) -> void:
+	if not ball_spin.is_zero_approx():
+		ball.global_rotate(ball_spin.normalized(),TAU*ball_spin.length()*delta)
 
 func flight_gravity() -> float:
 	if drill_feed_acceleration.is_finite(): return -drill_feed_acceleration.y
@@ -1134,7 +1140,11 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 		var crossing_point := world_point+world_motion*crossing+Vector3.DOWN*0.5*Flight.GRAVITY*crossing*crossing
 		# A teammate can still play a low pass before it reaches the net.
 		over = crossing_point.y >= Net.NET_TOP+0.02
-	launch(world_point,world_motion,("dump" if touches == 2 and technique != 0 else "free") if over else "pass",index)
+	var outgoing_spin := Vector3.ZERO
+	if technique == 0 and sample_after > sample_before:
+		var incoming_motion := (path_point(sample_after)-path_point(sample_before))/(sample_after-sample_before)
+		outgoing_spin = Flight.forearm_spin(incoming_motion,world_motion,ball_spin,BallPreview.RADIUS)
+	launch(world_point,world_motion,("dump" if touches == 2 and technique != 0 else "free") if over else "pass",index,outgoing_spin.length(),-1,Vector3.ZERO,Vector3.INF,outgoing_spin)
 
 func drill_pass_motion(contact: Vector3, motion: Vector3) -> Vector3:
 	# Keep the receiver's existing aim error and move the descending arrival to the target height.
@@ -2565,7 +2575,10 @@ func step_match(delta: float, controls: RefCounted) -> void:
 		phase = Phase.LIVE
 		stroke = "Serve"
 		play_touch()
-		launch(serve.to_global(serve.origin),serve.global_basis*serve.velocity,"serve",server_index(),serve.reception_spin_rps())
+		var serve_spin := Vector3.INF
+		if serve.has_method("reception_spin_vector"):
+			serve_spin = serve.global_basis*serve.reception_spin_vector()
+		launch(serve.to_global(serve.origin),serve.global_basis*serve.velocity,"serve",server_index(),serve.reception_spin_rps(),-1,Vector3.ZERO,Vector3.INF,serve_spin)
 		return
 	serve.step(delta)
 	var previous := elapsed
@@ -2589,9 +2602,7 @@ func step_match(delta: float, controls: RefCounted) -> void:
 			else:
 				receiving_team = side_after_tape
 				reset_receives()
-	if spin > 0.0 and velocity.length_squared() > 0.01:
-		var axis := Vector3.UP.cross(velocity).normalized()
-		if not axis.is_zero_approx(): ball.rotate(axis,TAU*spin*delta)
+	advance_ball_spin(delta)
 	var player_attacking: bool = attackers[0].enabled and attackers[0].setter == human and attackers[0].jump.active
 	var serving_human: bool = serve.player == human and not serve.can_run_after_contact()
 	advance_set_jumps(delta)

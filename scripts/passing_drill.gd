@@ -33,8 +33,6 @@ var launch_button: Button
 var running := false
 var finish_delay := -1.0
 var incoming_flight := -1
-var feed_spin_axis := Vector3.ZERO
-var feed_spin_speed := 0.0
 var contact_label := ""
 var closest_check := {}
 var target_crossing := Vector3.INF
@@ -326,9 +324,7 @@ func launch_ball() -> void:
 	game.score_label.hide()
 	game.info.text = "Ball in flight"
 	var plan := feed()
-	feed_spin_axis = plan.spin_axis
-	feed_spin_speed = plan.spin_rate
-	game.launch(source,plan.incoming,"spike",FEEDER,spin_rate if spin != "No spin" else 0.0,-1,Vector3.ZERO,plan.acceleration)
+	game.launch(source,plan.incoming,"spike",FEEDER,spin_rate if spin != "No spin" else 0.0,-1,Vector3.ZERO,plan.acceleration,plan.spin_axis*plan.spin_rate/TAU)
 	game.receiving_team = 0
 	game.cpu_choice = RECEIVER
 	game.cpu_technique = 1 if game.overhead_available(RECEIVER,1) else 0
@@ -390,8 +386,8 @@ func simulate_step(delta: float) -> void:
 			target_crossing = before.lerp(after,(before.y-height)/(before.y-after.y))
 	game.animated.fill(false)
 	game.advance_recoveries(delta)
+	game.advance_ball_spin(delta)
 	if game.flight_number == incoming_flight:
-		if not feed_spin_axis.is_zero_approx(): game.ball.rotate(feed_spin_axis,feed_spin_speed*delta)
 		var platform: Node3D = game.platforms[RECEIVER]
 		game.tick_receive(delta,previous)
 		var check: Dictionary = platform.contact_check
