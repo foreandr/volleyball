@@ -13,7 +13,7 @@ var list: VBoxContainer
 var scroll: ScrollContainer
 var back: Button
 var category := ""
-var empty_drill_open := false
+var setting_stage: SubViewportContainer
 
 func _ready() -> void:
 	var background := ColorRect.new()
@@ -90,14 +90,46 @@ func show_category(name_: String) -> void:
 		var title: String = drill.title
 		add_item(title,func():
 			if scene_path.is_empty():
-				empty_drill_open = true
-				heading.text = title
-				clear_list()
-				back.grab_focus()
+				open_setting_stage(title)
 				return
 			StorySession.open_passing_drill = name_ == "Passing"
 			get_tree().change_scene_to_file(scene_path))
 	list.get_child(0).grab_focus()
+
+func open_setting_stage(title: String) -> void:
+	heading.text = title
+	clear_list()
+	scroll.hide()
+	setting_stage = SubViewportContainer.new()
+	setting_stage.stretch = true
+	setting_stage.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.get_parent().add_child(setting_stage)
+	var viewport := SubViewport.new()
+	viewport.own_world_3d = true
+	setting_stage.add_child(viewport)
+	var environment := WorldEnvironment.new()
+	environment.environment = Environment.new()
+	environment.environment.background_mode = Environment.BG_COLOR
+	environment.environment.background_color = Color("192936")
+	environment.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	environment.environment.ambient_light_color = Color.WHITE
+	environment.environment.ambient_light_energy = 0.65
+	viewport.add_child(environment)
+	var sun := DirectionalLight3D.new()
+	sun.rotation_degrees = Vector3(-52,-32,0)
+	sun.shadow_enabled = true
+	viewport.add_child(sun)
+	viewport.add_child(preload("res://scripts/preview_court.gd").new())
+	var player := preload("res://scripts/volleyball_player.gd").new()
+	player.position = Vector3(0,0.04,1.4)
+	viewport.add_child(player)
+	player.get_node("DirectionArrows").hide()
+	var camera := Camera3D.new()
+	camera.position = Vector3(7.0,6.8,-10.0)
+	viewport.add_child(camera)
+	camera.look_at(Vector3(0,1,3.2))
+	camera.make_current()
+	back.grab_focus()
 
 func add_item(title: String, action: Callable) -> Button:
 	var item := Button.new()
@@ -109,8 +141,10 @@ func add_item(title: String, action: Callable) -> Button:
 	return item
 
 func go_back() -> void:
-	if empty_drill_open:
-		empty_drill_open = false
+	if is_instance_valid(setting_stage):
+		setting_stage.queue_free()
+		setting_stage = null
+		scroll.show()
 		show_category(category)
 	elif category.is_empty():
 		get_tree().change_scene_to_file("res://scenes/main.tscn")
