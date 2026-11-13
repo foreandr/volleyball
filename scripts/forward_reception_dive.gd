@@ -92,7 +92,7 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 		author.rotate_world(pose,"spine_02",Vector3.RIGHT,0.18*low)
 		author.rotate_world(pose,"neck_01",Vector3.RIGHT,-0.38*low)
 	var chest_settle := landing*(1.0-smoothstep(0.49,0.71,since_brace))
-	var get_up := smoothstep(0.64,0.83,since_brace)
+	var get_up := smoothstep(0.59,0.78,since_brace)
 	# Keep the hips low until the lead foot can take weight.
 	var support_drop := 0.16*smoothstep(0.47,0.63,since_brace)*(1.0-get_up)
 	pose[pelvis].origin -= author.world_pose(pose,parent).basis.inverse()*Vector3.UP*support_drop/scale_
@@ -116,7 +116,7 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 			ankle.z += (0.42 if pancake else 0.66)*plant
 			ankle.y += 0.09*sin(PI*plant)
 		var trail := foot.origin-Vector3.BACK*(0.69 if side == "l" else 0.81)
-		trail.x = foot.origin.x*0.48
+		trail.x = foot.origin.x
 		var thigh: String = "thigh_"+side
 		var calf: String = "calf_"+side
 		var hip: Vector3 = author.point(pose,thigh)
@@ -129,8 +129,8 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 		raised_ankle += Vector3(0.0,sin(shin_lift),-cos(shin_lift))*lower_length
 		trail = trail.lerp(raised_ankle,kick)
 		var lead: bool = side == "r"
-		var step_start := 0.45 if lead else 0.67
-		var plant_time := 0.65 if lead else 0.84
+		var step_start := 0.41 if lead else 0.60
+		var plant_time := 0.60 if lead else 0.78
 		var step := smoothstep(step_start,plant_time,since_brace)
 		var swing := sin(PI*step)
 		# Bring one foot under the hips, then step the trailing foot up after the weight transfer.
@@ -141,7 +141,7 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 		var lateral := 0.09 if side == "l" else -0.09
 		var leg_axis := (ankle-hip).normalized()
 		var dive_pole := leg_axis.cross(Vector3.RIGHT).normalized()
-		var pole := (dive_pole+Vector3.RIGHT*lateral).lerp(dive_pole,airborne)
+		var pole := (dive_pole+Vector3.RIGHT*lateral*(1.0-smoothstep(0.40,0.56,since_brace))).lerp(dive_pole,airborne)
 		var knee_limit := lerpf(lerpf(180.0,120.0,kick),136.0,descent)
 		author.limb(pose,thigh,calf,foot_name,ankle,pole,1.0,knee_limit)
 		var ready_shin: Vector3 = foot.origin-author.point(ready,calf)
@@ -152,6 +152,7 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 		var toe_pitch := -angle_difference(ready_pitch,posed_pitch)*maxf(extension,kick)*(1.0-step)
 		toe_pitch = lerpf(toe_pitch,0.22*swing,smoothstep(0.42,0.57,since_brace))
 		author.set_world_basis(pose,foot_name,Basis(Vector3.RIGHT,toe_pitch)*foot.basis)
+	var brace_pose := pose.duplicate()
 	var grip: Vector3 = (author.point(pose,"hand_l")+author.point(pose,"hand_r"))*0.5
 	var reach := smoothstep(0.11,0.31,time)
 	if not pancake:
@@ -198,13 +199,17 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 			if support <= 0.0: continue
 			var hand: String = "hand_"+side
 			var outward := 1.0 if side == "l" else -1.0
-			var shoulder: Vector3 = author.point(pose,"upperarm_"+side)
+			var shoulder: Vector3 = author.point(brace_pose,"upperarm_"+side)
 			# The chest moves past the palms as they slide, then the hands push the torso up.
 			var palm := shoulder+Vector3(outward*0.13,0.0,lerpf(0.32,-0.17,push)/scale_)
 			palm.y = rig.to_local(Vector3(0.0,0.065,0.0)).y
-			author.limb(pose,"upperarm_"+side,"lowerarm_"+side,hand,palm,
-				Vector3(outward*0.48,0.56,-0.16),support,166.0)
-			flatten_palm(pose,author,rig,support,side)
+			# Solve the floor brace from the neutral arm, independent of the moving ball target.
+			author.limb(brace_pose,"upperarm_"+side,"lowerarm_"+side,hand,palm,
+				Vector3(outward*0.48,0.56,-0.16),1.0,166.0)
+			flatten_palm(brace_pose,author,rig,1.0,side)
+			for joint in ["upperarm_"+side,"lowerarm_"+side,hand]:
+				var bone := rig.find_bone(joint)
+				pose[bone].basis = pose[bone].basis.slerp(brace_pose[bone].basis,support)
 	if pancake:
 		for side in ["l","r"]:
 			var hand: String = "hand_"+side
