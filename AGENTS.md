@@ -1,5 +1,7 @@
 # Volleyball
 
+- Share applicable drill behavior across all drills through common code. Fix shared camera, replay, editing, setup persistence, and diagnostics at their source. Keep each drill's saved setup independent.
+
 - Godot 4.6 / GDScript, Compatibility renderer. Keep character assets and saves independent from FightLab and Alien Optimization.
 - Implement the requested change, run a focused check, commit, and launch a fresh maximized game window. Close only previous Volleyball game windows. Defer broad tests and documentation until requested.
 - Keep the UI minimal. No unsolicited instructions, explanatory copy, view buttons or metadata.

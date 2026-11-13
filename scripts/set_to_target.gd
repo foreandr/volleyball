@@ -350,17 +350,12 @@ func handle_replay_drag(event: InputEvent, camera: Camera3D) -> bool:
 	return false
 
 func review_count() -> int:
-	return rep_history.size()+int(game.replay.current.size() >= 2)
+	return game.replay.drill_rep_count(rep_history)
 
 func open_review(index: int, autoplay := false) -> void:
-	if index < 0 or index >= review_count(): return
-	var replay = game.replay
-	var frames: Array[Dictionary] = rep_history[index] if index < rep_history.size() else replay.current
-	if replay.active: replay.toggle(game,true)
-	replay.toggle(game,true,frames)
-	review_index = index
-	replay.playing = autoplay
-	if not autoplay: replay.seek(game,replay.duration())
+	if game.replay.open_drill_rep(game,rep_history,index,autoplay):
+		review_index = index
+		replay_drag = -2
 
 func edit_setter() -> void:
 	var replay = game.replay

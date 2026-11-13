@@ -122,6 +122,19 @@ func apply(match_: Node3D, first: Dictionary, second: Dictionary, blend: float) 
 	match_.info.text = first.info
 	match_.player_label.global_position = match_.human.global_position+Vector3.UP*2.17
 
+func drill_rep_count(history: Array) -> int:
+	return history.size()+int(current.size() >= 2)
+
+func open_drill_rep(match_: Node3D, history: Array, rep: int, autoplay: bool) -> bool:
+	if rep < 0 or rep >= drill_rep_count(history): return false
+	var selected: Array[Dictionary] = history[rep] if rep < history.size() else current
+	if active: toggle(match_,true)
+	toggle(match_,true,selected)
+	if not active: return false
+	playing = autoplay
+	if not autoplay: seek(match_,duration())
+	return true
+
 func bake_actor(match_: Node3D, actor_index: int, title: String) -> Animation:
 	var actor: Node3D = match_.players[actor_index]
 	var start: Transform3D = frames[0].actors[actor_index].root

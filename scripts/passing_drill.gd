@@ -406,19 +406,12 @@ func launch_ball() -> void:
 	game.replay.record(game)
 
 func review_count() -> int:
-	return batch_replays.size()+int(game.replay.current.size() >= 2)
+	return game.replay.drill_rep_count(batch_replays)
 
 func open_rep(index: int, autoplay: bool) -> void:
-	if index < 0 or index >= review_count(): return
-	var replay = game.replay
-	var selected: Array[Dictionary] = batch_replays[index] if index < batch_replays.size() else replay.current
-	drag_handle = ""
-	if replay.active: game.toggle_replay(true)
-	replay.toggle(game,true,selected)
-	if replay.active:
+	if game.replay.open_drill_rep(game,batch_replays,index,autoplay):
 		review_rep = index
-		replay.playing = autoplay
-		if not autoplay: replay.seek(game,replay.duration())
+		drag_handle = ""
 
 func tick(delta: float) -> void:
 	if game.replay.active:
