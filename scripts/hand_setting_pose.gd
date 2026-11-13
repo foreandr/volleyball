@@ -120,16 +120,19 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 			target_fingers = target_fingers.rotated(Vector3.RIGHT,load_pitch)
 			target_across = target_across.rotated(Vector3.RIGHT,load_pitch)
 		var palm_load := 1.0-clampf(set_extension,0.0,1.0) if overhead_set else 0.0
-		if palm_load > 0.0 or frontset > 0.0:
+		if palm_load > 0.0:
 			var palm_normal := target_fingers.cross(target_across).normalized()*sign_
 			var lift_axis := palm_normal.cross(Vector3.UP)
 			if not lift_axis.is_zero_approx():
-				var angle_to_up := palm_normal.angle_to(Vector3.UP)
-				var load_lift := maxf(0.0,angle_to_up-deg_to_rad(18.0))*palm_load
-				var release_lift := minf(deg_to_rad(78.0),angle_to_up)*frontset
-				var lift := load_lift+release_lift
+				var lift := maxf(0.0,palm_normal.angle_to(Vector3.UP)-deg_to_rad(18.0))*palm_load
 				target_fingers = target_fingers.rotated(lift_axis.normalized(),lift)
 				target_across = target_across.rotated(lift_axis.normalized(),lift)
+		if frontset > 0.0:
+			var palm_normal := target_fingers.cross(target_across).normalized()*sign_
+			var release_normal := (horizontal_push.normalized()+Vector3.DOWN*0.58).normalized()
+			var turn_over := Quaternion.IDENTITY.slerp(Quaternion(palm_normal,release_normal),frontset)
+			target_fingers = turn_over*target_fingers
+			target_across = turn_over*target_across
 		if face_save and not ball_direction.is_zero_approx():
 			var incoming := (rig.global_basis.inverse()*ball_direction).normalized()
 			var palm_normal := Vector3(clampf(incoming.x,-0.45,0.45),clampf(incoming.y,-0.18,0.40),maxf(0.55,incoming.z)).normalized()
