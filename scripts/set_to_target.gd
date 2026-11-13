@@ -9,6 +9,7 @@ const SETTER_START := Vector3(-1.45,0.04,0.4)
 const PASS_TARGET := Vector3(0.55,3.35,1.50)
 const LEFT_PIN := Vector3(3.55,0.065,3.28)
 const STEP := 1.0/60.0
+const SETUP_KEY := "SetToTarget"
 
 var game: Node3D
 var trail: MultiMeshInstance3D
@@ -31,12 +32,25 @@ var grab := Vector3.ZERO
 var markers := {}
 var remaining := 0
 var batch_rep := 0
+var successful_reps := 0
+var completed_reps := 0
+var replay_drag := -2
+var replay_drag_plane: Plane
 var repeating := false
 var next_rep := -1.0
 var pass_preview: MultiMeshInstance3D
 var feed_preview: MultiMeshInstance3D
 
 func configure(status: Label) -> void:
+	var setup := StorySession.load_drill_setup(SETUP_KEY)
+	passer_start = setup.get("passer",passer_start)
+	setter_start = setup.get("setter",setter_start)
+	feed_landing = setup.get("feed",feed_landing)
+	pass_target = setup.get("pass",pass_target)
+	set_target = setup.get("set",set_target)
+	set_apex = setup.get("set_apex",set_apex)
+	feed_duration = setup.get("feed_duration",feed_duration)
+	live_speed = setup.get("live_speed",live_speed)
 	var setter := Player.new()
 	add_child(setter)
 	game = Match.new()
@@ -63,6 +77,13 @@ func configure(status: Label) -> void:
 	status.text = "Ready"
 	refresh_setup()
 
+func setup_snapshot() -> Dictionary:
+	return {"passer":passer_start,"setter":setter_start,"feed":feed_landing,"pass":pass_target,
+		"set":set_target,"set_apex":set_apex,"feed_duration":feed_duration,"live_speed":live_speed}
+
+func save_setup() -> void:
+	StorySession.save_drill_setup(SETUP_KEY,setup_snapshot())
+
 func reset_players() -> void:
 	game.begin_point()
 	game.phase = game.Phase.FINISHED
@@ -84,6 +105,8 @@ func launch_ten() -> void:
 	repeating = false
 	remaining = 10
 	batch_rep = 1
+	completed_reps = 0
+	successful_reps = 0
 	launch_rep()
 
 func toggle_repeat() -> void:
@@ -120,6 +143,7 @@ func launch_rep() -> void:
 	game.cpu_technique = 0
 	set_status("Float feed")
 	running = true
+	game.trace.write("setting_drill_feed",game.match_clock,setup_snapshot(),true)
 	game.replay.record(game)
 
 func _physics_process(delta: float) -> void:
@@ -165,6 +189,12 @@ func step_rep() -> void:
 		if repeating or remaining > 0: next_rep = 0.7
 		if kind == "serve": set_status("Missed feed")
 		elif kind == "pass": set_status("Missed set")
+		var success: bool = kind == "set" and game.net_hit.is_empty()
+		if batch_rep > 0:
+			completed_reps += 1
+			successful_reps += int(success)
+			game.info.text += "\n%d/%d sets completed" % [successful_reps,completed_reps]
+		game.trace.write("setting_drill_result",game.match_clock,{"rep":batch_rep,"set_completed":success,"result":game.info.text},true)
 	game.replay.record(game)
 
 func set_status(message: String) -> void:
@@ -222,11 +252,15 @@ func refresh_setup() -> void:
 	show_preview(trail,contact,set_motion,Flight.landing_time(contact,set_motion))
 
 func handle_setup_input(event: InputEvent, camera: Camera3D) -> bool:
-	if running or game.replay.active or not event is InputEventMouse: return false
+	if not event is InputEventMouse: return false
+	if game.replay.active: return handle_replay_drag(event,camera)
+	if running: return false
 	var mouse: Vector2 = event.position
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		dragging = event.pressed
-		if not dragging: return not selected.is_empty()
+		if not dragging:
+			if not selected.is_empty(): save_setup()
+			return not selected.is_empty()
 		selected = ""
 		var distance := 28.0
 		for key in ["passer","setter","feed","pass","set"]:
@@ -257,6 +291,7 @@ func handle_setup_input(event: InputEvent, camera: Camera3D) -> bool:
 		feed_duration = clampf(feed_duration+arc*0.12,0.70,1.35)
 	else: pass_target.y = clampf(pass_target.y+arc,2.3,6.0)
 	refresh_setup()
+	save_setup()
 	return true
 
 func court_hit(camera: Camera3D, mouse: Vector2) -> Variant:
@@ -282,6 +317,38 @@ func move_selection(point: Vector3) -> void:
 		"set": set_target = Vector3(x,set_target.y,z)
 	refresh_setup()
 
+func handle_replay_drag(event: InputEvent, camera: Camera3D) -> bool:
+	var replay = game.replay
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		var was_dragging := replay_drag != -2
+		replay_drag = -2
+		if not event.pressed: return was_dragging
+		var closest := 30.0
+		for index in [-1,0,1]:
+			if index == -1 and not game.ball.visible: continue
+			var point: Vector3 = game.ball.global_position if index == -1 else game.players[index].global_position+Vector3.UP*0.78
+			if camera.is_position_behind(point): continue
+			var distance := camera.unproject_position(point).distance_to(event.position)
+			if distance >= closest: continue
+			var plane := Plane(Vector3.UP,point.y)
+			var hit: Variant = plane.intersects_ray(camera.project_ray_origin(event.position),camera.project_ray_normal(event.position))
+			if not hit is Vector3: continue
+			var offset: Vector3 = replay.ball_offset if index == -1 else replay.actor_offsets.get(index,Vector3.ZERO)
+			closest = distance
+			replay_drag = index
+			replay_drag_plane = plane
+			grab = offset-hit
+		return replay_drag != -2
+	if event is InputEventMouseMotion and replay_drag != -2 and event.button_mask & MOUSE_BUTTON_MASK_LEFT:
+		var hit: Variant = replay_drag_plane.intersects_ray(camera.project_ray_origin(event.position),camera.project_ray_normal(event.position))
+		if hit is Vector3:
+			var offset := (Vector3(hit)+grab).slide(Vector3.UP)
+			if replay_drag == -1: replay.ball_offset = offset
+			else: replay.actor_offsets[replay_drag] = offset
+			replay.seek(game,replay.clock)
+		return true
+	return false
+
 func review_count() -> int:
 	return rep_history.size()+int(game.replay.current.size() >= 2)
 
@@ -299,6 +366,8 @@ func edit_setter() -> void:
 	var replay = game.replay
 	if not replay.active: return
 	replay.playing = false
+	save_setup()
+	StorySession.return_to_set_to_target = true
 	StorySession.edit_animation = replay.bake_actor(game,0,"Setting replay")
 	StorySession.edit_entry = {"id":"setting_replay_edit","name":"Setting replay","category":"Setting","type":"Overhead"}
 	StorySession.animation_draft.clear()

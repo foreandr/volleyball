@@ -563,13 +563,13 @@ func save_copy() -> void:
 	StorySession.edit_animation = null
 	StorySession.animation_draft.clear()
 	StorySession.animation_return = {"category":saved.category,"type":saved.type,"id":saved.id}
-	get_tree().change_scene_to_file("res://scenes/story_animations.tscn")
+	get_tree().change_scene_to_file("res://scenes/drills.tscn" if StorySession.return_to_set_to_target else "res://scenes/story_animations.tscn")
 
 func open_menu() -> void:
 	if session != null:
 		StorySession.animation_draft = {"source":entry.id,"animation":session.source,"edits":session.edits.duplicate(true),"position_edits":session.position_edits.duplicate(true),"name":copy_name.text,"frame":frame,"group":selected_group}
 	StorySession.animation_return = {"category":entry.category,"type":entry.type,"id":entry.id}
-	get_tree().change_scene_to_file("res://scenes/story_animations.tscn")
+	get_tree().change_scene_to_file("res://scenes/drills.tscn" if StorySession.return_to_set_to_target else "res://scenes/story_animations.tscn")
 
 func handle_keyboard(event: InputEventKey) -> void:
 	if event.ctrl_pressed and event.keycode == KEY_Z:

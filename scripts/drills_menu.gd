@@ -61,7 +61,11 @@ func _ready() -> void:
 	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	list.add_theme_constant_override("separation",8)
 	scroll.add_child(list)
-	if StorySession.drill_menu_category.is_empty():
+	if StorySession.return_to_set_to_target:
+		StorySession.return_to_set_to_target = false
+		show_category("Setting")
+		open_setting_stage("Set to Target")
+	elif StorySession.drill_menu_category.is_empty():
 		show_categories()
 	else:
 		var previous := StorySession.drill_menu_category
@@ -148,7 +152,9 @@ func open_setting_stage(title: String) -> void:
 	ten.custom_minimum_size.y = 38
 	ten.pressed.connect(drill.launch_ten)
 	left.add_child(ten)
-	add_speed(left,"Slow motion",1.0,func(value: float): drill.live_speed = value)
+	add_speed(left,"Slow motion",drill.live_speed,func(value: float): drill.live_speed = value)
+	var slow_motion := left.get_child(left.get_child_count()-1) as HSlider
+	slow_motion.value_changed.connect(func(_value: float): drill.save_setup())
 	build_review(right)
 	for button in [launch,ten]:
 		button.pressed.connect(func(): repeat.set_pressed_no_signal(false))
@@ -316,6 +322,12 @@ func _input(event: InputEvent) -> void:
 	if not is_instance_valid(setting_stage) or not event is InputEventKey or not event.pressed or event.echo: return
 	if event.physical_keycode == KEY_R:
 		toggle_review()
+		get_viewport().set_input_as_handled()
+	elif event.physical_keycode == KEY_F8:
+		if target_drill.game.mark_trace(): target_drill.game.info.text = "Debug marker saved"
+		get_viewport().set_input_as_handled()
+	elif target_drill.game.replay.active and event.physical_keycode in [KEY_LEFT,KEY_RIGHT]:
+		target_drill.game.replay.step_frame(target_drill.game,-1 if event.physical_keycode == KEY_LEFT else 1)
 		get_viewport().set_input_as_handled()
 	elif event.physical_keycode == KEY_SPACE and target_drill.game.replay.active:
 		toggle_playback()

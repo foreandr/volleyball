@@ -122,6 +122,7 @@ var preview_path := "user://preview_setup.cfg"
 var lab_replay_path := ""
 var open_home_simulation := false
 var open_passing_drill := false
+var return_to_set_to_target := false
 var drill_menu_category := ""
 var demo_launch_consumed := false
 var iteration_run := preload("res://scripts/iteration_run.gd").new()
@@ -148,6 +149,13 @@ func save_match_preference(key: String, value: Variant) -> void:
 	if match_preferences.has_section_key("match",key) and match_preferences.get_value("match",key) == value: return
 	match_preferences.set_value("match",key,value)
 	match_preferences.save(MATCH_SETTINGS_PATH)
+
+func load_drill_setup(drill: String) -> Dictionary:
+	var setup: Variant = match_preference(drill+"_setup",{})
+	return setup.duplicate(true) if setup is Dictionary else {}
+
+func save_drill_setup(drill: String, setup: Dictionary) -> void:
+	save_match_preference(drill+"_setup",setup.duplicate(true))
 
 func save_preview_setup() -> void:
 	var values := {}
