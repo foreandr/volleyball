@@ -45,6 +45,10 @@ var trajectory: MeshInstance3D
 
 func _init(match_: Node3D) -> void:
 	game = match_
+	var saved_source: Variant = StorySession.match_preference(PREFERENCE_PREFIX+"source_position",Vector2(source.x,source.z))
+	if saved_source is Vector2 and saved_source.is_finite():
+		source.x = clampf(saved_source.x,-6.5,6.5)
+		source.z = clampf(saved_source.y,-6.5,15.0)
 	game.phase = game.Phase.FINISHED
 	game.update_player_guide()
 	game.score_label.hide()
@@ -171,7 +175,9 @@ func handle_drag(event: InputEvent, camera: Camera3D, screen: Vector2) -> bool:
 			var point: Vector3 = hit+grab_offset
 			match drag_handle:
 				"receiver": start = Vector3(clampf(point.x,-4.4,4.4),start.y,clampf(point.z,-4.9,3.4))
-				"source": source = Vector3(clampf(point.x,-6.5,6.5),source.y,clampf(point.z,-6.5,15.0))
+				"source":
+					source = Vector3(clampf(point.x,-6.5,6.5),source.y,clampf(point.z,-6.5,15.0))
+					StorySession.save_match_preference(PREFERENCE_PREFIX+"source_position",Vector2(source.x,source.z))
 				"target": target = Vector3(clampf(point.x,-4.4,4.4),target.y,clampf(point.z,-4.9,3.8))
 			update_setup()
 		return true
