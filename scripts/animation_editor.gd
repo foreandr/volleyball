@@ -39,6 +39,8 @@ var redo_history: Array[Dictionary] = []
 var overlay: Control
 var gizmo_drag := false
 var drag_plane: Plane
+var shoulder_drag_origin := Vector3.ZERO
+var shoulder_start_offset := Vector3.ZERO
 
 func _ready() -> void:
 	entry = (StorySession.edit_entry if not StorySession.edit_entry.is_empty() else Catalog.ENTRIES[0]).duplicate(true)
@@ -347,6 +349,7 @@ func refresh_keys() -> void:
 	for bone in scope_bones():
 		var name_ := str(preview_player.skeleton.get_bone_name(bone))
 		for frame in session.edits.get(name_,{}): keys[frame] = true
+		for frame in session.position_edits.get(name_,{}): keys[frame] = true
 	timeline.set_meta("keyframes",keys.keys())
 	timeline.queue_redraw()
 
@@ -363,7 +366,11 @@ func key_joint() -> void:
 	if session == null or selected_bone < 0: return
 	set_playing(false)
 	remember_undo()
-	for bone in scope_bones(): session.set_offset(bone,frame,session.offset_at(bone,frame))
+	for bone in scope_bones():
+		session.set_offset(bone,frame,session.offset_at(bone,frame))
+		var name_ := str(preview_player.skeleton.get_bone_name(bone))
+		if session.position_edits.has(name_):
+			session.position_edits[name_][frame] = session.position_offset_at(bone,frame)
 	refresh_keys()
 
 func reset_joint() -> void:
@@ -407,6 +414,7 @@ func refresh_history() -> void:
 func endpoint_index(bone: int) -> int:
 	var rig: Skeleton3D = preview_player.skeleton
 	var name_ := str(rig.get_bone_name(bone))
+	if name_.begins_with("clavicle_"): return rig.find_bone("upperarm_"+name_.right(1))
 	if name_.begins_with("hand_"): return rig.find_bone("middle_01_"+name_.right(1))
 	var children := rig.get_bone_children(bone)
 	return children[0] if not children.is_empty() else -1
@@ -425,7 +433,7 @@ func handle_points() -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
 	if session == null: return result
 	var bones := selected_roots()
-	for name_ in ["pelvis","spine_02","spine_03","Head","upperarm_l","lowerarm_l","hand_l","upperarm_r","lowerarm_r","hand_r","thigh_l","calf_l","foot_l","thigh_r","calf_r","foot_r"]:
+	for name_ in ["pelvis","spine_02","spine_03","Head","clavicle_l","clavicle_r","upperarm_l","lowerarm_l","hand_l","upperarm_r","lowerarm_r","hand_r","thigh_l","calf_l","foot_l","thigh_r","calf_r","foot_r"]:
 		var index: int = preview_player.skeleton.find_bone(name_)
 		if index >= 0 and not index in bones: bones.append(index)
 	for bone in bones:
@@ -463,7 +471,12 @@ func handle_preview_input(event: InputEvent) -> void:
 				else: select_bone(index)
 				remember_undo()
 				gizmo_drag = true
-				drag_plane = Plane(preview_camera.global_basis.z,endpoint_world(index))
+				var handle_origin := endpoint_world(index)
+				drag_plane = Plane(preview_camera.global_basis.z,handle_origin)
+				if str(preview_player.skeleton.get_bone_name(index)).begins_with("clavicle_"):
+					var hit: Variant = drag_plane.intersects_ray(preview_camera.project_ray_origin(event.position),preview_camera.project_ray_normal(event.position))
+					shoulder_drag_origin = hit if hit is Vector3 else handle_origin
+					shoulder_start_offset = session.position_offset_at(index,frame)
 				preview.grab_focus()
 				preview.accept_event()
 				return
@@ -485,6 +498,18 @@ func handle_preview_input(event: InputEvent) -> void:
 
 func drag_joint(target: Vector3) -> void:
 	var rig: Skeleton3D = preview_player.skeleton
+	var name_ := str(rig.get_bone_name(selected_bone))
+	if name_.begins_with("clavicle_"):
+		var forward := preview_player.global_basis.z.normalized()
+		var distance := clampf((target-shoulder_drag_origin).dot(forward),-0.15,0.15)
+		var parent := rig.get_bone_parent(selected_bone)
+		var parent_basis := rig.global_basis*rig.get_bone_global_pose(parent).basis
+		var keys: Dictionary = session.position_edits.get(name_,{})
+		keys[frame] = shoulder_start_offset+parent_basis.inverse()*(forward*distance)
+		session.position_edits[name_] = keys
+		session.sample(frame)
+		refresh_keys()
+		return
 	var pivot := bone_world(selected_bone)
 	var from := endpoint_world(selected_bone)-pivot
 	var to := target-pivot
