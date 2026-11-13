@@ -4,6 +4,45 @@ signal struck(actor: Node3D, point: Vector3, velocity: Vector3, spin: float)
 
 var enabled := false
 var spike_strength := 1.0
+# Jog_Fwd is a loop. The leading ankle reaches support at 0.023 s and half a cycle later.
+const JOG_LEFT_PLANT_PHASE := 0.025
+var run_into_plant := false
+var run_entry_velocity := Vector3.ZERO
+
+func run_left_plant_distance() -> float:
+	var animator: AnimationPlayer = setter.animator
+	var length := animator.current_animation_length
+	return fposmod(JOG_LEFT_PLANT_PHASE*length-animator.current_animation_position,length)
+
+func record_run_footfalls(before: float, after: float, length: float) -> bool:
+	var advance := fposmod(after-before,length)
+	var left_landed := false
+	for foot in ["left","right"]:
+		var phase := JOG_LEFT_PLANT_PHASE+(0.5 if foot == "right" else 0.0)
+		var distance := fposmod(length*phase-before,length)
+		if distance <= 0.00001 or distance > advance+0.00001: continue
+		var actual: String = foot
+		if setter.mirror_animation: actual = "right" if foot == "left" else "left"
+		trace.write("approach_run_footfall",clock,{"foot":actual,"position":setter.position})
+		left_landed = left_landed or foot == "left"
+	return left_landed
+
+func queue_run_plant(velocity: Vector3) -> void:
+	var intercept := find_approach_intercept(true,0)
+	if not intercept.is_finite(): return
+	approach_steps = 2
+	approach_pressed_at = clock
+	approach_space_held = true
+	approach_jump_queued = true
+	run_into_plant = true
+	run_entry_velocity = velocity
+	trace.write("approach_run_plant",clock,{"foot":setter.animation_side("l"),"remaining_steps":2,"position":setter.position,"velocity":velocity},true)
+
+func begin_attack_jump(direction: Vector2, plant_time := 0.36, jump_height := 0.0, tempo := 1.0) -> void:
+	super.begin_attack_jump(direction,plant_time,jump_height,tempo)
+	if run_into_plant and jump.active:
+		setter.animator.speed_scale = 1.0
+		jump.carry_run_into_plant(run_entry_velocity)
 
 func configure_for_match(actor: Node3D, readout: Label) -> void:
 	swing_practice = false
@@ -21,6 +60,8 @@ func configure_for_match(actor: Node3D, readout: Label) -> void:
 func start_set(actor: Node3D, origin: Vector3, velocity: Vector3, target: Vector3, shot: Vector3, age: float, held: bool) -> void:
 	setter = actor
 	bump.setter = actor
+	run_into_plant = false
+	run_entry_velocity = Vector3.ZERO
 	var saved := actor.transform
 	super.reset_feed()
 	actor.transform = saved

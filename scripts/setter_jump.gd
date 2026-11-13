@@ -49,6 +49,7 @@ var plant_legs := {}
 var plant_ground := 0.0
 var entry_leg_rotations := {}
 var entry_body_pose := {}
+var incoming_plant_speed := 0.0
 
 func load_lead_arm_clip() -> void:
 	var copies := AnimationCatalog.custom_entries()
@@ -86,6 +87,7 @@ func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time
 	plant_legs.clear()
 	entry_leg_rotations.clear()
 	entry_body_pose.clear()
+	incoming_plant_speed = 0.0
 	if approach_plant and not setting_jump:
 		var rig: Skeleton3D = actor.skeleton
 		var parent := actor.get_parent_node_3d()
@@ -134,6 +136,9 @@ func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time
 			left_plant.y = plant_ground
 	if not from_sprint: actor.play_action("idle")
 
+func carry_run_into_plant(velocity: Vector3) -> void:
+	incoming_plant_speed = clampf(velocity.dot(heading),0.0,3.0*stride/load_duration())
+
 func begin_set_jump(actor: Node3D, load: float, jump_height := 0.56) -> void:
 	if active: return
 	begin(actor,Vector2.ZERO,Vector3.INF,APPROACH_LOAD_TIME,jump_height,2,false,1.0,true)
@@ -180,11 +185,18 @@ func step(actor: Node3D, delta: float, input: Vector2) -> void:
 	if lead_time > 0.0:
 		transfer_hop = 0.05*smoothstep(lead_step_duration*0.82,lead_step_duration,lead_age)*(1.0-smoothstep(0.0,0.135,pose_time))
 	if not plant_legs.is_empty() and lead_time > 0.0:
+		# Let the longer approach transfer weight without a separate hop between steps.
+		transfer_hop *= 0.30
 		# Carry momentum between the lead step and the final plant.
 		var ground_distance := entry_distance+lead_distance+stride
 		var stepped_distance := distance-stride*AIR_TRAVEL_FRACTION*flight
 		var continuous_distance := ground_distance*smoothstep(0.0,load_time,elapsed)
 		distance += (continuous_distance-stepped_distance)*0.32
+	if incoming_plant_speed > 0.0:
+		var progress := clampf(elapsed/load_time,0.0,1.0)
+		var plant_distance := stride*smoothstep(0.0,1.0,progress)
+		plant_distance += incoming_plant_speed*load_time*progress*(1.0-progress)**2
+		distance = plant_distance+stride*AIR_TRAVEL_FRACTION*flight
 	var base := start+heading*distance+Vector3.UP*(4.0*height*flight*(1.0-flight)+transfer_hop)
 	var lunge := approach_lunge*smoothstep(0.0,air_glide_duration,elapsed-load_time)
 	var position := base+air_offset+lunge
@@ -211,6 +223,7 @@ func attack_plant_foot(side: String) -> Vector3:
 	var to := left_plant if left else right_plant
 	var end := load_duration()
 	var start_step := lead_time*0.48 if not left else lead_time*0.92
+	if incoming_plant_speed > 0.0 and left: start_step = end*0.38
 	var end_step := lead_time+(end-lead_time)*(0.53 if not left else 0.96)
 	if (left and lead_time > 0.0) or (not left and entry_time > 0.0):
 		var early_start := entry_time*0.70 if left else 0.0

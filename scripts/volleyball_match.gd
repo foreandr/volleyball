@@ -1352,7 +1352,7 @@ func settle_point(delta: float) -> void:
 	advance_recoveries(delta)
 	advance_idle_players(delta)
 
-func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_facing := Vector3.INF, chase := false, turn_to_travel := false, turn_rate := 12.5, paced_run := false) -> void:
+func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_facing := Vector3.INF, chase := false, turn_to_travel := false, turn_rate := 12.5, paced_run := false, run_cadence := 0.0) -> void:
 	if recoveries.has(index) or owns_action(index,true): return
 	var actor := players[index]
 	var is_server: bool = not drill_set_pin.is_finite() and serve.player == actor
@@ -1406,7 +1406,7 @@ func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_f
 	if actor.mirror_animation: movement.x = -movement.x
 	actor.animator.speed_scale = lerpf(1.60,1.92,smoothstep(5.85,8.4,pace)) if sprint else 1.0
 	if sprint and paced_run:
-		actor.animator.speed_scale = clampf(pace/3.7,0.22,2.05)
+		actor.animator.speed_scale = run_cadence if run_cadence > 0.0 else clampf(pace/3.7,0.22,2.05)
 	actor.play_action("run" if sprint else "idle",0.10)
 	actor.animator.advance(delta)
 	var steps := footwork[index]
@@ -2193,6 +2193,7 @@ func prepare_cpu_approach(hitter: int, driver: Node3D, delta: float) -> void:
 	var time_left: float = driver.pin_arrival-(driver.clock-driver.stage_start)
 	var gap := (pin-actor.position).slide(Vector3.UP).length()
 	var staging := pin-Vector3.BACK*2.02
+	if follow_run_into_plant(hitter,driver,staging,time_left,delta): return
 	var peeling := actor.position.z > pin.z-1.70 and time_left > 0.82
 	if peeling:
 		peel_cpu_off_net(hitter,staging,delta)
@@ -2213,6 +2214,30 @@ func prepare_cpu_approach(hitter: int, driver: Node3D, delta: float) -> void:
 	if distance > 0.12:
 		var speed := clampf(distance/maxf(0.05,time_left-0.82),0.65,CPU_SPRINT_SPEED)
 		move_cpu_to_approach(hitter,staging,delta,speed)
+
+func follow_run_into_plant(hitter: int, driver: Node3D, staging: Vector3, time_left: float, delta: float) -> bool:
+	var actor := players[hitter]
+	var animator: AnimationPlayer = actor.animator
+	var run: String = actor.animation_slots["run"]
+	if recoveries.has(hitter) or animator.current_animation != run or time_left < 0.58 or time_left > 1.2: return false
+	# Give the runner space to land its last left step beyond the old staging point.
+	var entry_target := staging+Vector3.BACK*1.13
+	var offset := (entry_target-actor.position).slide(Vector3.UP)
+	if offset.z < -0.05 or offset.length() > 2.2: return false
+	var before := animator.current_animation_position
+	var length := animator.current_animation_length
+	var until_left: float = driver.run_left_plant_distance()
+	var window := clampf(time_left-0.72,0.09,0.36)
+	var cadence := move_toward(animator.speed_scale,clampf(until_left/window,1.4,1.85),delta*6.0)
+	var speed := clampf(offset.length()/maxf(window,until_left/maxf(cadence,0.1)),1.45,4.6)
+	var before_position := actor.position
+	var run_target := entry_target+Vector3.BACK*0.24
+	move_cpu(hitter,frames[team(hitter)].to_global(run_target),delta,speed,Vector3.INF,true,true,17.0,true,cadence)
+	if animator.current_animation != run: return true
+	if driver.record_run_footfalls(before,animator.current_animation_position,length) and time_left <= 0.85:
+		driver.queue_run_plant((actor.position-before_position)/delta)
+		if driver.approach_jump_queued: show_key(hitter,"Space")
+	return true
 
 func position_attack(delta: float) -> void:
 	if defensive_ball() and flight_kind != "pass":
