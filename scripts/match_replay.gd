@@ -68,11 +68,20 @@ func seek(match_: Node3D, value: float) -> void:
 	clock = clampf(value,0.0,duration())
 	var sample: float = frames.front().time+clock
 	if frames[index].time > sample: index = 0
-	while index+1 < frames.size() and frames[index+1].time <= sample: index += 1
+	while index+1 < frames.size() and float(frames[index+1].time) <= sample+0.000001: index += 1
 	var first := frames[index]
 	var second := frames[mini(index+1,frames.size()-1)]
 	var blend := clampf((sample-float(first.time))/maxf(0.00001,float(second.time)-float(first.time)),0.0,1.0)
 	apply(match_,first,second,blend)
+
+func step_frame(match_: Node3D, direction: int) -> void:
+	if not active: return
+	playing = false
+	var sample: float = frames.front().time+clock
+	var next := index+direction
+	# Between captures, stepping back lands on the earlier capture first.
+	if direction < 0 and sample > float(frames[index].time)+0.000001: next = index
+	seek(match_,float(frames[clampi(next,0,frames.size()-1)].time)-float(frames.front().time))
 
 func step(match_: Node3D, delta: float) -> void:
 	if playing:

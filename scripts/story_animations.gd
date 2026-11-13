@@ -328,7 +328,7 @@ func show_match_tuning() -> void:
 
 func add_match_replay_controls(tuning: VBoxContainer) -> void:
 	match_replay_button = Button.new()
-	match_replay_button.text = "Replay rally (R)"
+	match_replay_button.text = "Replay rally (R)" if passing_drill == null else "Review rep (R)"
 	match_replay_button.focus_mode = Control.FOCUS_NONE
 	match_replay_button.pressed.connect(toggle_match_replay)
 	tuning.add_child(match_replay_button)
@@ -340,10 +340,20 @@ func add_match_replay_controls(tuning: VBoxContainer) -> void:
 	match_replay_play.pressed.connect(toggle_match_replay_playback)
 	match_replay_panel.add_child(match_replay_play)
 	match_replay_seek = HSlider.new()
-	match_replay_seek.step = 0.01
+	match_replay_seek.step = 0.0
 	match_replay_seek.focus_mode = Control.FOCUS_NONE
-	match_replay_seek.value_changed.connect(func(value: float): demo_match.replay.seek(demo_match,value))
+	match_replay_seek.value_changed.connect(func(value: float):
+		demo_match.replay.playing = false
+		demo_match.replay.seek(demo_match,value)
+		update_match_replay_controls())
 	match_replay_panel.add_child(match_replay_seek)
+	var frames := HBoxContainer.new()
+	match_replay_panel.add_child(frames)
+	for direction in [-1,1]:
+		var frame_button := button("◀ Frame" if direction < 0 else "Frame ▶",step_match_replay.bind(direction))
+		frame_button.focus_mode = Control.FOCUS_NONE
+		frame_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		frames.add_child(frame_button)
 	demo_match.replay.speed = StorySession.match_preference("replay_speed",0.50)
 	var speed_label := label("Replay speed  %.2f×" % demo_match.replay.speed,16)
 	match_replay_panel.add_child(speed_label)
@@ -378,7 +388,16 @@ func open_lab_replay() -> void:
 	if evidence.has("type"): show_marker_popup(str(evidence.type).capitalize())
 
 func toggle_match_replay() -> void:
-	demo_match.toggle_replay()
+	var replay = demo_match.replay
+	var opening_drill_review: bool = passing_drill != null and not replay.active
+	demo_match.toggle_replay(passing_drill != null)
+	if opening_drill_review and replay.active:
+		replay.playing = false
+		replay.seek(demo_match,replay.duration())
+	update_match_replay_controls()
+
+func step_match_replay(direction: int) -> void:
+	demo_match.replay.step_frame(demo_match,direction)
 	update_match_replay_controls()
 
 func toggle_match_replay_playback() -> void:
@@ -391,7 +410,10 @@ func toggle_match_replay_playback() -> void:
 func update_match_replay_controls() -> void:
 	var replay = demo_match.replay
 	match_replay_panel.visible = replay.active
-	match_replay_button.text = "Back to match (R)" if replay.active else "Replay rally (R)"
+	if passing_drill != null:
+		match_replay_button.text = "Back to drill (R)" if replay.active else "Review rep (R)"
+	else:
+		match_replay_button.text = "Back to match (R)" if replay.active else "Replay rally (R)"
 	if not replay.active: return
 	match_replay_play.text = "Pause (Space)" if replay.playing else "Play (Space)"
 	match_replay_seek.max_value = replay.duration()
@@ -1999,6 +2021,9 @@ func _input(event: InputEvent) -> void:
 			KEY_SPACE:
 				if not demo_match.replay.active: return
 				toggle_match_replay_playback()
+			KEY_LEFT, KEY_RIGHT:
+				if not demo_match.replay.active: return
+				step_match_replay(-1 if event.keycode == KEY_LEFT else 1)
 			KEY_F8:
 				if demo_match.mark_trace(): show_marker_popup()
 			KEY_ESCAPE: open_menu()

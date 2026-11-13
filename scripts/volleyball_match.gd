@@ -2356,8 +2356,8 @@ func check_floor(previous: float) -> void:
 	else:
 		award(1-team(last_player),"Out")
 
-func toggle_replay() -> void:
-	replay.toggle(self,phase in [Phase.DEAD,Phase.FINISHED])
+func toggle_replay(prefer_current := false) -> void:
+	replay.toggle(self,prefer_current or phase in [Phase.DEAD,Phase.FINISHED])
 
 func pose_serve_receive_wait() -> void:
 	var weight := smoothstep(0.0,0.24,ready_age)
