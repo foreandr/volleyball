@@ -992,7 +992,8 @@ func queue_receive(index: int, technique: int) -> void:
 	bump.green_forearm_allowance = 0.48 if is_human(index) else 0.30
 	bump.green_start = 0.0 if is_human(index) else 0.01
 	bump.green_end = 0.78 if is_human(index) else 0.55
-	bump.defensive_hand_dig = defensive_ball() and technique == 1
+	bump.fast_hand_dig = technique == 1 and not is_human(index) and (defensive_ball() or flight_kind == "serve") and cpu_hand_receive_too_fast(arrival(hand_contact_height(1)))
+	bump.defensive_hand_dig = technique == 1 and (defensive_ball() or bump.fast_hand_dig)
 	bump.quick_low_save = technique == 0 and not is_human(index)
 	bump.allow_pancake = flight_kind not in ["spike","dump"] or touched_tape
 	bump.pancake_requires_chase = true
@@ -1374,13 +1375,25 @@ func cpu_hand_receive_too_fast(at: float) -> bool:
 	var after := minf(flight_end(),at+0.003)
 	return after > before and path_point(before).distance_to(path_point(after)) > CPU_HAND_RECEIVE_MAX_SPEED*(after-before)
 
+func cpu_prefers_fast_forearms(index: int, hand_at: float) -> bool:
+	if not cpu_hand_receive_too_fast(hand_at): return false
+	for height in [1.13,0.86,0.60,0.46]:
+		var at := arrival(height)
+		var point := path_point(at)
+		if point.y < height-0.12 or at >= flight_end()-0.025: continue
+		if frames[team(index)].to_local(point).z > Net.NET_Z: continue
+		var gap := (point-players[index].global_position).slide(Vector3.UP).length()
+		var travel := CPU_SPRINT_SPEED*maxf(0.0,at-elapsed-0.10)
+		if gap <= travel+1.55: return true
+	return false
+
 func overhead_available(index: int, technique: int) -> bool:
 	if not is_human(index) and flight_kind == "serve" and serve.get_script() == SERVES[3]: return false
 	var first_contact := technique == 1 and (defensive_ball() or flight_kind == "serve")
 	var setting := cpu_is_setting(index)
 	var height := hand_contact_height(technique)
 	var at := arrival(height)
-	if first_contact and not is_human(index) and cpu_hand_receive_too_fast(at): return false
+	if first_contact and not is_human(index) and cpu_prefers_fast_forearms(index,at): return false
 	var frame := frames[team(index)]
 	var point := frame.to_local(path_point(at))
 	var actor := players[index]
@@ -1513,7 +1526,7 @@ func tick_receive(delta: float, previous: float) -> void:
 		var alternate := technique
 		if technique == 0 and defensive_ball() and hands_lead >= 0.065 and hands_lead <= 0.30 and overhead_available(index,1):
 			alternate = 1
-		elif technique == 1 and (cpu_hand_receive_too_fast(hands_at) or (defensive_ball() and (path_point(elapsed).y < players[index].global_position.y+1.54 or (hands_lead < 0.17 and not overhead_available(index,1) and path_point(elapsed).y < 2.10)))):
+		elif technique == 1 and (cpu_prefers_fast_forearms(index,hands_at) or (defensive_ball() and (path_point(elapsed).y < players[index].global_position.y+1.54 or (hands_lead < 0.17 and not overhead_available(index,1) and path_point(elapsed).y < 2.10)))):
 			alternate = 0
 		if alternate != technique:
 			bump.reset()
