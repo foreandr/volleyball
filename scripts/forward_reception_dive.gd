@@ -1,6 +1,7 @@
 extends RefCounted
 
 const RECOVERY_CORRECTION = preload("res://assets/animations/reception_dive_correction.tres")
+const TWO_ARM_REACH_EDIT = preload("res://assets/animations/two_arm_dive_reach_edit.tres")
 const PlatformPose = preload("res://scripts/reception_platform_pose.gd")
 const WINDUP := 0.33
 const CONTACT_POSE_TIME := 0.40
@@ -29,6 +30,7 @@ static func unscaled_contact_travel(pancake: bool, wide: bool) -> float:
 
 static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D], clasp: Array[Transform3D], start: Vector3, heading: Vector3, time: float, ball_point: Vector3, release_time: float, pancake := false, travel_scale := 1.0, track_platform := false, wide_arm := "", slide_heading := Vector3.ZERO) -> void:
 	var correction_time := time-WINDUP+float(RECOVERY_CORRECTION.get_meta("contact_time"))
+	var reach_edit_time := time/WINDUP*float(TWO_ARM_REACH_EDIT.get_meta("contact_time"))
 	# Start later while preserving the reach at the intended ball contact.
 	time = time*CONTACT_POSE_TIME/WINDUP if time < WINDUP else time-WINDUP+CONTACT_POSE_TIME
 	time -= GET_UP_EXTENSION*smoothstep(0.82,POSE_DURATION+GET_UP_EXTENSION,time)
@@ -230,6 +232,11 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 			if height < 0.055:
 				wrist.y += (0.055-height)/scale_
 				author.limb(pose,"upperarm_"+side,"lowerarm_"+side,hand,wrist,Vector3(0.65 if side == "l" else -0.65,0.4,-0.25))
+	if not pancake and wide_arm.is_empty() and reach_edit_time >= 0.0 and reach_edit_time < 13.0/60.0:
+		for track in TWO_ARM_REACH_EDIT.get_track_count():
+			var bone := rig.find_bone(TWO_ARM_REACH_EDIT.track_get_path(track).get_subname(0))
+			var edit: Quaternion = TWO_ARM_REACH_EDIT.rotation_track_interpolate(track,reach_edit_time)
+			pose[bone].basis *= Basis(edit)
 	# Apply the editor changes as local joint offsets over the live dive.
 	for track in RECOVERY_CORRECTION.get_track_count():
 		var bone := rig.find_bone(RECOVERY_CORRECTION.track_get_path(track).get_subname(0))
