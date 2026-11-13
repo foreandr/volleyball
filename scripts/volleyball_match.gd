@@ -149,6 +149,7 @@ var overpass_flight := -1
 var overpass_plan_flight := -1
 var overpass_player := -1
 var rear_chaser := -1
+var backshuffle_receiver := -1
 var dig_switch_at := -INF
 var block_vertical := 30.0
 var serve_vertical := 30.0
@@ -569,6 +570,7 @@ func award(side: int, reason: String) -> void:
 func reset_receives() -> void:
 	dig_switch_at = -INF
 	rear_chaser = -1
+	backshuffle_receiver = -1
 	held_ball = false
 	cpu_second_spike = false
 	for bump in platforms:
@@ -1387,6 +1389,13 @@ func cpu_prefers_fast_forearms(index: int, hand_at: float) -> bool:
 		if gap <= travel+1.55: return true
 	return false
 
+func cpu_should_backshuffle(index: int, contact: Vector3, cue: float) -> bool:
+	if not (defensive_ball() or flight_kind == "serve"): return false
+	var frame := frames[team(index)]
+	var approach := frame.to_local(contact)-frame.to_local(path_point(maxf(0.0,cue-0.06)))
+	var depth := frame.to_local(contact).z-players[index].position.z
+	return depth < -0.25 and approach.z < -0.05 and cpu_hand_receive_too_fast(cue)
+
 func overhead_available(index: int, technique: int) -> bool:
 	if not is_human(index) and flight_kind == "serve" and serve.get_script() == SERVES[3]: return false
 	var first_contact := technique == 1 and (defensive_ball() or flight_kind == "serve")
@@ -1572,6 +1581,8 @@ func tick_receive(delta: float, previous: float) -> void:
 	var set_jump_plant_gap := INF
 	if technique == 2: set_jump_rise = set_jumps[index].flight_duration(set_jump_height,true)*0.43
 	bump.low_save_approach_velocity = Vector3.ZERO
+	if not is_human(index) and cpu_should_backshuffle(index,catch_point,cue): backshuffle_receiver = index
+	var backshuffle := backshuffle_receiver == index
 	if not is_human(index):
 		if technique != 0 and not is_finite(bump.pressed_at) and not overhead_available(index,technique):
 			cpu_technique = 1 if technique == 2 and overhead_available(index,1) else 0
@@ -1585,18 +1596,22 @@ func tick_receive(delta: float, previous: float) -> void:
 		var drop_distance := to_drop.length()
 		var drop_heading := to_drop.normalized()
 		var alignment := drop_heading.dot(actor.basis.z.normalized())
-		if cpu_dig and drop_distance > 0.80 and alignment < -0.32:
+		if cpu_dig and not backshuffle and drop_distance > 0.80 and alignment < -0.32:
 			rear_chaser = index
 		var turning_chase := cpu_dig and rear_chaser == index
 		var forward_chase := is_dig and drop_distance > 1.20 and alignment > 0.48 and cue-elapsed > 0.095
 		var run_to_drop := turning_chase or forward_chase
 		var outside_lunge_range := cpu_dig and not cpu_can_lunge(index,catch_point,cue-elapsed)
 		var turn_for_save: bool = cpu_dig and not bump.low_save.active and flight_end()-elapsed <= 0.33 and drop_distance > 1.20
-		if run_to_drop: face = drop_heading if drop_distance > 0.45 else actor.basis.z
+		if backshuffle: face = Vector3.BACK
+		elif run_to_drop: face = drop_heading if drop_distance > 0.45 else actor.basis.z
 		elif turn_for_save: face = face.lerp(drop_heading,0.68).normalized()
 		var offset := (FOREARM_DIG_REACH if cpu_dig else 0.52) if technique == 0 else hand_receive_reach()
 		if not recovering and not set_jumps[index].active and not bump.low_save.active:
 			var target := catch_point-frame.global_basis*face*offset
+			if backshuffle:
+				# Leave room to play the ball behind the hips after the backward steps.
+				target = catch_point+frame.global_basis.z*0.45
 			var lead := cue-elapsed
 			var speed := lerpf(1.7,5.3,smoothstep(0.035,0.24,lead))
 			if is_dig or hand_pass or cpu_setting or free_ball:
@@ -1605,12 +1620,12 @@ func tick_receive(delta: float, previous: float) -> void:
 				speed = clampf(distance/maxf(0.035,lead-reserve),2.0,7.2)
 			elif is_finite(bump.pressed_at):
 				speed = minf(speed,2.0)
-			if run_to_drop and drop_distance > 1.55: speed = CPU_SPRINT_SPEED
-			var plant := not outside_lunge_range and is_finite(bump.pose_started_at) and lead < 0.16 and drop_distance < 1.05
-			var lateral_run := outside_lunge_range and not run_to_drop
+			if not backshuffle and run_to_drop and drop_distance > 1.55: speed = CPU_SPRINT_SPEED
+			var plant := not backshuffle and not outside_lunge_range and is_finite(bump.pose_started_at) and lead < 0.16 and drop_distance < 1.05
+			var lateral_run := outside_lunge_range and not run_to_drop and not backshuffle
 			if lateral_run: speed = CPU_SPRINT_SPEED
 			var before_move := actor.position
-			move_cpu(index,target,delta,speed,face,not plant and (is_dig or cpu_setting or free_ball or flight_kind == "serve"),(run_to_drop or turn_for_save or lateral_run) and not plant,18.0 if lateral_run else 12.5)
+			move_cpu(index,target,delta,speed,face,not backshuffle and not plant and (is_dig or cpu_setting or free_ball or flight_kind == "serve"),(run_to_drop or turn_for_save or lateral_run) and not plant and not backshuffle,18.0 if lateral_run else 12.5)
 			bump.low_save_approach_velocity = (actor.position-before_move)/maxf(delta,0.001)
 			set_jump_plant_gap = (target-actor.global_position).slide(Vector3.UP).length()
 		var prep := set_jump_rise+0.16 if technique == 2 else (0.40 if cpu_dig else (0.18 if cpu_setting and technique == 0 else 0.27))
@@ -1650,7 +1665,7 @@ func tick_receive(delta: float, previous: float) -> void:
 		bump.lunge_bend_depth = lerpf(0.14,0.22,low)
 		bump.knee_bend_depth = bump.ready_knee_bend_depth*smoothstep(cue-0.33,cue-0.06,elapsed)
 		if cpu_dig:
-			bump.allow_auto_dive = bump.emergency_low_save or not cpu_can_lunge(index,catch_point,cue-elapsed)
+			bump.allow_auto_dive = not backshuffle and (bump.emergency_low_save or not cpu_can_lunge(index,catch_point,cue-elapsed))
 	if not is_human(index) and frame.to_local(path_point(end)).z > Net.NET_Z: bump.allow_auto_dive = false
 	var was_diving: bool = bump.low_save.active
 	bump.update_attempt(elapsed,previous,end,path,frame.global_basis.inverse()*motion,delta,timing_cue,spin,cue if is_dig else INF)
