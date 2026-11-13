@@ -105,6 +105,8 @@ func build_controls(host: Control, parent: VBoxContainer) -> void:
 	add_slider(host,left,"speed_scale","Slow motion","%",10,100,5,100,func(v): playback_speed = v*0.01)
 	add_slider(host,parent,"target_height","Target height","m",0.15,4.5,0.05,target.y,func(v): target.y = v)
 	add_slider(host,parent,"skill","Passing skill","%",0,100,1,game.passing_skill,func(v): game.passing_skill = v)
+	add_slider(host,parent,"elbow_looseness","Elbow looseness","%",0,100,1,50,func(v):
+		game.players[RECEIVER].get_pose_author().reception_elbow_looseness = v*0.01)
 	left.add_child(host.label("Ball feed",19))
 	add_slider(host,left,"source_y","Source height","m",0.3,7.0,0.05,source.y,func(v): source.y = v)
 	add_slider(host,left,"heading","Direction","°",-180,180,1,heading,func(v): heading = v)
