@@ -72,7 +72,7 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 	if not wide_arm.is_empty() and not slide_heading.is_zero_approx():
 		var ball_yaw := atan2(slide_heading.x,slide_heading.z)
 		var turn := clampf(angle_difference(facing_yaw,ball_yaw)*0.55,-deg_to_rad(52.0),deg_to_rad(52.0))
-		facing_yaw += turn*smoothstep(0.04,0.33,time)
+		facing_yaw += turn*smoothstep(0.0,0.16,time)
 	actor.rotation.y = facing_yaw
 	var pose := ready.duplicate()
 	var pelvis := rig.find_bone("pelvis")

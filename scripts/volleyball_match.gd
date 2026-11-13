@@ -1570,7 +1570,9 @@ func tick_receive(delta: float, previous: float) -> void:
 		var turning_chase := cpu_dig and rear_chaser == index
 		var forward_chase := is_dig and drop_distance > 1.20 and alignment > 0.48 and cue-elapsed > 0.095
 		var run_to_drop := turning_chase or forward_chase
+		var turn_for_save: bool = cpu_dig and not bump.low_save.active and flight_end()-elapsed <= 0.33 and drop_distance > 1.20
 		if run_to_drop: face = drop_heading if drop_distance > 0.45 else actor.basis.z
+		elif turn_for_save: face = face.lerp(drop_heading,0.68).normalized()
 		var offset := (FOREARM_DIG_REACH if cpu_dig else 0.52) if technique == 0 else hand_receive_reach()
 		if not recovering and not set_jumps[index].active and not bump.low_save.active:
 			var target := catch_point-frame.global_basis*face*offset
@@ -1585,7 +1587,7 @@ func tick_receive(delta: float, previous: float) -> void:
 			if run_to_drop and drop_distance > 1.55: speed = CPU_SPRINT_SPEED
 			var plant := is_finite(bump.pose_started_at) and lead < 0.16 and drop_distance < 1.05
 			var before_move := actor.position
-			move_cpu(index,target,delta,speed,face,not plant and (is_dig or cpu_setting or free_ball or flight_kind == "serve"),run_to_drop and not plant)
+			move_cpu(index,target,delta,speed,face,not plant and (is_dig or cpu_setting or free_ball or flight_kind == "serve"),(run_to_drop or turn_for_save) and not plant)
 			bump.low_save_approach_velocity = (actor.position-before_move)/maxf(delta,0.001)
 			set_jump_plant_gap = (target-actor.global_position).slide(Vector3.UP).length()
 		var prep := set_jump_rise+0.16 if technique == 2 else (0.40 if cpu_dig else (0.18 if cpu_setting and technique == 0 else 0.27))
@@ -1616,7 +1618,7 @@ func tick_receive(delta: float, previous: float) -> void:
 		bump.show()
 		bump.update_aim()
 	var floor_lead := end-elapsed
-	bump.emergency_low_save = drill_pass_target.is_finite() and cpu_dig and floor_lead <= 0.25
+	bump.emergency_low_save = cpu_dig and floor_lead <= 0.25
 	var timing_cue := cue if is_human(index) and technique == 0 else INF
 	bump.knee_bend_depth = 0.0
 	if forearm_dig:

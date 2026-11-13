@@ -418,10 +418,15 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 	if attempted and grade == Timing.Grade.WAITING:
 		var start_dig := strict_dig and (not hand_setting or time >= dig_cue-0.19)
 		var start_jump_set := setter_jumping and hand_setting and not face_dig
-		if not is_finite(pose_started_at) and (start_dig or start_jump_set or progress >= 1.0-PLATFORM_PREP_TIME/APPROACH_TIME):
-			pose_started_at = maxf(pressed_at,time-delta)
 		if allow_auto_dive and not hand_setting and not setter_jumping and (reach.is_empty() or quick_low_save):
 			low_save.plan(setter,path,time,end,clip,quick_low_save,allow_pancake,pancake_requires_chase,low_save_approach_velocity,emergency_low_save)
+		if not low_save.active and not is_finite(pose_started_at) and (start_dig or start_jump_set or progress >= 1.0-PLATFORM_PREP_TIME/APPROACH_TIME):
+			var platform_in_range := true
+			if strict_dig and quick_low_save and not hand_setting:
+				var intercept: Vector3 = path.call(clampf(dig_cue,time,end))
+				platform_in_range = (intercept-setter.position).slide(Vector3.UP).length() <= 1.35
+			if platform_in_range:
+				pose_started_at = maxf(pressed_at,time-delta)
 	var elapsed := time-pose_started_at
 	var striking := attempted and grade == Timing.Grade.WAITING and (low_save.active or is_finite(pose_started_at)) and (time < end or (strict_dig and previous < end)) and (not catch_only or catch_airborne)
 	if striking:
