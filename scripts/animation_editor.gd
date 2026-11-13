@@ -431,7 +431,7 @@ func handle_points() -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
 	if session == null: return result
 	var bones := selected_roots()
-	for name_ in ["pelvis","spine_02","spine_03","Head","clavicle_l","clavicle_r","upperarm_l","lowerarm_l","hand_l","upperarm_r","lowerarm_r","hand_r","thigh_l","calf_l","foot_l","thigh_r","calf_r","foot_r"]:
+	for name_ in ["pelvis","spine_01","spine_02","spine_03","Head","clavicle_l","clavicle_r","upperarm_l","lowerarm_l","hand_l","upperarm_r","lowerarm_r","hand_r","thigh_l","calf_l","foot_l","thigh_r","calf_r","foot_r"]:
 		var index: int = preview_player.skeleton.find_bone(name_)
 		if index >= 0 and not index in bones: bones.append(index)
 	for bone in bones:

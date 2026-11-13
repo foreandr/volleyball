@@ -657,13 +657,20 @@ func lift_arms_during_plant() -> void:
 	var rig: Skeleton3D = setter.skeleton
 	var pose: Array[Transform3D] = []
 	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
-	apply_two_arm_lift(pose,setter.get_pose_author(),0.0,0.0,progress*0.30)
+	var author: RefCounted = setter.get_pose_author()
+	apply_launch_back_arch(pose,author,smootherstep(0.12,0.95,progress))
+	apply_two_arm_lift(pose,author,0.0,0.0,progress*0.30)
 	approach_render_rotations.clear()
 	for bone in rig.get_bone_count():
 		var rotation := pose[bone].basis.get_rotation_quaternion()
 		approach_render_rotations.append(rotation)
-		if rig.get_bone_name(bone) in ["upperarm_r","lowerarm_r","hand_r","upperarm_l","lowerarm_l","hand_l"]:
+		if rig.get_bone_name(bone) in ["spine_01","spine_02","upperarm_r","lowerarm_r","hand_r","upperarm_l","lowerarm_l","hand_l"]:
 			rig.set_bone_pose_rotation(bone,rotation)
+
+func apply_launch_back_arch(pose: Array[Transform3D], author: RefCounted, weight: float) -> void:
+	var arch := deg_to_rad(-26.0)*weight
+	author.rotate_world(pose,"spine_01",Vector3.RIGHT,arch*0.65)
+	author.rotate_world(pose,"spine_02",Vector3.RIGHT,arch*0.35)
 
 func setter_movement_scale() -> float:
 	if stage == Stage.SERVE:
@@ -1312,6 +1319,10 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 	var torso_pitch := pitch-deg_to_rad(12.0)*strike_reach+deg_to_rad(30.0)*follow_crunch+deg_to_rad(torso_forward_bias_degrees)*lean_blend
 	author.rotate_world(pose,"spine_01",Vector3.RIGHT,torso_pitch*0.45*weight)
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,torso_pitch*0.55*weight)
+	if stage == Stage.SET and plant_arm_lift_started and clock > swing_started:
+		var arch_release := smootherstep(0.08,0.34,clock-swing_started)
+		var drive_release := smootherstep(0.0,0.65,extension)
+		apply_launch_back_arch(pose,author,1.0-maxf(arch_release,drive_release))
 	if uses_air_reach_assist() and stage == Stage.SET:
 		var torso_reach := smootherstep(0.03,0.18,clock-swing_started)*0.68
 		author.rotate_world(pose,"spine_01",Vector3.RIGHT,lean.x*torso_reach)
