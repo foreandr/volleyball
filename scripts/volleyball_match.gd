@@ -1590,6 +1590,7 @@ func tick_receive(delta: float, previous: float) -> void:
 	bump.low_save_approach_velocity = Vector3.ZERO
 	if not is_human(index) and cpu_should_backshuffle(index,catch_point,cue): backshuffle_receiver = index
 	var backshuffle := backshuffle_receiver == index
+	var square_receive := not is_human(index) and (flight_kind == "serve" or (is_dig and cpu_hand_receive_too_fast(cue)))
 	if not is_human(index):
 		if technique != 0 and not is_finite(bump.pressed_at) and not overhead_available(index,technique):
 			cpu_technique = 1 if technique == 2 and overhead_available(index,1) else 0
@@ -1603,13 +1604,13 @@ func tick_receive(delta: float, previous: float) -> void:
 		var drop_distance := to_drop.length()
 		var drop_heading := to_drop.normalized()
 		var alignment := drop_heading.dot(actor.basis.z.normalized())
-		if cpu_dig and not backshuffle and drop_distance > 0.80 and alignment < -0.32:
+		if cpu_dig and not square_receive and not backshuffle and drop_distance > 0.80 and alignment < -0.32:
 			rear_chaser = index
-		var turning_chase := cpu_dig and rear_chaser == index
-		var forward_chase := is_dig and drop_distance > 1.20 and alignment > 0.48 and cue-elapsed > 0.095
+		var turning_chase := cpu_dig and not square_receive and rear_chaser == index
+		var forward_chase := is_dig and not square_receive and drop_distance > 1.20 and alignment > 0.48 and cue-elapsed > 0.095
 		var run_to_drop := turning_chase or forward_chase
 		var outside_lunge_range := cpu_dig and not cpu_can_lunge(index,catch_point,cue-elapsed)
-		var turn_for_save: bool = cpu_dig and not bump.low_save.active and flight_end()-elapsed <= 0.33 and drop_distance > 1.20
+		var turn_for_save: bool = cpu_dig and not square_receive and not bump.low_save.active and flight_end()-elapsed <= 0.33 and drop_distance > 1.20
 		if backshuffle: face = Vector3.BACK
 		elif run_to_drop: face = drop_heading if drop_distance > 0.45 else actor.basis.z
 		elif turn_for_save: face = face.lerp(drop_heading,0.68).normalized()
@@ -1629,10 +1630,16 @@ func tick_receive(delta: float, previous: float) -> void:
 				speed = minf(speed,2.0)
 			if not backshuffle and run_to_drop and drop_distance > 1.55: speed = CPU_SPRINT_SPEED
 			var plant := not backshuffle and not outside_lunge_range and is_finite(bump.pose_started_at) and lead < 0.16 and drop_distance < 1.05
-			var lateral_run := outside_lunge_range and not run_to_drop and not backshuffle
+			var lateral_run := outside_lunge_range and not square_receive and not run_to_drop and not backshuffle
 			if lateral_run: speed = CPU_SPRINT_SPEED
 			var before_move := actor.position
-			move_cpu(index,target,delta,speed,face,not backshuffle and not plant and (is_dig or cpu_setting or free_ball or flight_kind == "serve"),(run_to_drop or turn_for_save or lateral_run) and not plant and not backshuffle,18.0 if lateral_run else 12.5)
+			# Leave the final step to the lunge when the receive pose can cover it.
+			if square_receive and technique == 0 and lead >= -0.035:
+				var reach_offset: Vector3 = bump.to_local(catch_point)-bump.ready_contact()
+				var reach_tier: int = Bump.Timing.practice_reach_tier(reach_offset)
+				if reach_tier == 2 or bump.reach.get("tier",0) == 2:
+					target = actor.global_position
+			move_cpu(index,target,delta,speed,face,not square_receive and not backshuffle and not plant and (is_dig or cpu_setting or free_ball or flight_kind == "serve"),(run_to_drop or turn_for_save or lateral_run) and not plant and not backshuffle,18.0 if lateral_run else 12.5)
 			bump.low_save_approach_velocity = (actor.position-before_move)/maxf(delta,0.001)
 			set_jump_plant_gap = (target-actor.global_position).slide(Vector3.UP).length()
 		var prep := set_jump_rise+0.16 if technique == 2 else (0.40 if cpu_dig else (0.18 if cpu_setting and technique == 0 else 0.27))
@@ -1673,6 +1680,11 @@ func tick_receive(delta: float, previous: float) -> void:
 		bump.knee_bend_depth = bump.ready_knee_bend_depth*smoothstep(cue-0.33,cue-0.06,elapsed)
 		if cpu_dig:
 			bump.allow_auto_dive = not backshuffle and (bump.emergency_low_save or not cpu_can_lunge(index,catch_point,cue-elapsed))
+	if square_receive and technique == 0 and not bump.low_save.active:
+		var reach_offset: Vector3 = bump.to_local(catch_point)-bump.ready_contact()
+		if bump.reach.is_empty() and cue-elapsed <= 0.22 and Bump.Timing.practice_reach_tier(reach_offset) == 2:
+			bump.plan_reach(reach_offset)
+		if bump.reach.get("tier",0) == 2: bump.allow_auto_dive = false
 	if not is_human(index) and frame.to_local(path_point(end)).z > Net.NET_Z: bump.allow_auto_dive = false
 	var was_diving: bool = bump.low_save.active
 	bump.fast_back_receive = backshuffle and technique == 0 and is_dig
