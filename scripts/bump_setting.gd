@@ -98,6 +98,8 @@ var hand_catch_from := Vector3.INF
 var hand_target := {}
 var set_follow_target := Vector3.INF
 var release_time := -INF
+var release_wrist_goals := {}
+var release_wrist_elapsed := 0.0
 var release_point: Vector3
 var outgoing: Vector3
 var floor_time := 0.0
@@ -174,6 +176,7 @@ func reset() -> void:
 	cone.hide()
 	touch_time = -INF
 	release_time = -INF
+	release_wrist_goals.clear()
 	hand_target.clear()
 	set_follow_target = Vector3.INF
 	net_hit.clear()
@@ -702,7 +705,11 @@ func update_hand_push(time: float, follow: float) -> void:
 	var torso_follow := smoothstep(0.0,0.10,after_release)
 	var anchor := hand_anchor
 	if setter_jumping and hand_catch_from.is_finite(): anchor = hand_catch_from.lerp(anchor,smoothstep(0.0,0.065,follow))
-	HandPose.apply(setter,setter.to_global(anchor),blend,global_basis*push,cushion,torso_follow,false,Vector3.ZERO,extension,set_offset,smoothstep(0.0,delay,follow),forearm_setting)
+	var turnover_end := delay+HandPose.FRONT_WRIST_FOLLOW_TIME
+	var capture_wrist := follow >= delay and not is_finite(release_time) and forearm_setting
+	if capture_wrist: release_wrist_elapsed = follow
+	HandPose.apply(setter,setter.to_global(anchor),blend,global_basis*push,cushion,torso_follow,false,Vector3.ZERO,extension,set_offset,smoothstep(0.0,delay,follow),forearm_setting,
+		smoothstep(0.0,turnover_end,follow),release_wrist_goals if capture_wrist else null)
 	if follow >= delay and not is_finite(release_time):
 		release_time = time
 		release_point = platform_center()

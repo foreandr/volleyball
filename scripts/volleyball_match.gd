@@ -1206,6 +1206,10 @@ func begin_recovery(index: int) -> void:
 		recovery["hold"] = 0.08
 		recovery["rise"] = 0.65
 		recovery["spine_rise"] = 0.80
+		if not bump.release_wrist_goals.is_empty():
+			recovery["wrist_goals"] = bump.release_wrist_goals.duplicate()
+			recovery["wrist_elapsed"] = bump.release_wrist_elapsed
+			recovery["wrist_turn_end"] = bump.hand_release_delay()+Bump.HandPose.FRONT_WRIST_FOLLOW_TIME
 	if bump.low_save.active:
 		recovery["save"] = bump.low_save
 		recovery["save_time"] = elapsed
@@ -1244,6 +1248,7 @@ func advance_recoveries(delta: float) -> void:
 		animated[index] = true
 		var weight := 1.0-smoothstep(hold,hold+rise,age)
 		var spine_weight := 1.0-smoothstep(hold,hold+spine_rise,age)
+		var wrist_goals: Dictionary = recovery.get("wrist_goals",{})
 		for bone in rig.get_bone_count():
 			if landing_set:
 				var name_ := rig.get_bone_name(bone)
@@ -1253,6 +1258,14 @@ func advance_recoveries(delta: float) -> void:
 			var idle := rig.get_bone_pose(bone)
 			rig.set_bone_pose_position(bone,idle.origin.lerp(pose.origin,bone_weight))
 			var rotation := pose.basis.orthonormalized().get_rotation_quaternion().normalized()
+			if wrist_goals.has(bone):
+				var elapsed_at_release: float = recovery.wrist_elapsed
+				var turn_end: float = recovery.wrist_turn_end
+				var initial := smoothstep(0.0,turn_end,elapsed_at_release)
+				var progress := smoothstep(0.0,turn_end,elapsed_at_release+age)
+				rotation = rotation.slerp(wrist_goals[bone],(progress-initial)/maxf(0.0001,1.0-initial))
+				var wrist_hold := maxf(hold,turn_end-elapsed_at_release)
+				bone_weight = 1.0-smoothstep(wrist_hold,hold+rise,age)
 			rig.set_bone_pose_rotation(bone,idle.basis.orthonormalized().get_rotation_quaternion().normalized().slerp(rotation,bone_weight))
 		if recovery.get("fast_elbow_bend",false) and age > 0.0 and age < FAST_DIG_ELBOW_DURATION:
 			apply_fast_dig_elbow_bend(rig,age)

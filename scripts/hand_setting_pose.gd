@@ -6,6 +6,9 @@ const SET_CONTACT_FORWARD := 0.05
 const CONTACT_RADIUS := 0.40
 const GREEN_CONTACT_ALLOWANCE := 0.17
 const RELEASE_TIME := 0.125
+const FRONT_WRIST_FOLLOW_TIME := 0.14
+const SET_WRIST_LOAD_PITCH := -16.0
+const SET_PALM_LOAD_ANGLE := 28.0
 
 static func contact_center(actor: Node3D) -> Vector3:
 	var rig: Skeleton3D = actor.skeleton
@@ -15,7 +18,7 @@ static func contact_center(actor: Node3D) -> Vector3:
 		center += rig.get_bone_global_pose(rig.find_bone("thumb_03_"+side)).origin
 	return rig.to_global(center*0.25+Vector3(0,0.075,0.07))
 
-static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.ZERO, cushion := 0.0, torso_follow := 0.0, face_save := false, ball_direction := Vector3.ZERO, set_extension := -1.0, set_offset := Vector3.INF, arch_progress := 0.0, overhead_set := false) -> void:
+static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.ZERO, cushion := 0.0, torso_follow := 0.0, face_save := false, ball_direction := Vector3.ZERO, set_extension := -1.0, set_offset := Vector3.INF, arch_progress := 0.0, overhead_set := false, wrist_turn := -1.0, wrist_finish: Variant = null) -> void:
 	if blend <= 0.0: return
 	var rig: Skeleton3D = actor.skeleton
 	var author: RefCounted = actor.get_pose_author()
@@ -116,7 +119,7 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 			target_fingers = target_fingers.lerp(local_push.normalized(),0.46*follow)
 		if overhead_set and set_extension >= 0.0:
 			# Cock the wrists during the lift, then let the release pose take over.
-			var load_pitch := deg_to_rad(-26.0)*(1.0-set_extension)
+			var load_pitch := deg_to_rad(SET_WRIST_LOAD_PITCH)*(1.0-set_extension)
 			target_fingers = target_fingers.rotated(Vector3.RIGHT,load_pitch)
 			target_across = target_across.rotated(Vector3.RIGHT,load_pitch)
 		var palm_load := 1.0-clampf(set_extension,0.0,1.0) if overhead_set else 0.0
@@ -124,21 +127,36 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 			var palm_normal := target_fingers.cross(target_across).normalized()*sign_
 			var lift_axis := palm_normal.cross(Vector3.UP)
 			if not lift_axis.is_zero_approx():
-				var lift := maxf(0.0,palm_normal.angle_to(Vector3.UP)-deg_to_rad(18.0))*palm_load
+				var lift := maxf(0.0,palm_normal.angle_to(Vector3.UP)-deg_to_rad(SET_PALM_LOAD_ANGLE))*palm_load
 				target_fingers = target_fingers.rotated(lift_axis.normalized(),lift)
 				target_across = target_across.rotated(lift_axis.normalized(),lift)
+		var release_basis := Basis.IDENTITY
 		if frontset > 0.0:
 			var palm_normal := target_fingers.cross(target_across).normalized()*sign_
 			var release_normal := (horizontal_push.normalized()+Vector3.DOWN*0.58).normalized()
-			var turn_over := Quaternion.IDENTITY.slerp(Quaternion(palm_normal,release_normal),frontset)
-			target_fingers = turn_over*target_fingers
-			target_across = turn_over*target_across
+			release_basis = Basis(Quaternion(palm_normal,release_normal))*hand_basis(target_fingers,target_across)
+			# Start the turnover at the same palms-up pose used on the way in.
+			var loaded_fingers := Vector3(-sign_*0.52,0.82,0.23).rotated(Vector3.RIGHT,deg_to_rad(SET_WRIST_LOAD_PITCH))
+			var loaded_across := Vector3(-sign_*0.72,-0.30,-0.54).rotated(Vector3.RIGHT,deg_to_rad(SET_WRIST_LOAD_PITCH))
+			var loaded_normal := loaded_fingers.cross(loaded_across).normalized()*sign_
+			var lift_axis := loaded_normal.cross(Vector3.UP).normalized()
+			var lift := loaded_normal.angle_to(Vector3.UP)-deg_to_rad(SET_PALM_LOAD_ANGLE)
+			var loaded_basis := Basis(lift_axis,lift)*hand_basis(loaded_fingers,loaded_across)
+			var hand_turn := loaded_basis.slerp(release_basis,wrist_direction*(wrist_turn if wrist_turn >= 0.0 else 1.0))
+			target_fingers = hand_turn.x
+			target_across = hand_turn.y
 		if face_save and not ball_direction.is_zero_approx():
 			var incoming := (rig.global_basis.inverse()*ball_direction).normalized()
 			var palm_normal := Vector3(clampf(incoming.x,-0.45,0.45),clampf(incoming.y,-0.18,0.40),maxf(0.55,incoming.z)).normalized()
 			target_fingers = target_fingers.slide(palm_normal).normalized()
 			target_across = palm_normal.cross(target_fingers)*sign_
-		author.set_world_basis(pose,hand,hand_basis(target_fingers,target_across)*hand_basis(fingers,across).inverse()*base.basis)
+		var hand_orientation := hand_basis(target_fingers,target_across)*hand_basis(fingers,across).inverse()*base.basis
+		author.set_world_basis(pose,hand,hand_orientation)
+		if wrist_finish != null and frontset > 0.0:
+			var current_basis: Basis = pose[hand_bone].basis
+			author.set_world_basis(pose,hand,release_basis*hand_basis(fingers,across).inverse()*base.basis)
+			wrist_finish[hand_bone] = pose[hand_bone].basis.get_rotation_quaternion()
+			pose[hand_bone].basis = current_basis
 		var index_tip := diamond+Vector3(sign_*0.018,0.065,0.025)
 		var thumb_tip := diamond+Vector3(sign_*0.016,-0.047,0.045)
 		var finger_cup := diamond+Vector3(0,0.075,0.07)
