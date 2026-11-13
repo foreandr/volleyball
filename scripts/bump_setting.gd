@@ -486,10 +486,9 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 		blend_dig_transition(time)
 		var keep_platform_low := rushed_cpu_receive and not hand_setting and not low_save.active and not reach.has("custom_clip")
 		if keep_platform_low: lower_rushed_platform()
-		var hold_arms := rushed_cpu_receive and not hand_setting and not low_save.active and not reach.has("custom_clip") and time > 12.0/60.0+0.00001 and time <= 15.0/60.0+0.00001
-		if deep_squat and not hold_arms:
+		var arm_hold := smoothstep(12.0/60.0,13.0/60.0,time)*(1.0-smoothstep(15.0/60.0,19.0/60.0,time)) if rushed_cpu_receive and not hand_setting and not low_save.active and not reach.has("custom_clip") else 0.0
+		if deep_squat:
 			reach_platform(Vector3.ZERO,smoothstep(0.025,0.14,elapsed))
-		if hold_arms: restore_early_dig_arms()
 		var pancake := low_save.active and low_save.pancake
 		var center := to_local(LowSave.palm_center(setter)) if pancake else platform_center()
 		var radius := 0.16 if pancake else (0.33 if face_dig else contact_radius())
@@ -517,7 +516,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 				center = contact[1]
 				cutoff = Net.RADIUS+(0.04 if hand_setting or pancake else 0.05)
 				if near_dive_contact and low_save.wide_arm.is_empty(): cutoff += 0.015
-				if not hand_setting and not low_save.active and not hold_arms:
+				if not hand_setting and not low_save.active and arm_hold < 1.0:
 					# Bring the platform toward the approaching ball, then test the posed bones again.
 					var preview: Vector3 = path.call(minf(end,sweep_end+(0.025 if rushed_cpu_receive else 0.070)))
 					var live_contact := dig_contact_segment(first,preview,false,previous_dig_pose,previous_dig_pose)
@@ -538,6 +537,12 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 						contact = dig_contact_segment(first,last,false,initial_pose,previous_dig_pose)
 						point = contact[0]
 						center = contact[1]
+			if arm_hold > 0.0 and not early_dig_arms.is_empty():
+				restore_early_dig_arms(arm_hold)
+				previous_dig_pose = dig_bones()
+				var held_contact := dig_contact_segment(first,last,false,initial_pose,previous_dig_pose)
+				point = held_contact[0]
+				center = held_contact[1]
 			if rushed_cpu_receive and not hand_setting and not low_save.active and time <= 12.0/60.0+0.00001:
 				capture_early_dig_arms()
 			var gap_after_adjustment := point.distance_to(center)
@@ -810,12 +815,12 @@ func capture_early_dig_arms() -> void:
 			var bone := rig.find_bone(part+side)
 			early_dig_arms[bone] = rig.get_bone_pose(bone)
 
-func restore_early_dig_arms() -> void:
+func restore_early_dig_arms(weight: float) -> void:
 	var rig: Skeleton3D = setter.skeleton
 	for bone in early_dig_arms:
 		var pose: Transform3D = early_dig_arms[bone]
-		rig.set_bone_pose_position(bone,pose.origin)
-		rig.set_bone_pose_rotation(bone,pose.basis.get_rotation_quaternion())
+		rig.set_bone_pose_position(bone,rig.get_bone_pose_position(bone).lerp(pose.origin,weight))
+		rig.set_bone_pose_rotation(bone,rig.get_bone_pose_rotation(bone).slerp(pose.basis.get_rotation_quaternion(),weight))
 
 func lower_rushed_platform() -> void:
 	var rig: Skeleton3D = setter.skeleton
