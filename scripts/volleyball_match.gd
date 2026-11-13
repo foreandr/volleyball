@@ -1570,6 +1570,7 @@ func tick_receive(delta: float, previous: float) -> void:
 		var turning_chase := cpu_dig and rear_chaser == index
 		var forward_chase := is_dig and drop_distance > 1.20 and alignment > 0.48 and cue-elapsed > 0.095
 		var run_to_drop := turning_chase or forward_chase
+		var outside_lunge_range := cpu_dig and not cpu_can_lunge(index,catch_point,cue-elapsed)
 		var turn_for_save: bool = cpu_dig and not bump.low_save.active and flight_end()-elapsed <= 0.33 and drop_distance > 1.20
 		if run_to_drop: face = drop_heading if drop_distance > 0.45 else actor.basis.z
 		elif turn_for_save: face = face.lerp(drop_heading,0.68).normalized()
@@ -1585,9 +1586,11 @@ func tick_receive(delta: float, previous: float) -> void:
 			elif is_finite(bump.pressed_at):
 				speed = minf(speed,2.0)
 			if run_to_drop and drop_distance > 1.55: speed = CPU_SPRINT_SPEED
-			var plant := is_finite(bump.pose_started_at) and lead < 0.16 and drop_distance < 1.05
+			var plant := not outside_lunge_range and is_finite(bump.pose_started_at) and lead < 0.16 and drop_distance < 1.05
+			var lateral_run := outside_lunge_range and not run_to_drop
+			if lateral_run: speed = CPU_SPRINT_SPEED
 			var before_move := actor.position
-			move_cpu(index,target,delta,speed,face,not plant and (is_dig or cpu_setting or free_ball or flight_kind == "serve"),(run_to_drop or turn_for_save) and not plant)
+			move_cpu(index,target,delta,speed,face,not plant and (is_dig or cpu_setting or free_ball or flight_kind == "serve"),(run_to_drop or turn_for_save or lateral_run) and not plant,18.0 if lateral_run else 12.5)
 			bump.low_save_approach_velocity = (actor.position-before_move)/maxf(delta,0.001)
 			set_jump_plant_gap = (target-actor.global_position).slide(Vector3.UP).length()
 		var prep := set_jump_rise+0.16 if technique == 2 else (0.40 if cpu_dig else (0.18 if cpu_setting and technique == 0 else 0.27))
