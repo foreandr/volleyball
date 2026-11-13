@@ -1330,7 +1330,9 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 			swing_finish_pose = pose.duplicate()
 	if uses_assisted_approach() and not approach_arm_transition.is_empty():
 		var handoff_age := clock-stage_start if stage == Stage.HIT else clock-swing_started
-		if stage == Stage.SET and handoff_age < 0.43:
+		if stage == Stage.SET and handoff_age < 0.43 and sync_approach_arm_lift():
+			apply_two_arm_lift(pose,author,handoff_age,extension)
+		elif stage == Stage.SET and handoff_age < 0.43:
 			var front_pose := pose.duplicate()
 			var across: Vector3 = (author.point(pose,"upperarm_l")-author.point(pose,"upperarm_r")).normalized()
 			var up: Vector3 = (author.point(pose,"neck_01")-author.point(pose,"spine_01")).normalized()
@@ -1364,11 +1366,8 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 					var rise := smootherstep(0.015,0.35,handoff_age)
 					var angle := lerpf(-0.48,PI*0.5,rise)
 					var arc := (forward*cos(angle)+up*sin(angle)).normalized()
-					if sync_approach_arm_lift():
-						rise = overhead
-						arc = lift_direction
 					var reach := lerpf(0.43,arm_length*0.96,rise)
-					var entry := smootherstep(0.0,0.12 if sync_approach_arm_lift() else 0.17,handoff_age)
+					var entry := smootherstep(0.0,0.17,handoff_age)
 					# Keep the wrist outside the shoulder as the backswing passes the hip.
 					var sweep := (outward*0.58-up*0.82).normalized()
 					var outgoing := (arc*reach+outward*0.015).normalized()
@@ -1395,6 +1394,40 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 				SpikeArm.blend_arm(pose,approach_arm_transition,author,source_weight)
 				SpikeArm.blend_arm(pose,approach_arm_transition,author,source_weight,"l")
 	return pose
+
+func apply_two_arm_lift(pose: Array, author: RefCounted, age: float, extension: float) -> void:
+	var source := pose.duplicate()
+	for side in ["r","l"]:
+		SpikeArm.blend_arm(source,approach_arm_transition,author,1.0,side)
+	var raise := smootherstep(0.0,0.28,age)
+	var together := smoothstep(0.0,0.14,age)
+	var shared_angle := lerpf(deg_to_rad(-153.0),deg_to_rad(78.0),raise)
+	for side in ["r","l"]:
+		var upper: String = "upperarm_"+side
+		var lower: String = "lowerarm_"+side
+		var hand: String = "hand_"+side
+		var shoulder: Vector3 = author.point(source,upper)
+		var elbow: Vector3 = author.point(source,lower)
+		var wrist: Vector3 = author.point(source,hand)
+		var initial := wrist-shoulder
+		var angle := atan2(initial.y,initial.z)
+		if angle > 0.0 and initial.z < 0.0: angle -= TAU
+		angle = lerpf(angle,shared_angle,together)
+		# Carry both long arms past the hips and up in front, with room between the hands.
+		var arm_length := shoulder.distance_to(elbow)+elbow.distance_to(wrist)
+		var radius := lerpf(Vector2(initial.y,initial.z).length(),arm_length*0.95,raise)
+		var lateral := lerpf(initial.x,0.07 if side == "l" else -0.07,together)
+		var target := shoulder+Vector3(lateral,sin(angle)*radius,cos(angle)*radius)
+		var initial_axis := initial.normalized()
+		var axis := (target-shoulder).normalized()
+		var pole := Quaternion(initial_axis,axis)*(elbow-shoulder).slide(initial_axis).normalized()
+		var outward := Vector3.RIGHT if side == "l" else Vector3.LEFT
+		var stable_pole := (outward+Vector3.BACK*0.35).slide(axis).normalized()
+		pole = pole.rotated(axis,pole.signed_angle_to(stable_pole,axis)*raise)
+		author.limb(source,upper,lower,hand,target,pole,1.0,174.0,true)
+		var release := smootherstep(0.24,0.42,age) if side == "r" else smootherstep(0.26,0.43,age)
+		if side == "r": release = maxf(release,smootherstep(0.18,0.67,extension))
+		SpikeArm.blend_arm(pose,source,author,1.0-release,side)
 
 func shot_line_weight(target: Vector3, origin: Vector3) -> float:
 	# Only an inward angle crosses the court. Outward aim can still run down the near sideline.
