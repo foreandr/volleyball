@@ -487,11 +487,6 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 		if keep_platform_low: lower_rushed_platform()
 		var hold_arms := rushed_cpu_receive and not hand_setting and not low_save.active and not reach.has("custom_clip") and time > 12.0/60.0+0.00001 and time <= 15.0/60.0+0.00001
 		if hold_arms: restore_early_dig_arms()
-		if deep_squat and not hold_arms:
-			var low_ball: Vector3 = path.call(clampf(dig_cue,time,end))
-			var platform := platform_center()
-			var shift := low_ball-platform
-			reach_platform(shift,smoothstep(0.0,0.14,elapsed),0.65,true)
 		var pancake := low_save.active and low_save.pancake
 		var center := to_local(LowSave.palm_center(setter)) if pancake else platform_center()
 		var radius := 0.16 if pancake else (0.33 if face_dig else contact_radius())
