@@ -68,6 +68,7 @@ var low_save_approach_velocity := Vector3.ZERO
 var allow_pancake := true
 var pancake_requires_chase := false
 var entry_pose: Array[Transform3D] = []
+var entry_duration := 0.065
 var entry_time := -INF
 var reach_changed_at := -INF
 var pose_started_at := -INF
@@ -397,14 +398,15 @@ func dig_contact_segment(first: Vector3, last: Vector3, pancake := false, start_
 					closest = pair
 	return closest
 
-func begin_dig_transition(time: float) -> void:
+func begin_dig_transition(time: float, duration := 0.065) -> void:
+	entry_duration = duration
 	entry_pose.clear()
 	entry_time = time
 	for bone in setter.skeleton.get_bone_count(): entry_pose.append(setter.skeleton.get_bone_pose(bone))
 
 func blend_dig_transition(time: float) -> void:
 	if entry_pose.is_empty(): return
-	var weight := smoothstep(0.0,0.065,time-entry_time)
+	var weight := smoothstep(0.0,entry_duration,time-entry_time)
 	if weight >= 1.0:
 		entry_pose.clear()
 		return
@@ -426,8 +428,11 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 	if attempted and grade == Timing.Grade.WAITING:
 		var start_dig := strict_dig and (not hand_setting or time >= dig_cue-0.19)
 		var start_jump_set := setter_jumping and hand_setting and not face_dig
+		var was_diving := low_save.active
 		if allow_auto_dive and not hand_setting and not setter_jumping and (reach.is_empty() or quick_low_save):
 			low_save.plan(setter,path,time,end,clip,quick_low_save,allow_pancake,pancake_requires_chase,low_save_approach_velocity,emergency_low_save)
+		if low_save.active and not was_diving:
+			begin_dig_transition(time-delta,clampf(low_save.contact_time-time,delta,0.13))
 		if not low_save.active and not is_finite(pose_started_at) and (start_dig or start_jump_set or progress >= 1.0-PLATFORM_PREP_TIME/APPROACH_TIME):
 			var platform_in_range := true
 			if strict_dig and quick_low_save and not hand_setting:
@@ -435,6 +440,8 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 				platform_in_range = (intercept-setter.position).slide(Vector3.UP).length() <= 1.35
 			if platform_in_range and (not fast_back_receive or time >= dig_cue-0.14):
 				pose_started_at = maxf(pressed_at,time-delta)
+				if strict_dig and not hand_setting:
+					begin_dig_transition(time-delta,clampf(dig_cue-time,delta,0.13))
 	var elapsed := time-pose_started_at
 	var striking := attempted and grade == Timing.Grade.WAITING and (low_save.active or is_finite(pose_started_at)) and (time < end or (strict_dig and previous < end)) and (not catch_only or catch_airborne)
 	if striking:
