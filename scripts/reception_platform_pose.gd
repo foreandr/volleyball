@@ -3,7 +3,7 @@ extends RefCounted
 const HAND_GAP := 0.065
 const ELBOW_ANGLE := 168.0
 
-static func connect_arms(pose: Array, author: RefCounted, desired: Vector3, weight: float, shoulder_advance := 0.022, lateral := Vector3.RIGHT) -> void:
+static func connect_arms(pose: Array, author: RefCounted, desired: Vector3, weight: float, shoulder_advance := 0.022, lateral := Vector3.RIGHT, dive := false) -> void:
 	if weight <= 0.001: return
 	var rig: Skeleton3D = author.rig
 	var original := pose.duplicate()
@@ -38,6 +38,7 @@ static func connect_arms(pose: Array, author: RefCounted, desired: Vector3, weig
 		var old_hand: Transform3D = author.world_pose(original,rig.find_bone(hand))
 		var target := grip+(left_hand if side == "l" else right_hand)
 		var pole := lateral*(0.32 if side == "l" else -0.32)+Vector3.DOWN*0.55+forward*0.30
+		if dive: pole = lateral*(-0.62 if side == "l" else 0.62)+Vector3.DOWN*0.24+forward*0.46
 		var upper_before: Transform3D = author.world_pose(pose,rig.find_bone(arm))
 		var lower_before: Transform3D = author.world_pose(pose,rig.find_bone(elbow))
 		var wrist_before: Vector3 = author.point(pose,hand)

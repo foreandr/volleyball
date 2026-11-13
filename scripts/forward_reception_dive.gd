@@ -180,7 +180,7 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 			var shoulder_height: float = (author.point(pose,"upperarm_l").y+author.point(pose,"upperarm_r").y)*0.5
 			head_height = minf(head_height-(0.09 if track_platform else 0.17),shoulder_height-(0.04 if track_platform else 0.12))
 		target.y = clampf(target.y,0.13,maxf(0.13,head_height))
-		PlatformPose.connect_arms(pose,author,grip.lerp(target,reach),reach,0.0)
+		PlatformPose.connect_arms(pose,author,grip.lerp(target,reach),reach,0.0,Vector3.RIGHT,true)
 		var turn := Quaternion(PlatformPose.platform_axis(clasp,author),PlatformPose.platform_axis(pose,author))
 		for side in ["l","r"]:
 			var wrist: String = "hand_"+side
