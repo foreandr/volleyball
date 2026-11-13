@@ -1161,8 +1161,6 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 		rig.set_bone_pose_rotation(bone,rotation)
 	if stage == Stage.HIT and keeps_strike_palm_presented():
 		apply_pinky_down_finish(rig)
-	if stage == Stage.SET and sync_approach_arm_lift() and not approach_render_rotations.is_empty():
-		pose_hitting_elbow_before_strike(rig,pose,clock-swing_started)
 	var contact_reach := smootherstep(0.68,0.98,extension)*(1.0-smoothstep(0.0,0.22,follow))
 	if keeps_strike_palm_presented() and stage == Stage.SET and contact_reach > 0.0 and not approach_render_rotations.is_empty():
 		var author: RefCounted = setter.get_pose_author()
@@ -1182,6 +1180,9 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 			var rotation := pose[bone].basis.get_rotation_quaternion()
 			rig.set_bone_pose_rotation(bone,rotation)
 			approach_render_rotations[bone] = rotation
+
+	if stage == Stage.SET and sync_approach_arm_lift() and not approach_render_rotations.is_empty():
+		pose_hitting_elbow(rig,pose,follow)
 
 	if stage == Stage.SET and keeps_strike_palm_presented():
 		var turnover := smootherstep(0.16,0.72,extension)
@@ -1234,7 +1235,6 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 	var airborne := smoothstep(0.08,0.45,setter.position.y-jump.start.y)
 	var strike_reach := smootherstep(0.24,0.83,extension)*(1.0-smoothstep(0.0,0.58,follow)) if keeps_strike_palm_presented() else 0.0
 	if stage == Stage.HIT: strike_reach *= 1.0-smootherstep(0.0,0.14,clock-stage_start)
-	author.rotate_world(pose,"pelvis",Vector3.UP,deg_to_rad(9.0)*strike_reach*weight)
 	var leg_release := smoothstep(0.0,1.0,rotation_phase)
 	var leg_turn := tanh(turn*rotation_weight*0.75)*0.32*leg_release*leg_rotation_scale*airborne
 	var kick_release := 0.32*leg_release*smoothstep(0.0,1.5,leg_rotation_scale)
@@ -1264,6 +1264,12 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 			author.aim_joint(pose,thigh,calf,hip+thigh_axis)
 			knee = author.point(pose,calf)
 			author.aim_joint(pose,calf,foot,knee+shin_axis.slerp(thigh_axis,straighten*(0.86 if uses_assisted_approach() else 0.98)))
+	if uses_assisted_approach():
+		var hip_open := deg_to_rad(30.0)*smoothstep(0.0,0.80,rotation_phase)
+		hip_open *= 1.0-smootherstep(0.02,0.25,clock-stage_start) if stage == Stage.HIT else 1.0
+		var spine: Transform3D = author.world_pose(pose,rig.find_bone("spine_01"))
+		author.rotate_world(pose,"pelvis",Vector3.UP,hip_open*airborne*weight)
+		author.set_world_basis(pose,"spine_01",spine.basis)
 	# Tilt after the leg solve so the hips carry the tucked legs into the reach.
 	var reach_weight := airborne*weight*maxf(0.72*arm_lift,extension)
 	reach_weight *= 1.0-smoothstep(0.0,0.85,follow)
@@ -1420,11 +1426,8 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 				SpikeArm.blend_arm(pose,approach_arm_transition,author,source_weight,"l")
 	return pose
 
-func pose_hitting_elbow_before_strike(rig: Skeleton3D, pose: Array[Transform3D], age: float) -> void:
-	var frame := age*60.0
-	if frame < 5.0 or frame >= 25.0: return
-	# Load the elbow after the lift, then extend into the strike.
-	var influence := smoothstep(5.0,8.0,frame)*(1.0-smoothstep(22.0,25.0,frame))
+func pose_hitting_elbow(rig: Skeleton3D, pose: Array[Transform3D], follow: float) -> void:
+	if follow > 0.0: return
 	var author: RefCounted = setter.get_pose_author()
 	for bone in rig.get_bone_count(): pose[bone] = rig.get_bone_pose(bone)
 	var shoulder: Vector3 = author.point(pose,"upperarm_r")
@@ -1433,16 +1436,20 @@ func pose_hitting_elbow_before_strike(rig: Skeleton3D, pose: Array[Transform3D],
 	var upper := elbow-shoulder
 	var lower := wrist-elbow
 	var axis := (wrist-shoulder).normalized()
-	var pole := upper.slide(axis).normalized()
-	if pole.is_zero_approx(): pole = Vector3.LEFT
-	var bend := smoothstep(6.0,15.0,frame)*(1.0-smoothstep(15.0,24.0,frame))
-	var angle := deg_to_rad(lerpf(174.0,143.0,bend))
-	var reach := sqrt(upper.length_squared()+lower.length_squared()-2.0*upper.length()*lower.length()*cos(angle))
-	var target := shoulder+axis*reach
-	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",target,pole,influence,180.0,true)
+	# Keep the elbow outside the shoulder as the hand rolls from load into reach.
+	var load := smootherstep(0.0,0.10,clock-swing_started)
+	var drive := clampf((clock-swing_drive_started)/swing_drive_duration,0.0,1.0) if is_finite(swing_drive_started) else 0.0
+	var opening := smoothstep(0.10,0.97,drive)
+	var angle := lerpf(lerpf(86.0,80.0,load),179.0,opening)
+	var pole := Vector3(-1.0,0.05,0.30).slide(axis).normalized()
+	if pole.is_zero_approx(): pole = upper.slide(axis).normalized()
+	var reach := sqrt(upper.length_squared()+lower.length_squared()-2.0*upper.length()*lower.length()*cos(deg_to_rad(angle)))
+	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",shoulder+axis*reach,pole,1.0,angle,true)
 	for joint in ["upperarm_r","lowerarm_r"]:
 		var bone := rig.find_bone(joint)
-		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
+		var rotation := pose[bone].basis.get_rotation_quaternion()
+		rig.set_bone_pose_rotation(bone,rotation)
+		approach_render_rotations[bone] = rotation
 
 # Shoulder-to-wrist pitch for each 60 fps frame of the paired lift.
 const ARM_LIFT_PITCH := [-153.0,-148.0,-142.0,-134.0,-124.0,-113.0,-101.0,-88.0,-74.0,-59.0,-44.0,-29.0,-14.0,0.0,14.0,27.0,39.0,49.0,54.0]
@@ -1479,7 +1486,8 @@ func apply_two_arm_lift(pose: Array, author: RefCounted, age: float, extension: 
 		var outward := Vector3.RIGHT if side == "l" else Vector3.LEFT
 		var stable_pole := (outward+Vector3.BACK*0.35).slide(axis).normalized()
 		pole = pole.rotated(axis,pole.signed_angle_to(stable_pole,axis)*raise)
-		author.limb(source,upper,lower,hand,target,pole,1.0,174.0,true)
+		var elbow_limit := lerpf(119.0,86.0,smootherstep(0.0,0.27,lift_age)) if side == "r" else 174.0
+		author.limb(source,upper,lower,hand,target,pole,1.0,elbow_limit,true)
 		var palm_lift := smoothstep(0.05,0.24,lift_age)
 		if palm_lift > 0.0:
 			face_lift_palm_forward(source,author,side,palm_lift)
