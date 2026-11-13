@@ -233,6 +233,10 @@ func accuracy_bounds(error: float, incoming: Vector3, spin_rps: float) -> Vector
 		bounds = bounds.min(Vector2(3.40,2.30))*1.25+Vector2(0.75,0.50)+Vector2(3.60,1.95)*pace
 		if low_save.active and not low_save.wide_arm.is_empty():
 			bounds = bounds*1.30+Vector2(0.85,0.60)
+		if not hand_setting and not setting:
+			# Skilled passers absorb pace without removing timing or spin error.
+			var control := smoothstep(55.0,100.0,skill)
+			bounds = bounds.lerp(Accuracy.spread(error,incoming.length(),spin_rps,skill,false)*0.65+Vector2(0.25,0.18),control)
 	if fast_hand_dig: bounds = bounds.max(Vector2(6.0,4.0))*1.5
 	return bounds
 
