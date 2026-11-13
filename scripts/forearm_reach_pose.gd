@@ -157,7 +157,7 @@ static func sample(rig: Skeleton3D, author: RefCounted, step: Vector3, travel: V
 				arms = arms.lerp(wrist_target-center,weight*0.85)
 		elif not back:
 			arms.x -= side_lean*0.05*weight
-		PlatformPose.connect_arms(pose,author,center+arms,smoothstep(0.0,0.68,weight))
+		PlatformPose.connect_arms(pose,author,center+arms,smoothstep(0.0,0.68,weight),0.022,Vector3.RIGHT,false,tier == 2)
 	rig.set_bone_pose_position(pelvis,pose[pelvis].origin)
 	for bone in rig.get_bone_count():
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())

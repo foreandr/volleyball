@@ -54,7 +54,7 @@ static func connect_arms(pose: Array, author: RefCounted, desired: Vector3, weig
 		elif dive:
 			author.limb(pose,arm,elbow,hand,target,pole,smoothstep(0.0,0.65,weight),174.0)
 		else:
-			author.limb(pose,arm,elbow,hand,old_hand.origin.lerp(target,weight),pole,1.0,elbow_angle if compact else 174.0)
+			author.limb(pose,arm,elbow,hand,old_hand.origin.lerp(target,weight),pole,1.0,174.0)
 		var elbow_after: Vector3 = author.point(pose,elbow)
 		var wrist_after: Vector3 = author.point(pose,hand)
 		# Retain the rig's authored axial twist. The IK bend plane can flip it through the shirt.
