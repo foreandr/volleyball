@@ -1478,9 +1478,27 @@ func apply_two_arm_lift(pose: Array, author: RefCounted, age: float, extension: 
 		var stable_pole := (outward+Vector3.BACK*0.35).slide(axis).normalized()
 		pole = pole.rotated(axis,pole.signed_angle_to(stable_pole,axis)*raise)
 		author.limb(source,upper,lower,hand,target,pole,1.0,174.0,true)
+		var palm_lift := smoothstep(0.05,0.24,lift_age)
+		if palm_lift > 0.0:
+			face_lift_palm_forward(source,author,side,palm_lift)
 		var release := smootherstep(0.24,0.42,age) if side == "r" else smootherstep(0.22,0.39,age)
 		if side == "r": release = maxf(release,smootherstep(0.18,0.67,extension))
 		SpikeArm.blend_arm(pose,source,author,1.0-release,side)
+
+func face_lift_palm_forward(pose: Array, author: RefCounted, side: String, weight: float) -> void:
+	var hand := "hand_"+side
+	var wrist: Vector3 = author.point(pose,hand)
+	var elbow: Vector3 = author.point(pose,"lowerarm_"+side)
+	var middle := "middle_01_"+side
+	var fingers: Vector3 = (author.point(pose,middle)-wrist).normalized()
+	var reach := fingers.slerp((wrist-elbow).normalized(),weight*0.88)
+	author.aim_joint(pose,hand,middle,wrist+reach)
+	var across: Vector3 = author.point(pose,"pinky_01_"+side)-author.point(pose,"index_01_"+side)
+	var palm := reach.cross(across).normalized()*(1.0 if side == "r" else -1.0)
+	var forward := Vector3.BACK.slide(reach)
+	if forward.length_squared() < 0.01: return
+	var roll := palm.signed_angle_to(forward.normalized(),reach)
+	author.rotate_world(pose,hand,reach,roll*weight)
 
 func shot_line_weight(target: Vector3, origin: Vector3) -> float:
 	# Only an inward angle crosses the court. Outward aim can still run down the near sideline.
