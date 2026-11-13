@@ -1,5 +1,7 @@
 extends Node3D
 
+const ReceiveAnimations = preload("res://scripts/volleyball_animations.gd")
+
 const Trace = preload("res://scripts/setting_trace.gd")
 const Replay = preload("res://scripts/match_replay.gd")
 const Review = preload("res://scripts/match_review.gd")
@@ -190,6 +192,12 @@ func configure(actor: Node3D, board: Label, status: Label, build := "", players_
 	saved_arrows = actor.get_node("DirectionArrows").visible
 	score_label = board
 	info = status
+	var backward_clip: Animation
+	var copies := ReceiveAnimations.custom_entries()
+	for i in range(copies.size()-1,-1,-1):
+		if copies[i].get("source") == "d2_backward_from_d1":
+			backward_clip = load(copies[i].path) as Animation
+			if backward_clip != null: break
 	for side in 2:
 		var frame := Node3D.new()
 		if side == 1:
@@ -214,6 +222,7 @@ func configure(actor: Node3D, board: Label, status: Label, build := "", players_
 			var bump := Bump.new()
 			frame.add_child(bump)
 			bump.configure(avatar,avatar.animator.get_animation("custom_forearm/clip"))
+			bump.set_custom_backward(backward_clip)
 			bump.green_start = 0.01
 			bump.green_end = 0.55
 			bump.green_forearm_allowance = 0.30
@@ -1397,8 +1406,9 @@ func cpu_prefers_fast_forearms(index: int, hand_at: float) -> bool:
 		if point.y < height-0.12 or at >= flight_end()-0.025: continue
 		if frames[team(index)].to_local(point).z > Net.NET_Z: continue
 		var gap := (point-players[index].global_position).slide(Vector3.UP).length()
-		var travel := CPU_SPRINT_SPEED*maxf(0.0,at-elapsed-0.10)
-		if gap <= travel+1.55: return true
+		var travel := 4.35*CPU_SHUFFLE_SPEED_SCALE*maxf(0.0,at-elapsed-0.10)
+		var reach := 1.32 if height >= 0.60 else 1.55
+		if gap <= travel+reach: return true
 	return false
 
 func cpu_should_backshuffle(index: int, contact: Vector3, cue: float) -> bool:
@@ -1426,7 +1436,7 @@ func overhead_available(index: int, technique: int) -> bool:
 		if forward.is_zero_approx(): forward = actor.basis.z
 		offset -= forward*hand_receive_reach()
 		var reserve := 0.32 if technique == 2 else 0.10
-		var pace := 6.65 if first_contact and offset.normalized().dot(actor.basis.z) > 0.65 else 4.15
+		var pace := 4.35*CPU_SHUFFLE_SPEED_SCALE if first_contact and (flight_kind == "serve" or cpu_hand_receive_too_fast(at)) else 4.15
 		range_ = (0.48 if first_contact else 0.55)+maxf(0.0,at-elapsed-reserve)*pace
 	return point.z <= Net.NET_Z+0.05 and point.y >= height-0.12 and at < flight_end()-0.03 and (first_contact or setting or point.z >= actor.position.z-0.24) and offset.length() <= range_
 
