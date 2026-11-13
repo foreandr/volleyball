@@ -135,13 +135,18 @@ static func sample(actor: Node3D, author: RefCounted, ready: Array[Transform3D],
 		var swing := sin(PI*step)
 		# Bring one foot under the hips, then step the trailing foot up after the weight transfer.
 		ankle = ankle.lerp(trail,maxf(extension,kick)).lerp(foot.origin,step)
-		ankle.y += swing*(0.18 if lead else 0.11)/scale_
+		ankle.y += swing*(0.18 if lead else 0.21)/scale_
 		var descent := smoothstep(0.19,0.28,since_brace)*(1.0-smoothstep(0.37,0.52,since_brace))
 		var airborne := maxf(kick,descent)*(1.0-step)
 		var lateral := 0.09 if side == "l" else -0.09
 		var leg_axis := (ankle-hip).normalized()
 		var dive_pole := leg_axis.cross(Vector3.RIGHT).normalized()
-		var pole := (dive_pole+Vector3.RIGHT*lateral*(1.0-smoothstep(0.40,0.56,since_brace))).lerp(dive_pole,airborne)
+		var ready_pole: Vector3 = author.point(ready,calf)-author.point(ready,thigh)
+		ready_pole = ready_pole.slide((foot.origin-author.point(ready,thigh)).normalized()).normalized()
+		var recovery_pole := (dive_pole+Vector3.RIGHT*ready_pole.x).normalized()
+		var pole := (dive_pole+Vector3.RIGHT*lateral).lerp(dive_pole,airborne)
+		# Keep the trailing knee in its bend plane as the foot swings under the hip.
+		pole = pole.lerp(recovery_pole,smoothstep(0.52,0.63,since_brace))
 		var knee_limit := lerpf(lerpf(180.0,120.0,kick),136.0,descent)
 		author.limb(pose,thigh,calf,foot_name,ankle,pole,1.0,knee_limit)
 		var ready_shin: Vector3 = foot.origin-author.point(ready,calf)
