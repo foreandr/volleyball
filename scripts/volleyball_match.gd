@@ -30,6 +30,7 @@ const CpuShots = preload("res://scripts/cpu_attack_shots.gd")
 const CpuPolicy = preload("res://scripts/cpu_policy.gd")
 const WIN_SCORE := 15
 const RECOVERY_TIME := 0.32
+const FAST_DIG_ELBOW_SPEED := 25.0
 const FAST_RECEIVE_HOLD := 0.28
 const FAST_RECEIVE_RISE := 0.75
 const SERVE_RUN_BLEND := 0.15
@@ -1084,7 +1085,12 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 		cpu_policy.used(side,"pass height")
 	if defensive_ball() and not bump.contact_check.is_empty():
 		trace.write("dig_contact",match_clock,bump.contact_check)
+	var sample_before := maxf(0.0,bump.touch_time-0.003)
+	var sample_after := minf(flight_end(),bump.touch_time+0.003)
+	var fast_forearm: bool = technique == 0 and not bump.low_save.active and sample_after > sample_before
+	fast_forearm = fast_forearm and path_point(sample_before).distance_to(path_point(sample_after)) >= FAST_DIG_ELBOW_SPEED*(sample_after-sample_before)
 	begin_recovery(index)
+	if fast_forearm: recoveries[index]["fast_elbow_bend"] = true
 	if not StorySession.attack_ball_audio_muted:
 		if technique != 0 and not transition: set_audio.play()
 		else: play_touch()
@@ -1213,9 +1219,23 @@ func advance_recoveries(delta: float) -> void:
 			rig.set_bone_pose_position(bone,idle.origin.lerp(pose.origin,weight))
 			var rotation := pose.basis.orthonormalized().get_rotation_quaternion().normalized()
 			rig.set_bone_pose_rotation(bone,idle.basis.orthonormalized().get_rotation_quaternion().normalized().slerp(rotation,weight))
+		if recovery.get("fast_elbow_bend",false) and age < 0.20:
+			apply_fast_dig_elbow_bend(rig,age)
 		if recovery.has("kick_foot"):
 			var flick := smoothstep(0.0,0.070,age)*(1.0-smoothstep(0.07,0.22,age))
 			if flick > 0.001: pose_kick_leg(actor,recovery.kick_foot,(Vector3.UP*0.15+actor.global_basis.z*0.11)*flick)
+
+func apply_fast_dig_elbow_bend(rig: Skeleton3D, age: float) -> void:
+	var bend := deg_to_rad(30.0)*smoothstep(0.0,0.045,age)*(1.0-smoothstep(0.075,0.20,age))
+	for side in ["l","r"]:
+		var elbow := rig.find_bone("lowerarm_"+side)
+		var wrist := rig.find_bone("hand_"+side)
+		var parent_basis := rig.get_bone_global_pose(rig.get_bone_parent(elbow)).basis.orthonormalized()
+		var forearm := rig.get_bone_global_pose(wrist).origin-rig.get_bone_global_pose(elbow).origin
+		var axis := forearm.cross(rig.global_basis.inverse()*Vector3.UP).normalized()
+		if axis.is_zero_approx(): continue
+		var rotation := Quaternion(parent_basis.inverse()*axis,bend)
+		rig.set_bone_pose_rotation(elbow,(rotation*rig.get_bone_pose_rotation(elbow)).normalized())
 
 func advance_set_jumps(delta: float) -> void:
 	for index in players.size():
