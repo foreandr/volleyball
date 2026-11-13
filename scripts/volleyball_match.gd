@@ -1744,9 +1744,9 @@ func tick_receive(delta: float, previous: float) -> void:
 		# Decide before the dive windup runs out. A viable grounded receive keeps priority.
 		bump.allow_auto_dive = not holds_lunge and (not lunge_in_range or elapsed > cue+0.035)
 	if cpu_dig and forearm_dig and not backshuffle and not bump.low_save.active and not bump.deep_squat:
-		var low_point := path_point(maxf(elapsed,arrival(0.45)))
+		var low_point := path_point(maxf(elapsed,arrival(0.60)))
 		var offset := actor.to_local(low_point)
-		bump.deep_squat = offset.z >= 0.10 and offset.z <= 1.22 and absf(offset.x) <= 0.60 and low_point.y <= 0.55
+		bump.deep_squat = offset.z >= 0.10 and offset.z <= 1.22 and absf(offset.x) <= 0.60 and low_point.y <= 0.61
 		if bump.deep_squat: bump.clear_reach()
 	if bump.deep_squat:
 		bump.allow_auto_dive = false
