@@ -3,11 +3,11 @@ extends "res://scripts/jump_float_serve.gd"
 const MatchAttack = preload("res://scripts/match_attack.gd")
 const SetterJump = preload("res://scripts/setter_jump.gd")
 
-const TOSS_STEP := 0.72
-const TOSS_BACKSWING_END := 0.31
+const TOSS_STEP := 0.90
+const TOSS_BACKSWING_END := 0.39
 const FIRST_STEP_STRIDE := 1.40
 const APPROACH_START := TOSS_STEP+0.36
-const SPIN_TAKEOFF := APPROACH_START+0.56
+const SPIN_TAKEOFF := APPROACH_START+0.74
 const SPIN_CONTACT := SPIN_TAKEOFF+0.55
 const JUMP_HEIGHT := 1.12
 const MAX_SERVE_SPEED := 1.55
@@ -87,7 +87,10 @@ func prepare_serve_reset() -> void:
 	approach.load_arm_extra = 0.48*0.85
 	var intercept := player.position+forward*2.14+Vector3.UP*3.0
 	approach.begin(player,Vector2(-forward.x,forward.z),intercept,SPIN_TAKEOFF-APPROACH_START-SetterJump.LEAD_STEP_TIME,active_jump_height,SPIKE_APPROACH_STEPS,false,1.0,false,SPIKE_GLIDE)
-	if active_jump_carry: approach.approach_lunge += forward*maxf(0.0,active_jump_height-0.75)*0.90
+	if active_jump_carry:
+		# Build forward momentum through contact and carry it into the landing.
+		approach.air_glide_duration = 0.76
+		approach.approach_lunge = forward*1.98
 	approach.approach_lunge -= forward*SERVE_CONTACT_LEAD
 	prepare_spike_driver()
 	var sample_count := ceili((recovery_end()-APPROACH_START)*APPROACH_SAMPLE_RATE)
@@ -173,9 +176,10 @@ func position_toss_hands(pose: Array, rig: Skeleton3D, author: RefCounted, time:
 	var direction := Vector3(-0.23,-cos(pitch),sin(pitch)).normalized()
 	var reach := shoulder.distance_to(elbow)+elbow.distance_to(hand)
 	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",shoulder+direction*reach,Vector3.LEFT,weight,179.0,true)
-	var wrist_pitch := deg_to_rad(30.0)*(1.0-smoothstep(TOSS_BACKSWING_END,TOSS_STEP,time))
-	var fingers := direction.rotated(Vector3.LEFT,wrist_pitch)
-	orient_palm(pose,rig,author,"r",fingers,Vector3.RIGHT,weight)
+	# Keep the palm under the ball even when the straight arm points down or back.
+	var hand_pitch := deg_to_rad(24.0)*upswing
+	var fingers := Vector3(0.0,sin(hand_pitch),cos(hand_pitch))
+	orient_palm(pose,rig,author,"r",fingers,Vector3.UP.cross(fingers),weight)
 	var off_hand := left_shoulder+Vector3(0.11,-0.51,0.07)/scale_
 	author.limb(pose,"upperarm_l","lowerarm_l","hand_l",off_hand,Vector3(0.60,-0.20,0.25),weight)
 
