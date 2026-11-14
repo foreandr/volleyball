@@ -159,17 +159,21 @@ func toss_palm(pose: Array, _rig: Skeleton3D, author: RefCounted, _time: float) 
 	return wrist.lerp(knuckles,0.68)
 
 func position_toss_hands(pose: Array, rig: Skeleton3D, author: RefCounted, time: float, weight: float) -> void:
-	var draw := smoothstep(0.0,0.16,time)*(1.0-smoothstep(0.16,TOSS_STEP,time))
-	var rise := pow(clampf(inverse_lerp(0.15,TOSS_STEP,time),0.0,1.0),1.65)
+	var backswing := smoothstep(0.0,0.17,time)
+	var upswing := spike_pose_driver.smootherstep(0.17,TOSS_STEP+0.055,time)
+	var pitch := deg_to_rad(lerpf(35.0,-34.0,backswing)+116.0*upswing)
 	var scale_: float = rig.global_basis.y.length()
 	var shoulder: Vector3 = author.point(pose,"upperarm_r")
 	var left_shoulder: Vector3 = author.point(pose,"upperarm_l")
-	var outside := (shoulder-left_shoulder).slide(Vector3.UP).normalized()
-	var wrist := shoulder+(Vector3(0.0,-0.39+0.63*rise,0.43+0.04*rise-0.45*draw)+outside*(0.13+0.28*draw))/scale_
-	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",wrist,Vector3(-0.32,-1.0,0.0),weight,155.0,true)
-	var forearm: Vector3 = (author.point(pose,"hand_r")-author.point(pose,"lowerarm_r")).normalized()
-	var fingers := Vector3(forearm.x,clampf(forearm.y,-0.15,0.26),forearm.z).normalized()
-	orient_palm(pose,rig,author,"r",fingers,Vector3.UP.cross(fingers),weight)
+	var elbow: Vector3 = author.point(pose,"lowerarm_r")
+	var hand: Vector3 = author.point(pose,"hand_r")
+	# Keep the shoulder-to-hand radius fixed as the arm swings past the hip.
+	var direction := Vector3(-0.23,-cos(pitch),sin(pitch)).normalized()
+	var reach := shoulder.distance_to(elbow)+elbow.distance_to(hand)
+	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",shoulder+direction*reach,Vector3.LEFT,weight,179.0,true)
+	var wrist_pitch := deg_to_rad(30.0)*(1.0-smoothstep(0.24,TOSS_STEP,time))
+	var fingers := direction.rotated(Vector3.LEFT,wrist_pitch)
+	orient_palm(pose,rig,author,"r",fingers,Vector3.RIGHT,weight)
 	var off_hand := left_shoulder+Vector3(0.11,-0.51,0.07)/scale_
 	author.limb(pose,"upperarm_l","lowerarm_l","hand_l",off_hand,Vector3(0.60,-0.20,0.25),weight)
 
