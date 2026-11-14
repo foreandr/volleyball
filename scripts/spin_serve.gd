@@ -3,7 +3,9 @@ extends "res://scripts/jump_float_serve.gd"
 const MatchAttack = preload("res://scripts/match_attack.gd")
 const SetterJump = preload("res://scripts/setter_jump.gd")
 
-const TOSS_STEP := 0.42
+const TOSS_STEP := 0.72
+const TOSS_BACKSWING_END := 0.31
+const FIRST_STEP_STRIDE := 1.40
 const APPROACH_START := TOSS_STEP+0.36
 const SPIN_TAKEOFF := APPROACH_START+0.56
 const SPIN_CONTACT := SPIN_TAKEOFF+0.55
@@ -76,7 +78,7 @@ func prepare_serve_reset() -> void:
 	approach_sample_origin = serve_start
 	approach_sample_forward = forward
 	var rig: Skeleton3D = player.skeleton
-	var setup := float_approach(APPROACH_START,SPIN_TAKEOFF,jump_landing_time(),active_jump_height,1.17,APPROACH_START,TOSS_STEP)
+	var setup := float_approach(APPROACH_START,SPIN_TAKEOFF,jump_landing_time(),active_jump_height,1.17,APPROACH_START,TOSS_STEP,FIRST_STEP_STRIDE)
 	for bone in rig.get_bone_count():
 		rig.set_bone_pose_rotation(bone,setup[bone].basis.get_rotation_quaternion())
 	approach.active = false
@@ -104,8 +106,8 @@ func prepare_serve_reset() -> void:
 
 func float_step_pose(time: float) -> Array:
 	if time < APPROACH_START or approach_poses.is_empty():
-		var pose := float_approach(time,SPIN_TAKEOFF,jump_landing_time(),active_jump_height,1.17,APPROACH_START,TOSS_STEP)
-		var load_weight := smoothstep(0.04,0.29,time)*(1.0-smoothstep(TOSS_STEP,APPROACH_START,time))
+		var pose := float_approach(time,SPIN_TAKEOFF,jump_landing_time(),active_jump_height,1.17,APPROACH_START,TOSS_STEP,FIRST_STEP_STRIDE)
+		var load_weight := smoothstep(0.04,TOSS_STEP*0.69,time)*(1.0-smoothstep(TOSS_STEP,APPROACH_START,time))
 		if load_weight <= 0.0: return pose
 		var rig: Skeleton3D = player.skeleton
 		var author: RefCounted = player.get_pose_author()
@@ -159,9 +161,9 @@ func toss_palm(pose: Array, _rig: Skeleton3D, author: RefCounted, _time: float) 
 	return wrist.lerp(knuckles,0.68)
 
 func position_toss_hands(pose: Array, rig: Skeleton3D, author: RefCounted, time: float, weight: float) -> void:
-	var backswing := smoothstep(0.0,0.17,time)
-	var upswing := spike_pose_driver.smootherstep(0.17,TOSS_STEP+0.055,time)
-	var pitch := deg_to_rad(lerpf(35.0,-34.0,backswing)+116.0*upswing)
+	var backswing := smoothstep(0.0,TOSS_BACKSWING_END,time)
+	var upswing := spike_pose_driver.smootherstep(TOSS_BACKSWING_END,TOSS_STEP+0.09,time)
+	var pitch := deg_to_rad(lerpf(35.0,-57.0,backswing)+145.0*upswing)
 	var scale_: float = rig.global_basis.y.length()
 	var shoulder: Vector3 = author.point(pose,"upperarm_r")
 	var left_shoulder: Vector3 = author.point(pose,"upperarm_l")
@@ -171,7 +173,7 @@ func position_toss_hands(pose: Array, rig: Skeleton3D, author: RefCounted, time:
 	var direction := Vector3(-0.23,-cos(pitch),sin(pitch)).normalized()
 	var reach := shoulder.distance_to(elbow)+elbow.distance_to(hand)
 	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",shoulder+direction*reach,Vector3.LEFT,weight,179.0,true)
-	var wrist_pitch := deg_to_rad(30.0)*(1.0-smoothstep(0.24,TOSS_STEP,time))
+	var wrist_pitch := deg_to_rad(30.0)*(1.0-smoothstep(TOSS_BACKSWING_END,TOSS_STEP,time))
 	var fingers := direction.rotated(Vector3.LEFT,wrist_pitch)
 	orient_palm(pose,rig,author,"r",fingers,Vector3.RIGHT,weight)
 	var off_hand := left_shoulder+Vector3(0.11,-0.51,0.07)/scale_
