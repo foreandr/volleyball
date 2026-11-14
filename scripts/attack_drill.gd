@@ -1137,11 +1137,12 @@ func lift_lean_offset(arm_lift: float, extension: float) -> float:
 	var lift := smoothstep(0.04,0.52,arm_lift)*(1.0-smoothstep(0.81,1.0,arm_lift))
 	return -deg_to_rad(lift_lean_back_degrees)*lift*(1.0-smoothstep(0.22,0.74,extension))
 
-func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0.0, follow := 0.0, draw_progress := 1.0, arm_lift := 1.0) -> void:
+func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0.0, follow := 0.0, draw_progress := 1.0, arm_lift := 1.0, frame: Node3D = null) -> void:
+	if frame == null: frame = self
 	var rig: Skeleton3D = setter.skeleton
 	var pose: Array[Transform3D] = []
 	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
-	pose = build_bow_draw_pose(self,pose,delta,weight,contact,extension,follow,draw_progress,arm_lift)
+	pose = build_bow_draw_pose(frame,pose,delta,weight,contact,extension,follow,draw_progress,arm_lift)
 	var smoothing := 0.0
 	if uses_assisted_approach() and not approach_arm_transition.is_empty():
 		if approach_render_rotations.is_empty():
@@ -1176,7 +1177,7 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 		var elbow: Vector3 = author.point(pose,"lowerarm_r")
 		var wrist: Vector3 = author.point(pose,"hand_r")
 		var arm_length := shoulder.distance_to(elbow)+elbow.distance_to(wrist)
-		var ball_target := rig.to_local(to_global(contact))
+		var ball_target := rig.to_local(frame.to_global(contact))
 		var direction := (ball_target-shoulder).normalized()
 		var target := shoulder+direction*arm_length
 		var pole := (elbow-shoulder).slide((wrist-shoulder).normalized()).normalized()
@@ -1189,7 +1190,7 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 			approach_render_rotations[bone] = rotation
 
 	if stage == Stage.SET and sync_approach_arm_lift() and not approach_render_rotations.is_empty():
-		pose_hitting_elbow(rig,pose,contact,follow)
+		pose_hitting_elbow(rig,pose,frame.to_global(contact),follow)
 
 	if stage == Stage.SET and keeps_strike_palm_presented():
 		var turnover := smootherstep(0.16,0.72,extension)
@@ -1446,7 +1447,7 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 				SpikeArm.blend_arm(pose,approach_arm_transition,author,source_weight,"l")
 	return pose
 
-func pose_hitting_elbow(rig: Skeleton3D, pose: Array[Transform3D], contact: Vector3, follow: float) -> void:
+func pose_hitting_elbow(rig: Skeleton3D, pose: Array[Transform3D], world_contact: Vector3, follow: float) -> void:
 	if follow > 0.0: return
 	var author: RefCounted = setter.get_pose_author()
 	for bone in rig.get_bone_count(): pose[bone] = rig.get_bone_pose(bone)
@@ -1468,7 +1469,7 @@ func pose_hitting_elbow(rig: Skeleton3D, pose: Array[Transform3D], contact: Vect
 	var loaded_axis := (out*0.76+Vector3.UP*0.59+Vector3.FORWARD*0.10).normalized()
 	axis = axis.slerp(loaded_axis,cocked)
 	if keeps_strike_palm_presented():
-		var ball_axis := (rig.to_local(to_global(contact))-shoulder).normalized()
+		var ball_axis := (rig.to_local(world_contact)-shoulder).normalized()
 		axis = axis.slerp(ball_axis,smoothstep(0.34,0.86,drive))
 	var angle := lerpf(lerpf(86.0,80.0,load),179.0,opening)
 	var pole := Vector3(-1.0,0.05,0.30).slide(axis).normalized()

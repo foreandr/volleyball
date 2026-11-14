@@ -16,6 +16,7 @@ var active := false
 var load_bend_extra := 0.0
 var load_arm_extra := 0.0
 var front_limit := 2.5
+var back_limit := Court.RUNOFF_NEAR_BASELINE
 var elapsed := 0.0
 var held := false
 var hold_time := 0.0
@@ -239,7 +240,7 @@ func step(actor: Node3D, delta: float, input: Vector2) -> void:
 	var glide_fraction := (minf(air_age,0.46)+0.20*(fade-fade**3+0.5*fade**4))/0.46
 	var glide := heading*attack_glide*(glide_fraction+AIR_TRAVEL_FRACTION*flight)
 	var position := base+air_offset+lunge+glide
-	actor.position = Court.clamp_setter(position,front_limit)
+	actor.position = Court.clamp_setter(position,front_limit,back_limit)
 	if air_delta > 0.0: air_offset += actor.position-position
 	actor.animator.advance(delta)
 	var landing := elapsed-load_time-air_time

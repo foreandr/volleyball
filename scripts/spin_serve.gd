@@ -1,6 +1,6 @@
 extends "res://scripts/jump_float_serve.gd"
 
-const AttackDrill = preload("res://scripts/attack_drill.gd")
+const MatchAttack = preload("res://scripts/match_attack.gd")
 const SetterJump = preload("res://scripts/setter_jump.gd")
 
 const TOSS_STEP := 0.42
@@ -10,6 +10,8 @@ const SPIN_CONTACT := SPIN_TAKEOFF+0.55
 const JUMP_HEIGHT := 1.12
 const MAX_SERVE_SPEED := 1.55
 const APPROACH_SAMPLE_RATE := 120.0
+const SPIKE_APPROACH_STEPS := 3
+const SPIKE_GLIDE := 0.27
 
 var sidespin := 0.0
 var serve_speed := MAX_SERVE_SPEED
@@ -23,9 +25,10 @@ var active_forward_lean_degrees := 0.0
 var released_sidespin := 0.0
 var released_lift := 0.0
 var approach := SetterJump.new()
-var spike_pose_driver := AttackDrill.new()
+var spike_pose_driver := MatchAttack.new()
 var approach_positions: PackedVector3Array = []
 var approach_sample_origin: Vector3
+var approach_sample_forward: Vector3
 var approach_poses: Array[Array] = []
 
 func configure(actor: Node3D, start := START, yaw := 0.0) -> void:
@@ -71,20 +74,28 @@ func prepare_toss_hands(pose: Array, rig: Skeleton3D, author: RefCounted, time: 
 func prepare_serve_reset() -> void:
 	if not approach_poses.is_empty(): return
 	approach_sample_origin = serve_start
+	approach_sample_forward = forward
 	var rig: Skeleton3D = player.skeleton
 	var setup := float_approach(APPROACH_START,SPIN_TAKEOFF,jump_landing_time(),active_jump_height,1.17,APPROACH_START,TOSS_STEP)
 	for bone in rig.get_bone_count():
 		rig.set_bone_pose_rotation(bone,setup[bone].basis.get_rotation_quaternion())
 	approach.active = false
+	approach.back_limit = serve_start.z
 	approach.load_bend_extra = deg_to_rad(85.0)*0.36
 	approach.load_arm_extra = 0.48*0.85
 	var intercept := player.position+forward*2.14+Vector3.UP*3.0
-	approach.begin(player,Vector2(-forward.x,forward.z),intercept,SPIN_TAKEOFF-APPROACH_START-SetterJump.LEAD_STEP_TIME,active_jump_height,3)
+	approach.begin(player,Vector2(-forward.x,forward.z),intercept,SPIN_TAKEOFF-APPROACH_START-SetterJump.LEAD_STEP_TIME,active_jump_height,SPIKE_APPROACH_STEPS,false,1.0,false,SPIKE_GLIDE)
 	if active_jump_carry: approach.approach_lunge += forward*maxf(0.0,active_jump_height-0.75)*0.90
 	approach.approach_lunge -= forward*SERVE_CONTACT_LEAD
+	prepare_spike_driver()
 	var sample_count := ceili((recovery_end()-APPROACH_START)*APPROACH_SAMPLE_RATE)
 	for index in range(sample_count+1):
 		if index > 0: approach.step(player,1.0/APPROACH_SAMPLE_RATE,Vector2.ZERO)
+		var time := APPROACH_START+index/APPROACH_SAMPLE_RATE
+		if time <= SPIN_TAKEOFF:
+			spike_pose_driver.lift_arms_during_plant()
+		else:
+			sample_spike_swing(time)
 		approach_positions.append(player.position)
 		var sample: Array[Transform3D] = []
 		for bone in rig.get_bone_count(): sample.append(rig.get_bone_pose(bone))
@@ -128,10 +139,10 @@ func serve_swing_rate(_launch_speed: float) -> float:
 	return 1.0
 
 func reset() -> void:
-	active_forward_lean_degrees = forward_lean_degrees
-	if active_jump_height != jump_height or active_jump_carry != jump_carry_enabled:
+	if active_jump_height != jump_height or active_jump_carry != jump_carry_enabled or active_forward_lean_degrees != forward_lean_degrees or approach_sample_forward != forward:
 		approach_poses.clear()
 		approach_positions.clear()
+	active_forward_lean_degrees = forward_lean_degrees
 	active_jump_height = jump_height
 	active_jump_carry = jump_carry_enabled
 	super.reset()
@@ -162,56 +173,61 @@ func position_toss_hands(pose: Array, rig: Skeleton3D, author: RefCounted, time:
 	var off_hand := left_shoulder+Vector3(0.11,-0.51,0.07)/scale_
 	author.limb(pose,"upperarm_l","lowerarm_l","hand_l",off_hand,Vector3(0.60,-0.20,0.25),weight)
 
-func shape_float_strike(pose: Array, rig: Skeleton3D, author: RefCounted, time: float) -> void:
-	var swing_start := SPIN_TAKEOFF+0.015
-	if time < swing_start: return
-	var hit_age := maxf(0.0,time-SPIN_CONTACT)
-	var weight := smoothstep(swing_start,swing_start+0.12,time)*(1.0-smoothstep(0.19,0.44,hit_age))
-	if weight <= 0.0: return
-	var drive_start := SPIN_CONTACT-0.16
-	var extension := smoothstep(drive_start,SPIN_CONTACT,time)
-	var follow := 1.0-pow(1.0-clampf(hit_age/0.19,0.0,1.0),2.0)
-	var scale_: float = rig.global_basis.y.length()
-	var shoulder: Vector3 = author.point(pose,"upperarm_r")
-	var contact := to_local(rig.to_global(shoulder+Vector3(-0.05,0.67,0.33+SERVE_CONTACT_LEAD)/scale_))
-	var source_index := roundi((swing_start-APPROACH_START)*APPROACH_SAMPLE_RATE)
+func prepare_spike_driver() -> void:
 	spike_pose_driver.setter = player
 	spike_pose_driver.jump = approach
-	spike_pose_driver.jump.start = serve_start
 	spike_pose_driver.swing_practice = false
-	spike_pose_driver.approach_steps = 3
+	spike_pose_driver.approach_steps = SPIKE_APPROACH_STEPS
 	spike_pose_driver.force_contact_tilt = true
 	spike_pose_driver.torso_forward_bias_degrees = active_forward_lean_degrees
-	spike_pose_driver.elbow_clearance = 0.23
-	spike_pose_driver.clock = time
-	spike_pose_driver.stage = AttackDrill.Stage.HIT if hit_age > 0.0 else AttackDrill.Stage.SET
-	spike_pose_driver.stage_start = SPIN_CONTACT
-	spike_pose_driver.swing_aim = target
-	spike_pose_driver.swing_contact_aim = target
-	spike_pose_driver.swing_started = swing_start
-	spike_pose_driver.swing_charge_started = swing_start
-	spike_pose_driver.swing_drive_started = drive_start if time >= drive_start else -INF
-	spike_pose_driver.swing_drive_duration = SPIN_CONTACT-drive_start
+	spike_pose_driver.swing_started = SPIN_TAKEOFF
+	spike_pose_driver.swing_charge_started = SPIN_TAKEOFF
+	spike_pose_driver.swing_drive_started = -INF
+	spike_pose_driver.swing_drive_duration = 0.18
 	spike_pose_driver.swing_power = 1.0
+	spike_pose_driver.swing_contact = Vector3.INF
 	spike_pose_driver.approach_pressed_at = APPROACH_START
 	spike_pose_driver.approach_set_touched_at = APPROACH_START
 	spike_pose_driver.approach_expected_hit_at = SPIN_CONTACT
+	spike_pose_driver.swing_aim = serve_start+forward*18.0
+	spike_pose_driver.swing_contact_aim = spike_pose_driver.swing_aim
+	spike_pose_driver.plant_arm_lift_started = false
 	spike_pose_driver.swing_palm_roll = 0.0
-	spike_pose_driver.swing_finish_pose.clear()
-	# The takeoff pose is only the entry to the swing, not its finish.
 	spike_pose_driver.approach_arm_transition.clear()
-	if hit_age <= 0.0:
-		spike_pose_driver.approach_arm_transition.assign(approach_poses[source_index])
-	var hand_lift := smoothstep(0.08,0.26,time-swing_start)
-	var strike_pose: Array[Transform3D] = []
-	strike_pose.assign(pose)
-	strike_pose = spike_pose_driver.build_bow_draw_pose(self,strike_pose,1.0/APPROACH_SAMPLE_RATE,weight,contact,extension,follow,1.0,hand_lift)
-	for bone in pose.size(): pose[bone] = strike_pose[bone]
+	spike_pose_driver.approach_render_rotations.clear()
+	spike_pose_driver.swing_finish_pose.clear()
+	spike_pose_driver.finish_hand_axis = Vector3.ZERO
+	spike_pose_driver.finish_hand_turn = INF
+
+func sample_spike_swing(time: float) -> void:
+	var age := maxf(0.0,time-SPIN_CONTACT)
+	var weight := 1.0-smoothstep(0.19,0.44,age)
+	if weight <= 0.0: return
+	var rig: Skeleton3D = player.skeleton
+	var drive_start := SPIN_CONTACT-spike_pose_driver.swing_drive_duration
+	var drive := clampf((time-drive_start)/spike_pose_driver.swing_drive_duration,0.0,1.0)
+	var extension := spike_pose_driver.smootherstep(0.08,1.0,drive)
+	var follow := 1.0-(1.0-clampf(age/0.19,0.0,1.0))**2
+	var shoulder := rig.get_bone_global_pose(rig.find_bone("upperarm_r")).origin
+	var reach := Vector3(-0.05,0.67,0.33+SERVE_CONTACT_LEAD)/rig.global_basis.y.length()
+	var contact := to_local(rig.to_global(shoulder+reach))
+	spike_pose_driver.clock = time
+	spike_pose_driver.stage_start = SPIN_CONTACT
+	spike_pose_driver.stage = MatchAttack.Stage.HIT if age > 0.0 else MatchAttack.Stage.SET
+	spike_pose_driver.swing_drive_started = drive_start if time >= drive_start else -INF
+	if age > 0.0 and not spike_pose_driver.swing_contact.is_finite():
+		spike_pose_driver.approach_arm_transition.assign(approach_poses.back())
+		spike_pose_driver.swing_contact = contact
+	if age > 0.0: contact = spike_pose_driver.swing_contact
+	var lift := spike_pose_driver.smootherstep(0.08,0.26,time-SPIN_TAKEOFF)
+	spike_pose_driver.pose_bow_draw(1.0/APPROACH_SAMPLE_RATE,weight,contact,extension,follow,1.0,lift,self)
+	if age <= 0.0:
+		spike_pose_driver.finish_hand_axis = spike_pose_driver.strike_hand_axis(rig)
+		spike_pose_driver.finish_hand_edge = spike_pose_driver.strike_hand_edge(rig,spike_pose_driver.finish_hand_axis)
 
 func finish_float_wrist(pose: Array, _rig: Skeleton3D, author: RefCounted, time: float) -> void:
-	var snap := smoothstep(SPIN_CONTACT-0.07,SPIN_CONTACT+0.12,time)*(1.0-smoothstep(SPIN_CONTACT+0.21,jump_landing_time(),time))
-	SpikeArm.align_wrist_to_forearm(pose,author,0.82*smoothstep(TOSS_STEP,TOSS_STEP+0.22,time))
-	author.rotate_world(pose,"hand_r",Vector3.RIGHT,deg_to_rad(24.0)*snap)
+	var weight := smoothstep(TOSS_STEP,TOSS_STEP+0.22,time)*(1.0-smoothstep(TOSS_STEP+0.22,APPROACH_START,time))
+	SpikeArm.align_wrist_to_forearm(pose,author,0.82*weight)
 
 func set_forward_lean(value: float) -> void:
 	forward_lean_degrees = value
