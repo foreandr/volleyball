@@ -1169,7 +1169,7 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 	if stage == Stage.HIT and keeps_strike_palm_presented():
 		apply_pinky_down_finish(rig)
 	var contact_reach := smootherstep(0.68,0.98,extension)*(1.0-smoothstep(0.0,0.22,follow))
-	if keeps_strike_palm_presented() and stage == Stage.SET and contact_reach > 0.0 and not approach_render_rotations.is_empty():
+	if keeps_strike_palm_presented() and stage == Stage.SET and contact_reach > 0.0 and not sync_approach_arm_lift() and not approach_render_rotations.is_empty():
 		var author: RefCounted = setter.get_pose_author()
 		for bone in rig.get_bone_count(): pose[bone] = rig.get_bone_pose(bone)
 		var shoulder: Vector3 = author.point(pose,"upperarm_r")
@@ -1189,7 +1189,7 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 			approach_render_rotations[bone] = rotation
 
 	if stage == Stage.SET and sync_approach_arm_lift() and not approach_render_rotations.is_empty():
-		pose_hitting_elbow(rig,pose,follow)
+		pose_hitting_elbow(rig,pose,contact,follow)
 
 	if stage == Stage.SET and keeps_strike_palm_presented():
 		var turnover := smootherstep(0.16,0.72,extension)
@@ -1446,7 +1446,7 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 				SpikeArm.blend_arm(pose,approach_arm_transition,author,source_weight,"l")
 	return pose
 
-func pose_hitting_elbow(rig: Skeleton3D, pose: Array[Transform3D], follow: float) -> void:
+func pose_hitting_elbow(rig: Skeleton3D, pose: Array[Transform3D], contact: Vector3, follow: float) -> void:
 	if follow > 0.0: return
 	var author: RefCounted = setter.get_pose_author()
 	for bone in rig.get_bone_count(): pose[bone] = rig.get_bone_pose(bone)
@@ -1459,15 +1459,21 @@ func pose_hitting_elbow(rig: Skeleton3D, pose: Array[Transform3D], follow: float
 	# Keep the elbow outside the shoulder as the hand rolls from load into reach.
 	var load := smootherstep(0.0,0.10,clock-swing_started)
 	var drive := clampf((clock-swing_drive_started)/swing_drive_duration,0.0,1.0) if is_finite(swing_drive_started) else 0.0
-	var cocked := smootherstep(0.0,0.12,drive)*(1.0-smootherstep(0.30,0.54,drive))
-	var opening := smoothstep(0.10,0.97,drive)*(1.0-cocked)
+	var gather := smootherstep(0.18,0.29,clock-swing_started)
+	var cocked := maxf(gather,smootherstep(0.0,0.12,drive))*(1.0-smootherstep(0.30,0.72,drive))
+	var opening := smoothstep(0.30,0.97,drive)
 	var across: Vector3 = (author.point(pose,"upperarm_l")-shoulder).normalized()
 	var out := -across
 	# Move the hand outside the head and let the elbow hang beneath it for the loaded pose.
 	var loaded_axis := (out*0.76+Vector3.UP*0.59+Vector3.FORWARD*0.10).normalized()
 	axis = axis.slerp(loaded_axis,cocked)
+	if keeps_strike_palm_presented():
+		var ball_axis := (rig.to_local(to_global(contact))-shoulder).normalized()
+		axis = axis.slerp(ball_axis,smoothstep(0.34,0.86,drive))
 	var angle := lerpf(lerpf(86.0,80.0,load),179.0,opening)
-	var pole := Vector3(-1.0,0.05,0.30).lerp(Vector3.DOWN+out*0.24,cocked).slide(axis).normalized()
+	var pole := Vector3(-1.0,0.05,0.30).slide(axis).normalized()
+	var loaded_pole := (Vector3.DOWN+out*0.24).slide(axis).normalized()
+	pole = pole.rotated(axis,pole.signed_angle_to(loaded_pole,axis)*cocked)
 	if pole.is_zero_approx(): pole = upper.slide(axis).normalized()
 	var reach := sqrt(upper.length_squared()+lower.length_squared()-2.0*upper.length()*lower.length()*cos(deg_to_rad(angle)))
 	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",shoulder+axis*reach,pole,1.0,angle,true)
