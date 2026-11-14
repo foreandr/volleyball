@@ -257,9 +257,11 @@ func start_demo_match(team_size := 2, learn_from_demo := true, _cpu_only := true
 		StorySession.ensure_background_training()
 	demo_match = preload("res://scripts/volleyball_match.gd").new()
 	demo_match.spectator = true
-	if learn_from_demo:
+	if match_from_home:
+		demo_match.cpu_serve_override = demo_match.TOPSPIN_SERVE
+	if match_from_home or learn_from_demo:
 		demo_match.win_score = 21
-		demo_match.auto_rematch = true
+		demo_match.auto_rematch = not match_from_home
 	preview_player.get_parent().add_child(demo_match)
 	demo_match.configure(preview_player,board,status,build_label,team_size,learn_from_demo,mirror_blue_right)
 	demo_match.review_flagged.connect(show_marker_popup)
@@ -305,6 +307,7 @@ func show_match_tuning() -> void:
 		demo_match.reset_match()
 		update_match_replay_controls()
 		preview.grab_focus()))
+	if match_from_home: add_match_replay_controls(tuning)
 
 func add_match_replay_controls(tuning: VBoxContainer) -> void:
 	match_replay_button = Button.new()

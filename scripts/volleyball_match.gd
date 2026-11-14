@@ -25,6 +25,7 @@ const SERVES := [
 	preload("res://scripts/jump_float_serve.gd"),
 	preload("res://scripts/spin_serve.gd"),
 ]
+const TOPSPIN_SERVE := 3
 const SERVICE_START := [-6.40,-6.40,-7.4,-8.15]
 const CpuShots = preload("res://scripts/cpu_attack_shots.gd")
 const CpuPolicy = preload("res://scripts/cpu_policy.gd")
@@ -88,6 +89,7 @@ var spike_audio: AudioStreamPlayer
 var net_audio: AudioStreamPlayer
 var floor_audio: AudioStreamPlayer
 var serve_style := 0
+var cpu_serve_override := -1
 var score := [0,0]
 var server_slot := [0,0]
 var service_team := 0
@@ -440,7 +442,9 @@ func begin_point() -> void:
 	aim_ring.hide()
 	trajectory_node.hide()
 	var server := server_index()
-	var style: int = serve_style if is_human(server) else cpu_policy.choose_serve(team(server))
+	var style := serve_style
+	if not is_human(server):
+		style = cpu_serve_override if cpu_serve_override >= 0 else cpu_policy.choose_serve(team(server))
 	prepare_serve(style)
 	update_score()
 	trace.begin_feed({"mode":"demo_match","score":score,"server":server_index(),"spectator":spectator,"team_size":team_size})
@@ -456,7 +460,7 @@ func prepare_serve(style: int) -> void:
 	frames[side].add_child(serve)
 	var x := 1.6*starting_lane(index)
 	serve.configure(players[index],Vector3(x,0.04,SERVICE_START[style]))
-	if style == 3: serve.set_serve_speed(1.12)
+	if style == TOPSPIN_SERVE: serve.set_serve_speed(1.12)
 	if serve.has_method("set_jump_height"): serve.set_jump_height(serve_vertical*0.0254)
 	var aim := Vector3(0.0,Flight.FLOOR,10.7)
 	if not is_human(index):
@@ -1535,7 +1539,7 @@ func cpu_should_backshuffle(index: int, contact: Vector3, cue: float) -> bool:
 	return depth < -0.25 and approach.z < -0.05 and cpu_hand_receive_too_fast(cue)
 
 func overhead_available(index: int, technique: int) -> bool:
-	if not is_human(index) and flight_kind == "serve" and not drill_feed_acceleration.is_finite() and serve.get_script() == SERVES[3]: return false
+	if not is_human(index) and flight_kind == "serve" and not drill_feed_acceleration.is_finite() and serve.get_script() == SERVES[TOPSPIN_SERVE]: return false
 	var first_contact := technique == 1 and (defensive_ball() or flight_kind == "serve")
 	var setting := cpu_is_setting(index)
 	var height := hand_contact_height(technique)
