@@ -2219,7 +2219,7 @@ func follow_run_into_plant(hitter: int, driver: Node3D, staging: Vector3, time_l
 	var actor := players[hitter]
 	var animator: AnimationPlayer = actor.animator
 	var run: String = actor.animation_slots["run"]
-	if recoveries.has(hitter) or animator.current_animation != run or time_left < 0.58 or time_left > 1.2: return false
+	if recoveries.has(hitter) or animator.current_animation != run or time_left < 0.54 or time_left > 1.2: return false
 	# Hand off on an earlier running plant to leave room for both takeoff steps.
 	var entry_target := staging+Vector3.BACK*0.43
 	var offset := (entry_target-actor.position).slide(Vector3.UP)

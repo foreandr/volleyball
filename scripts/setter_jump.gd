@@ -149,6 +149,11 @@ func carry_run_into_plant(velocity: Vector3) -> void:
 	var lateral := heading.cross(Vector3.UP)*width
 	var right_step := 0.80
 	var left_step := 0.42
+	# Shorten the plant if the set leaves too little time for two full strides.
+	var fit_time := clampf((entry_speed*load_duration()-running_left+0.16)/right_step,0.20,1.0)
+	var timed_fit := lerpf(fit_time,1.0,smoothstep(0.16,0.25,load_duration()))
+	right_step *= timed_fit
+	left_step *= timed_fit
 	if heading.z > 0.0:
 		var available := (front_limit-start.z-absf(lateral.z))/heading.z-running_left
 		var fit := clampf(available/(right_step+left_step),0.0,1.0)
