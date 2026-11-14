@@ -177,9 +177,9 @@ func position_toss_hands(pose: Array, rig: Skeleton3D, author: RefCounted, time:
 	var reach := shoulder.distance_to(elbow)+elbow.distance_to(hand)
 	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",shoulder+direction*reach,Vector3.LEFT,weight,179.0,true)
 	# Keep the palm under the ball even when the straight arm points down or back.
-	var hand_pitch := deg_to_rad(24.0)*upswing
+	var hand_pitch := deg_to_rad(lerpf(-8.0,24.0,upswing))
 	var fingers := Vector3(0.0,sin(hand_pitch),cos(hand_pitch))
-	orient_palm(pose,rig,author,"r",fingers,Vector3.UP.cross(fingers),weight)
+	orient_palm(pose,rig,author,"r",fingers,fingers.cross(Vector3.UP),weight)
 	var off_hand := left_shoulder+Vector3(0.11,-0.51,0.07)/scale_
 	author.limb(pose,"upperarm_l","lowerarm_l","hand_l",off_hand,Vector3(0.60,-0.20,0.25),weight)
 
