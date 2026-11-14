@@ -6,7 +6,7 @@ const CATEGORIES := {
 	"Passing": [{"title":"Pass to Target","scene":"res://scenes/story_animations.tscn"}],
 	"Setting": [{"title":"Set to Target"}],
 	"Attacking": [{"title":"Butterfly"}],
-	"Serving": [],
+	"Serving": [{"title":"Spin Serve"}],
 	"Digging": [],
 }
 
@@ -20,6 +20,7 @@ var setting_camera: Camera3D
 var setting_row: HBoxContainer
 var target_drill: Node3D
 var review_button: Button
+var launch_button: Button
 var replay_panel: VBoxContainer
 var frame_label: Label
 var marker_popup: Label
@@ -67,7 +68,10 @@ func _ready() -> void:
 	if not StorySession.return_to_drill.is_empty():
 		var drill := StorySession.return_to_drill
 		StorySession.return_to_drill = ""
-		show_category("Attacking" if drill == "Butterfly" else "Setting")
+		for name_ in CATEGORIES:
+			if CATEGORIES[name_].any(func(entry): return entry.title == drill):
+				show_category(name_)
+				break
 		open_setting_stage(drill)
 	elif StorySession.drill_menu_category.is_empty():
 		show_categories()
@@ -136,16 +140,22 @@ func open_setting_stage(title: String) -> void:
 	setting_stage.add_child(viewport)
 	preload("res://scripts/preview_court.gd").add_preview_lighting(viewport)
 	viewport.add_child(preload("res://scripts/preview_court.gd").new())
+	var spin_serve := title == "Spin Serve"
 	var butterfly := title == "Butterfly"
-	var drill: Node3D = preload("res://scripts/butterfly_drill.gd").new() if butterfly else preload("res://scripts/set_to_target.gd").new()
+	var drill: Node3D
+	match title:
+		"Spin Serve": drill = preload("res://scripts/spin_serve_drill.gd").new()
+		"Butterfly": drill = preload("res://scripts/butterfly_drill.gd").new()
+		_: drill = preload("res://scripts/set_to_target.gd").new()
 	target_drill = drill
 	viewport.add_child(drill)
 	drill.configure(status)
 	var launch := Button.new()
-	launch.text = "Underhand serve" if butterfly else "Launch float feed"
+	launch.text = "Spin serve" if spin_serve else ("Underhand serve" if butterfly else "Launch float feed")
 	launch.custom_minimum_size.y = 48
 	launch.pressed.connect(drill.launch_single)
 	left.add_child(launch)
+	launch_button = launch
 	var repeat := Button.new()
 	repeat.text = "Repeat"
 	repeat.toggle_mode = true
@@ -153,15 +163,14 @@ func open_setting_stage(title: String) -> void:
 	repeat.pressed.connect(drill.toggle_repeat)
 	left.add_child(repeat)
 	var ten := Button.new()
-	ten.text = "Run 10 reps" if butterfly else "Serve 10 times"
+	ten.text = "Run 10 reps" if butterfly or spin_serve else "Serve 10 times"
 	ten.custom_minimum_size.y = 38
 	ten.pressed.connect(drill.launch_ten)
 	left.add_child(ten)
-	var sweep := Button.new()
-	sweep.text = "Set to all 7 positions"
-	sweep.custom_minimum_size.y = 38
-	sweep.pressed.connect(drill.launch_net_sweep)
-	left.add_child(sweep)
+	var batch_buttons := [launch,ten]
+	if not spin_serve:
+		var sweep := review_control(left,"Set to all 7 positions",drill.launch_net_sweep)
+		batch_buttons.append(sweep)
 	add_speed(left,"Slow motion",drill.live_speed,func(value: float): drill.live_speed = value)
 	var slow_motion := left.get_child(left.get_child_count()-1) as HSlider
 	slow_motion.value_changed.connect(func(_value: float): drill.save_setup())
@@ -171,14 +180,28 @@ func open_setting_stage(title: String) -> void:
 		add_drill_value(left,"Set apex",3.35,7.0,"set_apex")
 		add_drill_value(left,"Spike pace",0.5,1.4,"spike_pace","×")
 		add_drill_value(left,"Spike jump height",30,65,"spike_jump_height"," in",1.0)
+	if spin_serve:
+		add_drill_value(left,"Serve apex",3.5,9.0,"apex")
+		add_drill_value(left,"Serve speed",0.65,1.55,"speed","×")
+		add_drill_value(left,"Jump height",0.75,1.48,"jump_height"," m",0.01)
+		add_drill_value(left,"Forward lean",-45.0,45.0,"lean","°",1.0)
+		add_drill_value(left,"Sidespin",-100.0,100.0,"sidespin","%",1.0)
+		var carry := CheckButton.new()
+		carry.text = "Forward carry"
+		carry.button_pressed = drill.jump_carry
+		carry.toggled.connect(drill.set_jump_carry)
+		left.add_child(carry)
 	build_review(right)
-	for button in [launch,ten,sweep]:
+	for button in batch_buttons:
 		button.pressed.connect(func(): repeat.set_pressed_no_signal(false))
 	setting_camera = Camera3D.new()
 	setting_camera.fov = 42.0
 	setting_camera.far = 150.0
 	setting_camera.position = Vector3(0,8.2,-12.2)
 	camera_focus = Vector3(0,1.55,3.9)
+	if spin_serve:
+		setting_camera.position = Vector3(-9.0,5.2,-15.0)
+		camera_focus = Vector3(0,1.8,-4.4)
 	viewport.add_child(setting_camera)
 	setting_camera.look_at(camera_focus)
 	setting_camera.make_current()
@@ -290,11 +313,14 @@ func build_review(panel: VBoxContainer) -> void:
 	next_rep = review_control(reps,"Next rep",func(): target_drill.open_review(target_drill.review_index+1,true))
 	review_control(replay_panel,"Save replay",save_reviewed_rep)
 	add_speed(replay_panel,"Replay speed",replay.speed,func(value: float): replay.speed = value)
-	review_control(replay_panel,"Edit setter",target_drill.edit_setter)
+	if target_drill.drill_title() == "Spin Serve":
+		review_control(replay_panel,"Edit server",target_drill.edit_server)
+	else:
+		review_control(replay_panel,"Edit setter",target_drill.edit_setter)
 	if target_drill.drill_title() == "Butterfly":
-		review_control(replay_panel,"Edit server",target_drill.edit_role.bind(2,"Butterfly serve","Serving","Underhand","server"))
-		review_control(replay_panel,"Edit passer",target_drill.edit_role.bind(1,"Butterfly pass","Forearm reception","Forearm","passer"))
-		review_control(replay_panel,"Edit hitter",target_drill.edit_role.bind(1,"Butterfly spike","Attacking","Line Hit","hitter"))
+		review_control(replay_panel,"Edit server",target_drill.edit_role.bind(2,"Butterfly serve","Serving","Underhand","server",true))
+		review_control(replay_panel,"Edit passer",target_drill.edit_role.bind(1,"Butterfly pass","Forearm reception","Forearm","passer",true))
+		review_control(replay_panel,"Edit hitter",target_drill.edit_role.bind(1,"Butterfly spike","Attacking","Line Hit","hitter",true))
 	update_review()
 
 func save_reviewed_rep() -> void:
@@ -393,8 +419,10 @@ func _input(event: InputEvent) -> void:
 	elif target_drill.game.replay.active and event.physical_keycode in [KEY_LEFT,KEY_RIGHT]:
 		target_drill.game.replay.step_frame(target_drill.game,-1 if event.physical_keycode == KEY_LEFT else 1)
 		get_viewport().set_input_as_handled()
-	elif event.physical_keycode == KEY_SPACE and target_drill.game.replay.active:
-		toggle_playback()
+	elif event.physical_keycode == KEY_SPACE:
+		if target_drill.game.replay.active: toggle_playback()
+		elif target_drill.drill_title() == "Spin Serve": launch_button.pressed.emit()
+		else: return
 		get_viewport().set_input_as_handled()
 
 func _unhandled_input(event: InputEvent) -> void:

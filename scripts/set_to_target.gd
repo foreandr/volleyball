@@ -152,7 +152,7 @@ func feed_origin() -> Vector3:
 func feed_motion() -> Vector3:
 	return (feed_landing-feed_origin())/feed_duration+Vector3.UP*Flight.GRAVITY*feed_duration*0.5
 
-func launch_rep() -> void:
+func begin_rep() -> void:
 	if game.replay.active: game.replay.toggle(game,true)
 	if game.replay.current.size() >= 2:
 		rep_history.append(game.replay.current)
@@ -164,6 +164,9 @@ func launch_rep() -> void:
 	reset_players()
 	trail.hide()
 	budget = 0.0
+
+func launch_rep() -> void:
+	begin_rep()
 	game.phase = game.Phase.LIVE
 	game.drill_pass_target = pass_target
 	var target := set_target
@@ -239,18 +242,20 @@ func step_rep() -> void:
 			set_status("Set to target")
 	game.advance_idle_players(STEP)
 	if game.elapsed >= game.flight_end() and finish_rep():
-		running = false
-		game.phase = game.Phase.FINISHED
-		if repeating or remaining > 0: next_rep = 0.7
 		if game.flight_kind == "serve": set_status("Missed feed")
 		elif game.flight_kind == "pass": set_status("Missed set")
-		var success := rep_success(game.flight_kind)
-		if batch_rep > 0:
-			completed_reps += 1
-			successful_reps += int(success)
-			game.info.text += "\n%d/%d %s completed" % [successful_reps,completed_reps,result_label()]
-		game.trace.write("setting_drill_result",game.match_clock,{"rep":batch_rep,"set_completed":success,"result":game.info.text},true)
+		complete_rep(rep_success(game.flight_kind))
 	game.replay.record(game)
+
+func complete_rep(success: bool) -> void:
+	running = false
+	game.phase = game.Phase.FINISHED
+	if repeating or remaining > 0: next_rep = 0.7
+	if batch_rep > 0:
+		completed_reps += 1
+		successful_reps += int(success)
+		game.info.text += "\n%d/%d %s completed" % [successful_reps,completed_reps,result_label()]
+	game.trace.write("setting_drill_result",game.match_clock,{"rep":batch_rep,"set_completed":success,"result":game.info.text},true)
 
 func finish_rep() -> bool:
 	return true
@@ -455,14 +460,14 @@ func open_review(index: int, autoplay := false) -> void:
 func edit_setter() -> void:
 	edit_role(0,"Setting replay","Setting","Overhead","setter")
 
-func edit_role(actor: int, title: String, category: String, type: String, role: String) -> void:
+func edit_role(actor: int, title: String, category: String, type: String, role: String, include_ball := false) -> void:
 	var replay = game.replay
 	if not replay.active: return
 	replay.playing = false
 	save_setup()
 	StorySession.return_to_drill = drill_title()
 	var contacts: Dictionary = replay.frames[0].get("contacts",{})
-	StorySession.edit_animation = replay.bake_actor(game,actor,title,contacts.get(role,replay.index),setup_key() == "Butterfly")
+	StorySession.edit_animation = replay.bake_actor(game,actor,title,contacts.get(role,replay.index),include_ball or setup_key() == "Butterfly")
 	StorySession.edit_entry = {"id":setup_key()+"_"+title,"name":title,"category":category,"type":type}
 	StorySession.animation_draft.clear()
 	get_tree().change_scene_to_file("res://scenes/animation_editor.tscn")
