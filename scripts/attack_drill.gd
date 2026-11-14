@@ -1291,11 +1291,6 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 	# Twist the ribcage around its own axis so the lean stays independent.
 	var chest_axis: Vector3 = (author.point(pose,"neck_01")-author.point(pose,"spine_03")).normalized()
 	var chest_yaw := clampf(turn*rotation_weight-deg_to_rad(12.0)*strike_reach*weight,-1.45,1.45)
-	if stage == Stage.SET and uses_assisted_approach() and is_finite(swing_drive_started):
-		# Open the ribcage briefly at the start of the drive, then unwind into contact.
-		var drive_progress := drive_age/swing_drive_duration
-		var open_chest := smootherstep(0.0,0.19,drive_progress)*(1.0-smootherstep(0.32,0.62,drive_progress))
-		chest_yaw -= deg_to_rad(20.0)*open_chest*airborne
 	author.rotate_world(pose,"spine_03",chest_axis,chest_yaw)
 	var load_back := 1.0-smoothstep(0.04,0.55,extension)
 	var backswing_weight := draw_progress*(1.0-arm_lift)*(1.0-smoothstep(0.0,0.38,extension))
@@ -1464,9 +1459,15 @@ func pose_hitting_elbow(rig: Skeleton3D, pose: Array[Transform3D], follow: float
 	# Keep the elbow outside the shoulder as the hand rolls from load into reach.
 	var load := smootherstep(0.0,0.10,clock-swing_started)
 	var drive := clampf((clock-swing_drive_started)/swing_drive_duration,0.0,1.0) if is_finite(swing_drive_started) else 0.0
-	var opening := smoothstep(0.10,0.97,drive)
+	var cocked := smootherstep(0.0,0.12,drive)*(1.0-smootherstep(0.30,0.54,drive))
+	var opening := smoothstep(0.10,0.97,drive)*(1.0-cocked)
+	var across: Vector3 = (author.point(pose,"upperarm_l")-shoulder).normalized()
+	var out := -across
+	# Move the hand outside the head and let the elbow hang beneath it for the loaded pose.
+	var loaded_axis := (out*0.76+Vector3.UP*0.59+Vector3.FORWARD*0.10).normalized()
+	axis = axis.slerp(loaded_axis,cocked)
 	var angle := lerpf(lerpf(86.0,80.0,load),179.0,opening)
-	var pole := Vector3(-1.0,0.05,0.30).slide(axis).normalized()
+	var pole := Vector3(-1.0,0.05,0.30).lerp(Vector3.DOWN+out*0.24,cocked).slide(axis).normalized()
 	if pole.is_zero_approx(): pole = upper.slide(axis).normalized()
 	var reach := sqrt(upper.length_squared()+lower.length_squared()-2.0*upper.length()*lower.length()*cos(deg_to_rad(angle)))
 	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",shoulder+axis*reach,pole,1.0,angle,true)
