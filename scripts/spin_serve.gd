@@ -70,7 +70,7 @@ func uses_float_arm_pose() -> bool:
 	return false
 
 func prepare_toss_hands(pose: Array, rig: Skeleton3D, author: RefCounted, time: float) -> void:
-	var weight := 1.0-smoothstep(TOSS_STEP,TOSS_STEP+0.21,time)
+	var weight := 1.0-smoothstep(TOSS_STEP+0.08,TOSS_STEP+0.29,time)
 	if weight > 0.0: position_toss_hands(pose,rig,author,time,weight)
 
 func prepare_serve_reset() -> void:
@@ -158,28 +158,44 @@ func spin_toss_ball(previous: float, time: float, rate: float) -> void:
 	if air_time > 0.0:
 		ball.rotate(Vector3.UP.cross(forward).normalized(),TAU*3.5*air_time)
 
-func toss_palm(pose: Array, _rig: Skeleton3D, author: RefCounted, _time: float) -> Vector3:
+func toss_palm(pose: Array, rig: Skeleton3D, author: RefCounted, _time: float) -> Vector3:
 	var wrist: Vector3 = author.point(pose,"hand_r")
 	var knuckles: Vector3 = author.point(pose,"middle_01_r")
-	return wrist.lerp(knuckles,0.68)
+	var across: Vector3 = author.point(pose,"index_01_r")-author.point(pose,"pinky_01_r")
+	var normal := across.cross(knuckles-wrist).normalized()
+	var scale_: float = rig.global_basis.y.length()
+	# Center the ball on the cupped palm as it tilts through the swing.
+	var offset := (BallPreview.RADIUS+0.012)/scale_
+	return wrist.lerp(knuckles,0.78)+(normal-Vector3.UP)*offset
 
 func position_toss_hands(pose: Array, rig: Skeleton3D, author: RefCounted, time: float, weight: float) -> void:
-	var backswing := smoothstep(0.0,TOSS_BACKSWING_END,time)
+	var backswing := spike_pose_driver.smootherstep(0.0,TOSS_BACKSWING_END,time)
 	var upswing := spike_pose_driver.smootherstep(TOSS_BACKSWING_END,TOSS_STEP+0.09,time)
-	var pitch := deg_to_rad(lerpf(35.0,-57.0,backswing)+145.0*upswing)
+	var pitch := deg_to_rad(lerpf(53.0,-47.0,backswing)+137.0*upswing)
 	var scale_: float = rig.global_basis.y.length()
 	var shoulder: Vector3 = author.point(pose,"upperarm_r")
 	var left_shoulder: Vector3 = author.point(pose,"upperarm_l")
 	var elbow: Vector3 = author.point(pose,"lowerarm_r")
 	var hand: Vector3 = author.point(pose,"hand_r")
-	# Keep the shoulder-to-hand radius fixed as the arm swings past the hip.
-	var direction := Vector3(-0.23,-cos(pitch),sin(pitch)).normalized()
-	var reach := shoulder.distance_to(elbow)+elbow.distance_to(hand)
-	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",shoulder+direction*reach,Vector3.LEFT,weight,179.0,true)
-	# Keep the palm under the ball even when the straight arm points down or back.
-	var hand_pitch := deg_to_rad(lerpf(-8.0,24.0,upswing))
-	var fingers := Vector3(0.0,sin(hand_pitch),cos(hand_pitch))
-	orient_palm(pose,rig,author,"r",fingers,fingers.cross(Vector3.UP),weight)
+	# Aim both segments along the same shoulder-led arc.
+	var direction := Vector3(-0.26,-cos(pitch),sin(pitch)).normalized()
+	var upper_axis := (elbow-shoulder).normalized().slerp(direction,weight)
+	var lower_axis := (hand-elbow).normalized().slerp(direction,weight)
+	author.aim_joint(pose,"upperarm_r","lowerarm_r",shoulder+upper_axis)
+	elbow = author.point(pose,"lowerarm_r")
+	author.aim_joint(pose,"lowerarm_r","hand_r",elbow+lower_axis)
+	# Let the wrist follow the arm's arc, then open the fingers into release.
+	var release := smoothstep(TOSS_STEP-0.12,TOSS_STEP+0.055,time)
+	var hand_pitch := clampf(pitch-deg_to_rad(52.0),deg_to_rad(-14.0),deg_to_rad(27.0))
+	var hand_yaw := deg_to_rad(12.0+70.0*(1.0-smoothstep(-47.0,35.0,rad_to_deg(pitch))))
+	var fingers := Vector3(-sin(hand_yaw)*cos(hand_pitch),sin(hand_pitch),cos(hand_yaw)*cos(hand_pitch))
+	var across := fingers.cross(Vector3.UP).normalized()
+	orient_palm(pose,rig,author,"r",fingers,across,weight)
+	var cup := weight*(1.0-release)
+	for digit in ["index","middle","ring","pinky"]:
+		author.rotate_world(pose,digit+"_01_r",across,deg_to_rad(12.0)*cup)
+		author.rotate_world(pose,digit+"_02_r",across,deg_to_rad(17.0)*cup)
+		author.rotate_world(pose,digit+"_03_r",across,deg_to_rad(9.0)*cup)
 	var off_hand := left_shoulder+Vector3(0.11,-0.51,0.07)/scale_
 	author.limb(pose,"upperarm_l","lowerarm_l","hand_l",off_hand,Vector3(0.60,-0.20,0.25),weight)
 
@@ -235,8 +251,12 @@ func sample_spike_swing(time: float) -> void:
 		spike_pose_driver.finish_hand_axis = spike_pose_driver.strike_hand_axis(rig)
 		spike_pose_driver.finish_hand_edge = spike_pose_driver.strike_hand_edge(rig,spike_pose_driver.finish_hand_axis)
 
+func shape_float_strike(_pose: Array, _rig: Skeleton3D, _author: RefCounted, _time: float) -> void:
+	# The topspin strike is already included in the sampled approach poses.
+	pass
+
 func finish_float_wrist(pose: Array, _rig: Skeleton3D, author: RefCounted, time: float) -> void:
-	var weight := smoothstep(TOSS_STEP,TOSS_STEP+0.22,time)*(1.0-smoothstep(TOSS_STEP+0.22,APPROACH_START,time))
+	var weight := smoothstep(TOSS_STEP+0.09,TOSS_STEP+0.25,time)*(1.0-smoothstep(TOSS_STEP+0.22,APPROACH_START,time))
 	SpikeArm.align_wrist_to_forearm(pose,author,0.82*weight)
 
 func set_forward_lean(value: float) -> void:
