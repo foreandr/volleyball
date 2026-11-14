@@ -217,6 +217,7 @@ func prepare_spike_driver() -> void:
 	spike_pose_driver.approach_expected_hit_at = SPIN_CONTACT
 	spike_pose_driver.swing_aim = serve_start+forward*18.0
 	spike_pose_driver.swing_contact_aim = spike_pose_driver.swing_aim
+	spike_pose_driver.plant_arm_lift_age = 0.12
 	spike_pose_driver.plant_arm_lift_started = false
 	spike_pose_driver.swing_palm_roll = 0.0
 	spike_pose_driver.approach_arm_transition.clear()

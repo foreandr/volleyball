@@ -115,6 +115,7 @@ const ATTACK_BODY_BONES := ["pelvis","spine_01","spine_02","spine_03","neck_01",
 var swing_palm_roll := 0.0
 var plant_arm_lift_started := false
 const PLANT_ARM_LIFT_TIME := 0.165
+var plant_arm_lift_age := 0.30
 var finish_hand_axis := Vector3.ZERO
 var finish_hand_edge := Vector3.ZERO
 var finish_hand_turn := INF
@@ -659,7 +660,7 @@ func lift_arms_during_plant() -> void:
 	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
 	var author: RefCounted = setter.get_pose_author()
 	apply_launch_back_arch(pose,author,smootherstep(0.12,0.95,progress))
-	apply_two_arm_lift(pose,author,0.0,0.0,progress*0.30)
+	apply_two_arm_lift(pose,author,0.0,0.0,progress*plant_arm_lift_age)
 	approach_render_rotations.clear()
 	for bone in rig.get_bone_count():
 		var rotation := pose[bone].basis.get_rotation_quaternion()
@@ -1383,7 +1384,7 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 	if uses_assisted_approach() and not approach_arm_transition.is_empty():
 		var handoff_age := clock-stage_start if stage == Stage.HIT else clock-swing_started
 		if stage == Stage.SET and handoff_age < 0.43 and sync_approach_arm_lift():
-			apply_two_arm_lift(pose,author,handoff_age,extension,handoff_age+0.30 if plant_arm_lift_started else handoff_age)
+			apply_two_arm_lift(pose,author,handoff_age,extension,handoff_age+plant_arm_lift_age if plant_arm_lift_started else handoff_age)
 		elif stage == Stage.SET and handoff_age < 0.43:
 			var front_pose := pose.duplicate()
 			var across: Vector3 = (author.point(pose,"upperarm_l")-author.point(pose,"upperarm_r")).normalized()
