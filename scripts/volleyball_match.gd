@@ -30,6 +30,7 @@ const SERVICE_START := [-6.40,-6.40,-7.4,-8.15]
 const CpuShots = preload("res://scripts/cpu_attack_shots.gd")
 const CpuPolicy = preload("res://scripts/cpu_policy.gd")
 const WIN_SCORE := 15
+const CPU_COURT_FRONT_LIMIT := 3.43
 const RECOVERY_TIME := 0.32
 const FAST_DIG_ELBOW_SPEED := 25.0
 const FAST_DIG_ELBOW_DURATION := 0.32
@@ -233,6 +234,7 @@ func configure(actor: Node3D, board: Label, status: Label, build := "", players_
 			footwork.append(Footwork.new(avatar))
 			avatar.play_action("forearm")
 			var bump := Bump.new()
+			bump.receive_front_limit = CPU_COURT_FRONT_LIMIT
 			frame.add_child(bump)
 			bump.configure(avatar,avatar.animator.get_animation("custom_forearm/clip"))
 			bump.set_custom_backward(backward_clip)
@@ -1401,9 +1403,9 @@ func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_f
 		pace = clampf(speed,0.65,CPU_SPRINT_SPEED) if paced_run else clampf(speed*1.24,5.85,CPU_SPRINT_SPEED)
 	var before := actor.position
 	var step_target := before+offset.limit_length(delta*pace)
-	var grounded := Court.clamp_setter(step_target,3.43)
+	var grounded := Court.clamp_setter(step_target,CPU_COURT_FRONT_LIMIT)
 	if is_server and before.z < Court.RUNOFF_NEAR_BASELINE:
-		grounded.z = clampf(step_target.z,before.z,3.43)
+		grounded.z = clampf(step_target.z,before.z,CPU_COURT_FRONT_LIMIT)
 	grounded.y = move_toward(before.y,PLAYER_GROUND_Y,delta*1.25)
 	actor.position = grounded
 	var movement := actor.basis.inverse()*(actor.position-before).slide(Vector3.UP)

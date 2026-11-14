@@ -270,7 +270,7 @@ func start_demo_match(team_size := 2, learn_from_demo := true, _cpu_only := true
 	show_match_tuning()
 	player_controls.locomotion = ""
 	player_controls.setter_travel = Vector3.ZERO
-	player_controls.indicator.text = "You"
+	player_controls.indicator.text = "Camera"
 	preview_camera.position = Vector3(0.0,8.2,-12.2)
 	setting_camera_focus = Vector3(0.0,1.55,3.9)
 	preview_camera.look_at(setting_camera_focus)

@@ -53,6 +53,7 @@ var custom_backward_mirror_bones := PackedInt32Array()
 var custom_backward_time := 0.0
 var ready_pose: Array[Transform3D] = []
 var reach := {}
+var receive_front_limit := 2.5
 var reach_step := Vector3.ZERO
 var reach_travel := Vector3.ZERO
 var rear_setup := Vector3.ZERO
@@ -775,12 +776,12 @@ func advance_reach(path: Callable, time: float, end: float, delta: float, quick_
 		reach_progress = minf(1.0,reach_progress+delta/duration)
 		var origin := setter.position
 		var setup := rear_setup*(smoothstep(0.0,0.50,reach_progress)-smoothstep(0.0,0.50,before))
-		setter.position = Court.clamp_setter(origin+setup)
+		setter.position = Court.clamp_setter(origin+setup,receive_front_limit)
 		rear_setup_travel += setter.position-origin
 		origin = setter.position
 		var lateral_start := 0.28 if not rear_setup.is_zero_approx() else 0.0
 		var travel := smoothstep(lateral_start,1.0,reach_progress)-smoothstep(lateral_start,1.0,before)
-		setter.position = Court.clamp_setter(origin+reach_step*travel)
+		setter.position = Court.clamp_setter(origin+reach_step*travel,receive_front_limit)
 		reach_travel += setter.position-origin
 	return intercept
 
