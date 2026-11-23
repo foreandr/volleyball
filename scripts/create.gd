@@ -118,7 +118,8 @@ func _ready() -> void:
 		build_ball_controls(ball_controls_host)
 	build_controls(controls)
 	if has_ball_controls(): player_controls = preload("res://scripts/preview_player_control.gd").new(self)
-	preview.grab_focus()
+	if is_instance_valid(name_field): name_field.grab_focus()
+	else: preview.grab_focus()
 
 func has_ball_controls() -> bool:
 	return false
@@ -368,6 +369,10 @@ func open_menu() -> void:
 	else: get_tree().change_scene_to_file("res://scenes/main.tscn")
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventJoypadButton and event.is_action_pressed("ui_cancel"):
+		open_menu()
+		get_viewport().set_input_as_handled()
+		return
 	if event is InputEventKey and event.pressed: handle_keyboard(event)
 
 func handle_keyboard(event: InputEventKey) -> void:

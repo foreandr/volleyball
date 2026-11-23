@@ -57,7 +57,12 @@ func development() -> void:
 			CareerSession.persist()
 			development())
 		upgrade.disabled = points<=0 or value>=100
-	add_button("Back",show_home)
+	var back := add_button("Back",show_home)
+	back.grab_focus()
+	for child in column.get_children():
+		if child is Button and not child.disabled:
+			child.grab_focus()
+			break
 
 func choose_athlete() -> void:
 	clear_menu("ATHLETES")
@@ -66,6 +71,10 @@ func choose_athlete() -> void:
 			CareerSession.select(id)
 			resume())
 	add_button("Back",show_home)
+	for child in column.get_children():
+		if child is Button:
+			child.grab_focus()
+			break
 
 func resume() -> void:
 	match CareerSession.stage():
