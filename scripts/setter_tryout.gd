@@ -76,9 +76,9 @@ func _ready() -> void:
 	MenuPresentation.set_music(false)
 	add_child(world)
 	world.add_child(preload("res://scripts/tryout_gym.gd").new())
-	Court.add_preview_lighting(world)
-	for child in world.get_children():
-		if child is WorldEnvironment: child.environment.ambient_light_energy = 0.85
+	preload("res://scripts/tryout_gym.gd").light_gym(world)
+	get_viewport().msaa_3d = Viewport.MSAA_4X
+	camera.fov = 52
 	world.add_child(camera)
 	camera.current = true
 	setter = athlete(Vector3(-0.8,0.04,1.1),"e97937")
@@ -238,7 +238,7 @@ func build_settings() -> void:
 	var column := VBoxContainer.new()
 	settings.add_child(column)
 	column.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT,Control.PRESET_MODE_MINSIZE,16)
-	for field in [["Camera orbit",-145,145,0],["Elevation",12,56,27],["Distance",6,15,12],["Master volume",0,100,80]]:
+	for field in [["Camera orbit",-145,145,12],["Elevation",12,56,18],["Distance",6,15,10],["Master volume",0,100,80]]:
 		var key := str(field[0])
 		var label := Label.new()
 		label.text = key
