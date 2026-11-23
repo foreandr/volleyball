@@ -21,7 +21,7 @@ func _ready() -> void:
 	var fields := VBoxContainer.new()
 	prompt.add_child(fields)
 	var syntax := Label.new()
-	syntax.text = "quest intro   /   quest tutorial   /   quest rep 1–24   /   quest complete"
+	syntax.text = "quest intro   /   quest tutorial   /   quest rep 1–32   /   quest complete"
 	fields.add_child(syntax)
 	fields.add_child(command)
 	command.placeholder_text = "quest tutorial"
@@ -47,13 +47,13 @@ func run_command() -> void:
 	var stage := str(parts[1])
 	var rep := 0
 	if stage == "rep":
-		if parts.size() != 3 or not parts[2].is_valid_int() or int(parts[2]) not in range(1,25): return
+		if parts.size() != 3 or not parts[2].is_valid_int() or int(parts[2]) not in range(1,33): return
 		rep = int(parts[2])-1
 		stage = "tutorial"
 	elif stage not in ["intro","tutorial","complete"]: return
 	if athlete_id.is_empty(): create_athlete(base_profile())
 	creating = false
-	if not checkpoint(stage,24 if stage == "complete" else rep): return
+	if not checkpoint(stage,32 if stage == "complete" else rep): return
 	get_tree().change_scene_to_file.call_deferred(CHAPTER)
 
 func base_profile() -> Dictionary:
@@ -106,15 +106,15 @@ func credit(rep: int) -> bool:
 	var cleared: Array = data.get_value(key(),"cleared",[])
 	if rep not in cleared:
 		cleared.append(rep)
-		if (rep+1)%6 == 0:
+		if (rep+1)%8 == 0:
 			data.set_value("points",athlete_id,data.get_value("points",athlete_id,0)+3)
 	data.set_value(key(),"cleared",cleared)
 	var badges: Array = data.get_value("badges",athlete_id,[])
 	for i in 3:
 		var earned := true
-		for required in [[0,1],[2,3,4,5],range(24)][i]:
+		for required in [[0,1],[2,3,4,5],range(32)][i]:
 			if required not in cleared: earned = false
 		if earned and BADGES[i] not in badges: badges.append(BADGES[i])
 	data.set_value("badges",athlete_id,badges)
-	return checkpoint("complete" if rep == 23 else "tutorial",rep+1)
+	return checkpoint("complete" if rep == 31 else "tutorial",rep+1)
 

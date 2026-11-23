@@ -7,11 +7,13 @@ const TARGETS := ["Left side","Middle","Pipe","Right side"]
 const TEMPOS := ["Normal","High","Fast"]
 const BUTTONS := [JOY_BUTTON_X,JOY_BUTTON_Y,JOY_BUTTON_A,JOY_BUTTON_B]
 const KEYS := [KEY_J,KEY_I,KEY_K,KEY_L]
-const PINS := [Vector3(3.65,2.9,3.1),Vector3(0.55,3.0,3.2),Vector3(0,2.9,1.3),Vector3(-3.65,2.9,3.1)]
-const STARTS := [Vector3(4.15,0.04,0),Vector3(1.6,0.04,1),Vector3(0,0.04,-1.9),Vector3(-4.15,0.04,0)]
+const PINS := [Vector3(3.75,2.15,3.0),Vector3(0.55,0.54,3.3),Vector3(0,0.54,-2.3),Vector3(-3.75,2.15,3.0)]
+const BASE := Vector3(0,0.04,1.35)
+const ORDER := [0,3,2,1]
+const CONTACT := 1.65
 const DURATION := [1.05,1.65,0.68]
 const APEX := [1.1,2.5,0.32]
-const LINES := ["Welcome to the team, %s. I’m Coach Ellis.","You’re trying out at setter. Get under the first pass and show me where you want your hitters.","We’ll start at the left pin. Give me two at each tempo. Then we’ll work across the net."]
+const LINES := ["Welcome to the team, %s. I’m Coach Ellis.","You’re trying out at setter. Watch the four targets. I’ll toss the first ones right to you.","Two to each spot. First stay planted, then jump set. After that, I’ll make you move."]
 var phase := ""
 var elapsed := 0.0
 var clock := 0.0
@@ -19,9 +21,20 @@ var skip_time := 0.0
 var camera := Camera3D.new()
 var world := Node3D.new()
 var setter: Node3D
-var passer: Node3D
+var targets: Array[Node3D] = []
+var jump := preload("res://scripts/setter_jump.gd").new()
+var demonstration := false
+var demo_index := 0
+var pressed_at := 0.0
+var endpoint := Vector3.ZERO
+var settings := Window.new()
+var yaw := 0.0
+var elevation := 27.0
+var distance := 12.0
+var meter := ProgressBar.new()
+
 var coach: Node3D
-var hitters: Array[Node3D] = []
+
 var landing := MeshInstance3D.new()
 var ball := MeshInstance3D.new()
 var panel := PanelContainer.new()
@@ -54,16 +67,24 @@ func athlete(at: Vector3,color: String) -> Node3D:
 func _ready() -> void:
 	MenuPresentation.set_music(false)
 	add_child(world)
-	world.add_child(Court.new())
+	world.add_child(preload("res://scripts/tryout_gym.gd").new())
 	Court.add_preview_lighting(world)
+	for child in world.get_children():
+		if child is WorldEnvironment: child.environment.ambient_light_energy = 0.85
 	world.add_child(camera)
 	camera.current = true
 	setter = athlete(Vector3(-0.8,0.04,1.1),"e97937")
 	setter.apply_profile(CareerSession.profile())
 	setter.play_action("idle")
-	passer = athlete(Vector3(2,0.04,-3.6),"236b80")
-	for start in STARTS: hitters.append(athlete(start,"236b80"))
-	coach = athlete(Vector3(-2.4,0.04,1.8),"242c3a")
+	coach = athlete(Vector3(-2.5,0.04,-1.2),"48574d")
+	coach.play_action("idle")
+	for i in 4:
+		var basket := preload("res://scripts/tryout_target.gd").new()
+		basket.position = PINS[i]
+		basket.is_net = i in [0,3]
+		basket.depth = 0.88 if basket.is_net else 0.50
+		world.add_child(basket)
+		targets.append(basket)
 	var mesh := SphereMesh.new()
 	mesh.radius = 0.105
 	mesh.height = 0.21
@@ -85,11 +106,12 @@ func _ready() -> void:
 	world.add_child(landing)
 	landing.hide()
 	build_hud()
+	build_settings()
 	rep = CareerSession.progress()
 	match CareerSession.stage():
 		"intro": begin("intro")
 		"complete": complete()
-		_: reset_feed()
+		_: start_practice()
 
 func build_hud() -> void:
 	panel.anchor_top = 1
@@ -108,6 +130,9 @@ func build_hud() -> void:
 	message.add_theme_font_size_override("font_size",22)
 	column.add_child(message)
 	column.add_child(hint)
+	meter.custom_minimum_size = Vector2(180,10)
+	meter.show_percentage = false
+	column.add_child(meter)
 	finish.text = "Return to My Career"
 	finish.pressed.connect(leave)
 	column.add_child(finish)
@@ -139,36 +164,98 @@ func begin(next: String) -> void:
 func leave() -> void:
 	get_tree().change_scene_to_file("res://scenes/story.tscn")
 
+func start_practice() -> void:
+	demonstration = rep == 0
+	demo_index = 0
+	reset_feed()
+
+func jump_rep() -> bool:
+	return not demonstration and (rep/8)%2 == 1
+
+func called() -> int:
+	return ORDER[demo_index if demonstration else (rep%8)/2]
+
 func reset_feed() -> void:
 	begin("feed")
+	jump.active = false
 	last_flick = 0
 	flick_at = -10
-	coach.hide()
+	setter.position = BASE
+	setter.play_action("idle")
+	catch_point = BASE + Vector3.UP*(1.93*setter.height_cm/180.0 + (0.52 if jump_rep() else 0.0))
+	if not demonstration and rep>=16: catch_point.z += 1.25 if rep%2==0 else -1.25
+	coach.show()
+	coach.rotation.y = atan2(catch_point.x-coach.position.x,catch_point.z-coach.position.z)
 	ball.show()
-	setter.position = Vector3(-0.8,0.04,1.1)
-	catch_point = Vector3(-0.5+0.72*sin(rep*2.3),1.93*setter.height_cm/180.0,2.45)
-	for i in 4:
-		hitters[i].position = STARTS[i]
-		hitters[i].play_action("idle")
-	if back_row_right(): hitters[3].position.z = -1.8
 	landing.position = Vector3(catch_point.x,0.075,catch_point.z)
 	landing.show()
-	camera.position = Vector3(0,7.4,-10.6)
-	camera.look_at(Vector3(0,1.25,2.2))
-	title.text = "SETTER TRYOUT    /    %02d OF 24" % (rep+1)
-	message.text = "%s   ·   %s tempo" % [route_label(rep/6),TEMPOS[(rep%6)/2]]
-	hint.text = "RT sprint   LT face ball   •   X left   Y middle   A pipe   B right/C   •   RS ↓ fast   ↑ high"
+	apply_camera()
+	title.text = "COACH DEMO    /    %d OF 4" % (demo_index+1) if demonstration else "SETTER TRYOUT    /    %02d OF 32    •    %s" % [rep+1,"MOVING" if rep>=16 else "STATIONARY"]
+	message.text = TARGETS[called()]+"    /    "+("Jump set" if jump_rep() else "Standing set")
+	hint.text = "X left  ·  Y middle  ·  A pipe  ·  B right   |   R3 jump   |   Menu settings"
+	meter.value = 0
 
-func route_label(index: int) -> String:
-	return "C ball" if index == 3 and back_row_right() else TARGETS[index]
+func apply_camera() -> void:
+	var pivot := Vector3(0,1.35,1.0)
+	var angle := deg_to_rad(elevation)
+	camera.position = pivot+Vector3(sin(yaw)*cos(angle),sin(angle),-cos(yaw)*cos(angle))*distance
+	camera.position.x = clampf(camera.position.x,-10.8,10.8)
+	camera.position.y = minf(camera.position.y,8.2)
+	camera.position.z = clampf(camera.position.z,-10.3,14.0)
+	camera.look_at(pivot)
 
-func back_row_right() -> bool:
-	return rep%2 == 1
-
-func pin(index: int) -> Vector3:
-	var point: Vector3 = PINS[index]
-	if index == 3 and back_row_right(): point.z = 0.85
-	return point
+func build_settings() -> void:
+	settings.title = "Practice settings"
+	settings.size = Vector2i(360,340)
+	settings.exclusive = true
+	settings.transient = true
+	settings.visible = false
+	add_child(settings)
+	settings.close_requested.connect(settings.hide)
+	settings.window_input.connect(func(e):
+		if e is InputEventJoypadButton and e.pressed and e.button_index == JOY_BUTTON_START: settings.hide())
+	var column := VBoxContainer.new()
+	settings.add_child(column)
+	column.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT,Control.PRESET_MODE_MINSIZE,16)
+	for field in [["Camera orbit",-145,145,0],["Elevation",12,56,27],["Distance",6,15,12],["Master volume",0,100,80]]:
+		var key := str(field[0])
+		var label := Label.new()
+		label.text = key
+		column.add_child(label)
+		var slider := HSlider.new()
+		slider.min_value = field[1]
+		slider.max_value = field[2]
+		var update := func(value: float):
+			match key:
+				"Camera orbit": yaw = deg_to_rad(value)
+				"Elevation": elevation = value
+				"Distance": distance = value
+				"Master volume": AudioServer.set_bus_volume_db(0,linear_to_db(value/100))
+			apply_camera()
+			StorySession.game_options.set_value("tryout_camera",key,value)
+			StorySession.save_options()
+		slider.value = db_to_linear(AudioServer.get_bus_volume_db(0))*100 if key=="Master volume" else StorySession.game_options.get_value("tryout_camera",key,field[3])
+		match key:
+			"Camera orbit": yaw = deg_to_rad(slider.value)
+			"Elevation": elevation = slider.value
+			"Distance": distance = slider.value
+		slider.value_changed.connect(update)
+		column.add_child(slider)
+	for caption in ["Continue","Replay demonstration","My Career"]:
+		var item := Button.new()
+		item.text = caption
+		column.add_child(item)
+		item.pressed.connect(func():
+			settings.hide()
+			if caption == "Replay demonstration":
+				skip.hide()
+				finish.hide()
+				demonstration = true
+				demo_index = 0
+				reset_feed()
+			elif caption == "My Career": leave())
+	settings.visibility_changed.connect(func():
+		if settings.visible: column.get_child(8).grab_focus())
 
 func arc(a: Vector3,b: Vector3,t: float,height: float) -> Vector3:
 	var u := clampf(t,0,1)
@@ -197,52 +284,60 @@ func move_setter(delta: float) -> void:
 	setter.play_action("idle" if direction.is_zero_approx() or focus else "run")
 
 func _process(delta: float) -> void:
+	if settings.visible: return
 	clock += delta
 	elapsed += delta
 	if phase == "intro":
 		play_intro(delta)
 		return
 	if phase == "complete": return
-	if phase in ["feed","pass"]: move_setter(delta)
+	if jump.active: jump.step(setter,delta,Vector2.ZERO)
+	elif not demonstration and rep>=16 and phase in ["feed","pass"]: move_setter(delta)
 	var stick := axis(JOY_AXIS_RIGHT_Y)
 	if absf(stick)>0.45 or Input.is_key_pressed(KEY_UP) or Input.is_key_pressed(KEY_DOWN):
 		last_flick = 1 if stick < -0.45 or Input.is_key_pressed(KEY_UP) else 2
 		flick_at = clock
 	match phase:
 		"feed":
-			ball.position = arc(Vector3(-1,2.5,5.8),passer.position+Vector3.UP*1.15,elapsed/1.15,0.75)
-			if elapsed >= 1.15:
-				passer.play_action("forearm")
-				contact_sound.play()
+			setter.animator.advance(0.0)
+			var toss := smoothstep(0.35,0.95,elapsed)
+			ball.position = coach.position+coach.basis.z*0.35+Vector3.UP*lerpf(1.12,1.8,toss)
+			Hands.apply(coach,ball.position,0.85)
+			if elapsed>=0.95:
 				source = ball.position
 				begin("pass")
 		"pass":
-			ball.position = arc(source,catch_point,elapsed/1.85,1.35)
-			var callout := "%s · %s" % [route_label(rep/6),TEMPOS[(rep%6)/2]]
-			var timing := "Move to the ring" if elapsed<1.15 else ("Hold the target" if elapsed<1.66 else "Release")
-			message.text = "%s    /    %s" % [callout,timing]
-			if held >= 0: Hands.apply(setter,ball.position,clampf((elapsed-1.3)*2,0,1))
-			if elapsed>1.85: ball.position.y -= (elapsed-1.85)*4.0
-			if elapsed > 2.13: miss("The pass landed. Move under it and release at contact.")
+			ball.position = arc(source,catch_point,elapsed/CONTACT,1.32)
+			if elapsed>CONTACT: ball.position.y -= (elapsed-CONTACT)*3.8
+			if demonstration and held<0 and elapsed>=0.85:
+				held = called()
+				pressed_at = elapsed
+			if held>=0:
+				meter.value = clampf((elapsed-pressed_at)/0.65,0,1)*100
+				Hands.apply(setter,ball.position,smoothstep(0.8,1.55,elapsed))
+			if demonstration and elapsed>=CONTACT: release(called())
+			elif elapsed>CONTACT+0.25: miss("The toss dropped. Hold the target, then release at contact.")
 		"set":
 			var t := clampf(elapsed/flight_time,0,1)
-			ball.position = arc(source,pin(target),t,APEX[tempo])
-			var hitter := hitters[target]
-			var approach := pin(target)
-			approach.y = 0.04
-			var runup: Vector3 = STARTS[target]
-			if target == 3 and back_row_right(): runup.z = -1.8
-			hitter.position = runup.lerp(approach,smoothstep(0.0,0.92,t))
-			hitter.position.y += sin(clampf((t-0.68)/0.60,0,1)*PI)*0.66
+			ball.position = arc(source,endpoint,t,APEX[tempo])
+			if elapsed<0.22: Hands.apply(setter,source,1.0-elapsed/0.22,(endpoint-source).normalized()*0.22,0.0,0.3,false,Vector3.ZERO,1.0,endpoint-source,0.5,true)
 			if t>=1:
-				if success:
+				if endpoint.distance_to(PINS[target])<targets[target].mouth_radius-0.10: targets[target].impact()
+				if success and not demonstration:
 					if not CareerSession.credit(rep): return
 					rep += 1
 				begin("result")
 				message.text = feedback
 		"result":
-			if elapsed>1.15:
-				if rep>=24: complete()
+			if success:
+				ball.position = endpoint-Vector3.UP*minf(targets[target].depth-0.08,elapsed*3.1)
+			if elapsed>1.0:
+				if demonstration:
+					demo_index += 1
+					if demo_index==4:
+						demonstration = false
+						if CareerSession.stage()=="intro": CareerSession.checkpoint("tutorial",0)
+				if rep>=32: complete()
 				else: reset_feed()
 
 func play_intro(delta: float) -> void:
@@ -261,9 +356,10 @@ func play_intro(delta: float) -> void:
 	if skip_time>=1 or elapsed>=12.6:
 		if CareerSession.checkpoint("tutorial",0):
 			skip.hide()
-			reset_feed()
+			start_practice()
 
 func miss(reason: String) -> void:
+	success = false
 	begin("result")
 	message.text = reason
 
@@ -272,18 +368,27 @@ func release(index: int) -> void:
 	held = -1
 	var skill := float(CareerSession.profile().get("Hand setting",40))/100
 	var gap := Vector2(setter.position.x-catch_point.x,setter.position.z-catch_point.z).length()
-	if absf(elapsed-1.85)>0.16+0.12*skill or gap>0.72+0.36*skill:
-		miss("Missed contact. Move under the pass, then release.")
-		return
+	var airborne := setter.position.y-BASE.y
+	if not demonstration:
+		if jump_rep() and airborne<0.20:
+			miss("Jump set requested. Click R3 before contact.")
+			return
+		if not jump_rep() and airborne>0.12:
+			miss("Stay planted for this set.")
+			return
+		if elapsed-pressed_at<0.12 or absf(elapsed-CONTACT)>0.20 or gap>0.72+0.36*skill:
+			miss("Missed contact. Hold the target and release above your forehead.")
+			return
 	target = index
 	tempo = last_flick if clock-flick_at<0.35 else 0
 	source = ball.position
 	flight_time = DURATION[tempo]
-	success = target==rep/6 and tempo==(rep%6)/2
-	feedback = "On target.  %s · %s" % [route_label(target),TEMPOS[tempo]] if success else "You set %s · %s. Try the called ball again." % [route_label(target),TEMPOS[tempo]]
+	var error := 0.0 if demonstration else (elapsed-CONTACT)*(3.6-skill)+gap*0.22
+	endpoint = PINS[target]+Vector3(error,0,error*0.4)
+	success = target==called() and endpoint.distance_to(PINS[target])<targets[target].mouth_radius-0.10
+	feedback = TARGETS[target]+"   /   Target made" if success else "Missed the called target. Try it again."
 	contact_sound.play()
-	Hands.apply(setter,source,1.0,pin(target)-source)
-	hitters[target].play_action("run")
+	Hands.apply(setter,source,1.0,endpoint-source)
 	begin("set")
 
 func complete() -> void:
@@ -302,13 +407,23 @@ func complete() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.echo: return
-	if event is InputEventKey and event.keycode == KEY_ESCAPE and event.pressed:
-		leave()
+	if settings.visible: return
+	if (event is InputEventKey and event.keycode==KEY_ESCAPE or event is InputEventJoypadButton and event.button_index==JOY_BUTTON_START) and event.is_pressed():
+		settings.popup_centered()
+		get_viewport().set_input_as_handled()
+		return
+	if demonstration: return
+	if (event is InputEventJoypadButton and event.button_index==JOY_BUTTON_RIGHT_STICK or event is InputEventKey and event.keycode==KEY_SPACE) and phase=="pass":
+		if event.is_pressed(): jump.begin_set_jump(setter,0.22,0.55)
+		else: jump.release()
+		get_viewport().set_input_as_handled()
 		return
 	var index := -1
 	if event is InputEventJoypadButton: index = BUTTONS.find(event.button_index)
 	elif event is InputEventKey: index = KEYS.find(event.keycode)
 	if index < 0 or phase != "pass": return
-	if event.is_pressed(): held = index
+	if event.is_pressed():
+		held = index
+		pressed_at = elapsed
 	else: release(index)
 	get_viewport().set_input_as_handled()
