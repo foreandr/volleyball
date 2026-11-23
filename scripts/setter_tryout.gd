@@ -14,6 +14,13 @@ const CONTACT := 1.65
 const DURATION := [1.05,1.65,0.68]
 const APEX := [1.1,2.5,0.32]
 const LINES := ["Welcome to the team, %s. I’m Coach Ellis.","You’re trying out at setter. Watch the four targets. I’ll toss the first ones right to you.","Two to each spot. First stay planted, then jump set. After that, I’ll make you move."]
+const TOSS_SPOTS := [Vector3(-2.5,0.04,-1.2),Vector3(2.8,0.04,-1.8),Vector3(2.7,0.04,2.45),Vector3(-2.9,0.04,2.4)]
+var coach_motion := preload("res://scripts/tryout_coach.gd").new()
+var station := -1
+var coach_goal := Vector3.ZERO
+var focused := false
+var active_pad := -1
+var floor_speed := 0.0
 var phase := ""
 var elapsed := 0.0
 var clock := 0.0
@@ -61,6 +68,7 @@ func athlete(at: Vector3,color: String) -> Node3D:
 	actor.team_color = Color(color)
 	actor.position = at
 	world.add_child(actor)
+	actor.animator.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
 	actor.get_node("DirectionArrows").hide()
 	return actor
 
@@ -78,6 +86,7 @@ func _ready() -> void:
 	setter.play_action("idle")
 	coach = athlete(Vector3(-2.5,0.04,-1.2),"48574d")
 	coach.play_action("idle")
+	coach_motion.dress(coach)
 	for i in 4:
 		var basket := preload("res://scripts/tryout_target.gd").new()
 		basket.position = PINS[i]
@@ -89,8 +98,16 @@ func _ready() -> void:
 	mesh.radius = 0.105
 	mesh.height = 0.21
 	ball.mesh = mesh
-	var leather := StandardMaterial3D.new()
-	leather.albedo_color = Color("ffeaa9")
+	var leather := ShaderMaterial.new()
+	var cover := Shader.new()
+	cover.code = """shader_type spatial;
+	void fragment() {
+		vec3 n = normalize(vec3(sin(UV.y*3.14159)*cos(UV.x*6.28318), cos(UV.y*3.14159), sin(UV.y*3.14159)*sin(UV.x*6.28318)));
+		float stripe = fract(UV.x*3.0 + n.y*0.40);
+		ALBEDO = mix(vec3(0.91,0.83,0.64),vec3(0.08,0.22,0.35),smoothstep(0.62,0.64,stripe));
+		ROUGHNESS = 0.53;
+	}"""
+	leather.shader = cover
 	ball.material_override = leather
 	world.add_child(ball)
 	contact_sound.stream = preload("res://assets/audio/set_touch.wav")
@@ -157,6 +174,7 @@ func build_hud() -> void:
 	skip.hide()
 
 func begin(next: String) -> void:
+	trace("phase",{"next":next})
 	phase = next
 	elapsed = 0
 	held = -1
@@ -165,7 +183,7 @@ func leave() -> void:
 	get_tree().change_scene_to_file("res://scenes/story.tscn")
 
 func start_practice() -> void:
-	demonstration = rep == 0
+	demonstration = false
 	demo_index = 0
 	reset_feed()
 
@@ -176,11 +194,14 @@ func called() -> int:
 	return ORDER[demo_index if demonstration else (rep%8)/2]
 
 func reset_feed() -> void:
-	begin("feed")
+	begin("walk")
+	station = (station+1)%TOSS_SPOTS.size()
+	coach_goal = TOSS_SPOTS[station]
 	jump.active = false
 	last_flick = 0
 	flick_at = -10
 	setter.position = BASE
+	setter.rotation.y = atan2(coach.position.x-BASE.x,coach.position.z-BASE.z)
 	setter.play_action("idle")
 	catch_point = BASE + Vector3.UP*(1.93*setter.height_cm/180.0 + (0.52 if jump_rep() else 0.0))
 	if not demonstration and rep>=16: catch_point.z += 1.25 if rep%2==0 else -1.25
@@ -263,7 +284,7 @@ func arc(a: Vector3,b: Vector3,t: float,height: float) -> Vector3:
 
 func pad() -> int:
 	var pads := Input.get_connected_joypads()
-	return -1 if pads.is_empty() else pads[0]
+	return active_pad if active_pad in pads else (-1 if pads.is_empty() else pads[0])
 
 func axis(which: JoyAxis) -> float:
 	var id := pad()
@@ -273,18 +294,24 @@ func move_setter(delta: float) -> void:
 	var motion := Vector2(axis(JOY_AXIS_LEFT_X),axis(JOY_AXIS_LEFT_Y))
 	motion += Vector2(int(Input.is_key_pressed(KEY_D))-int(Input.is_key_pressed(KEY_A)),int(Input.is_key_pressed(KEY_S))-int(Input.is_key_pressed(KEY_W)))
 	if motion.length()<0.16: motion = Vector2.ZERO
-	var direction := Vector3(-motion.x,0,-motion.y).limit_length(1)
+	var direction := Vector3(-motion.x,0,-motion.y).limit_length(1) if rep>=16 else Vector3.ZERO
 	var focus := axis(JOY_AXIS_TRIGGER_LEFT)>0.25 or Input.is_key_pressed(KEY_CTRL)
 	var sprint := axis(JOY_AXIS_TRIGGER_RIGHT)>0.25 or Input.is_key_pressed(KEY_SHIFT)
+	if focus!=focused:
+		focused = focus
+		trace("focus",{"active":focus})
+		message.text = ("Focused on ball   /   " if focus else "")+TARGETS[called()]
 	var speed := 2.35 if focus else (6.2 if sprint else 4.3)
 	setter.position = Court.clamp_setter(setter.position+direction*delta*speed,3.65,-4.85)
-	var facing := ball.position-setter.position if focus else direction
+	var facing := ball.position-setter.position if focus else (coach.position-setter.position if phase=="walk" and direction.is_zero_approx() else direction)
 	if Vector2(facing.x,facing.z).length()>0.05:
 		setter.rotation.y = lerp_angle(setter.rotation.y,atan2(facing.x,facing.z),minf(1,delta*14))
 	setter.play_action("idle" if direction.is_zero_approx() or focus else "run")
 
 func _process(delta: float) -> void:
 	if settings.visible: return
+	setter.animator.advance(delta)
+	coach.animator.advance(delta)
 	clock += delta
 	elapsed += delta
 	if phase == "intro":
@@ -292,32 +319,44 @@ func _process(delta: float) -> void:
 		return
 	if phase == "complete": return
 	if jump.active: jump.step(setter,delta,Vector2.ZERO)
-	elif not demonstration and rep>=16 and phase in ["feed","pass"]: move_setter(delta)
+	elif not demonstration: move_setter(delta)
 	var stick := axis(JOY_AXIS_RIGHT_Y)
 	if absf(stick)>0.45 or Input.is_key_pressed(KEY_UP) or Input.is_key_pressed(KEY_DOWN):
 		last_flick = 1 if stick < -0.45 or Input.is_key_pressed(KEY_UP) else 2
 		flick_at = clock
 	match phase:
+		"walk":
+			var step := coach_goal-coach.position
+			if step.length()>0.05:
+				coach.rotation.y = atan2(step.x,step.z)
+				coach.play_action("base/Walk")
+				coach.position = coach.position.move_toward(coach_goal,delta*1.9)
+				ball.position = coach.position+Vector3.UP*1.12+coach.basis.z*0.28
+			else:
+				coach.rotation.y = atan2(catch_point.x-coach.position.x,catch_point.z-coach.position.z)
+				coach.play_action("idle")
+				change_feed_phase("feed")
 		"feed":
 			setter.animator.advance(0.0)
-			var toss := smoothstep(0.35,0.95,elapsed)
-			ball.position = coach.position+coach.basis.z*0.35+Vector3.UP*lerpf(1.12,1.8,toss)
-			Hands.apply(coach,ball.position,0.85)
+			ball.position = coach_motion.toss(coach,clampf(elapsed/0.95,0,1))
 			if elapsed>=0.95:
 				source = ball.position
-				begin("pass")
+				trace("coach_release",{"from":str(source),"to":str(catch_point)})
+				change_feed_phase("pass")
 		"pass":
-			ball.position = arc(source,catch_point,elapsed/CONTACT,1.32)
-			if elapsed>CONTACT: ball.position.y -= (elapsed-CONTACT)*3.8
+			ball.position = source.lerp(catch_point,elapsed/CONTACT)+Vector3.UP*(4.905*elapsed*(CONTACT-elapsed))
+			if elapsed<0.22: coach_motion.toss(coach,1.0)
+			ball.position.y = maxf(0.15,ball.position.y)
 			if demonstration and held<0 and elapsed>=0.85:
 				held = called()
-				pressed_at = elapsed
+				pressed_at = clock
 			if held>=0:
-				meter.value = clampf((elapsed-pressed_at)/0.65,0,1)*100
-				Hands.apply(setter,ball.position,smoothstep(0.8,1.55,elapsed))
+				meter.value = clampf((clock-pressed_at)/0.65,0,1)*100
+				Hands.apply(setter,ball.position,0.35+0.65*smoothstep(0.8,1.55,elapsed))
 			if demonstration and elapsed>=CONTACT: release(called())
 			elif elapsed>CONTACT+0.25: miss("The toss dropped. Hold the target, then release at contact.")
 		"set":
+			ball.rotate_x(delta*4.0)
 			var t := clampf(elapsed/flight_time,0,1)
 			ball.position = arc(source,endpoint,t,APEX[tempo])
 			if elapsed<0.22: Hands.apply(setter,source,1.0-elapsed/0.22,(endpoint-source).normalized()*0.22,0.0,0.3,false,Vector3.ZERO,1.0,endpoint-source,0.5,true)
@@ -328,6 +367,13 @@ func _process(delta: float) -> void:
 					rep += 1
 				begin("result")
 				message.text = feedback
+		"drop":
+			floor_speed += 9.81*delta
+			ball.position.y = maxf(0.15,ball.position.y-floor_speed*delta)
+			if ball.position.y<=0.151:
+				begin("ground")
+				trace("floor",{})
+				message.text = feedback+"   •   LB / Enter: next toss"
 		"result":
 			if success:
 				ball.position = endpoint-Vector3.UP*minf(targets[target].depth-0.08,elapsed*3.1)
@@ -338,7 +384,12 @@ func _process(delta: float) -> void:
 						demonstration = false
 						if CareerSession.stage()=="intro": CareerSession.checkpoint("tutorial",0)
 				if rep>=32: complete()
-				else: reset_feed()
+				elif demonstration or demo_index==4:
+					if not demonstration: demo_index = 0
+					reset_feed()
+				else:
+					begin("ground")
+					message.text = feedback+"   •   LB / Enter: next toss"
 
 func play_intro(delta: float) -> void:
 	ball.hide()
@@ -360,11 +411,15 @@ func play_intro(delta: float) -> void:
 
 func miss(reason: String) -> void:
 	success = false
-	begin("result")
+	trace("miss",{"reason":reason})
+	floor_speed = maxf(0.2,9.81*(elapsed-CONTACT/2.0)-(catch_point.y-source.y)/CONTACT)
+	feedback = reason
+	begin("drop")
 	message.text = reason
 
 func release(index: int) -> void:
 	if phase!="pass" or held!=index: return
+	trace("release",{"target":TARGETS[index],"held_s":clock-pressed_at,"timing_error":elapsed-CONTACT,"air_m":setter.position.y-BASE.y})
 	held = -1
 	var skill := float(CareerSession.profile().get("Hand setting",40))/100
 	var gap := Vector2(setter.position.x-catch_point.x,setter.position.z-catch_point.z).length()
@@ -376,7 +431,7 @@ func release(index: int) -> void:
 		if not jump_rep() and airborne>0.12:
 			miss("Stay planted for this set.")
 			return
-		if elapsed-pressed_at<0.12 or absf(elapsed-CONTACT)>0.20 or gap>0.72+0.36*skill:
+		if clock-pressed_at<0.12 or absf(elapsed-CONTACT)>0.20 or gap>0.72+0.36*skill:
 			miss("Missed contact. Hold the target and release above your forehead.")
 			return
 	target = index
@@ -387,6 +442,7 @@ func release(index: int) -> void:
 	endpoint = PINS[target]+Vector3(error,0,error*0.4)
 	success = target==called() and endpoint.distance_to(PINS[target])<targets[target].mouth_radius-0.10
 	feedback = TARGETS[target]+"   /   Target made" if success else "Missed the called target. Try it again."
+	trace("set",{"requested":TARGETS[called()],"actual":TARGETS[target],"made":success,"error_m":error})
 	contact_sound.play()
 	Hands.apply(setter,source,1.0,endpoint-source)
 	begin("set")
@@ -405,25 +461,60 @@ func complete() -> void:
 	finish.show()
 	finish.grab_focus()
 
-func _unhandled_input(event: InputEvent) -> void:
+func trace(kind: String, fields: Dictionary) -> void:
+	fields.merge({"phase":phase,"rep":rep+1,"demo":demonstration,"phase_s":elapsed})
+	InteractionTrace.record(kind,fields)
+
+func change_feed_phase(next: String) -> void:
+	var prepared := held
+	begin(next)
+	held = prepared
+
+func _exit_tree() -> void:
+	coach_motion.dispose()
+
+func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.echo: return
-	if settings.visible: return
+	if settings.visible or get_tree().paused: return
+	if event is InputEventJoypadButton: active_pad = event.device
 	if (event is InputEventKey and event.keycode==KEY_ESCAPE or event is InputEventJoypadButton and event.button_index==JOY_BUTTON_START) and event.is_pressed():
+		trace("pause",{})
 		settings.popup_centered()
 		get_viewport().set_input_as_handled()
 		return
-	if demonstration: return
-	if (event is InputEventJoypadButton and event.button_index==JOY_BUTTON_RIGHT_STICK or event is InputEventKey and event.keycode==KEY_SPACE) and phase=="pass":
-		if event.is_pressed(): jump.begin_set_jump(setter,0.22,0.55)
+	if phase in ["intro","complete"]: return
+	if demonstration:
+		if event is InputEventJoypadButton: trace("input_in_demo",{"id":event.button_index})
+		return
+	if (event is InputEventJoypadButton and event.button_index==JOY_BUTTON_LEFT_SHOULDER or event is InputEventKey and event.keycode==KEY_ENTER) and event.is_pressed() and phase=="ground":
+		reset_feed()
+		get_viewport().set_input_as_handled()
+		return
+	if event is InputEventJoypadButton and event.button_index==JOY_BUTTON_RIGHT_STICK or event is InputEventKey and event.keycode==KEY_SPACE:
+		if event.is_pressed():
+			trace("jump_request",{"accepted":not jump.active})
+			if not jump.active: jump.begin_set_jump(setter,0.22,0.55)
+			else: message.text = "Landing before next jump"
 		else: jump.release()
 		get_viewport().set_input_as_handled()
 		return
 	var index := -1
 	if event is InputEventJoypadButton: index = BUTTONS.find(event.button_index)
 	elif event is InputEventKey: index = KEYS.find(event.keycode)
-	if index < 0 or phase != "pass": return
-	if event.is_pressed():
+	if index<0: return
+	if phase not in ["walk","feed","pass"]:
+		trace("target_unavailable",{"target":TARGETS[index],"down":event.is_pressed()})
+		if phase=="ground": message.text = "LB or Enter calls the next toss"
+	elif event.is_pressed():
 		held = index
-		pressed_at = elapsed
-	else: release(index)
+		pressed_at = clock
+		message.text = "Preparing   /   "+TARGETS[index]
+		trace("prepare",{"target":TARGETS[index]})
+	elif held==index:
+		if phase=="pass": release(index)
+		else:
+			trace("released_before_toss",{"target":TARGETS[index]})
+			held = -1
+			message.text = "Released before the toss"
+	else: trace("unmatched_release",{"target":TARGETS[index]})
 	get_viewport().set_input_as_handled()
