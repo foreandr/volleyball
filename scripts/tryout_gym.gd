@@ -4,6 +4,7 @@ func _ready() -> void:
 	super()
 	var maple := ShaderMaterial.new()
 	maple.shader = preload("res://assets/gym/maple.gdshader")
+	maple.set_shader_parameter("crest",preload("res://assets/gym/falcon.svg"))
 	get_node("Runoff").material_override = maple
 	for i in 30: get_node("Floorboard%d" % i).material_override = maple
 	var block := ShaderMaterial.new()
@@ -52,6 +53,15 @@ func _ready() -> void:
 		box("Door rail",Vector3(1.8,0.06,0.12),Vector3(x,1.1,14.30),steel)
 		wall_text("EXIT",Vector3(x,2.67,14.32),0.003,Color.PALE_GREEN)
 	build_gallery(steel,paint)
+	for side in [-1,1]:
+		var crest := Sprite3D.new()
+		crest.texture = preload("res://assets/gym/falcon.svg")
+		crest.pixel_size = .0065
+		crest.position = Vector3(side*11.02,4.35,2.1)
+		crest.rotation.y = -side*PI*.5
+		crest.shaded = true
+		add_child(crest)
+	wall_text("F A L C O N S",Vector3(0,7.47,14.45),.010,Color("264939"))
 	var probe := ReflectionProbe.new()
 	probe.position = Vector3(0,3,2)
 	probe.size = Vector3(23,11,28)
@@ -115,6 +125,25 @@ static func light_gym(world: Node3D) -> void:
 	env.ambient_light_color = Color("d0d8df")
 	env.ambient_light_energy = .38
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	var cinematic := RenderingServer.get_current_rendering_method()=="forward_plus"
+	if cinematic:
+		env.tonemap_exposure = 0.91
+		env.ssao_enabled = true
+		env.ssao_radius = 0.85
+		env.ssao_intensity = 1.5
+		env.ssil_enabled = true
+		env.ssil_radius = 2.2
+		env.ssil_intensity = 0.7
+		env.ssr_enabled = true
+		env.ssr_max_steps = 64
+		env.glow_enabled = true
+		env.glow_intensity = 0.38
+		env.glow_strength = 0.7
+		env.volumetric_fog_enabled = true
+		env.volumetric_fog_density = 0.0025
+		env.volumetric_fog_length = 32
+		env.volumetric_fog_anisotropy = 0.55
+		env.volumetric_fog_albedo = Color("ecdbc3")
 	var atmosphere := WorldEnvironment.new()
 	atmosphere.environment = env
 	world.add_child(atmosphere)
@@ -143,6 +172,21 @@ static func light_gym(world: Node3D) -> void:
 	daylight.shadow_enabled = true
 	world.add_child(daylight)
 	daylight.look_at(Vector3(2,0,3))
+
+	if cinematic:
+		for z in [-3.1,3.2,9.5]:
+			var sun := SpotLight3D.new()
+			sun.position = Vector3(-10.3,6.7,z)
+			sun.spot_angle = 21
+			sun.spot_range = 23
+			sun.spot_attenuation = 0.25
+			sun.light_color = Color("ffdfaa")
+			sun.light_energy = 2.25
+			sun.light_volumetric_fog_energy = 1.1
+			sun.light_projector = preload("res://assets/gym/window_light.svg")
+			sun.shadow_enabled = true
+			world.add_child(sun)
+			sun.look_at(Vector3(2.5,0.2,z+3.8))
 
 func wall_text(text: String,at: Vector3,scale_: float,color: Color) -> void:
 	var letters := Label3D.new()

@@ -18,6 +18,8 @@ func rod(a: Vector3,b: Vector3,r: float,color: Color) -> void:
 	item.mesh = tube
 	var surface := StandardMaterial3D.new()
 	surface.albedo_color = color
+	surface.metallic = 0.6
+	surface.roughness = 0.35
 	item.material_override = surface
 	item.position = (a+b)/2
 	item.quaternion = Quaternion(Vector3.UP,(b-a).normalized())
@@ -38,10 +40,34 @@ func _ready() -> void:
 			var foot := Vector3(side*mouth_radius,-position.y+0.1,0)
 			rod(foot,Vector3(side*mouth_radius,0,0),0.025,Color.SILVER)
 			rod(foot+Vector3.FORWARD*0.46,foot+Vector3.BACK*0.46,0.035,Color.DIM_GRAY)
+			for z in [-0.39,0.39]:
+				rod(foot+Vector3(-.032,-.005,z),foot+Vector3(.032,-.005,z),.067,Color("20272b"))
+			rod(foot+Vector3.FORWARD*.40,foot+Vector3.UP*.48,.014,Color.SILVER)
+	else:
+		var base := CylinderMesh.new()
+		base.top_radius = mouth_radius*.81
+		base.bottom_radius = base.top_radius
+		base.height = .022
+		var bottom := MeshInstance3D.new()
+		bottom.mesh = base
+		bottom.material_override = paint
+		bottom.position.y = -depth
+		add_child(bottom)
+		for y in [-.035,-.075,-depth+.035]:
+			var rib := MeshInstance3D.new()
+			var band := TorusMesh.new()
+			var r := mouth_radius*lerpf(1,.8,-y/depth)
+			band.outer_radius = r+.012
+			band.inner_radius = r-.003
+			rib.mesh = band
+			rib.material_override = paint
+			rib.position.y = y
+			add_child(rib)
 	var basket := MeshInstance3D.new()
 	basket.mesh = mesh
-	cord.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	cord.albedo_color = Color("eee5ca") if is_net else Color("ae633e")
+	cord.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED if is_net else BaseMaterial3D.SHADING_MODE_PER_PIXEL
+	cord.roughness = .42
+	cord.albedo_color = Color("eee5ca") if is_net else Color("bb6034")
 	cord.cull_mode = BaseMaterial3D.CULL_DISABLED
 	add_child(basket)
 	rebuild()
@@ -64,7 +90,9 @@ func rebuild() -> void:
 			if is_net:
 				for point in [a,c,b,c]: mesh.surface_add_vertex(point)
 			else:
-				for point in [a,b,c,b,d,c]: mesh.surface_add_vertex(point)
+				for point in [a,b,c,b,d,c]:
+					mesh.surface_set_normal(Vector3(point.x,-0.12,point.z).normalized())
+					mesh.surface_add_vertex(point)
 	mesh.surface_end()
 
 func impact() -> void:

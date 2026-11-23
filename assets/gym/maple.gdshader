@@ -1,4 +1,5 @@
 shader_type spatial;
+uniform sampler2D crest : source_color,filter_linear_mipmap_anisotropic,repeat_disable;
 varying vec3 court;
 void vertex(){court=(MODEL_MATRIX*vec4(VERTEX,1.0)).xyz;}
 float hash(vec2 p){return fract(sin(dot(p,vec2(15.31,83.7)))*4375.2);}
@@ -17,7 +18,18 @@ void fragment(){
 	float edge=min(min(q.x,1.-q.x)*.095,min(q.y,1.-q.y)*1.68);
 	float joint=1.-smoothstep(0.,max(.0015,fwidth(edge)),edge);
 	ALBEDO=maple*(1.-0.17*joint);
-	ROUGHNESS=.34+grain*.06;
+	// Screen-printed school crest and perimeter paint sit beneath the varnish.
+	vec2 mark_uv=vec2(.5-p.x/3.6,.5+(p.y-6.25)/3.6);
+	if(all(greaterThanEqual(mark_uv,vec2(0.))) && all(lessThanEqual(mark_uv,vec2(1.)))){
+		vec4 mark=texture(crest,mark_uv);
+		ALBEDO=mix(ALBEDO,mark.rgb,mark.a*.91);
+	}
+	vec2 bounds=abs(p-vec2(0.,4.))-vec2(4.5,9.);
+	float outer=max(bounds.x,bounds.y);
+	float band=smoothstep(.04,.06,outer)*(1.-smoothstep(.43,.45,outer));
+	ALBEDO=mix(ALBEDO,vec3(.038,.128,.10)*(1.+grain*.1),band);
+	float scuff=noise2(p*vec2(8.,85.))*noise2(p*1.8);
+	ROUGHNESS=.28+grain*.05+.17*smoothstep(.49,.72,scuff);
 	SPECULAR=.63;
 	CLEARCOAT=.38;
 	CLEARCOAT_ROUGHNESS=.2;
