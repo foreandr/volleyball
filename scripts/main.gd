@@ -40,7 +40,7 @@ func go(scene: String) -> void:
 
 func show_home() -> void:
 	page("VOLLEYBALL","Home")
-	add_menu_button(column,"Career","Career",func(): go("story"))
+	add_menu_button(column,"Career","My Career",func(): go("story"))
 	add_menu_button(column,"Play","Play",show_play).grab_focus()
 	add_menu_button(column,"Create","Create player",func(): go("create"))
 	add_menu_button(column,"Training","Training camp",func(): go("drills"))
@@ -68,6 +68,9 @@ func show_roster() -> void:
 	var profile_source = preload("res://scripts/player_profile.gd")
 	if roster_pool.is_empty():
 		roster_pool.append(profile_source.load_profile())
+		if CareerSession.data.has_section("athletes"):
+			for id in CareerSession.data.get_section_keys("athletes"):
+				roster_pool.append(CareerSession.data.get_value("athletes",id))
 		for i in 48: roster_pool.append(profile_source.generate())
 	StorySession.offline_roster.clear()
 	var teams := HBoxContainer.new()

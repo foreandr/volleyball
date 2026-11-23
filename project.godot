@@ -19,3 +19,4 @@ renderer/rendering_method.mobile="gl_compatibility"
 [autoload]
 StorySession="*res://scripts/story_session.gd"
 MenuPresentation="*res://scripts/menu_presentation.gd"
+CareerSession="*res://scripts/career_session.gd"

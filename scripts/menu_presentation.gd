@@ -30,7 +30,7 @@ func scene_entered() -> void:
 		scene.theme = skin
 		reveal(scene)
 		sweep()
-		if scene.scene_file_path != "res://scenes/story_animations.tscn" and not is_instance_valid(scene.get("setting_stage")):
+		if scene.scene_file_path not in ["res://scenes/story_animations.tscn","res://scenes/setter_tryout.tscn"] and not is_instance_valid(scene.get("setting_stage")):
 			set_music(true)
 
 func set_music(in_menu: bool) -> void:

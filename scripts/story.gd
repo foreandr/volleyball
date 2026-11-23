@@ -1,12 +1,17 @@
 extends Control
+var screen := ""
 var column: VBoxContainer
 
 func _ready() -> void:
 	column = VBoxContainer.new()
 	MenuPresentation.mount_menu(self,column)
-	show_home()
+	if CareerSession.enter_origin:
+		CareerSession.enter_origin = false
+		origin()
+	else: show_home()
 
 func clear_menu(title: String) -> void:
+	screen = title
 	for child in column.get_children():
 		column.remove_child(child)
 		child.queue_free()
@@ -22,14 +27,66 @@ func add_button(text: String, action: Callable) -> Button:
 	return result
 
 func show_home() -> void:
-	clear_menu("CAREER")
-	var resume := add_button("Continue",func(): StorySession.load_story(StorySession.last_id()))
-	resume.disabled = StorySession.last_id().is_empty()
-	var new_story := add_button("New",StorySession.begin_new)
-	var load_button := add_button("Load",show_load)
-	load_button.disabled = StorySession.saved_stories().is_empty()
+	clear_menu("MY CAREER")
+	if not CareerSession.athlete_id.is_empty():
+		add_button("Continue  /  "+str(CareerSession.profile().name),resume).grab_focus()
+		add_button("Player development",development)
+	var create := add_button("Create athlete",func():
+		CareerSession.creating = true
+		get_tree().change_scene_to_file("res://scenes/create.tscn"))
+	if CareerSession.athlete_id.is_empty(): create.grab_focus()
+	if CareerSession.data.has_section("athletes"): add_button("Select athlete",choose_athlete)
+	if not StorySession.saved_stories().is_empty(): add_button("Legacy careers",show_load)
 	add_button("Back",open_menu)
-	new_story.grab_focus()
+
+func development() -> void:
+	clear_menu("PLAYER DEVELOPMENT")
+	var id := CareerSession.athlete_id
+	var points := int(CareerSession.data.get_value("points",id,0))
+	var info := Label.new()
+	var badges: Array = CareerSession.data.get_value("badges",id,[])
+	info.text = "%d upgrade points   ·   %s" % [points,"No badges yet" if badges.is_empty() else ", ".join(badges)]
+	column.add_child(info)
+	for rating in CareerSession.Profile.RATINGS:
+		var athlete := CareerSession.profile()
+		var value := int(athlete[rating])
+		var upgrade := add_button("%s   %d" % [rating,value],func():
+			athlete[rating] = value+1
+			CareerSession.data.set_value("athletes",id,athlete)
+			CareerSession.data.set_value("points",id,points-1)
+			CareerSession.persist()
+			development())
+		upgrade.disabled = points<=0 or value>=100
+	add_button("Back",show_home)
+
+func choose_athlete() -> void:
+	clear_menu("ATHLETES")
+	for id in CareerSession.data.get_section_keys("athletes"):
+		add_button(CareerSession.data.get_value("athletes",id).name,func():
+			CareerSession.select(id)
+			resume())
+	add_button("Back",show_home)
+
+func resume() -> void:
+	match CareerSession.stage():
+		"origin": origin()
+		"position": position_menu()
+		_: get_tree().change_scene_to_file(CareerSession.CHAPTER)
+
+func origin() -> void:
+	clear_menu("CHOOSE YOUR ORIGIN")
+	add_button("Indoor",func():
+		if CareerSession.checkpoint("position",0): position_menu()).grab_focus()
+	add_button("Beach",func(): pass).disabled = true
+	add_button("Back",show_home)
+
+func position_menu() -> void:
+	clear_menu("INDOOR  /  POSITION")
+	add_button("Setter",func():
+		if CareerSession.checkpoint("intro",0): resume()).grab_focus()
+	for role in ["P1","P2","Right side","M1","M2","Libero"]:
+		add_button(role,func(): pass).disabled = true
+	add_button("Back",origin)
 
 func show_load() -> void:
 	clear_menu("LOAD CAREER")
@@ -60,5 +117,6 @@ func open_menu() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
-		if column.has_node("Continue"): open_menu()
+		if screen == "MY CAREER": open_menu()
+		elif screen == "INDOOR  /  POSITION": origin()
 		else: show_home()

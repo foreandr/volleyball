@@ -1,6 +1,7 @@
 extends Control
 const Profile = preload("res://scripts/player_profile.gd")
 var profile: Dictionary = Profile.load_profile()
+var budget_label: Label
 var name_field: LineEdit
 
 var hand_field: OptionButton
@@ -132,6 +133,7 @@ func screen_subtitle() -> String:
 	return ""
 
 func initial_profile() -> Dictionary:
+	if CareerSession.creating: return CareerSession.base_profile()
 	return StorySession.draft.duplicate(true) if StorySession.creating_story else Profile.load_profile()
 
 func build_controls(controls: VBoxContainer) -> void:
@@ -147,8 +149,12 @@ func build_controls(controls: VBoxContainer) -> void:
 	add_attribute(controls,"Height (inches)","height_cm",60,84,profile.height_cm / 2.54)
 	add_attribute(controls,"Vertical jump (inches)","vertical_in",10,60,profile.vertical_in)
 	add_attribute(controls,"Wingspan (inches)","wingspan_in",48,96,profile.wingspan_in)
+	if CareerSession.creating:
+		budget_label = Label.new()
+		controls.add_child(budget_label)
+		budget_label.text = "100 attribute points available"
 	for rating in Profile.RATINGS:
-		add_attribute(controls,rating,rating,0,100,profile[rating])
+		add_attribute(controls,rating,rating,40 if CareerSession.creating else 0,100,profile[rating])
 	controls.add_child(label("Handedness",18))
 	hand_field = OptionButton.new()
 	hand_field.name = "PlayerHandedness"
@@ -158,10 +164,11 @@ func build_controls(controls: VBoxContainer) -> void:
 	hand_field.custom_minimum_size.y = 42
 	hand_field.item_selected.connect(func(index): profile.handedness = "Left" if index == 1 else "Right"; update_profile())
 	controls.add_child(hand_field)
-	controls.add_child(button("Generate player",func():
-		profile = Profile.generate()
-		update_profile()
-		get_tree().reload_current_scene()))
+	if not CareerSession.creating:
+		controls.add_child(button("Generate player",func():
+			profile = Profile.generate()
+			update_profile()
+			get_tree().reload_current_scene()))
 	var space := Control.new()
 	space.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	controls.add_child(space)
@@ -180,6 +187,9 @@ func add_attribute(parent: VBoxContainer, caption: String, key: String, minimum:
 	slider.value = initial
 	parent.add_child(slider)
 	slider.value_changed.connect(func(value: float):
+		if CareerSession.creating and key in Profile.RATINGS:
+			value = minf(value,float(profile[key])+100-CareerSession.spent(profile))
+			slider.set_value_no_signal(value)
 		heading.text = "%s   %d" % [caption,int(value)]
 		profile[key] = value*2.54 if key == "height_cm" else value
 		update_profile())
@@ -187,6 +197,12 @@ func add_attribute(parent: VBoxContainer, caption: String, key: String, minimum:
 func save_player() -> void:
 	profile.name = name_field.text
 	profile.handedness = "Left" if hand_field.selected == 1 else "Right"
+	if CareerSession.creating:
+		if CareerSession.create_athlete(profile):
+			CareerSession.enter_origin = true
+			CareerSession.creating = false
+			get_tree().change_scene_to_file("res://scenes/story.tscn")
+		return
 	if StorySession.creating_story:
 		if StorySession.save_new(profile) == OK:
 			get_tree().change_scene_to_file("res://scenes/story_animations.tscn")
@@ -335,12 +351,17 @@ func button(text: String, action: Callable) -> Button:
 	return result
 
 func update_profile() -> void:
-	if StorySession.creating_story: StorySession.draft = Profile.clean(profile)
+	if CareerSession.creating: budget_label.text = "%d attribute points available" % (100-CareerSession.spent(profile))
+	elif StorySession.creating_story: StorySession.draft = Profile.clean(profile)
 	else: Profile.save_profile(profile)
 	if is_instance_valid(save_button): save_button.disabled = profile.name.strip_edges().is_empty()
 	if is_instance_valid(preview_player): preview_player.apply_profile(profile)
 
 func open_menu() -> void:
+	if CareerSession.creating:
+		CareerSession.creating = false
+		get_tree().change_scene_to_file("res://scenes/story.tscn")
+		return
 	if StorySession.creating_story:
 		StorySession.cancel_creation()
 		get_tree().change_scene_to_file("res://scenes/story.tscn")
