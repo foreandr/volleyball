@@ -121,6 +121,20 @@ var preview_hash := 0
 var preview_path := "user://preview_setup.cfg"
 var lab_replay_path := ""
 var open_home_simulation := false
+var offline_size := 2
+var offline_roster: Array[Dictionary] = []
+var kit_colors := [Color("287fda"),Color("d9874e")]
+var pad_bindings := [JOY_BUTTON_A,JOY_BUTTON_X,JOY_BUTTON_Y,JOY_BUTTON_B]
+var game_options := ConfigFile.new()
+const OPTIONS := "user://game_options.cfg"
+
+func save_options() -> void:
+	game_options.set_value("match","buttons",pad_bindings)
+	game_options.set_value("audio","volume_db",AudioServer.get_bus_volume_db(0))
+	game_options.save(OPTIONS)
+
+var open_home_play := false
+var play_launch_consumed := false
 var open_passing_drill := false
 var return_to_drill := ""
 var drill_menu_category := ""
@@ -129,6 +143,9 @@ var iteration_run := preload("res://scripts/iteration_run.gd").new()
 const PREVIEW_FIELDS := ["pass_start","pass_distance","pass_output_angle","incoming_speed","incoming_angle","feed_spot","incoming_spin","spin_rate","float_strength","source_height","feed_fit","receive_direction","receive_distance_tier","ball_tab","pass_destination","pass_apex","destination_fit","preview_camera"]
 
 func _ready() -> void:
+	if game_options.load(OPTIONS) == OK:
+		pad_bindings = game_options.get_value("match","buttons",pad_bindings)
+		AudioServer.set_bus_volume_db(0,game_options.get_value("audio","volume_db",0.0))
 	if DisplayServer.get_name() != "headless":
 		Engine.max_fps = 60
 	match_preferences.load(MATCH_SETTINGS_PATH)

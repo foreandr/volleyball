@@ -7,6 +7,8 @@ const ForwardDive = preload("res://scripts/forward_reception_dive.gd")
 const SideKneeSlide = preload("res://scripts/side_knee_slide.gd")
 const PassRecipes = preload("res://scripts/pass_recipe_library.gd")
 
+var attributes: Dictionary = Profile.clean({})
+var kit_material: StandardMaterial3D
 var pose_author: RefCounted
 @export var team_color := Color("2c8fe5")
 @export var player_number := 1
@@ -51,6 +53,7 @@ func _ready() -> void:
 					var cloth := StandardMaterial3D.new()
 					cloth.albedo_color = team_color if slot == 0 else Color("26333e")
 					if slot == 2: cloth.albedo_color = Color("c5c9cc")
+					if slot == 0: kit_material = cloth
 					cloth.roughness = 0.9
 					cloth.cull_mode = BaseMaterial3D.CULL_DISABLED
 					outfit.set_surface_override_material(slot,cloth)
@@ -96,6 +99,7 @@ func install_custom(resource: Resource, slot := "idle", save := true) -> bool:
 
 func apply_profile(profile: Dictionary) -> void:
 	var values := Profile.clean(profile)
+	attributes = values
 	display_name = values.name
 	set_height_cm(values.height_cm)
 	handedness = values.handedness

@@ -117,7 +117,9 @@ func _ready() -> void:
 	if StorySession.open_home_simulation:
 		StorySession.open_home_simulation = false
 		match_from_home = true
-		start_demo_match.call_deferred()
+		var playable := StorySession.open_home_play
+		StorySession.open_home_play = false
+		start_demo_match.call_deferred(StorySession.offline_size if playable else 2,not playable,not playable)
 	if StorySession.open_passing_drill:
 		StorySession.open_passing_drill = false
 		start_passing_drill.call_deferred()
@@ -235,7 +237,7 @@ func show_categories() -> void:
 func start_passing_drill() -> void:
 	start_demo_match(2,false,true,true,true)
 
-func start_demo_match(team_size := 2, learn_from_demo := true, _cpu_only := true, mirror_blue_right := true, passing := false) -> void:
+func start_demo_match(team_size := 2, learn_from_demo := true, cpu_only := true, mirror_blue_right := true, passing := false) -> void:
 	stop_blocking_practice()
 	stop_serving_session()
 	stop_setting_drill()
@@ -246,7 +248,7 @@ func start_demo_match(team_size := 2, learn_from_demo := true, _cpu_only := true
 	right_panel.hide()
 	angle_control.hide()
 	clear_content()
-	set_title("PASS TO TARGET" if passing else "SIMULATE")
+	set_title(("PLAY %dv%d" % [team_size,team_size]) if not cpu_only else ("PASS TO TARGET" if passing else "SIMULATE"))
 	selected_category = "Demo Match"
 	var board := label("",26)
 	content.add_child(board)
@@ -256,8 +258,10 @@ func start_demo_match(team_size := 2, learn_from_demo := true, _cpu_only := true
 	if learn_from_demo:
 		StorySession.ensure_background_training()
 	demo_match = preload("res://scripts/volleyball_match.gd").new()
-	demo_match.spectator = true
-	if match_from_home:
+	demo_match.spectator = cpu_only
+	if not cpu_only:
+		content.add_child(label("Left stick  Move | RB  Sprint\nRight stick  Aim | Hold and release to receive",16))
+	if match_from_home and cpu_only:
 		demo_match.cpu_serve_override = demo_match.TOPSPIN_SERVE
 	if match_from_home or learn_from_demo:
 		demo_match.win_score = 21
@@ -265,7 +269,7 @@ func start_demo_match(team_size := 2, learn_from_demo := true, _cpu_only := true
 	preview_player.get_parent().add_child(demo_match)
 	demo_match.configure(preview_player,board,status,build_label,team_size,learn_from_demo,mirror_blue_right)
 	demo_match.review_flagged.connect(show_marker_popup)
-	demo_match.set_ball_sound(false)
+	demo_match.set_ball_sound(not cpu_only)
 	if passing: passing_drill = preload("res://scripts/passing_drill.gd").new(demo_match)
 	show_match_tuning()
 	player_controls.locomotion = ""
@@ -1224,7 +1228,9 @@ func _process(delta: float) -> void:
 	pass_timing_cue.hide()
 	if is_instance_valid(demo_match):
 		if passing_drill != null: passing_drill.tick(delta)
-		else: demo_match.tick_match(delta,player_controls)
+		else:
+			if not demo_match.spectator and not demo_match.replay.active: update_match_pad_aim(delta)
+			demo_match.tick_match(delta,player_controls)
 		if passing_drill != null or demo_match.replay.active:
 			move_match_camera(delta)
 		if demo_match.replay.active or match_replay_panel.visible:
@@ -1645,6 +1651,10 @@ func handle_preview_input(event: InputEvent) -> void:
 		if event is InputEventMouseMotion and (event.button_mask & MOUSE_BUTTON_MASK_MIDDLE):
 			orbit_setting_camera(event.relative)
 			preview.accept_event()
+		elif not demo_match.spectator and not demo_match.replay.active and event is InputEventMouseMotion:
+			var point: Vector2 = setup_drag.screen_position(event.position)
+			var hit: Variant = Plane(Vector3.UP,0.055).intersects_ray(preview_camera.project_ray_origin(point),preview_camera.project_ray_normal(point))
+			if hit is Vector3: demo_match.set_aim(hit)
 		elif passing_drill != null and event is InputEventMouse and passing_drill.handle_drag(event,preview_camera,setup_drag.screen_position(event.position)):
 			preview.grab_focus()
 			preview.accept_event()
@@ -2052,7 +2062,46 @@ func open_menu() -> void:
 		if category_buttons.has(previous): category_buttons[previous].grab_focus()
 	else: get_tree().change_scene_to_file("res://scenes/main.tscn")
 
+func update_match_pad_aim(delta: float) -> void:
+	var pads := Input.get_connected_joypads()
+	if pads.is_empty(): return
+	var stick := Vector2(Input.get_joy_axis(pads[0],JOY_AXIS_RIGHT_X),-Input.get_joy_axis(pads[0],JOY_AXIS_RIGHT_Y))
+	if stick.length() < 0.20: return
+	var target: Vector3 = demo_match.aim_point
+	if not target.is_finite(): target = Vector3(0,0.055,8)
+	target.x = clampf(target.x+stick.x*9.0*delta,-4.0,4.0)
+	target.z = clampf(target.z+stick.y*12.0*delta,-1.4,11.4)
+	demo_match.set_aim(target)
+
 func _input(event: InputEvent) -> void:
+	if is_instance_valid(demo_match) and not demo_match.spectator:
+		if event is InputEventJoypadButton:
+			var pads := Input.get_connected_joypads()
+			if pads.is_empty() or event.device != pads[0]: return
+			match StorySession.pad_bindings.find(event.button_index):
+				3:
+					if event.pressed: open_menu()
+				0:
+					if demo_match.replay.active:
+						if event.pressed: toggle_match_replay_playback()
+					else: demo_match.input_space(event.pressed)
+				1, 2:
+					if not demo_match.replay.active:
+						demo_match.receive_prepared = event.pressed
+					if not event.pressed and not demo_match.replay.active:
+						demo_match.input_receive(0 if event.button_index == StorySession.pad_bindings[1] else 1)
+				_: return
+			get_viewport().set_input_as_handled()
+			return
+		if event is InputEventKey and not demo_match.replay.active and not event.echo:
+			match event.keycode:
+				KEY_SPACE: demo_match.input_space(event.pressed)
+				KEY_Q, KEY_E:
+					demo_match.receive_prepared = event.pressed
+					if not event.pressed: demo_match.input_receive(0 if event.keycode == KEY_Q else 1)
+			if event.keycode in [KEY_SPACE,KEY_Q,KEY_E]:
+				get_viewport().set_input_as_handled()
+				return
 	if is_instance_valid(demo_match) and event is InputEventKey:
 		if not event.pressed or event.echo: return
 		match event.keycode:

@@ -183,6 +183,8 @@ var crossed_net := false
 var next_touch_cue := INF
 var touched_tape := false
 var stroke := ""
+var receive_prepared := false
+var roster_active := false
 var team_size := 2
 var win_score := WIN_SCORE
 var auto_rematch := false
@@ -193,7 +195,8 @@ var deep_defenders := [-1,-1]
 var support_lanes := [0.0,0.0]
 
 func configure(actor: Node3D, board: Label, status: Label, build := "", players_per_team := 2, learn_from_demo := false, mirror_blue_right := true) -> void:
-	team_size = clampi(players_per_team,2,3)
+	team_size = clampi(players_per_team,2,6)
+	roster_active = not spectator and StorySession.offline_roster.size() == team_size*2
 	key_until.resize(team_size*2)
 	jump_set_started.resize(team_size*2)
 	animated.resize(team_size*2)
@@ -228,6 +231,10 @@ func configure(actor: Node3D, board: Label, status: Label, build := "", players_
 					avatar.handedness = "Left"
 					avatar.mirror_animation = true
 				frame.add_child(avatar)
+			if roster_active:
+				avatar.apply_profile(StorySession.offline_roster[side*team_size+slot])
+				avatar.team_color = StorySession.kit_colors[side]
+				if avatar.kit_material: avatar.kit_material.albedo_color = avatar.team_color
 			avatar.animator.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
 			avatar.get_node("DirectionArrows").hide()
 			players.append(avatar)
@@ -367,7 +374,7 @@ func server_index() -> int:
 	return service_team*team_size+server_slot[service_team]
 
 func starting_lane(index: int) -> float:
-	var lane: float = [-1.0,1.0,0.0][index%team_size]
+	var lane: float = [-1.0,1.0,0.0,-1.0,1.0,0.0][index%team_size]
 	return -lane if team(index) == 0 else lane
 
 func reset_match() -> void:
@@ -399,6 +406,7 @@ func set_player_blocks(value: bool) -> void:
 	player_blocks = value
 
 func begin_point() -> void:
+	receive_prepared = false
 	cpu_policy.begin_point()
 	review.reset()
 	replay.finish_point()
@@ -418,7 +426,7 @@ func begin_point() -> void:
 	for index in players.size():
 		var actor := players[index]
 		var slot := index%team_size
-		actor.position = Vector3(2.1*starting_lane(index),0.04,0.70 if slot == 2 else -2.6)
+		actor.position = Vector3(2.1*starting_lane(index),0.04,0.70 if slot >= 3 or (team_size == 3 and slot == 2) else -2.6)
 		actor.rotation.y = 0.0
 		actor.model.rotation.y = 0.0
 		actor.play_action("idle",0.0)
@@ -653,7 +661,7 @@ func launch(point: Vector3, motion: Vector3, kind: String, from: int, spin_rate 
 	if kind in ["spike","free","dump"]: receiving_team = 1-team(from)
 	if last_was_block and kind in ["block","free"]:
 		receiving_team = 0 if path_point(flight_end()).z < Net.NET_Z else 1
-	if team_size == 3 and kind == "pass" and touches == 1 and possession_team == receiving_team:
+	if team_size >= 3 and kind == "pass" and touches == 1 and possession_team == receiving_team:
 		rally_setter = nearest_on_team(receiving_team,path_point(arrival(1.92)),from)
 		rally_hitter = -1
 		rally_hitter = hitter_for_set(rally_setter)
@@ -720,7 +728,7 @@ func choose_shot(index: int, contact := Vector3.INF, block_at := Vector3.INF, pr
 			var crossing := lane_at_depth(contact,target,Net.NET_Z)
 			if absf(crossing) > Net.NET_HALF_WIDTH-Net.RADIUS-0.12: continue
 			var defender_gap := (target-backcourt).slide(Vector3.UP).length()
-			if team_size == 3:
+			if team_size >= 3:
 				for index_ in range(defending*team_size,(defending+1)*team_size):
 					if index_ == blocker: continue
 					var cover := frame.to_local(players[index_].global_position)
@@ -1075,6 +1083,11 @@ func aim_receive(index: int) -> void:
 	bump.passing_skill_override = passing_skill
 	bump.setting_skill_override = setting_skill
 	bump.hard_dig = flight_kind in ["spike","dump","block"]
+	if roster_active:
+		var skills: Dictionary = players[index].attributes
+		var technique := "Hand" if bump.hand_setting else "Forearm"
+		bump.passing_skill_override = skills[technique + (" defense" if bump.hard_dig else " reception")]
+		bump.setting_skill_override = skills[technique + " setting"]
 	if is_human(index) and aim_point.is_finite(): destination = frame.to_local(aim_point)
 	elif side == possession_team and (touches >= 2 or (cpu_dump and index == cpu_choice)): destination = choose_shot(index)
 	bump.set_follow_target = set_pin_for(index) if cpu_is_setting(index) and not cpu_dump else Vector3.INF
@@ -1109,6 +1122,11 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 	var transition := defensive_ball()
 	if not can_touch(index): return
 	var side := team(index)
+	if is_human(index) and velocity.length() > 18.0:
+		var pads := Input.get_connected_joypads()
+		if not pads.is_empty():
+			var strength := clampf((velocity.length()-14.0)/20.0,0.1,1.0)
+			Input.start_joy_vibration(pads[0],strength*0.5,strength,0.13)
 	if transition: transition_possession[side] = true
 	var frame := frames[side]
 	var point := frame.to_local(world_point)
@@ -1475,7 +1493,7 @@ func select_receiver() -> void:
 			if cost < best_cost:
 				cpu_choice = index
 				best_cost = cost
-	elif team_size == 3:
+	elif team_size >= 3:
 		cpu_choice = nearest_on_team(side,point)
 	elif point.distance_squared_to(players[first].global_position) <= point.distance_squared_to(players[first+1].global_position):
 		cpu_choice = first
@@ -2402,13 +2420,13 @@ func position_defense(delta: float) -> void:
 		near = 0 if player_blocks else 1
 	elif near < 0:
 		near = first if absf(players[first].position.x-x) < absf(players[first+1].position.x-x) else first+1
-		if team_size == 3:
+		if team_size >= 3:
 			near = nearest_on_team(defense_side,frame.to_global(Vector3(x,0.04,3.42)))
 	defender_assignment[defense_side] = near
 	var depth := -2.15
 	var cover := -x*0.48
 	var deep := near^1
-	if team_size == 3:
+	if team_size >= 3:
 		deep = deep_defenders[defense_side]
 		if deep < 0 or deep == near:
 			deep = nearest_on_team(defense_side,frame.to_global(Vector3(cover,0.04,depth)),near)
@@ -2489,7 +2507,7 @@ func position_defense(delta: float) -> void:
 			start_block(near,timing,dump_ready)
 	if not is_human(deep) and not blocks.has(deep) and not set_jumps[deep].active:
 		move_cpu(deep,frame.to_global(Vector3(clampf(cover,-4.05,4.05),0.04,depth)),delta)
-	if team_size == 3:
+	if team_size >= 3:
 		var support := nearest_on_team(defense_side,frame.to_global(Vector3.ZERO),near,deep)
 		if not is_human(support) and not blocks.has(support) and not set_jumps[support].active:
 			var opposite := lerpf(cover,support_lanes[defense_side],0.78)
@@ -2779,6 +2797,10 @@ func step_match(delta: float, controls: RefCounted) -> void:
 		if is_finite(bump.pressed_at) and (is_finite(bump.pose_started_at) or next_touch_cue-elapsed <= 0.18):
 			controls.sprint_requested = false
 			mobility = minf(mobility,0.45)
+		if receive_prepared:
+			mobility *= 0.30
+		if roster_active:
+			mobility *= lerpf(0.78,1.18,human.attributes.Speed / 100.0)
 		animated[0] = true
 		controls.move_player(motion,delta,false,ball.global_position,mobility,0.15,true,3.42,0.0,0.0,true)
 	advance_attackers(delta)

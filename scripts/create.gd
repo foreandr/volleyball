@@ -2,7 +2,7 @@ extends Control
 const Profile = preload("res://scripts/player_profile.gd")
 var profile: Dictionary = Profile.load_profile()
 var name_field: LineEdit
-var height_field: SpinBox
+
 var hand_field: OptionButton
 var save_button: Button
 var preview: SubViewportContainer
@@ -146,17 +146,12 @@ func build_controls(controls: VBoxContainer) -> void:
 	name_field.custom_minimum_size.y = 42
 	name_field.text_changed.connect(func(value): profile.name = value; update_profile())
 	controls.add_child(name_field)
-	controls.add_child(label("Height",18))
-	height_field = SpinBox.new()
-	height_field.name = "PlayerHeight"
-	height_field.min_value = 120
-	height_field.max_value = 240
-	height_field.step = 1
-	height_field.suffix = "cm"
-	height_field.value = profile.height_cm
-	height_field.custom_minimum_size.y = 42
-	height_field.value_changed.connect(func(value): profile.height_cm = value; update_profile())
-	controls.add_child(height_field)
+	profile = Profile.clean(profile)
+	add_attribute(controls,"Height (inches)","height_cm",60,84,profile.height_cm / 2.54)
+	add_attribute(controls,"Vertical jump (inches)","vertical_in",10,60,profile.vertical_in)
+	add_attribute(controls,"Wingspan (inches)","wingspan_in",48,96,profile.wingspan_in)
+	for rating in Profile.RATINGS:
+		add_attribute(controls,rating,rating,0,100,profile[rating])
 	controls.add_child(label("Handedness",18))
 	hand_field = OptionButton.new()
 	hand_field.name = "PlayerHandedness"
@@ -166,6 +161,10 @@ func build_controls(controls: VBoxContainer) -> void:
 	hand_field.custom_minimum_size.y = 42
 	hand_field.item_selected.connect(func(index): profile.handedness = "Left" if index == 1 else "Right"; update_profile())
 	controls.add_child(hand_field)
+	controls.add_child(button("Generate player",func():
+		profile = Profile.generate()
+		update_profile()
+		get_tree().reload_current_scene()))
 	var space := Control.new()
 	space.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	controls.add_child(space)
@@ -174,10 +173,22 @@ func build_controls(controls: VBoxContainer) -> void:
 	save_button.disabled = profile.name.strip_edges().is_empty()
 	controls.add_child(save_button)
 
+func add_attribute(parent: VBoxContainer, caption: String, key: String, minimum: int, maximum: int, initial: float) -> void:
+	var heading := label("%s   %d" % [caption,roundi(initial)],16)
+	parent.add_child(heading)
+	var slider := HSlider.new()
+	slider.min_value = minimum
+	slider.max_value = maximum
+	slider.step = 1
+	slider.value = initial
+	parent.add_child(slider)
+	slider.value_changed.connect(func(value: float):
+		heading.text = "%s   %d" % [caption,int(value)]
+		profile[key] = value*2.54 if key == "height_cm" else value
+		update_profile())
+
 func save_player() -> void:
-	if height_field.get_line_edit().has_focus(): height_field.apply()
 	profile.name = name_field.text
-	profile.height_cm = height_field.value
 	profile.handedness = "Left" if hand_field.selected == 1 else "Right"
 	if StorySession.creating_story:
 		if StorySession.save_new(profile) == OK:
