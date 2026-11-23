@@ -26,21 +26,6 @@ func toss(actor: Node3D,t: float) -> Vector3:
 
 func dress(actor: Node3D) -> void:
 	var rig: Skeleton3D = actor.skeleton
-	for side in ["l","r"]:
-		var shoulder := SphereMesh.new()
-		shoulder.radius = 0.092
-		shoulder.height = 0.184
-		attach(rig,"upperarm_"+side,shoulder,Color("344d49"))
-		for pair in [["upperarm_","lowerarm_",0.085,0.07],["lowerarm_","hand_",0.07,0.049]]:
-			var name_: String = pair[0]+side
-			var rest := rig.get_bone_rest(rig.find_bone(pair[1]+side)).origin
-			var sleeve := CylinderMesh.new()
-			sleeve.bottom_radius = pair[2]
-			sleeve.top_radius = pair[3]
-			sleeve.height = rest.length()*1.15
-			var garment := attach(rig,name_,sleeve,Color("344d49"))
-			garment.position = rest*0.5
-			garment.quaternion = Quaternion(Vector3.UP,rest.normalized())
 	var head := rig.find_bone("Head")
 	var cap := SphereMesh.new()
 	cap.radius = 0.127

@@ -128,6 +128,12 @@ static func light_gym(world: Node3D) -> void:
 			lamp.light_energy = 1.85
 			lamp.shadow_enabled = true
 			world.add_child(lamp)
+	var bounce := OmniLight3D.new()
+	bounce.position = Vector3(0,3.1,-4)
+	bounce.light_color = Color("fff2df")
+	bounce.light_energy = 0.62
+	bounce.omni_range = 10
+	world.add_child(bounce)
 	var daylight := SpotLight3D.new()
 	daylight.position = Vector3(-10.6,6.5,-1)
 	daylight.light_energy = 4.0

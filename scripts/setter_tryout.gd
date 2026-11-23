@@ -25,6 +25,7 @@ var phase := ""
 var elapsed := 0.0
 var clock := 0.0
 var skip_time := 0.0
+var camera_lead := Vector3.ZERO
 var camera := Camera3D.new()
 var world := Node3D.new()
 var setter: Node3D
@@ -86,6 +87,8 @@ func _ready() -> void:
 	setter.play_action("idle")
 	coach = athlete(Vector3(-2.5,0.04,-1.2),"48574d")
 	coach.play_action("idle")
+	preload("res://scripts/practice_kit.gd").apply(setter,false)
+	preload("res://scripts/practice_kit.gd").apply(coach,true)
 	coach_motion.dress(coach)
 	for i in 4:
 		var basket := preload("res://scripts/tryout_target.gd").new()
@@ -133,7 +136,7 @@ func _ready() -> void:
 func build_hud() -> void:
 	panel.anchor_top = 1
 	panel.anchor_bottom = 1
-	panel.offset_left = 26
+	panel.offset_left = 20
 	panel.offset_bottom = -22
 	panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	panel.add_theme_stylebox_override("panel",MenuPresentation.box(Color("112534ed"),Color("6de4d1"),4))
@@ -143,11 +146,16 @@ func build_hud() -> void:
 	title.add_theme_color_override("font_color",Color("7be3d3"))
 	column.add_child(title)
 	message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	message.custom_minimum_size.x = 620
-	message.add_theme_font_size_override("font_size",22)
+	message.custom_minimum_size.x = 395
+	message.add_theme_font_size_override("font_size",20)
 	column.add_child(message)
+	hint.add_theme_font_size_override("font_size",13)
+	hint.add_theme_color_override("font_color",Color("c1d0ce"))
 	column.add_child(hint)
-	meter.custom_minimum_size = Vector2(180,10)
+	meter.custom_minimum_size = Vector2(180,5)
+	meter.add_theme_stylebox_override("fill",MenuPresentation.box(Color("69dfc7"),Color("69dfc7"),0))
+	meter.add_theme_stylebox_override("background",StyleBoxEmpty.new())
+	meter.hide()
 	meter.show_percentage = false
 	column.add_child(meter)
 	finish.text = "Return to My Career"
@@ -175,6 +183,7 @@ func build_hud() -> void:
 
 func begin(next: String) -> void:
 	trace("phase",{"next":next})
+	meter.visible = next=="pass"
 	phase = next
 	elapsed = 0
 	held = -1
@@ -217,7 +226,7 @@ func reset_feed() -> void:
 	meter.value = 0
 
 func apply_camera() -> void:
-	var pivot := Vector3(0,1.35,1.0)
+	var pivot := Vector3(0,1.35,1.0)+camera_lead
 	var angle := deg_to_rad(elevation)
 	camera.position = pivot+Vector3(sin(yaw)*cos(angle),sin(angle),-cos(yaw)*cos(angle))*distance
 	camera.position.x = clampf(camera.position.x,-10.8,10.8)
@@ -318,6 +327,10 @@ func _process(delta: float) -> void:
 		play_intro(delta)
 		return
 	if phase == "complete": return
+	# Leave the four targets in frame while easing toward the live ball.
+	var lead := (ball.position-Vector3(0,1.6,1.0))*Vector3(0.10,0.08,0.055)
+	camera_lead = camera_lead.lerp(lead.limit_length(0.5),1.0-exp(-3.2*delta))
+	apply_camera()
 	if jump.active: jump.step(setter,delta,Vector2.ZERO)
 	elif not demonstration: move_setter(delta)
 	var stick := axis(JOY_AXIS_RIGHT_Y)
