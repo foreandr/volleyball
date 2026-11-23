@@ -5,6 +5,7 @@ const Player = preload("res://scripts/volleyball_player.gd")
 const Hands = preload("res://scripts/hand_setting_pose.gd")
 const TARGETS := ["Left side","Middle","Pipe","Right side"]
 const TEMPOS := ["Normal","High","Fast"]
+const Xbox = preload("res://scripts/xbox_controls.gd")
 const BUTTONS := [JOY_BUTTON_X,JOY_BUTTON_Y,JOY_BUTTON_A,JOY_BUTTON_B]
 const KEYS := [KEY_J,KEY_I,KEY_K,KEY_L]
 const PINS := [Vector3(3.75,2.15,3.0),Vector3(0.55,0.54,3.3),Vector3(0,0.54,-2.3),Vector3(-3.75,2.15,3.0)]
@@ -48,6 +49,8 @@ var ball := MeshInstance3D.new()
 var panel := PanelContainer.new()
 var title := Label.new()
 var message := Label.new()
+var controls_row := HFlowContainer.new()
+var prompt_phase := ""
 var hint := Label.new()
 var skip := TextureProgressBar.new()
 var finish := Button.new()
@@ -152,6 +155,8 @@ func build_hud() -> void:
 	hint.add_theme_font_size_override("font_size",13)
 	hint.add_theme_color_override("font_color",Color("c1d0ce"))
 	column.add_child(hint)
+	column.add_child(controls_row)
+	controls_row.custom_minimum_size.x = 480
 	meter.custom_minimum_size = Vector2(180,5)
 	meter.add_theme_stylebox_override("fill",MenuPresentation.box(Color("69dfc7"),Color("69dfc7"),0))
 	meter.add_theme_stylebox_override("background",StyleBoxEmpty.new())
@@ -183,10 +188,25 @@ func build_hud() -> void:
 
 func begin(next: String) -> void:
 	trace("phase",{"next":next})
+	update_prompts(next)
 	meter.visible = next=="pass"
 	phase = next
 	elapsed = 0
 	held = -1
+
+func update_prompts(next: String) -> void:
+	var group := next if next in ["intro","complete","ground"] else "practice"
+	if group==prompt_phase: return
+	prompt_phase = group
+	var entries := []
+	match group:
+		"intro": entries = [[JOY_BUTTON_A,"Hold to skip"]]
+		"complete": entries = [[JOY_BUTTON_A,"Continue"]]
+		"ground": entries = [[JOY_BUTTON_LEFT_SHOULDER,"Next toss"],[JOY_BUTTON_START,"Settings"]]
+		_:
+			for i in BUTTONS.size(): entries.append([BUTTONS[i],TARGETS[i]])
+			entries.append_array([[JOY_BUTTON_RIGHT_STICK,"Jump"],["LT","Focus"],["RT","Sprint"],[JOY_BUTTON_START,"Settings"]])
+	Xbox.prompts(controls_row,entries)
 
 func leave() -> void:
 	get_tree().change_scene_to_file("res://scenes/story.tscn")
@@ -222,7 +242,8 @@ func reset_feed() -> void:
 	apply_camera()
 	title.text = "COACH DEMO    /    %d OF 4" % (demo_index+1) if demonstration else "SETTER TRYOUT    /    %02d OF 32    •    %s" % [rep+1,"MOVING" if rep>=16 else "STATIONARY"]
 	message.text = TARGETS[called()]+"    /    "+("Jump set" if jump_rep() else "Standing set")
-	hint.text = "X left  ·  Y middle  ·  A pipe  ·  B right   |   R3 jump   |   Menu settings"
+	hint.text = ""
+	hint.hide()
 	meter.value = 0
 
 func apply_camera() -> void:
@@ -236,14 +257,14 @@ func apply_camera() -> void:
 
 func build_settings() -> void:
 	settings.title = "Practice settings"
-	settings.size = Vector2i(360,340)
+	settings.size = Vector2i(430,440)
 	settings.exclusive = true
 	settings.transient = true
 	settings.visible = false
 	add_child(settings)
 	settings.close_requested.connect(settings.hide)
 	settings.window_input.connect(func(e):
-		if e is InputEventJoypadButton and e.pressed and e.button_index == JOY_BUTTON_START: settings.hide())
+		if e is InputEventJoypadButton and e.pressed and e.button_index == Xbox.physical(JOY_BUTTON_START): settings.hide())
 	var column := VBoxContainer.new()
 	settings.add_child(column)
 	column.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT,Control.PRESET_MODE_MINSIZE,16)
@@ -271,11 +292,25 @@ func build_settings() -> void:
 			"Distance": distance = slider.value
 		slider.value_changed.connect(update)
 		column.add_child(slider)
-	for caption in ["Continue","Replay demonstration","My Career"]:
+	var bindings_scroll := ScrollContainer.new()
+	settings.add_child(bindings_scroll)
+	bindings_scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT,Control.PRESET_MODE_MINSIZE,16)
+	bindings_scroll.follow_focus = true
+	var bindings := VBoxContainer.new()
+	bindings.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bindings_scroll.add_child(bindings)
+	bindings_scroll.hide()
+	for caption in ["Continue","Controller bindings","Replay demonstration","My Career"]:
 		var item := Button.new()
 		item.text = caption
 		column.add_child(item)
 		item.pressed.connect(func():
+			if caption == "Controller bindings":
+				column.hide()
+				bindings_scroll.show()
+				build_bindings(bindings,column,bindings_scroll)
+				bindings.get_child(0).grab_focus()
+				return
 			settings.hide()
 			if caption == "Replay demonstration":
 				skip.hide()
@@ -285,7 +320,30 @@ func build_settings() -> void:
 				reset_feed()
 			elif caption == "My Career": leave())
 	settings.visibility_changed.connect(func():
-		if settings.visible: column.get_child(8).grab_focus())
+		prompt_phase = ""
+		update_prompts(phase)
+		if settings.visible:
+			bindings_scroll.hide()
+			column.show()
+			column.get_child(8).grab_focus())
+
+func build_bindings(bindings: VBoxContainer,column: VBoxContainer,scroll: ScrollContainer) -> void:
+	for child in bindings.get_children():
+		bindings.remove_child(child)
+		child.queue_free()
+	Xbox.settings(bindings,func():
+		prompt_phase = ""
+		update_prompts(phase)
+		build_bindings(bindings,column,scroll))
+	var back := Button.new()
+	back.text = "Back"
+	bindings.add_child(back)
+	back.pressed.connect(func():
+		prompt_phase = ""
+		update_prompts(phase)
+		scroll.hide()
+		column.show()
+		column.get_child(9).grab_focus())
 
 func arc(a: Vector3,b: Vector3,t: float,height: float) -> Vector3:
 	var u := clampf(t,0,1)
@@ -304,8 +362,8 @@ func move_setter(delta: float) -> void:
 	motion += Vector2(int(Input.is_key_pressed(KEY_D))-int(Input.is_key_pressed(KEY_A)),int(Input.is_key_pressed(KEY_S))-int(Input.is_key_pressed(KEY_W)))
 	if motion.length()<0.16: motion = Vector2.ZERO
 	var direction := Vector3(-motion.x,0,-motion.y).limit_length(1) if rep>=16 else Vector3.ZERO
-	var focus := axis(JOY_AXIS_TRIGGER_LEFT)>0.25 or Input.is_key_pressed(KEY_CTRL)
-	var sprint := axis(JOY_AXIS_TRIGGER_RIGHT)>0.25 or Input.is_key_pressed(KEY_SHIFT)
+	var focus := axis(Xbox.trigger(true))>0.25 or Input.is_key_pressed(KEY_CTRL)
+	var sprint := axis(Xbox.trigger(false))>0.25 or Input.is_key_pressed(KEY_SHIFT)
 	if focus!=focused:
 		focused = focus
 		trace("focus",{"active":focus})
@@ -386,7 +444,7 @@ func _process(delta: float) -> void:
 			if ball.position.y<=0.151:
 				begin("ground")
 				trace("floor",{})
-				message.text = feedback+"   •   LB / Enter: next toss"
+				message.text = feedback
 		"result":
 			if success:
 				ball.position = endpoint-Vector3.UP*minf(targets[target].depth-0.08,elapsed*3.1)
@@ -402,7 +460,7 @@ func _process(delta: float) -> void:
 					reset_feed()
 				else:
 					begin("ground")
-					message.text = feedback+"   •   LB / Enter: next toss"
+					message.text = feedback
 
 func play_intro(delta: float) -> void:
 	ball.hide()
@@ -412,8 +470,8 @@ func play_intro(delta: float) -> void:
 	coach.rotation.y = atan2(setter.position.x-coach.position.x,setter.position.z-coach.position.z)
 	title.text = "INDOOR  /  DAY ONE     •     COACH ELLIS"
 	message.text = LINES[0] % CareerSession.profile().name if line==0 else LINES[line]
-	hint.text = "Hold A or Space to skip"
-	var holding := Input.is_key_pressed(KEY_SPACE) or (pad()>=0 and Input.is_joy_button_pressed(pad(),JOY_BUTTON_A))
+	hint.hide()
+	var holding := Input.is_key_pressed(KEY_SPACE) or (pad()>=0 and Input.is_joy_button_pressed(pad(),Xbox.physical(JOY_BUTTON_A)))
 	skip_time = minf(1,skip_time+delta) if holding else 0.0
 	skip.visible = true
 	skip.value = skip_time*100
@@ -439,7 +497,7 @@ func release(index: int) -> void:
 	var airborne := setter.position.y-BASE.y
 	if not demonstration:
 		if jump_rep() and airborne<0.20:
-			miss("Jump set requested. Click R3 before contact.")
+			miss("Jump set requested. Jump before contact.")
 			return
 		if not jump_rep() and airborne>0.12:
 			miss("Stay planted for this set.")
@@ -470,6 +528,7 @@ func complete() -> void:
 	title.text = "MY CAREER   /   INDOOR SETTER"
 	message.text = "Setter tryout complete"
 	var badges: Array = CareerSession.data.get_value("badges",CareerSession.athlete_id,[])
+	hint.show()
 	hint.text = "Badges   •   "+"   /   ".join(badges) if not badges.is_empty() else ""
 	finish.show()
 	finish.grab_focus()
@@ -490,7 +549,7 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.echo: return
 	if settings.visible or get_tree().paused: return
 	if event is InputEventJoypadButton: active_pad = event.device
-	if (event is InputEventKey and event.keycode==KEY_ESCAPE or event is InputEventJoypadButton and event.button_index==JOY_BUTTON_START) and event.is_pressed():
+	if (event is InputEventKey and event.keycode==KEY_ESCAPE or event is InputEventJoypadButton and event.button_index==Xbox.physical(JOY_BUTTON_START)) and event.is_pressed():
 		trace("pause",{})
 		settings.popup_centered()
 		get_viewport().set_input_as_handled()
@@ -499,11 +558,11 @@ func _input(event: InputEvent) -> void:
 	if demonstration:
 		if event is InputEventJoypadButton: trace("input_in_demo",{"id":event.button_index})
 		return
-	if (event is InputEventJoypadButton and event.button_index==JOY_BUTTON_LEFT_SHOULDER or event is InputEventKey and event.keycode==KEY_ENTER) and event.is_pressed() and phase=="ground":
+	if (event is InputEventJoypadButton and event.button_index==Xbox.physical(JOY_BUTTON_LEFT_SHOULDER) or event is InputEventKey and event.keycode==KEY_ENTER) and event.is_pressed() and phase=="ground":
 		reset_feed()
 		get_viewport().set_input_as_handled()
 		return
-	if event is InputEventJoypadButton and event.button_index==JOY_BUTTON_RIGHT_STICK or event is InputEventKey and event.keycode==KEY_SPACE:
+	if event is InputEventJoypadButton and event.button_index==Xbox.physical(JOY_BUTTON_RIGHT_STICK) or event is InputEventKey and event.keycode==KEY_SPACE:
 		if event.is_pressed():
 			trace("jump_request",{"accepted":not jump.active})
 			if not jump.active: jump.begin_set_jump(setter,0.22,0.55)
@@ -512,12 +571,14 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 	var index := -1
-	if event is InputEventJoypadButton: index = BUTTONS.find(event.button_index)
+	if event is InputEventJoypadButton:
+		for i in BUTTONS.size():
+			if event.button_index==Xbox.physical(BUTTONS[i]): index = i
 	elif event is InputEventKey: index = KEYS.find(event.keycode)
 	if index<0: return
 	if phase not in ["walk","feed","pass"]:
 		trace("target_unavailable",{"target":TARGETS[index],"down":event.is_pressed()})
-		if phase=="ground": message.text = "LB or Enter calls the next toss"
+		if phase=="ground": message.text = "Call the next toss"
 	elif event.is_pressed():
 		held = index
 		pressed_at = clock

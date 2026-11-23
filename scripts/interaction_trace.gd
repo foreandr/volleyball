@@ -18,7 +18,8 @@ func _ready() -> void:
 func watch(node: Node) -> void:
 	if node is Window: node.window_input.connect(raw)
 	if node is BaseButton:
-		node.pressed.connect(func(): record("ui_press",{"control":str(node.get_path())}))
+		var path := str(node.get_path())
+		node.pressed.connect(func(): record("ui_press",{"control":path}))
 
 func raw(e: InputEvent) -> void:
 	if e is InputEventJoypadButton:

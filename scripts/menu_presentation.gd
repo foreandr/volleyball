@@ -12,8 +12,7 @@ var ribbon := Polygon2D.new()
 var wipe_tween: Tween
 
 func _ready() -> void:
-	bind_menu_button("ui_accept",JOY_BUTTON_A)
-	bind_menu_button("ui_cancel",JOY_BUTTON_B)
+	refresh_menu_buttons()
 	build_theme()
 	overlay.layer = 20
 	add_child(overlay)
@@ -25,6 +24,13 @@ func _ready() -> void:
 	music.volume_db = -14
 	music_enabled = StorySession.game_options.get_value("audio","menu_music",true)
 	get_tree().scene_changed.connect(scene_entered)
+
+func refresh_menu_buttons() -> void:
+	var xbox = preload("res://scripts/xbox_controls.gd")
+	for binding in [["ui_accept",JOY_BUTTON_A],["ui_cancel",JOY_BUTTON_B]]:
+		for previous in InputMap.action_get_events(binding[0]):
+			if previous is InputEventJoypadButton: InputMap.action_erase_event(binding[0],previous)
+		bind_menu_button(binding[0],xbox.physical(binding[1]))
 
 func bind_menu_button(action: StringName, button: JoyButton) -> void:
 	var event := InputEventJoypadButton.new()

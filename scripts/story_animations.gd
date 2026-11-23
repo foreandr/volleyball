@@ -264,7 +264,9 @@ func start_demo_match(team_size := 2, learn_from_demo := true, cpu_only := true,
 	demo_match = preload("res://scripts/volleyball_match.gd").new()
 	demo_match.spectator = cpu_only
 	if not cpu_only:
-		content.add_child(label("Left stick  Move | RB  Sprint\nRight stick  Aim | Hold and release to receive",16))
+		var prompts := HFlowContainer.new()
+		content.add_child(prompts)
+		preload("res://scripts/xbox_controls.gd").prompts(prompts,[["Move","Move"],[JOY_BUTTON_RIGHT_SHOULDER,"Sprint"],["Aim","Aim"],[JOY_BUTTON_X,"Forearm"],[JOY_BUTTON_Y,"Hands"],[JOY_BUTTON_A,"Serve / jump"],[JOY_BUTTON_B,"Back"]])
 	if match_from_home and cpu_only:
 		demo_match.cpu_serve_override = demo_match.TOPSPIN_SERVE
 	if match_from_home or learn_from_demo:
@@ -2214,7 +2216,7 @@ func _input(event: InputEvent) -> void:
 		reception_review.stop(false)
 	super._input(event)
 	if event is InputEventKey and event.keycode in [KEY_F1,KEY_F2]: return
-	if event is InputEventJoypadButton and event.pressed and event.button_index == JOY_BUTTON_B:
+	if event is InputEventJoypadButton and event.pressed and event.button_index == preload("res://scripts/xbox_controls.gd").physical(JOY_BUTTON_B):
 		open_menu()
 		get_viewport().set_input_as_handled()
 		return
@@ -2237,5 +2239,5 @@ func _input(event: InputEvent) -> void:
 		if event.axis_value <= 0.25: trigger_held[key] = false
 		elif event.axis_value >= 0.6 and not trigger_held.get(key,false):
 			trigger_held[key] = true
-			cycle_type(-1 if event.axis == JOY_AXIS_TRIGGER_LEFT else 1)
+			cycle_type(-1 if event.axis == preload("res://scripts/xbox_controls.gd").trigger(true) else 1)
 			get_viewport().set_input_as_handled()

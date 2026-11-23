@@ -204,7 +204,7 @@ func update_stamina_ring() -> void:
 func read_pace_input() -> void:
 	sprint_requested = Input.is_physical_key_pressed(KEY_SHIFT)
 	var connected := Input.get_connected_joypads()
-	if not connected.is_empty(): sprint_requested = sprint_requested or Input.is_joy_button_pressed(connected[0],JOY_BUTTON_RIGHT_SHOULDER)
+	if not connected.is_empty(): sprint_requested = sprint_requested or Input.is_joy_button_pressed(connected[0],preload("res://scripts/xbox_controls.gd").physical(JOY_BUTTON_RIGHT_SHOULDER))
 
 func movement_input() -> Vector2:
 	var direction := Vector2.ZERO

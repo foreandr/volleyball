@@ -121,19 +121,7 @@ func show_settings() -> void:
 	soundtrack.button_pressed = MenuPresentation.music_enabled
 	soundtrack.toggled.connect(MenuPresentation.toggle_music)
 	column.add_child(soundtrack)
-	var names := ["Serve / jump / block","Forearm receive","Hand receive","Back"]
-	for i in names.size():
-		var choice := OptionButton.new()
-		for key in ["A","B","X","Y"]:
-			choice.add_item("%s   %s" % [names[i],key])
-		choice.select(StorySession.pad_bindings[i])
-		column.add_child(choice)
-		choice.item_selected.connect(func(selected: int):
-			var other := StorySession.pad_bindings.find(selected)
-			StorySession.pad_bindings[other] = StorySession.pad_bindings[i]
-			StorySession.pad_bindings[i] = selected
-			StorySession.save_options()
-			show_settings())
+	preload("res://scripts/xbox_controls.gd").settings(column,show_settings)
 	add_menu_button(column,"IterationLab","Iteration Lab",func(): go("iteration_lab"))
 	add_menu_button(column,"Back","Back",show_home)
 
