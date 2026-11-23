@@ -42,10 +42,7 @@ var finding_fade: Tween
 var last_finding := ""
 
 func _ready() -> void:
-	var background := ColorRect.new()
-	background.color = Color("#111821")
-	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(background)
+	MenuPresentation.backdrop(self,false)
 	var margin := MarginContainer.new()
 	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	for edge in ["left","right","top","bottom"]: margin.add_theme_constant_override("margin_"+edge,26)

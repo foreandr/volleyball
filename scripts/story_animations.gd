@@ -190,6 +190,8 @@ func build_controls(controls: VBoxContainer) -> void:
 	show_categories()
 
 func clear_content() -> void:
+	MenuPresentation.reveal(content)
+	MenuPresentation.sweep()
 	stop_underhand_serve()
 	for child in content.get_children():
 		content.remove_child(child)
@@ -206,6 +208,7 @@ func set_title(text: String) -> void:
 	if heading: heading.text = text
 
 func show_categories() -> void:
+	MenuPresentation.set_music(true)
 	stop_demo_match()
 	stop_blocking_practice()
 	stop_serving_session()
@@ -238,6 +241,7 @@ func start_passing_drill() -> void:
 	start_demo_match(2,false,true,true,true)
 
 func start_demo_match(team_size := 2, learn_from_demo := true, cpu_only := true, mirror_blue_right := true, passing := false) -> void:
+	MenuPresentation.set_music(false)
 	stop_blocking_practice()
 	stop_serving_session()
 	stop_setting_drill()
@@ -2060,6 +2064,7 @@ func open_menu() -> void:
 		var previous := selected_category
 		show_categories()
 		if category_buttons.has(previous): category_buttons[previous].grab_focus()
+	elif not StorySession.active.is_empty(): get_tree().change_scene_to_file("res://scenes/story.tscn")
 	else: get_tree().change_scene_to_file("res://scenes/main.tscn")
 
 func update_match_pad_aim(delta: float) -> void:

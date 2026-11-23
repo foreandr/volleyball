@@ -31,10 +31,7 @@ var seek: HSlider
 var camera_focus := Vector3.ZERO
 
 func _ready() -> void:
-	var background := ColorRect.new()
-	background.color = Color("102b40")
-	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(background)
+	MenuPresentation.backdrop(self,false)
 
 	var margin := MarginContainer.new()
 	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -49,7 +46,7 @@ func _ready() -> void:
 	heading = Label.new()
 	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	heading.add_theme_font_size_override("font_size",40)
-	heading.add_theme_color_override("font_color",Color("ffce70"))
+	heading.add_theme_color_override("font_color",Color("73e1d2"))
 	header.add_child(heading)
 	back = Button.new()
 	back.name = "Back"
@@ -81,6 +78,9 @@ func _ready() -> void:
 		show_category(previous)
 
 func clear_list() -> void:
+	MenuPresentation.sweep()
+	MenuPresentation.reveal(list)
+	MenuPresentation.reveal(heading)
 	for entry in list.get_children():
 		list.remove_child(entry)
 		entry.queue_free()
@@ -89,7 +89,7 @@ func clear_list() -> void:
 func show_categories() -> void:
 	var previous := category
 	category = ""
-	heading.text = "Drills"
+	heading.text = "TRAINING CAMP"
 	clear_list()
 	for name_ in CATEGORIES:
 		var item := add_item(name_,show_category.bind(name_))
@@ -97,6 +97,7 @@ func show_categories() -> void:
 			item.grab_focus()
 
 func show_category(name_: String) -> void:
+	MenuPresentation.set_music(true)
 	category = name_
 	heading.text = name_+" Drills"
 	clear_list()
@@ -122,6 +123,7 @@ func show_category(name_: String) -> void:
 func open_setting_stage(title: String) -> void:
 	heading.text = title
 	clear_list()
+	MenuPresentation.set_music(false)
 	scroll.hide()
 	setting_stage = SubViewportContainer.new()
 	setting_stage.stretch = true
@@ -374,8 +376,8 @@ func setting_panel(width: float) -> VBoxContainer:
 	var panel := PanelContainer.new()
 	panel.custom_minimum_size.x = width
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color("192938")
-	style.border_color = Color("304657")
+	style.bg_color = Color("132a39")
+	style.border_color = Color("345661")
 	style.set_border_width_all(1)
 	style.set_corner_radius_all(8)
 	panel.add_theme_stylebox_override("panel",style)

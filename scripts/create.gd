@@ -23,10 +23,7 @@ var player_controls: RefCounted
 
 func _ready() -> void:
 	profile = initial_profile()
-	var background := ColorRect.new()
-	background.color = Color("0f1a25")
-	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(background)
+	MenuPresentation.backdrop(self,false)
 	var margin := MarginContainer.new()
 	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	for edge in ["left","right","top","bottom"]: margin.add_theme_constant_override("margin_"+edge,24)
@@ -43,7 +40,7 @@ func _ready() -> void:
 	var title := label(screen_title(),32)
 	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	title.name = "ScreenTitle"
-	title.add_theme_color_override("font_color",Color("ffce70"))
+	title.add_theme_color_override("font_color",Color("73e1d2"))
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title_block.add_child(title)
 	var subtitle := screen_subtitle()
@@ -316,8 +313,8 @@ func update_camera() -> void:
 func panel() -> PanelContainer:
 	var result := PanelContainer.new()
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color("192938")
-	style.border_color = Color("304657")
+	style.bg_color = Color("132a39")
+	style.border_color = Color("345661")
 	style.set_border_width_all(1)
 	style.set_corner_radius_all(8)
 	result.add_theme_stylebox_override("panel",style)

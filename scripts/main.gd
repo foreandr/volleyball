@@ -14,34 +14,32 @@ func _ready() -> void:
 		open_simulation()
 		return
 
-	var background := ColorRect.new()
-	background.color = Color("102b40")
-	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(background)
+	MenuPresentation.mount_menu(self,column)
+	open_page(MenuPresentation.return_page)
 
-	var center := CenterContainer.new()
-	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(center)
-	column.custom_minimum_size.x = 380
-	column.add_theme_constant_override("separation",8)
-	center.add_child(column)
-	show_home()
+var route := "Home"
 
-func page(title_text: String) -> void:
+func open_page(target: String) -> void:
+	match target:
+		"Play": show_play()
+		"Offline": show_offline()
+		"Match setup": show_roster()
+		"Settings": show_settings()
+		_: show_home()
+
+func page(title_text: String, current: String) -> void:
+	route = current
+	MenuPresentation.return_page = current
 	for child in column.get_children():
 		column.remove_child(child)
 		child.queue_free()
-	var title := Label.new()
-	title.text = title_text
-	title.add_theme_font_size_override("font_size",44)
-	title.add_theme_color_override("font_color",Color("ffce70"))
-	column.add_child(title)
+	MenuPresentation.heading(column,current,title_text)
 
 func go(scene: String) -> void:
 	get_tree().change_scene_to_file("res://scenes/%s.tscn" % scene)
 
 func show_home() -> void:
-	page("VOLLEYBALL")
+	page("VOLLEYBALL","Home")
 	add_menu_button(column,"Career","Career",func(): go("story"))
 	add_menu_button(column,"Play","Play",show_play).grab_focus()
 	add_menu_button(column,"Create","Create player",func(): go("create"))
@@ -50,14 +48,14 @@ func show_home() -> void:
 	add_menu_button(column,"Quit","Quit",func(): get_tree().quit())
 
 func show_play() -> void:
-	page("PLAY")
+	page("PLAY","Play")
 	add_menu_button(column,"Offline","Offline",show_offline).grab_focus()
 	add_menu_button(column,"Online","Online",Callable()).disabled = true
 	add_menu_button(column,"Simulate","Simulate",open_simulation)
 	add_menu_button(column,"Back","Back",show_home)
 
 func show_offline() -> void:
-	page("OFFLINE")
+	page("OFFLINE","Offline")
 	for size in range(2,7):
 		var item := add_menu_button(column,"Size%d" % size,"%dv%d" % [size,size],func():
 			StorySession.offline_size = size
@@ -66,7 +64,7 @@ func show_offline() -> void:
 	add_menu_button(column,"Back","Back",show_play)
 
 func show_roster() -> void:
-	page("MATCH SETUP")
+	page("MATCH SETUP","Match setup")
 	var profile_source = preload("res://scripts/player_profile.gd")
 	if roster_pool.is_empty():
 		roster_pool.append(profile_source.load_profile())
@@ -104,7 +102,7 @@ func show_roster() -> void:
 	add_menu_button(column,"Back","Back",show_offline)
 
 func show_settings() -> void:
-	page("SETTINGS")
+	page("SETTINGS","Settings")
 	var volume := HSlider.new()
 	var caption := Label.new()
 	caption.text = "Master volume"
@@ -115,6 +113,11 @@ func show_settings() -> void:
 	column.add_child(volume)
 	volume.grab_focus()
 	volume.drag_ended.connect(func(_changed: bool): StorySession.save_options())
+	var soundtrack := CheckButton.new()
+	soundtrack.text = "Menu soundtrack"
+	soundtrack.button_pressed = MenuPresentation.music_enabled
+	soundtrack.toggled.connect(MenuPresentation.toggle_music)
+	column.add_child(soundtrack)
 	var names := ["Serve / jump / block","Forearm receive","Hand receive","Back"]
 	for i in names.size():
 		var choice := OptionButton.new()
@@ -135,7 +138,8 @@ func add_menu_button(parent: VBoxContainer, id: String, title: String, action: C
 	var item := Button.new()
 	item.name = id
 	item.text = title
-	item.custom_minimum_size.y = 56
+	item.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	item.custom_minimum_size.y = 51
 	if action.is_valid(): item.pressed.connect(action)
 	parent.add_child(item)
 	return item
@@ -150,4 +154,4 @@ func open_match(playable: bool) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
-		get_tree().quit()
+		if route != "Home": open_page(MenuPresentation.PARENTS.get(route,"Home"))
