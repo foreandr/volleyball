@@ -101,7 +101,7 @@ func tuning_controls() -> void:
 	var athlete = game.setter
 	var range_label := Label.new()
 	var refresh := func(): range_label.text="Set range    Medium %.1f m    High %.1f m" % [game.camp_range(0),game.camp_range(1)]
-	for field in [["Stamina",0,100,athlete.stamina.value,"%"],["Endurance",0,100,athlete.stamina.endurance,""],["Strength",1,100,athlete.attributes.Strength,""],["Hand setting",0,100,athlete.attributes["Hand setting"],""],["Speed",0,100,athlete.attributes.Speed,""],["Jump height",10,120,game.camp_jump_height*100," cm"],["Jump ability",0,100,game.camp_jump_ability,""]]:
+	for field in [["Current stamina",0,100,athlete.stamina.fraction()*100.,"%"],["Stamina",0,100,athlete.stamina.rating,""],["Willpower",0,100,athlete.stamina.willpower,""],["Endurance",0,100,athlete.stamina.endurance,""],["Strength",1,100,athlete.attributes.Strength,""],["Hand setting",0,100,athlete.attributes["Hand setting"],""],["Speed",0,100,athlete.attributes.Speed,""],["Jump height",10,120,game.camp_jump_height*100," cm"],["Jump ability",0,100,game.camp_jump_ability,""]]:
 		var caption := Label.new()
 		body.add_child(caption)
 		var slider := HSlider.new()
@@ -117,11 +117,13 @@ func tuning_controls() -> void:
 		slider.value_changed.connect(func(v):
 			format_value.call(v)
 			match field[0]:
-				"Stamina":
-					athlete.stamina.rested_capacity=maxf(athlete.stamina.rested_capacity,v)
-					athlete.stamina.value=v
-					athlete.stamina.exhausted=v<=0.
-				"Endurance": athlete.stamina.endurance=v
+				"Current stamina":
+					athlete.stamina.value=v*.01*athlete.stamina.capacity()
+					athlete.stamina.rested_capacity=maxf(athlete.stamina.rested_capacity,athlete.stamina.value)
+					athlete.stamina.exhausted=false
+				"Stamina","Endurance","Willpower":
+					athlete.attributes[field[0]]=v
+					athlete.stamina.set_ratings(athlete.attributes.Stamina,athlete.attributes.Endurance,athlete.attributes.Willpower)
 				"Jump height":
 					game.camp_jump_height=v*.01
 				"Jump ability": game.camp_jump_ability=v

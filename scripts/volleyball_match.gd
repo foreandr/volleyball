@@ -596,7 +596,7 @@ func update_score() -> void:
 	score_label.text = ("BLUE  %d  –  %d  ORANGE" if spectator else "YOU  %d  –  %d  CPU") % [score[0],score[1]]
 	if not players.is_empty():
 		displayed_stamina=roundi(players[0].stamina.value)
-		score_label.text+="   |   Stamina / skills %d%%" % displayed_stamina
+		score_label.text+="   |   Stamina %d/%d" % [displayed_stamina,roundi(players[0].stamina.capacity())]
 
 func award(side: int, reason: String) -> void:
 	if phase != Phase.LIVE: return

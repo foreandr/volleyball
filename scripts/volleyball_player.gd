@@ -138,7 +138,7 @@ func install_custom(resource: Resource, slot := "idle", save := true) -> bool:
 func apply_profile(profile: Dictionary) -> void:
 	var values := Profile.clean(profile)
 	attributes = values
-	stamina.endurance=values.Stamina
+	stamina.set_ratings(values.Stamina,values.Endurance,values.Willpower)
 	refresh_kit()
 	display_name = values.name
 	set_height_cm(values.height_cm)

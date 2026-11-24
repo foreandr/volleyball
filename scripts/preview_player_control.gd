@@ -200,7 +200,7 @@ func spend_dive_stamina() -> void:
 	update_stamina_ring()
 
 func update_stamina_ring() -> void:
-	if stamina_ring.visible: stamina_ring.set_fraction(stamina.value/100.0)
+	if stamina_ring.visible: stamina_ring.set_fraction(stamina.fraction())
 
 func read_pace_input() -> void:
 	sprint_requested = Input.is_physical_key_pressed(KEY_SHIFT)

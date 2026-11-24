@@ -92,11 +92,14 @@ func draw_player(actor: Node3D,human: bool) -> void:
 		var origin := at+Vector2(-52,radius.y+25)
 		draw_rect(Rect2(origin-Vector2.ONE,Vector2(106,9)),Color.WHITE)
 		draw_rect(Rect2(origin,Vector2(104,7)),ink)
-		var available := clampf(energy.value,0.,100.)*1.04
+		var available := float(energy.fraction())*104.
 		draw_rect(Rect2(origin,Vector2(available,7)),Color.WHITE)
-		var spent := minf(104.-available,energy.action_cost*1.04)
+		var spent := minf(104.-available,energy.action_cost/energy.capacity()*104.)
 		if spent>0.: draw_rect(Rect2(origin+Vector2(available,0),Vector2(spent,7)),Color("51cbe9"))
-		var caption := "Stamina %d/100" % roundi(energy.value)
+		var caption := "Stamina %d/%d" % [roundi(energy.value),roundi(energy.capacity())]
+		if energy.value<0.:
+			draw_rect(Rect2(origin,Vector2(104.*absf(energy.value)/maxf(1.,energy.willpower),7)),Color("d7a6ff"))
+			caption="Reserve used %d/%d" % [ceili(-energy.value),roundi(energy.willpower)]
 		if energy.action!="": caption+="   %s -%d" % [energy.action,ceili(energy.action_cost)]
 		var text_pos := origin+Vector2(-48,22)
 		draw_string_outline(ThemeDB.fallback_font,text_pos,caption,HORIZONTAL_ALIGNMENT_CENTER,200,13,4,ink)

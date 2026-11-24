@@ -780,13 +780,13 @@ func receive_hand_lift(arrival: float) -> float:
 	var lift := .48*smoothstep(0.,.50,held_time)+.52*(1.-smoothstep(.035,.34,remaining))
 	return lift*smoothstep(0.,.12,held_time)
 
-func shape_catch_hands(lift := 1.) -> void:
+func shape_catch_hands(lift := 1., arch := 0.) -> void:
 	lift*=grip_open
 	if lift<=0.: return
 	var receive := extended_receive_point()
 	var contact_weight := 1. if phase!="pass" else 1.-smoothstep(.035,.18,ball.position.distance_to(receive))
 	var hand_target := receive.lerp(ball.position,contact_weight)
-	Hands.apply(setter,hand_target,lift,Vector3.ZERO,0.,0.,false,Vector3.ZERO,0.,Vector3.INF,0.,true,-1.,null,Vector3.ZERO,true)
+	Hands.apply(setter,hand_target,lift,Vector3.ZERO,0.,0.,false,Vector3.ZERO,0.,PINS[target]-setter.position if arch>0. else Vector3.INF,arch,true,-1.,null,Vector3.ZERO,true)
 	if contact_weight>0. and lift>=.99: Contact.track_hands(setter,hand_target,true,contact_weight,96.)
 
 func reach_for_toss(lift: float) -> void:
@@ -1126,12 +1126,12 @@ func step_practice(delta: float) -> void:
 			if elapsed<=SET_RECEIVE_TIME:
 				var t := clampf(elapsed/SET_RECEIVE_TIME,0.,1.)
 				ball.position=setter.to_global(receive_local).lerp(pocket,1.-pow(1.-t,2.))
-				shape_catch_hands()
+				shape_catch_hands(1.,.55*t)
 				var pads := (Contact.palm(setter,"l")+Contact.palm(setter,"r"))*.5
 				ball.position=ball.position.lerp(pads+Vector3.UP*.060,smoothstep(0.,.035,elapsed))
 			else:
 				var extension := smoothstep(0.,push_time,elapsed-SET_RECEIVE_TIME)
-				Hands.apply(setter,pocket,1.,push_axis*.23*extension,0.,0.,false,Vector3.ZERO,extension,endpoint-pocket,0.,true,-1.,null,Vector3.ZERO,true)
+				Hands.apply(setter,pocket,1.,push_axis*.23*extension,0.,0.,false,Vector3.ZERO,extension,endpoint-pocket,.55+.45*extension,true,-1.,null,Vector3.ZERO,true)
 				# Carry the ball on the finger pads until elbow extension is complete.
 				Contact.track_hands(setter,pocket,true,1.-extension)
 				var fingers := (Contact.palm(setter,"l")+Contact.palm(setter,"r"))*.5
@@ -1169,7 +1169,7 @@ func step_practice(delta: float) -> void:
 				miss("Ball deflected off the gym equipment.")
 				drop_velocity = rebound
 				return
-			if elapsed<0.22: Hands.apply(setter,source,1.0-elapsed/0.22,push_axis*0.22,0.0,0.3,false,Vector3.ZERO,1.0,endpoint-source,0.5,true)
+			if elapsed<0.22: Hands.apply(setter,source,1.0-elapsed/0.22,push_axis*0.22,0.0,0.3,false,Vector3.ZERO,1.0,endpoint-source,1.,true)
 			if t>=1:
 				if endpoint.distance_to(PINS[target])<targets[target].mouth_radius-0.10: targets[target].impact(ball.position,motion/maxf(delta,.001))
 				finish_set()

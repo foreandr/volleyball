@@ -92,11 +92,13 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 	var wrist_direction := smoothstep(0.12,0.70,absf(set_depth_m))
 	var wrist_distance := smoothstep(0.0,4.0,absf(set_depth_m))
 	var frontset := smoothstep(0.12,0.70,set_depth_m)*maxf(set_extension,0.0)
-	var back_arch := smoothstep(0.0,4.0,-set_depth_m)
+	var back_arch := backset*lerpf(.35,1.,smoothstep(.8,9.,-set_depth_m))
 	if arch_progress > 0.0 and back_arch > 0.0:
-		var arch := deg_to_rad(48.0)*back_arch*arch_progress*blend
+		var arch := deg_to_rad(24.0)*back_arch*arch_progress*blend
 		author.rotate_world(pose,"spine_01",Vector3.RIGHT,-arch*0.45)
 		author.rotate_world(pose,"spine_02",Vector3.RIGHT,-arch*0.55)
+	var shoulders: Vector3=(author.point(pose,"upperarm_l")+author.point(pose,"upperarm_r"))*.5
+	var spine_axis: Vector3=(shoulders-author.point(pose,"pelvis")).normalized()
 	var turn := 0.0
 	torso_follow *= blend
 	if torso_follow > 0.0 and horizontal_push.length_squared() > 0.0001:
@@ -133,9 +135,9 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 			var length := shoulder.distance_to(elbow)+elbow.distance_to(hand_point)
 			var aim_weight := smoothstep(0.0,1.0,set_extension)
 			var release_direction := local_push.normalized()
-			release_direction = (release_direction+Vector3.FORWARD*0.10*backset).normalized()
+			release_direction=release_direction.slerp(spine_axis,backset)
 			var set_axis := release_direction
-			set_axis = (set_axis-Vector3.RIGHT*sign_*(0.30*backset+0.24*frontset)).normalized()
+			set_axis = (set_axis-Vector3.RIGHT*sign_*(0.055*backset+0.24*frontset)).normalized()
 			var direction := (wrist-shoulder).normalized().slerp(set_axis,lerpf(0.65,1.0,backset)*aim_weight)
 			wrist = shoulder+direction*lerpf(wrist.distance_to(shoulder),length*0.997,aim_weight)
 		if catching:
@@ -171,6 +173,7 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 				var lower_gap := skull.distance_to(Geometry3D.get_closest_point_to_segment(skull,elbow,solved_wrist))
 				var deficit := clearance-minf(upper_gap,lower_gap)
 				if deficit <= 0.001: break
+				if backset>.8 and set_extension>.9: break # Overhead extension already tracks the shoulder line.
 				wrist.x += sign_*deficit*1.4
 				author.limb(pose,upper,lower,hand,wrist,pole,1.0,elbow_limit)
 		for digit in ["thumb","index","middle","ring","pinky"]:

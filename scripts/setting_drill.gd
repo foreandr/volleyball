@@ -314,7 +314,7 @@ func step(delta: float) -> void:
 		receiver.rotation.y = receiver_yaw
 		receiver.play_action("idle")
 	if not receiving or not is_forward_dive(): cpu_stamina.recover(delta)
-	cpu_stamina_ring.set_fraction(cpu_stamina.value/100.0)
+	cpu_stamina_ring.set_fraction(cpu_stamina.fraction())
 	if after_pass < 0.0:
 		timing_cue.update_timing(elapsed,SERVE_TIME,BallPreview.GREEN_START,BallPreview.GREEN_END)
 		ball.position = flight_point(SOURCE,serve_velocity,elapsed)
