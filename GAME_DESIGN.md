@@ -107,3 +107,4 @@ Grounded turns use longer alternating steps and keep the feet planted through sm
 Setters raise their hands during the hold and finish shaping them as the toss descends. Offline match setup remembers the selected ball brand and displays its panel colors on court.
 Grounded square-ups use a short right plant and a longer left swing. The hips finish turning with the left foot.
 In Setting Camp the CPU runs toward higher backcourt tosses and finishes each approach with one right-left plant. The hands rise within roughly a meter of the forehead. Pause Options can open Animation Frames on the recorded setter rep; saved copies retain the selected frame.
+The setter pivots on the ball of the right foot as the hips square up. The left foot lands to give a stance slightly wider than the athlete's neutral ready stance.

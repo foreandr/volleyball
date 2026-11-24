@@ -13,11 +13,14 @@ var step_active := false
 var hip_lag := 0.0
 var planted_weight := 1.0
 
-var right_landing := Transform3D.IDENTITY
+var right_pivot_local := Vector3.ZERO
+var pivot_point := Vector3.ZERO
 var scripted := false
 var sequence := -1.0
+var finish_yaw := 0.0
 
-func set_sequence(fraction: float, enabled: bool) -> void:
+func set_sequence(fraction: float, enabled: bool, heading := 0.0) -> void:
+	finish_yaw=heading
 	if fraction<0.:
 		contacts.clear()
 		step_active=false
@@ -46,17 +49,19 @@ func _process_modification() -> void:
 	var desired: Array[Transform3D]=[]
 	for side in ["l","r"]:
 		desired.append(rig.global_transform*rig.get_bone_global_pose(rig.find_bone("foot_"+side)))
+	var author: RefCounted=actor.get_pose_author()
 	if contacts.is_empty():
 		contacts.assign(desired)
-		right_landing=desired[1]
+		if scripted:
+			var toes: Vector3=author.point(author.baseline,"ball_r")
+			right_pivot_local=author.feet["r"].affine_inverse()*toes
+			pivot_point=desired[1]*right_pivot_local
 		swing=1 # Right plant, then bring the left foot around.
 		planted_weight=1.
 		progress=0.
 		step_duration=clampf(.72/maxf(.01,absf(angle)/dt),.18,.28)
 	if scripted:
-		var next_foot := 1 if sequence<.38 else 0
-		if next_foot!=swing: contacts[1]=right_landing
-		swing=next_foot
+		swing=1 if sequence<.38 else 0
 		progress=clampf(sequence/.38 if swing==1 else (sequence-.38)/.62,0.,1.)
 	elif progress == 0. and not step_active:
 		var offset := (desired[swing].origin - contacts[swing].origin).slide(Vector3.UP).length()
@@ -79,10 +84,30 @@ func _process_modification() -> void:
 	landing.origin=current.origin+(landing.origin-current.origin).rotated(Vector3.UP,advance)
 	if scripted:
 		var side := "r" if swing==1 else "l"
-		var neutral := rig.get_bone_global_rest(rig.find_bone("foot_"+side))
-		landing=rig.global_transform*neutral
+		var ready_right: Transform3D=rig.global_transform*author.feet["r"]
+		var ready_left: Transform3D=rig.global_transform*author.feet["l"]
+		if swing==1:
+			landing=ready_right
+			# Plant under the finishing hip so the left leg can open to its full width.
+			var remaining := angle_difference(actor.rotation.y,finish_yaw)
+			var toe := landing*right_pivot_local
+			var final_toe := current.origin+(toe-current.origin).rotated(Vector3.UP,remaining)
+			landing.origin+=final_toe-toe
+		else:
+			# Keep the ball of the right foot planted while the ankle and knee follow the hips.
+			var support := ready_right
+			support.basis=Basis(Vector3.UP,hip_lag)*support.basis
+			support.origin=pivot_point-support.basis*right_pivot_local
+			support.origin.y-=preload("res://scripts/practice_joint_limits.gd").sole_floor_gap(rig,"r",support)
+			contacts[1]=support
+			landing=ready_left
+			var stance_axis := current.basis.x.slide(Vector3.UP).normalized()
+			var ready_span := (ready_left.origin-ready_right.origin).dot(stance_axis)
+			var current_span := (landing.origin-support.origin).dot(stance_axis)
+			landing.origin+=stance_axis*(ready_span*1.12-current_span)
 		landing.origin.y-=preload("res://scripts/practice_joint_limits.gd").sole_floor_gap(rig,side,landing)
-		if swing==1: right_landing=landing
+		if swing==1:
+			pivot_point=landing*right_pivot_local
 	var moving := contacts[swing].interpolate_with(landing,smoothstep(0.,1.,progress))
 	var arc := sin(PI*progress)
 	arc *= arc
@@ -90,7 +115,6 @@ func _process_modification() -> void:
 	if swing==0:
 		var outward := (landing.origin-current.origin).slide(Vector3.UP).normalized()
 		moving.origin+=outward*(.095 if scripted else .027)*arc
-	var author: RefCounted=actor.get_pose_author()
 	var pose: Array=[]
 	for i in rig.get_bone_count(): pose.append(rig.get_bone_pose(i))
 	var pelvis := rig.find_bone("pelvis")

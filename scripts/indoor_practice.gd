@@ -728,7 +728,7 @@ func move_to_camp_toss(delta: float) -> void:
 	var fraction := plant_time/PLANT_DURATION
 	var turn := .22*smoothstep(0.,.38,fraction)+.78*smoothstep(.30,1.,fraction)
 	setter.rotation.y=lerp_angle(plant_start_yaw,target_yaw,turn)
-	footwork.set_sequence(fraction,true)
+	footwork.set_sequence(fraction,true,target_yaw)
 
 func step_practice(delta: float) -> void:
 	setter.animator.advance(delta)
