@@ -32,6 +32,14 @@ var world := Node3D.new()
 var setter: Node3D
 var targets: Array[Node3D] = []
 var squat := preload("res://scripts/tryout_squat.gd").new()
+const Contact = preload("res://scripts/gym_physics.gd")
+var contacts := Contact.new()
+var gym := preload("res://scripts/tryout_gym.gd").new()
+var seats_in_use: Array[RefCounted] = []
+var last_contact := -100.0
+var cushion := 0.0
+var drop_velocity := Vector3.ZERO
+var old_palms := {}
 var jump := preload("res://scripts/setter_jump.gd").new()
 var demonstration := false
 var demo_index := 0
@@ -80,7 +88,7 @@ func athlete(at: Vector3,color: String) -> Node3D:
 func _ready() -> void:
 	MenuPresentation.set_music(false)
 	add_child(world)
-	world.add_child(preload("res://scripts/tryout_gym.gd").new())
+	world.add_child(gym)
 	preload("res://scripts/tryout_gym.gd").light_gym(world)
 	get_viewport().msaa_3d = Viewport.MSAA_4X
 	camera.fov = 52
@@ -150,10 +158,10 @@ func seat_teammates() -> void:
 		athlete_.rotation.y = -side*PI/2
 		athlete_.play_action("base/Sitting_Talking",0)
 		athlete_.animator.seek(i*.31,true)
-		var rig: Skeleton3D = athlete_.skeleton
-		var hips := rig.to_global(rig.get_bone_global_pose(rig.find_bone("pelvis")).origin)
-		athlete_.position.y += .48+row*.37+.16-hips.y
-		athlete_.animator.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_IDLE
+		var idx := (4 if side==1 else 0)+row
+		var constraint := preload("res://scripts/bleacher_seat.gd").new()
+		constraint.configure(athlete_,gym.benches[idx],gym.benches[idx-1] if row>0 else null,side,float(seat[2]))
+		seats_in_use.append(constraint)
 
 func build_hud() -> void:
 	panel.anchor_top = 1
@@ -242,6 +250,9 @@ func called() -> int:
 	return ORDER[demo_index if demonstration else (rep%8)/2]
 
 func reset_feed() -> void:
+	last_contact = -100
+	cushion = 0
+	old_palms.clear()
 	begin("walk")
 	station = (station+1)%TOSS_SPOTS.size()
 	coach_goal = TOSS_SPOTS[station]
@@ -269,10 +280,9 @@ func reset_feed() -> void:
 func apply_camera() -> void:
 	var pivot := Vector3(0,1.35,1.0)+camera_lead
 	var angle := deg_to_rad(elevation)
-	camera.position = pivot+Vector3(sin(yaw)*cos(angle),sin(angle),-cos(yaw)*cos(angle))*distance
-	camera.position.x = clampf(camera.position.x,-10.8,10.8)
-	camera.position.y = minf(camera.position.y,8.2)
-	camera.position.z = clampf(camera.position.z,-10.3,14.0)
+	var arm := Vector3(sin(yaw)*cos(angle),sin(angle),-cos(yaw)*cos(angle))*distance
+	var obstruction := contacts.sweep(world,contacts.camera_shape,pivot,arm,Contact.GYM)
+	camera.position = pivot+arm*float(obstruction.get("fraction",1.0))
 	camera.look_at(pivot)
 
 func build_settings() -> void:
@@ -302,7 +312,8 @@ func move_setter(delta: float) -> void:
 		trace("focus",{"active":focus})
 		message.text = ("Focused on ball   /   " if focus else "")+TARGETS[called()]
 	var speed := 2.35 if focus else (6.2 if sprint else 4.3)
-	setter.position = Court.clamp_setter(setter.position+direction*delta*speed,3.65,-4.85)
+	setter.position = contacts.travel(world,setter.position,direction*delta*speed,setter.height_cm*.01)
+	setter.position.z = minf(setter.position.z,3.65)
 	var facing := ball.position-setter.position if focus else (coach.position-setter.position if phase=="walk" and direction.is_zero_approx() else direction)
 	if Vector2(facing.x,facing.z).length()>0.05:
 		setter.rotation.y = lerp_angle(setter.rotation.y,atan2(facing.x,facing.z),minf(1,delta*14))
@@ -312,6 +323,9 @@ func _process(delta: float) -> void:
 	if settings.visible: return
 	setter.animator.advance(delta)
 	coach.animator.advance(delta)
+	for seat in seats_in_use:
+		seat.actor.animator.advance(delta)
+		seat.update()
 	clock += delta
 	elapsed += delta
 	if phase == "intro":
@@ -350,7 +364,15 @@ func _process(delta: float) -> void:
 				trace("coach_release",{"from":str(source),"to":str(catch_point)})
 				change_feed_phase("pass")
 		"pass":
+			var previous := ball.position
 			ball.position = source.lerp(catch_point,elapsed/CONTACT)+Vector3.UP*(4.905*elapsed*(CONTACT-elapsed))
+			var incoming := ball.position-previous
+			var obstacle := contacts.sweep(world,contacts.ball_shape,previous,incoming,Contact.GYM|Contact.EQUIPMENT)
+			if not obstacle.is_empty():
+				ball.position = previous+incoming*float(obstacle.fraction)
+				miss("Toss deflected off the gym equipment.")
+				drop_velocity = (incoming/maxf(.001,delta)).bounce(obstacle.normal)*.45
+				return
 			if elapsed<0.22: coach_motion.toss(coach,1.0)
 			ball.position.y = maxf(0.15,ball.position.y)
 			if demonstration and held<0 and elapsed>=0.85:
@@ -359,12 +381,38 @@ func _process(delta: float) -> void:
 			if held>=0:
 				meter.value = clampf((clock-pressed_at)/0.65,0,1)*100
 				Hands.apply(setter,ball.position,0.35+0.65*smoothstep(0.8,1.55,elapsed))
+				Contact.track_hands(setter,ball.position)
+			var collided := false
+			for side in ["l","r"]:
+				for landmark in ["hand_","index_03_","thumb_03_","middle_02_"]:
+					var bone: String = landmark+side
+					var hand := Contact.joint(setter,bone)
+					if Contact.touched(previous,ball.position,old_palms.get(bone,hand),hand): collided = true
+					old_palms[bone] = hand
+			if collided and last_contact<0:
+				last_contact = clock
+				cushion = clampf(previous.distance_to(ball.position)/maxf(delta,.001)*.012,.02,.10)
+				trace("palm_contact",{"held":held,"give_m":cushion})
+				if held<0:
+					miss("Loose ball off the hands.")
+					drop_velocity += setter.basis.z*.85
+					return
+			if collided: last_contact = clock
+			if held>=0 and clock-last_contact<.11:
+				Hands.apply(setter,ball.position-Vector3.UP*cushion,1.0,Vector3.ZERO,cushion)
 			if demonstration and elapsed>=CONTACT: release(called())
 			elif elapsed>CONTACT+0.25: miss("The toss dropped. Hold the target, then release at contact.")
 		"set":
 			ball.rotate_x(delta*4.0)
 			var t := clampf(elapsed/flight_time,0,1)
-			ball.position = arc(source,endpoint,t,APEX[tempo])
+			var desired := arc(source,endpoint,t,APEX[tempo])
+			var motion := desired-ball.position
+			var hit := contacts.sweep(world,contacts.ball_shape,ball.position,motion,Contact.GYM|Contact.EQUIPMENT)
+			ball.position += motion*float(hit.get("fraction",1.0))
+			if not hit.is_empty():
+				miss("Ball deflected off the gym equipment.")
+				drop_velocity = (motion/maxf(delta,.001)).bounce(hit.normal)*.45
+				return
 			if elapsed<0.22: Hands.apply(setter,source,1.0-elapsed/0.22,(endpoint-source).normalized()*0.22,0.0,0.3,false,Vector3.ZERO,1.0,endpoint-source,0.5,true)
 			if t>=1:
 				if endpoint.distance_to(PINS[target])<targets[target].mouth_radius-0.10: targets[target].impact()
@@ -374,9 +422,13 @@ func _process(delta: float) -> void:
 				begin("result")
 				message.text = feedback
 		"drop":
-			floor_speed += 9.81*delta
-			ball.position.y = maxf(0.15,ball.position.y-floor_speed*delta)
-			if ball.position.y<=0.151:
+			drop_velocity.y -= 9.81*delta
+			var motion := drop_velocity*delta
+			var hit := contacts.sweep(world,contacts.ball_shape,ball.position,motion,Contact.GYM|Contact.EQUIPMENT)
+			ball.position += motion*float(hit.get("fraction",1.0))
+			if not hit.is_empty(): drop_velocity = drop_velocity.bounce(hit.normal)*.34
+			if ball.position.y<=.151 or (not hit.is_empty() and hit.normal.y>.7 and drop_velocity.length()<1.0):
+				ball.position.y = maxf(.15,ball.position.y)
 				begin("ground")
 				trace("floor",{})
 				message.text = feedback
@@ -418,7 +470,7 @@ func play_intro(delta: float) -> void:
 func miss(reason: String) -> void:
 	success = false
 	trace("miss",{"reason":reason})
-	floor_speed = maxf(0.2,9.81*(elapsed-CONTACT/2.0)-(catch_point.y-source.y)/CONTACT)
+	drop_velocity = (catch_point-source)/CONTACT+Vector3.UP*9.81*(CONTACT/2.0-elapsed)
 	feedback = reason
 	begin("drop")
 	message.text = reason
@@ -436,6 +488,9 @@ func release(index: int) -> void:
 			return
 		if not jump_rep() and airborne>0.12:
 			miss("Stay planted for this set.")
+			return
+		if clock-last_contact>.13:
+			miss("No hand contact. Get under the ball before release.")
 			return
 		if clock-pressed_at<0.12 or absf(elapsed-CONTACT)>0.20 or gap>0.72+0.36*skill:
 			miss("Missed contact. Hold the target and release above your forehead.")

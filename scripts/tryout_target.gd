@@ -24,6 +24,10 @@ func rod(a: Vector3,b: Vector3,r: float,color: Color) -> void:
 	item.position = (a+b)/2
 	item.quaternion = Quaternion(Vector3.UP,(b-a).normalized())
 	add_child(item)
+	var shape := CylinderShape3D.new()
+	shape.height = tube.height
+	shape.radius = r
+	preload("res://scripts/gym_physics.gd").solid(item,shape,32)
 
 func _ready() -> void:
 	var hoop := TorusMesh.new()
@@ -35,6 +39,19 @@ func _ready() -> void:
 	paint.albedo_color = Color("ed7543")
 	rim.material_override = paint
 	add_child(rim)
+	for i in 20:
+		var a := TAU*i/20.
+		var b := TAU*(i+1)/20.
+		var start := Vector3(cos(a),0,sin(a))*mouth_radius
+		var end := Vector3(cos(b),0,sin(b))*mouth_radius
+		var segment := Node3D.new()
+		segment.position = (start+end)/2.
+		segment.quaternion = Quaternion(Vector3.UP,(end-start).normalized())
+		add_child(segment)
+		var shape := CapsuleShape3D.new()
+		shape.radius = .022
+		shape.height = start.distance_to(end)+.044
+		preload("res://scripts/gym_physics.gd").solid(segment,shape,32)
 	if is_net:
 		for side in [-1,1]:
 			var foot := Vector3(side*mouth_radius,-position.y+0.1,0)
@@ -63,6 +80,17 @@ func _ready() -> void:
 			rib.material_override = paint
 			rib.position.y = y
 			add_child(rib)
+		# Hollow side walls keep the target opening available to a falling ball.
+		for i in 16:
+			var angle := TAU*i/16
+			var wall := Node3D.new()
+			wall.position = Vector3(sin(angle)*mouth_radius*.9,-depth*.5,cos(angle)*mouth_radius*.9)
+			wall.rotation.y = angle
+			wall.rotate_object_local(Vector3.RIGHT,.18)
+			add_child(wall)
+			var shape := BoxShape3D.new()
+			shape.size = Vector3(mouth_radius*.39,depth,.025)
+			preload("res://scripts/gym_physics.gd").solid(wall,shape,32)
 	var basket := MeshInstance3D.new()
 	basket.mesh = mesh
 	cord.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED if is_net else BaseMaterial3D.SHADING_MODE_PER_PIXEL

@@ -87,7 +87,7 @@ func configure(host: Control) -> void:
 			if game.phase=="complete": game.finish.grab_focus())
 
 func fields() -> Array:
-	return [["Camera orbit",-145,145,12,"°"],["Elevation",12,56,18,"°"],["Distance",6,15,10," m"],["Master volume",0,100,80,"%"]]
+	return [["Camera orbit",-145,145,12,"°"],["Elevation",-12,82,18,"°"],["Distance",2,26,10," m"],["Master volume",0,100,80,"%"]]
 
 func saved(field: Array) -> float:
 	if field[0]=="Master volume": return db_to_linear(AudioServer.get_bus_volume_db(0))*100

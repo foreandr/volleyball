@@ -1,5 +1,17 @@
 extends "res://scripts/preview_court.gd"
 
+const Contacts = preload("res://scripts/gym_physics.gd")
+var benches: Array[MeshInstance3D] = []
+
+func box(label_: String,size_: Vector3,center: Vector3,style: Material) -> MeshInstance3D:
+	var part := super.box(label_,size_,center,style)
+	if label_ in ["Runoff","North wall","South wall","Side masonry","Ceiling","Bleacher bench","Folding support","LeftPostPadding","RightPostPadding"]:
+		var shape := BoxShape3D.new()
+		shape.size = size_
+		Contacts.solid(part,shape,Contacts.GYM)
+	if label_=="Bleacher bench": benches.append(part)
+	return part
+
 func _ready() -> void:
 	super()
 	var maple := ShaderMaterial.new()
