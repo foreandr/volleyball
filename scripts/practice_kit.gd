@@ -506,7 +506,11 @@ static func face_hair(rig: Skeleton3D,body: MeshInstance3D,mesh: ArrayMesh,coach
 		float line=1.685+.065*smoothstep(-.055,.075,p.z)+.01*abs(sin(p.x*32.));
 		float temple=smoothstep(.035,.077,abs(p.x))*smoothstep(-.008,.058,p.z);
 		line+=temple*temple_recess;
-		float growth=smoothstep(line-.006,line+.010,p.y);
+		// Short growth blends the hairline into the longer moving locks.
+		float comb=p.x*2100.+p.z*540.+sin(p.y*55.+p.x*33.)*4.;
+		float fibers=cos(comb)*(1.-smoothstep(.9,3.,fwidth(comb)));
+		float edge_height=p.y-line+.0028*fibers;
+		float growth=smoothstep(-.006,.020,edge_height);
 		bool scalp=growth>grain;
 		float edge=1.632+.020*smoothstep(.04,.078,abs(p.x));
 		float cheek=smoothstep(-.005,.009,edge-p.y);
@@ -518,6 +522,10 @@ static func face_hair(rig: Skeleton3D,body: MeshInstance3D,mesh: ArrayMesh,coach
 		float strand=.5+.5*cos(p.y*620.+abs(p.x)*390.+p.z*160.);
 		float silver=gray ? smoothstep(.37,.88,grain)*(.26+.32*strand) : 0.;
 		ALBEDO=mix(tone.rgb,tone.rgb*1.65,silver)*(.72+.47*grain);
+		if(scalp){
+			float root_light=1.-smoothstep(.018,.055,edge_height);
+			ALBEDO*=(1.+.34*fibers)*(1.+.36*root_light);
+		}
 		if(jaw) ALBEDO*=.70+.30*strand;
 		ROUGHNESS=.94;
 	}"""

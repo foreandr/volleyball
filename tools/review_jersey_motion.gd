@@ -87,6 +87,10 @@ func review() -> void:
 			gym.camera.position=Vector3(-1.75,1.96,-3.65)
 			gym.camera.look_at(gym.rotation_drill.HUDDLE_CENTER+Vector3.UP*1.23)
 		if frame in [125,140]: await capture("huddle"+str(frame))
+		if frame==141:
+			gym.camera.position=gym.rotation_drill.HUDDLE_CENTER+Vector3(0,5.0,-3.0)
+			gym.camera.look_at(gym.rotation_drill.HUDDLE_CENTER+Vector3.UP*1.25)
+			await capture("roster_hair")
 		if frame==145:
 			for player in gym.rotation_drill.roster: player.exertion_total+=245.
 		if frame==148: await capture("after_exertion")
