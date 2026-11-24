@@ -104,10 +104,9 @@ func draw_player(actor: Node3D,human: bool) -> void:
 		var squat: RefCounted=game.squat if actor==game.setter else game.free_squat
 		var jump: RefCounted=game.jump if actor==game.setter else game.free_jump
 		var outer := radius+Vector2(4,4)
-		var cpu: bool=actor==game.setter and game.automatic_setter()
 		var readout: Vector2=jump_readouts.get(actor,Vector2(0.,-100.))
 		if squat.charging or jump.active:
-			if squat.charging or not cpu:
+			if squat.charging:
 				readout.x=clampf(squat.seconds/squat.FULL_LOAD,0.,1.)
 			else:
 				readout.x=clampf(jump.elapsed/maxf(.001,jump.load_duration()),0.,1.)

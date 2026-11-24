@@ -142,6 +142,7 @@ var catch_point := Vector3.ZERO
 var target := 0
 var free_squat := preload("res://scripts/tryout_squat.gd").new()
 var free_jump := preload("res://scripts/setter_jump.gd").new()
+var free_jump_used := false
 var free_target := -1
 var free_press := 0.0
 var lateral_steps := {}
@@ -387,7 +388,7 @@ func update_prompts(next: String) -> void:
 				if middle_available(): entries.append([BUTTONS[1],"Hold to set middle"])
 			else:
 				for i in BUTTONS.size(): entries.append([BUTTONS[i],TARGETS[i]])
-			entries.append_array([[JOY_BUTTON_RIGHT_SHOULDER,"Set height"],[JOY_BUTTON_LEFT_STICK,"Show / hide arc"],[JOY_BUTTON_A,"Hold / release jump"],["LT","Focus"],["RT","Sprint"],[JOY_BUTTON_START,"Settings"]])
+			entries.append_array([[JOY_BUTTON_RIGHT_SHOULDER,"Set height"],[JOY_BUTTON_LEFT_STICK,"Show / hide arc"],[JOY_BUTTON_LEFT_SHOULDER,"Hold with target to jump set"],["LT","Focus"],["RT","Sprint"],[JOY_BUTTON_START,"Settings"]])
 	if solo_setting:
 		if cpu_setting: entries=[[BUTTONS[called()],"CPU set middle" if called()==1 else "CPU set to 4"],[JOY_BUTTON_RIGHT_SHOULDER,"Set height"],[JOY_BUTTON_START,"Settings"]]
 		entries.push_front(["View","Take control" if cpu_setting else "Watch CPU set"])
@@ -425,6 +426,7 @@ func start_practice() -> void:
 	if rotation_drill.turn == 1: say(coach, "%s, you're up first." % setter.display_name,4.0)
 
 func jump_rep() -> bool:
+	if not automatic_setter(): return jump.active or (held>=0 and jump_modifier())
 	if solo_setting: return rep%2==1
 	return demo_index%2==1 if demonstration else rotation_drill.round_index==1
 
@@ -494,7 +496,7 @@ func reset_feed() -> void:
 	ball.visible = demonstration or rotation_drill.issued!=null
 	apply_camera()
 	if demonstration: title.text="COACH DEMO   /   %d OF 3" % (demo_index+1)
-	message.text = (("Middle" if called()==1 else "Position 4") if solo_setting else TARGETS[called()])+"    /    "+("Jump set" if jump_rep() else "Standing set")
+	message.text = (("Middle" if called()==1 else "Position 4") if solo_setting else TARGETS[called()])+"    /    "+(("Jump set" if jump_rep() else "Standing set") if automatic_setter() else "Choose your set")
 	if not demonstration:
 		var made := 0
 		for attempt in scorecard:
@@ -795,6 +797,10 @@ func reach_for_toss(lift: float) -> void:
 	target_point.y=clampf(ball.position.y,target_point.y-.18,target_point.y+.13)
 	Contact.track_hands(setter,target_point,true,weight,136.)
 
+func jump_modifier() -> bool:
+	var id := pad()
+	return (id>=0 and Input.is_joy_button_pressed(id,Xbox.physical(JOY_BUTTON_LEFT_SHOULDER))) or Input.is_key_pressed(KEY_SPACE)
+
 func player_jump_carry() -> Vector3:
 	if phase!="pass" or camp_velocity.length()<.25: return camp_velocity
 	# Intersect the descending toss with the forehead along this charged jump.
@@ -980,14 +986,22 @@ func step_practice(delta: float) -> void:
 		"pass":
 			ball.rotation+=toss_spin*delta
 			if cpu_setting and not jump.active: move_to_camp_toss(delta)
-			if automatic_setter() and jump_rep() and not cpu_jump_started and not jump.active and elapsed>=contact_time-cpu_jump_lead and elapsed<contact_time:
+			var height := camp_jump_height if solo_setting else .52
+			var takeoff_lead := cpu_jump_lead
+			if not automatic_setter():
+				var rise := height if jump_rep() else 0.
+				catch_point.y=forehead_target.y+.09+rise
+				var velocity := (forehead_target.y-source.y)/forehead_arrival+4.905*forehead_arrival
+				contact_time=(velocity+sqrt(maxf(0.,velocity*velocity-19.62*(catch_point.y-source.y))))/9.81
+				takeoff_lead=.07+jump.flight_duration(height,true)*.5
+			if jump_rep() and not cpu_jump_started and not jump.active and elapsed>=contact_time-takeoff_lead and elapsed<contact_time:
 				cpu_jump_started=true
 				energy[setter].spend(5,"Jump")
-				var height := camp_jump_height if solo_setting else .52
 				jump.begin_set_jump(setter,.07,height)
 				jump.height=height
 				jump.air_time=jump.flight_duration(height,true)
-				if cpu_setting and rep%4==3:
+				if not automatic_setter(): jump.carry_velocity=player_jump_carry()
+				elif cpu_setting and rep%4==3:
 					var air_remaining := maxf(.08,contact_time+cpu_release_delay-elapsed-jump.load_duration())
 					var aim := set_heading(setter,called())
 					var stance := receive_stance(aim)
@@ -1271,7 +1285,7 @@ func set_fill() -> float:
 	var ready := .30*(1.-exp(-age*5.))
 	if phase!="pass": return ready
 	var offset := release_offset()
-	var window := timing_window()
+	var window := ON_TIME
 	if offset < -window:
 		var remaining := -offset-window
 		return lerpf(ready,.55,age/(age+remaining))
@@ -1279,8 +1293,8 @@ func set_fill() -> float:
 
 func release(index: int) -> void:
 	if phase!="pass" or held!=index: return
-	graded_fill=set_fill()
 	if not pending_release:
+		graded_fill=set_fill()
 		var raw_offset := release_offset()
 		set_error = raw_offset
 		input_hold=clock-pressed_at
@@ -1299,10 +1313,7 @@ func release(index: int) -> void:
 	var skill := float(setter.effective_rating("Hand setting"))/100
 	var gap := Vector2(setter.position.x-catch_point.x,setter.position.z-catch_point.z).length()
 	var airborne := setter.position.y-BASE.y
-	var technique_feedback := ""
 	if not automatic_setter():
-		if jump_rep() and airborne<.20: technique_feedback="Jump set requested. Jump before contact."
-		elif not jump_rep() and airborne>.12: technique_feedback="Standing set requested. Stay planted."
 		if first_contact<0 or clock-last_contact>HAND_CUSHION:
 			miss("No hand contact. Get under the ball before release.")
 			return
@@ -1335,11 +1346,10 @@ func release(index: int) -> void:
 	else: endpoint=setter.reachable_set(source,endpoint,airborne>.12)
 	energy[setter].spend(2)
 	placement_error=endpoint.distance_to(PINS[target])
-	success = technique_feedback.is_empty() and target==called() and endpoint.distance_to(PINS[target])<targets[target].mouth_radius-0.10
+	success = target==called() and endpoint.distance_to(PINS[target])<targets[target].mouth_radius-0.10
 	feedback = TARGETS[target]+"   /   Target made" if success else "Missed the called target. Try it again."
-	if not technique_feedback.is_empty(): feedback=technique_feedback
 	if set_error < -timing_window(): show_timing(set_error)
-	trace("set",{"technique":technique_feedback,"requested":TARGETS[called()],"actual":TARGETS[target],"made":success,"error_m":error})
+	trace("set",{"requested":TARGETS[called()],"actual":TARGETS[target],"made":success,"error_m":error})
 	receive_local=setter.to_local(ball.position)
 	push_axis=((endpoint-source).slide(Vector3.UP).normalized()*.60+Vector3.UP*.80).normalized()
 	shape_catch_hands()
@@ -1566,20 +1576,6 @@ func _input(event: InputEvent) -> void:
 		reset_feed()
 		get_viewport().set_input_as_handled()
 		return
-	if event is InputEventJoypadButton and event.button_index==Xbox.physical(JOY_BUTTON_A) or event is InputEventKey and event.keycode==KEY_SPACE:
-		if event.is_pressed():
-			var allowed := not jump.active and not squat.charging
-			trace("squat_press",{"accepted":allowed})
-			if allowed:
-				energy[setter].spend(5,"Jump")
-				squat.begin(setter)
-				message.text = "Release to jump"
-		elif squat.charging:
-			message.text = squat.release(setter,jump,camp_jump_height if solo_setting else -1.,camp_jump_ability if solo_setting else 65.)
-			if solo_setting: jump.carry_velocity=player_jump_carry()
-			trace("jump_release",{"seconds":squat.seconds,"quality":message.text,"height":jump.height})
-		get_viewport().set_input_as_handled()
-		return
 	var index := -1
 	if event is InputEventJoypadButton:
 		for i in BUTTONS.size():
@@ -1618,7 +1614,13 @@ func free_motion(dt: float,actor: Node3D) -> bool:
 	free_squat.update(actor,dt)
 	free_squat.ring.hide()
 	if free_jump.active: free_jump.step(actor,dt,Vector2.ZERO)
+	if free_target<0: free_jump_used=false
 	if free_target>=0:
+		if jump_modifier() and not free_jump_used and not free_jump.active:
+			free_jump_used=true
+			energy[actor].spend(5,"Jump")
+			free_jump.begin_set_jump(actor,.07,.52)
+			free_jump.release()
 		if axis(Xbox.trigger(true))>.25: face_set(actor,free_target,dt)
 		var hands: Vector3 = actor.position+Vector3.UP*(actor.height_cm*.0108)+actor.basis.z*.14
 		Hands.apply(actor,hands,smoothstep(0,.22,clock-free_press))
@@ -1627,14 +1629,6 @@ func free_motion(dt: float,actor: Node3D) -> bool:
 func free_input(event: InputEvent) -> void:
 	var actor := rotation_drill.roster[0]
 	if rotation_drill.unloading.has(actor): return
-	if (event is InputEventJoypadButton and event.button_index==Xbox.physical(JOY_BUTTON_A)) or (event is InputEventKey and event.keycode==KEY_SPACE):
-		if event.is_pressed() and not free_squat.charging and not free_jump.active:
-			energy[actor].spend(5,"Jump")
-			free_squat.begin(actor)
-		elif not event.is_pressed() and free_squat.charging: free_squat.release(actor,free_jump)
-		rotation_drill.manual_wait=true
-		get_viewport().set_input_as_handled()
-		return
 	for i in BUTTONS.size():
 		if not ((event is InputEventJoypadButton and event.button_index==Xbox.physical(BUTTONS[i])) or (event is InputEventKey and event.keycode==KEYS[i])): continue
 		if event.is_pressed():
