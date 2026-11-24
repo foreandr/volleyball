@@ -244,6 +244,11 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 	depths.resize(positions.size())
 	for i in positions.size():
 		depths[i]=Color(clampf((positions[i].z+.3)/.6,0.,1.),0.,0.)
+		# Taper the covered waistband toward the hips so a forward bend
+		# keeps the rear shorts panel underneath the loose practice shirt.
+		var waist := smoothstep(.92,1.035,pattern[i].y)
+		positions[i].z=lerpf(positions[i].z,-.025,waist*.24)
+		positions[i].x*=1.-waist*.075
 		var shortening := (hem-.69)*(1.-smoothstep(.69,.96,pattern[i].y))
 		positions[i].y+=shortening
 		pattern[i].y+=shortening
