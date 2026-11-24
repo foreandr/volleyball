@@ -113,3 +113,4 @@ Camp jump reps alternate vertical and moving takeoffs. Moving jump sets carry th
 On a set the ball stays in the hands through a short yield to the forehead and a full arm extension. Flight starts at the fingertips.
 Approach pace selects walk, compact jog, run, or sprint clips. Setting hands rise earlier with spread fingers and close thumbs; the outward push is quicker than the cushion. Strength governs horizontal set range from 5 to 13 meters.
 On the lift to receive the set, elbows travel near the torso and stay near a right angle while straight wrists pass the face. The elbows open on the outward send.
+The reference setting lift leads with open hands past the chest and face while the elbows trail underneath. The receiving pocket sits forward of the forehead, yields back, and drives up and forward.

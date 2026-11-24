@@ -117,11 +117,13 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 			var elbow: Vector3=author.point(pose,lower)
 			var upper_len := shoulder.distance_to(elbow)
 			var lower_len := elbow.distance_to(author.point(pose,hand))
-			var start_axis := Vector3(-sign_*.12,-.94,.32).normalized()
-			var finish_axis := (wrist-shoulder).normalized()
-			var axis := start_axis.slerp(finish_axis,blend)
+			# The hands pass in front of the chest while the elbows trail the wrists.
+			var low := Vector3(-sign_*.10,-.94,.26).normalized()
+			var chest := Vector3(sign_*.06,-.10,.99).normalized()
+			var high := (wrist-shoulder).normalized()
+			var axis := low.slerp(chest,blend).slerp(chest.slerp(high,blend),blend)
 			wrist=shoulder+axis*sqrt(upper_len*upper_len+lower_len*lower_len)
-			pole=Vector3(sign_*lerpf(.12,.78,blend),-.62,lerpf(-.85,-.32,blend))
+			pole=Vector3(sign_*lerpf(.12,.42,smoothstep(.5,1.,blend)),-.90,lerpf(-1.,-.24,blend))
 			elbow_limit=90.
 		author.limb(pose,upper,lower,hand,wrist,pole,1.0,elbow_limit)
 		if overhead_set and not catching:

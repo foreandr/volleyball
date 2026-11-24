@@ -717,11 +717,14 @@ func _process(delta: float) -> void:
 func catch_pocket() -> Vector3:
 	return Contact.joint(setter,"Head")+Vector3.UP*.18+setter.global_basis.z*.10
 
+func extended_receive_point() -> Vector3:
+	return catch_pocket()+Vector3.UP*CATCH_GIVE+setter.global_basis.z*.085
+
 func receive_hand_lift(arrival: float) -> float:
 	if solo_setting and elapsed<arrival:
 		var distance_to_head := ball.position.distance_to(catch_pocket())
 		if elapsed<arrival*.5: return 0.
-		return (1.-smoothstep(.65,1.85,distance_to_head))*smoothstep(0.,.075,maxf(0.,clock-pressed_at))
+		return maxf(1.-smoothstep(.85,2.25,distance_to_head),1.-smoothstep(.12,.46,arrival-elapsed))*smoothstep(0.,.14,maxf(0.,clock-pressed_at))
 	var remaining := arrival-elapsed
 	var held_time := maxf(0.,clock-pressed_at)
 	var lift := .48*smoothstep(0.,.50,held_time)+.52*(1.-smoothstep(.035,.34,remaining))
@@ -729,8 +732,11 @@ func receive_hand_lift(arrival: float) -> float:
 
 func shape_catch_hands(lift := 1.) -> void:
 	if lift<=0.: return
-	Hands.apply(setter,ball.position,lift,Vector3.ZERO,0.,0.,false,Vector3.ZERO,0.,Vector3.INF,0.,true,-1.,null,Vector3.ZERO,true)
-	if lift>=.99: Contact.track_hands(setter,ball.position,true,1.,96.)
+	var receive := extended_receive_point()
+	var contact_weight := 1. if phase!="pass" else 1.-smoothstep(.035,.18,ball.position.distance_to(receive))
+	var hand_target := receive.lerp(ball.position,contact_weight)
+	Hands.apply(setter,hand_target,lift,Vector3.ZERO,0.,0.,false,Vector3.ZERO,0.,Vector3.INF,0.,true,-1.,null,Vector3.ZERO,true)
+	if contact_weight>0. and lift>=.99: Contact.track_hands(setter,hand_target,true,contact_weight,96.)
 
 func player_jump_carry() -> Vector3:
 	if phase!="pass" or camp_velocity.length()<.25: return camp_velocity
@@ -899,7 +905,7 @@ func step_practice(delta: float) -> void:
 			ball.position = source.lerp(forehead_target,flight_t/forehead_arrival)+Vector3.UP*(4.905*flight_t*(forehead_arrival-flight_t))
 			if cpu_setting:
 				var release_time := contact_time+cpu_release_delay
-				var receive := catch_pocket()+Vector3.UP*CATCH_GIVE
+				var receive := extended_receive_point()
 				var settle := smoothstep(release_time-.16,release_time,elapsed)
 				var correction := receive-ball.position
 				var lateral := correction.slide(Vector3.UP).limit_length(.22)
@@ -915,6 +921,7 @@ func step_practice(delta: float) -> void:
 			ball.position.y = maxf(0.15,ball.position.y)
 			var turn_gap := angle_difference(setter.rotation.y,set_heading(setter,called()))
 			var turn_lead := Hands.preparation_lead(turn_gap,called()==2 and not cpu_setting)
+			if cpu_setting: turn_lead=maxf(turn_lead,.48)
 			if automatic_setter() and held<0 and elapsed>=.07 and (contact_time+cpu_release_delay-elapsed<=turn_lead or (incoming.y<0 and ball.position.distance_to(catch_point)<=2.10)):
 				held = called()
 				pressed_at = clock
@@ -1222,7 +1229,7 @@ func release(index: int) -> void:
 	if set_error < -timing_window(): show_timing(set_error)
 	trace("set",{"technique":technique_feedback,"requested":TARGETS[called()],"actual":TARGETS[target],"made":success,"error_m":error})
 	receive_local=setter.to_local(ball.position)
-	push_axis=((endpoint-source).slide(Vector3.UP).normalized()*.53+Vector3.UP*.85).normalized()
+	push_axis=((endpoint-source).slide(Vector3.UP).normalized()*.60+Vector3.UP*.80).normalized()
 	shape_catch_hands()
 	begin("set_contact")
 
