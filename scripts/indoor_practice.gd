@@ -1449,6 +1449,7 @@ func step_practice(delta: float) -> void:
 				miss("Ball deflected off the gym equipment.")
 				drop_velocity = rebound
 				return
+			if handle_attack_contact(desired-motion,delta): return
 			var follow_weight := 1.-smoothstep(.14,.34,elapsed) if target==2 else 1.-elapsed/.22
 			if follow_weight>0. and bump_aim.is_zero_approx():
 				var arch := smoothstep(0.,.18,SET_RECEIVE_TIME+push_time+elapsed) if target==2 else 1.
@@ -1555,6 +1556,9 @@ func play_intro(delta: float) -> void:
 			speech_left = 0
 			skip.hide()
 			start_practice()
+
+func handle_attack_contact(_previous: Vector3,_delta: float) -> bool:
+	return false
 
 func advance_missed_ball(delta: float) -> void:
 	var remaining := delta

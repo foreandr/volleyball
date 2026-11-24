@@ -5,7 +5,7 @@ const Replay = preload("res://scripts/match_replay.gd")
 const CATEGORIES := {
 	"Passing": [{"title":"Pass to Target","scene":"res://scenes/story_animations.tscn"}],
 	"Setting": [{"title":"Set to Target","scene":"res://scenes/setting_camp.tscn"}],
-	"Attacking": [{"title":"Butterfly"}],
+	"Attacking": [{"title":"Approach and Spike","scene":"res://scenes/attacking_camp.tscn"},{"title":"Butterfly"}],
 	"Serving": [{"title":"Spin Serve"}],
 	"Digging": [],
 }
@@ -69,7 +69,8 @@ func _ready() -> void:
 			if CATEGORIES[name_].any(func(entry): return entry.title == drill):
 				show_category(name_)
 				break
-		if drill=="Set to Target": MenuPresentation.load_scene("res://scenes/setting_camp.tscn")
+		if drill=="Approach and Spike": MenuPresentation.load_scene("res://scenes/attacking_camp.tscn")
+		elif drill=="Set to Target": MenuPresentation.load_scene("res://scenes/setting_camp.tscn")
 		else: open_setting_stage(drill)
 	elif StorySession.drill_menu_category.is_empty():
 		show_categories()

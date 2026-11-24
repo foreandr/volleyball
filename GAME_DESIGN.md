@@ -164,3 +164,4 @@ Player-controlled bump sets allow up to 23 cm of collision-checked assistance to
 Missed sets land and roll for half a second before the next attempt. Switching target buttons during preparation starts a fresh meter, with a brief allowance for the thumb to move between buttons.
 Players can change between any available set targets during preparation. Near contact, the reach check also accounts for the ball and head moving past each other within torso-lean range.
 Light analog input eases into walking, with cadence matched to movement speed. The walk cycle owns its footfalls through slow turns and continues across player-controlled camp feeds.
+Training Camp > Attacking > Approach and Spike uses the Setting Camp coach feed and CPU hand-set mechanics. The hitter approaches the left pin and jumps automatically. Press X to time the spike as the set descends.
