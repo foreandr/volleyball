@@ -73,6 +73,15 @@ void fragment(){
 	float sculpt=sin(height*1380.+3.*smoothstep(-.09,.11,shoe.z));
 	float resolved=1.-smoothstep(.7,2.6,fwidth(height)*1380.);
 	vec3 midsole=mix(vec3(.51,.49,.45),tint.rgb,.14)*(.96+.055*sculpt*resolved);
+	// Recessed channels in the heel foam rise toward the back of the shoe.
+	float heel=1.-smoothstep(-.066,.006,shoe.z);
+	float channel_y=height-(.018+.007*heel);
+	float channels=min(abs(channel_y),abs(channel_y-.0045));
+	float channel_aa=max(.0003,fwidth(channel_y));
+	float recess=1.-smoothstep(.00045,.0012+channel_aa,channels);
+	float lower_lip=1.-smoothstep(.0004,.001+channel_aa,min(abs(channel_y+.0014),abs(channel_y-.0031)));
+	float sidewall=heel*(1.-underside)*smoothstep(.018,.031,abs(shoe.x));
+	midsole*=1.+sidewall*(.14*lower_lip-.38*recess);
 	ALBEDO=mix(ALBEDO,midsole,foam*.91);
 	ALBEDO*=1.-foam*.19*bead;
 	ALBEDO=mix(ALBEDO,gum*(1.-.55*flex),underside);
