@@ -95,3 +95,7 @@ CPU setters choose a takeoff lead and release offset per toss. In solo camp a ce
 Solo setting camp samples tosses across a one-metre disk around the setting spot. The player moves with the left stick and the CPU shuffles under the feed. Lateral placement is independent of toss height.
 
 CPU setters delay squaring to the target until the closing part of the toss. Both front and back sets use a slower turn, continuing into the practice follow-through.
+
+During setting practice LT tracks the live incoming ball. Holding a target button with LT turns the setter toward the appropriate set heading. CPU setters simulate that same sequence. Turning away increases placement spread while leaving over-the-shoulder sets available.
+
+Grounded pivots alternate support feet, lift the swinging shoe, and settle into idle. Airborne yaw follows the jump pose. Front and middle sets budget enough turning time to square by release; back sets begin slightly later.

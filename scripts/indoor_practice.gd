@@ -14,7 +14,6 @@ const PINS := [Vector3(4.75,2.65,3.0),Vector3(1.05,2.65,3.3),Vector3(-4.75,2.65,
 # Midway between the centers of zones 2 (x=-3) and 3 (x=0).
 const BASE := Vector3(-1.5,0.04,1.35)
 const ORDER := [0,2,1]
-const SET_LOAD := .26
 var forehead_arrival := 1.0
 var camp_receive_spot := BASE
 var camp_velocity := Vector3.ZERO
@@ -148,6 +147,9 @@ func athlete(at: Vector3,color: String) -> Node3D:
 	world.add_child(actor)
 	actor.animator.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
 	actor.get_node("DirectionArrows").hide()
+	var turn_steps := preload("res://scripts/ground_turn_steps.gd").new()
+	turn_steps.actor=actor
+	actor.skeleton.add_child(turn_steps)
 	actor.skeleton.add_child(preload("res://scripts/practice_joint_limits.gd").new())
 	return actor
 
@@ -483,9 +485,17 @@ func set_alignment(actor: Node3D,choice: int) -> float:
 	return 1.-smoothstep(deg_to_rad(18. if choice==2 else 8.),deg_to_rad(140.),angle)
 
 func facing_scatter(actor: Node3D,choice: int) -> Vector3:
-	var radius := (.035 if choice==2 else 0.)+.32*(1.-set_alignment(actor,choice))
+	var radius := (.035 if choice==2 else 0.)+.65*(1.-set_alignment(actor,choice))
 	var angle := rotation_drill.random.randf()*TAU
 	return Vector3(cos(angle),0,sin(angle))*radius*sqrt(rotation_drill.random.randf())
+
+func track_feed_or_target(dt: float) -> void:
+	if not automatic_setter() and axis(Xbox.trigger(true))<=.25 and not Input.is_key_pressed(KEY_CTRL): return
+	if held>=0:
+		face_set(setter,held,dt)
+		return
+	var offset := (ball.position-setter.position).slide(Vector3.UP)
+	if offset.length()>.12: focus_headings[setter]=atan2(offset.x,offset.z)
 
 func face_set(actor: Node3D,choice: int,dt: float) -> void:
 	var heading := set_heading(actor,choice)
@@ -530,11 +540,12 @@ func move_setter(delta: float,actor: Node3D=setter,off_ball := false) -> bool:
 	if not off_ball: actor.position.z = minf(actor.position.z,3.65)
 	var at_net := absf(actor.position.z-4.)<1.55 and absf(direction.x)>absf(direction.z)*1.35 and not sprint
 	var focus_point := ball.position if ball.visible else coach.position
-	if not off_ball and phase=="pass": focus_point=source
 	var facing := focus_point-actor.position if focus else (coach.position-actor.position if phase=="walk" and direction.is_zero_approx() else direction)
 	if at_net and not focus: facing=Vector3(0,0,1 if actor.position.z<4 else -1)
 	var choice := free_target if off_ball else held
-	if focus and choice>=0:
+	if not off_ball and phase in ["feed","pass"] and focus:
+		pass # The live feed updates focus after moving the ball this frame.
+	elif focus and choice>=0:
 		face_set(actor,choice,delta)
 	elif Vector2(facing.x,facing.z).length()>0.05:
 		actor.rotation.y = rotate_toward(actor.rotation.y,atan2(facing.x,facing.z),delta*(3.33 if focus else 4.5))
@@ -654,7 +665,11 @@ func _process(delta: float) -> void:
 		var heading: float=focus_headings.get(actor,actor.rotation.y)
 		var change := angle_difference(old,heading)
 		var limit := 3.33 if focus_headings.has(actor) or (actor==setter and focused) else 4.5
-		if actor==setter and automatic_setter() and focus_headings.has(actor): limit=Hands.CPU_SQUARE_RATE
+		if actor==setter and automatic_setter() and (held>=0 or phase=="set") and focus_headings.has(actor):
+			limit=Hands.CPU_SQUARE_RATE
+			if phase=="pass":
+				var remaining := maxf(.08,contact_time+cpu_release_delay-elapsed-(.05 if held==2 else .18))
+				limit=clampf(absf(change)/remaining,limit,3.45 if held==2 else 4.3)
 		if focus_headings.has(actor): limit=minf(limit,sqrt(2.*20.*absf(change)))
 		var desired := clampf(change/maxf(.0001,dt),-limit,limit)
 		var velocity := move_toward(float(angular_speed.get(actor,0.)),desired,dt*20.)
@@ -735,6 +750,7 @@ func step_practice(delta: float) -> void:
 			if cpu_setting: move_to_camp_toss(delta)
 			if held>=0: Hands.apply(setter,catch_point,.55)
 			ball.position = coach_motion.toss(coach,clampf((clock-maxf(clock-elapsed,next_release-.30))/.30,0,1))
+			track_feed_or_target(delta)
 			# Measure the athlete who actually arrived, including their rig scale.
 			var head := Contact.joint(setter,"Head")
 			forehead_target=head+Vector3.UP*.17+setter.global_basis.z*.048
@@ -760,8 +776,6 @@ func step_practice(delta: float) -> void:
 		"pass":
 			ball.rotation+=toss_spin*delta
 			if cpu_setting and not jump.active: move_to_camp_toss(delta)
-			if automatic_setter() and contact_time-elapsed<=Hands.square_lead(angle_difference(setter.rotation.y,set_heading(setter,called()))):
-				face_set(setter,called(),delta)
 			if automatic_setter() and jump_rep() and not cpu_jump_started and not jump.active and elapsed>=contact_time-cpu_jump_lead and elapsed<contact_time:
 				cpu_jump_started=true
 				energy[setter].spend(5)
@@ -788,13 +802,13 @@ func step_practice(delta: float) -> void:
 				return
 			if elapsed<0.16: coach_motion.toss(coach,1.0)
 			ball.position.y = maxf(0.15,ball.position.y)
-			if automatic_setter() and held<0 and elapsed>=contact_time-SET_LOAD:
+			var turn_gap := angle_difference(setter.rotation.y,set_heading(setter,called()))
+			var turn_lead := Hands.preparation_lead(turn_gap,called()==2)
+			if automatic_setter() and held<0 and elapsed>=.07 and (contact_time+cpu_release_delay-elapsed<=turn_lead or (incoming.y<0 and ball.position.distance_to(catch_point)<=2.10)):
 				held = called()
 				pressed_at = clock
+			track_feed_or_target(delta)
 			if held>=0:
-				if held==2 and called()==2 and not automatic_setter() and not focused:
-					var opposite := (setter.position-PINS[2]).slide(Vector3.UP)
-					setter.rotation.y=lerp_angle(setter.rotation.y,atan2(opposite.x,opposite.z),minf(1,delta*9))
 				meter.value = set_fill()*100
 				Hands.apply(setter,ball.position,0.35+0.65*smoothstep(contact_time-.55,contact_time-.10,elapsed))
 				if Vector3(0,ball.position.y-setter.position.y,0).length()<setter.height_cm*.013: Contact.track_hands(setter,ball.position)
@@ -1046,12 +1060,12 @@ func release(index: int) -> void:
 	flight_time = DURATION[tempo]
 	var error := 0.0 if demonstration else set_error*(3.6-skill)+gap*0.22
 	endpoint = PINS[target]+Vector3(error,0,error*0.4)
-	if not demonstration:
+	if not demonstration and not cpu_setting:
 		endpoint+=facing_scatter(setter,target)
 	if cpu_setting:
 		# Timing the push early or late displaces the set along its intended line.
 		var aim: Vector3=(PINS[target]-setter.position).slide(Vector3.UP).normalized()
-		endpoint=PINS[target]+aim*(cpu_release_delay*12.)
+		endpoint=PINS[target]+aim*(cpu_release_delay*12.)+facing_scatter(setter,target)
 	elif rotation_drill.turn!=0 and not demonstration:
 		var angle := rotation_drill.random.randf()*TAU
 		var distance := rotation_drill.random.randf_range(.03,.15) if cpu_aims_inside(rotation_drill.turn) else rotation_drill.random.randf_range(.82,1.55)

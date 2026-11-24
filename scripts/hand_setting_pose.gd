@@ -1,10 +1,12 @@
 extends RefCounted
 
-const CPU_SQUARE_RATE := 2.05
-const CPU_FOLLOW_TIME := .22
+const CPU_SQUARE_RATE := 2.35
+const CPU_PREP_LEAD := .34
+static func preparation_lead(gap: float, back_set: bool) -> float:
+	var lead := absf(gap)/CPU_SQUARE_RATE+.30
+	return maxf(CPU_PREP_LEAD,lead-(.14 if back_set else 0.))
 
-static func square_lead(yaw_gap: float) -> float:
-	return clampf(absf(yaw_gap)/CPU_SQUARE_RATE-.10,.12,.72)
+const CPU_FOLLOW_TIME := .22
 
 const CONTACT_HEIGHT := 1.83
 const CONTACT_FORWARD := 0.23

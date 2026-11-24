@@ -245,6 +245,9 @@ func configure(actor: Node3D, board: Label, status: Label, build := "", players_
 				preload("res://scripts/practice_kit.gd").apply(avatar,false,side*team_size+slot,false)
 			avatar.shirt_fabric.set_shader_parameter("fabric",avatar.team_color)
 			if not avatar.skeleton.find_child("PracticeJointLimits",false,false):
+				var turn_steps := preload("res://scripts/ground_turn_steps.gd").new()
+				turn_steps.actor=avatar
+				avatar.skeleton.add_child(turn_steps)
 				var limits := preload("res://scripts/practice_joint_limits.gd").new()
 				limits.name="PracticeJointLimits"
 				avatar.skeleton.add_child(limits)
@@ -1776,6 +1779,7 @@ func tick_receive(delta: float, previous: float) -> void:
 			cpu_fake_dump = false
 			next_touch_cue = INF
 			return
+		var before_set_yaw := actor.rotation.y
 		var face := toward_incoming(index,catch_point)
 		if face.is_zero_approx(): face = Vector3.BACK
 		var to_drop := (frame.to_local(catch_point)-actor.position).slide(Vector3.UP)
@@ -1820,16 +1824,22 @@ func tick_receive(delta: float, previous: float) -> void:
 					target = actor.global_position
 			var set_travel := (target-actor.global_position).slide(Vector3.UP).length()
 			var setting_run := cpu_setting and technique != 0 and lead > 0.24 and set_travel > 0.85
-			var square_rate := 18.0 if lateral_run else 12.5
-			if cpu_setting and technique!=0 and not setting_run:
-				var set_facing := (set_pin_for(index)-actor.position).slide(Vector3.UP).normalized()
-				if set_facing.x<0: set_facing=-set_facing
-				var gap := angle_difference(actor.rotation.y,atan2(set_facing.x,set_facing.z))
-				if lead<=preload("res://scripts/hand_setting_pose.gd").square_lead(gap): face=set_facing
-				square_rate=preload("res://scripts/hand_setting_pose.gd").CPU_SQUARE_RATE
-			move_cpu(index,target,delta,speed,face,not square_receive and not backshuffle and not plant and (is_dig or cpu_setting or free_ball or flight_kind == "serve"),(run_to_drop or turn_for_save or lateral_run or setting_run) and not plant and not backshuffle,square_rate)
+			move_cpu(index,target,delta,speed,face,not square_receive and not backshuffle and not plant and (is_dig or cpu_setting or free_ball or flight_kind == "serve"),(run_to_drop or turn_for_save or lateral_run or setting_run) and not plant and not backshuffle,18.0 if lateral_run else 12.5)
 			bump.low_save_approach_velocity = (actor.position-before_move)/maxf(delta,0.001)
 			set_jump_plant_gap = (target-actor.global_position).slide(Vector3.UP).length()
+		if cpu_setting and technique!=0:
+			var sight := (frame.to_local(ball.global_position)-actor.position).slide(Vector3.UP)
+			var aim := (set_pin_for(index)-actor.position).slide(Vector3.UP)
+			var back := aim.x<0
+			if back: aim=-aim
+			var gap := angle_difference(actor.rotation.y,atan2(aim.x,aim.z))
+			var setting := is_finite(bump.pressed_at) or cue-elapsed<=preload("res://scripts/hand_setting_pose.gd").preparation_lead(gap,back)
+			if setting:
+				sight=aim
+			if sight.length()>.12:
+				var turn_rate := preload("res://scripts/hand_setting_pose.gd").CPU_SQUARE_RATE if setting else 3.33
+				if setting and not back: turn_rate=clampf(absf(gap)/maxf(.08,cue-elapsed-.09),turn_rate,3.8)
+				actor.rotation.y=rotate_toward(before_set_yaw,atan2(sight.x,sight.z),delta*turn_rate)
 		var prep := set_jump_rise+0.16 if technique == 2 else (0.40 if cpu_dig else (0.18 if cpu_setting and technique == 0 else 0.27))
 		if elapsed >= cue-prep: queue_receive(index,technique)
 	if not is_finite(bump.pressed_at): return
