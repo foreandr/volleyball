@@ -57,7 +57,10 @@ func dress(actor: Node3D) -> void:
 		for i in 48:
 			for uv: Vector2 in [Vector2(i,j),Vector2(i+1,j),Vector2(i,j+1),Vector2(i,j+1),Vector2(i+1,j),Vector2(i+1,j+1)]:
 				var angle := uv.x*TAU/48.
-				var h := uv.y*PI/20.
+				# Lift the lower crown over the adjustment strap at the nape.
+				var rear := clampf(absf(angle-PI)/.51,0.,1.)
+				var arch := .34*sqrt(maxf(0.,1.-rear*rear))
+				var h := lerpf(arch,PI*.5,uv.y/10.)
 				var r := cos(h)
 				surface.add_vertex(Vector3(.098*r*sin(angle),.094*sin(h)-.018*r*(1.-cos(angle)),.119*r*cos(angle)))
 	# The sweatband follows the low edge of the crown and encloses the visor seam.
@@ -89,13 +92,27 @@ func dress(actor: Node3D) -> void:
 	mesh.mesh=surface.commit()
 	mesh.material_override=cloth
 	hat.add_child(mesh)
+	# A metal slide sits on the rear band below the crown opening.
+	var slide := MeshInstance3D.new()
+	var buckle := BoxMesh.new()
+	buckle.size=Vector3(.016,.014,.003)
+	slide.mesh=buckle
+	var hardware := StandardMaterial3D.new()
+	hardware.albedo_color=Color("686c61")
+	hardware.metallic=.72
+	hardware.roughness=.42
+	slide.material_override=hardware
+	slide.position=Vector3(.024,-.040,-.117)
+	slide.rotation.y=-.24
+	hat.add_child(slide)
 	var thread := ImmediateMesh.new()
 	thread.surface_begin(Mesh.PRIMITIVE_LINES)
 	for panel in 6:
 		var angle := panel*PI/3.
 		for j in 12:
 			for k in [j,j+1]:
-				var h := float(k)*PI/24.
+				var arch := .34 if panel==3 else 0.
+				var h := lerpf(arch,PI*.5,float(k)/12.)
 				var radius := cos(h)
 				thread.surface_add_vertex(Vector3(.099*radius*sin(angle),.095*sin(h)-.018*radius*(1.-cos(angle)),.120*radius*cos(angle)))
 	thread.surface_end()
