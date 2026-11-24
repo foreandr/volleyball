@@ -1203,7 +1203,7 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 		if not is_human(index):
 			cpu_policy.used(side,"set lane")
 			cpu_policy.used(side,"set height")
-		pin=players[index].reachable_set(point,pin)
+		pin=players[index].reachable_set(point,pin,players[index].position.y>PLAYER_GROUND_Y+.12)
 		var motion: Vector3 = driver.set_toward_pin(point,pin,apex,contact_height)
 		launch(world_point,frame.global_basis*motion,"set",index,1.0,hitter_for_set(index),frame.to_global(pin))
 		return

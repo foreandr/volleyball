@@ -22,6 +22,8 @@ const SET_PUSH_TIME := .025
 const FOREHEAD_REACH := .15
 var receive_local := Vector3.ZERO
 var push_axis := Vector3.UP
+var camp_call := 0
+var coach_windup := 0.0
 var camp_receive_spot := BASE
 var camp_velocity := Vector3.ZERO
 var grip_open := 0.
@@ -379,12 +381,14 @@ func update_prompts(next: String) -> void:
 		"complete": entries = [[JOY_BUTTON_A,"Continue"]]
 		"ground": entries = [[JOY_BUTTON_LEFT_SHOULDER,"Next toss"],[JOY_BUTTON_START,"Settings"]]
 		_:
-			if solo_setting: entries.append([BUTTONS[0],"Hold to set to 4"])
+			if solo_setting:
+				entries.append([BUTTONS[0],"Hold to set to 4"])
+				if middle_available(): entries.append([BUTTONS[1],"Hold to set middle"])
 			else:
 				for i in BUTTONS.size(): entries.append([BUTTONS[i],TARGETS[i]])
 			entries.append_array([[JOY_BUTTON_RIGHT_SHOULDER,"Set height"],[JOY_BUTTON_LEFT_STICK,"Show / hide arc"],[JOY_BUTTON_A,"Hold / release jump"],["LT","Focus"],["RT","Sprint"],[JOY_BUTTON_START,"Settings"]])
 	if solo_setting:
-		if cpu_setting: entries=[[BUTTONS[0],"CPU set to 4"],[JOY_BUTTON_RIGHT_SHOULDER,"Set height"],[JOY_BUTTON_START,"Settings"]]
+		if cpu_setting: entries=[[BUTTONS[called()],"CPU set middle" if called()==1 else "CPU set to 4"],[JOY_BUTTON_RIGHT_SHOULDER,"Set height"],[JOY_BUTTON_START,"Settings"]]
 		entries.push_front(["View","Take control" if cpu_setting else "Watch CPU set"])
 	Xbox.prompts(controls_row,entries)
 
@@ -424,16 +428,21 @@ func jump_rep() -> bool:
 	return demo_index%2==1 if demonstration else rotation_drill.round_index==1
 
 func called() -> int:
-	if solo_setting: return 0 # Outside pin, position four.
+	if solo_setting: return camp_call
 	return ORDER[demo_index if demonstration else rotation_drill.attempts]
+
+func middle_available() -> bool:
+	return camp_receive_spot.z>1. and absf(camp_receive_spot.x)<4.5
 
 func choose_camp_toss() -> Vector3:
 	var rng = rotation_drill.random
 	var start := Vector3(setter.position.x,BASE.y,setter.position.z)
 	for attempt in 64:
-		var spot := Vector3(rng.randf_range(-5.85,5.85),BASE.y,rng.randf_range(-5.85,1.8))
+		var spread := 1.35 if rng.randf()<.8 else 3.1
+		var spot := BASE+Vector3(rng.randfn(0.,spread),0.,rng.randfn(0.,spread))
+		if absf(spot.x)>5.85 or spot.z< -5.85 or spot.z>3.4: continue
 		var distance := start.distance_to(spot)
-		if distance<1.5 or distance>4.65*minf(1.,camp_speed_scale()): continue
+		if distance<.05 or distance>4.65*minf(1.,camp_speed_scale()): continue
 		var clear := true
 		for obstacle in [coach,rotation_drill.basket]:
 			var center := Vector3(obstacle.position.x,BASE.y,obstacle.position.z)
@@ -446,6 +455,8 @@ func choose_camp_toss() -> Vector3:
 func reset_feed() -> void:
 	if solo_setting:
 		camp_receive_spot=choose_camp_toss()
+		camp_call=1 if middle_available() and rotation_drill.random.randf()<.5 else 0
+		prompt_phase=""
 		plant_time=-1.
 		setter.skeleton.get_node("GroundTurnSteps").set_sequence(-1.,cpu_setting)
 		camp_velocity=Vector3.ZERO
@@ -475,7 +486,7 @@ func reset_feed() -> void:
 	ball.visible = demonstration or rotation_drill.issued!=null
 	apply_camera()
 	if demonstration: title.text="COACH DEMO   /   %d OF 3" % (demo_index+1)
-	message.text = ("Position 4" if solo_setting else TARGETS[called()])+"    /    "+("Jump set" if jump_rep() else "Standing set")
+	message.text = (("Middle" if called()==1 else "Position 4") if solo_setting else TARGETS[called()])+"    /    "+("Jump set" if jump_rep() else "Standing set")
 	if not demonstration:
 		var made := 0
 		for attempt in scorecard:
@@ -550,8 +561,8 @@ func toss_at(time: float) -> Vector3:
 func camp_speed_scale() -> float:
 	return lerpf(.65,1.25,setter.effective_rating("Speed")/100.)
 
-func camp_range(height_index: int) -> float:
-	var base: float=setter.reachable_set(Vector3.ZERO,Vector3.RIGHT*100.).x
+func camp_range(height_index: int, airborne := false) -> float:
+	var base: float=setter.reachable_set(Vector3.ZERO,Vector3.RIGHT*100.,airborne).x
 	return base*(.78 if height_index==1 else 1.)
 
 func chosen_tempo() -> int:
@@ -841,7 +852,10 @@ func standing_set_load(depth: float) -> void:
 	var ankles := [author.point(pose,"foot_l"),author.point(pose,"foot_r")]
 	var hips := rig.find_bone("pelvis")
 	var parent: Transform3D=author.world_pose(pose,rig.get_bone_parent(hips))
-	pose[hips].origin+=parent.basis.inverse()*(rig.global_basis.inverse()*Vector3.DOWN*.065*depth)
+	var pin: Vector3=PINS[target if phase=="set_contact" else (held if held>=0 else called())]
+	var distance := (pin-setter.position).slide(Vector3.UP).length()
+	var drive := smoothstep(.18,.90,distance/maxf(1.,camp_range(0)))
+	pose[hips].origin+=parent.basis.inverse()*(rig.global_basis.inverse()*Vector3.DOWN*lerpf(.035,.155,drive)*depth)
 	rig.set_bone_pose_position(hips,pose[hips].origin)
 	for i in 2:
 		var side := "l" if i==0 else "r"
@@ -867,7 +881,7 @@ func step_practice(delta: float) -> void:
 		follow=flat*smoothstep(0.,.045,elapsed)+(1.-flat)*smoothstep(.165,.235,elapsed)
 		follow*=1.-smoothstep(.26,.42,elapsed)
 	setter.skeleton.set_meta("wrist_follow",follow)
-	if not jump.active and not jump_rep():
+	if not jump.active and (not automatic_setter() or not jump_rep()):
 		if phase=="pass":
 			standing_set_load(smoothstep(contact_time-.24,contact_time,elapsed))
 		elif phase=="set_contact":
@@ -1144,7 +1158,7 @@ func step_practice(delta: float) -> void:
 				if ball.position.y<.16: begin("result")
 		"result":
 			if success: ball.position = endpoint-Vector3.UP*minf(targets[target].depth-.12,elapsed*3.1)
-			if elapsed>.08 and (not demonstration or not jump.active):
+			if elapsed>(.045 if solo_setting else .08) and (not demonstration or not jump.active):
 				if demonstration:
 					demo_index+=1
 					if demo_index>=ORDER.size(): demonstration=false
@@ -1180,6 +1194,10 @@ func step_practice(delta: float) -> void:
 				reset_feed()
 
 	rotation_drill.prepare_next_ball(delta)
+	if solo_setting and rotation_drill.waiting_ball and rotation_drill.fetch_time>=.74:
+		if (phase=="set" and elapsed>=flight_time-.30) or phase in ["rim","result","between","cart"] and coach_windup>0.:
+			coach_windup=minf(.30,coach_windup+delta)
+			rotation_drill.waiting_ball.position=coach_motion.toss(coach,coach_windup/.30)
 
 func play_intro(delta: float) -> void:
 	ball.hide()
@@ -1302,9 +1320,9 @@ func release(index: int) -> void:
 		var late := clampf((absf(set_error)-.065)/.135,0,1)
 		endpoint.z += 1.5*late
 	if solo_setting:
-		var offset := (endpoint-source).slide(Vector3.UP).limit_length(camp_range(tempo))
+		var offset := (endpoint-source).slide(Vector3.UP).limit_length(camp_range(tempo,airborne>.12))
 		endpoint=Vector3(source.x+offset.x,endpoint.y,source.z+offset.z)
-	else: endpoint=setter.reachable_set(source,endpoint)
+	else: endpoint=setter.reachable_set(source,endpoint,airborne>.12)
 	energy[setter].spend(2)
 	placement_error=endpoint.distance_to(PINS[target])
 	success = technique_feedback.is_empty() and target==called() and endpoint.distance_to(PINS[target])<targets[target].mouth_radius-0.10
@@ -1478,6 +1496,9 @@ func change_feed_phase(next: String) -> void:
 	if next=="feed": cue_until=clock+1.05
 	var prepared := held
 	begin(next)
+	if next=="feed":
+		elapsed=coach_windup
+		coach_windup=0.
 	held = prepared
 
 func _exit_tree() -> void:
@@ -1555,11 +1576,14 @@ func _input(event: InputEvent) -> void:
 			if event.button_index==Xbox.physical(BUTTONS[i]): index = i
 	elif event is InputEventKey: index = KEYS.find(event.keycode)
 	if index<0: return
-	if solo_setting and index!=0: return
+	if solo_setting and index!=0 and (index!=1 or not middle_available()): return
 	if phase not in ["cart","walk","feed","pass"]:
 		trace("target_unavailable",{"target":TARGETS[index],"down":event.is_pressed()})
 		if phase=="ground": message.text = "Call the next toss"
 	elif event.is_pressed():
+		if solo_setting:
+			camp_call=index
+			for i in targets.size(): targets[i].beacon.visible=i==index
 		pending_release = false
 		held = index
 		pressed_at = clock

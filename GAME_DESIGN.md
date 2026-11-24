@@ -123,3 +123,5 @@ Forward sets hold the wrists flat for 120 ms after easing out of the loaded grip
 Camp pause sliders tune the active setter for this session and show current medium/high set ranges. Fingers open on the gather from the relaxed running gait.
 RB cycles set heights. The incoming toss shows its projected flight and floor landing ring. Holding the set input begins opening the hands.
 On descending tosses an active setter can lean and reach to either side. Contact follows the swept ball and the actual palm pocket, including on off-center releases.
+
+Setting camp feeds cluster around the home between zones 2 and 3. Inside the attack line the setter can also call middle. The coach prepares the next toss during flight. Planted sets load the knees according to distance and available strength. Airborne contact has 77% of planted horizontal range.

@@ -102,8 +102,9 @@ func play_ground_gait(speed: float) -> void:
 func effective_rating(skill: String) -> float:
 	return float(attributes.get(skill,65))*stamina.effectiveness()
 
-func reachable_set(origin: Vector3, requested: Vector3) -> Vector3:
+func reachable_set(origin: Vector3, requested: Vector3, airborne := false) -> Vector3:
 	var distance_limit := lerpf(5.,13.,float(attributes.get("Strength",65))/100.)*stamina.effectiveness()
+	if airborne: distance_limit*=.77
 	var horizontal := (requested-origin).slide(Vector3.UP).limit_length(distance_limit)
 	return Vector3(origin.x+horizontal.x,requested.y,origin.z+horizontal.z)
 
