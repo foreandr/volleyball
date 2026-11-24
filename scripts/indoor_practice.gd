@@ -38,6 +38,11 @@ var spectator_progress := ProgressBar.new()
 var keyboard_prompt := true
 var skip_time := 0.0
 var camera_lead := Vector3.ZERO
+var replay_inspector := preload("res://scripts/practice_replay.gd").new()
+
+func toggle_practice_replay() -> void:
+	replay_inspector.toggle()
+
 var camera := Camera3D.new()
 var world := Node3D.new()
 var setter: Node3D
@@ -168,6 +173,7 @@ func _ready() -> void:
 	ball.material_override = leather
 	world.add_child(ball)
 	rotation_drill.configure(self)
+	add_child(replay_inspector)
 	for a in rotation_drill.roster: energy[a]=preload("res://scripts/player_stamina.gd").new()
 	var rings := preload("res://scripts/tryout_player_ring.gd").new()
 	rings.game=self

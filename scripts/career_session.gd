@@ -33,11 +33,25 @@ func _ready() -> void:
 	prompt.exclusive = true
 	var fields := VBoxContainer.new()
 	prompt.add_child(fields)
-	var syntax := Label.new()
-	syntax.text = "quest intro   /   quest tutorial   /   quest rep 1–32   /   quest complete   /   vison   /   visoff"
-	fields.add_child(syntax)
+	var commands := GridContainer.new()
+	commands.columns = 2
+	commands.add_theme_constant_override("h_separation",24)
+	fields.add_child(commands)
+	for entry in [
+		["vison","Show each person's current command"],
+		["visoff","Hide command bubbles"],
+		["replay","Inspect recent indoor practice or return to live play"],
+		["quest intro","Start the tryout introduction"],
+		["quest tutorial","Start the setting tutorial"],
+		["quest rep 1-32","Jump to a tutorial rep (for example, quest rep 5)"],
+		["quest complete","Jump to tryout completion"]
+	]:
+		for value in entry:
+			var label := Label.new()
+			label.text = value
+			commands.add_child(label)
 	fields.add_child(command)
-	command.placeholder_text = "quest tutorial"
+	command.placeholder_text = "Enter a command"
 	command.custom_minimum_size.x = 480
 	prompt.register_text_enter(command)
 	prompt.confirmed.connect(run_command)
@@ -57,6 +71,10 @@ func _input(event: InputEvent) -> void:
 func run_command() -> void:
 	var parts := command.text.strip_edges().to_lower().split(" ",false)
 	match "".join(parts):
+		"replay":
+			var scene := get_tree().current_scene
+			if scene and scene.has_method("toggle_practice_replay"): scene.call_deferred("toggle_practice_replay")
+			return
 		"vison","vizon":
 			show_commands = true
 			return

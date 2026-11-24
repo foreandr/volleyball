@@ -15,6 +15,14 @@ func box(label_: String,size_: Vector3,center: Vector3,style: Material) -> MeshI
 
 func _ready() -> void:
 	super()
+	# One continuous collider matches the visible maple instead of leaving a
+	# six-centimetre gap above the lower runoff collider.
+	var deck := Node3D.new()
+	add_child(deck)
+	deck.position = Vector3(0,0.01,4)
+	var deck_shape := BoxShape3D.new()
+	deck_shape.size = Vector3(9,0.06,18)
+	Contacts.solid(deck,deck_shape,Contacts.GYM)
 	var maple := ShaderMaterial.new()
 	maple.shader = preload("res://assets/gym/maple.gdshader")
 	maple.set_shader_parameter("crest",preload("res://assets/gym/falcon.svg"))

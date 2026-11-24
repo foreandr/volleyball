@@ -73,3 +73,5 @@ Two designated collectors retrieve loose balls after the coach finishes the tryo
 ## Future referee challenges
 
 Occasionally a referee should make an incorrect call. Teams should be able to challenge the call and have the decision upheld or overturned after review. Challenge limits, eligible calls and controls are open design decisions.
+
+The tilde console lists career and diagnostic commands. In indoor practice, replay pauses the drill and exposes recent poses with a scrubber and independent inspection camera. The gym court surface and player floor clearance follow the raised maple deck.

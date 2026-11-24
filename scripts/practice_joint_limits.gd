@@ -8,6 +8,8 @@ var excursion: Array[float]=[]
 var previous: Array[Quaternion]=[]
 var max_rate: Array[float]=[]
 
+var replay_bones: Array[Transform3D] = []
+
 func _process_modification() -> void:
 	var rig := get_skeleton()
 	if joints.is_empty():
@@ -35,3 +37,40 @@ func _process_modification() -> void:
 		if change>max_rate[j]*dt: q=previous[j].slerp(q,max_rate[j]*dt/change)
 		rig.set_bone_pose_rotation(joints[j],q)
 		previous[j]=q
+
+	enforce_court_floor(rig)
+	if not replay_bones.is_empty():
+		for i in rig.get_bone_count(): replay_bones[i] = rig.get_bone_pose(i)
+		replay_bones = []
+
+static var sole_hulls := {}
+
+func enforce_court_floor(rig: Skeleton3D) -> void:
+	var lift := 0.0
+	for side in ["l","r"]:
+		if not rig.has_meta("sole_"+side): continue
+		var sole: Node3D = rig.get_meta("sole_"+side)
+		if not sole: continue
+		var shoe := sole.get_child(0) as MeshInstance3D
+		if not sole_hulls.has(shoe.mesh):
+			sole_hulls[shoe.mesh] = shoe.mesh.create_convex_shape(true,false).points
+		var ankle := rig.find_bone("foot_"+side)
+		var frame := rig.global_transform * rig.get_bone_global_pose(ankle) * sole.transform * shoe.transform
+		for local: Vector3 in sole_hulls[shoe.mesh]:
+			var point := frame * local
+			lift = maxf(lift, floor_height(point)-point.y)
+	for bone in ["Head","pelvis","spine_03","calf_l","calf_r","lowerarm_l","lowerarm_r","hand_l","hand_r","middle_03_l","middle_03_r"]:
+		var index := rig.find_bone(bone)
+		if index < 0: continue
+		var point := rig.to_global(rig.get_bone_global_pose(index).origin)
+		var radius := 0.09 if bone in ["Head","pelvis","spine_03"] else 0.035
+		lift = maxf(lift,floor_height(point)+radius-point.y)
+	if lift > 0:
+		var root := rig.find_bone("pelvis")
+		var parent := rig.get_bone_parent(root)
+		var basis := rig.global_basis
+		if parent >= 0: basis *= rig.get_bone_global_pose(parent).basis
+		rig.set_bone_pose_position(root,rig.get_bone_pose_position(root)+basis.inverse()*(Vector3.UP*lift))
+
+static func floor_height(point: Vector3) -> float:
+	return 0.04 if absf(point.x)<=4.5 and point.z>=-5.0 and point.z<=13.0 else -0.02
