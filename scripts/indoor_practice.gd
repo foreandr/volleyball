@@ -270,7 +270,7 @@ func update_prompts(next: String) -> void:
 		"ground": entries = [[JOY_BUTTON_LEFT_SHOULDER,"Next toss"],[JOY_BUTTON_START,"Settings"]]
 		_:
 			for i in BUTTONS.size(): entries.append([BUTTONS[i],TARGETS[i]])
-			entries.append_array([["RS","Set height"],[JOY_BUTTON_LEFT_STICK,"Show / hide arc"],[JOY_BUTTON_RIGHT_STICK,"R3 hold / release jump" if Xbox.physical(JOY_BUTTON_RIGHT_STICK)==JOY_BUTTON_RIGHT_STICK else "Hold / release jump"],["LT","Focus"],["RT","Sprint"],[JOY_BUTTON_START,"Settings"]])
+			entries.append_array([["RS","Set height"],[JOY_BUTTON_LEFT_STICK,"Show / hide arc"],[JOY_BUTTON_A,"Hold / release jump"],["LT","Focus"],["RT","Sprint"],[JOY_BUTTON_START,"Settings"]])
 	Xbox.prompts(controls_row,entries)
 
 func leave() -> void:
@@ -863,7 +863,7 @@ func _input(event: InputEvent) -> void:
 		reset_feed()
 		get_viewport().set_input_as_handled()
 		return
-	if event is InputEventJoypadButton and event.button_index==Xbox.physical(JOY_BUTTON_RIGHT_STICK) or event is InputEventKey and event.keycode==KEY_SPACE:
+	if event is InputEventJoypadButton and event.button_index==Xbox.physical(JOY_BUTTON_A) or event is InputEventKey and event.keycode==KEY_SPACE:
 		if event.is_pressed():
 			var allowed := not jump.active and not squat.charging
 			trace("squat_press",{"accepted":allowed})
@@ -918,7 +918,7 @@ func free_motion(dt: float,actor: Node3D) -> bool:
 func free_input(event: InputEvent) -> void:
 	var actor := rotation_drill.roster[0]
 	if rotation_drill.unloading.has(actor): return
-	if (event is InputEventJoypadButton and event.button_index==Xbox.physical(JOY_BUTTON_RIGHT_STICK)) or (event is InputEventKey and event.keycode==KEY_SPACE):
+	if (event is InputEventJoypadButton and event.button_index==Xbox.physical(JOY_BUTTON_A)) or (event is InputEventKey and event.keycode==KEY_SPACE):
 		if event.is_pressed() and not free_squat.charging and not free_jump.active:
 			energy[actor].spend(5)
 			free_squat.begin(actor)

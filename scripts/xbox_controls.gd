@@ -47,6 +47,8 @@ static func prompts(parent: Container,entries: Array) -> void:
 
 static func settings(parent: Container,refresh: Callable) -> void:
 	for i in CONTROLS.size():
+		# Keep the legacy auxiliary slot in saved maps for remapping other controls.
+		if i==FACE.size()+AUX.find(JOY_BUTTON_RIGHT_STICK): continue
 		var choices: Array = FACE if i<4 else AUX
 		var slot := i if i<4 else i-4
 		var option := OptionButton.new()
