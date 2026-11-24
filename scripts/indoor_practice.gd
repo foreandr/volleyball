@@ -898,7 +898,7 @@ func step_practice(delta: float) -> void:
 	setter.skeleton.set_meta("fast_set_push",phase=="set_contact" and elapsed+delta>SET_RECEIVE_TIME or phase=="set" and elapsed<.04)
 	setter.animator.advance(delta)
 	var gathering := phase=="pass" and (plant_time>=0. or jump.active or squat.charging or (held>=0 and (not cpu_setting or jump_rep() and contact_time-elapsed<.46)))
-	var open := gathering or phase=="set_contact" or (phase=="set" and elapsed<.28)
+	var open := gathering or phase=="set_contact" or (phase=="set" and elapsed<(.34 if target==2 else .28))
 	grip_open=move_toward(grip_open,1. if open else 0.,delta*6.)
 	setter.skeleton.set_meta("grip_open",grip_open)
 	setter.skeleton.set_meta("fixed_setting_hands",grip_open>0.)
@@ -909,13 +909,12 @@ func step_practice(delta: float) -> void:
 		follow=flat*smoothstep(0.,.045,elapsed)+(1.-flat)*smoothstep(.165,.235,elapsed)
 		follow*=1.-smoothstep(.26,.42,elapsed)
 	setter.skeleton.set_meta("wrist_follow",follow)
-	var back_grip := 0.
-	if phase=="pass" and held==2:
-		back_grip=receive_hand_lift(contact_time)
-	elif target==2 and phase in ["set_contact","set"]:
-		back_grip=1.-smoothstep(.12,.26,elapsed) if phase=="set" else 1.
-	setter.skeleton.set_meta("back_grip",back_grip)
-	setter.skeleton.set_meta("back_extension",smoothstep(SET_RECEIVE_TIME,SET_RECEIVE_TIME+push_time,elapsed) if phase=="set_contact" else (1. if phase=="set" else 0.))
+	var back_finish := 0.
+	if target==2 and phase=="set":
+		back_finish=smoothstep(0.,.095,elapsed)*(1.-smoothstep(.16,.32,elapsed))
+		setter.skeleton.set_meta("wrist_follow",0.)
+	setter.skeleton.set_meta("back_grip",back_finish)
+	setter.skeleton.set_meta("back_extension",back_finish)
 	if not jump.active and (not automatic_setter() or not jump_rep()):
 		if phase=="pass":
 			standing_set_load(smoothstep(contact_time-.24,contact_time,elapsed))
@@ -1133,12 +1132,12 @@ func step_practice(delta: float) -> void:
 			if elapsed<=SET_RECEIVE_TIME:
 				var t := clampf(elapsed/SET_RECEIVE_TIME,0.,1.)
 				ball.position=setter.to_global(receive_local).lerp(pocket,1.-pow(1.-t,2.))
-				shape_catch_hands(1.,.55*t)
+				shape_catch_hands(1.,smoothstep(0.,.18,elapsed))
 				var pads := (Contact.palm(setter,"l")+Contact.palm(setter,"r"))*.5
 				ball.position=ball.position.lerp(pads+Vector3.UP*.060,smoothstep(0.,.035,elapsed))
 			else:
 				var extension := smoothstep(0.,push_time,elapsed-SET_RECEIVE_TIME)
-				Hands.apply(setter,pocket,1.,push_axis*.23*extension,0.,0.,false,Vector3.ZERO,extension,endpoint-pocket,.55+.45*extension,true,-1.,null,Vector3.ZERO,true)
+				Hands.apply(setter,pocket,1.,push_axis*.23*extension,0.,0.,false,Vector3.ZERO,extension,endpoint-pocket,smoothstep(0.,.18,elapsed),true,-1.,null,Vector3.ZERO,true)
 				# Carry the ball on the finger pads until elbow extension is complete.
 				Contact.track_hands(setter,pocket,true,1.-extension)
 				var fingers := (Contact.palm(setter,"l")+Contact.palm(setter,"r"))*.5
@@ -1177,7 +1176,10 @@ func step_practice(delta: float) -> void:
 				miss("Ball deflected off the gym equipment.")
 				drop_velocity = rebound
 				return
-			if elapsed<0.22: Hands.apply(setter,source,1.0-elapsed/0.22,push_axis*0.22,0.0,0.3,false,Vector3.ZERO,1.0,endpoint-source,1.,true)
+			var follow_weight := 1.-smoothstep(.14,.34,elapsed) if target==2 else 1.-elapsed/.22
+			if follow_weight>0.:
+				var arch := smoothstep(0.,.18,SET_RECEIVE_TIME+push_time+elapsed) if target==2 else 1.
+				Hands.apply(setter,source,follow_weight,push_axis*.22,0.,.3,false,Vector3.ZERO,1.,endpoint-source,arch,true)
 			if t>=1:
 				if endpoint.distance_to(PINS[target])<targets[target].mouth_radius-0.10: targets[target].impact(ball.position,motion/maxf(delta,.001))
 				finish_set()

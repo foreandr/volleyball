@@ -137,3 +137,4 @@ Energy capacity is 25 plus five points per Stamina rating. Endurance sets rested
 Back sets extend the arms together above the shoulders, following the spine as the torso arches farther for longer sets.
 Back-set contact cups the ball with upward palms. The wrists extend into a palms-up finish and the shared follow-through tracks the outgoing arc tangent within overhead shoulder reach.
 During back-set extension the chest, neck and chin lift together toward the outgoing set, easing down through recovery.
+Back-set wrists keep the receive grip through ball departure and extend over the next 95 ms. Chest and chin arch progressively from the catch through follow-through over 180 ms.
