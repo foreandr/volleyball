@@ -15,6 +15,10 @@ const Flight = preload("res://scripts/pass_flight.gd")
 const Net = preload("res://scripts/net_collision.gd")
 const BallPreview = preload("res://scripts/animation_ball_preview.gd")
 const Court = preload("res://scripts/preview_court.gd")
+const GymPaths = preload("res://scripts/tryout_paths.gd")
+var gym_contacts := preload("res://scripts/gym_physics.gd").new()
+var court_velocities := {}
+var movement_times := {}
 const Footwork = preload("res://scripts/directional_footwork.gd")
 const CONTACT_SOUND = preload("res://assets/audio/pass_contact.wav")
 const SPIKE_SOUND = preload("res://assets/audio/spike_smack.wav")
@@ -235,6 +239,13 @@ func configure(actor: Node3D, board: Label, status: Label, build := "", players_
 				avatar.apply_profile(StorySession.offline_roster[side*team_size+slot])
 				avatar.team_color = StorySession.kit_colors[side]
 				if avatar.kit_material: avatar.kit_material.albedo_color = avatar.team_color
+			if not avatar.shirt_fabric:
+				preload("res://scripts/practice_kit.gd").apply(avatar,false,side*team_size+slot,false)
+			avatar.shirt_fabric.set_shader_parameter("fabric",avatar.team_color)
+			if not avatar.skeleton.find_child("PracticeJointLimits",false,false):
+				var limits := preload("res://scripts/practice_joint_limits.gd").new()
+				limits.name="PracticeJointLimits"
+				avatar.skeleton.add_child(limits)
 			avatar.animator.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
 			avatar.get_node("DirectionArrows").hide()
 			players.append(avatar)
@@ -378,6 +389,8 @@ func starting_lane(index: int) -> float:
 	return -lane if team(index) == 0 else lane
 
 func reset_match() -> void:
+	court_velocities.clear()
+	movement_times.clear()
 	if replay.active: toggle_replay()
 	if cpu_policy.demo_recording:
 		cpu_policy.load_profile()
@@ -1408,7 +1421,7 @@ func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_f
 	elif receive_facing.is_finite() and not receive_facing.is_zero_approx():
 		yaw = atan2(receive_facing.x,receive_facing.z)
 		if not turn_to_travel: yaw = clampf(yaw,-1.03,1.03)
-	actor.rotation.y = rotate_toward(actor.rotation.y,yaw,delta*(turn_rate if turn_to_travel else 8.0))
+	actor.rotation.y = rotate_toward(actor.rotation.y,yaw,delta*minf(turn_rate,GymPaths.TURN_RATE))
 	var sprint := may_run and heading.dot(actor.basis.z.normalized()) >= run_alignment
 	var previous_body_pose := {}
 	if paced_run:
@@ -1420,7 +1433,14 @@ func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_f
 	if sprint:
 		pace = clampf(speed,0.65,CPU_SPRINT_SPEED) if paced_run else clampf(speed*1.24,5.85,CPU_SPRINT_SPEED)
 	var before := actor.position
-	var step_target := before+offset.limit_length(delta*pace)
+	var velocity: Vector3 = court_velocities.get(index,Vector3.ZERO)
+	if match_clock-float(movement_times.get(index,match_clock))>delta*2.: velocity=Vector3.ZERO
+	velocity=velocity.move_toward(heading*minf(pace,sqrt(2.*GymPaths.WALK_ACCELERATION*distance)),GymPaths.WALK_ACCELERATION*delta)
+	movement_times[index]=match_clock
+	court_velocities[index]=velocity
+	var world_step := frames[team(index)].global_basis*(velocity*delta).limit_length(distance)
+	var safe := gym_contacts.travel(self,actor.global_position,world_step,actor.height_cm*.01)
+	var step_target := frames[team(index)].to_local(safe)
 	var grounded := Court.clamp_setter(step_target,CPU_COURT_FRONT_LIMIT)
 	if is_server and before.z < Court.RUNOFF_NEAR_BASELINE:
 		grounded.z = clampf(step_target.z,before.z,CPU_COURT_FRONT_LIMIT)

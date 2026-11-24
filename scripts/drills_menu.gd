@@ -4,7 +4,7 @@ const Replay = preload("res://scripts/match_replay.gd")
 
 const CATEGORIES := {
 	"Passing": [{"title":"Pass to Target","scene":"res://scenes/story_animations.tscn"}],
-	"Setting": [{"title":"Set to Target"}],
+	"Setting": [{"title":"Set to Target","scene":"res://scenes/setting_camp.tscn"}],
 	"Attacking": [{"title":"Butterfly"}],
 	"Serving": [{"title":"Spin Serve"}],
 	"Digging": [],
@@ -69,7 +69,8 @@ func _ready() -> void:
 			if CATEGORIES[name_].any(func(entry): return entry.title == drill):
 				show_category(name_)
 				break
-		open_setting_stage(drill)
+		if drill=="Set to Target": MenuPresentation.load_scene("res://scenes/setting_camp.tscn")
+		else: open_setting_stage(drill)
 	elif StorySession.drill_menu_category.is_empty():
 		show_categories()
 	else:
@@ -140,8 +141,9 @@ func open_setting_stage(title: String) -> void:
 	var viewport := SubViewport.new()
 	viewport.own_world_3d = true
 	setting_stage.add_child(viewport)
-	preload("res://scripts/preview_court.gd").add_preview_lighting(viewport)
-	viewport.add_child(preload("res://scripts/preview_court.gd").new())
+	var gym := preload("res://scripts/tryout_gym.gd").new()
+	viewport.add_child(gym)
+	gym.light_gym(gym)
 	var spin_serve := title == "Spin Serve"
 	var butterfly := title == "Butterfly"
 	var drill: Node3D

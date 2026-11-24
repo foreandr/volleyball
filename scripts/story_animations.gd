@@ -146,8 +146,11 @@ func build_marker_popup() -> void:
 func show_marker_popup(caption := "Debug marker saved") -> void:
 	marker_popup.flash(caption)
 
+func light_preview_stage(world: Node3D) -> void:
+	preload("res://scripts/tryout_gym.gd").light_gym(world)
+
 func build_preview_stage(world: Node3D) -> void:
-	world.add_child(preload("res://scripts/preview_court.gd").new())
+	world.add_child(preload("res://scripts/tryout_gym.gd").new())
 	orbit_yaw = -2.2
 	orbit_pitch = 0.26
 	max_view_distance = 60.0

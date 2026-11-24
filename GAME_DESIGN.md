@@ -81,3 +81,5 @@ The practice coach wears a whistle and signals the start and finish before handl
 Feeding resumes at the active setter and station. Coaches can feed from either side or the handle of a cart. A missed jump-set toss continues to forehead height. The whistle cue is shared for future officials. Huddles use idle legs and can clear movable carts and target stands. Practice footwear includes low, mid and high collars, varied upper panels, sock colors and heights, and full or three-quarter tights.
 
 Indoor hand sets preserve the physical button-release time while a prepared setter waits for the descending ball to enter reach. A 65 ms on-time band and a short hand cushion accommodate releases around visible contact. Jump technique is graded separately.
+
+Training Camp / Setting / Set to Target runs on the same indoor practice controller as the career tryout. Solo practice recycles issued balls after each result and repeats standing and jump sets without roster rotation. Play and Training Camp use the indoor gym and shared athlete kit for match-based drills.

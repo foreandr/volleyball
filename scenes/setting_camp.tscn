@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/indoor_practice.tscn" id="1"]
+
+[node name="SettingCamp" instance=ExtResource("1")]
+solo_setting = true

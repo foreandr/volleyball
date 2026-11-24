@@ -180,18 +180,40 @@ const FACTS := [
 	"Karch Kiraly was the first player to win Olympic gold both indoors and on the beach.",
 	"Jackie Silva and Sandra Pires won the first Olympic women's beach volleyball title in 1996.",
 	"At the London Olympics, beach volleyball was played on Horse Guards Parade.",
-	"At the Paris 2024 Olympics, beach volleyball players competed beside the Eiffel Tower."
+	"At the Paris 2024 Olympics, beach volleyball players competed beside the Eiffel Tower.",
+	"Early volleyball teams could field more than six players. The six-player limit arrived in 1918.",
+	"The three-contact limit dates to 1922.",
+	"An early volleyball had a leather cover wrapped around a rubber inner tube.",
+	"The YMCA included volleyball rules in its North American athletic handbook in 1897.",
+	"In 1952 the U.S. association voted to write volleyball as one word.",
+	"Representatives from 14 countries founded the international volleyball federation in Paris in 1947.",
+	"The first men's volleyball world championship took place in 1949.",
+	"The first women's volleyball world championship followed in 1952.",
+	"The libero made its world championship debut in 1998.",
+	"Yellow, blue and white volleyballs appeared at the 1998 World Championships in Japan.",
+	"Volleyball appeared as a demonstration in Paris in 1924, forty years before its Olympic medal debut.",
+	"The first Snow Volleyball World Tour launched in 2019."
 ]
 const FACT_ART := {FACTS[7]:"res://assets/menu/paris_beach_court.svg"}
 var fact_order := []
 var last_fact := ""
+var fact_history := ConfigFile.new()
+var facts_loaded := false
 
 func next_fact() -> String:
+	if not facts_loaded:
+		facts_loaded=true
+		if fact_history.load("user://loading_facts.cfg")==OK:
+			last_fact=fact_history.get_value("facts","last","")
+			fact_order=fact_history.get_value("facts","remaining",[]).filter(func(f): return f in FACTS)
 	if fact_order.is_empty():
 		fact_order = FACTS.duplicate()
 		fact_order.shuffle()
 		if fact_order.back() == last_fact: fact_order.reverse()
 	last_fact = fact_order.pop_back()
+	fact_history.set_value("facts","last",last_fact)
+	fact_history.set_value("facts","remaining",fact_order)
+	fact_history.save("user://loading_facts.cfg")
 	return last_fact
 
 var loading_screen: ColorRect

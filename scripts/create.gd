@@ -236,7 +236,7 @@ func show_save_error() -> void:
 func build_preview(viewport: SubViewport) -> void:
 	var world := Node3D.new()
 	viewport.add_child(world)
-	preload("res://scripts/preview_court.gd").add_preview_lighting(world)
+	light_preview_stage(world)
 	build_preview_stage(world)
 	preview_player = preload("res://scripts/volleyball_player.gd").new()
 	preview_player.name = "PreviewPlayer"
@@ -253,6 +253,9 @@ func build_preview(viewport: SubViewport) -> void:
 	preview_camera.current = true
 	world.add_child(preview_camera)
 	update_camera()
+
+func light_preview_stage(world: Node3D) -> void:
+	preload("res://scripts/preview_court.gd").add_preview_lighting(world)
 
 func build_preview_stage(world: Node3D) -> void:
 	var platform := MeshInstance3D.new()

@@ -101,8 +101,11 @@ func _ready() -> void:
 	preview.add_child(overlay)
 	refresh_history()
 
+func light_preview_stage(world: Node3D) -> void:
+	preload("res://scripts/tryout_gym.gd").light_gym(world)
+
 func build_preview_stage(world: Node3D) -> void:
-	world.add_child(preload("res://scripts/preview_court.gd").new())
+	world.add_child(preload("res://scripts/tryout_gym.gd").new())
 	orbit_yaw = -2.2
 	orbit_pitch = 0.26
 	max_view_distance = 60.0

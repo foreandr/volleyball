@@ -41,16 +41,16 @@ static func tailored_surface(source: ArrayMesh,surface: int,jacket := false) -> 
 	shaped.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES,arrays,[],{},source.surface_get_format(surface)&Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS)
 	return shaped
 
-static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
+static func apply(actor: Node3D,coach: bool,variant := 0,vary_build := true) -> void:
 	var rig: Skeleton3D = actor.skeleton
 	var outer_shirt: MeshInstance3D
 	if coach:
 		actor.set_height_cm(174)
 		actor.scale*=Vector3(1.01,1,1.01)
-	elif variant>0:
+	elif vary_build and variant>0:
 		if variant<20: actor.set_height_cm(166+(variant*13)%36)
 		actor.scale*=Vector3(.88+.036*(variant%7),1,.90+.045*((variant*3)%6))
-	if variant>0 and variant<20:
+	if vary_build and variant>0 and variant<20:
 		var build := float((variant*5)%9)/8.
 		for side in ["l","r"]:
 			var thigh := rig.find_bone("thigh_"+side)

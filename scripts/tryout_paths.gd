@@ -1,5 +1,7 @@
 extends RefCounted
 
+const TURN_RATE := 2.25
+const WALK_ACCELERATION := 4.0
 const STEP := .35
 var graph := AStarGrid2D.new()
 var paths := {}
@@ -104,10 +106,10 @@ func detour(actor: Node3D,goal: Vector3,occupied: Array) -> void:
 var velocities := {}
 func stride(actor: Node3D, toward: Vector3, speed: float, dt: float) -> Vector3:
 	var heading := atan2(toward.x,toward.z)
-	actor.rotation.y = rotate_toward(actor.rotation.y,heading,2.25*dt)
+	actor.rotation.y = rotate_toward(actor.rotation.y,heading,TURN_RATE*dt)
 	var forward := Vector3(sin(actor.rotation.y),0,cos(actor.rotation.y))
 	var aligned := maxf(0.0,cos(angle_difference(actor.rotation.y,heading)))
 	var previous: Vector3 = velocities.get(actor,Vector3.ZERO)
-	var velocity := previous.move_toward(forward*speed*aligned,4.0*dt)
+	var velocity := previous.move_toward(forward*speed*aligned,WALK_ACCELERATION*dt)
 	velocities[actor] = velocity
 	return velocity*dt

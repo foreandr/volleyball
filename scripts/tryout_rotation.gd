@@ -50,17 +50,18 @@ func configure(host: Control) -> void:
 		routes.equipment_clearance.append(Rect2(center-half,half*2))
 	random.randomize()
 	roster.append(game.setter)
-	for i in [1,2]: roster.append(game.athlete(WAIT[i],["","377f95","93543a"][i]))
-	for i in [1,2]: game.register_student(roster[i],i)
-	for i in [1,2]: preload("res://scripts/practice_kit.gd").apply(roster[i],false,i)
+	if not game.solo_setting:
+		for i in [1,2]: roster.append(game.athlete(WAIT[i],["","377f95","93543a"][i]))
+		for i in [1,2]: game.register_student(roster[i],i)
+		for i in [1,2]: preload("res://scripts/practice_kit.gd").apply(roster[i],false,i)
+		for i in HOME.size():
+			var actor: Node3D = game.athlete(HOME[i],"395b48")
+			game.register_student(actor,i+3)
+			preload("res://scripts/practice_kit.gd").apply(actor,false,i+3)
+			key_upright_idle(actor)
+			workers.append({"actor":actor,"cargo":[],"goal":null,"lifting":0.0,"start":Vector3.ZERO})
+		runner=workers[5].actor
 	for actor in roster: key_upright_idle(actor)
-	for i in HOME.size():
-		var actor: Node3D = game.athlete(HOME[i],"395b48")
-		game.register_student(actor,i+3)
-		preload("res://scripts/practice_kit.gd").apply(actor,false,i+3)
-		key_upright_idle(actor)
-		workers.append({"actor":actor,"cargo":[],"goal":null,"lifting":0.0,"start":Vector3.ZERO})
-	runner=workers[5].actor
 	basket = Node3D.new()
 	game.world.add_child(basket)
 	basket.position = CART
@@ -74,7 +75,7 @@ func configure(host: Control) -> void:
 	cart_box(Vector3(0,1.01,-.42),Vector3(.93,.044,.044),metal)
 	for x in [-.43,.43]: cart_box(Vector3(x,.91,-.42),Vector3(.044,.20,.044),metal)
 	cart_box(Vector3(0,.58,0),Vector3(1.10,.035,.72),cloth)
-	for post in POSTS:
+	for post in ([] if game.solo_setting else POSTS):
 		var bin := basket.duplicate() as Node3D
 		game.world.add_child(bin)
 		bin.position=post
@@ -299,6 +300,11 @@ func take_ball() -> bool:
 
 func free_ball(velocity: Vector3) -> void:
 	if not issued: return
+	if game.solo_setting:
+		store_ball(issued)
+		issued=null
+		game.ball.hide()
+		return
 	issued.position = game.ball.position
 	issued.show()
 	issued.collision_layer = 128

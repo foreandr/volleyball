@@ -1,5 +1,7 @@
 extends Control
 
+@export var solo_setting := false
+
 const Court = preload("res://scripts/preview_court.gd")
 const Player = preload("res://scripts/volleyball_player.gd")
 const Hands = preload("res://scripts/hand_setting_pose.gd")
@@ -146,7 +148,9 @@ func _ready() -> void:
 	world.add_child(camera)
 	camera.current = true
 	setter = athlete(Vector3(-0.8,0.04,1.1),"e97937")
-	setter.apply_profile(CareerSession.profile())
+	var profile := CareerSession.profile()
+	if solo_setting and profile.is_empty(): profile=preload("res://scripts/player_profile.gd").load_profile()
+	setter.apply_profile(profile)
 	setter.play_action("idle")
 	coach = athlete(Vector3(-2.5,0.04,-1.2),"48574d")
 	coach.play_action("idle")
@@ -154,7 +158,7 @@ func _ready() -> void:
 	preload("res://scripts/practice_kit.gd").apply(coach,true)
 	setter.set_meta("school_photo",SchoolHeadshots.request(setter.attributes))
 	coach_motion.dress(coach)
-	seat_teammates()
+	if not solo_setting: seat_teammates()
 	for i in PINS.size():
 		var basket := preload("res://scripts/tryout_target.gd").new()
 		basket.position = PINS[i]
@@ -343,11 +347,11 @@ func update_prompts(next: String) -> void:
 	Xbox.prompts(controls_row,entries)
 
 func leave() -> void:
-	MenuPresentation.load_scene("res://scenes/story.tscn")
+	MenuPresentation.load_scene("res://scenes/drills.tscn" if solo_setting else "res://scenes/story.tscn")
 
 func start_practice() -> void:
 	coach_motion.whistle_cue.signal_drill(coach)
-	rotation_drill.advance_turn()
+	if not solo_setting: rotation_drill.advance_turn()
 	rotation_drill.stage_start()
 	skip_time = 0
 	demonstration = false
@@ -356,6 +360,7 @@ func start_practice() -> void:
 	if rotation_drill.turn == 1: say(coach, "%s, you're up first." % setter.display_name,4.0)
 
 func jump_rep() -> bool:
+	if solo_setting: return (rep/3)%2==1
 	return demo_index%2==1 if demonstration else rotation_drill.round_index==1
 
 func called() -> int:
@@ -395,6 +400,7 @@ func reset_feed() -> void:
 			if attempt.setter==rotation_drill.turn and attempt.made: made+=1
 		title.text="ZONE %d   /   %s   /   %d/9 MADE" % [[1,6,5][rotation_drill.round_index],TARGETS[called()],made]
 		if called()==2: message.text = "72   /   Back set"
+	if solo_setting: title.text="TRAINING CAMP   /   SET TO TARGET"
 	panel.visible=demonstration or rotation_drill.turn==0
 	hint.text = ""
 	hint.hide()
@@ -572,7 +578,7 @@ func _process(delta: float) -> void:
 	if changing_turn: return
 	update_speech(delta)
 	timing_note.visible = clock < timing_until and phase != "complete" and not settings.visible
-	score_strip.visible=phase not in ["intro","net_guide"] and not settings.visible and (not demonstration or phase=="complete")
+	score_strip.visible=not solo_setting and phase not in ["intro","net_guide"] and not settings.visible and (not demonstration or phase=="complete")
 	if settings.visible or phase=="net_guide": return
 	if coach_motion.whistle_cue.step_whistle(coach,delta): return
 	if phase=="complete":
@@ -630,7 +636,7 @@ func step_practice(delta: float) -> void:
 	var stick := Vector2(axis(JOY_AXIS_RIGHT_X),axis(JOY_AXIS_RIGHT_Y))
 	stick+=Input.get_vector("ui_left","ui_right","ui_up","ui_down") if (Input.is_key_pressed(KEY_LEFT) or Input.is_key_pressed(KEY_RIGHT) or Input.is_key_pressed(KEY_UP) or Input.is_key_pressed(KEY_DOWN)) else Vector2.ZERO
 	select_height(stick)
-	rotation_drill.tick(delta)
+	if not solo_setting: rotation_drill.tick(delta)
 	# Leave the three targets in frame while easing toward the live ball.
 	var lead := (ball.position-Vector3(0,1.6,1.0))*Vector3(0.10,0.08,0.055)
 	camera_lead = camera_lead.lerp(lead.limit_length(0.5),1.0-exp(-3.2*delta))
@@ -836,6 +842,11 @@ func step_practice(delta: float) -> void:
 					begin("between")
 		"between":
 			if elapsed>.025 and not jump.active and not free_jump.active:
+				if solo_setting:
+					rep+=1
+					rotation_drill.attempts=rep%3
+					reset_feed()
+					return
 				if rotation_drill.attempts==2: next_release = maxf(next_release,last_toss+3.5)
 				var entry := {"setter":rotation_drill.turn,"target":called(),"station":rotation_drill.station,"made":success,"error":placement_error}
 				if rotation_drill.turn!=0: entry["cpu_goal"]=cpu_goal(rotation_drill.turn)
