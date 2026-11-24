@@ -109,14 +109,27 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 				var shell_fabric := ShaderMaterial.new()
 				var trouser_shader := Shader.new()
 				trouser_shader.code="""shader_type spatial;
-				uniform vec3 inertia; uniform float motion; varying vec2 cut;
+				uniform vec3 inertia; uniform float motion; varying vec2 cut; varying float azimuth;
 				void vertex(){
 					cut=UV2;
+					azimuth=atan(COLOR.r*.6-.30,abs(cut.x)-.13);
+					float ankle=smoothstep(.092,.135,cut.y)*(1.-smoothstep(.22,.42,cut.y));
+					float gather=cos(cut.y*89.+1.7*sin(azimuth)+.45*cos(azimuth*3.));
+					VERTEX+=NORMAL*ankle*(.014+.006*gather);
 					float weight=1.-smoothstep(.38,1.02,UV2.y);
 					VERTEX+=weight*inertia*.38;
 					VERTEX+=NORMAL*(.019+.011*weight+.012*weight*motion*sin(UV2.y*28.+UV2.x*22.-TIME*12.));
 				}
-				void fragment(){ if(cut.y<.088 || cut.y>1.12)discard; float cuff=1.-smoothstep(.094,.112,cut.y); ALBEDO=vec3(.026,.042,.055)*(1.-cuff*.22); ROUGHNESS=.84; }"""
+				void fragment(){
+					if(cut.y<.088 || cut.y>1.12)discard;
+					float cuff=1.-smoothstep(.111,.116,cut.y);
+					float side=1.-smoothstep(.15,.24,abs(sin(azimuth)));
+					side*=smoothstep(.14,.20,abs(cut.x))*smoothstep(.11,.14,cut.y);
+					ALBEDO=mix(vec3(.026,.042,.055),vec3(.041,.060,.069),side);
+					float rib=cos(azimuth*65.)*(1.-smoothstep(.009,.045,fwidth(azimuth)));
+					ALBEDO*=1.-cuff*(.24-.08*rib);
+					ROUGHNESS=mix(.77,.88,cuff);
+				}"""
 				shell_fabric.shader=trouser_shader
 				pants.material_override=shell_fabric
 				actor.jersey_materials.append(shell_fabric)
