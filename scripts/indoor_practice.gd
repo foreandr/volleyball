@@ -59,6 +59,8 @@ const ON_TIME := .065
 const HAND_CUSHION := .18
 var buffered_at := 0.
 var buffered_contact_time := 0.
+var bump_aim := Vector3.ZERO
+var bump_armed := true
 var pending_release := false
 var input_hold := 0.0
 var contact_local := Vector3.ZERO
@@ -397,6 +399,7 @@ func update_prompts(next: String) -> void:
 				entries.append([BUTTONS[0],"Hold to set to 4"])
 				if middle_available(): entries.append([BUTTONS[1],"Hold to set middle"])
 				entries.append([BUTTONS[2],"Hold to back set"])
+				entries.append(["RS","Aim bump set"])
 			else:
 				for i in BUTTONS.size(): entries.append([BUTTONS[i],TARGETS[i]])
 			entries.append_array([[JOY_BUTTON_RIGHT_SHOULDER,"Set height"],[JOY_BUTTON_LEFT_STICK,"Show / hide arc"],[JOY_BUTTON_LEFT_SHOULDER,"Hold with target to jump set"],["LT","Focus"],["RT","Sprint"],[JOY_BUTTON_START,"Settings"]])
@@ -475,6 +478,7 @@ func choose_camp_toss() -> Vector3:
 	return Vector3.INF
 
 func reset_feed() -> void:
+	bump_aim=Vector3.ZERO
 	if solo_setting:
 		camp_receive_spot=choose_camp_toss()
 		if not camp_receive_spot.is_finite():
@@ -910,7 +914,68 @@ func standing_set_load(depth: float) -> void:
 			var id := rig.find_bone(joint)
 			rig.set_bone_pose_rotation(id,pose[id].basis.get_rotation_quaternion())
 
+func aim_bump(stick: Vector2) -> void:
+	if stick.length()<.25:
+		bump_armed=true
+		return
+	if stick.length()<.55 or not solo_setting or automatic_setter() or held>=0 or pending_release: return
+	if phase not in ["cart","feed","pass"] or (not bump_armed and bump_aim.is_zero_approx()): return
+	var right := camera.global_basis.x.slide(Vector3.UP).normalized()
+	bump_aim=(right*stick.x+right.cross(Vector3.UP)*stick.y).normalized()
+	bump_armed=false
+	message.text="Bump set"
+
+func play_bump(previous: Vector3, incoming: Vector3) -> void:
+	var rig: Skeleton3D=setter.skeleton
+	var author: RefCounted=setter.get_pose_author()
+	var pose: Array=[]
+	for i in rig.get_bone_count(): pose.append(rig.get_bone_pose(i))
+	var chest: Vector3=author.point(pose,"spine_03")
+	var reach := rig.to_local(ball.position)-chest
+	var wanted := chest+Vector3(clampf(reach.x,-.5,.5),-.16,clampf(reach.z,.26,.68))
+	preload("res://scripts/reception_platform_pose.gd").connect_arms(pose,author,wanted,1.)
+	for side in ["l","r"]:
+		for stem in ["clavicle_","upperarm_","lowerarm_","hand_"]:
+			var bone := rig.find_bone(stem+side)
+			rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
+	var elbows := [Contact.joint(setter,"lowerarm_l"),Contact.joint(setter,"lowerarm_r")]
+	var wrists := [Contact.joint(setter,"hand_l"),Contact.joint(setter,"hand_r")]
+	var platform: Vector3=preload("res://scripts/forearm_contact.gd").surface(elbows,wrists,.055).ball
+	var near := Geometry3D.get_closest_point_to_segment(platform,previous,ball.position)
+	var gap := platform.distance_to(near)
+	for side in 2:
+		var pair := Geometry3D.get_closest_points_between_segments(previous,ball.position,elbows[side],wrists[side])
+		gap=minf(gap,pair[0].distance_to(pair[1]))
+	if incoming.y>=0. or gap>.27:
+		if elapsed>forehead_arrival+.35: miss("Outside platform reach.")
+		return
+	source=platform
+	ball.position=source
+	target=0
+	var alignment := -2.
+	for i in PINS.size():
+		var lane: Vector3=(PINS[i]-source).slide(Vector3.UP)
+		var score := lane.normalized().dot(bump_aim)
+		if score>alignment:
+			alignment=score
+			target=i
+	var lane_length := (Vector3(PINS[target])-source).slide(Vector3.UP).length()
+	tempo=chosen_tempo()
+	flight_time=DURATION[tempo]
+	var desired := source+bump_aim*lane_length
+	desired.y=PINS[target].y
+	endpoint=setter.reachable_set(source,desired,false,Vector3.ZERO,flight_time,1.20*(.78 if tempo==1 else 1.))
+	camp_call=target
+	placement_error=endpoint.distance_to(PINS[target])
+	success=placement_error<targets[target].mouth_radius-.10
+	feedback="Bump set   /   Target made" if success else "Bump set   /   Off target"
+	energy[setter].spend(2)
+	trace("bump_set",{"aim":str(bump_aim),"from":str(source),"to":str(endpoint)})
+	begin("set")
+	message.text=feedback
+
 func step_practice(delta: float) -> void:
+	if solo_setting and not cpu_setting: aim_bump(Vector2(axis(JOY_AXIS_RIGHT_X),axis(JOY_AXIS_RIGHT_Y)))
 	setter.skeleton.set_meta("fast_set_push",phase=="set_contact" and elapsed+delta>SET_RECEIVE_TIME or phase=="set" and elapsed<.04)
 	setter.animator.advance(delta)
 	var gathering := phase=="pass" and (plant_time>=0. or jump.active or squat.charging or (held>=0 and (not cpu_setting or jump_rep() and contact_time-elapsed<.46)))
@@ -1097,6 +1162,9 @@ func step_practice(delta: float) -> void:
 				if held>=0: shape_catch_hands(receive_hand_lift(contact_time+cpu_release_delay-RELEASE_ADVANCE))
 				if elapsed>=contact_time+cpu_release_delay-RELEASE_ADVANCE: release(called())
 				return
+			if not bump_aim.is_zero_approx():
+				play_bump(previous,incoming)
+				return
 			if held>=0 and not pending_release:
 				meter.value = set_fill()*100
 				var lift := receive_hand_lift(contact_time)
@@ -1193,7 +1261,7 @@ func step_practice(delta: float) -> void:
 				drop_velocity = rebound
 				return
 			var follow_weight := 1.-smoothstep(.14,.34,elapsed) if target==2 else 1.-elapsed/.22
-			if follow_weight>0.:
+			if follow_weight>0. and bump_aim.is_zero_approx():
 				var arch := smoothstep(0.,.18,SET_RECEIVE_TIME+push_time+elapsed) if target==2 else 1.
 				Hands.apply(setter,source,follow_weight,push_axis*.22,0.,.3,false,Vector3.ZERO,1.,endpoint-source,arch,true)
 			if t>=1:
@@ -1668,6 +1736,7 @@ func _input(event: InputEvent) -> void:
 		if phase=="ground": message.text = "Call the next toss"
 	elif event.is_pressed():
 		if solo_setting:
+			bump_aim=Vector3.ZERO
 			camp_call=index
 			for i in targets.size(): targets[i].beacon.visible=i==index
 		pending_release = false

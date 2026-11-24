@@ -143,3 +143,4 @@ LT movement uses a continuous directional shuffle cycle with low alternating foo
 Accepted manual set releases carry the descending toss into the moving palm pocket at the scheduled contact time. The incoming path still checks court and equipment collisions first.
 Airborne setters transfer 22 percent of horizontal takeoff/carry velocity at contact to the set. Hand setting compensates for drift within available arm strength. Moving away from the target reduces maximum reach even for experts.
 All three timing bands appear on target press, including before the toss and while moving into range. Physical reach is evaluated separately at release.
+In player-controlled Setting Camp, tilting the right stick queues a forearm bump set aimed continuously in screen-relative court space. Contact triggers the pass, and the next toss returns to normal. Face buttons supersede the bump selection.
