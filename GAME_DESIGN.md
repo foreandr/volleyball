@@ -101,3 +101,5 @@ During setting practice LT tracks the live incoming ball. Holding a target butto
 Grounded pivots alternate support feet, lift the swinging shoe, and settle into idle. Airborne yaw follows the jump pose. Front and middle sets budget enough turning time to square by release; back sets begin slightly later.
 
 Solo CPU camp can be used to inspect reception: the setter stays grounded, moves the forehead under the incoming ball, faces the called set heading and holds the two-handed setting shape for 1.5 seconds before the next toss. View restores playable sets.
+
+The shared natural ready stance raises the torso by 20 degrees while retaining its knee bend and foot placement.

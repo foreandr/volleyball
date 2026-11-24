@@ -54,6 +54,10 @@ func _initialize() -> void:
 			if name_ == "pelvis":
 				var offset := global_pose(src,src_pose,source_bone).origin-src.get_bone_global_rest(source_bone).origin
 				local_pose[bone].origin += parent_basis.inverse()*(offset*0.951)
+		var spine := dst.find_bone("spine_01")
+		var hips := global_pose(dst, local_pose, dst.get_bone_parent(spine)).basis
+		var upright := Basis(Vector3.RIGHT, deg_to_rad(-20.0))
+		local_pose[spine].basis = (hips.inverse() * upright * hips * local_pose[spine].basis).orthonormalized()
 		for bone in dst.get_bone_count():
 			clip.position_track_insert_key(positions[bone],time,local_pose[bone].origin)
 			clip.rotation_track_insert_key(rotations[bone],time,local_pose[bone].basis.get_rotation_quaternion())
