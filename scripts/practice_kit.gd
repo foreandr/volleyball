@@ -561,6 +561,12 @@ static func face_hair(rig: Skeleton3D,body: MeshInstance3D,mesh: ArrayMesh,coach
 		float taper=smoothstep(1.551,1.566,p.y)*smoothstep(.005,.018,p.z);
 		float lip=exp(-dot(vec2(p.x/.031,(p.y-1.624)/.009),vec2(p.x/.031,(p.y-1.624)/.009)));
 		float density=cheek*taper*(1.-lip)*(.78+.18*(1.-smoothstep(1.58,1.62,p.y)));
+		// Sweep the moustache down toward the corners, leaving the lip and philtrum visible.
+		float wing=abs(p.x)/.033;
+		float lip_line=1.637-.009*wing*wing;
+		float moustache=(1.-smoothstep(.78,1.,wing))*(1.-smoothstep(.002,.006,abs(p.y-lip_line)))
+			*smoothstep(.045,.068,p.z)*(.62+.38*smoothstep(.001,.007,abs(p.x)));
+		density=max(density,.91*moustache);
 		bool jaw=gray && abs(p.x)<.092 && density>grain;
 		if(!scalp && !jaw) discard;
 		float strand=.5+.5*cos(p.y*620.+abs(p.x)*390.+p.z*160.);
@@ -570,7 +576,11 @@ static func face_hair(rig: Skeleton3D,body: MeshInstance3D,mesh: ArrayMesh,coach
 			float root_light=1.-smoothstep(.018,.055,edge_height);
 			ALBEDO*=(1.+.34*fibers)*(1.+.36*root_light);
 		}
-		if(jaw) ALBEDO*=.70+.30*strand;
+		if(jaw){
+			float whisker=p.y*1850.+abs(p.x)*mix(820.,350.,moustache)+p.z*460.;
+			float fiber=cos(whisker)*(1.-smoothstep(.7,2.8,fwidth(whisker)));
+			ALBEDO*= (.70+.30*strand)*(.92+.20*fiber-.19*moustache);
+		}
 		ROUGHNESS=.94;
 	}"""
 	var mat := ShaderMaterial.new()
