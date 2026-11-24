@@ -88,6 +88,15 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 			shell.skeleton=shell.get_path_to(rig)
 			shell.material_override=kit
 			outer_shirt=shell
+			if not coach:
+				var gusset := MeshInstance3D.new()
+				gusset.mesh=skin_surface
+				gusset.skin=node.skin
+				rig.add_child(gusset)
+				gusset.skeleton=gusset.get_path_to(rig)
+				var lining := ShaderMaterial.new()
+				lining.shader=preload("res://assets/gym/underarm_gusset.gdshader")
+				gusset.material_override=lining
 			face_hair(rig,node,skin_surface,coach,variant)
 			if not coach and variant%4==1 and variant%5!=4:
 				palm_tape(rig,node,skin_surface,"l" if variant%2==0 else "r")
