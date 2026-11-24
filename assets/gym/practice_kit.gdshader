@@ -133,6 +133,14 @@ void fragment(){
 		float welt=(1.-smoothstep(.006,.010,pocket))*length_mask;
 		float opening=(1.-smoothstep(.001,.0035,pocket))*length_mask;
 		base*=1.+.15*welt-.64*opening;
+		// Embroider the school insignia on the left breast above the pocket.
+		vec2 badge_uv=vec2(.5+(rest.x-.094)/.088,(1.453-y)/.088);
+		if(rest.z>.008 && all(greaterThanEqual(badge_uv,vec2(0.))) && all(lessThanEqual(badge_uv,vec2(1.)))){
+			vec4 badge=texture(team_crest,badge_uv);
+			float stitch_phase=(rest.x*.68+y)*2500.;
+			float thread=cos(stitch_phase)*(1.-smoothstep(.8,2.8,fwidth(stitch_phase)));
+			base=mix(base,badge.rgb*(.93+.13*thread),badge.a);
+		}
 	}else{
 		// Across the back the raglan seam runs from neckline to underarm.
 		// Use bind coordinates so the seam bends with the panel and printing.
