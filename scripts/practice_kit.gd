@@ -137,7 +137,17 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 					float cuff=1.-smoothstep(.111,.116,cut.y);
 					float side=1.-smoothstep(.15,.24,abs(sin(azimuth)));
 					side*=smoothstep(.14,.20,abs(cut.x))*smoothstep(.11,.14,cut.y);
+					// A tapered woven stripe follows the outseam from hip to ankle.
+					float outseam=sin(azimuth+.10*sin((cut.y-.12)*3.8));
+					float width=mix(.12,.24,smoothstep(.14,.86,cut.y));
+					float dist=abs(outseam)-width;
+					float aa=max(.012,fwidth(dist));
+					float outer=smoothstep(.14,.19,abs(cut.x))*smoothstep(.11,.13,cut.y);
+					float insert=(1.-smoothstep(-aa,aa,dist))*outer;
+					float piping=(1.-smoothstep(.014,.026+aa,abs(dist)))*outer;
 					ALBEDO=mix(vec3(.026,.042,.055),vec3(.041,.060,.069),side);
+					ALBEDO=mix(ALBEDO,vec3(.054,.104,.083),insert);
+					ALBEDO=mix(ALBEDO,vec3(.23,.26,.225),piping*.78);
 					float rib=cos(azimuth*65.)*(1.-smoothstep(.009,.045,fwidth(azimuth)));
 					ALBEDO*=1.-cuff*(.24-.08*rib);
 					ROUGHNESS=mix(.77,.88,cuff);

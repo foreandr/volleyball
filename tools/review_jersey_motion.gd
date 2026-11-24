@@ -124,5 +124,9 @@ func review() -> void:
 		gym.camera.position=coach.to_global(Vector3(1.9,1.70,2.15))
 		gym.camera.look_at(coach.to_global(Vector3(0,1.19,0)))
 		if frame in [6,20,32,44]: await capture("coach"+str(frame))
+		if frame in [32,44]:
+			gym.camera.position=coach.to_global(Vector3(1.32,.62,-.22))
+			gym.camera.look_at(coach.to_global(Vector3(0,.54,0)))
+			await capture("coach_stride"+str(frame))
 	print("Completed running, overhead setting and huddle captures")
 	quit()
