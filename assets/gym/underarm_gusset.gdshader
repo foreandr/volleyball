@@ -1,10 +1,14 @@
 shader_type spatial;
 render_mode cull_disabled;
+uniform vec2 arm_lift;
 varying vec2 bind;
 void vertex(){
 	bind=UV2;
 	float inset=mix(.004,.027,smoothstep(.17,.27,abs(bind.x)));
-	VERTEX-=NORMAL*inset;
+	float lift=bind.x>0.?arm_lift.x:arm_lift.y;
+	float axilla=1.-smoothstep(1.44,1.51,bind.y);
+	float extension=.021*lift*axilla*(1.-smoothstep(.23,.29,abs(bind.x)));
+	VERTEX+=NORMAL*(extension-inset);
 }
 void fragment(){
 	float side=abs(bind.x);

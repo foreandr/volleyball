@@ -195,6 +195,7 @@ var jersey_origin := Vector3.ZERO
 var jersey_speed := 0.
 var dressed_surface := preload("res://scripts/dressed_contact.gd").new()
 var sleeve_cloth: RefCounted
+var underarm_fabric: ShaderMaterial
 var shirt_fabric: ShaderMaterial
 var leg_skin: ShaderMaterial
 var exertion_total := 0.0
@@ -219,6 +220,7 @@ func _process(dt: float) -> void:
 			var elbow := skeleton.get_bone_global_pose(skeleton.find_bone("lowerarm_"+side)).origin
 			tension[i]=smoothstep(-.82,.20,(elbow-shoulder).normalized().y)
 		shirt_fabric.set_shader_parameter("arm_lift",tension)
+		if underarm_fabric: underarm_fabric.set_shader_parameter("arm_lift",tension)
 	if leg_skin:
 		var flex := Vector2.ZERO
 		var calf_load := Vector2.ZERO

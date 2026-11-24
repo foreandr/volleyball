@@ -97,6 +97,7 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 				var lining := ShaderMaterial.new()
 				lining.shader=preload("res://assets/gym/underarm_gusset.gdshader")
 				gusset.material_override=lining
+				actor.underarm_fabric=lining
 			face_hair(rig,node,skin_surface,coach,variant)
 			if not coach and variant%4==1 and variant%5!=4:
 				palm_tape(rig,node,skin_surface,"l" if variant%2==0 else "r")
