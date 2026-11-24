@@ -102,10 +102,13 @@ func play_ground_gait(speed: float) -> void:
 func effective_rating(skill: String) -> float:
 	return float(attributes.get(skill,65))*stamina.effectiveness()
 
-func reachable_set(origin: Vector3, requested: Vector3, airborne := false) -> Vector3:
+func reachable_set(origin: Vector3, requested: Vector3, airborne := false, velocity_at_contact := Vector3.ZERO, flight_seconds := 0., range_scale := 1.) -> Vector3:
 	var distance_limit := lerpf(5.,13.,float(attributes.get("Strength",65))/100.)*stamina.effectiveness()
 	if airborne: distance_limit*=.77
-	var horizontal := (requested-origin).slide(Vector3.UP).limit_length(distance_limit)
+	var carry := velocity_at_contact.slide(Vector3.UP)*.22*flight_seconds if airborne else Vector3.ZERO
+	var correction := carry*clampf(effective_rating("Hand setting")/100.,0.,1.)
+	# Only the push supplied by the arms is strength-limited.
+	var horizontal := ((requested-origin).slide(Vector3.UP)-correction).limit_length(distance_limit*range_scale)+carry
 	return Vector3(origin.x+horizontal.x,requested.y,origin.z+horizontal.z)
 
 func play_action(action: String, blend := 0.15) -> void:

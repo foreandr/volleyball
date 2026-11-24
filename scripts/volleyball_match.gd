@@ -1203,7 +1203,10 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 		if not is_human(index):
 			cpu_policy.used(side,"set lane")
 			cpu_policy.used(side,"set height")
-		pin=players[index].reachable_set(point,pin,players[index].position.y>PLAYER_GROUND_Y+.12)
+		var airborne: bool=players[index].position.y>PLAYER_GROUND_Y+.12
+		var carry: Vector3=set_jumps[index].horizontal_velocity() if airborne and set_jumps[index].active else Vector3.ZERO
+		var duration := (sqrt(2.*Flight.GRAVITY*maxf(0.,apex-point.y))+sqrt(2.*Flight.GRAVITY*maxf(0.,apex-contact_height)))/Flight.GRAVITY
+		pin=players[index].reachable_set(point,pin,airborne,carry,duration)
 		var motion: Vector3 = driver.set_toward_pin(point,pin,apex,contact_height)
 		launch(world_point,frame.global_basis*motion,"set",index,1.0,hitter_for_set(index),frame.to_global(pin))
 		return

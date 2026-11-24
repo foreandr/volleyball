@@ -66,8 +66,7 @@ func draw_set_path(actor: Node3D) -> void:
 	var b: Vector3=game.PINS[target]
 	var tempo: int=game.chosen_tempo()
 	if game.solo_setting and active:
-		var aim := (b-a).slide(Vector3.UP).limit_length(game.camp_range(tempo,actor.position.y-game.BASE.y>.12))
-		b=Vector3(a.x+aim.x,b.y,a.z+aim.z)
+		b=game.set_destination(a,b,tempo)
 	if game.clock<game.preview_until and not game.camera.is_position_behind(b):
 		draw_string(ThemeDB.fallback_font,game.camera.unproject_position(b)+Vector2(8,-14),game.TEMPOS[tempo],HORIZONTAL_ALIGNMENT_LEFT,-1,16)
 	var height: float=game.APEX[tempo] if active else 9.81*pow(game.DURATION[tempo],2)/8.

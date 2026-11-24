@@ -591,6 +591,12 @@ func camp_range(height_index: int, airborne := false) -> float:
 	var base: float=setter.reachable_set(Vector3.ZERO,Vector3.RIGHT*100.,airborne).x
 	return base*(.78 if height_index==1 else 1.)
 
+func set_destination(origin: Vector3, aim: Vector3, height_index: int) -> Vector3:
+	var airborne := setter.position.y-BASE.y>.12
+	var motion: Vector3=jump.horizontal_velocity() if airborne and jump.active else Vector3.ZERO
+	var scale := .78 if solo_setting and height_index==1 else 1.
+	return setter.reachable_set(origin,aim,airborne,motion,DURATION[height_index],scale)
+
 func chosen_tempo() -> int:
 	return selected_tempo
 
@@ -1414,10 +1420,7 @@ func release(index: int) -> void:
 		# Poor releases can carry past the pin into the tape or court.
 		var late := clampf((absf(set_error)-.065)/.135,0,1)
 		endpoint.z += 1.5*late
-	if solo_setting:
-		var offset := (endpoint-source).slide(Vector3.UP).limit_length(camp_range(tempo,airborne>.12))
-		endpoint=Vector3(source.x+offset.x,endpoint.y,source.z+offset.z)
-	else: endpoint=setter.reachable_set(source,endpoint,airborne>.12)
+	endpoint=set_destination(source,endpoint,tempo)
 	energy[setter].spend(2)
 	placement_error=endpoint.distance_to(PINS[target])
 	success = target==called() and endpoint.distance_to(PINS[target])<targets[target].mouth_radius-0.10
