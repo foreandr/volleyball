@@ -105,3 +105,4 @@ Solo CPU camp can be used to inspect reception: the setter stays grounded, moves
 The shared natural ready stance raises the torso by 20 degrees while retaining its knee bend and foot placement.
 Grounded turns use longer alternating steps and keep the feet planted through small heading adjustments.
 Setters raise their hands during the hold and finish shaping them as the toss descends. Offline match setup remembers the selected ball brand and displays its panel colors on court.
+Grounded square-ups use a short right plant and a longer left swing. The hips finish turning with the left foot.
