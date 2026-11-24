@@ -352,7 +352,8 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		sock=1.-smoothstep(sock_top,sock_top+.004,y);
 		// Compress the sock inside the heel cup and release it above the collar.
 		float inside_shoe=1.-smoothstep(.064,.117,y);
-		VERTEX+=NORMAL*(pad*.005+foam*.018+sock*.002-inside_shoe*.012);
+		float rolled_edge=pad*smoothstep(.073,.079,abs(k))*(1.-smoothstep(.083,.091,abs(k)));
+		VERTEX+=NORMAL*(pad*.005+rolled_edge*.003+foam*.018+sock*.002-inside_shoe*.012);
 		anatomy=vec3(abs(UV2.x),y,COLOR.r);
 		loads=vec2(flex,UV2.x>0.?calf_load.x:calf_load.y);
 	}
@@ -391,6 +392,11 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		float vent=1.-smoothstep(.12,.26,length(fract(vent_grid)-.5));
 		float vent_zone=(1.-face)*(1.-smoothstep(.054,.069,abs(height)));
 		cover+=face*(.075-.11*yarn)-seam*(.27-.15*stitch)-.24*vent*vent_zone;
+		// The elastic binding is knitted around the leg, across the direction of stretch.
+		float cuff_phase=angle*96.;
+		float cuff_ribs=cos(cuff_phase)*(1.-smoothstep(.65,2.8,fwidth(cuff_phase)));
+		float folded_edge=1.-smoothstep(.0008,.0026+fwidth(height),abs(abs(height)-.084));
+		cover+=binding*(.105*cuff_ribs+.14*folded_edge);
 		ALBEDO=mix(ALBEDO,pad_color.rgb*cover,pad_mask);
 		float gear=max(pad_mask,sock_mask);
 		vec2 p=anatomy.xy;
