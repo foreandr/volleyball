@@ -57,8 +57,8 @@ func update(actor: Node3D,delta: float) -> void:
 	var hips := rig.find_bone("pelvis")
 	var parent: Transform3D = author.world_pose(pose,rig.get_bone_parent(hips))
 	var bend := smoothstep(0,1,depth)
-	pose[hips].origin += parent.basis.inverse()*Vector3(0,-.32*bend,-.055*bend)
-	author.rotate_world(pose,"spine_01",Vector3.RIGHT,.24*bend)
+	pose[hips].origin += parent.basis.inverse()*Vector3(0,-.54*bend,-.09*bend)
+	author.rotate_world(pose,"spine_01",Vector3.RIGHT,.40*bend)
 	for side in ["l","r"]:
 		var foot: String = "foot_"+side
 		author.limb(pose,"thigh_"+side,"calf_"+side,foot,author.point(baseline,foot),Vector3(0,0,1))

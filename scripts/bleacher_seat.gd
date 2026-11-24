@@ -18,7 +18,7 @@ func configure(player: Node3D,seat: MeshInstance3D,below: MeshInstance3D,aisle_s
 	court_z = z
 	foot_height = below.global_position.y+below.mesh.size.y*.5 if below else .045
 	update()
-	for name_ in ["pelvis","thigh_l","thigh_r","calf_l","calf_r","foot_l","foot_r"]:
+	for name_ in ["pelvis","thigh_l","thigh_r","calf_l","calf_r","foot_l","foot_r","upperarm_l","upperarm_r","lowerarm_l","lowerarm_r"]:
 		var i: int = actor.skeleton.find_bone(name_)
 		planted[i] = actor.skeleton.get_bone_pose(i)
 
@@ -47,6 +47,13 @@ func update() -> void:
 		author.set_world_basis(pose,foot,old_basis)
 		for name_ in ["thigh_"+str(leg),"calf_"+str(leg),foot]:
 			var idx := rig.find_bone(name_)
+			rig.set_bone_pose_rotation(idx,pose[idx].basis.orthonormalized().get_rotation_quaternion())
+
+		var wrist: String="hand_"+leg
+		var knee: Vector3=author.point(pose,"calf_"+leg)
+		author.limb(pose,"upperarm_"+leg,"lowerarm_"+leg,wrist,knee+Vector3(0,.10,-.06),Vector3(0,-1,-.25))
+		for bone in ["upperarm_"+leg,"lowerarm_"+leg]:
+			var idx := rig.find_bone(bone)
 			rig.set_bone_pose_rotation(idx,pose[idx].basis.orthonormalized().get_rotation_quaternion())
 
 func celebrate(index: int,block_complete: bool) -> void:

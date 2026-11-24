@@ -23,6 +23,22 @@ static func tailored_surface(source: ArrayMesh,surface: int) -> ArrayMesh:
 
 static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 	var rig: Skeleton3D = actor.skeleton
+	if coach:
+		actor.set_height_cm(174)
+		actor.scale*=Vector3(1.23,1,1.32)
+	elif variant>0:
+		actor.set_height_cm(166+(variant*13)%36)
+		actor.scale*=Vector3(.88+.036*(variant%7),1,.90+.045*((variant*3)%6))
+	if variant>0:
+		var build := float((variant*5)%9)/8.
+		for side in ["l","r"]:
+			var thigh := rig.find_bone("thigh_"+side)
+			rig.set_bone_pose_scale(thigh,Vector3(.94+.12*build,.96+.08*build,.94+.12*build))
+			var arm := rig.find_bone("upperarm_"+side)
+			rig.set_bone_pose_scale(arm,Vector3(.9+.23*build,1,.9+.23*build))
+		var spine := rig.find_bone("spine_01")
+		rig.set_bone_pose_scale(spine,Vector3(1,1.045-.09*build,1))
+	var print_texture: Texture2D=preload("res://assets/gym/practice_502.svg") if variant==0 else number_texture(502+variant)
 	for side in ["l","r"]: court_shoe(rig,side,coach,variant)
 	for node: MeshInstance3D in rig.find_children("*","MeshInstance3D",true,false):
 		var shirt := node.mesh == preload("res://assets/characters/volleyball/outfit.res")
@@ -30,9 +46,9 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 		if not shirt and not sleeves: continue
 		var kit := ShaderMaterial.new()
 		kit.shader = FABRIC
-		kit.set_shader_parameter("fabric",Color("223d3c") if coach else (Color("b34421") if variant==0 else actor.team_color))
+		kit.set_shader_parameter("fabric",Color("223d3c") if coach else Color("b34421"))
 		kit.set_shader_parameter("trim",Color("cad4bf") if coach else Color("182d36"))
-		kit.set_shader_parameter("lettering",preload("res://assets/gym/practice_502.svg"))
+		kit.set_shader_parameter("lettering",print_texture)
 		kit.set_shader_parameter("jacket",coach)
 		kit.set_shader_parameter("sleeves",sleeves)
 		var shell := MeshInstance3D.new()
@@ -47,26 +63,39 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 			invisible.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 			invisible.albedo_color = Color.TRANSPARENT
 			node.set_surface_override_material(0,invisible)
-			if not coach: shorts(rig,node)
+			if not coach: shorts(rig,node,variant)
 	if not coach:
+		var head := rig.find_bone("Head")
+		var mount := BoneAttachment3D.new()
+		mount.bone_name=rig.get_bone_name(head)
+		rig.add_child(mount)
+		var scalp := Node3D.new()
+		mount.add_child(scalp)
+		var rest := rig.get_bone_global_rest(head)
+		scalp.transform=rest.affine_inverse()*Transform3D(Basis.IDENTITY,rest.origin)
+		var hair := Color.from_hsv(.065+.004*variant,.42,.13+.065*(variant%6))
+		shoe_part(scalp,Vector3(0,.17,-.014),Vector3(.20,.085+.013*(variant%4),.217),hair)
+		if variant%3==1: shoe_part(scalp,Vector3(0,.15,-.112),Vector3(.092,.095,.09),hair)
 		for side in ["l","r"]:
-			knee_pad(rig,side)
-			if variant in [1,3]: compression(rig,"calf_"+side,"foot_"+side,.067,.044,Color("e3ded2"))
-		if variant in [2,4]: compression(rig,"lowerarm_r","hand_r",.061,.042,Color("252e35"))
+			if variant==0 or variant%4==1 or (variant%4==2 and side=="l") or (variant%4==3 and side=="r"): knee_pad(rig,side)
+			if variant%3==1: compression(rig,"calf_"+side,"foot_"+side,.067,.044,Color("e3ded2"))
+		if variant%4==1: compression(rig,"hand_l","middle_01_l",.042,.041,Color("d6cdc0"))
+		if variant%3==2: compression(rig,"lowerarm_r","hand_r",.061,.042,Color("252e35"))
 
-static func shorts(rig: Skeleton3D,outfit: MeshInstance3D) -> void:
+static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int) -> void:
 	var material := ShaderMaterial.new()
 	var shader := Shader.new()
 	shader.code = """shader_type spatial;
-	varying vec2 rest;
+	uniform vec4 cloth:source_color; varying vec2 rest;
 	void vertex(){rest=UV2;VERTEX+=NORMAL*.004;}
 	void fragment(){
 		if(rest.y<.70) discard;
 		float hem=1.-smoothstep(.704,.714,rest.y);
-		ALBEDO=mix(vec3(.022,.045,.053),vec3(.80,.43,.21),hem);
+		ALBEDO=mix(cloth.rgb,vec3(.80,.43,.21),hem);
 		ROUGHNESS=.84;
 	}"""
 	material.shader = shader
+	material.set_shader_parameter("cloth",Color.from_hsv(fmod(.55+.147*variant,1.),.32,.24+.045*(variant%4)))
 	var part := MeshInstance3D.new()
 	part.mesh = tailored_surface(outfit.mesh,1)
 	part.skin = outfit.skin
@@ -91,6 +120,17 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D) -> void:
 	skin.set_shader_parameter("skin_map",preload("res://assets/characters/base/T_Superhero_Male_Light.png"))
 	legs.material_override = skin
 	source.free()
+
+static func number_texture(number: int) -> Texture2D:
+	var rows := ["75557","26227","71747","71717","55711","74717","74757","71111","75757","75717"]
+	var img := Image.create(96,48,false,Image.FORMAT_RGBA8)
+	var digits := str(number)
+	for n in digits.length():
+		var glyph: String=rows[int(digits[n])]
+		for y in 5:
+			for x in 3:
+				if int(glyph[y]) & (4>>x): img.fill_rect(Rect2(4+n*31+x*8,4+y*8,8,8),Color.WHITE)
+	return ImageTexture.create_from_image(img)
 
 static func compression(rig: Skeleton3D,bone: String,child: String,upper: float,lower: float,color: Color) -> void:
 	var socket := BoneAttachment3D.new()

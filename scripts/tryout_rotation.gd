@@ -1,10 +1,11 @@
 extends RefCounted
 
 const Contact = preload("res://scripts/gym_physics.gd")
-const CART := Vector3(-3.5,0,-2.6)
-const WAIT := [Vector3(0,.04,1.35),Vector3(-1.35,.04,.2),Vector3(1.65,.04,.25)]
-const STATIONS := [CART,Vector3(3.5,0,-2.6)]
+const CART := Vector3(-3.5,0,-5.75)
+const WAIT := [Vector3(0,.04,1.35),Vector3(-1.35,.04,4.9),Vector3(1.65,.04,4.9)]
+const STATIONS := [CART,Vector3(0,0,-5.75),Vector3(3.5,0,-5.75)]
 const HANDLE := Vector3(.12,.04,-.78)
+var coach_steps: RefCounted
 var tosses := 0
 var station := 0
 var routes := preload("res://scripts/tryout_paths.gd").new()
@@ -18,6 +19,16 @@ var issued: RigidBody3D
 var turn := 0
 var attempts := 0
 var round_index := 0
+const POSTS := [Vector3(5.4,0,2),Vector3(-5.4,0,2),Vector3(1.75,0,2.8)]
+const HOME := [Vector3(5.3,.04,3),Vector3(-5.3,.04,3),Vector3(2.7,.04,-6.65),Vector3(5.4,.04,-2),Vector3(-5.4,.04,-2),Vector3(-2.7,.04,-6.65),Vector3(5.6,.04,6.4),Vector3(-5.6,.04,6.4)]
+var manual_wait := false
+var bins: Array[Node3D] = []
+var loads := [[],[],[]]
+var human_cargo := []
+var runner: Node3D
+var exchange := -1
+var returning := false
+var cart_route := {}
 var basket: Node3D
 var net_hit := {}
 var random := RandomNumberGenerator.new()
@@ -25,13 +36,16 @@ var random := RandomNumberGenerator.new()
 func configure(host: Control) -> void:
 	game = host
 	random.randomize()
+	coach_steps=preload("res://scripts/right_side_steps.gd").new(game.coach)
 	roster.append(game.setter)
 	for i in [1,2]: roster.append(game.athlete(WAIT[i],["","377f95","93543a"][i]))
 	for i in [1,2]: preload("res://scripts/practice_kit.gd").apply(roster[i],false,i)
-	for i in 2:
-		var actor: Node3D = game.athlete(Vector3(-4+i*8,.04,5),"395b48")
+	for i in HOME.size():
+		var actor: Node3D = game.athlete(HOME[i],"395b48")
 		preload("res://scripts/practice_kit.gd").apply(actor,false,i+3)
 		workers.append({"actor":actor,"cargo":[],"goal":null,"lifting":0.0,"start":Vector3.ZERO})
+	runner=game.athlete(CART+Vector3.RIGHT*1.5,"395b48")
+	preload("res://scripts/practice_kit.gd").apply(runner,false,11)
 	basket = Node3D.new()
 	game.world.add_child(basket)
 	basket.position = CART
@@ -46,7 +60,12 @@ func configure(host: Control) -> void:
 	cart_box(Vector3(0,1.01,-.42),Vector3(.93,.044,.044),metal)
 	for x in [-.43,.43]: cart_box(Vector3(x,.91,-.42),Vector3(.044,.20,.044),metal)
 	cart_box(Vector3(0,.58,0),Vector3(1.10,.035,.72),cloth)
-	for i in 12:
+	for post in POSTS:
+		var bin := basket.duplicate() as Node3D
+		game.world.add_child(bin)
+		bin.position=post
+		bins.append(bin)
+	for i in 30:
 		var body := RigidBody3D.new()
 		body.name = "PracticeBall%d" % (i+1)
 		body.freeze = true
@@ -99,14 +118,17 @@ func store_ball(body: RigidBody3D) -> void:
 	stock.append(body)
 
 func station_ready(dt: float) -> bool:
-	var requested := (tosses/10)%2
+	var requested := (tosses/10)%STATIONS.size()
 	if requested!=station:
 		var previous := basket.position
-		basket.position=basket.position.move_toward(STATIONS[requested],dt*4.7)
+		var travel: Vector3=STATIONS[requested]-basket.position
+		var stride: float=coach_steps.advance(Vector2(-signf(travel.x),0),dt*1.35)
+		basket.position=basket.position.move_toward(STATIONS[requested],absf(stride)*game.coach.scale.y)
 		for body in stock: body.position+=basket.position-previous
 		game.coach.position=basket.position+HANDLE
 		game.coach.rotation.y=0
-		game.coach.play_action("base/Walk")
+		game.coach.play_action("idle")
+		coach_steps.apply_pose()
 		grip_handle()
 		if basket.position.distance_to(STATIONS[requested])<.01:
 			station=requested
@@ -154,19 +176,29 @@ func advance_turn() -> void:
 	if attempts==2:
 		attempts=0
 		turn=(turn+1)%3
-		if turn==0: round_index+=1
+		manual_wait=false
+		if turn==0:
+			round_index+=1
+			for body in human_cargo:
+				body.freeze=false
+				body.collision_layer=128
+				loose.append(body)
+			human_cargo.clear()
 	game.setter=roster[turn]
 
 func walk(actor: Node3D,goal: Vector3,dt: float,speed: float) -> bool:
 	var dir := (goal-actor.position).slide(Vector3.UP)
 	if dir.length()<.12:
-		actor.play_action("idle")
+		actor.play_action("base/Idle")
 		return true
 	var waypoint := routes.waypoint(actor,goal,dt)
 	dir = (waypoint-actor.position).slide(Vector3.UP)
 	actor.rotation.y=lerp_angle(actor.rotation.y,atan2(dir.x,dir.z),minf(1,dt*9))
 	var step := dir.limit_length(speed*dt)
-	var next: Vector3 = game.contacts.travel(game.world,actor.position,step,actor.height_cm*.01)
+	var next := move_actor(actor,step)
+	if game.phase in ["feed","pass"] and actor!=game.setter and actor!=game.coach and not on_drill_floor(actor.position) and on_drill_floor(next):
+		actor.play_action("base/Idle")
+		return false
 	var along := (next-actor.position).dot(dir.normalized())
 	if along<step.length()*.65: routes.reroute(actor,goal)
 	next.y=actor.position.y
@@ -177,22 +209,54 @@ func walk(actor: Node3D,goal: Vector3,dt: float,speed: float) -> bool:
 func tick(dt: float) -> void:
 	for i in 3:
 		if i==turn: continue
+		if i==0:
+			shag_player(dt)
+			continue
 		var waiting := roster[i]
 		waiting.animator.advance(dt)
 		walk(waiting,WAIT[(i-turn+3)%3],dt,5.2)
+	for i in range(loose.size()-1,-1,-1):
+		var body := loose[i]
+		if not body.freeze and under_stands(body.position):
+			for w in workers:
+				if w.goal==body:
+					w.goal=null
+					w.erase("destination")
+			loose.remove_at(i)
+			game.trace("ball_left_under_stands",{"id":body.name})
 	for worker in workers: collect(worker,dt)
+	service_carts(dt)
 	if not net_hit.is_empty():
 		game.gym.get_node("DynamicNet").sample(net_hit,game.clock)
 		if game.clock-net_hit.time>1.5: net_hit.clear()
 
+func under_stands(point: Vector3) -> bool:
+	for bench in game.gym.benches:
+		var at: Vector3=bench.to_local(point)
+		if absf(at.x)<=bench.mesh.size.x*.5+.15 and absf(at.z)<=bench.mesh.size.z*.5+.15: return true
+	return false
+
+func on_drill_floor(p: Vector3) -> bool:
+	return absf(p.x)<4.78 and p.z> -5.28 and p.z<4.25
+
+func floor_clear() -> bool:
+	for actor in roster:
+		if actor!=game.setter and on_drill_floor(actor.position): return false
+	for w in workers:
+		if on_drill_floor(w.actor.position): return false
+	return not on_drill_floor(runner.position)
+
 func nearest(at: Vector3,worker: Dictionary,limit: float) -> RigidBody3D:
 	var best: RigidBody3D
 	for body in loose:
+		if under_stands(body.position) or float(worker.get("skip",{}).get(body,0))>game.clock: continue
 		if body.position.y>1.55 or body.linear_velocity.length()>4: continue
 		var occupied := false
 		for other in workers:
 			if other.actor!=worker.actor and other.goal==body: occupied=true
 		if occupied: continue
+		var worker_index := workers.find(worker)
+		if worker_index>=0 and worker_index<3 and body.position.distance_to(POSTS[worker_index])>2.8: continue
 		var d := body.position.distance_to(at)
 		if d<limit:
 			limit=d
@@ -203,13 +267,28 @@ func collect(w: Dictionary,dt: float) -> void:
 	var actor: Node3D=w.actor
 	actor.animator.advance(dt)
 	var cargo: Array=w.cargo
+	if w.goal and not w.goal.freeze:
+		var stuck: float=w.get("stuck",0.)
+		if actor.position.distance_to(w.get("mark",actor.position))>.22:
+			w.mark=actor.position
+			stuck=0.
+		else: stuck+=dt
+		w.stuck=stuck
+		if under_stands(w.goal.position) or stuck>2.2:
+			if not w.has("skip"): w.skip={}
+			w.skip[w.goal]=game.clock+6.0
+			w.goal=null
+			w.stuck=0.
+			w.erase("destination")
 	if not w.goal and cargo.size()<2:
+		w.mark=actor.position
+		w.stuck=0.
 		w.goal=nearest(actor.position,w,2.7 if not cargo.is_empty() else INF)
 	if w.goal:
 		var body: RigidBody3D=w.goal
 		var delta := (body.position-actor.position).slide(Vector3.UP)
-		if delta.length()>.79:
-			walk(actor,body.position-delta.normalized()*.48,dt,5.7)
+		if delta.length()>.95:
+			perimeter_walk(w,body.position-delta.normalized()*.48,dt)
 		else:
 			actor.rotation.y=atan2(delta.x,delta.z)
 			actor.play_action("idle")
@@ -243,12 +322,13 @@ func collect(w: Dictionary,dt: float) -> void:
 				w.goal=null
 				w.lifting=0.
 	elif not cargo.is_empty():
-		if walk(actor,basket.position+Vector3(.1,.04,.72),dt,5.1):
+		var index := closest_bin(actor.position)
+		if index>=0 and (actor.position.distance_to(bins[index].position)<1.05 or perimeter_walk(w,bins[index].position+Vector3(.1,.04,-.65),dt)):
 			for body in cargo:
-				store_ball(body)
+				deposit(index,body)
 				game.trace("cart_return",{"id":body.name,"remaining":stock.size()})
 			cargo.clear()
-	else: actor.play_action("idle")
+	else: perimeter_walk(w,HOME[workers.find(w)],dt)
 	for i in cargo.size():
 		cargo[i].position=Contact.palm(actor,"l" if i==0 else "r")+Vector3.UP*.055
 
@@ -267,3 +347,142 @@ func pause_balls(paused: bool) -> void:
 			body.linear_velocity=paused_balls[body][0]
 			body.angular_velocity=paused_balls[body][1]
 		paused_balls.clear()
+
+func closest_bin(at: Vector3) -> int:
+	var best := -1
+	for i in bins.size():
+		if i!=exchange and (best<0 or at.distance_squared_to(bins[i].position)<at.distance_squared_to(bins[best].position)): best=i
+	return best
+
+func deposit(index: int,body: RigidBody3D) -> void:
+	var slot: int=loads[index].size()
+	body.position=bins[index].position+Vector3((slot%4-1.5)*.226,.7+.17*(slot/8),((slot/4)%2-.5)*.28)
+	loads[index].append(body)
+
+func shag_player(dt: float) -> void:
+	var actor := roster[0]
+	actor.animator.advance(dt)
+	if game.move_setter(dt,actor,true): manual_wait=true
+	elif not manual_wait: walk(actor,WAIT[(3-turn)%3],dt,4.8)
+	var index := closest_bin(actor.position)
+	if index>=0 and actor.position.distance_to(bins[index].position)<1.1:
+		for body in human_cargo: deposit(index,body)
+		human_cargo.clear()
+	if human_cargo.size()<2:
+		for body in loose:
+			if body.freeze or body.position.distance_to(actor.position)>.95 or body.linear_velocity.length()>4: continue
+			for w in workers:
+				if w.goal==body: w.goal=null
+			body.freeze=true
+			body.collision_layer=0
+			loose.erase(body)
+			human_cargo.append(body)
+			game.trace("player_shag",{"id":body.name})
+			break
+	for i in human_cargo.size(): human_cargo[i].position=Contact.palm(actor,"l" if i==0 else "r")
+
+func service_carts(dt: float) -> void:
+	runner.animator.advance(dt)
+	if exchange<0:
+		for i in bins.size():
+			if loads[i].size()>=4 or (stock.size()<=3 and not loads[i].is_empty()):
+				exchange=i
+				break
+		if exchange<0:
+			if cart_route.is_empty(): cart_route={"actor":runner}
+			perimeter_walk(cart_route,Vector3(3.9,.04,-6.5),dt)
+			return
+		cart_route={"actor":runner}
+	var cart := bins[exchange]
+	var handle := Vector3(0,.04,-.75)
+	if not cart_route.get("pushing",false):
+		if perimeter_walk(cart_route,cart.position+handle,dt): cart_route.pushing=true
+		return
+	var goal: Vector3=POSTS[exchange] if returning else STATIONS[station]+Vector3(0,0,0 if basket.position.z<STATIONS[station].z-.5 else -1.2)
+	var before := runner.position
+	var arrived := perimeter_walk(cart_route,goal+handle,dt)
+	var step := runner.position-before
+	cart.position+=step
+	runner.play_action("base/Walk")
+	for body in loads[exchange]: body.position+=step
+	if not arrived: return
+	if returning:
+		exchange=-1
+		returning=false
+	else:
+		var depleted := basket
+		basket=cart
+		bins[exchange]=depleted
+		for body in stock: body.position+=basket.position-depleted.position
+		for body in loads[exchange]: store_ball(body)
+		loads[exchange].clear()
+		cart_route={"actor":runner}
+		returning=true
+
+func gate(point: Vector3) -> Vector3:
+	if absf(point.x)>3.3: return Vector3(signf(point.x)*5.25,.04,clampf(point.z,-5.65,13.65))
+	return Vector3(point.x,.04,-5.65 if point.z<4 else 13.65)
+
+# Clockwise distance along the four exterior lanes, starting at the near left corner.
+func lane_coordinate(p: Vector3) -> float:
+	if p.z<=-5.64: return clampf(p.x+5.25,0,10.5)
+	if p.z>=13.64: return 29.8+clampf(5.25-p.x,0,10.5)
+	if p.x>0: return 10.5+clampf(p.z+5.65,0,19.3)
+	return 40.3+clampf(13.65-p.z,0,19.3)
+
+func perimeter_walk(w: Dictionary,target: Vector3,dt: float) -> bool:
+	var actor: Node3D=w.actor
+	if not w.has("destination") or target.distance_to(w.destination)>.8:
+		w.destination=target
+		var exit_point := gate(actor.position)
+		var entry := gate(target)
+		var start := lane_coordinate(exit_point)
+		var end := lane_coordinate(entry)
+		var clockwise := fposmod(end-start,59.6)
+		var forward := clockwise<=29.8
+		var corners := [Vector3(-5.25,.04,-5.65),Vector3(5.25,.04,-5.65),Vector3(5.25,.04,13.65),Vector3(-5.25,.04,13.65)]
+		var stops := {}
+		for corner: Vector3 in corners:
+			var offset := fposmod((lane_coordinate(corner)-start)*(1 if forward else -1),59.6)
+			if offset>.1 and offset<minf(clockwise,59.6-clockwise): stops[offset]=corner
+		var keys := stops.keys()
+		keys.sort()
+		w.path=[exit_point]
+		for key in keys: w.path.append(stops[key])
+		w.path.append(entry)
+	if game.phase in ["feed","pass"] and on_drill_floor(target) and w.path.is_empty(): return false
+	if not w.path.is_empty():
+		if actor.position.distance_to(w.path[0])<.58 or walk(actor,w.path[0],dt,5.7): w.path.pop_front()
+		return false
+	if absf(target.x)<3.3 and target.z>-5 and target.z<13 and workers.has(w) and not on_drill_floor(actor.position):
+		for other in workers:
+			if other.actor!=actor and absf(other.actor.position.x)<3.4 and other.actor.position.z>-5 and other.actor.position.z<13:
+				return false
+	return walk(actor,target,dt,5.7)
+
+func move_actor(actor: Node3D,step: Vector3) -> Vector3:
+	var here := actor.position
+	var depth := 0.0
+	if absf(here.x)<4.85:
+		depth=1.-smoothstep(.28,.95,absf(here.z-4.0))
+	if depth>0:
+		var rig: Skeleton3D=actor.skeleton
+		var author: RefCounted=actor.get_pose_author()
+		var pose: Array=author.baseline.duplicate()
+		var hips := rig.find_bone("pelvis")
+		var parent: Transform3D=author.world_pose(pose,rig.get_bone_parent(hips))
+		pose[hips].origin+=parent.basis.inverse()*Vector3.DOWN*.55*depth
+		author.rotate_world(pose,"spine_01",Vector3.RIGHT,.65*depth)
+		for side in ["l","r"]:
+			author.limb(pose,"thigh_"+side,"calf_"+side,"foot_"+side,author.point(author.baseline,"foot_"+side),Vector3.BACK)
+		rig.set_bone_pose_position(hips,pose[hips].origin)
+		for i in rig.get_bone_count(): rig.set_bone_pose_rotation(i,pose[i].basis.orthonormalized().get_rotation_quaternion())
+	var next: Vector3=game.contacts.travel(game.world,here,step*(1.-.45*depth),actor.height_cm*.01*(1.-.39*depth))
+	for other in roster+workers.map(func(w): return w.actor)+[game.coach,runner]:
+		if other==actor or not other: continue
+		var gap := (next-(other as Node3D).position).slide(Vector3.UP)
+		if gap.length()<.53 and gap.length()>0 and gap.dot(step)<0:
+			var tangent := Vector3(-gap.z,0,gap.x).normalized()
+			if tangent.dot(step)<0: tangent=-tangent
+			return game.contacts.travel(game.world,here,tangent*step.length(),actor.height_cm*.01*(1.-.39*depth))
+	return next

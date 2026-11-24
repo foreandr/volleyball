@@ -32,6 +32,11 @@ func dress(actor: Node3D) -> void:
 	cap.height = 0.19
 	var crown := attach(rig,rig.get_bone_name(head),cap,Color("20342f"))
 	crown.global_position = rig.to_global(rig.get_bone_global_pose(head).origin)+Vector3.UP*0.166
+	var beard := SphereMesh.new()
+	beard.radius=.097
+	beard.height=.115
+	var chin := attach(rig,rig.get_bone_name(head),beard,Color("928c82"))
+	chin.global_position=crown.global_position-Vector3.UP*.155+actor.basis.z*.05
 	var bill := BoxMesh.new()
 	bill.size = Vector3(0.17,0.012,0.12)
 	var brim := attach(rig,rig.get_bone_name(head),bill,Color("20342f"))

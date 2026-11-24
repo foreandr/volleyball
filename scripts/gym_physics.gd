@@ -43,7 +43,7 @@ func travel(world: Node3D,start: Vector3,motion: Vector3,height: float) -> Vecto
 	var pos := start
 	var remaining := motion
 	for i in 3:
-		var hit := sweep(world,capsule,pos+Vector3.UP*(capsule.height*.5+.025),remaining,GYM|EQUIPMENT)
+		var hit := sweep(world,capsule,pos+Vector3.UP*(capsule.height*.5+.025),remaining,GYM|EQUIPMENT|64)
 		if hit.is_empty(): return pos+remaining
 		pos += remaining*maxf(0,float(hit.fraction)-.001)
 		remaining = (remaining*(1.-float(hit.fraction))).slide(hit.normal)

@@ -9,10 +9,11 @@ const Xbox = preload("res://scripts/xbox_controls.gd")
 const BUTTONS := [JOY_BUTTON_X,JOY_BUTTON_Y,JOY_BUTTON_A,JOY_BUTTON_B]
 const KEYS := [KEY_J,KEY_I,KEY_K,KEY_L]
 const PINS := [Vector3(4.75,2.15,3.0),Vector3(0.55,2.15,3.3),Vector3(0.55,2.15,2.3),Vector3(-4.75,2.15,3.0)]
-const BASE := Vector3(0,0.04,1.35)
+# Midway between the centers of zones 2 (x=-3) and 3 (x=0).
+const BASE := Vector3(-1.5,0.04,1.35)
 const ORDER := [0,3,2,1]
 const CONTACT := 1.0
-const DURATION := [0.65,1.0,0.48]
+const DURATION := [0.65,1.52,0.48]
 const APEX := [1.1,2.5,0.32]
 const LINES := ["Welcome to the team, %s. I’m Coach Ellis.","You’re trying out at setter. Watch the four targets. I’ll toss the first ones right to you.","Two to each spot. First stay planted, then jump set. After that, I’ll make you move."]
 var coach_motion := preload("res://scripts/tryout_coach.gd").new()
@@ -71,6 +72,8 @@ var flick_at := -10.0
 var source := Vector3.ZERO
 var catch_point := Vector3.ZERO
 var target := 0
+var toss_curve := 1.0
+var toss_spin := Vector3.ZERO
 var tempo := 0
 var success := false
 var feedback := ""
@@ -244,7 +247,7 @@ func start_practice() -> void:
 	reset_feed()
 
 func jump_rep() -> bool:
-	return not demonstration and rotation_drill.turn==0 and (rep/8)%2 == 1
+	return (demo_index%2==1 if demonstration else (rotation_drill.attempts==1 if rotation_drill.turn!=0 else (rep/8)%2==1))
 
 func called() -> int:
 	return ORDER[demo_index if demonstration else rotation_drill.round_index%4]
@@ -275,6 +278,8 @@ func reset_feed() -> void:
 	if not demonstration:
 		title.text = "SETTER TRYOUT   /   %s    •    BALL %d OF 2" % ["YOUR TURN" if rotation_drill.turn==0 else ("SETTER %d" % (rotation_drill.turn+1)),rotation_drill.attempts+1]
 		if called()==3: message.text = "Back set   /   Right side"
+	if demonstration or rep<8: title.text += "    •    HIGH BALLS"
+	if not demonstration and rotation_drill.turn!=0: message.text = "Shag loose balls   /   Return to a cart"
 	hint.text = ""
 	hint.hide()
 	meter.value = 0
@@ -303,24 +308,26 @@ func axis(which: JoyAxis) -> float:
 	var id := pad()
 	return Input.get_joy_axis(id,which) if id >= 0 else 0.0
 
-func move_setter(delta: float) -> void:
+func move_setter(delta: float,actor: Node3D=setter,off_ball := false) -> bool:
 	var motion := Vector2(axis(JOY_AXIS_LEFT_X),axis(JOY_AXIS_LEFT_Y))
 	motion += Vector2(int(Input.is_key_pressed(KEY_D))-int(Input.is_key_pressed(KEY_A)),int(Input.is_key_pressed(KEY_S))-int(Input.is_key_pressed(KEY_W)))
 	if motion.length()<0.16: motion = Vector2.ZERO
-	var direction := Vector3(-motion.x,0,-motion.y).limit_length(1) if rep>=16 else Vector3.ZERO
+	var direction := Vector3(-motion.x,0,-motion.y).limit_length(1) if rep>=16 or off_ball else Vector3.ZERO
 	var focus := axis(Xbox.trigger(true))>0.25 or Input.is_key_pressed(KEY_CTRL)
 	var sprint := axis(Xbox.trigger(false))>0.25 or Input.is_key_pressed(KEY_SHIFT)
-	if focus!=focused:
+	if not off_ball and focus!=focused:
 		focused = focus
 		trace("focus",{"active":focus})
 		message.text = ("Focused on ball   /   " if focus else "")+TARGETS[called()]
 	var speed := 2.35 if focus else (6.2 if sprint else 4.3)
-	setter.position = contacts.travel(world,setter.position,direction*delta*speed,setter.height_cm*.01)
-	setter.position.z = minf(setter.position.z,3.65)
-	var facing := ball.position-setter.position if focus else (coach.position-setter.position if phase=="walk" and direction.is_zero_approx() else direction)
+	actor.position = rotation_drill.move_actor(actor,direction*delta*speed)
+	if not off_ball: actor.position.z = minf(actor.position.z,3.65)
+	var facing := ball.position-actor.position if focus else (coach.position-actor.position if phase=="walk" and direction.is_zero_approx() else direction)
 	if Vector2(facing.x,facing.z).length()>0.05:
-		setter.rotation.y = lerp_angle(setter.rotation.y,atan2(facing.x,facing.z),minf(1,delta*14))
-	setter.play_action("idle" if direction.is_zero_approx() or focus else "run")
+		actor.rotation.y = lerp_angle(actor.rotation.y,atan2(facing.x,facing.z),minf(1,delta*14))
+	actor.play_action("idle" if direction.is_zero_approx() or focus else "run")
+
+	return not direction.is_zero_approx()
 
 func _process(delta: float) -> void:
 	if settings.visible: return
@@ -354,7 +361,7 @@ func _process(delta: float) -> void:
 			var incoming_ready := rotation_drill.walk(setter,BASE,delta,5.2)
 			var coach_ready := rotation_drill.station_ready(delta)
 			coach_goal = rotation_drill.basket.position+rotation_drill.HANDLE
-			if coach_ready and incoming_ready and rotation_drill.take_ball():
+			if coach_ready and incoming_ready and rotation_drill.floor_clear() and rotation_drill.take_ball():
 				setter.rotation.y = atan2(coach.position.x-setter.position.x,coach.position.z-setter.position.z)
 				change_feed_phase("feed")
 				coach.rotation.y = atan2(catch_point.x-coach.position.x,catch_point.z-coach.position.z)
@@ -377,11 +384,19 @@ func _process(delta: float) -> void:
 				next_release = clock+2.0
 				if not demonstration: rotation_drill.tosses+=1
 				source = ball.position
+				toss_curve=rotation_drill.random.randf_range(.86,1.35)
+				toss_spin=Vector3(rotation_drill.random.randf_range(-3,3),rotation_drill.random.randf_range(-2,2),rotation_drill.random.randf_range(-3,3))
 				trace("coach_release",{"from":str(source),"to":str(catch_point)})
 				change_feed_phase("pass")
 		"pass":
+			ball.rotation+=toss_spin*delta
+			if (demonstration or rotation_drill.turn!=0) and jump_rep() and not jump.active and elapsed>=.60 and elapsed<.78:
+				jump.begin_set_jump(setter,.07,.52)
+				jump.height=.52
+				jump.air_time=jump.flight_duration(.52,true)
+				jump.release()
 			var previous := ball.position
-			ball.position = source.lerp(catch_point,elapsed/CONTACT)+Vector3.UP*(4.905*elapsed*(CONTACT-elapsed))
+			ball.position = source.lerp(catch_point,elapsed/CONTACT)+Vector3.UP*(4.905*toss_curve*elapsed*(CONTACT-elapsed))
 			var incoming := ball.position-previous
 			var obstacle := contacts.sweep(world,contacts.ball_shape,previous,incoming,Contact.GYM|Contact.EQUIPMENT|64)
 			if not obstacle.is_empty():
@@ -519,7 +534,7 @@ func release(index: int) -> void:
 			miss("Missed contact. Hold the target and release above your forehead.")
 			return
 	target = index
-	tempo = last_flick if clock-flick_at<0.35 else 0
+	tempo = 1 if demonstration or rep<8 else (last_flick if clock-flick_at<0.35 else 0)
 	source = ball.position
 	flight_time = DURATION[tempo]
 	var error := 0.0 if demonstration else (elapsed-CONTACT)*(3.6-skill)+gap*0.22
