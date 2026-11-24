@@ -749,6 +749,30 @@ static func haircut(scalp: Node3D,color: Color,variant: int,actor: Node3D) -> vo
 	if style==5 or (style==3 and variant>=7):
 		var radius := .037+.003*(variant%4)
 		var center := Vector3(parting*.025,.196+.005*(variant%3),-.092)
+		# The densely wound interior blocks daylight between the surface locks.
+		var core := MeshInstance3D.new()
+		var interior := SphereMesh.new()
+		interior.radius=radius*.94
+		interior.height=interior.radius*2.
+		core.mesh=interior
+		core.position=center
+		var inner_hair := StandardMaterial3D.new()
+		inner_hair.albedo_color=color.darkened(.28)
+		inner_hair.roughness=.91
+		core.material_override=inner_hair
+		scalp.add_child(core)
+		var band := MeshInstance3D.new()
+		var elastic := TorusMesh.new()
+		elastic.inner_radius=radius*.80
+		elastic.outer_radius=radius*.95
+		band.mesh=elastic
+		band.rotation.x=PI*.5
+		band.position=center+Vector3.BACK*radius*.51
+		var binding := StandardMaterial3D.new()
+		binding.albedo_color=Color("30282c")
+		binding.roughness=.86
+		band.material_override=binding
+		scalp.add_child(band)
 		for strand in 144:
 			var latitude := asin(rng.randf_range(-1.,1.))
 			var longitude := rng.randf()*TAU
