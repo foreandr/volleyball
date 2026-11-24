@@ -126,6 +126,14 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 			pole=Vector3(sign_*lerpf(.12,.42,smoothstep(.5,1.,blend)),-.90,lerpf(-1.,-.24,blend))
 			elbow_limit=90.
 		author.limb(pose,upper,lower,hand,wrist,pole,1.0,elbow_limit)
+		if catching and blend<1.:
+			var lift_clip := preload("res://assets/animations/setter_elbow_lift.tres")
+			var weight := smoothstep(0.,.12,blend)*(1.-smoothstep(.78,1.,blend))
+			for joint in [upper,lower]:
+				var id := rig.find_bone(joint)
+				var track := lift_clip.find_track(NodePath("Armature/Skeleton3D:"+joint),Animation.TYPE_ROTATION_3D)
+				var saved := lift_clip.rotation_track_interpolate(track,lift_clip.length*blend)
+				pose[id].basis=Basis(pose[id].basis.get_rotation_quaternion().slerp(saved,weight))
 		if overhead_set and not catching:
 			var skull: Vector3 = author.point(pose,"Head")+Vector3(0,0.095,0.025)/rig.global_basis.y.length()
 			var shoulder: Vector3 = author.point(pose,upper)
@@ -205,6 +213,9 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 			author.set_world_basis(pose,hand,release_basis*hand_basis(fingers,across).inverse()*base.basis)
 			wrist_finish[hand_bone] = pose[hand_bone].basis.get_rotation_quaternion()
 			pose[hand_bone].basis = current_basis
+		if rig.get_meta("fixed_setting_hands",false):
+			pose[hand_bone].basis=rig.get_bone_rest(hand_bone).basis
+			continue
 		var index_tip := diamond+Vector3(sign_*0.032,0.077,0.025)
 		var thumb_tip := diamond+Vector3(sign_*0.009,-0.047,0.045)
 		var finger_cup := diamond+Vector3(0,0.075,0.07)

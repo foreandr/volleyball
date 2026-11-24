@@ -49,7 +49,7 @@ func configure(host: Node, layer: Node = null) -> void:
 	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(body)
 	bar(options,"Animation Frames",open_frame_editor)
-	StorySession.add_saved_frame_picker(options,hide)
+	StorySession.add_saved_frame_picker(options,leave_for_frame_editor)
 	bar(options,"Back",show_home)
 	if practice:
 		for field in fields(): apply_field(field[0],saved(field),false)
@@ -96,8 +96,12 @@ func open_frame_editor() -> void:
 		game.replay_inspector.edit_setter_frames()
 	else:
 		StorySession.prepare_ready_frame_editor()
-	hide()
+	leave_for_frame_editor()
 	MenuPresentation.load_scene("res://scenes/animation_editor.tscn")
+
+func leave_for_frame_editor() -> void:
+	StorySession.frame_editor_origin=get_tree().current_scene.scene_file_path
+	hide()
 
 func restart() -> void:
 	hide()

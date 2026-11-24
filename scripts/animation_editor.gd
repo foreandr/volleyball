@@ -13,6 +13,7 @@ var trajectory_solver: RefCounted
 var trajectory_revision := -1
 var session: RefCounted
 var entry: Dictionary
+var origin_scene := ""
 var frame := 0
 var playhead := 0.0
 var playing := false
@@ -44,6 +45,8 @@ var shoulder_drag_origin := Vector3.ZERO
 var shoulder_start_offset := Vector3.ZERO
 
 func _ready() -> void:
+	origin_scene=StorySession.frame_editor_origin
+	StorySession.frame_editor_origin=""
 	entry = (StorySession.edit_entry if not StorySession.edit_entry.is_empty() else Catalog.ENTRIES[0]).duplicate(true)
 	super._ready()
 	player_controls = null
@@ -589,13 +592,13 @@ func save_copy() -> void:
 	StorySession.edit_animation = null
 	StorySession.animation_draft.clear()
 	StorySession.animation_return = {"category":saved.category,"type":saved.type,"id":saved.id}
-	MenuPresentation.load_scene("res://scenes/drills.tscn" if not StorySession.return_to_drill.is_empty() else "res://scenes/story_animations.tscn")
+	MenuPresentation.load_scene(origin_scene if not origin_scene.is_empty() else ("res://scenes/drills.tscn" if not StorySession.return_to_drill.is_empty() else "res://scenes/story_animations.tscn"))
 
 func open_menu() -> void:
 	if session != null:
 		StorySession.animation_draft = {"source":entry.id,"animation":session.source,"edits":session.edits.duplicate(true),"position_edits":session.position_edits.duplicate(true),"name":copy_name.text,"frame":frame,"group":selected_group}
 	StorySession.animation_return = {"category":entry.category,"type":entry.type,"id":entry.id}
-	MenuPresentation.load_scene("res://scenes/drills.tscn" if not StorySession.return_to_drill.is_empty() else "res://scenes/story_animations.tscn")
+	MenuPresentation.load_scene(origin_scene if not origin_scene.is_empty() else ("res://scenes/drills.tscn" if not StorySession.return_to_drill.is_empty() else "res://scenes/story_animations.tscn"))
 
 func handle_keyboard(event: InputEventKey) -> void:
 	if event.ctrl_pressed and event.keycode == KEY_Z:

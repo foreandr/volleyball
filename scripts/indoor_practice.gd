@@ -714,8 +714,13 @@ func _process(delta: float) -> void:
 		else: actor.rotation.y=old+velocity*dt
 		angular_speed[actor]=velocity
 
+func receive_stance(yaw_angle: float) -> Vector3:
+	var local_head := setter.to_local(Contact.joint(setter,"Head"))
+	var offset := (local_head.slide(Vector3.UP)+Vector3.BACK*.19).rotated(Vector3.UP,yaw_angle)
+	return camp_receive_spot-offset
+
 func catch_pocket() -> Vector3:
-	return Contact.joint(setter,"Head")+Vector3.UP*.18+setter.global_basis.z*.10
+	return Contact.joint(setter,"Head")+Vector3.UP*.235+setter.global_basis.z*.19
 
 func extended_receive_point() -> Vector3:
 	return catch_pocket()+Vector3.UP*CATCH_GIVE+setter.global_basis.z*.085
@@ -761,7 +766,7 @@ func player_jump_carry() -> Vector3:
 func move_to_camp_toss(delta: float) -> void:
 	var footwork = setter.skeleton.get_node("GroundTurnSteps")
 	var target_yaw := set_heading(setter,called())
-	var stance := camp_receive_spot-Vector3(sin(target_yaw),0,cos(target_yaw))*.10
+	var stance := receive_stance(target_yaw)
 	var offset := (stance-setter.position).slide(Vector3.UP)
 	var moving_jump := jump_rep() and rep%4==3 and not cpu_jump_started
 	if moving_jump:
@@ -791,9 +796,35 @@ func move_to_camp_toss(delta: float) -> void:
 	setter.rotation.y=lerp_angle(plant_start_yaw,target_yaw,turn)
 	footwork.set_sequence(fraction,true,target_yaw)
 
+func standing_set_load(depth: float) -> void:
+	if depth<=0.: return
+	var rig: Skeleton3D=setter.skeleton
+	var author: RefCounted=setter.get_pose_author()
+	var pose: Array=[]
+	for i in rig.get_bone_count(): pose.append(rig.get_bone_pose(i))
+	var ankles := [author.point(pose,"foot_l"),author.point(pose,"foot_r")]
+	var hips := rig.find_bone("pelvis")
+	var parent: Transform3D=author.world_pose(pose,rig.get_bone_parent(hips))
+	pose[hips].origin+=parent.basis.inverse()*(rig.global_basis.inverse()*Vector3.DOWN*.065*depth)
+	rig.set_bone_pose_position(hips,pose[hips].origin)
+	for i in 2:
+		var side := "l" if i==0 else "r"
+		var thigh := "thigh_"+side
+		var calf := "calf_"+side
+		author.limb(pose,thigh,calf,"foot_"+side,ankles[i],Vector3.BACK,1.,180.,true)
+		for joint in [thigh,calf]:
+			var id := rig.find_bone(joint)
+			rig.set_bone_pose_rotation(id,pose[id].basis.get_rotation_quaternion())
+
 func step_practice(delta: float) -> void:
 	setter.skeleton.set_meta("fast_set_push",phase=="set_contact" and elapsed+delta>SET_RECEIVE_TIME or phase=="set" and elapsed<.04)
 	setter.animator.advance(delta)
+	setter.skeleton.set_meta("fixed_setting_hands",true)
+	if not jump.active and not jump_rep():
+		if phase=="pass":
+			standing_set_load(smoothstep(contact_time-.24,contact_time,elapsed))
+		elif phase=="set_contact":
+			standing_set_load(1.-smoothstep(SET_RECEIVE_TIME,SET_RECEIVE_TIME+SET_PUSH_TIME,elapsed))
 	coach.animator.advance(delta)
 	for seat in seats_in_use:
 		seat.actor.animator.advance(delta)
@@ -890,7 +921,7 @@ func step_practice(delta: float) -> void:
 				if cpu_setting and rep%4==3:
 					var air_remaining := maxf(.08,contact_time+cpu_release_delay-elapsed-jump.load_duration())
 					var aim := set_heading(setter,called())
-					var stance := camp_receive_spot-Vector3(sin(aim),0,cos(aim))*.10
+					var stance := receive_stance(aim)
 					jump.carry_velocity=((stance-setter.position).slide(Vector3.UP)/air_remaining).limit_length(camp_velocity.length()+.4)
 				jump.release()
 			if held>=0 and first_contact>=0 and not automatic_setter():

@@ -136,6 +136,7 @@ func save_options() -> void:
 var open_home_play := false
 var play_launch_consumed := false
 var open_passing_drill := false
+var frame_editor_origin := ""
 var return_to_drill := ""
 var drill_menu_category := ""
 var demo_launch_consumed := false

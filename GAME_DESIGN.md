@@ -116,3 +116,4 @@ On the lift to receive the set, elbows travel near the torso and stay near a rig
 The reference setting lift leads with open hands past the chest and face while the elbows trail underneath. The receiving pocket sits forward of the forehead, yields back, and drives up and forward.
 Setting Camp exposes Edit set frames directly from Pause and opens on the recorded contact. The 105 ms cushion leads into a 40 ms outward push.
 In Animation Frames, holding a rotation arrow repeats at five degrees per increment; single clicks adjust one tenth of a degree.
+Setters keep a fixed open-hand pose, use the saved elbow lift during preparation and intercept the ball in front of the forehead. Standing setters load the knees and extend on the push. Saving a frame copy returns to the originating drill scene.
