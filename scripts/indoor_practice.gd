@@ -18,7 +18,7 @@ var forehead_arrival := 1.0
 var catch_start_local := Vector3.ZERO
 const CATCH_GIVE := .115
 const SET_RECEIVE_TIME := .105
-const SET_PUSH_TIME := .135
+const SET_PUSH_TIME := .085
 var receive_local := Vector3.ZERO
 var push_axis := Vector3.UP
 var camp_receive_spot := BASE
@@ -585,6 +585,8 @@ func move_setter(delta: float,actor: Node3D=setter,off_ball := false) -> bool:
 	still_seconds = still_seconds + delta if resting else 0.0
 	if still_seconds >= 3.0:
 		actor.play_action("base/Idle",0.65)
+	elif solo_setting and not focus and not at_net:
+		actor.play_ground_gait(camp_velocity.length())
 	else:
 		actor.play_action("base/Idle" if at_net else ("idle" if direction.is_zero_approx() or focus else ("base/Sprint" if sprint else "run")))
 
@@ -719,7 +721,7 @@ func receive_hand_lift(arrival: float) -> float:
 	if solo_setting and elapsed<arrival:
 		var distance_to_head := ball.position.distance_to(catch_pocket())
 		if elapsed<arrival*.5: return 0.
-		return (1.-smoothstep(.14,1.14,distance_to_head))*smoothstep(0.,.075,maxf(0.,clock-pressed_at))
+		return (1.-smoothstep(.65,1.85,distance_to_head))*smoothstep(0.,.075,maxf(0.,clock-pressed_at))
 	var remaining := arrival-elapsed
 	var held_time := maxf(0.,clock-pressed_at)
 	var lift := .48*smoothstep(0.,.50,held_time)+.52*(1.-smoothstep(.035,.34,remaining))
@@ -728,7 +730,7 @@ func receive_hand_lift(arrival: float) -> float:
 func shape_catch_hands(lift := 1.) -> void:
 	if lift<=0.: return
 	Hands.apply(setter,ball.position,lift,Vector3.ZERO,0.,0.,false,Vector3.ZERO,0.,Vector3.INF,0.,true,-1.,null,Vector3.ZERO,true)
-	Contact.track_hands(setter,ball.position,true,lift)
+	if lift>=.99: Contact.track_hands(setter,ball.position,true,1.,96.)
 
 func player_jump_carry() -> Vector3:
 	if phase!="pass" or camp_velocity.length()<.25: return camp_velocity
@@ -761,7 +763,7 @@ func move_to_camp_toss(delta: float) -> void:
 		var pace := minf(6.2,offset.length()/remaining)
 		camp_velocity=camp_velocity.move_toward(offset.normalized()*pace,14.*delta)
 		setter.position=rotation_drill.move_actor(setter,(camp_velocity*delta).limit_length(offset.length()))
-		setter.play_action("base/Sprint" if camp_velocity.length()>4.4 else "run")
+		setter.play_ground_gait(camp_velocity.length())
 		focus_headings[setter]=target_yaw if remaining<.95 else atan2(offset.x,offset.z)
 		return
 	if plant_time<0. and offset.length()>.16:
@@ -770,7 +772,7 @@ func move_to_camp_toss(delta: float) -> void:
 		var pace := minf(max_pace,sqrt(2.*14.*offset.length()))
 		camp_velocity=camp_velocity.move_toward(offset.normalized()*pace,14.*delta)
 		setter.position=rotation_drill.move_actor(setter,(camp_velocity*delta).limit_length(offset.length()))
-		setter.play_action("base/Sprint" if camp_velocity.length()>4.4 else "run")
+		setter.play_ground_gait(camp_velocity.length())
 		focus_headings[setter]=atan2(offset.x,offset.z)
 		return
 	if plant_time<0.:
@@ -924,8 +926,7 @@ func step_practice(delta: float) -> void:
 				return
 			if held>=0:
 				meter.value = set_fill()*100
-				Hands.apply(setter,ball.position,receive_hand_lift(contact_time))
-				if elapsed>=contact_time-.34: Contact.track_hands(setter,ball.position,false,receive_hand_lift(contact_time))
+				shape_catch_hands(receive_hand_lift(contact_time))
 			if held<0 and not automatic_setter():
 				var head := Contact.joint(setter,"Head")+Vector3.UP*.10+setter.global_basis.z*.048
 				var closest := Geometry3D.get_closest_point_to_segment(head,previous,ball.position)
@@ -973,13 +974,15 @@ func step_practice(delta: float) -> void:
 				var t := clampf(elapsed/SET_RECEIVE_TIME,0.,1.)
 				ball.position=setter.to_global(receive_local).lerp(pocket,1.-pow(1.-t,2.))
 				shape_catch_hands()
+				var pads := (Contact.palm(setter,"l")+Contact.palm(setter,"r"))*.5
+				ball.position=ball.position.lerp(pads+Vector3.UP*.060,smoothstep(0.,.035,elapsed))
 			else:
 				var extension := smoothstep(0.,SET_PUSH_TIME,elapsed-SET_RECEIVE_TIME)
 				Hands.apply(setter,pocket,1.,push_axis*.23*extension,0.,0.,false,Vector3.ZERO,extension,endpoint-pocket,0.,true,-1.,null,Vector3.ZERO,true)
 				# Carry the ball on the finger pads until elbow extension is complete.
+				Contact.track_hands(setter,pocket,true,1.-extension)
 				var fingers := (Contact.palm(setter,"l")+Contact.palm(setter,"r"))*.5
-				ball.position=pocket.lerp(fingers+Vector3.UP*.060,extension)
-				Contact.track_hands(setter,ball.position,true,1.-extension)
+				ball.position=fingers+Vector3.UP*.060
 				if elapsed>=SET_RECEIVE_TIME+SET_PUSH_TIME:
 					source=ball.position
 					begin("set")
@@ -1211,6 +1214,7 @@ func release(index: int) -> void:
 		# Poor releases can carry past the pin into the tape or court.
 		var late := clampf((absf(set_error)-.065)/.135,0,1)
 		endpoint.z += 1.5*late
+	endpoint=setter.reachable_set(source,endpoint)
 	placement_error=endpoint.distance_to(PINS[target])
 	success = technique_feedback.is_empty() and target==called() and endpoint.distance_to(PINS[target])<targets[target].mouth_radius-0.10
 	feedback = TARGETS[target]+"   /   Target made" if success else "Missed the called target. Try it again."

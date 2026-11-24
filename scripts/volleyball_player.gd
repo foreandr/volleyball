@@ -86,9 +86,22 @@ func _ready() -> void:
 	animator.add_animation_library("base",library)
 	var volleyball := AnimationLibrary.new()
 	volleyball.add_animation("goalkeeper_idle",preload("res://assets/animations/goalkeeper_idle.tres").duplicate(true))
+	volleyball.add_animation("slow_jog",preload("res://assets/animations/slow_jog.tres"))
 	animator.add_animation_library("volleyball",volleyball)
 	play_action("idle")
 	animator.advance(float(player_number)*0.31)
+
+func play_ground_gait(speed: float) -> void:
+	if speed<.15: play_action("idle")
+	elif speed<1.75: play_action("base/Walk")
+	elif speed<3.25: play_action("volleyball/slow_jog")
+	elif speed<4.75: play_action("run")
+	else: play_action("base/Sprint")
+
+func reachable_set(origin: Vector3, requested: Vector3) -> Vector3:
+	var distance_limit := lerpf(5.,13.,float(attributes.get("Strength",65))/100.)
+	var horizontal := (requested-origin).slide(Vector3.UP).limit_length(distance_limit)
+	return Vector3(origin.x+horizontal.x,requested.y,origin.z+horizontal.z)
 
 func play_action(action: String, blend := 0.15) -> void:
 	if action == "forearm" and not animation_slots.has(action):

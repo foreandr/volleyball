@@ -111,3 +111,5 @@ The setter pivots on the ball of the right foot as the hips square up. The left 
 Setting Camp targets position four on every rep, alternating standing and jump sets. The coach can feed both sidelines and deep zone six, within sprint range on clear floor.
 Camp jump reps alternate vertical and moving takeoffs. Moving jump sets carry the approach velocity to the projected contact; sprinting is optional.
 On a set the ball stays in the hands through a short yield to the forehead and a full arm extension. Flight starts at the fingertips.
+Approach pace selects walk, compact jog, run, or sprint clips. Setting hands rise earlier with spread fingers and close thumbs; the outward push is quicker than the cushion. Strength governs horizontal set range from 5 to 13 meters.
+On the lift to receive the set, elbows travel near the torso and stay near a right angle while straight wrists pass the face. The elbows open on the outward send.

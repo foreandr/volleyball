@@ -81,6 +81,7 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 		author.rotate_world(pose,"spine_03",Vector3.UP,turn*0.58)
 		author.rotate_world(pose,"spine_02",Vector3.RIGHT,clampf(local_push.z,-0.17,0.17)*0.55*torso_follow)
 	diamond += local_push-Vector3.UP*0.055*cushion
+	var catching := steady_torso and overhead_set and set_extension<=0. and push.is_zero_approx()
 	var elbow_limit := lerpf(152.0,176.0,clampf(push.length()/0.24,0.0,1.0))-12.0*cushion
 	if set_extension >= 0.0:
 		elbow_limit = lerpf(143.0,178.0,set_extension)-8.0*cushion
@@ -111,8 +112,19 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 			set_axis = (set_axis-Vector3.RIGHT*sign_*(0.30*backset+0.24*frontset)).normalized()
 			var direction := (wrist-shoulder).normalized().slerp(set_axis,lerpf(0.65,1.0,backset)*aim_weight)
 			wrist = shoulder+direction*lerpf(wrist.distance_to(shoulder),length*0.997,aim_weight)
+		if catching:
+			var shoulder: Vector3=author.point(pose,upper)
+			var elbow: Vector3=author.point(pose,lower)
+			var upper_len := shoulder.distance_to(elbow)
+			var lower_len := elbow.distance_to(author.point(pose,hand))
+			var start_axis := Vector3(-sign_*.12,-.94,.32).normalized()
+			var finish_axis := (wrist-shoulder).normalized()
+			var axis := start_axis.slerp(finish_axis,blend)
+			wrist=shoulder+axis*sqrt(upper_len*upper_len+lower_len*lower_len)
+			pole=Vector3(sign_*lerpf(.12,.78,blend),-.62,lerpf(-.85,-.32,blend))
+			elbow_limit=90.
 		author.limb(pose,upper,lower,hand,wrist,pole,1.0,elbow_limit)
-		if overhead_set:
+		if overhead_set and not catching:
 			var skull: Vector3 = author.point(pose,"Head")+Vector3(0,0.095,0.025)/rig.global_basis.y.length()
 			var shoulder: Vector3 = author.point(pose,upper)
 			var clearance := 0.16/rig.global_basis.y.length()
@@ -181,6 +193,9 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 			var palm_normal := Vector3(clampf(incoming.x,-0.45,0.45),clampf(incoming.y,-0.18,0.40),maxf(0.55,incoming.z)).normalized()
 			target_fingers = target_fingers.slide(palm_normal).normalized()
 			target_across = palm_normal.cross(target_fingers)*sign_
+		if catching:
+			target_fingers=(base.origin-author.point(pose,lower)).normalized()
+			target_across=target_across.slide(target_fingers).normalized()
 		var hand_orientation := hand_basis(target_fingers,target_across)*hand_basis(fingers,across).inverse()*base.basis
 		author.set_world_basis(pose,hand,hand_orientation)
 		if wrist_finish != null and frontset > 0.0:
@@ -188,8 +203,8 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 			author.set_world_basis(pose,hand,release_basis*hand_basis(fingers,across).inverse()*base.basis)
 			wrist_finish[hand_bone] = pose[hand_bone].basis.get_rotation_quaternion()
 			pose[hand_bone].basis = current_basis
-		var index_tip := diamond+Vector3(sign_*0.018,0.065,0.025)
-		var thumb_tip := diamond+Vector3(sign_*0.016,-0.047,0.045)
+		var index_tip := diamond+Vector3(sign_*0.032,0.077,0.025)
+		var thumb_tip := diamond+Vector3(sign_*0.009,-0.047,0.045)
 		var finger_cup := diamond+Vector3(0,0.075,0.07)
 		if wrist_follow > 0.0:
 			index_tip = index_tip.lerp(author.point(pose,"index_03_"+side),wrist_follow)
@@ -203,14 +218,14 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 		var after: Quaternion = pose[bone].basis.orthonormalized().get_rotation_quaternion().normalized()
 		var bone_name := rig.get_bone_name(bone)
 		var solved := not face_save and (bone_name.begins_with("spine_") or bone_name.begins_with("upperarm_") or bone_name.begins_with("lowerarm_"))
-		rig.set_bone_pose_rotation(bone,after if solved else before.slerp(after,blend).normalized())
+		rig.set_bone_pose_rotation(bone,after if solved or (catching and bone_name.begins_with("hand_")) else before.slerp(after,blend).normalized())
 
 static func shape_outer_fingers(author: RefCounted, pose: Array, side: String, ball_center: Vector3) -> void:
 	var inside: Vector3 = author.point(pose,"index_01_"+side)
 	var outside: Vector3 = author.point(pose,"pinky_01_"+side)
 	var spread := (outside-inside).normalized()
 	var digits := ["middle","ring","pinky"]
-	var spacing := [0.005,0.012,0.020]
+	var spacing := [0.009,0.019,0.030]
 	for index in digits.size():
 		var first: String = digits[index]+"_01_"+side
 		var second: String = digits[index]+"_02_"+side
