@@ -1019,8 +1019,10 @@ func play_bump(previous: Vector3, incoming: Vector3, dt: float) -> void:
 		sampler.pose_reach(smoothstep(0.,1.,sampler.reach_progress),predicted)
 	if not sampler.low_save.active:
 		var distance_to_target := predicted.slide(Vector3.UP).distance_to(bump_destination().slide(Vector3.UP))
-		sampler.bump_load_depth=lerpf(.09,.17,smoothstep(2.,9.,distance_to_target))*(1.-smoothstep(.06,.32,remaining))
-		sampler.load_bump_legs(sampler.bump_load_depth)
+		if not bump_touched:
+			sampler.bump_load_depth=lerpf(.15,.24,smoothstep(2.,9.,distance_to_target))
+			sampler.bump_receive_phase=-remaining
+		sampler.pose_bump_receive(sampler.bump_receive_phase)
 	if remaining<.30 and not sampler.low_save.active:
 		sampler.reach_platform(predicted-sampler.platform_center(),1.-smoothstep(.04,.30,remaining),.48,true,false)
 	var elbows := [Contact.joint(setter,"lowerarm_l"),Contact.joint(setter,"lowerarm_r")]

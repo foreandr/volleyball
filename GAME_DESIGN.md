@@ -153,3 +153,4 @@ In Setting Camp, clicking the right stick while watching the CPU switches betwee
 Back bump sets open the hips toward the hitting pin and carry the joined forearms upward through release. The planted feet anchor the turn.
 On close bump sets, the setter steps into the incoming ball, plants before contact, and lets the elbows bend through the swing, especially on back bumps.
 Grounded bump sets load the knees before contact and extend through the arm swing. Longer sets use a deeper load.
+On grounded bump sets, the torso hinges forward with the knee bend and starts rising before contact. The back bump carries that rise into the overhead follow-through.
