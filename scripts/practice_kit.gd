@@ -339,6 +339,18 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		float opening_edge=1.-smoothstep(.03,.14,abs(length(vec2(lateral/.046,height/.031))-1.));
 		float edging_back=open_back*opening_edge*(1.-smoothstep(.37,.49,anatomy.z));
 		float cover=.74-.19*edging_back+.12*yarn+.14*face-.25*channel-.16*binding+.11*edging;
+		// Perimeter stitching joins the abrasion-resistant face to the stretch sleeve.
+		vec2 face_uv=vec2(lateral/.069,height/.070);
+		float radius=length(face_uv);
+		float rim_dist=abs(radius-.91);
+		float seam=(1.-smoothstep(.016,.041+fwidth(radius),rim_dist))*smoothstep(.49,.62,anatomy.z);
+		float stitch_phase=atan(face_uv.y,face_uv.x)*52.;
+		float stitch=.5+.5*cos(stitch_phase)*(1.-smoothstep(.55,2.6,fwidth(stitch_phase)));
+		vec2 vent_grid=vec2(angle*5.73,height*105.);
+		vent_grid.x+=.5*mod(floor(vent_grid.y),2.);
+		float vent=1.-smoothstep(.12,.26,length(fract(vent_grid)-.5));
+		float vent_zone=(1.-face)*(1.-smoothstep(.054,.069,abs(height)));
+		cover+=face*(.075-.11*yarn)-seam*(.27-.15*stitch)-.24*vent*vent_zone;
 		ALBEDO=mix(ALBEDO,pad_color.rgb*cover,pad_mask);
 		float gear=max(pad_mask,sock_mask);
 		vec2 p=anatomy.xy;
@@ -355,7 +367,7 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		NORMAL_MAP_DEPTH=mix(.93,.08,gear);
 		SSS_STRENGTH=.18*(1.-gear);
 		SPECULAR=mix(.36,.22,gear);
-		ROUGHNESS=mix(ROUGHNESS,.88,gear);}"""
+		ROUGHNESS=mix(ROUGHNESS,.88-.18*face*pad_mask,gear);}"""
 	skin.shader = cut
 	var both := variant>=20 or variant==0 or variant%4==1
 	skin.set_shader_parameter("padded",Vector2(float(both or variant%4==2),float(both or variant%4==3)))
