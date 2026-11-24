@@ -122,11 +122,11 @@ func draw_player(actor: Node3D,human: bool) -> void:
 			draw_rect(Rect2(base-Vector2(0,32*readout.x),Vector2(10,32*readout.x)),Color(Color("51cbe9"),opacity))
 		if actor!=game.setter and game.free_target>=0:
 			timing_arc(at,outer,PI,clampf((game.clock-game.free_press)/.43,0,1),.47,.76)
-		var pressing: bool=game.held>=0 and game.phase=="pass" and not game.pending_release
+		var pressing: bool=game.held>=0 and game.phase in ["cart","walk","feed","pass"] and not game.pending_release
 		var result: bool=game.clock<game.set_grade_until or game.pending_release
 		if actor==game.setter and (pressing or result):
 			var fill: float=game.set_fill() if pressing else game.graded_fill
-			var band: Vector2=game.timing_band() if pressing and game.phase=="pass" else game.grade_band
+			var band: Vector2=game.timing_band() if pressing else game.grade_band
 			var contact: Vector2=game.contact_band() if pressing else game.grade_contact
 			timing_arc(at,outer,PI,fill,band.x,band.y,contact)
 	var label: String=actor.display_name.strip_edges().get_slice(" ",actor.display_name.strip_edges().count(" ")).to_upper()
@@ -140,7 +140,7 @@ func timing_arc(at: Vector2,radius: Vector2,start: float,value: float,low: float
 	for i in colors.size():
 		var begin: float=cuts[i]
 		var end: float=cuts[i+1]
-		arc_band(at,radius,start+begin*PI,start+end*PI,colors[i].darkened(.43),7)
+		arc_band(at,radius,start+begin*PI,start+end*PI,colors[i].darkened(.12),7)
 		arc_band(at,radius,start+begin*PI,start+clampf(value,begin,end)*PI,colors[i],7)
 	var angle := start+value*PI
 	var cursor := at+Vector2(cos(angle),sin(angle))*radius

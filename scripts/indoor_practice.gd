@@ -1345,20 +1345,23 @@ func set_fill() -> float:
 	return clampf((clock-meter_start)*meter_rate,0.,1.)
 
 func timing_band() -> Vector2:
+	if phase!="pass": return Vector2(.55,.85)
 	var ideal := (clock-meter_start-release_offset())*meter_rate
 	return Vector2(clampf(ideal-ON_TIME*meter_rate,0.,1.),clampf(ideal+ON_TIME*meter_rate,0.,1.))
 
 func late_contact_limit() -> float:
 	return minf(timing_window(),HAND_CUSHION-.055+RELEASE_ADVANCE)
 
+func toss_in_reach() -> bool:
+	if first_contact>=0 or automatic_setter(): return true
+	if elapsed>contact_time and ball.position.y<extended_receive_point().y-.10: return false
+	var arrival := toss_at(contact_time)
+	var head := Contact.joint(setter,"Head")
+	if jump.active: head+=jump.horizontal_velocity()*clampf(contact_time-elapsed,0.,.24)
+	return (arrival-head).slide(Vector3.UP).length()<=.76
+
 func contact_band() -> Vector2:
-	if phase!="pass": return Vector2.ZERO
-	if first_contact<0 and not automatic_setter():
-		if elapsed>contact_time and ball.position.y<extended_receive_point().y-.10: return Vector2.ZERO
-		var arrival := toss_at(contact_time)
-		var head := Contact.joint(setter,"Head")
-		if jump.active: head+=jump.horizontal_velocity()*clampf(contact_time-elapsed,0.,.24)
-		if (arrival-head).slide(Vector3.UP).length()>.76: return Vector2.ZERO
+	if phase!="pass": return Vector2(.30,.96)
 	var ideal := (clock-meter_start-release_offset())*meter_rate
 	return Vector2(clampf(ideal-(timing_window()+.065)*meter_rate,0.,1.),clampf(ideal+late_contact_limit()*meter_rate,0.,1.))
 
@@ -1374,10 +1377,10 @@ func release(index: int) -> void:
 		if not automatic_setter():
 			set_error = signf(raw_offset)*maxf(0.,absf(raw_offset)-ON_TIME)
 			trace("set_button_up",{"raw_offset_s":raw_offset,"held_s":input_hold,"ball":str(ball.position),"head":str(Contact.joint(setter,"Head"))})
-		if not automatic_setter() and (raw_offset < -(timing_window()+.065) or raw_offset>late_contact_limit() or grade_contact==Vector2.ZERO):
+		if not automatic_setter() and (raw_offset < -(timing_window()+.065) or raw_offset>late_contact_limit() or not toss_in_reach()):
 			measured_release=true
 			set_grade_until=clock+.65
-			miss("Out of reach." if grade_contact==Vector2.ZERO else ("Too early for contact." if raw_offset<0. else "Too late for contact."))
+			miss("Out of reach." if not toss_in_reach() else ("Too early for contact." if raw_offset<0. else "Too late for contact."))
 			return
 		if first_contact < 0 and not automatic_setter():
 			buffered_at=elapsed
