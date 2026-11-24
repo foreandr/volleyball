@@ -755,6 +755,28 @@ func shape_catch_hands(lift := 1.) -> void:
 	Hands.apply(setter,hand_target,lift,Vector3.ZERO,0.,0.,false,Vector3.ZERO,0.,Vector3.INF,0.,true,-1.,null,Vector3.ZERO,true)
 	if contact_weight>0. and lift>=.99: Contact.track_hands(setter,hand_target,true,contact_weight,96.)
 
+func reach_for_toss(lift: float) -> void:
+	var pocket := extended_receive_point()
+	var lateral := (ball.position-pocket).slide(Vector3.UP)
+	var distance := lateral.length()
+	var vertical := ball.position.y-pocket.y
+	var weight := lift*(1.-smoothstep(.63,.83,distance))*(1.-smoothstep(.36,1.2,absf(vertical)))
+	if weight<=0. or distance<.045: return
+	var rig: Skeleton3D=setter.skeleton
+	var author: RefCounted=setter.get_pose_author()
+	var pose: Array=[]
+	for i in rig.get_bone_count(): pose.append(rig.get_bone_pose(i))
+	var axis := (rig.global_basis.inverse()*Vector3.UP.cross(lateral.normalized())).normalized()
+	var bend := deg_to_rad(26.)*smoothstep(.045,.48,distance)*weight
+	for spine in ["spine_01","spine_02"]:
+		author.rotate_world(pose,spine,axis,bend*.5)
+		var id := rig.find_bone(spine)
+		rig.set_bone_pose_rotation(id,pose[id].basis.orthonormalized().get_rotation_quaternion())
+	var target_point := extended_receive_point()
+	target_point+=(ball.position-target_point).slide(Vector3.UP).limit_length(.34)
+	target_point.y=clampf(ball.position.y,target_point.y-.18,target_point.y+.13)
+	Contact.track_hands(setter,target_point,true,weight,136.)
+
 func player_jump_carry() -> Vector3:
 	if phase!="pass" or camp_velocity.length()<.25: return camp_velocity
 	# Intersect the descending toss with the forehead along this charged jump.
@@ -988,7 +1010,9 @@ func step_practice(delta: float) -> void:
 				return
 			if held>=0:
 				meter.value = set_fill()*100
-				shape_catch_hands(receive_hand_lift(contact_time))
+				var lift := receive_hand_lift(contact_time)
+				shape_catch_hands(lift)
+				if not automatic_setter() and incoming.y<0.: reach_for_toss(lift)
 			if held<0 and not automatic_setter():
 				var head := Contact.joint(setter,"Head")+Vector3.UP*.10+setter.global_basis.z*.048
 				var closest := Geometry3D.get_closest_point_to_segment(head,previous,ball.position)
@@ -1007,9 +1031,9 @@ func step_practice(delta: float) -> void:
 					old_palms[bone] = hand
 			if held>=0 and not automatic_setter() and incoming.y<0:
 				# Cover the space between the palms as well as individual fingers.
-				var pocket := Contact.joint(setter,"Head")+setter.global_basis.z*.095+Vector3.UP*.24
+				var pocket := (Contact.palm(setter,"l")+Contact.palm(setter,"r"))*.5+Vector3.UP*.06
 				var closest := Geometry3D.get_closest_point_to_segment(pocket,previous,ball.position)
-				if closest.distance_to(pocket)<.19:
+				if closest.distance_to(pocket)<.22:
 					collided=true
 					ball.position=closest
 			if collided and last_contact<0:
@@ -1254,7 +1278,7 @@ func release(index: int) -> void:
 		if first_contact<0 or clock-last_contact>HAND_CUSHION:
 			miss("No hand contact. Get under the ball before release.")
 			return
-		if set_error < -(timing_window()+0.065) or set_error > timing_window() or gap>0.72+0.36*skill:
+		if set_error < -(timing_window()+0.065) or set_error > timing_window():
 			miss("Missed contact. Hold the target and release above your forehead.")
 			return
 	target = index

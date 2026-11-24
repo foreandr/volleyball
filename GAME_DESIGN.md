@@ -122,3 +122,4 @@ Each athlete's current stamina percentage scales skill effectiveness linearly. S
 Forward sets hold the wrists flat for 120 ms after easing out of the loaded grip before the wrists turn toward the target.
 Camp pause sliders tune the active setter for this session and show current medium/high set ranges. Fingers open on the gather from the relaxed running gait.
 RB cycles set heights. The incoming toss shows its projected flight and floor landing ring. Holding the set input begins opening the hands.
+On descending tosses an active setter can lean and reach to either side. Contact follows the swept ball and the actual palm pocket, including on off-center releases.
