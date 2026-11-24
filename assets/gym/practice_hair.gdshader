@@ -13,7 +13,11 @@ void vertex(){
 	vec3 lag=guide_0*weights.x+guide_1*weights.y+guide_2*weights.z+guide_3*weights.w;
 	float tips=UV.y*UV.y*(3.-2.*UV.y);
 	float wind=sin(TIME*2.6+phase+VERTEX.x*28.)+.35*sin(TIME*5.+VERTEX.z*31.);
-	VERTEX+=tips*(lag+vec3(.003*wind,0.,.0015*wind));
+	vec3 motion=lag+vec3(.003*wind,0.,.0015*wind);
+	// Slide loose ends along the scalp when a head turn drives them inward.
+	vec3 outward=normalize(vec3(radial.x,sqrt(max(0.,1.-dot(radial,radial))),radial.y));
+	motion-=outward*min(dot(outward,motion),0.);
+	VERTEX+=tips*motion;
 }
 void fragment(){
 	float strand=UV.x*42.+sin(UV.y*7.+phase)*.65;

@@ -166,6 +166,10 @@ func update_hair(dt: float) -> void:
 		hair_speeds.resize(4)
 		for guide: Vector3 in HAIR_GUIDES: hair_anchors.append(hair_mount.to_global(guide))
 	var local_basis := hair_mount.global_basis.inverse()
+	# Longer cuts swing farther and settle more slowly after a plant.
+	var length_mix := smoothstep(.022,.076,hair_length)
+	var stiffness := lerpf(540.,175.,length_mix)
+	var damping := lerpf(33.,14.,length_mix)
 	var steps := maxi(1,ceili(minf(dt,.12)*120.))
 	var h := minf(dt,.12)/steps
 	for i in HAIR_GUIDES.size():
@@ -182,7 +186,7 @@ func update_hair(dt: float) -> void:
 				hair_offsets[i]-=shift/steps
 				var wind_force := fabric_airflow*hair_length*(12.+3.*sin(fabric_time*2.2+i))
 				hair_speeds[i]+=wind_force*h
-				hair_speeds[i]+=(-hair_offsets[i]*(290.+i*12.)-hair_speeds[i]*19.)*h
+				hair_speeds[i]+=(-hair_offsets[i]*(stiffness+i*9.)-hair_speeds[i]*damping)*h
 				hair_offsets[i]=(hair_offsets[i]+hair_speeds[i]*h).limit_length(hair_length*.58)
 		hair_material.set_shader_parameter("guide_"+str(i),local_basis*hair_offsets[i])
 

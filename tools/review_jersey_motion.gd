@@ -59,6 +59,19 @@ func review() -> void:
 				gym.camera.look_at(hands-Vector3.UP*.045)
 				await capture("hands"+str(frame))
 			if frame in ([6,12,18] if action=="run" else [16,36,64]): await capture(action+str(frame))
+	# Keep the same head-relative view while the runner plants and the tips settle.
+	athlete.play_action("run",0.)
+	var head_bone: int=athlete.skeleton.find_bone("Head")
+	for frame in 36:
+		await process_frame
+		if frame<16:
+			athlete.position+=heading*.09
+			athlete.animator.advance(1./30.)
+		if frame in [14,17,20,26,35]:
+			var head: Vector3=athlete.skeleton.to_global(athlete.skeleton.get_bone_global_pose(head_bone).origin)
+			gym.camera.position=head+athlete.global_basis.orthonormalized()*Vector3(.46,.30,.50)
+			gym.camera.look_at(head+Vector3.UP*.10)
+			await capture("hair_stop"+str(frame))
 	athlete.animator.callback_mode_process=playback
 	athlete.position=start
 	gym.set_process(true)
