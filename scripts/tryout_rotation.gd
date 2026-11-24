@@ -161,7 +161,9 @@ func station_ready(dt: float) -> bool:
 		basket.rotation.y=rotate_toward(basket.rotation.y,heading,dt*2.8)
 		var aligned := absf(angle_difference(basket.rotation.y,heading))<.01
 		if aligned and not parking:
-			basket.position=basket.position.move_toward(STATIONS[requested],dt*2.15)
+			var step := travel.limit_length(dt*2.15)
+			var next := move_actor(coach,step)
+			basket.position+=(next-coach.position).slide(Vector3.UP)
 		coach.position=basket.to_global(HANDLE)
 		coach.rotation.y=basket.rotation.y
 		coach_stride=push_pose(coach,basket,coach_stride,before.distance_to(coach.position))
@@ -197,6 +199,7 @@ func grip_handle(actor: Node3D,cart: Node3D) -> void:
 			rig.set_bone_pose_rotation(idx,pose[idx].basis.orthonormalized().get_rotation_quaternion())
 
 func prepare_next_ball(dt: float) -> void:
+	if coach_pushing or (tosses/10)%STATIONS.size()!=station: return
 	if game.demonstration or game.phase in ["intro","complete","feed","walk"]: return
 	if game.phase=="pass" and game.elapsed<.16: return
 	var coach: Node3D=game.coach

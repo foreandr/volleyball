@@ -3,20 +3,20 @@ extends Control
 const Court = preload("res://scripts/preview_court.gd")
 const Player = preload("res://scripts/volleyball_player.gd")
 const Hands = preload("res://scripts/hand_setting_pose.gd")
-const TARGETS := ["Left side","Middle","Pipe","Right side"]
+const TARGETS := ["Left side","31","Right side"]
 const TEMPOS := ["Normal","High","Fast"]
 const Xbox = preload("res://scripts/xbox_controls.gd")
-const BUTTONS := [JOY_BUTTON_X,JOY_BUTTON_Y,JOY_BUTTON_A,JOY_BUTTON_B]
-const KEYS := [KEY_J,KEY_I,KEY_K,KEY_L]
-const PINS := [Vector3(4.75,2.65,3.0),Vector3(1.05,2.65,3.3),Vector3(-0.45,2.65,2.3),Vector3(-4.75,2.65,3.0)]
+const BUTTONS := [JOY_BUTTON_X,JOY_BUTTON_Y,JOY_BUTTON_B]
+const KEYS := [KEY_J,KEY_I,KEY_L]
+const PINS := [Vector3(4.75,2.65,3.0),Vector3(1.05,2.65,3.3),Vector3(-4.75,2.65,3.0)]
 # Midway between the centers of zones 2 (x=-3) and 3 (x=0).
 const BASE := Vector3(-1.5,0.04,1.35)
-const ORDER := [0,3,2,1]
+const ORDER := [0,2,1]
 const SET_LOAD := .26
 var contact_time := 1.0
 const DURATION := [0.65,1.52,0.48]
 const APEX := [1.1,2.5,0.32]
-const LINES := ["Welcome to the team, %s. I’m Coach Ellis.","You’re trying out at setter. Watch the four targets. I’ll toss the first ones right to you.","Two to each spot. First stay planted, then jump set. After that, I’ll make you move."]
+const LINES := ["Welcome to the team, %s. I’m Coach Ellis.","You’re trying out at setter. Watch the three targets. I’ll toss the first ones right to you.","Two to each spot. First stay planted, then jump set. After that, I’ll make you move."]
 var coach_motion := preload("res://scripts/tryout_coach.gd").new()
 var last_toss := -10.0
 var next_release := 0.0
@@ -99,6 +99,7 @@ func athlete(at: Vector3,color: String) -> Node3D:
 	world.add_child(actor)
 	actor.animator.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
 	actor.get_node("DirectionArrows").hide()
+	actor.skeleton.add_child(preload("res://scripts/practice_joint_limits.gd").new())
 	return actor
 
 func _ready() -> void:
@@ -119,7 +120,7 @@ func _ready() -> void:
 	preload("res://scripts/practice_kit.gd").apply(coach,true)
 	coach_motion.dress(coach)
 	seat_teammates()
-	for i in 4:
+	for i in PINS.size():
 		var basket := preload("res://scripts/tryout_target.gd").new()
 		basket.position = PINS[i]
 		basket.is_net = true
@@ -268,7 +269,7 @@ func jump_rep() -> bool:
 	return (demo_index%2==1 if demonstration else (rotation_drill.attempts==1 if rotation_drill.turn!=0 else (rep/8)%2==1))
 
 func called() -> int:
-	return ORDER[demo_index if demonstration else rotation_drill.round_index%4]
+	return ORDER[demo_index if demonstration else rotation_drill.round_index%ORDER.size()]
 
 func reset_feed() -> void:
 	set_grade_until=0.0
@@ -292,11 +293,11 @@ func reset_feed() -> void:
 	coach.rotation.y = atan2(catch_point.x-coach.position.x,catch_point.z-coach.position.z)
 	ball.visible = demonstration or rotation_drill.issued!=null
 	apply_camera()
-	title.text = "COACH DEMO    /    %d OF 4" % (demo_index+1) if demonstration else "SETTER TRYOUT    /    %02d OF 32    •    %s" % [rep+1,"MOVING" if rep>=16 else "STATIONARY"]
+	title.text = "COACH DEMO    /    %d OF 3" % (demo_index+1) if demonstration else "SETTER TRYOUT    /    %02d OF 32    •    %s" % [rep+1,"MOVING" if rep>=16 else "STATIONARY"]
 	message.text = TARGETS[called()]+"    /    "+("Jump set" if jump_rep() else "Standing set")
 	if not demonstration:
 		title.text = "SETTER TRYOUT   /   %s    •    BALL %d OF 2" % ["YOUR TURN" if rotation_drill.turn==0 else ("SETTER %d" % (rotation_drill.turn+1)),rotation_drill.attempts+1]
-		if called()==3: message.text = "Back set   /   Right side"
+		if called()==2: message.text = "Back set   /   Right side"
 	if demonstration or rep<8: title.text += "    •    HIGH BALLS"
 	if not demonstration and rotation_drill.turn!=0: message.text = "Shag loose balls   /   Return to a cart"
 	hint.text = ""
@@ -329,15 +330,15 @@ func axis(which: JoyAxis) -> float:
 
 func set_heading(actor: Node3D,choice: int) -> float:
 	var aim: Vector3=(PINS[choice]-actor.position).slide(Vector3.UP).normalized()
-	if choice==3: aim=(-aim+Vector3.BACK*.85).normalized()
+	if choice==2: aim=(-aim+Vector3.BACK*.85).normalized()
 	return atan2(aim.x,aim.z)
 
 func set_alignment(actor: Node3D,choice: int) -> float:
 	var angle := absf(angle_difference(actor.rotation.y,set_heading(actor,choice)))
-	return 1.-smoothstep(deg_to_rad(18. if choice==3 else 8.),deg_to_rad(140.),angle)
+	return 1.-smoothstep(deg_to_rad(18. if choice==2 else 8.),deg_to_rad(140.),angle)
 
 func facing_scatter(actor: Node3D,choice: int) -> Vector3:
-	var radius := (.035 if choice==3 else 0.)+.32*(1.-set_alignment(actor,choice))
+	var radius := (.035 if choice==2 else 0.)+.32*(1.-set_alignment(actor,choice))
 	var angle := rotation_drill.random.randf()*TAU
 	return Vector3(cos(angle),0,sin(angle))*radius*sqrt(rotation_drill.random.randf())
 
@@ -345,7 +346,7 @@ func face_set(actor: Node3D,choice: int,dt: float) -> void:
 	var heading := set_heading(actor,choice)
 	var clockwise := fposmod(actor.rotation.y-heading,TAU)
 	if absf(angle_difference(actor.rotation.y,heading))<.035: actor.rotation.y=heading
-	else: actor.rotation.y-=minf(clockwise,dt*10.)
+	else: actor.rotation.y-=minf(clockwise,dt*(10./3.))
 
 func select_height(stick: Vector2) -> void:
 	if stick.length()<.32:
@@ -385,7 +386,7 @@ func move_setter(delta: float,actor: Node3D=setter,off_ball := false) -> bool:
 	if focus and choice>=0:
 		face_set(actor,choice,delta)
 	elif Vector2(facing.x,facing.z).length()>0.05:
-		actor.rotation.y = lerp_angle(actor.rotation.y,atan2(facing.x,facing.z),minf(1,delta*14))
+		actor.rotation.y = rotate_toward(actor.rotation.y,atan2(facing.x,facing.z),delta*(3.33 if focus else 4.5))
 	actor.play_action("base/Idle" if at_net else ("idle" if direction.is_zero_approx() or focus else ("base/Sprint" if sprint else "run")))
 
 	if (at_net or focus) and not direction.is_zero_approx():
@@ -397,8 +398,27 @@ func move_setter(delta: float,actor: Node3D=setter,off_ball := false) -> bool:
 			steps.apply_pose(.78 if at_net else 1.)
 	return not direction.is_zero_approx()
 
+var angular_speed := {}
+
 func _process(delta: float) -> void:
 	if settings.visible: return
+	var before := {}
+	for actor in rotation_drill.roster+[coach]+rotation_drill.workers.map(func(w): return w.actor):
+		before[actor]=actor.rotation.y
+	step_practice(delta)
+	# Compose all AI, input and animation requests first. Enforce a single
+	# turn budget per actor even when several actions change in one frame.
+	var dt := minf(delta,.05)
+	for actor: Node3D in before:
+		var old: float=before[actor]
+		var change := angle_difference(old,actor.rotation.y)
+		var limit := 3.33 if actor==setter and focused else 4.5
+		var desired := clampf(change/maxf(.0001,dt),-limit,limit)
+		var velocity := move_toward(float(angular_speed.get(actor,0.)),desired,dt*20.)
+		angular_speed[actor]=velocity
+		actor.rotation.y=old+velocity*dt
+
+func step_practice(delta: float) -> void:
 	setter.animator.advance(delta)
 	coach.animator.advance(delta)
 	for seat in seats_in_use:
@@ -416,7 +436,7 @@ func _process(delta: float) -> void:
 	select_height(stick)
 	rotation_drill.tick(delta)
 	if phase == "complete": return
-	# Leave the four targets in frame while easing toward the live ball.
+	# Leave the three targets in frame while easing toward the live ball.
 	var lead := (ball.position-Vector3(0,1.6,1.0))*Vector3(0.10,0.08,0.055)
 	camera_lead = camera_lead.lerp(lead.limit_length(0.5),1.0-exp(-3.2*delta))
 	apply_camera()
@@ -508,8 +528,8 @@ func _process(delta: float) -> void:
 				held = called()
 				pressed_at = clock
 			if held>=0:
-				if held==3 and called()==3 and not demonstration and rotation_drill.turn==0 and not focused:
-					var opposite := (setter.position-PINS[3]).slide(Vector3.UP)
+				if held==2 and called()==2 and not demonstration and rotation_drill.turn==0 and not focused:
+					var opposite := (setter.position-PINS[2]).slide(Vector3.UP)
 					setter.rotation.y=lerp_angle(setter.rotation.y,atan2(opposite.x,opposite.z),minf(1,delta*9))
 				meter.value = set_fill()*100
 				Hands.apply(setter,ball.position,0.35+0.65*smoothstep(contact_time-.55,contact_time-.10,elapsed))
@@ -583,7 +603,7 @@ func _process(delta: float) -> void:
 			if elapsed>.08 and (not demonstration or not jump.active):
 				if demonstration:
 					demo_index+=1
-					if demo_index>=4: demonstration=false
+					if demo_index>=ORDER.size(): demonstration=false
 					reset_feed()
 				else:
 					rotation_drill.free_ball(Vector3.DOWN*.4 if success else (endpoint-source).normalized()*2.9)
