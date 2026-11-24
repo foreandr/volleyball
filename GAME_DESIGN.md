@@ -148,3 +148,4 @@ In player-controlled Setting Camp, hold the right stick to aim along the net bet
 Andre Foreman's Volleyball uses a rotating home ball and keeps its original save directory. The animation menu opens the shared Setting Camp. Bump sets use directional reception reaches and low-save animations. Player equipment and shorts designs are selected in the creator and preserved in the profile.
 
 Forearm sets preserve the approach shuffle, use reception footwork and low saves to intercept the toss, then carry the planted reach into a directional follow-through. Forearm placement varies with effective skill and fatigue.
+Grounded forearm reception uses authored forward and lateral plant presets. Target steering affects the spine and arms. The frame editor preserves recorded body motion by default.

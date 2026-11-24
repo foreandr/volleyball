@@ -2,6 +2,7 @@ extends Node3D
 
 const Profile = preload("res://scripts/player_profile.gd")
 const FOREARM_PLATFORM := "straight_pass_02"
+var reception_steps: RefCounted
 const ForearmReach = preload("res://scripts/forearm_reach_pose.gd")
 const ForwardDive = preload("res://scripts/forward_reception_dive.gd")
 const SideKneeSlide = preload("res://scripts/side_knee_slide.gd")
@@ -171,13 +172,19 @@ func animation_side(side: String) -> String:
 	return ("r" if side == "l" else "l") if mirror_animation else side
 
 func pose_reception_reach(step: Vector3, travel: Vector3, weight: float, progress: float, ready: Array[Transform3D], reach: Dictionary, knee_slide: bool, direction: int, contact: Vector3) -> void:
-	if mirror_animation:
-		step.x = -step.x
-		travel.x = -travel.x
-		if reach.get("court_lead",false) or reach.side_lunge or reach.rear_diagonal or absf(step.x) > 0.10 and absf(step.x) > absf(step.z)*0.55:
+	if knee_slide:
+		if mirror_animation:
+			step.x = -step.x
+			travel.x = -travel.x
 			reach = reach.duplicate()
 			reach.lead = animation_side(reach.lead)
-	ForearmReach.sample(skeleton,get_pose_author(),step,travel,weight,progress,ready,reach,knee_slide,direction,contact)
+		ForearmReach.sample(skeleton,get_pose_author(),step,travel,weight,progress,ready,reach,true,direction,contact)
+		return
+	if reception_steps == null:
+		reception_steps = preload("res://scripts/right_side_steps.gd").new(self)
+	var lateral := bool(reach.get("side_lunge",false)) or absf(step.x)>absf(step.z)
+	var left: bool = step.x>0.0 if lateral else reach.get("lead","r")=="l"
+	reception_steps.apply_reception_plant(lateral,reach.get("tier",1)>=2,left!=mirror_animation,progress,weight)
 
 func pose_reception_dive(ready: Array[Transform3D], clasp: Array[Transform3D], start: Vector3, heading: Vector3, time: float, ball_point: Vector3, release_time: float, pancake := false, travel_scale := 1.0, track_platform := false, wide_arm := "", slide_heading := Vector3.ZERO) -> void:
 	ForwardDive.sample(self,get_pose_author(),ready,clasp,start,heading,time,ball_point,release_time,pancake,travel_scale,track_platform,wide_arm,slide_heading)

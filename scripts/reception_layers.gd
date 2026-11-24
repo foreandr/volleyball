@@ -32,7 +32,7 @@ func configure(_pose: Array) -> void:
 	var options: Dictionary = actor.get_meta("reception_options",{})
 	body_name = "Balanced"
 	hand_name = str(options.get("hands","From platform"))
-	preserve_body = source.get_meta("reception_body","")=="Balanced" and not options.get("replace_body",false)
+	preserve_body = (source.has_meta("editor_ball_frames") or source.get_meta("reception_body","")=="Balanced") and not options.get("replace_body",false)
 	recipe = {} if preserve_body else BODIES.Balanced.duplicate()
 
 func apply(pose: Array, time: float) -> Array:

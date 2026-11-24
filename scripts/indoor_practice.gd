@@ -1069,7 +1069,7 @@ func step_practice(delta: float) -> void:
 		setter.skeleton.set_meta("wrist_follow",0.)
 	setter.skeleton.set_meta("back_grip",back_finish)
 	setter.skeleton.set_meta("back_extension",back_finish)
-	if not jump.active and (not automatic_setter() or not jump_rep()):
+	if bump_aim.is_zero_approx() and not jump.active and (not automatic_setter() or not jump_rep()):
 		if phase=="pass":
 			standing_set_load(smoothstep(contact_time-.24,contact_time,elapsed))
 		elif phase=="set_contact":

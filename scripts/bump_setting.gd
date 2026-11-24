@@ -2,8 +2,6 @@ extends MeshInstance3D
 
 const D2_FINISH = preload("res://assets/animations/d2_back_lift_finish.tres")
 
-const FRONT_LUNGE_STEP = preload("res://assets/animations/front_lunge_step.tres")
-const FRONT_LUNGE_ARMS = preload("res://assets/animations/front_lunge_arms.tres")
 const ReachPose = preload("res://scripts/forearm_reach_pose.gd")
 
 const HandPose = preload("res://scripts/hand_setting_pose.gd")
@@ -515,7 +513,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 				else:
 					pose_reach(smoothstep(0.0,1.0,reach_progress),intercept)
 		blend_dig_transition(time)
-		if not hand_setting: apply_knee_bend(time)
+		if not hand_setting and reach.is_empty(): apply_knee_bend(time)
 		if reach.has("custom_clip"): apply_d2_finish(time)
 		var keep_platform_low := rushed_cpu_receive and not hand_setting and not low_save.active and not reach.has("custom_clip")
 		if keep_platform_low: lower_rushed_platform()
@@ -668,7 +666,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 		elif not (striking and (defer_forearm_follow or is_finite(lowest_receive_hips))):
 			# Let match recovery capture the crouched contact pose before any follow-through.
 			follow_forearm(time,incoming)
-	if not striking: apply_knee_bend(time)
+	if not striking and (hand_setting or reach.is_empty()): apply_knee_bend(time)
 	var recent_touch := is_finite(touch_time) and time-touch_time <= BallTimingRing.RESULT_DURATION
 	if not catch_only and ((grade == Timing.Grade.WAITING and progress >= 0.0) or recent_touch):
 		var anticipated := (1.0-maxf(progress,0.0))*APPROACH_TIME
@@ -843,34 +841,7 @@ func follow_forearm(time: float, incoming: Vector3) -> void:
 
 func pose_reach(weight: float, intercept: Vector3) -> void:
 	if reach.is_empty() or weight <= 0.0: return
-	var local := setter.basis.inverse()
-	var pose_progress := reach_progress
-	if not rear_setup.is_zero_approx():
-		pose_progress = clampf(inverse_lerp(0.28,1.0,reach_progress),0.0,1.0)
-		var step_weight := smoothstep(0.0,0.30,reach_progress)*(1.0-smoothstep(0.30,0.62,reach_progress))
-		if step_weight > 0.0:
-			var shuffle := {"tier":1,"back":true,"rear_diagonal":false,"short_straight_back":true,
-				"forward_lunge":false,"lead":reach.lead,"side_lunge":false,"height":0.0,"centered_back":true}
-			setter.pose_reception_reach(local*rear_setup,local*rear_setup_travel,step_weight,
-				clampf(reach_progress/0.50,0.0,1.0),ready_pose,shuffle,false,0,intercept)
-		weight *= smoothstep(0.0,0.65,pose_progress)
-	if weight > 0.0:
-		var planted_travel := reach_travel
-		if is_finite(touch_time): planted_travel *= 1.0-smoothstep(0.10,0.40,rear_follow)
-		setter.pose_reception_reach(local*reach_step,local*planted_travel,weight,pose_progress,ready_pose,reach,false,0,intercept)
-
-		if reach.get("forward_lunge",false) and reach.get("tier",0) == 2:
-			var rig: Skeleton3D = setter.skeleton
-			# Sample the edited foot lift and plant across the lunge, in place.
-			var step_time := clampf(pose_progress,0.0,1.0)*FRONT_LUNGE_STEP.length
-			for track in FRONT_LUNGE_STEP.get_track_count():
-				var bone := rig.find_bone(FRONT_LUNGE_STEP.track_get_path(track).get_subname(0))
-				var saved := FRONT_LUNGE_STEP.rotation_track_interpolate(track,step_time)
-				rig.set_bone_pose_rotation(bone,rig.get_bone_pose_rotation(bone).slerp(saved,weight))
-			for track in FRONT_LUNGE_ARMS.get_track_count():
-				var bone := rig.find_bone(FRONT_LUNGE_ARMS.track_get_path(track).get_subname(0))
-				var saved := FRONT_LUNGE_ARMS.rotation_track_interpolate(track,0.0)
-				rig.set_bone_pose_rotation(bone,rig.get_bone_pose_rotation(bone).slerp(saved,weight))
+	setter.pose_reception_reach(setter.basis.inverse()*reach_step,Vector3.ZERO,weight,reach_progress,ready_pose,reach,false,0,intercept)
 
 func capture_early_dig_arms() -> void:
 	var rig: Skeleton3D = setter.skeleton
@@ -902,6 +873,12 @@ func reach_platform(offset: Vector3, weight := 1.0, reach_limit := 0.26, steer_s
 	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
 	var grip: Vector3 = (author.point(pose,"hand_l")+author.point(pose,"hand_r"))*0.5
 	var shift := rig.global_basis.inverse()*global_basis*offset.limit_length(reach_limit)
+	if steer_sideways:
+		for spine in ["spine_02","spine_03"]:
+			author.rotate_world(pose,spine,Vector3.BACK,-clampf(shift.x*0.45,-0.13,0.13)*weight)
+			author.rotate_world(pose,spine,Vector3.RIGHT,clampf(shift.z*0.38,-0.09,0.13)*weight)
+			var id := rig.find_bone(spine)
+			rig.set_bone_pose_rotation(id,pose[id].basis.get_rotation_quaternion())
 	var lateral := Vector3.RIGHT
 	var target := grip+shift
 	var weight_scale := 0.82

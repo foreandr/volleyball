@@ -146,3 +146,29 @@ func install(pose: Array, weight: float) -> void:
 	for bone in rig.get_bone_count():
 		rig.set_bone_pose_position(bone,rig.get_bone_pose_position(bone).lerp(pose[bone].origin,weight))
 		rig.set_bone_pose_rotation(bone,rig.get_bone_pose_rotation(bone).slerp(pose[bone].basis.get_rotation_quaternion(),weight))
+
+# Sample a committed footwork clip. Ball and target positions never enter this layer.
+func apply_reception_plant(lateral: bool, deep: bool, left: bool, progress: float, weight: float) -> void:
+	var rig: Skeleton3D = actor.skeleton
+	var pose: Array = author.baseline.duplicate()
+	var index := 2 if deep else 0
+	var clip: Animation = clips[index] if lateral else preload("res://assets/animations/front_lunge_step.tres")
+	var time := clampf(progress,0.,1.)*clip.length*(0.55 if lateral else 1.)
+	var spine := rig.find_bone("spine_01")
+	var chest_basis := rig.get_bone_global_pose(spine).basis
+	var bones := ["pelvis","thigh_l","thigh_r","calf_l","calf_r","foot_l","foot_r","ball_l","ball_r"]
+	for name_ in bones:
+		var id := rig.find_bone(name_)
+		var path := NodePath("Armature/Skeleton3D:"+str(name_))
+		var pos := clip.find_track(path,Animation.TYPE_POSITION_3D)
+		var rot := clip.find_track(path,Animation.TYPE_ROTATION_3D)
+		if pos>=0: pose[id].origin=clip.position_track_interpolate(pos,time)
+		if rot>=0: pose[id].basis=Basis(clip.rotation_track_interpolate(rot,time))
+	if left: pose=mirrored(pose)
+	for name_ in bones:
+		var id := rig.find_bone(name_)
+		var planted := rig.get_bone_pose(id).interpolate_with(pose[id],weight)
+		rig.set_bone_pose_position(id,planted.origin)
+		rig.set_bone_pose_rotation(id,planted.basis.get_rotation_quaternion())
+	var parent := rig.get_bone_parent(spine)
+	rig.set_bone_pose_rotation(spine,(rig.get_bone_global_pose(parent).basis.inverse()*chest_basis).orthonormalized().get_rotation_quaternion())
