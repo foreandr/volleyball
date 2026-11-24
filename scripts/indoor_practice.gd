@@ -43,7 +43,6 @@ var input_hold := 0.0
 var contact_local := Vector3.ZERO
 var measured_release := false
 var spectator_progress := ProgressBar.new()
-var keyboard_prompt := true
 var skip_time := 0.0
 var camera_lead := Vector3.ZERO
 var replay_inspector := preload("res://scripts/practice_replay.gd").new()
@@ -287,7 +286,6 @@ func build_hud() -> void:
 	skip.offset_right = -32
 	skip.offset_bottom = -34
 	add_child(skip)
-	keyboard_prompt = pad() < 0
 	add_child(spectator_prompt)
 	spectator_prompt.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	spectator_prompt.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
@@ -588,7 +586,7 @@ func _process(delta: float) -> void:
 	if rotation_drill.turn == 1 and phase != "intro" and not demonstration:
 		var holding := Input.is_key_pressed(KEY_SPACE) or (pad() >= 0 and Input.is_joy_button_pressed(pad(),Xbox.physical(JOY_BUTTON_A)))
 		skip_time = minf(1,skip_time + delta) if holding else 0.0
-		spectator_icon.visible = not keyboard_prompt and pad() >= 0
+		spectator_icon.visible = not Xbox.keyboard_prompts()
 		if spectator_icon.visible: spectator_icon.texture = Xbox.glyph(JOY_BUTTON_A)
 		spectator_text.text = "to start your turn" if spectator_icon.visible else "[Space] to start your turn"
 		spectator_progress.value = skip_time
@@ -1174,9 +1172,7 @@ func _input(event: InputEvent) -> void:
 			settings.hide()
 			get_viewport().set_input_as_handled()
 		return
-	if event is InputEventKey and event.pressed: keyboard_prompt = true
 	if event is InputEventJoypadButton and event.pressed:
-		keyboard_prompt = false
 		active_pad = event.device
 	if (event is InputEventKey and event.keycode==KEY_ESCAPE or event is InputEventJoypadButton and event.button_index==Xbox.physical(JOY_BUTTON_START)) and event.is_pressed():
 		trace("pause",{})

@@ -397,7 +397,7 @@ func tick_demo(delta: float, controls: RefCounted) -> void:
 		if previous_stage == Stage.PASS and stage != Stage.PASS: set_preview.clear_surfaces()
 		if previous_stage == Stage.PASS and stage == Stage.SET:
 			aim_swing(Vector3(randf_range(-3.35,3.35),Flight.FLOOR,randf_range(8.5,11.8)))
-		if stage == Stage.PASS and not manual_set_requested: status.text = "E / I to set  |  Hold Space to spike"
+		if stage == Stage.PASS and not manual_set_requested: status.text = PromptControls.hint("Set, then approach and spike","E / I to set  |  Hold Space to spike")
 		return
 	controls.read_pace_input()
 	trace_input = controls.movement_input()

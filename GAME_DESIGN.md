@@ -83,3 +83,5 @@ Feeding resumes at the active setter and station. Coaches can feed from either s
 Indoor hand sets preserve the physical button-release time while a prepared setter waits for the descending ball to enter reach. A 65 ms on-time band and a short hand cushion accommodate releases around visible contact. Jump technique is graded separately.
 
 Training Camp / Setting / Set to Target runs on the same indoor practice controller as the career tryout. Solo practice recycles issued balls after each result and repeats standing and jump sets without roster rotation. Play and Training Camp use the indoor gym and shared athlete kit for match-based drills.
+
+Gameplay prompts default to mapped Xbox glyphs regardless of connected devices or recent key presses. Keyboard prompt text requires an explicit opt-in in Controls.

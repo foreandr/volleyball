@@ -1,5 +1,7 @@
 extends "res://scripts/setting_drill.gd"
 
+const PromptControls = preload("res://scripts/xbox_controls.gd")
+
 signal shot_sequence_changed(playing: bool)
 
 const Court = preload("res://scripts/preview_court.gd")
@@ -771,7 +773,7 @@ func play_serve(time: float, previous: float, delta: float) -> void:
 		stage = Stage.PASS
 		stage_start = clock
 		call_rally_set(setter.position)
-		status.text = "Move into range  |  Hold Space"
+		status.text = PromptControls.hint("Move into approach range","Move into range  |  Hold Space")
 		trace.write("player_pass",clock,{"point":pass_origin,"velocity":pass_motion,"cpu_contact":cpu_contact_point,
 			"grade":bump.grade,"reach":bump.reach,"contact":bump.contact_check},true)
 	elif time >= end:
@@ -865,7 +867,7 @@ func play_cpu_set(time: float, delta: float) -> void:
 			bump.hand_setting = false
 			trace.closest_check.clear()
 			trace.closest_margin = INF
-			status.text = "Hold Space to approach and spike"
+			status.text = PromptControls.hint("Approach and spike","Hold Space to approach and spike")
 			region.show()
 			aim_swing(swing_aim)
 			trace.write("cpu_set",clock,{"point":pass_origin,"velocity":pass_motion,"pin_arrival":pin_arrival},true)
@@ -921,7 +923,7 @@ func play_cpu_set(time: float, delta: float) -> void:
 
 func play_pin_ball(time: float, previous: float, delta: float) -> void:
 	if uses_assisted_approach() and not is_finite(approach_pressed_at):
-		status.text = "Hold Space to charge the spike" if find_approach_intercept().is_finite() else unavailable_approach_status()
+		status.text = PromptControls.hint("Charge the spike","Hold Space to charge the spike") if find_approach_intercept().is_finite() else unavailable_approach_status()
 	var spin_axis := Vector3.UP.cross(pass_motion).normalized()
 	if not spin_axis.is_zero_approx(): ball.rotate(spin_axis,TAU*SET_TOPSPIN_RPS*delta)
 	ball.position = flight_point(pass_origin,pass_motion,minf(time,flight_end))

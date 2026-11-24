@@ -5,6 +5,12 @@ const AUX := [JOY_BUTTON_LEFT_SHOULDER,JOY_BUTTON_RIGHT_SHOULDER,JOY_BUTTON_RIGH
 const NAMES := {JOY_BUTTON_A:"A",JOY_BUTTON_B:"B",JOY_BUTTON_X:"X",JOY_BUTTON_Y:"Y",JOY_BUTTON_LEFT_SHOULDER:"LB",JOY_BUTTON_RIGHT_SHOULDER:"RB",JOY_BUTTON_RIGHT_STICK:"RS",JOY_BUTTON_START:"Menu",JOY_BUTTON_LEFT_STICK:"LS"}
 const CONTROLS := ["Serve / jump / pipe","Forearm receive / left set","Hand receive / middle set","Back / right set","Next toss","Match sprint","Jump set","Pause","Show / hide set arc"]
 
+static func keyboard_prompts() -> bool:
+	return StorySession.game_options.get_value("controls","keyboard_prompts",false)
+
+static func hint(action: String, keyboard: String) -> String:
+	return keyboard if keyboard_prompts() else action
+
 static func auxiliary_bindings() -> Array:
 	var mapping: Array=StorySession.game_options.get_value("xbox","aux",AUX).duplicate()
 	if mapping.size()==4: mapping.append(JOY_BUTTON_LEFT_STICK)
@@ -46,6 +52,13 @@ static func prompts(parent: Container,entries: Array) -> void:
 		pair.add_child(label)
 
 static func settings(parent: Container,refresh: Callable) -> void:
+	var keyboard := CheckButton.new()
+	keyboard.text = "Show keyboard prompts"
+	keyboard.button_pressed = keyboard_prompts()
+	keyboard.toggled.connect(func(enabled):
+		StorySession.game_options.set_value("controls","keyboard_prompts",enabled)
+		StorySession.save_options())
+	parent.add_child(keyboard)
 	for i in CONTROLS.size():
 		# Keep the legacy auxiliary slot in saved maps for remapping other controls.
 		if i==FACE.size()+AUX.find(JOY_BUTTON_RIGHT_STICK): continue

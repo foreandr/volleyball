@@ -1,4 +1,6 @@
 extends Control
+
+const PromptControls = preload("res://scripts/xbox_controls.gd")
 var game: Control
 
 func _ready() -> void:
@@ -27,13 +29,13 @@ func _draw() -> void:
 		var anchor: Vector3=game.targets[called].global_position+Vector3.UP*.43
 		if not game.camera.is_position_behind(anchor):
 			var point: Vector2=game.camera.unproject_position(anchor)
-			var icon := preload("res://scripts/xbox_controls.gd").glyph(game.BUTTONS[called])
+			var icon := PromptControls.glyph(game.BUTTONS[called])
 			var font := ThemeDB.fallback_font
 			var width := font.get_string_size(game.TARGETS[called],HORIZONTAL_ALIGNMENT_LEFT,-1,16).x+74
 			draw_rect(Rect2(point-Vector2(width*.5,18),Vector2(width,32)),Color("14242eee"))
 			var left := point+Vector2(-width*.5+6,5)
 			draw_string(font,left,"Hold",HORIZONTAL_ALIGNMENT_LEFT,-1,16)
-			if game.keyboard_prompt or game.pad() < 0:
+			if PromptControls.keyboard_prompts():
 				draw_string(font,left+Vector2(33,0),"[" + OS.get_keycode_string(game.KEYS[called]) + "]",HORIZONTAL_ALIGNMENT_CENTER,27,16)
 			else:
 				draw_texture_rect(icon,Rect2(left+Vector2(33,-19),Vector2(27,24)),false)

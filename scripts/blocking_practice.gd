@@ -215,7 +215,7 @@ func reset_feed() -> void:
 		next_shot_lane = (next_shot_lane+1)%SHOT_LANES.size()
 		swing_target.hide()
 	approach_set_touched_at = clock
-	status.text = "Hold Space to approach" if player_attacks else "Time your jump"
+	status.text = PromptControls.hint("Begin your approach","Hold Space to approach") if player_attacks else "Time your jump"
 
 func set_vertical_inches(value: float) -> void:
 	vertical_inches = clampf(value,-20.0,30.0)

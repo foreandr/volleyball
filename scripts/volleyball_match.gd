@@ -1,5 +1,7 @@
 extends Node3D
 
+const PromptControls = preload("res://scripts/xbox_controls.gd")
+
 const ReceiveAnimations = preload("res://scripts/volleyball_animations.gd")
 
 const Trace = preload("res://scripts/setting_trace.gd")
@@ -2845,7 +2847,7 @@ func step_match(delta: float, controls: RefCounted) -> void:
 			return
 		var cue := "Opponent's ball"
 		if receiving_team == 0:
-			cue = "Hold Space to attack" if expected_hitter == 0 else ("Set to your teammate" if possession_team == 0 and touches == 1 and human_can_set() else "Receive or cover")
+			cue = PromptControls.hint("Hold the attack button","Hold Space to attack") if expected_hitter == 0 else ("Set to your teammate" if possession_team == 0 and touches == 1 and human_can_set() else "Receive or cover")
 		elif flight_kind == "set": cue = "Move up to block | Space" if player_blocks else "Teammate blocking | Cover the court"
 		info.text = "%s | %s" % [stroke,cue]
 

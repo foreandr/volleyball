@@ -1,4 +1,6 @@
 extends "res://scripts/create.gd"
+
+const PromptControls = preload("res://scripts/xbox_controls.gd")
 const BallPreview = preload("res://scripts/animation_ball_preview.gd")
 const Court = preload("res://scripts/preview_court.gd")
 const SETTING_CAMERA_FOCUS := Vector3(0,1.45,2.6)
@@ -271,7 +273,7 @@ func start_demo_match(team_size := 2, learn_from_demo := true, cpu_only := true,
 	if not cpu_only:
 		var prompts := HFlowContainer.new()
 		content.add_child(prompts)
-		preload("res://scripts/xbox_controls.gd").prompts(prompts,[["Move","Move"],[JOY_BUTTON_RIGHT_SHOULDER,"Sprint"],["Aim","Aim"],[JOY_BUTTON_X,"Forearm"],[JOY_BUTTON_Y,"Hands"],[JOY_BUTTON_A,"Serve / jump"],[JOY_BUTTON_B,"Back"]])
+		PromptControls.prompts(prompts,[["Move","Move"],[JOY_BUTTON_RIGHT_SHOULDER,"Sprint"],["Aim","Aim"],[JOY_BUTTON_X,"Forearm"],[JOY_BUTTON_Y,"Hands"],[JOY_BUTTON_A,"Serve / jump"],[JOY_BUTTON_B,"Back"]])
 	if match_from_home and cpu_only:
 		demo_match.cpu_serve_override = demo_match.TOPSPIN_SERVE
 	if match_from_home or learn_from_demo:
@@ -381,7 +383,7 @@ func add_match_replay_controls(tuning: VBoxContainer) -> void:
 		speed_label.text = "Replay speed  %.2f×" % value)
 	match_replay_panel.add_child(speed)
 	match_replay_panel.add_child(button("Save replay",save_reviewed_rep))
-	match_replay_panel.add_child(label("Middle drag or WASD to move camera\nScroll to zoom",15))
+	match_replay_panel.add_child(label(PromptControls.hint("Adjust camera","Middle drag or WASD to move camera\nScroll to zoom"),15))
 
 func open_latest_saved_rep() -> void:
 	var title := "Pass to Target" if passing_drill != null else "Match"
@@ -459,7 +461,7 @@ func update_match_replay_controls() -> void:
 		previous_rep_button.disabled = showing_saved_rep or rep <= 0
 		next_rep_button.disabled = showing_saved_rep or rep >= total-1
 		review_rep_label.text = "Saved rep %d" % replay.saved_evidence.rep if showing_saved_rep else "Rep %d / %d" % [rep+1,total]
-	match_replay_play.text = "Pause (Space)" if replay.playing else "Play (Space)"
+	match_replay_play.text = PromptControls.hint("Pause","Pause (Space)") if replay.playing else PromptControls.hint("Play","Play (Space)")
 	match_replay_frame.text = "Frame %d / %d" % [replay.index,replay.frames.size()-1]
 	match_replay_seek.max_value = replay.frames.size()-1
 	match_replay_seek.set_value_no_signal(replay.index)
@@ -540,9 +542,9 @@ func select_category(category: String) -> void:
 	next.size_flags_horizontal = Control.SIZE_SHRINK_END
 	row.add_child(next)
 	if category == "Forearm reception":
-		drill_status = label("F1 to play  |  WASD to move
+		drill_status = label(PromptControls.hint("Aim your pass","F1 to play  |  WASD to move
 Mouse to aim  |  Tap Q to receive
-Scroll to set pass height",16)
+Scroll to set pass height"),16)
 		drill_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		content.add_child(drill_status)
 		var arrow_hint := label("Middle-click a court arrow to aim the feed",16)
@@ -570,7 +572,7 @@ Scroll to set pass height",16)
 	if category == "Chasing":
 		content.add_child(button("Serve Bump Set Spike",start_serve_bump_set_spike))
 	if category == "Serving":
-		drill_status = label("Space to serve\nMove cursor to aim\nWASD to run\nMiddle drag to rotate\nScroll for arc  |  Shift + scroll to zoom",16)
+		drill_status = label(PromptControls.hint("Serve and aim","Space to serve\nMove cursor to aim\nWASD to run\nMiddle drag to rotate\nScroll for arc  |  Shift + scroll to zoom"),16)
 		content.add_child(drill_status)
 	var list := ItemList.new()
 	list.name = "AnimationList"
@@ -614,7 +616,7 @@ func start_blocking_practice(defense := false) -> void:
 	blocking_practice.configure_block(preview_player,drill_status,build_label)
 	blocking_practice.set_ball_audio_muted(StorySession.attack_ball_audio_muted)
 	if defense:
-		content.add_child(label("WASD to move  |  Shift to sprint\nQ to dig  |  E for face-height saves\nMove mouse to aim your pass",18))
+		content.add_child(label(PromptControls.hint("Move to receive","WASD to move  |  Shift to sprint\nQ to dig  |  E for face-height saves\nMove mouse to aim your pass"),18))
 		add_skill_slider("Forearm reception","forearm_reception_skill")
 		add_skill_slider("Hand reception","hand_reception_skill")
 		content.add_child(button("Back to Blocking",open_blocking_mode.bind(false)))
@@ -660,7 +662,7 @@ func start_blocking_practice(defense := false) -> void:
 	content.add_child(feed)
 	content.move_child(feed,1)
 	var update_role := func(attacking: bool):
-		controls.text = ("Hold Space to approach and spike\nMove mouse to aim\nHold Shift at contact for high hands" if attacking else "Space to jump\nQ / E to open left / right arm")+"\nWASD to move camera\nMiddle drag to rotate"
+		controls.text = (PromptControls.hint("Approach and spike","Hold Space to approach and spike\nMove mouse to aim\nHold Shift at contact for high hands") if attacking else PromptControls.hint("Jump and block","Space to jump\nQ / E to open left / right arm"))+PromptControls.hint("\nAdjust camera","\nWASD to move camera\nMiddle drag to rotate")
 		feed.visible = attacking
 		preview_camera.position = Vector3(0.0,4.9,13.2 if attacking else -5.2)
 		setting_camera_focus = Vector3(0.0,2.1,3.4 if attacking else 4.6)
@@ -753,7 +755,7 @@ func start_serve_bump_set_spike() -> void:
 	clear_content()
 	if is_instance_valid(ball_preview): ball_preview.stop()
 	set_title("SERVE BUMP SET SPIKE")
-	var controls_hint := label("WASD to move  |  Q forearms  |  E / I hands\nCursor aims  |  Scroll for pass or set height\nShift + W to run  |  Hold Space to spike",16)
+	var controls_hint := label(PromptControls.hint("Approach and spike","WASD to move  |  Q forearms  |  E / I hands\nCursor aims  |  Scroll for pass or set height\nShift + W to run  |  Hold Space to spike"),16)
 	controls_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(controls_hint)
 	drill_status = label("",18)
@@ -788,7 +790,7 @@ func start_serve_bump_set_spike() -> void:
 	serve_side.item_selected.connect(func(index: int):
 		setting_drill.serve_to_partner = index == 1
 		technique.disabled = index == 1
-		controls_hint.text = "Aim the set with the cursor\nScroll to change set height\nQ forearms  |  E / I hands\nHold Space to spike\nF to jump set" if index == 1 else "WASD to move  |  Q forearms  |  E / I hands\nCursor aims  |  Scroll for pass or set height\nShift + W to run  |  Hold Space to spike"
+		controls_hint.text = PromptControls.hint("Approach and spike","Aim the set with the cursor\nScroll to change set height\nQ forearms  |  E / I hands\nHold Space to spike\nF to jump set") if index == 1 else PromptControls.hint("Approach and spike","WASD to move  |  Q forearms  |  E / I hands\nCursor aims  |  Scroll for pass or set height\nShift + W to run  |  Hold Space to spike")
 		setting_drill.reset_feed())
 	content.add_child(serve_side)
 	add_skill_slider("Setting","setting_skill")
@@ -821,11 +823,11 @@ func start_setting_drill(attack := false) -> void:
 		if attack:
 			controls_hint.visible = index != 0
 			if index == 2:
-				controls_hint.text = "WASD to move  |  Hold Space when rings overlap\nHold from setter touch to spike\nMove mouse to aim\nDrag player or set ring\nCtrl-click start  |  Shift-click set"
+				controls_hint.text = PromptControls.hint("Approach and spike","WASD to move  |  Hold Space when rings overlap\nHold from setter touch to spike\nMove mouse to aim\nDrag player or set ring\nCtrl-click start  |  Shift-click set")
 				return
-			controls_hint.text = "WASD to move  |  Q forearms  |  I / E hands\nMouse to aim  |  Shift + scroll for pass height\nHold Space from setter touch to spike"
+			controls_hint.text = PromptControls.hint("Approach and spike","WASD to move  |  Q forearms  |  I / E hands\nMouse to aim  |  Shift + scroll for pass height\nHold Space from setter touch to spike")
 			return
-		controls_hint.text = "WASD to move  |  Tap Q to bump set\nMouse to aim  |  Scroll to change height" if index == 1 else "WASD to move  |  Tap E to set\nMouse to aim  |  Scroll to change height\nSpace jump  |  7 to 50 in"
+		controls_hint.text = PromptControls.hint("Aim your set","WASD to move  |  Tap Q to bump set\nMouse to aim  |  Scroll to change height") if index == 1 else PromptControls.hint("Aim your set","WASD to move  |  Tap E to set\nMouse to aim  |  Scroll to change height\nSpace jump  |  7 to 50 in")
 	show_mode.call(modes.selected)
 	modes.item_selected.connect(func(index: int):
 		type_indices[mode_category] = index
@@ -1107,7 +1109,7 @@ func refresh_type() -> void:
 	animation_list.visible = not serving_practice
 	edit_button.visible = not serving_practice
 	if selected_category == "Serving" and is_instance_valid(drill_status):
-		drill_status.text = "Space to serve\nMove cursor to aim\nWASD to run\nMiddle drag to rotate\nScroll for arc  |  Shift + scroll to zoom" if serving_practice else "WASD to run"
+		drill_status.text = PromptControls.hint("Serve and aim","Space to serve\nMove cursor to aim\nWASD to run\nMiddle drag to rotate\nScroll for arc  |  Shift + scroll to zoom") if serving_practice else PromptControls.hint("Move and aim","WASD to run")
 	if serving_practice:
 		if is_instance_valid(ball_preview): ball_preview.stop()
 		var serve_script := preload("res://scripts/underhand_serve.gd")
@@ -1867,7 +1869,7 @@ func step_underhand_rally(delta: float) -> void:
 			serve_opponents.ball.global_rotation = underhand_serve.ball.global_rotation
 		if not serve_opponents.rally_active: underhand_serve.reset()
 	if not was_ready and underhand_serve.elapsed < 0.0:
-		serving_rally_status.text = "Space to serve"
+		serving_rally_status.text = PromptControls.hint("Serve and aim","Space to serve")
 		serving_position = underhand_serve.serve_start
 		serving_running = false
 
@@ -2230,7 +2232,7 @@ func _input(event: InputEvent) -> void:
 		reception_review.stop(false)
 	super._input(event)
 	if event is InputEventKey and event.keycode in [KEY_F1,KEY_F2]: return
-	if event is InputEventJoypadButton and event.pressed and event.button_index == preload("res://scripts/xbox_controls.gd").physical(JOY_BUTTON_B):
+	if event is InputEventJoypadButton and event.pressed and event.button_index == PromptControls.physical(JOY_BUTTON_B):
 		open_menu()
 		get_viewport().set_input_as_handled()
 		return
@@ -2253,5 +2255,5 @@ func _input(event: InputEvent) -> void:
 		if event.axis_value <= 0.25: trigger_held[key] = false
 		elif event.axis_value >= 0.6 and not trigger_held.get(key,false):
 			trigger_held[key] = true
-			cycle_type(-1 if event.axis == preload("res://scripts/xbox_controls.gd").trigger(true) else 1)
+			cycle_type(-1 if event.axis == PromptControls.trigger(true) else 1)
 			get_viewport().set_input_as_handled()
