@@ -32,6 +32,16 @@ void fragment(){
 	float guard=toe*smoothstep(.024,.029,height)*(1.-smoothstep(guard_height-.001,guard_height+.001,height));
 	float weld=1.-smoothstep(.0005,.0016+fwidth(height),abs(height-guard_height+.002));
 	ALBEDO=mix(ALBEDO,mix(upper*.68,counter_color.rgb,.40)*(.91+.15*weld),guard);
+	// Woven quarter panels sit between the heel counter and bonded toe guard.
+	float quarter=smoothstep(-.052,-.027,shoe.z)*(1.-smoothstep(.087,.111,shoe.z))
+		*smoothstep(.031,.042,height)*(1.-smoothstep(.067,.080,height))
+		*smoothstep(.021,.035,abs(shoe.x));
+	vec2 cell=vec2(shoe.z/.0038,height/.0031);
+	float detail=1.-smoothstep(.25,.82,max(fwidth(cell.x),fwidth(cell.y)));
+	cell.x+=.5*mod(floor(cell.y),2.);
+	float hole=1.-smoothstep(.15,.39,length(fract(cell)-.5));
+	vec3 mesh_color=mix(upper,vec3(.076,.081,.083),.58)*(.97-.52*hole*detail);
+	ALBEDO=mix(ALBEDO,mesh_color,quarter*(1.-guard)*(1.-counter));
 	float bead=1.-smoothstep(.0004,.0014+fwidth(height),abs(height-.022));
 	// Compression-molded foam forms a continuous sidewall above the rubber tread.
 	float sculpt=sin(height*1380.+3.*smoothstep(-.09,.11,shoe.z));
