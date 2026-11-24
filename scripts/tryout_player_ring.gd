@@ -123,7 +123,7 @@ func draw_player(actor: Node3D,human: bool) -> void:
 			timing_arc(at,outer,PI,clampf((game.clock-game.free_press)/.43,0,1),.47,.76)
 		var pressing: bool=game.held>=0 and game.phase in ["cart","walk","feed","pass"]
 		var result: bool=game.clock<game.set_grade_until
-		if actor==game.setter and not game.automatic_setter() and not squat.charging and (pressing or result):
+		if actor==game.setter and (pressing or result):
 			var fill: float=game.set_fill() if pressing else game.graded_fill
 			timing_arc(at,outer,PI,fill,.55,.85)
 	var label: String=actor.display_name.strip_edges().get_slice(" ",actor.display_name.strip_edges().count(" ")).to_upper()
