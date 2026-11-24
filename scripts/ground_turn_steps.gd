@@ -38,7 +38,7 @@ func _process_modification() -> void:
 	var travel := (current.origin-previous.origin).slide(Vector3.UP).length()
 	previous=current
 	if scripted and sequence<0.: return
-	if not initialized or actor.position.y>.065 or travel>maxf(.045,dt*1.3) or absf(angle)>.70:
+	if not initialized or (not scripted and actor.get_meta("moving_shuffle",false)) or actor.position.y>.065 or travel>maxf(.045,dt*1.3) or absf(angle)>.70:
 		initialized=true
 		contacts.clear()
 		step_active=false

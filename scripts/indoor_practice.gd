@@ -147,7 +147,8 @@ var free_jump := preload("res://scripts/setter_jump.gd").new()
 var free_jump_used := false
 var free_target := -1
 var free_press := 0.0
-var lateral_steps := {}
+var shuffle_steps := {}
+var ground_velocity := {}
 var cue_until := 0.0
 var meter_start := 0.
 var meter_rate := 1.
@@ -612,7 +613,13 @@ func move_setter(delta: float,actor: Node3D=setter,off_ball := false) -> bool:
 	var speed := (4.1 if sprint else 2.35) if focus else (6.2 if sprint else 4.3)
 	var previous_position := actor.position
 	if solo_setting and actor==setter: speed*=camp_speed_scale()
-	actor.position = rotation_drill.move_actor(actor,direction*delta*speed)
+	var planting := not off_ball and (phase=="set_contact" or (phase=="pass" and held>=0 and elapsed>contact_time-.13))
+	var velocity: Vector3=ground_velocity.get(actor,Vector3.ZERO)
+	var desired := direction*speed
+	if planting: desired*=.30
+	velocity=velocity.move_toward(desired,delta*(21. if planting or desired.is_zero_approx() else 15.))
+	actor.position = rotation_drill.move_actor(actor,velocity*delta)
+	ground_velocity[actor]=(actor.position-previous_position)/maxf(.001,delta)
 	if solo_setting and not off_ball: camp_velocity=(actor.position-previous_position)/maxf(.001,delta)
 	if not off_ball: actor.position.z = minf(actor.position.z,3.65)
 	var at_net := absf(actor.position.z-4.)<1.55 and absf(direction.x)>absf(direction.z)*1.35 and not sprint
@@ -630,18 +637,19 @@ func move_setter(delta: float,actor: Node3D=setter,off_ball := false) -> bool:
 	still_seconds = still_seconds + delta if resting else 0.0
 	if still_seconds >= 3.0:
 		actor.play_action("base/Idle",0.65)
-	elif solo_setting and not focus and not at_net:
-		actor.play_ground_gait(camp_velocity.length())
+	elif planting or focus or at_net:
+		actor.play_action("idle",.22)
 	else:
-		actor.play_action("base/Idle" if at_net else ("idle" if direction.is_zero_approx() or focus else ("base/Sprint" if sprint else "run")))
+		actor.play_ground_gait(velocity.length())
 
-	if (at_net or focus) and not direction.is_zero_approx():
-		var local := actor.basis.orthonormalized().inverse()*direction
-		if focus or absf(local.x)>.3:
-			if not lateral_steps.has(actor): lateral_steps[actor]=preload("res://scripts/right_side_steps.gd").new(actor)
-			var steps: RefCounted=lateral_steps[actor]
-			steps.advance(Vector2(-local.x,local.z),delta*(1.65 if focus and sprint else 1.))
-			steps.apply_pose(.78 if at_net else 1.)
+	if not shuffle_steps.has(actor): shuffle_steps[actor]=preload("res://scripts/directional_footwork.gd").new(actor)
+	var steps: RefCounted=shuffle_steps[actor]
+	var shuffle := Vector3.ZERO
+	if (focus or at_net) and not planting:
+		shuffle=actor.basis.orthonormalized().inverse()*Vector3(ground_velocity[actor])
+		shuffle=(shuffle/2.35).limit_length(1.)
+	steps.step(shuffle,delta,clampf(velocity.length()/2.35,.55,1.35),true,true)
+	actor.set_meta("moving_shuffle",steps.weight>.04 and velocity.length()>.12)
 	return not direction.is_zero_approx()
 
 var angular_speed := {}

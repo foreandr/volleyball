@@ -139,3 +139,4 @@ Back-set contact cups the ball with upward palms. The wrists extend into a palms
 During back-set extension the chest, neck and chin lift together toward the outgoing set, easing down through recovery.
 Back-set wrists keep the receive grip through ball departure and extend over the next 95 ms. Chest and chin arch progressively from the catch through follow-through over 180 ms.
 The normal set pocket sits 7.5 cm forward of the head joint. Both grounded footwork and jump interception use this same forehead offset.
+LT movement uses a continuous directional shuffle cycle with low alternating foot lifts, blended acceleration and a decelerating plant into contact. Stationary turn steps yield while shuffling.

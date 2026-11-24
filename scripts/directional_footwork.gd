@@ -10,7 +10,7 @@ func _init(player: Node3D) -> void:
 	actor = player
 	author = actor.get_pose_author()
 
-func step(direction: Vector3, delta: float, step_rate: float, continuous := false) -> void:
+func step(direction: Vector3, delta: float, step_rate: float, continuous := false, grounded_shuffle := false) -> void:
 	weight = move_toward(weight,1.0 if direction.length()>0.05 else 0.0,delta*7)
 	if weight<0.001: return
 	travel = travel.lerp(direction,1-exp(-delta*16))
@@ -18,6 +18,7 @@ func step(direction: Vector3, delta: float, step_rate: float, continuous := fals
 	var rig: Skeleton3D = actor.skeleton
 	var pose: Array = []
 	for bone in rig.get_bone_count(): pose.append(Transform3D(Basis(rig.get_bone_pose_rotation(bone)),rig.get_bone_pose_position(bone)))
+	var original := pose.duplicate() if grounded_shuffle else []
 	var pelvis := rig.find_bone("pelvis")
 	var parent := rig.get_bone_parent(pelvis)
 	pose[pelvis].origin += author.world_pose(pose,parent).basis.inverse()*Vector3(0,(-float(recipe.crouch)+float(recipe.bob)*cos(phase*TAU*2))*weight,0)
@@ -37,7 +38,7 @@ func step(direction: Vector3, delta: float, step_rate: float, continuous := fals
 			# Match the planted foot's velocity at toe-off and landing.
 			var swing_progress := 2.0*offset-1.0
 			stride = -0.5-swing_progress+swing_progress*swing_progress*(6.0-4.0*swing_progress)
-			lift = pow(sin(PI*swing_progress),2.0)*0.075
+			lift = pow(sin(PI*swing_progress),2.0)*(.035 if grounded_shuffle else .075)
 		var ready_foot: Transform3D = author.feet[side]
 		var target := ready_foot.origin+travel*stride*float(recipe.stride)*weight+Vector3.UP*lift*weight
 		if not continuous:
@@ -55,6 +56,8 @@ func step(direction: Vector3, delta: float, step_rate: float, continuous := fals
 		var pitch := deg_to_rad(12.0)*sin(swing*TAU)*travel.z*weight
 		author.set_world_basis(pose,"foot_"+side,Basis(Vector3.RIGHT,pitch)*ready_foot.basis)
 	for bone in rig.get_bone_count():
+		if grounded_shuffle:
+			pose[bone]=original[bone].interpolate_with(pose[bone],smoothstep(0.,1.,weight))
 		rig.set_bone_pose_position(bone,pose[bone].origin)
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
 
