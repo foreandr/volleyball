@@ -44,7 +44,37 @@ func dress(actor: Node3D) -> void:
 	rig.add_child(mount)
 	var hat := Node3D.new()
 	mount.add_child(hat)
-	hat.transform=rig.get_bone_global_rest(head).affine_inverse()*Transform3D(Basis.IDENTITY,Vector3(0,1.744,-.021))
+	# Measure the skull around the sweatband and crown in the same bind
+	# coordinates used by the cap, then attach the fit to the animated head.
+	var head_mesh := preload("res://assets/characters/volleyball/body.res")
+	var skull: PackedVector3Array=head_mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	var low := Vector3(INF,INF,INF)
+	var high := -low
+	var crown_y := 0.
+	for point in skull:
+		if absf(point.x)>.125: continue
+		crown_y=maxf(crown_y,point.y)
+		if point.y<1.720 or point.y>1.752: continue
+		low=low.min(point)
+		high=high.max(point)
+	var center := Vector3(0,1.740,-.021)
+	var fit := Vector3.ONE
+	if low.is_finite() and high.y>low.y:
+		center.z=(low.z+high.z)*.5
+		fit=Vector3((high.x-low.x+.006)/.196,(crown_y+.004-center.y)/.094,(high.z-low.z+.008)/.238)
+		# Band width alone misses the bulge above the temples. Enclose all scalp
+		# points above the sloping band in the actual domed crown profile.
+		var envelope:=1.
+		for point in skull:
+			if point.y<center.y-.043 or absf(point.x)>.125: continue
+			var local:= (point-center)/fit
+			var radial:=Vector2(local.x/.098,local.z/.119)
+			var band_drop:=.018*(1.-radial.normalized().y)*radial.length()
+			if local.y < -band_drop: continue
+			var rise:=(local.y+band_drop)/.094
+			envelope=maxf(envelope,sqrt(radial.length_squared()+rise*rise))
+		fit*=envelope*1.025
+	hat.transform=rig.get_bone_global_rest(head).affine_inverse()*Transform3D(Basis.IDENTITY.scaled(fit),center)
 	var cloth := StandardMaterial3D.new()
 	cloth.albedo_color=Color("244c3d")
 	cloth.roughness=.94
