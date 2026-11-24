@@ -115,3 +115,4 @@ Approach pace selects walk, compact jog, run, or sprint clips. Setting hands ris
 On the lift to receive the set, elbows travel near the torso and stay near a right angle while straight wrists pass the face. The elbows open on the outward send.
 The reference setting lift leads with open hands past the chest and face while the elbows trail underneath. The receiving pocket sits forward of the forehead, yields back, and drives up and forward.
 Setting Camp exposes Edit set frames directly from Pause and opens on the recorded contact. The 105 ms cushion leads into a 40 ms outward push.
+In Animation Frames, holding a rotation arrow repeats at one degree per increment; single clicks adjust one tenth of a degree.

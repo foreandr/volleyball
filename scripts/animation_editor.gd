@@ -27,6 +27,8 @@ var frame_field: SpinBox
 var timeline: HSlider
 var contact_frame_button: Button
 var rotation_fields: Array[SpinBox] = []
+var held_rotation_field: SpinBox
+var rotation_press_ms := 0
 var copy_name: LineEdit
 var play_button: Button
 var undo_button: Button
@@ -194,6 +196,11 @@ func build_controls(controls: VBoxContainer) -> void:
 		value.max_value = 180
 		value.step = 0.1
 		value.custom_minimum_size.y = 32
+		value.gui_input.connect(func(event: InputEvent):
+			if event is InputEventMouseButton and event.button_index==MOUSE_BUTTON_LEFT and event.pressed:
+				release_rotation_arrow()
+				held_rotation_field=value
+				rotation_press_ms=Time.get_ticks_msec())
 		value.value_changed.connect(rotation_changed)
 		controls.add_child(value)
 		rotation_fields.append(value)
@@ -292,7 +299,18 @@ func set_playing(value: bool) -> void:
 	if is_instance_valid(ball_preview): ball_preview.last_time = session.time_at(frame)
 	if is_instance_valid(play_button): play_button.text = "Pause" if playing else "Play"
 
+func release_rotation_arrow() -> void:
+	if held_rotation_field:
+		held_rotation_field.custom_arrow_step=0.
+		held_rotation_field=null
+
 func _process(delta: float) -> void:
+	if held_rotation_field:
+		if not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) or not get_window().has_focus():
+			release_rotation_arrow()
+		elif Time.get_ticks_msec()-rotation_press_ms>=250:
+			held_rotation_field.custom_arrow_step=held_rotation_field.step*10.
+
 	super._process(delta)
 	if session == null: return
 	if playing:
