@@ -557,7 +557,9 @@ static func haircut(scalp: Node3D,color: Color,variant: int,actor: Node3D) -> vo
 				tangent=tangent.normalized()
 				var surface_normal := across.cross(tangent).normalized()
 				if surface_normal.dot(normal)<0.: surface_normal=-surface_normal
-				tool.set_normal(surface_normal)
+				var cross_section := across.slide(tangent).normalized()
+				var edge_slope := (uv.x*2.-1.)*(.85 if coiled else .62)
+				tool.set_normal((surface_normal+cross_section*edge_slope).normalized())
 				tool.set_tangent(Plane(tangent,1.))
 				tool.set_uv(Vector2(uv.x,t))
 				tool.set_uv2(Vector2(normal.x,normal.z)*.5+Vector2.ONE*.5)
