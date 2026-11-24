@@ -63,6 +63,7 @@ var bump_aim := Vector3.ZERO
 var bump_armed := true
 var bump_released := false
 var bump_touched := false
+var bump_overlap_time := -INF
 var bump_arrival := 0.
 var bump_offset := 0.
 var bump_follow_start := 0.
@@ -497,6 +498,7 @@ func reset_feed() -> void:
 	bump_aim=Vector3.ZERO
 	bump_released=false
 	bump_touched=false
+	bump_overlap_time=-INF
 	if reception_pose: reception_pose.reset()
 	if solo_setting:
 		camp_receive_spot=choose_camp_toss()
@@ -1028,8 +1030,12 @@ func play_bump(previous: Vector3, incoming: Vector3, dt: float) -> void:
 			sampler.bump_load_depth=lerpf(.12,.26,demand)
 			sampler.bump_receive_phase=-remaining
 		sampler.pose_bump_receive(sampler.bump_receive_phase)
-	if remaining<.30 and not sampler.low_save.active:
-		sampler.reach_platform(predicted-sampler.platform_center(),1.-smoothstep(.04,.30,remaining),.48,true,false)
+	if remaining<.38 and not sampler.low_save.active:
+		var platform_height: float= setter.position.y+setter.height_cm*.0055
+		var tracking := toss_at(elapsed+.025)
+		tracking.y=clampf(tracking.y,setter.position.y+.27,setter.position.y+setter.height_cm*.0081)
+		var low := smoothstep(.05,.52,platform_height-tracking.y)
+		sampler.reach_platform(tracking-sampler.platform_center(),1.-smoothstep(.055,.38,remaining),.77,true,false,low)
 	var elbows := [Contact.joint(setter,"lowerarm_l"),Contact.joint(setter,"lowerarm_r")]
 	var wrists := [Contact.joint(setter,"hand_l"),Contact.joint(setter,"hand_r")]
 	var platform: Vector3=preload("res://scripts/forearm_contact.gd").surface(elbows,wrists,.055).ball
@@ -1038,18 +1044,15 @@ func play_bump(previous: Vector3, incoming: Vector3, dt: float) -> void:
 	for side in 2:
 		var pair := Geometry3D.get_closest_points_between_segments(previous,ball.position,elbows[side],wrists[side])
 		gap=minf(gap,pair[0].distance_to(pair[1]))
-	if not bump_touched and (incoming.y>=0. or gap>.27):
+	if incoming.y<0. and gap<=.27: bump_overlap_time=elapsed
+	if not bump_released:
+		if elapsed>bump_arrival+late_contact_limit(): miss("Bump release too late.")
+		return
+	if incoming.y>=0. or elapsed-bump_overlap_time>.065 or gap>.52:
 		if elapsed>forehead_arrival+.35: miss("Outside platform reach.")
 		return
-	if not bump_touched:
-		if not bump_released: bump_arrival=elapsed
-		bump_touched=true
-		bump_incoming=incoming/maxf(dt,.001)
-		ball.position=platform
-	if not bump_released:
-		ball.position=platform
-		if elapsed>bump_arrival+late_contact_limit(): miss("Held through platform contact.")
-		return
+	bump_touched=true
+	bump_incoming=incoming/maxf(dt,.001)
 	bump_follow_start=elapsed
 	source=platform
 	ball.position=source
@@ -1071,6 +1074,7 @@ func play_bump(previous: Vector3, incoming: Vector3, dt: float) -> void:
 	success=placement_error<targets[target].mouth_radius-.10
 	feedback="Bump set   /   Target made" if success else "Bump set   /   Off target"
 	energy[setter].spend(2)
+	sampler.bump_playback_rate=.75 if target==2 else .94
 	sampler.touch=source
 	sampler.touch_time=elapsed
 	sampler.outgoing=(endpoint-source+Vector3.UP*4.*APEX[tempo])/flight_time
@@ -1199,9 +1203,6 @@ func step_practice(delta: float) -> void:
 				bump_armed=false
 				aim_bump(Vector2.ZERO)
 				if phase!="pass": return
-			if bump_touched and not bump_aim.is_zero_approx():
-				play_bump(ball.position,Vector3.ZERO,delta)
-				return
 			ball.rotation+=toss_spin*delta
 			if cpu_setting and not jump.active and (not cpu_forearm or (reception_pose.reach.is_empty() and not reception_pose.low_save.active)): move_to_camp_toss(delta)
 			var height := camp_jump_height if solo_setting else .52
@@ -1546,6 +1547,7 @@ func timing_band() -> Vector2:
 	return Vector2(clampf(ideal-ON_TIME*meter_rate,0.,1.),clampf(ideal+ON_TIME*meter_rate,0.,1.))
 
 func late_contact_limit() -> float:
+	if not bump_aim.is_zero_approx(): return timing_window()+.055
 	return minf(timing_window(),HAND_CUSHION-.055+RELEASE_ADVANCE)
 
 func toss_in_reach() -> bool:

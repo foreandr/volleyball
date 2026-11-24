@@ -90,6 +90,7 @@ var ready_knee_bend_depth := 0.0
 var lunge_bend_depth := 0.0
 var defense_ground_y := 0.0
 var contact_destination := Vector2.ZERO
+var bump_playback_rate := 1.0
 var planned_bump_effort := -1.0
 var bump_load_depth := 0.0
 var bump_receive_phase := 0.0
@@ -159,6 +160,7 @@ func set_custom_backward(animation: Animation) -> void:
 func reset() -> void:
 	bump_load_depth=0.0
 	planned_bump_effort=-1.0
+	bump_playback_rate=1.0
 	early_dig_arms.clear()
 	hard_dig = false
 	fast_hand_dig = false
@@ -866,7 +868,7 @@ func pose_bump_receive(time_from_contact: float) -> void:
 			rig.set_bone_pose_rotation(id,pose[id].basis.get_rotation_quaternion())
 
 func follow_forearm(time: float, incoming: Vector3) -> void:
-	var follow := time-touch_time
+	var follow := (time-touch_time)*bump_playback_rate
 	rear_follow = follow
 	if follow <= 0.0 or follow >= FOREARM_RECOVERY_TIME: return
 	var blend := 1.0-smoothstep(0.13,FOREARM_RECOVERY_TIME,follow)
@@ -905,7 +907,7 @@ func lower_rushed_platform() -> void:
 	if excess > 0.0:
 		reach_platform(Vector3.DOWN*excess,1.0,0.35)
 
-func reach_platform(offset: Vector3, weight := 1.0, reach_limit := 0.26, steer_sideways := false, preserve_clasp := false) -> void:
+func reach_platform(offset: Vector3, weight := 1.0, reach_limit := 0.26, steer_sideways := false, preserve_clasp := false, low_contact := 0.0) -> void:
 	var rig: Skeleton3D = setter.skeleton
 	var author: RefCounted = setter.get_pose_author()
 	var pose: Array = []
@@ -915,7 +917,7 @@ func reach_platform(offset: Vector3, weight := 1.0, reach_limit := 0.26, steer_s
 	if steer_sideways:
 		for spine in ["spine_02","spine_03"]:
 			author.rotate_world(pose,spine,Vector3.BACK,-clampf(shift.x*0.45,-0.13,0.13)*weight)
-			author.rotate_world(pose,spine,Vector3.RIGHT,clampf(shift.z*0.38,-0.09,0.13)*weight)
+			author.rotate_world(pose,spine,Vector3.RIGHT,(clampf(shift.z*0.38,-0.09,0.13)+low_contact*.14)*weight)
 			var id := rig.find_bone(spine)
 			rig.set_bone_pose_rotation(id,pose[id].basis.get_rotation_quaternion())
 	var lateral := Vector3.RIGHT
@@ -931,6 +933,9 @@ func reach_platform(offset: Vector3, weight := 1.0, reach_limit := 0.26, steer_s
 		weight_scale = 1.0
 	var compact: bool = preserve_clasp or (not reach.has("custom_clip") and (fast_back_receive or reach.get("tier",0) == 2))
 	PlatformPose.connect_arms(pose,author,target,weight_scale*weight,0.0 if compact else 0.022,lateral,false,compact)
+	if low_contact>0.:
+		for hand in ["hand_l","hand_r"]:
+			author.rotate_world(pose,hand,lateral,-deg_to_rad(10.)*low_contact*weight)
 	for side in ["l","r"]:
 		for part in ["upperarm_","lowerarm_","hand_"]:
 			var bone := rig.find_bone(part+side)
