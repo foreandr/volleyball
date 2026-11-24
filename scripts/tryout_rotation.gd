@@ -823,19 +823,16 @@ var circle: Array = []
 var debrief_started := false
 var settle_time := 0.
 var huddle_planted := false
-var coach_head_rest := Quaternion.IDENTITY
+var speech_joints := {}
+var pointing_poses: Array[Dictionary]=[]
+var look_angles: Array[float]=[]
 var shoulder_trim := {}
 var elbow_adjustments := {}
 
 func huddle(dt: float) -> void:
 	if huddle_planted:
-		# Only the speaker's head moves during the debrief. The manually
-		# advanced skeletons retain their solved hand and foot contacts.
-		var rig: Skeleton3D=game.coach.skeleton
-		var head:=rig.find_bone("Head")
 		settle_time+=dt
-		var nod:=.032*sin((settle_time-.75)*2.4)
-		rig.set_bone_pose_rotation(head,coach_head_rest*Quaternion(Vector3.RIGHT,nod))
+		coach_address(settle_time-.75)
 		return
 	if circle.is_empty():
 		circle=roster+workers.map(func(w): return w.actor)+[game.coach]
@@ -1011,12 +1008,84 @@ func huddle(dt: float) -> void:
 			huddle_planted=true
 			settle_time=.75
 			var coach_rig: Skeleton3D=game.coach.skeleton
-			coach_head_rest=coach_rig.get_bone_pose_rotation(coach_rig.find_bone("Head"))
+			for joint in ["Head","lowerarm_l","lowerarm_r"]:
+				var id:=coach_rig.find_bone(joint)
+				var parent:=coach_rig.get_bone_global_pose(coach_rig.get_bone_parent(id)).basis.orthonormalized()
+				speech_joints[joint]=[id,coach_rig.get_bone_pose_rotation(id),parent.inverse()*Vector3.RIGHT,parent.inverse()*Vector3.UP]
+			prepare_pointing_poses()
 	else:
 		settle_time=0.
 	if present==circle.size() and not debrief_started:
 		debrief_started=true
 		game.message.text="Coach Ellis: Good work. Give your hitters time to approach. Bring it in."
+
+func prepare_pointing_poses() -> void:
+	var rig: Skeleton3D=game.coach.skeleton
+	var author: RefCounted=game.coach.get_pose_author()
+	var rest: Array=[]
+	for id in rig.get_bone_count(): rest.append(rig.get_bone_pose(id))
+	var center:=circle.find(game.coach)
+	for offset in [-3,3]:
+		var neighbor: Node3D=circle[posmod(center+offset,circle.size())]
+		var target:=rig.to_local(Contact.joint(neighbor,"spine_03"))
+		var side: String="l" if target.x>0. else "r"
+		var arm: String="upperarm_"+side
+		var elbow: String="lowerarm_"+side
+		var hand: String="hand_"+side
+		var pose:=rest.duplicate()
+		var shoulder: Vector3=author.point(pose,arm)
+		var aim: Vector3=(target-shoulder).normalized()
+		author.limb(pose,arm,elbow,hand,shoulder+aim*.47,Vector3(signf(target.x),-.75,0.),1.,156.)
+		var joints: Array=[arm,elbow,hand]
+		for digit in ["index","middle","ring","pinky"]:
+			for segment in ["01","02","03"]:
+				var name_: String=digit+"_"+segment+"_"+side
+				var id:=rig.find_bone(name_)
+				pose[id].basis=rig.get_bone_rest(id).basis
+				joints.append(name_)
+		var index: Vector3=author.point(pose,"index_03_"+side)-author.point(pose,"index_01_"+side)
+		var span: Vector3=author.point(pose,"index_01_"+side)-author.point(pose,"pinky_01_"+side)
+		var hands=preload("res://scripts/hand_setting_pose.gd")
+		var wrist: Transform3D=author.world_pose(pose,rig.find_bone(hand))
+		author.set_world_basis(pose,hand,hands.hand_basis(aim,Vector3.UP)*hands.hand_basis(index,span).inverse()*wrist.basis.orthonormalized())
+		var heel: Vector3=author.point(pose,hand)-Vector3.UP*.018
+		for digit in ["middle","ring","pinky"]:
+			author.aim_joint(pose,digit+"_02_"+side,digit+"_03_"+side,heel)
+		var rotations: Dictionary={}
+		for name_ in joints:
+			var id:=rig.find_bone(name_)
+			rotations[id]=[rest[id].basis.orthonormalized().get_rotation_quaternion(),pose[id].basis.orthonormalized().get_rotation_quaternion()]
+		pointing_poses.append(rotations)
+		look_angles.append(clampf(atan2(target.x,target.z),-.74,.74))
+
+func coach_address(t: float) -> void:
+	# A call, a shorter follow-up and a pause. Keep shoulders available
+	# for neighboring palms while emphasis travels through elbows and head.
+	var beat:=fmod(t,4.8)
+	var turn:=int(t/4.8)%2
+	var first:=smoothstep(.14,.43,beat)*(1.-smoothstep(.68,1.20,beat))
+	var second:=smoothstep(1.24,1.49,beat)*(1.-smoothstep(1.72,2.15,beat))
+	var finish:=smoothstep(2.52,2.78,beat)*(1.-smoothstep(3.18,3.66,beat))
+	var voice:=maxf(maxf(first,second),finish)*(.70+.30*cos(t*19.))
+	var rig: Skeleton3D=game.coach.skeleton
+	var face: ShaderMaterial=game.coach.get_meta("coach_face")
+	face.set_shader_parameter("shout",voice)
+	for joint in speech_joints:
+		var data: Array=speech_joints[joint]
+		var pitch:=first*.55+finish*.28 if joint=="lowerarm_r" else second*.47+finish*.24
+		var yaw:=0.
+		if joint=="Head":
+			pitch=.22*smoothstep(0.,.35,t)+.12*first-.05*second+.08*finish
+			yaw=look_angles[turn]*(first+.66*second)+look_angles[1-turn]*finish
+		rig.set_bone_pose_rotation(data[0],Quaternion(data[3],yaw)*Quaternion(data[2],-pitch)*data[1])
+	for i in pointing_poses.size():
+		var strength:=maxf(first,.65*second) if i==turn else finish
+		for id in pointing_poses[i]:
+			var keys: Array=pointing_poses[i][id]
+			if strength>.001:
+				rig.set_bone_pose_rotation(id,keys[0].slerp(keys[1],strength))
+			elif id!=speech_joints["lowerarm_l"][0] and id!=speech_joints["lowerarm_r"][0]:
+				rig.set_bone_pose_rotation(id,keys[0])
 
 func huddle_angle(actor: Node3D) -> float:
 	var offset := actor.position-HUDDLE_CENTER

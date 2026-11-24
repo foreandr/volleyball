@@ -103,6 +103,7 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 				arms.material_override=layer
 			if not coach and variant%3==2: compression(rig,node,skin_surface)
 			var grooming := face_hair(rig,node,skin_surface,coach,variant)
+			if coach: actor.set_meta("coach_face",grooming)
 			if not coach and variant==0:
 				actor.beard_material=grooming
 				actor.refresh_kit()
@@ -639,7 +640,7 @@ static func face_hair(rig: Skeleton3D,body: MeshInstance3D,mesh: ArrayMesh,coach
 	part.skeleton=part.get_path_to(rig)
 	var shader := Shader.new()
 	shader.code="""shader_type spatial;
-	uniform bool gray; uniform int beard_style; uniform float temple_recess;
+	uniform bool gray; uniform float shout; uniform int beard_style; uniform float temple_recess;
 	uniform vec4 tone:source_color;
 	varying vec3 p;
 	void vertex(){p=vec3(UV2,COLOR.r*.6-.3);VERTEX+=NORMAL*.002;}
@@ -676,7 +677,9 @@ static func face_hair(rig: Skeleton3D,body: MeshInstance3D,mesh: ArrayMesh,coach
 			if(beard_style==3) density=max(moustache,density*(1.-smoothstep(.024,.039,abs(p.x))));
 		}
 		bool jaw=(gray || beard_style>0) && abs(p.x)<.092 && density>grain;
-		if(!scalp && !jaw) discard;
+		vec2 mouth=vec2(p.x/.028,(p.y-1.625+.010*shout)/(.002+.014*shout));
+		bool open_mouth=gray && shout>.035 && p.z>.04 && dot(mouth,mouth)<1.;
+		if(!scalp && !jaw && !open_mouth) discard;
 		float strand=.5+.5*cos(p.y*620.+abs(p.x)*390.+p.z*160.);
 		float silver=gray ? smoothstep(.37,.88,grain)*(.26+.32*strand) : 0.;
 		ALBEDO=mix(tone.rgb,tone.rgb*1.65,silver)*(.72+.47*grain);
@@ -695,6 +698,12 @@ static func face_hair(rig: Skeleton3D,body: MeshInstance3D,mesh: ArrayMesh,coach
 			float whisker=p.y*1850.+abs(p.x)*mix(820.,350.,moustache)+p.z*460.;
 			float fiber=cos(whisker)*(1.-smoothstep(.7,2.8,fwidth(whisker)));
 			ALBEDO*= (.70+.30*strand)*(.92+.20*fiber-.19*moustache);
+		}
+		if(open_mouth){
+			float teeth=smoothstep(.40,.62,mouth.y)*(1.-smoothstep(.78,.98,abs(mouth.x)));
+			float tongue=(1.-smoothstep(-.72,-.32,mouth.y))*(1.-smoothstep(.32,.92,abs(mouth.x)));
+			ALBEDO=mix(vec3(.039,.008,.012),vec3(.28,.056,.068),tongue);
+			ALBEDO=mix(ALBEDO,vec3(.71,.66,.55),teeth);
 		}
 		ROUGHNESS=.94;
 	}"""
