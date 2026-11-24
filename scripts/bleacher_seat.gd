@@ -1,6 +1,11 @@
 extends RefCounted
 
 const Contact = preload("res://scripts/gym_physics.gd")
+var sound := AudioStreamPlayer3D.new()
+var beat := .36
+var age := 0.0
+var duration := 0.0
+var last_beat := -1
 var planted := {}
 var actor: Node3D
 var bench: MeshInstance3D
@@ -10,6 +15,12 @@ var foot_height := 0.0
 
 func configure(player: Node3D,seat: MeshInstance3D,below: MeshInstance3D,aisle_side: int,z: float) -> void:
 	actor = player
+	sound.stream = preload("res://assets/audio/bleacher_clap.wav")
+	sound.unit_size = 8
+	sound.volume_db = -8
+	sound.max_distance = 32
+	actor.add_child(sound)
+	sound.position.y = 1.2
 	bench = seat
 	side = aisle_side
 	court_z = z
@@ -45,3 +56,45 @@ func update() -> void:
 		for name_ in ["thigh_"+str(leg),"calf_"+str(leg),foot]:
 			var idx := rig.find_bone(name_)
 			rig.set_bone_pose_rotation(idx,pose[idx].basis.orthonormalized().get_rotation_quaternion())
+
+func celebrate(index: int,block_complete: bool) -> void:
+	age = -.10-fmod(index*.137,.36)
+	beat = .31+fmod(index*.073,.13)
+	duration = beat*(5 if block_complete else 3)
+	last_beat = -1
+	sound.pitch_scale = .89+fmod(index*.091,.24)
+
+func applause(delta: float) -> void:
+	if duration<=0: return
+	age += delta
+	if age<0: return
+	if age>=duration:
+		duration = 0
+		return
+	var phase := fmod(age,beat)/beat
+	var closed := smoothstep(.12,.48,phase)*(1.-smoothstep(.51,.92,phase))
+	var blend := smoothstep(0,.10,age)*(1.-smoothstep(duration-.12,duration,age))
+	var rig: Skeleton3D = actor.skeleton
+	var author: RefCounted = actor.get_pose_author()
+	var pose: Array = []
+	for idx in rig.get_bone_count(): pose.append(rig.get_bone_pose(idx))
+	var center: Vector3 = author.point(pose,"spine_03")+Vector3(0,.055,.29)
+	for side_ in ["l","r"]:
+		var sign_ := 1.0 if side_=="l" else -1.0
+		var wrist: String = "hand_"+side_
+		var base: Transform3D = author.world_pose(pose,rig.find_bone(wrist))
+		var along: Vector3 = author.point(pose,"middle_01_"+side_)-base.origin
+		var across: Vector3 = author.point(pose,"index_01_"+side_)-author.point(pose,"pinky_01_"+side_)
+		var hands = preload("res://scripts/hand_setting_pose.gd")
+		var basis: Basis = hands.hand_basis(Vector3(0,.92,.38),Vector3(0,-.38,.92)*sign_)*hands.hand_basis(along,across).inverse()*base.basis
+		var tip := center+Vector3(sign_*lerpf(.21,.015,closed),.012*sign_,0)
+		var target: Vector3 = tip-basis*(base.basis.inverse()*along)
+		author.limb(pose,"upperarm_"+side_,"lowerarm_"+side_,wrist,target,Vector3(sign_*.75,-.7,0),blend)
+		author.set_world_basis(pose,wrist,author.world_pose(pose,rig.find_bone(wrist)).basis.slerp(basis,blend))
+		for name_ in ["upperarm_"+side_,"lowerarm_"+side_,wrist]:
+			var idx := rig.find_bone(name_)
+			rig.set_bone_pose_rotation(idx,pose[idx].basis.orthonormalized().get_rotation_quaternion())
+	var count := floori(age/beat)
+	if phase>=.47 and last_beat!=count:
+		last_beat = count
+		sound.play()

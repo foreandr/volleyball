@@ -149,7 +149,7 @@ func _ready() -> void:
 	if DisplayServer.get_name() != "headless":
 		Engine.max_fps = 60
 	match_preferences.load(MATCH_SETTINGS_PATH)
-	AudioServer.set_bus_mute(AudioServer.get_bus_index("Master"),true)
+	AudioServer.set_bus_mute(AudioServer.get_bus_index("Master"),game_options.get_value("audio","muted",false))
 	var config := ConfigFile.new()
 	if config.load(preview_path)==OK:
 		for field in PREVIEW_FIELDS:
@@ -192,4 +192,6 @@ func _input(event: InputEvent) -> void:
 	if focus is LineEdit or focus is TextEdit: return
 	var master := AudioServer.get_bus_index("Master")
 	AudioServer.set_bus_mute(master,not AudioServer.is_bus_mute(master))
+	game_options.set_value("audio","muted",AudioServer.is_bus_mute(master))
+	save_options()
 	get_viewport().set_input_as_handled()

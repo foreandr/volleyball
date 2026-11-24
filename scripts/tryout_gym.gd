@@ -1,6 +1,7 @@
 extends "res://scripts/preview_court.gd"
 
 const Contacts = preload("res://scripts/gym_physics.gd")
+var digits: Array[Array] = []
 var benches: Array[MeshInstance3D] = []
 
 func box(label_: String,size_: Vector3,center: Vector3,style: Material) -> MeshInstance3D:
@@ -58,8 +59,9 @@ func _ready() -> void:
 	for i in 12:
 		box("Wall pad",Vector3(0.88,1.95,0.16),Vector3((i-5.5)*0.92,1.0,14.43),padding)
 	box("Scoreboard",Vector3(3.8,1.45,0.18),Vector3(0,3.85,14.41),material("26352e"))
-	wall_text("HOME      GUEST",Vector3(0,4.19,14.29),0.003,Color.FLORAL_WHITE)
-	wall_text("00     00",Vector3(0,3.63,14.29),0.006,Color.SANDY_BROWN)
+	wall_text("SETS       GOAL",Vector3(0,4.19,14.29),0.003,Color.FLORAL_WHITE)
+	for x in [1.11,.70,-.70,-1.11]: add_digit(float(x))
+	update_board(0)
 	for x in [-8.2,8.2]:
 		box("Gym exit",Vector3(2.1,2.4,0.14),Vector3(x,1.2,14.42),material("656f61"))
 		box("Door rail",Vector3(1.8,0.06,0.12),Vector3(x,1.1,14.30),steel)
@@ -101,11 +103,6 @@ func build_gallery(steel: Material,paint: Material) -> void:
 			box("Clerestory frame",Vector3(0.15,1.9,2.9),Vector3(side*11.09,6.65,z),steel)
 			for pane in 3:
 				box("Daylight glazing",Vector3(0.06,1.72,0.86),Vector3(side*10.98,6.65,z+(pane-1)*0.93),glass)
-		for x_ in [6.75,8.8]:
-			var x: float = side*x_
-			for z in [-4.4,10.4]:
-				brace(Vector3(x,0.4,z),Vector3(x,2.1,z),0.045,steel)
-			brace(Vector3(x,2.1,-4.4),Vector3(x,2.1,10.4),0.045,steel)
 	for z in [-8,-3,2,7,12]:
 		box("Truss chord",Vector3(22.5,.08,.08),Vector3(0,7.85,z),steel)
 		for i in 14:
@@ -209,3 +206,23 @@ func wall_text(text: String,at: Vector3,scale_: float,color: Color) -> void:
 	letters.position = at
 	letters.rotation.y = PI
 	add_child(letters)
+
+func add_digit(x: float) -> void:
+	var lit := material("ffc968")
+	lit.emission_enabled = true
+	lit.emission = Color("ffc15c")
+	lit.emission_energy_multiplier = 1.8
+	var digit := []
+	for i in 7:
+		var centers := [Vector2(0,.23),Vector2(.13,.115),Vector2(.13,-.115),Vector2(0,-.23),Vector2(-.13,-.115),Vector2(-.13,.115),Vector2.ZERO]
+		var at: Vector2 = centers[i]
+		var horizontal := i in [0,3,6]
+		digit.append(box("LED segment",Vector3(.22 if horizontal else .037,.035 if horizontal else .18,.016),Vector3(x-at.x,3.64+at.y,14.28),lit))
+	digits.append(digit)
+
+func update_board(made: int) -> void:
+	var patterns := [63,6,91,79,102,109,125,7,127,111]
+	var values := [made/10,made%10,3,2]
+	for n in digits.size():
+		for segment in 7:
+			digits[n][segment].visible = (int(patterns[values[n]]) & (1<<segment))!=0

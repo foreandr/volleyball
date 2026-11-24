@@ -33,6 +33,7 @@ var setter: Node3D
 var targets: Array[Node3D] = []
 var squat := preload("res://scripts/tryout_squat.gd").new()
 const Contact = preload("res://scripts/gym_physics.gd")
+var rotation_drill := preload("res://scripts/tryout_rotation.gd").new()
 var contacts := Contact.new()
 var gym := preload("res://scripts/tryout_gym.gd").new()
 var seats_in_use: Array[RefCounted] = []
@@ -126,6 +127,7 @@ func _ready() -> void:
 	leather.shader = cover
 	ball.material_override = leather
 	world.add_child(ball)
+	rotation_drill.configure(self)
 	contact_sound.stream = preload("res://assets/audio/set_touch.wav")
 	add_child(contact_sound)
 	var ring := TorusMesh.new()
@@ -142,6 +144,7 @@ func _ready() -> void:
 	build_hud()
 	build_settings()
 	rep = CareerSession.progress()
+	gym.update_board(rep)
 	match CareerSession.stage():
 		"intro": begin("intro")
 		"complete": complete()
@@ -244,35 +247,38 @@ func start_practice() -> void:
 	reset_feed()
 
 func jump_rep() -> bool:
-	return not demonstration and (rep/8)%2 == 1
+	return not demonstration and rotation_drill.turn==0 and (rep/8)%2 == 1
 
 func called() -> int:
-	return ORDER[demo_index if demonstration else (rep%8)/2]
+	return ORDER[demo_index if demonstration else rotation_drill.round_index%4]
 
 func reset_feed() -> void:
 	last_contact = -100
 	cushion = 0
 	old_palms.clear()
-	begin("walk")
+	begin("cart" if not demonstration else "walk")
 	station = (station+1)%TOSS_SPOTS.size()
 	coach_goal = TOSS_SPOTS[station]
 	squat.cancel()
 	jump.active = false
 	last_flick = 0
 	flick_at = -10
-	setter.position = BASE
+	if demonstration: setter.position = BASE
 	setter.rotation.y = atan2(coach.position.x-BASE.x,coach.position.z-BASE.z)
 	setter.play_action("idle")
 	catch_point = BASE + Vector3.UP*(1.93*setter.height_cm/180.0 + (0.52 if jump_rep() else 0.0))
 	if not demonstration and rep>=16: catch_point.z += 1.25 if rep%2==0 else -1.25
 	coach.show()
 	coach.rotation.y = atan2(catch_point.x-coach.position.x,catch_point.z-coach.position.z)
-	ball.show()
+	ball.visible = demonstration or rotation_drill.issued!=null
 	landing.position = Vector3(catch_point.x,0.075,catch_point.z)
 	landing.show()
 	apply_camera()
 	title.text = "COACH DEMO    /    %d OF 4" % (demo_index+1) if demonstration else "SETTER TRYOUT    /    %02d OF 32    •    %s" % [rep+1,"MOVING" if rep>=16 else "STATIONARY"]
 	message.text = TARGETS[called()]+"    /    "+("Jump set" if jump_rep() else "Standing set")
+	if not demonstration:
+		title.text = "SETTER TRYOUT   /   %s    •    BALL %d OF 2" % ["YOUR TURN" if rotation_drill.turn==0 else ("SETTER %d" % (rotation_drill.turn+1)),rotation_drill.attempts+1]
+		if called()==3: message.text = "Back set   /   Right side"
 	hint.text = ""
 	hint.hide()
 	meter.value = 0
@@ -287,6 +293,7 @@ func apply_camera() -> void:
 
 func build_settings() -> void:
 	settings.configure(self)
+	settings.visibility_changed.connect(func(): rotation_drill.pause_balls(settings.visible))
 
 func arc(a: Vector3,b: Vector3,t: float,height: float) -> Vector3:
 	var u := clampf(t,0,1)
@@ -326,11 +333,13 @@ func _process(delta: float) -> void:
 	for seat in seats_in_use:
 		seat.actor.animator.advance(delta)
 		seat.update()
+		seat.applause(delta)
 	clock += delta
 	elapsed += delta
 	if phase == "intro":
 		play_intro(delta)
 		return
+	rotation_drill.tick(delta)
 	if phase == "complete": return
 	# Leave the four targets in frame while easing toward the live ball.
 	var lead := (ball.position-Vector3(0,1.6,1.0))*Vector3(0.10,0.08,0.055)
@@ -339,12 +348,18 @@ func _process(delta: float) -> void:
 	squat.update(setter,delta)
 	landing.visible = not squat.ring.visible and phase in ["walk","feed","pass"]
 	if jump.active: jump.step(setter,delta,Vector2.ZERO)
-	elif not demonstration and not squat.charging: move_setter(delta)
+	elif not demonstration and rotation_drill.turn==0 and not squat.charging and phase!="cart": move_setter(delta)
 	var stick := axis(JOY_AXIS_RIGHT_Y)
 	if absf(stick)>0.45 or Input.is_key_pressed(KEY_UP) or Input.is_key_pressed(KEY_DOWN):
 		last_flick = 1 if stick < -0.45 or Input.is_key_pressed(KEY_UP) else 2
 		flick_at = clock
 	match phase:
+		"cart":
+			var incoming_ready := rotation_drill.walk(setter,BASE,delta,2.45)
+			var coach_ready := rotation_drill.walk(coach,rotation_drill.CART+Vector3(.48,.04,-.50),delta,2.25)
+			if coach_ready and incoming_ready and rotation_drill.take_ball():
+				setter.rotation.y = atan2(coach.position.x-setter.position.x,coach.position.z-setter.position.z)
+				change_feed_phase("walk")
 		"walk":
 			var step := coach_goal-coach.position
 			if step.length()>0.05:
@@ -367,7 +382,7 @@ func _process(delta: float) -> void:
 			var previous := ball.position
 			ball.position = source.lerp(catch_point,elapsed/CONTACT)+Vector3.UP*(4.905*elapsed*(CONTACT-elapsed))
 			var incoming := ball.position-previous
-			var obstacle := contacts.sweep(world,contacts.ball_shape,previous,incoming,Contact.GYM|Contact.EQUIPMENT)
+			var obstacle := contacts.sweep(world,contacts.ball_shape,previous,incoming,Contact.GYM|Contact.EQUIPMENT|64)
 			if not obstacle.is_empty():
 				ball.position = previous+incoming*float(obstacle.fraction)
 				miss("Toss deflected off the gym equipment.")
@@ -375,10 +390,13 @@ func _process(delta: float) -> void:
 				return
 			if elapsed<0.22: coach_motion.toss(coach,1.0)
 			ball.position.y = maxf(0.15,ball.position.y)
-			if demonstration and held<0 and elapsed>=0.85:
+			if (demonstration or rotation_drill.turn!=0) and held<0 and elapsed>=0.85:
 				held = called()
 				pressed_at = clock
 			if held>=0:
+				if held==3 and called()==3:
+					var opposite := (setter.position-PINS[3]).slide(Vector3.UP)
+					setter.rotation.y=lerp_angle(setter.rotation.y,atan2(opposite.x,opposite.z),minf(1,delta*9))
 				meter.value = clampf((clock-pressed_at)/0.65,0,1)*100
 				Hands.apply(setter,ball.position,0.35+0.65*smoothstep(0.8,1.55,elapsed))
 				Contact.track_hands(setter,ball.position)
@@ -400,16 +418,17 @@ func _process(delta: float) -> void:
 			if collided: last_contact = clock
 			if held>=0 and clock-last_contact<.11:
 				Hands.apply(setter,ball.position-Vector3.UP*cushion,1.0,Vector3.ZERO,cushion)
-			if demonstration and elapsed>=CONTACT: release(called())
+			if (demonstration or rotation_drill.turn!=0) and elapsed>=CONTACT: release(called())
 			elif elapsed>CONTACT+0.25: miss("The toss dropped. Hold the target, then release at contact.")
 		"set":
 			ball.rotate_x(delta*4.0)
 			var t := clampf(elapsed/flight_time,0,1)
 			var desired := arc(source,endpoint,t,APEX[tempo])
 			var motion := desired-ball.position
-			var hit := contacts.sweep(world,contacts.ball_shape,ball.position,motion,Contact.GYM|Contact.EQUIPMENT)
+			var hit := contacts.sweep(world,contacts.ball_shape,ball.position,motion,Contact.GYM|Contact.EQUIPMENT|64)
 			ball.position += motion*float(hit.get("fraction",1.0))
 			if not hit.is_empty():
+				if absf(ball.position.z-4)<.18: rotation_drill.net_reaction(ball.position,motion/maxf(delta,.001))
 				miss("Ball deflected off the gym equipment.")
 				drop_velocity = (motion/maxf(delta,.001)).bounce(hit.normal)*.45
 				return
@@ -417,37 +436,39 @@ func _process(delta: float) -> void:
 			if t>=1:
 				if endpoint.distance_to(PINS[target])<targets[target].mouth_radius-0.10: targets[target].impact()
 				if success and not demonstration:
-					if not CareerSession.credit(rep): return
-					rep += 1
+					if rotation_drill.turn==0:
+						if not CareerSession.credit(rep): return
+						rep += 1
+						gym.update_board(rep)
+					for i in seats_in_use.size():
+						seats_in_use[i].celebrate(i,rep%8==0)
+					trace("bleacher_applause",{"completed":rep})
 				begin("result")
 				message.text = feedback
 		"drop":
-			drop_velocity.y -= 9.81*delta
-			var motion := drop_velocity*delta
-			var hit := contacts.sweep(world,contacts.ball_shape,ball.position,motion,Contact.GYM|Contact.EQUIPMENT)
-			ball.position += motion*float(hit.get("fraction",1.0))
-			if not hit.is_empty(): drop_velocity = drop_velocity.bounce(hit.normal)*.34
-			if ball.position.y<=.151 or (not hit.is_empty() and hit.normal.y>.7 and drop_velocity.length()<1.0):
-				ball.position.y = maxf(.15,ball.position.y)
-				begin("ground")
-				trace("floor",{})
+			if not demonstration:
+				rotation_drill.free_ball(drop_velocity)
+				begin("between")
 				message.text = feedback
+			else:
+				drop_velocity.y-=9.81*delta
+				ball.position+=drop_velocity*delta
+				if ball.position.y<.16: begin("result")
 		"result":
-			if success:
-				ball.position = endpoint-Vector3.UP*minf(targets[target].depth-0.08,elapsed*3.1)
-			if elapsed>1.0:
+			if success: ball.position = endpoint-Vector3.UP*minf(targets[target].depth-.12,elapsed*3.1)
+			if elapsed>.45:
 				if demonstration:
-					demo_index += 1
-					if demo_index==4:
-						demonstration = false
-						if CareerSession.stage()=="intro": CareerSession.checkpoint("tutorial",0)
-				if rep>=32: complete()
-				elif demonstration or demo_index==4:
-					if not demonstration: demo_index = 0
+					demo_index+=1
+					if demo_index>=4: demonstration=false
 					reset_feed()
 				else:
-					begin("ground")
-					message.text = feedback
+					rotation_drill.free_ball(Vector3.DOWN*.4 if success else (endpoint-source).normalized()*2.9)
+					begin("between")
+		"between":
+			if elapsed>.85:
+				rotation_drill.advance_turn()
+				if rep>=32: complete()
+				else: reset_feed()
 
 func play_intro(delta: float) -> void:
 	ball.hide()
@@ -482,7 +503,7 @@ func release(index: int) -> void:
 	var skill := float(CareerSession.profile().get("Hand setting",40))/100
 	var gap := Vector2(setter.position.x-catch_point.x,setter.position.z-catch_point.z).length()
 	var airborne := setter.position.y-BASE.y
-	if not demonstration:
+	if not demonstration and rotation_drill.turn==0:
 		if jump_rep() and airborne<0.20:
 			miss("Jump set requested. Jump before contact.")
 			return
@@ -501,11 +522,18 @@ func release(index: int) -> void:
 	flight_time = DURATION[tempo]
 	var error := 0.0 if demonstration else (elapsed-CONTACT)*(3.6-skill)+gap*0.22
 	endpoint = PINS[target]+Vector3(error,0,error*0.4)
+	if rotation_drill.turn!=0 and not demonstration:
+		var scatter := .19 if rotation_drill.random.randf()<.67 else 1.65
+		endpoint += Vector3(rotation_drill.random.randf_range(-scatter,scatter),0,rotation_drill.random.randf_range(-scatter,scatter))
+	elif not demonstration:
+		# Poor releases can carry past the pin into the tape or court.
+		var late := clampf((absf(elapsed-CONTACT)-.065)/.135,0,1)
+		endpoint.z += 1.5*late
 	success = target==called() and endpoint.distance_to(PINS[target])<targets[target].mouth_radius-0.10
 	feedback = TARGETS[target]+"   /   Target made" if success else "Missed the called target. Try it again."
 	trace("set",{"requested":TARGETS[called()],"actual":TARGETS[target],"made":success,"error_m":error})
 	contact_sound.play()
-	Hands.apply(setter,source,1.0,endpoint-source)
+	Hands.apply(setter,source,1.0,(endpoint-source).normalized()*.22,0,.3,false,Vector3.ZERO,1.,endpoint-source,.6,true)
 	begin("set")
 
 func complete() -> void:
@@ -550,7 +578,7 @@ func _input(event: InputEvent) -> void:
 		settings.show()
 		get_viewport().set_input_as_handled()
 		return
-	if phase in ["intro","complete"]: return
+	if phase in ["intro","complete"] or (rotation_drill.turn!=0 and not demonstration): return
 	if demonstration:
 		if event is InputEventJoypadButton: trace("input_in_demo",{"id":event.button_index})
 		return
