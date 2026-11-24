@@ -229,14 +229,15 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 	render_mode cull_disabled;
 	uniform vec3 inertia; uniform float motion; uniform float hem_y; uniform vec2 stride; uniform vec4 accent:source_color; varying float depth; uniform vec4 cloth:source_color; uniform sampler2D knit_surface:repeat_enable,filter_linear_mipmap_anisotropic; varying vec2 rest;
 	uniform sampler2D leg_number:source_color,filter_linear_mipmap_anisotropic;
-	varying float fold_height;
+	float pleat_height(vec2 pattern,float hem,float ripple){
+		float raised=pattern.x>0.?stride.x:stride.y;
+		float pleat=sin(abs(pattern.x)*99.+pattern.y*31.);
+		return hem*((.009+raised*.010)*pleat+motion*.014*ripple);
+	}
 	void vertex(){rest=UV2; depth=COLOR.r*.6-.3;
-		// Length is tailored in bind space so the cuff rotates with the thigh.
-		float raised=rest.x>0.?stride.x:stride.y;
 		float hem=1.-smoothstep(hem_y,hem_y+.22,rest.y);
 		float ripple=sin(rest.x*47.+rest.y*25.-TIME*14.);
-		float pleat=sin(abs(rest.x)*99.+rest.y*31.);
-		fold_height=hem*((.009+raised*.010)*pleat+motion*.014*ripple);
+		float fold_height=pleat_height(rest,hem,ripple);
 		VERTEX+=NORMAL*(.004+hem*(.013+motion*.012)+fold_height);
 		VERTEX+=hem*inertia*.65;
 		VERTEX.y+=hem*motion*.009*ripple;}
@@ -268,6 +269,9 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		vec3 dx=dFdx(VERTEX), dy=dFdy(VERTEX);
 		vec3 tx=cross(dy,NORMAL), ty=cross(NORMAL,dx);
 		float area=dot(dx,tx);
+		// Evaluate folds across the panel so lighting stays smooth across mesh edges.
+		float fold_height=pleat_height(rest,1.-smoothstep(hem_y,hem_y+.22,rest.y),
+			sin(rest.x*47.+rest.y*25.-TIME*14.));
 		vec3 slope=(tx*dFdx(fold_height)+ty*dFdy(fold_height))*sign(area)/max(abs(area),.0000001);
 		NORMAL=normalize(NORMAL-clamp(slope,vec3(-.65),vec3(.65))*.62);
 		float folds=sin(rest.x*84.+rest.y*38.)*hem;
