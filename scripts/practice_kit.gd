@@ -107,9 +107,10 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 				var shell_fabric := ShaderMaterial.new()
 				var trouser_shader := Shader.new()
 				trouser_shader.code="""shader_type spatial;
-				uniform float motion;
+				uniform vec3 inertia; uniform float motion;
 				void vertex(){
 					float weight=1.-smoothstep(.38,1.02,UV2.y);
+					VERTEX+=weight*inertia*.38;
 					VERTEX+=NORMAL*weight*(.011+.018*motion*sin(UV2.y*28.+UV2.x*22.-TIME*12.));
 				}
 				void fragment(){ ALBEDO=vec3(.026,.042,.055); ROUGHNESS=.84; }"""
@@ -169,11 +170,12 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 	var material := ShaderMaterial.new()
 	var shader := Shader.new()
 	shader.code = """shader_type spatial;
-	uniform float motion; uniform float hem_y; uniform vec4 cloth:source_color; varying vec2 rest;
+	uniform vec3 inertia; uniform float motion; uniform float hem_y; uniform vec4 cloth:source_color; varying vec2 rest;
 	void vertex(){rest=UV2;
 		float hem=1.-smoothstep(hem_y,hem_y+.22,rest.y);
 		float ripple=sin(rest.x*47.+rest.y*25.-TIME*14.);
 		VERTEX+=NORMAL*(.004+hem*(.017+motion*(.018+.025*ripple)));
+		VERTEX+=hem*inertia*.65;
 		VERTEX.y+=hem*motion*.009*ripple;}
 	void fragment(){
 		if(rest.y<hem_y) discard;
@@ -207,12 +209,21 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 	var cut := Shader.new()
 	cut.code = """shader_type spatial;
 	uniform sampler2D muscles:hint_normal; uniform sampler2D roughness_map; uniform float hem_y; uniform sampler2D skin_map:source_color; varying float y;
-	void vertex(){y=UV2.y;} void fragment(){if(y>hem_y+.02 || y<.095)discard; ALBEDO=texture(skin_map,UV).rgb; NORMAL_MAP=texture(muscles,UV).rgb; NORMAL_MAP_DEPTH=.30; ROUGHNESS=mix(.42,.86,texture(roughness_map,UV).r);}"""
+	uniform vec2 knee_flex;
+	void vertex(){
+		y=UV2.y;
+		float flex=UV2.x>0.?knee_flex.x:knee_flex.y;
+		vec2 q=(vec2(abs(UV2.x),y)-vec2(.115,.63))/vec2(.095,.12);
+		float front=smoothstep(.46,.65,COLOR.r);
+		VERTEX+=NORMAL*.012*flex*front*exp(-dot(q,q));
+	}
+	void fragment(){if(y>hem_y+.02 || y<.095)discard; ALBEDO=texture(skin_map,UV).rgb; NORMAL_MAP=texture(muscles,UV).rgb; NORMAL_MAP_DEPTH=.30; ROUGHNESS=mix(.42,.86,texture(roughness_map,UV).r);}"""
 	skin.shader = cut
 	skin.set_shader_parameter("muscles",preload("res://assets/characters/base/T_Superhero_Male_Normal.png"))
 	skin.set_shader_parameter("roughness_map",preload("res://assets/characters/base/T_Superhero_Male_Roughness.png"))
 	skin.set_shader_parameter("hem_y",hem)
 	skin.set_shader_parameter("skin_map",preload("res://assets/characters/base/T_Superhero_Male_Light.png"))
+	actor.leg_skin=skin
 	legs.material_override = skin
 	source.free()
 

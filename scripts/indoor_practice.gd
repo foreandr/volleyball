@@ -449,6 +449,7 @@ func step_practice(delta: float) -> void:
 	for seat in seats_in_use:
 		seat.actor.animator.advance(delta)
 		seat.update()
+		seat.watch(ball.position if ball.visible else coach.position+Vector3.UP*1.5,delta)
 		seat.applause(delta)
 	for a in energy: energy[a].recover(delta)
 	clock += delta
@@ -581,13 +582,15 @@ func step_practice(delta: float) -> void:
 			var hit := contacts.sweep(world,contacts.ball_shape,ball.position,motion,Contact.GYM|Contact.EQUIPMENT|64)
 			ball.position += motion*float(hit.get("fraction",1.0))
 			if not hit.is_empty():
+				for net in targets:
+					if ball.position.distance_to(net.position)<net.mouth_radius+.14: net.impact(ball.position,motion/maxf(delta,.001))
 				if absf(ball.position.z-4)<.18: rotation_drill.net_reaction(ball.position,motion/maxf(delta,.001))
 				miss("Ball deflected off the gym equipment.")
 				drop_velocity = (motion/maxf(delta,.001)).bounce(hit.normal)*.45
 				return
 			if elapsed<0.22: Hands.apply(setter,source,1.0-elapsed/0.22,(endpoint-source).normalized()*0.22,0.0,0.3,false,Vector3.ZERO,1.0,endpoint-source,0.5,true)
 			if t>=1:
-				if endpoint.distance_to(PINS[target])<targets[target].mouth_radius-0.10: targets[target].impact()
+				if endpoint.distance_to(PINS[target])<targets[target].mouth_radius-0.10: targets[target].impact(ball.position,motion/maxf(delta,.001))
 				if success and not demonstration:
 					if rotation_drill.turn==0:
 						gym.update_board(rep+1)

@@ -365,6 +365,13 @@ func tick(dt: float) -> void:
 				spare.collision_layer=0
 				deposit(index,spare)
 				game.trace("sideline_spare",{"id":spare.name,"bin":index})
+	for body in loose:
+		if body.freeze or body.sleeping or body.position.y<.14: continue
+		var v := body.linear_velocity
+		# A 21 cm ball in indoor air: quadratic drag and a bounded spin lift.
+		var drag := -.006*v.length()*v
+		var magnus := .0018*body.angular_velocity.cross(v)
+		body.apply_central_force(drag+magnus.limit_length(.35))
 	for worker in workers:
 		if exchange<0 or worker.actor!=runner: collect(worker,dt)
 	service_carts(dt)
@@ -455,7 +462,10 @@ func collect(w: Dictionary,dt: float) -> void:
 		var body: RigidBody3D=w.goal
 		var delta := (body.position-actor.position).slide(Vector3.UP)
 		if w.lifting<=0 and delta.length()>.95:
-			perimeter_walk(w,body.position-delta.normalized()*.48,dt)
+			var lead := body.linear_velocity.slide(Vector3.UP)*clampf(delta.length()/5.7,0.,.42)
+			var pickup := body.position+lead.limit_length(.85)
+			if under_stands(pickup): pickup=body.position
+			perimeter_walk(w,pickup-delta.normalized()*.48,dt)
 		else:
 			actor.rotation.y=atan2(delta.x,delta.z)
 			actor.play_action("idle")

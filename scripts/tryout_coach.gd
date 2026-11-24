@@ -13,6 +13,13 @@ func toss(actor: Node3D,t: float) -> Vector3:
 	var pose: Array = author.baseline.duplicate()
 	var dip := sin(PI*smoothstep(0.,.55,t))
 	var drive := smoothstep(0.40,1.0,t)
+	var pelvis := rig.find_bone("pelvis")
+	var parent: Transform3D=author.world_pose(pose,rig.get_bone_parent(pelvis))
+	pose[pelvis].origin+=parent.basis.inverse()*Vector3(0,-.066*dip,.022*dip)
+	for side in ["l","r"]:
+		var foot: Vector3=author.point(author.baseline,"foot_"+side)
+		author.limb(pose,"thigh_"+side,"calf_"+side,"foot_"+side,foot,Vector3.BACK)
+	rig.set_bone_pose_position(pelvis,pose[pelvis].origin)
 	author.rotate_world(pose,"spine_01",Vector3.RIGHT,0.12*dip-0.08*drive)
 	var center: Vector3 = author.point(pose,"pelvis")+Vector3(0,0.12-0.16*dip+0.46*drive,0.46+0.10*drive)
 	for side in ["l","r"]:

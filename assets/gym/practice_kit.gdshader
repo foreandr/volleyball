@@ -5,12 +5,15 @@ uniform vec4 trim : source_color;
 uniform sampler2D lettering : source_color,filter_linear_mipmap_anisotropic;
 uniform bool jacket = false;
 
+uniform vec3 inertia;
 uniform float motion=0.;
 uniform float phase=0.;
 varying vec3 rest;
 void vertex(){
 	// Capture the undistorted garment coordinates from UV2 for animated tailoring.
 	rest=vec3(UV2, COLOR.r*0.6-0.3);
+	float freedom=1.-smoothstep(1.04,1.48,rest.y);
+	VERTEX+=freedom*(inertia*.38+NORMAL*max(0.,dot(inertia,NORMAL))*.85)*(jacket?.65:1.);
 	if(!jacket){
 		float arm=smoothstep(.16,.27,abs(rest.x));
 		float free_edge=mix(1.-smoothstep(1.02,1.54,rest.y),.56*smoothstep(.19,.39,abs(rest.x)),arm);

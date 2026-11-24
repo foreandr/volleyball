@@ -57,7 +57,13 @@ func _ready() -> void:
 			add_child(label)
 	for z in [-8,-3,2,7,12]:
 		box("Roof steel",Vector3(22.6,0.2,0.18),Vector3(0,8.55,z),steel)
+		box("Truss lower chord",Vector3(22.4,.09,.10),Vector3(0,7.91,z),steel)
+		for bay in 10:
+			var x := -11.2+bay*2.24
+			brace(Vector3(x,8.52,z),Vector3(x+1.12,7.94,z),.06,steel)
+			brace(Vector3(x+1.12,7.94,z),Vector3(x+2.24,8.52,z),.06,steel)
 		for x in [-5,5]:
+			box("Fixture suspension",Vector3(.035,.14,.035),Vector3(x,8.46,z),steel)
 			box("Fluorescent bank",Vector3(2.8,0.1,0.32),Vector3(x,8.38,z),material("fff3cc"))
 
 
@@ -150,7 +156,7 @@ static func light_gym(world: Node3D) -> void:
 		env.ssil_radius = 2.2
 		env.ssil_intensity = 0.7
 		env.ssr_enabled = true
-		env.ssr_max_steps = 64
+		env.ssr_max_steps = 128
 		env.glow_enabled = true
 		env.glow_intensity = 0.38
 		env.glow_strength = 0.7

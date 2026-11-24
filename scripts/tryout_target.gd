@@ -6,8 +6,12 @@ var mouth_radius := 0.42
 var depth := 0.64
 var mesh := ImmediateMesh.new()
 var cord := StandardMaterial3D.new()
-var sag := 0.0
-var velocity := 0.0
+const STRANDS := 20
+const ROWS := 7
+var offsets := PackedVector3Array()
+var speeds := PackedVector3Array()
+var cords := MultiMesh.new()
+var awake := false
 
 func rod(a: Vector3,b: Vector3,r: float,color: Color) -> void:
 	var item := MeshInstance3D.new()
@@ -111,42 +115,95 @@ func _ready() -> void:
 			preload("res://scripts/gym_physics.gd").solid(wall,shape,32)
 	var basket := MeshInstance3D.new()
 	basket.mesh = mesh
-	cord.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED if is_net else BaseMaterial3D.SHADING_MODE_PER_PIXEL
+	cord.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
 	cord.roughness = .42
 	cord.albedo_color = Color("eee5ca") if is_net else Color("bb6034")
 	cord.cull_mode = BaseMaterial3D.CULL_DISABLED
-	add_child(basket)
-	rebuild()
+	if is_net:
+		basket.free()
+		var braid := CylinderMesh.new()
+		braid.top_radius=.005
+		braid.bottom_radius=.005
+		braid.height=1.
+		braid.radial_segments=8
+		braid.rings=0
+		braid.material=cord
+		cords.transform_format=MultiMesh.TRANSFORM_3D
+		cords.mesh=braid
+		cords.instance_count=2*STRANDS*(ROWS-1)
+		var netting := MultiMeshInstance3D.new()
+		netting.multimesh=cords
+		add_child(netting)
+		offsets.resize(ROWS*STRANDS)
+		speeds.resize(ROWS*STRANDS)
+		update_cords()
+	else:
+		add_child(basket)
+		rebuild()
 
 func knot(i: int,j: int) -> Vector3:
 	var t := j/6.0
 	var angle := TAU*(i+0.5*(j%2))/20
 	var radius := mouth_radius*lerpf(1,0.48 if is_net else 0.80,t)
-	return Vector3(cos(angle)*radius,-depth*t-sag*t,sin(angle)*radius)
+	return Vector3(cos(angle)*radius,-depth*t,sin(angle)*radius)
 
 func rebuild() -> void:
 	mesh.clear_surfaces()
-	mesh.surface_begin(Mesh.PRIMITIVE_LINES if is_net else Mesh.PRIMITIVE_TRIANGLES,cord)
+	mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES,cord)
 	for i in 20:
 		for j in 6:
 			var a := knot(i,j)
 			var b := knot(i+1,j)
 			var c := knot(i,j+1)
 			var d := knot(i+1,j+1)
-			if is_net:
-				for point in [a,c,b,c]: mesh.surface_add_vertex(point)
-			else:
-				for point in [a,b,c,b,d,c]:
-					mesh.surface_set_normal(Vector3(point.x,-0.12,point.z).normalized())
-					mesh.surface_add_vertex(point)
+			for point in [a,b,c,b,d,c]:
+				mesh.surface_set_normal(Vector3(point.x,-0.12,point.z).normalized())
+				mesh.surface_add_vertex(point)
 	mesh.surface_end()
 
-func impact() -> void:
-	if is_net: velocity = 2.1
+func update_cords() -> void:
+	var strand := 0
+	for row in ROWS-1:
+		for i in STRANDS:
+			var a := knot(i,row)+offsets[row*STRANDS+i]
+			for next in [i,posmod(i+(-1 if row%2==0 else 1),STRANDS)]:
+				var b := knot(next,row+1)+offsets[(row+1)*STRANDS+next]
+				var axis := b-a
+				var basis_ := Basis(Quaternion(Vector3.UP,axis.normalized())).scaled_local(Vector3(1,axis.length(),1))
+				cords.set_instance_transform(strand,Transform3D(basis_,(a+b)*.5))
+				strand+=1
+
+func impact(at: Vector3,incoming: Vector3) -> void:
+	if not is_net: return
+	var local := to_local(at)
+	var velocity := global_basis.inverse()*incoming
+	for row in range(1,ROWS):
+		for i in STRANDS:
+			var gap := (knot(i,row)-local).slide(Vector3.UP)
+			var influence := exp(-gap.length_squared()/.085)*sin(PI*row/(ROWS+.5))
+			speeds[row*STRANDS+i]+=velocity.limit_length(11.)*.68*influence
+	awake=true
 
 func _process(delta: float) -> void:
-	if absf(sag)+absf(velocity)<0.001: return
-	var dt := minf(delta,0.05)
-	velocity += (-72*sag-8*velocity)*dt
-	sag += velocity*dt
-	rebuild()
+	if not awake: return
+	var steps := maxi(1,ceili(minf(delta,.12)*180.))
+	var dt := minf(delta,.12)/steps
+	var peak := 0.
+	for step in steps:
+		peak=0.
+		for row in range(1,ROWS):
+			for i in STRANDS:
+				var k := row*STRANDS+i
+				var left := row*STRANDS+posmod(i-1,STRANDS)
+				var right := row*STRANDS+(i+1)%STRANDS
+				var below := mini(row+1,ROWS-1)*STRANDS+i
+				var coupling := offsets[left]+offsets[right]+offsets[k-STRANDS]+offsets[below]-4.*offsets[k]
+				speeds[k]+=(coupling*175.-offsets[k]*72.-speeds[k]*8.)*dt
+		for k in range(STRANDS,offsets.size()):
+			offsets[k]+=speeds[k]*dt
+			peak=maxf(peak,offsets[k].length_squared()+speeds[k].length_squared())
+	if peak<.000005:
+		offsets.fill(Vector3.ZERO)
+		speeds.fill(Vector3.ZERO)
+		awake=false
+	update_cords()

@@ -139,9 +139,21 @@ var hair_velocity := Vector3.ZERO
 var jersey_materials: Array[ShaderMaterial]=[]
 var jersey_origin := Vector3.ZERO
 var jersey_speed := 0.
+var leg_skin: ShaderMaterial
+var cloth_offset := Vector3.ZERO
+var cloth_velocity := Vector3.ZERO
 
 func _process(dt: float) -> void:
 	if jersey_materials.is_empty() or dt<=0.: return
+	if leg_skin:
+		var flex := Vector2.ZERO
+		for i in 2:
+			var side: String=["l","r"][i]
+			var hip := skeleton.get_bone_global_pose(skeleton.find_bone("thigh_"+side)).origin
+			var knee := skeleton.get_bone_global_pose(skeleton.find_bone("calf_"+side)).origin
+			var ankle := skeleton.get_bone_global_pose(skeleton.find_bone("foot_"+side)).origin
+			flex[i]=smoothstep(.12,1.65,(knee-hip).angle_to(ankle-knee))
+		leg_skin.set_shader_parameter("knee_flex",flex)
 	if hair_material and hair_mount:
 		var head := hair_mount.to_global(Vector3(0,.18,0))
 		var velocity := (head-hair_last)/dt if head.distance_to(hair_last)<.8 else Vector3.ZERO
@@ -151,8 +163,19 @@ func _process(dt: float) -> void:
 		hair_velocity+=((target-hair_lag)*175.-hair_velocity*19.)*step
 		hair_lag+=hair_velocity*step
 		hair_material.set_shader_parameter("lag",hair_lag)
-	var travel := global_position.distance_to(jersey_origin)
+	var displacement := global_position-jersey_origin
+	var travel := displacement.length()
+	var drag := Vector3.ZERO
+	if travel<1.:
+		drag=(global_basis.orthonormalized().inverse()*(-displacement)/dt*.012).limit_length(.065)
+	var steps := maxi(1,ceili(minf(dt,.10)*120.))
+	var h := minf(dt,.10)/steps
+	for i in steps:
+		cloth_velocity+=((drag-cloth_offset)*155.-cloth_velocity*13.)*h
+		cloth_offset+=cloth_velocity*h
 	jersey_origin=global_position
 	var speed := clampf(travel/dt/6.2,0.,1.) if travel<1. else 0.
 	jersey_speed=lerpf(jersey_speed,speed,1.-exp(-dt*(12. if speed>jersey_speed else 5.)))
-	for material in jersey_materials: material.set_shader_parameter("motion",jersey_speed)
+	for material in jersey_materials:
+		material.set_shader_parameter("motion",jersey_speed)
+		material.set_shader_parameter("inertia",cloth_offset)

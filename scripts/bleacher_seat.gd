@@ -5,6 +5,8 @@ var beat := .36
 var age := 0.0
 var duration := 0.0
 var planted := {}
+var gaze := Vector2.ZERO
+var head_rest := Quaternion.IDENTITY
 var actor: Node3D
 var bench: MeshInstance3D
 var side := 1
@@ -13,6 +15,7 @@ var foot_height := 0.0
 
 func configure(player: Node3D,seat: MeshInstance3D,below: MeshInstance3D,aisle_side: int,z: float) -> void:
 	actor = player
+	head_rest=actor.skeleton.get_bone_pose_rotation(actor.skeleton.find_bone("Head"))
 	bench = seat
 	side = aisle_side
 	court_z = z
@@ -55,6 +58,17 @@ func update() -> void:
 		for bone in ["upperarm_"+leg,"lowerarm_"+leg]:
 			var idx := rig.find_bone(bone)
 			rig.set_bone_pose_rotation(idx,pose[idx].basis.orthonormalized().get_rotation_quaternion())
+
+func watch(point: Vector3,dt: float) -> void:
+	var rig: Skeleton3D=actor.skeleton
+	var head := rig.find_bone("Head")
+	var direction := actor.global_basis.orthonormalized().inverse()*(point-Contact.joint(actor,"Head"))
+	var desired := Vector2(clampf(atan2(direction.x,direction.z),-.62,.62),clampf(atan2(direction.y,Vector2(direction.x,direction.z).length()),-.20,.27))
+	gaze=gaze.move_toward(desired,dt*1.6)
+	var parent := rig.get_bone_global_pose(rig.get_bone_parent(head)).basis.orthonormalized()
+	var yaw_axis := parent.inverse()*(rig.global_basis.orthonormalized().inverse()*Vector3.UP)
+	var pitch_axis := parent.inverse()*(rig.global_basis.orthonormalized().inverse()*actor.global_basis.x.normalized())
+	rig.set_bone_pose_rotation(head,Quaternion(yaw_axis.normalized(),gaze.x)*Quaternion(pitch_axis.normalized(),-gaze.y)*head_rest)
 
 func celebrate(index: int,block_complete: bool) -> void:
 	age = -.10-fmod(index*.137,.36)
