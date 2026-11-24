@@ -1,5 +1,7 @@
 # Volleyball
 
+- Read the indoor practice baseline in GAME_DESIGN.md before changing a drill. Build new indoor drills on scenes/indoor_practice.tscn and its controller. Update the baseline in the same commit when shared behavior changes.
+
 - Share applicable drill behavior across all drills through common code. Fix shared camera, replay, editing, setup persistence, and diagnostics at their source. Keep each drill's saved setup independent.
 
 - Godot 4.6 / GDScript, Compatibility renderer. Keep character assets and saves independent from FightLab and Alien Optimization.

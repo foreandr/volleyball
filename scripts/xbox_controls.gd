@@ -1,14 +1,19 @@
 extends RefCounted
 
 const FACE := [JOY_BUTTON_A,JOY_BUTTON_X,JOY_BUTTON_Y,JOY_BUTTON_B]
-const AUX := [JOY_BUTTON_LEFT_SHOULDER,JOY_BUTTON_RIGHT_SHOULDER,JOY_BUTTON_RIGHT_STICK,JOY_BUTTON_START]
-const NAMES := {JOY_BUTTON_A:"A",JOY_BUTTON_B:"B",JOY_BUTTON_X:"X",JOY_BUTTON_Y:"Y",JOY_BUTTON_LEFT_SHOULDER:"LB",JOY_BUTTON_RIGHT_SHOULDER:"RB",JOY_BUTTON_RIGHT_STICK:"RS",JOY_BUTTON_START:"Menu"}
-const CONTROLS := ["Serve / jump / pipe","Forearm receive / left set","Hand receive / middle set","Back / right set","Next toss","Match sprint","Jump set","Pause"]
+const AUX := [JOY_BUTTON_LEFT_SHOULDER,JOY_BUTTON_RIGHT_SHOULDER,JOY_BUTTON_RIGHT_STICK,JOY_BUTTON_START,JOY_BUTTON_LEFT_STICK]
+const NAMES := {JOY_BUTTON_A:"A",JOY_BUTTON_B:"B",JOY_BUTTON_X:"X",JOY_BUTTON_Y:"Y",JOY_BUTTON_LEFT_SHOULDER:"LB",JOY_BUTTON_RIGHT_SHOULDER:"RB",JOY_BUTTON_RIGHT_STICK:"RS",JOY_BUTTON_START:"Menu",JOY_BUTTON_LEFT_STICK:"LS"}
+const CONTROLS := ["Serve / jump / pipe","Forearm receive / left set","Hand receive / middle set","Back / right set","Next toss","Match sprint","Jump set","Pause","Set trajectory"]
+
+static func auxiliary_bindings() -> Array:
+	var mapping: Array=StorySession.game_options.get_value("xbox","aux",AUX).duplicate()
+	if mapping.size()==4: mapping.append(JOY_BUTTON_LEFT_STICK)
+	return mapping
 
 static func physical(logical: int) -> int:
 	var slot := FACE.find(logical)
 	if slot>=0: return StorySession.pad_bindings[slot]
-	return StorySession.game_options.get_value("xbox","aux",AUX)[AUX.find(logical)]
+	return auxiliary_bindings()[AUX.find(logical)]
 
 static func trigger(left: bool) -> JoyAxis:
 	var swapped := bool(StorySession.game_options.get_value("xbox","swap_triggers",false))
@@ -43,7 +48,7 @@ static func prompts(parent: Container,entries: Array) -> void:
 static func settings(parent: Container,refresh: Callable) -> void:
 	for i in CONTROLS.size():
 		var choices: Array = FACE if i<4 else AUX
-		var slot := i%4
+		var slot := i if i<4 else i-4
 		var option := OptionButton.new()
 		option.name = "Binding%d" % i
 		option.add_theme_constant_override("icon_max_width",36)
@@ -53,7 +58,7 @@ static func settings(parent: Container,refresh: Callable) -> void:
 		option.select(choices.find(physical(choices[slot])))
 		parent.add_child(option)
 		option.item_selected.connect(func(index: int):
-			var mapping: Array = StorySession.pad_bindings if i<4 else StorySession.game_options.get_value("xbox","aux",AUX).duplicate()
+			var mapping: Array = StorySession.pad_bindings if i<4 else auxiliary_bindings()
 			var other := mapping.find(choices[index])
 			mapping[other] = mapping[slot]
 			mapping[slot] = choices[index]

@@ -147,11 +147,11 @@ static func coach_jacket(rig: Skeleton3D) -> void:
 	# Jacket sections measured from waistband to collar. The forward waist and
 	# lower belly are wider than the chest. Skin the panels across the spine.
 	var sections := [
-		Vector4(.935,.249,.197,.057),Vector4(.955,.282,.227,.067),
-		Vector4(1.01,.310,.260,.080),Vector4(1.09,.325,.274,.086),
-		Vector4(1.18,.316,.259,.078),Vector4(1.27,.288,.228,.058),
-		Vector4(1.37,.260,.199,.038),Vector4(1.445,.244,.176,.016),
-		Vector4(1.50,.218,.150,-.003),Vector4(1.54,.146,.108,-.010),
+		Vector4(.915,.262,.210,.047),Vector4(.952,.273,.218,.053),
+		Vector4(1.01,.294,.245,.068),Vector4(1.09,.312,.258,.072),
+		Vector4(1.18,.306,.252,.070),Vector4(1.27,.288,.228,.058),
+		Vector4(1.37,.260,.199,.038),Vector4(1.445,.250,.182,.004),
+		Vector4(1.50,.228,.156,-.012),Vector4(1.54,.146,.108,-.010),
 		Vector4(1.56,.083,.083,-.012)]
 	var skin := Skin.new()
 	for bone in ["pelvis","spine_01","spine_02","spine_03"]:
@@ -173,7 +173,7 @@ static func coach_jacket(rig: Skeleton3D) -> void:
 				var t := blend-joint
 				tool.set_bones(PackedInt32Array([joint,joint+1,0,0]))
 				tool.set_weights(PackedFloat32Array([1.-t,t,0,0]))
-				tool.set_normal(Vector3(sin(a),-.23 if ring.x<1.09 else .29,cos(a)).normalized())
+				tool.set_normal(Vector3(sin(a)/ring.y,lerpf(-.7,1.1,smoothstep(.96,1.27,ring.x)),cos(a)/ring.z).normalized())
 				tool.set_uv(Vector2((col+corner.x)/48.,ring.x))
 				tool.add_vertex(Vector3(ring.y*sin(a),ring.x,ring.w+ring.z*cos(a)))
 	var coat := MeshInstance3D.new()

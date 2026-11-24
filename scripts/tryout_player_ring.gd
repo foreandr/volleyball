@@ -21,6 +21,7 @@ func _draw() -> void:
 	if not game or not game.is_node_ready() or game.settings.visible or game.phase=="intro": return
 	var human: Node3D=game.rotation_drill.roster[0]
 	draw_player(human,true)
+	if game.preview_enabled: draw_set_path(human)
 	if game.clock<game.cue_until and game.phase in ["feed","pass"]:
 		var called: int=game.called()
 		var anchor: Vector3=game.targets[called].global_position+Vector3.UP*.43
@@ -35,6 +36,21 @@ func _draw() -> void:
 			draw_texture_rect(icon,Rect2(left+Vector2(33,-19),Vector2(27,24)),false)
 			draw_string(font,left+Vector2(62,0),game.TARGETS[called],HORIZONTAL_ALIGNMENT_LEFT,-1,16)
 	if game.setter!=human: draw_player(game.setter,false)
+
+func draw_set_path(actor: Node3D) -> void:
+	var active: bool=actor==game.setter
+	var target: int=game.held if active else game.free_target
+	if target<0: return
+	var a: Vector3=game.catch_point if active else (game.Contact.palm(actor,"l")+game.Contact.palm(actor,"r"))*.5
+	var b: Vector3=game.PINS[target]
+	var tempo: int=game.chosen_tempo()
+	var height: float=game.APEX[tempo] if active else 9.81*pow(game.DURATION[tempo],2)/8.
+	for i in 41:
+		var pos: Vector3=game.arc(a,b,i/40.,height)
+		if not game.camera.is_position_behind(pos):
+			var pt: Vector2=game.camera.unproject_position(pos)
+			draw_circle(pt,2.9,Color("122420aa"))
+			draw_circle(pt,1.8,Color("87f4ddee"))
 
 func draw_player(actor: Node3D,human: bool) -> void:
 	var foot := Vector3(actor.position.x,.08,actor.position.z)

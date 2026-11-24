@@ -2,6 +2,21 @@
 
 The following describes the intended full game. A menu route, stored rating or prototype does not establish that a feature is finished.
 
+## Indoor practice baseline
+
+A new indoor drill starts with practice already happening in a staffed gym. Inherit `scenes/indoor_practice.tscn` and extend `scripts/indoor_practice.gd`. The career setter tryout uses this entry point. Older standalone drill scenes predate it and require migration when revised.
+
+| Carry into the next drill | Shared implementation and behavior |
+| --- | --- |
+| Gym and people | Keep the court, flexible net, posts, seated teammates, bleachers, scoreboard, lighting and camera collision. Use the player profile, numbered practice jerseys, varied bodies and equipment, and the coach’s separate outfit. See `tryout_gym.gd`, `practice_kit.gd`, `bleacher_seat.gd` and `gym_physics.gd`. |
+| Practice in progress | `tryout_rotation.gd` owns the coach’s supply, issued balls, loose balls, pickups, deposits and cart exchanges. Three setters rotate. Six crew members work in pairs. Human players can shag, jump and set between turns. Credit Team Chemistry on completed human returns. |
+| Crew decisions | Reserve a reachable ball, approach from outside, yield to the feed, pick up, carry, deposit and return to station. Leave balls under the stands. Walking without progress for one second triggers recovery around obstacles and people. Preserve physical contacts during recovery. |
+| Xbox controls | Use `xbox_controls.gd` for bindings and button images. LT squares up, RT sprints, and LT + RT gives a faster shuffle. With LT held, X aims left, Y middle, A pipe and B prepares a back set. RS click loads and releases a jump. LS click toggles the trajectory. Right-stick up/down selects high/fast tempo. |
+| Ball contact and feedback | Hold to prepare, release at the hands. Incoming flight and physical hand contact govern timing. Keep skill-based timing windows, the floor ring, surname, stamina, jump and set cues, and the target glyph. A stationary player must be able to reach the coach’s feed at their own height. |
+| Review | Preserve input and interaction traces, the visible clock and rolling recordings. Watch a rep at gameplay distance. Check both pins, feet, hands, clothing and contact through movement. |
+
+For a new exercise, change its objective, feed, targets, scoring and progression in the derived controller. The shared scene supplies working setting reps by default. Override `start_drill()` for entry and `credit_rep()` for drill-specific progress. Keep career checkpoints in the career controller. Verify a new exercise through its menu entry, including a short athlete, an unattended toss, a remapped controller prompt and a loose-ball return during another setter’s turn.
+
 ## Competition and progression
 Home offers Career, Play, Training Camp with performance stars, Create Player, Settings and Quit. Offline standard matches support 2â€“6 players per side. Online stays disabled. Select both squads and uniforms from a large generated roster, or edit everyone to either height extreme. The 2v2 career progresses through tournament arcs with dialogue explaining opponentsâ€™ philosophies. Opponents specialize in blocking, attacking, defense, serving, all-round play, deceptive jump sets and setter dumps, cut shots, roll shots, line attacks, high hands, and early one- or two-contact returns. Start with a small salary. Tournament winnings buy skills, haircuts, footwear, branded garments and accessories.
 
