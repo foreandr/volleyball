@@ -15,12 +15,12 @@ void vertex(){
 		float free_edge=sleeves ? smoothstep(.22,.33,abs(rest.x)) : 1.-smoothstep(1.02,1.46,rest.y);
 		float folds=sin(rest.x*45.+rest.y*17.+rest.z*19.+phase);
 		float wave=sin(rest.y*26.+rest.x*32.-TIME*13.+phase);
-		VERTEX+=NORMAL*free_edge*(.008+.005*folds+motion*(.012+.017*wave));
-		VERTEX.y+=free_edge*motion*.008*wave;
+		VERTEX+=NORMAL*free_edge*(.026+.008*folds+motion*(.020+.031*wave));
+		VERTEX.y+=free_edge*motion*.016*wave;
 	}
 	if(sleeves){
 		float folds=.0018*sin(rest.x*115.0+rest.z*38.0);
-		VERTEX+=NORMAL*(.009+folds);
+		VERTEX+=NORMAL*(.009+folds+(jacket ? motion*.013*sin(rest.x*24.-TIME*12.) : 0.));
 	}
 }
 void fragment(){

@@ -40,6 +40,7 @@ func _draw() -> void:
 func draw_set_path(actor: Node3D) -> void:
 	var active: bool=actor==game.setter
 	var target: int=game.held if active else game.free_target
+	if target<0 and (game.clock<game.preview_until or game.stick_latched): target=game.called()
 	if target<0: return
 	var a: Vector3=game.catch_point if active else (game.Contact.palm(actor,"l")+game.Contact.palm(actor,"r"))*.5
 	var b: Vector3=game.PINS[target]
@@ -79,7 +80,7 @@ func draw_player(actor: Node3D,human: bool) -> void:
 	var label: String=actor.display_name.strip_edges().get_slice(" ",actor.display_name.strip_edges().count(" ")).to_upper()
 	var origin := at+Vector2(-80,radius.y+19)
 	draw_string_outline(ThemeDB.fallback_font,origin,label,HORIZONTAL_ALIGNMENT_CENTER,160,14,4,Color("10191f"))
-	draw_string(ThemeDB.fallback_font,origin,label,HORIZONTAL_ALIGNMENT_CENTER,160,14,Color.WHITE)
+	draw_string(ThemeDB.fallback_font,origin,label,HORIZONTAL_ALIGNMENT_CENTER,160,14,Color("ffce75") if actor==game.setter else Color.WHITE)
 
 func timing_arc(at: Vector2,radius: Vector2,start: float,value: float,low: float,high: float) -> void:
 	var cuts := [0.,low,high,1.]

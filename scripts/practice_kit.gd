@@ -24,8 +24,8 @@ static func tailored_surface(source: ArrayMesh,surface: int,quad_shape := false,
 			# A rounded lower abdomen and fuller flanks continue into the trouser waist.
 			var belly := exp(-pow((p.y-1.075)/.205,2.))*smoothstep(.31,.18,absf(p.x))
 			var flank := exp(-pow((p.y-1.05)/.23,2.))
-			vertices[i].x+=p.x*.53*flank*smoothstep(.32,.19,absf(p.x))
-			vertices[i].z+=belly*(.155*smoothstep(-.095,.085,p.z)-.032*(1.-smoothstep(-.13,0.,p.z)))
+			vertices[i].x+=p.x*.31*flank*smoothstep(.32,.19,absf(p.x))
+			vertices[i].z+=belly*(.095*smoothstep(-.095,.085,p.z)-.032*(1.-smoothstep(-.13,0.,p.z)))
 			vertices[i].y-=.035*belly*smoothstep(.01,.10,p.z)
 		if jacket and p.y>.99 and p.y<1.57:
 			var ease := smoothstep(.99,1.10,p.y)*(1.-smoothstep(1.48,1.57,p.y))
@@ -44,7 +44,7 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 	var rig: Skeleton3D = actor.skeleton
 	if coach:
 		actor.set_height_cm(174)
-		actor.scale*=Vector3(1.06,1,1.07)
+		actor.scale*=Vector3(1.01,1,1.01)
 	elif variant>0:
 		if variant<20: actor.set_height_cm(166+(variant*13)%36)
 		actor.scale*=Vector3(.88+.036*(variant%7),1,.90+.045*((variant*3)%6))
@@ -65,10 +65,9 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 		if not shirt and not sleeves: continue
 		var kit := ShaderMaterial.new()
 		kit.shader = FABRIC
-		if not coach:
-			actor.jersey_origin=actor.global_position
-			actor.jersey_materials.append(kit)
-			kit.set_shader_parameter("phase",variant*1.79)
+		actor.jersey_origin=actor.global_position
+		actor.jersey_materials.append(kit)
+		kit.set_shader_parameter("phase",variant*1.79)
 		kit.set_shader_parameter("fabric",Color("223d3c") if coach else Color("b34421"))
 		kit.set_shader_parameter("trim",Color("cad4bf") if coach else Color("182d36"))
 		kit.set_shader_parameter("lettering",print_texture)
@@ -96,7 +95,18 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 				pants.skin=node.skin
 				rig.add_child(pants)
 				pants.skeleton=pants.get_path_to(rig)
-				pants.material_override=node.get_surface_override_material(1)
+				var shell_fabric := ShaderMaterial.new()
+				var trouser_shader := Shader.new()
+				trouser_shader.code="""shader_type spatial;
+				uniform float motion;
+				void vertex(){
+					float weight=1.-smoothstep(.38,1.02,UV2.y);
+					VERTEX+=NORMAL*weight*(.011+.018*motion*sin(UV2.y*28.+UV2.x*22.-TIME*12.));
+				}
+				void fragment(){ ALBEDO=vec3(.026,.042,.055); ROUGHNESS=.84; }"""
+				shell_fabric.shader=trouser_shader
+				pants.material_override=shell_fabric
+				actor.jersey_materials.append(shell_fabric)
 				node.set_surface_override_material(1,invisible)
 				for side in ["l","r"]: compression(rig,"calf_"+side,"foot_"+side,.068,.047,Color("253239"))
 	if not coach:
@@ -117,7 +127,7 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 		if variant%3==2: compression(rig,"lowerarm_r","hand_r",.061,.042,Color("252e35"))
 
 	reshape_build(rig,coach,variant)
-	if coach: coach_jacket(rig)
+	if coach: coach_jacket(rig,actor)
 
 # Taper upper arms in bind space, before joints pose them, so bare skin and
 # fabric follow the same silhouette. Leave wrists, ankles and face registered.
@@ -147,7 +157,7 @@ static func reshape_build(rig: Skeleton3D,coach: bool,variant: int) -> void:
 			shaped.surface_set_material(i,original.surface_get_material(i))
 		part.mesh=shaped
 
-static func coach_jacket(rig: Skeleton3D) -> void:
+static func coach_jacket(rig: Skeleton3D,actor: Node3D) -> void:
 	# Jacket sections measured from waistband to collar. The forward waist and
 	# lower belly are wider than the chest. Skin the panels across the spine.
 	var sections := [
@@ -165,12 +175,12 @@ static func coach_jacket(rig: Skeleton3D) -> void:
 	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
 	for row in range(sections.size()-1):
 		for col in 48:
-			for corner: Vector2i in [Vector2i(0,0),Vector2i(1,0),Vector2i(0,1),Vector2i(0,1),Vector2i(1,0),Vector2i(1,1)]:
+			for corner: Vector2i in [Vector2i(0,0),Vector2i(0,1),Vector2i(1,0),Vector2i(0,1),Vector2i(1,1),Vector2i(1,0)]:
 				var ring: Vector4=sections[row+corner.y]
 				var waist := 1.-smoothstep(1.18,1.48,ring.x)
-				ring.y*=1.-.09*waist
-				ring.z*=1.-.12*waist
-				ring.w*=1.-.16*waist
+				ring.y*=1.-.18*waist
+				ring.z*=1.-.24*waist
+				ring.w*=1.-.40*waist
 				var a := (col+corner.x)*TAU/48.
 				var blend := clampf((ring.x-.99)/.16,0.,2.999)
 				var joint := int(blend)
@@ -188,18 +198,30 @@ static func coach_jacket(rig: Skeleton3D) -> void:
 	var textile := Shader.new()
 	textile.code="""shader_type spatial;
 	render_mode cull_disabled;
+	uniform float motion;
+	void vertex(){
+		float free_edge=1.-smoothstep(.96,1.47,UV.y);
+		float fold=sin(UV.x*44.+UV.y*7.);
+		VERTEX+=NORMAL*free_edge*(.006*fold+motion*.025*sin(UV.x*32.+UV.y*17.-TIME*12.));
+	}
 	void fragment(){
 		float zipper=1.-smoothstep(.001,.0025,min(UV.x,1.-UV.x));
 		float hem=1.-smoothstep(.955,.967,UV.y);
 		float rib=.5+.5*sin(UV.x*1500.);
 		float weave=sin(UV.x*2400.)*sin(UV.y*2100.);
 		vec3 fabric=mix(vec3(.056,.107,.085),vec3(.03,.055,.047),hem);
-		ALBEDO=mix(fabric*(1.+.025*weave+.06*hem*rib),vec3(.28,.31,.30),zipper);
+		float front=min(UV.x,1.-UV.x);
+		float pocket=(1.-smoothstep(.002,.006,abs(front-(.154+(UV.y-1.11)*.34))))*smoothstep(1.03,1.045,UV.y)*(1.-smoothstep(1.15,1.16,UV.y));
+		float yoke=1.-smoothstep(.001,.0035,abs(UV.y-(1.417+.025*cos(UV.x*6.283))));
+		vec3 panel=mix(fabric,vec3(.079,.142,.110),smoothstep(1.42,1.45,UV.y));
+		panel=mix(panel,vec3(.029,.045,.041),pocket*.9+yoke*.5);
+		ALBEDO=mix(panel*(1.+.025*weave+.06*hem*rib),vec3(.28,.31,.30),zipper);
 		ROUGHNESS=.87;
 	}"""
 	var material := ShaderMaterial.new()
 	material.shader=textile
 	coat.material_override=material
+	actor.jersey_materials.append(material)
 
 static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: Node3D) -> void:
 	var material := ShaderMaterial.new()
@@ -209,7 +231,7 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 	void vertex(){rest=UV2;
 		float hem=1.-smoothstep(hem_y,hem_y+.22,rest.y);
 		float ripple=sin(rest.x*47.+rest.y*25.-TIME*14.);
-		VERTEX+=NORMAL*(.004+hem*(.009+motion*(.012+.016*ripple)));
+		VERTEX+=NORMAL*(.004+hem*(.017+motion*(.018+.025*ripple)));
 		VERTEX.y+=hem*motion*.009*ripple;}
 	void fragment(){
 		if(rest.y<hem_y) discard;

@@ -56,7 +56,6 @@ var meter := ProgressBar.new()
 
 var coach: Node3D
 
-var landing := MeshInstance3D.new()
 var ball := MeshInstance3D.new()
 var panel := PanelContainer.new()
 var title := Label.new()
@@ -68,8 +67,9 @@ var skip := TextureProgressBar.new()
 var finish := Button.new()
 var rep := 0
 var held := -1
-var last_flick := 0
-var flick_at := -10.0
+var selected_tempo := 1
+var stick_latched := false
+var preview_until := 0.0
 var source := Vector3.ZERO
 var catch_point := Vector3.ZERO
 var target := 0
@@ -147,16 +147,6 @@ func _ready() -> void:
 	var rings := preload("res://scripts/tryout_player_ring.gd").new()
 	rings.game=self
 	add_child(rings)
-	var ring := TorusMesh.new()
-	ring.inner_radius = 0.53
-	ring.outer_radius = 0.58
-	landing.mesh = ring
-	var paint := StandardMaterial3D.new()
-	paint.albedo_color = Color("7effdf")
-	paint.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	landing.material_override = paint
-	world.add_child(landing)
-	landing.hide()
 	squat.configure(world)
 	free_squat.configure(world)
 	free_jump.front_limit=14.0
@@ -263,7 +253,7 @@ func update_prompts(next: String) -> void:
 		"ground": entries = [[JOY_BUTTON_LEFT_SHOULDER,"Next toss"],[JOY_BUTTON_START,"Settings"]]
 		_:
 			for i in BUTTONS.size(): entries.append([BUTTONS[i],TARGETS[i]])
-			entries.append_array([[JOY_BUTTON_LEFT_STICK,"Set trajectory"],[JOY_BUTTON_RIGHT_STICK,"Hold / release jump"],["LT","Focus"],["RT","Sprint"],[JOY_BUTTON_START,"Settings"]])
+			entries.append_array([["RS","Set height"],[JOY_BUTTON_LEFT_STICK,"Show / hide arc"],[JOY_BUTTON_RIGHT_STICK,"R3 hold / release jump" if Xbox.physical(JOY_BUTTON_RIGHT_STICK)==JOY_BUTTON_RIGHT_STICK else "Hold / release jump"],["LT","Focus"],["RT","Sprint"],[JOY_BUTTON_START,"Settings"]])
 	Xbox.prompts(controls_row,entries)
 
 func leave() -> void:
@@ -293,8 +283,6 @@ func reset_feed() -> void:
 	if jump.active:
 		jump.active=false
 		setter.position.y=BASE.y
-	last_flick = 0
-	flick_at = -10
 	if demonstration: setter.position = BASE
 	setter.rotation.y = atan2(coach.position.x-BASE.x,coach.position.z-BASE.z)
 	setter.play_action("idle")
@@ -303,8 +291,6 @@ func reset_feed() -> void:
 	coach.show()
 	coach.rotation.y = atan2(catch_point.x-coach.position.x,catch_point.z-coach.position.z)
 	ball.visible = demonstration or rotation_drill.issued!=null
-	landing.position = Vector3(catch_point.x,0.075,catch_point.z)
-	landing.show()
 	apply_camera()
 	title.text = "COACH DEMO    /    %d OF 4" % (demo_index+1) if demonstration else "SETTER TRYOUT    /    %02d OF 32    •    %s" % [rep+1,"MOVING" if rep>=16 else "STATIONARY"]
 	message.text = TARGETS[called()]+"    /    "+("Jump set" if jump_rep() else "Standing set")
@@ -361,9 +347,20 @@ func face_set(actor: Node3D,choice: int,dt: float) -> void:
 	if absf(angle_difference(actor.rotation.y,heading))<.035: actor.rotation.y=heading
 	else: actor.rotation.y-=minf(clockwise,dt*10.)
 
+func select_height(stick: Vector2) -> void:
+	if stick.length()<.32:
+		stick_latched=false
+		return
+	if maxf(absf(stick.x),absf(stick.y))<.55: return
+	var choice := 0 if absf(stick.x)>absf(stick.y) else (1 if stick.y<0 else 2)
+	if not stick_latched or choice!=selected_tempo:
+		selected_tempo=choice
+		preview_until=clock+2.
+		preview_enabled=true
+	stick_latched=true
+
 func chosen_tempo() -> int:
-	if clock-flick_at<.35: return last_flick
-	return 1 if demonstration or rep<8 else 0
+	return selected_tempo
 
 func move_setter(delta: float,actor: Node3D=setter,off_ball := false) -> bool:
 	var motion := Vector2(axis(JOY_AXIS_LEFT_X),axis(JOY_AXIS_LEFT_Y))
@@ -414,6 +411,9 @@ func _process(delta: float) -> void:
 	if phase == "intro":
 		play_intro(delta)
 		return
+	var stick := Vector2(axis(JOY_AXIS_RIGHT_X),axis(JOY_AXIS_RIGHT_Y))
+	stick+=Input.get_vector("ui_left","ui_right","ui_up","ui_down") if (Input.is_key_pressed(KEY_LEFT) or Input.is_key_pressed(KEY_RIGHT) or Input.is_key_pressed(KEY_UP) or Input.is_key_pressed(KEY_DOWN)) else Vector2.ZERO
+	select_height(stick)
 	rotation_drill.tick(delta)
 	if phase == "complete": return
 	# Leave the four targets in frame while easing toward the live ball.
@@ -422,14 +422,9 @@ func _process(delta: float) -> void:
 	apply_camera()
 	squat.update(setter,delta)
 	squat.ring.hide()
-	landing.visible = not squat.ring.visible and phase in ["walk","feed","pass"]
 	if jump.active: jump.step(setter,delta,Vector2.ZERO)
 	elif not demonstration and rotation_drill.turn==0 and not squat.charging and phase!="cart": move_setter(delta)
 	if (jump.active or squat.charging or phase=="cart") and held>=0 and rotation_drill.turn==0 and axis(Xbox.trigger(true))>.25: face_set(setter,held,delta)
-	var stick := axis(JOY_AXIS_RIGHT_Y)
-	if absf(stick)>0.45 or Input.is_key_pressed(KEY_UP) or Input.is_key_pressed(KEY_DOWN):
-		last_flick = 1 if stick < -0.45 or Input.is_key_pressed(KEY_UP) else 2
-		flick_at = clock
 	match phase:
 		"cart":
 			var incoming_ready := not jump.active and not squat.charging and rotation_drill.walk(setter,BASE,delta,5.2)
@@ -461,7 +456,6 @@ func _process(delta: float) -> void:
 			if rep<16 or demonstration:
 				catch_point.x=head.x
 				catch_point.z=head.z
-			landing.position=Vector3(catch_point.x,.075,catch_point.z)
 			if elapsed>=.30 and clock>=next_release and rotation_drill.floor_clear():
 				last_toss = clock
 				next_release = clock+2.0
@@ -673,7 +667,7 @@ func release(index: int) -> void:
 			return
 	energy[setter].spend(2)
 	target = index
-	tempo = chosen_tempo()
+	tempo = chosen_tempo() if not demonstration and rotation_drill.turn==0 else (1 if demonstration or rep<8 else 0)
 	source = ball.position
 	flight_time = DURATION[tempo]
 	var error := 0.0 if demonstration else set_error*(3.6-skill)+gap*0.22
@@ -695,7 +689,6 @@ func release(index: int) -> void:
 
 func complete() -> void:
 	for net in targets: net.beacon.hide()
-	landing.hide()
 	begin("complete")
 	camera.position = Vector3(0,6,-9)
 	camera.look_at(Vector3(0,1.4,2))
