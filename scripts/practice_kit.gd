@@ -192,6 +192,7 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 	var material := ShaderMaterial.new()
 	var shader := Shader.new()
 	shader.code = """shader_type spatial;
+	render_mode cull_disabled;
 	uniform vec3 inertia; uniform float motion; uniform float hem_y; uniform vec2 stride; uniform vec4 accent:source_color; varying float depth; uniform vec4 cloth:source_color; uniform sampler2D knit_surface:repeat_enable,filter_linear_mipmap_anisotropic; varying vec2 rest;
 	void vertex(){rest=UV2; depth=COLOR.r*.6-.3;
 		// Length is tailored in bind space so the cuff rotates with the thigh.
@@ -218,6 +219,11 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		vec2 grain=(yarn.rg-.5)*.32;
 		NORMAL_MAP=normalize(vec3(grain+vec2(folds*.12,.035*hem),1.))*.5+.5;
 		ALBEDO*=.97+.06*yarn.b;
+		// The folded cuff exposes the reverse of the fabric during a raised stride.
+		if(!FRONT_FACING){
+			ALBEDO=mix(cloth.rgb*.61,cloth.rgb*.89,hem)*(.92+.16*yarn.b);
+			NORMAL_MAP_DEPTH=.45;
+		}
 		ROUGHNESS=.78+.06*hem+.07*(yarn.b-.5);
 	}"""
 	material.shader = shader
