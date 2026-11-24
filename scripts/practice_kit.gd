@@ -416,6 +416,7 @@ static func court_shoe(rig: Skeleton3D,side: String,coach: bool,variant: int) ->
 	textile.shader=preload("res://assets/gym/court_shoe.gdshader")
 	textile.set_shader_parameter("shoe_atlas",preload("res://assets/characters/footwear/running_shoes.png"))
 	textile.set_shader_parameter("tint",Color.WHITE if coach else [Color.WHITE,Color("dfecff"),Color("ffe0a8"),Color("d5e4cf")][variant%4])
+	textile.set_shader_parameter("counter_color",Color("303737") if coach else [Color("374351"),Color("b2583a"),Color("545d66"),Color("496663"),Color("c6aa69")][variant%5])
 	trainer.material_override=textile
 	last.add_child(trainer)
 	rig.set_meta("sole_"+side,last)
