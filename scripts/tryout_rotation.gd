@@ -4,7 +4,8 @@ const Contact = preload("res://scripts/gym_physics.gd")
 const CART := Vector3(-3.05,0,-1.7)
 const WAIT := [Vector3(0,.04,1.35),Vector3(-1.35,.04,4.9),Vector3(1.65,.04,4.9)]
 const STATIONS := [CART,Vector3(0,0,-1.7),Vector3(3.05,0,-1.7)]
-const HANDLE := Vector3(.12,.04,-.78)
+const FEED_SPOT := Vector3(.85,.04,-.40)
+const HANDLE := Vector3(.10,.04,-.68)
 var runner_steps: RefCounted
 var coach_steps: RefCounted
 var tosses := 0
@@ -17,6 +18,7 @@ var stock: Array[RigidBody3D] = []
 var loose: Array[RigidBody3D] = []
 var paused_balls := {}
 var waiting_ball: RigidBody3D
+var fetch_start := Vector3.ZERO
 var fetch_time := 0.0
 var issued: RigidBody3D
 var turn := 0
@@ -120,13 +122,20 @@ func store_ball(body: RigidBody3D) -> void:
 	body.freeze = true
 	body.collision_layer = 0
 	body.show()
-	var i := stock.size()
-	body.position = basket.position+Vector3((i%4-1.5)*.226,.70+.17*(i/8),((i/4)%2-.5)*.28)
+	var slots := {}
+	for stored in stock: slots[stored.get_meta("cart_slot",0)]=true
+	var i := 0
+	while slots.has(i): i+=1
+	body.set_meta("cart_slot",i)
+	body.position = basket.position+Vector3((i%5-2)*.211,.70+.181*(i/15),((i/5)%3-1)*.214)
 	stock.append(body)
 
 func station_ready(dt: float) -> bool:
 	var requested := (tosses/10)%STATIONS.size()
 	if requested!=station:
+		if game.coach.position.distance_to(basket.position+HANDLE)>.18:
+			walk(game.coach,basket.position+HANDLE,dt,2.25)
+			return false
 		var previous := basket.position
 		var travel: Vector3=STATIONS[requested]-basket.position
 		var stride: float=coach_steps.advance(Vector2(-signf(travel.x),0),dt*1.35)
@@ -141,7 +150,7 @@ func station_ready(dt: float) -> bool:
 			station=requested
 			game.trace("cart_station",{"station":station,"tosses":tosses})
 		return false
-	return walk(game.coach,basket.position+HANDLE,dt,4.2)
+	return walk(game.coach,basket.position+FEED_SPOT,dt,4.2)
 
 func grip_handle(actor: Node3D,cart: Node3D) -> void:
 	var rig: Skeleton3D = actor.skeleton
@@ -161,21 +170,40 @@ func prepare_next_ball(dt: float) -> void:
 	if game.phase=="pass" and game.elapsed<.16: return
 	var coach: Node3D=game.coach
 	if not waiting_ball:
-		if stock.is_empty() or coach.position.distance_to(basket.position+HANDLE)>.55: return
-		waiting_ball=stock.pop_back()
+		if stock.is_empty() or coach.position.distance_to(basket.position+FEED_SPOT)>.36: return
+		waiting_ball=stock.back()
+		for candidate in stock:
+			var dz := candidate.position.y-waiting_ball.position.y
+			if dz>.02 or (absf(dz)<.02 and candidate.position.distance_to(coach.position)<waiting_ball.position.distance_to(coach.position)):
+				waiting_ball=candidate
+		stock.erase(waiting_ball)
+		fetch_start=waiting_ball.position
 		fetch_time=0.
 	fetch_time+=dt
-	var cradle := coach.position+Vector3.UP*1.16+coach.basis.z*.33-coach.basis.x*.13
-	var point := waiting_ball.position if fetch_time<.30 else cradle
-	var weight := smoothstep(0,.29,fetch_time)
-	game.coach_motion.fetch_pose(coach,point,weight)
-	if fetch_time>=.30:
-		var palm := Contact.palm(coach,"r")+Vector3.UP*.07
-		waiting_ball.position=waiting_ball.position.lerp(palm,minf(1.,dt*18.))
+	var rig: Skeleton3D=coach.skeleton
+	var author: RefCounted=coach.get_pose_author()
+	var to_cart := (basket.position-coach.position).slide(Vector3.UP)
+	if fetch_time<.40 and to_cart.length_squared()>.01:
+		coach.rotation.y=lerp_angle(coach.rotation.y,atan2(to_cart.x,to_cart.z),minf(1.,dt*12.))
+	if fetch_time>.32 and (tosses/10)%STATIONS.size()==station:
+		var toward := (game.setter as Node3D).position-coach.position
+		coach.rotation.y=lerp_angle(coach.rotation.y,atan2(toward.x,toward.z),minf(1.,dt*8.))
+	var cradle: Vector3=rig.to_global(author.point(author.baseline,"pelvis")+Vector3(0,.12,.41))
+	var carry := smoothstep(.28,.74,fetch_time)
+	var pivot := coach.position
+	var start_radius := (fetch_start-pivot).slide(Vector3.UP)
+	var end_radius := (cradle-pivot).slide(Vector3.UP)
+	var yaw := lerp_angle(atan2(start_radius.x,start_radius.z),atan2(end_radius.x,end_radius.z),carry)
+	var radius := lerpf(start_radius.length(),end_radius.length(),carry)
+	var center := pivot+Vector3(sin(yaw),0,cos(yaw))*radius
+	center.y=lerpf(fetch_start.y,cradle.y,carry)+.15*sin(PI*carry)
+	if fetch_time>=.74: center=cradle
+	game.coach_motion.fetch_pose(coach,center,smoothstep(0,.28,fetch_time),carry)
+	waiting_ball.position=center
 
 func take_ball() -> bool:
 	if issued: return true
-	if not waiting_ball or fetch_time<.48: return false
+	if not waiting_ball or fetch_time<.74: return false
 	issued=waiting_ball
 	waiting_ball=null
 	issued.hide()
@@ -571,7 +599,10 @@ func move_actor(actor: Node3D,step: Vector3) -> Vector3:
 	var here := actor.position
 	var depth := 0.0
 	if absf(here.x)<4.85:
-		depth=1.-smoothstep(.28,.95,absf(here.z-4.0))
+		var approach := absf(step.z)>absf(step.x)*.5 and (4.-here.z)*step.z>0.
+		depth=1.-smoothstep(.18,.78 if approach else .32,absf(here.z-4.0))
+		if absf(step.x)>absf(step.z)*2. and absf(here.z-4.)<.38:
+			step.z+=absf(step.x)*(.55 if here.z>=4. else -.55)
 	if depth>0:
 		var rig: Skeleton3D=actor.skeleton
 		var author: RefCounted=actor.get_pose_author()

@@ -1,6 +1,6 @@
 extends RefCounted
 
-const FULL_LOAD := 0.92
+const FULL_LOAD := 0.38
 const GREEN_START := 0.58
 const GREEN_END := 0.76
 var charging := false

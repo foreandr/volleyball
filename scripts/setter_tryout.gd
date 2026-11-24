@@ -12,6 +12,7 @@ const PINS := [Vector3(4.75,2.65,3.0),Vector3(1.05,2.65,3.3),Vector3(-0.45,2.65,
 # Midway between the centers of zones 2 (x=-3) and 3 (x=0).
 const BASE := Vector3(-1.5,0.04,1.35)
 const ORDER := [0,3,2,1]
+const SET_LOAD := .26
 var contact_time := 1.0
 const DURATION := [0.65,1.52,0.48]
 const APEX := [1.1,2.5,0.32]
@@ -276,7 +277,7 @@ func reset_feed() -> void:
 	cushion = 0
 	old_palms.clear()
 	begin("cart" if not demonstration else "walk")
-	coach_goal = rotation_drill.basket.position+rotation_drill.HANDLE
+	coach_goal = rotation_drill.basket.position+rotation_drill.FEED_SPOT
 	squat.cancel()
 	if jump.active:
 		jump.active=false
@@ -350,7 +351,7 @@ func move_setter(delta: float,actor: Node3D=setter,off_ball := false) -> bool:
 	if at_net and not focus: facing=Vector3(0,0,1 if actor.position.z<4 else -1)
 	if Vector2(facing.x,facing.z).length()>0.05:
 		actor.rotation.y = lerp_angle(actor.rotation.y,atan2(facing.x,facing.z),minf(1,delta*14))
-	actor.play_action("idle" if direction.is_zero_approx() or focus else ("base/Sprint" if sprint else "run"))
+	actor.play_action("base/Idle" if at_net else ("idle" if direction.is_zero_approx() or focus else ("base/Sprint" if sprint else "run")))
 
 	if (at_net or focus) and not direction.is_zero_approx():
 		var local := actor.basis.orthonormalized().inverse()*direction
@@ -358,7 +359,7 @@ func move_setter(delta: float,actor: Node3D=setter,off_ball := false) -> bool:
 			if not lateral_steps.has(actor): lateral_steps[actor]=preload("res://scripts/right_side_steps.gd").new(actor)
 			var steps: RefCounted=lateral_steps[actor]
 			steps.advance(Vector2(-local.x,local.z),delta)
-			steps.apply_pose(1.0-smoothstep(.1,.8,1.-absf(actor.position.z-4.))*.65)
+			steps.apply_pose(.78 if at_net else 1.)
 	return not direction.is_zero_approx()
 
 func _process(delta: float) -> void:
@@ -376,7 +377,6 @@ func _process(delta: float) -> void:
 		play_intro(delta)
 		return
 	rotation_drill.tick(delta)
-	rotation_drill.prepare_next_ball(delta)
 	if phase == "complete": return
 	# Leave the four targets in frame while easing toward the live ball.
 	var lead := (ball.position-Vector3(0,1.6,1.0))*Vector3(0.10,0.08,0.055)
@@ -395,7 +395,7 @@ func _process(delta: float) -> void:
 		"cart":
 			var incoming_ready := not jump.active and not squat.charging and rotation_drill.walk(setter,BASE,delta,5.2)
 			var coach_ready := rotation_drill.station_ready(delta)
-			coach_goal = rotation_drill.basket.position+rotation_drill.HANDLE
+			coach_goal = rotation_drill.basket.position+rotation_drill.FEED_SPOT
 			if coach_ready and incoming_ready and rotation_drill.floor_clear() and rotation_drill.take_ball():
 				setter.rotation.y = atan2(coach.position.x-setter.position.x,coach.position.z-setter.position.z)
 				change_feed_phase("feed")
@@ -445,7 +445,7 @@ func _process(delta: float) -> void:
 				return
 			if elapsed<0.16: coach_motion.toss(coach,1.0)
 			ball.position.y = maxf(0.15,ball.position.y)
-			if (demonstration or rotation_drill.turn!=0) and held<0 and elapsed>=contact_time-.64:
+			if (demonstration or rotation_drill.turn!=0) and held<0 and elapsed>=contact_time-SET_LOAD:
 				held = called()
 				pressed_at = clock
 			if held>=0:
@@ -535,6 +535,8 @@ func _process(delta: float) -> void:
 				if rep>=32: complete()
 				else: reset_feed()
 
+	rotation_drill.prepare_next_ball(delta)
+
 func play_intro(delta: float) -> void:
 	ball.hide()
 	var line := mini(2,int(elapsed/4.2))
@@ -584,7 +586,7 @@ func release(index: int) -> void:
 		if clock-last_contact>minf(.17,timing_window()):
 			miss("No hand contact. Get under the ball before release.")
 			return
-		if clock-pressed_at<0.12 or absf(elapsed-contact_time)>timing_window() or gap>0.72+0.36*skill:
+		if absf((clock-pressed_at)-SET_LOAD)>timing_window() or absf(elapsed-contact_time)>timing_window() or gap>0.72+0.36*skill:
 			miss("Missed contact. Hold the target and release above your forehead.")
 			return
 	energy[setter].spend(2)
@@ -595,7 +597,7 @@ func release(index: int) -> void:
 	var error := 0.0 if demonstration else (elapsed-contact_time)*(3.6-skill)+gap*0.22
 	endpoint = PINS[target]+Vector3(error,0,error*0.4)
 	if rotation_drill.turn!=0 and not demonstration:
-		var scatter := .19 if rotation_drill.random.randf()<.67 else 1.65
+		var scatter := .22 if rotation_drill.random.randf()<.60 else 1.65
 		endpoint += Vector3(rotation_drill.random.randf_range(-scatter,scatter),0,rotation_drill.random.randf_range(-scatter,scatter))
 	elif not demonstration:
 		# Poor releases can carry past the pin into the tape or court.

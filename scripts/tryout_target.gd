@@ -2,7 +2,7 @@ extends Node3D
 
 var beacon := MeshInstance3D.new()
 var is_net := false
-var mouth_radius := 0.46
+var mouth_radius := 0.42
 var depth := 0.64
 var mesh := ImmediateMesh.new()
 var cord := StandardMaterial3D.new()

@@ -14,18 +14,23 @@ func toss(actor: Node3D,t: float) -> Vector3:
 	var dip := sin(PI*clampf(t/0.55,0,1))
 	var drive := smoothstep(0.40,1.0,t)
 	author.rotate_world(pose,"spine_01",Vector3.RIGHT,0.12*dip-0.08*drive)
-	var center: Vector3 = author.point(pose,"pelvis")+Vector3(0,0.12-0.16*dip+0.46*drive,0.33+0.20*drive)
+	var center: Vector3 = author.point(pose,"pelvis")+Vector3(0,0.12-0.16*dip+0.46*drive,0.41+0.13*drive)
 	for side in ["l","r"]:
 		var sign_ := 1.0 if author.point(pose,"upperarm_"+side).x>center.x else -1.0
-		var wrist := center+Vector3(sign_*0.11,-0.06,-0.06)
+		var wrist := center+Vector3(sign_*.076,-.088,-.090)
 		author.limb(pose,"upperarm_"+side,"lowerarm_"+side,"hand_"+side,wrist,Vector3(sign_*0.65,-0.9,-0.25))
-		pose_helper.orient_palm(pose,rig,author,side,Vector3.BACK,Vector3.LEFT if side=="l" else Vector3.RIGHT,0.85)
+		pose_helper.orient_palm(pose,rig,author,side,Vector3.BACK,Vector3.RIGHT*sign_,1.0)
 	for i in rig.get_bone_count(): rig.set_bone_pose_rotation(i,pose[i].basis.orthonormalized().get_rotation_quaternion())
 	var palms: Vector3 = (author.point(pose,"middle_01_l")+author.point(pose,"middle_01_r"))*0.5
-	return rig.to_global(palms)+Vector3.UP*0.095
+	return rig.to_global(center).lerp(rig.to_global(palms)+Vector3.UP*.095,drive)
 
 func dress(actor: Node3D) -> void:
 	var rig: Skeleton3D = actor.skeleton
+	actor.animation_slots["idle"]="base/Idle"
+	actor.play_action("idle",0.)
+	actor.animator.advance(.18)
+	var author: RefCounted=actor.get_pose_author()
+	for i in rig.get_bone_count(): author.baseline[i]=rig.get_bone_pose(i)
 	var head := rig.find_bone("Head")
 	var mount := BoneAttachment3D.new()
 	mount.bone_name=rig.get_bone_name(head)
@@ -34,7 +39,7 @@ func dress(actor: Node3D) -> void:
 	mount.add_child(hat)
 	hat.transform=rig.get_bone_global_rest(head).affine_inverse()*Transform3D(Basis.IDENTITY,Vector3(0,1.744,-.021))
 	var cloth := StandardMaterial3D.new()
-	cloth.albedo_color=Color("214438")
+	cloth.albedo_color=Color("244c3d")
 	cloth.roughness=.94
 	cloth.cull_mode=BaseMaterial3D.CULL_DISABLED
 	var surface := SurfaceTool.new()
@@ -49,20 +54,49 @@ func dress(actor: Node3D) -> void:
 	for i in 24:
 		for uv: Vector2 in [Vector2(i,0),Vector2(i+1,0),Vector2(i,1),Vector2(i,1),Vector2(i+1,0),Vector2(i+1,1)]:
 			var x := uv.x/12.-1.
-			var z := lerpf(.060+.050*(1.-x*x),.094+.104*sqrt(maxf(0.,1.-x*x)),uv.y)
+			var z := lerpf(.060+.050*(1.-x*x),.090+.085*sqrt(maxf(0.,1.-x*x)),uv.y)
 			surface.add_vertex(Vector3(x*.102,-.004-.021*x*x-.010*uv.y,z))
 	surface.generate_normals()
 	var mesh := MeshInstance3D.new()
 	mesh.mesh=surface.commit()
 	mesh.material_override=cloth
 	hat.add_child(mesh)
+	var thread := ImmediateMesh.new()
+	thread.surface_begin(Mesh.PRIMITIVE_LINES)
+	for panel in 6:
+		var angle := panel*PI/3.
+		for j in 12:
+			for k in [j,j+1]:
+				var h := float(k)*PI/24.
+				var radius := cos(h)
+				thread.surface_add_vertex(Vector3(.099*radius*sin(angle),.095*sin(h)-.018*radius*(1.-cos(angle)),.120*radius*cos(angle)))
+	thread.surface_end()
+	var stitching := MeshInstance3D.new()
+	stitching.mesh=thread
+	var seam := StandardMaterial3D.new()
+	seam.albedo_color=Color("516859")
+	stitching.material_override=seam
+	hat.add_child(stitching)
+	var crest := Label3D.new()
+	crest.text="F"
+	crest.font_size=48
+	crest.pixel_size=.00063
+	crest.outline_size=2
+	crest.modulate=Color("d4d7ba")
+	crest.position=Vector3(0,.032,.115)
+	crest.rotation.x=-.29
+	hat.add_child(crest)
 
-func fetch_pose(actor: Node3D,point: Vector3,weight: float) -> void:
+func fetch_pose(actor: Node3D,center: Vector3,reach: float,carry: float) -> void:
 	var rig: Skeleton3D=actor.skeleton
 	var author: RefCounted=actor.get_pose_author()
 	var pose: Array=author.baseline.duplicate()
-	author.rotate_world(pose,"spine_01",Vector3.RIGHT,.19*weight)
-	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",rig.to_local(point),Vector3(-.45,-1,0),weight)
-	for bone in ["spine_01","upperarm_r","lowerarm_r","hand_r"]:
-		var i := rig.find_bone(bone)
-		rig.set_bone_pose_rotation(i,pose[i].basis.orthonormalized().get_rotation_quaternion())
+	var local := rig.to_local(center)
+	author.rotate_world(pose,"spine_01",Vector3.RIGHT,.24*reach*(1.-carry))
+	for side in ["r","l"]:
+		var weight := reach if side=="r" else smoothstep(.04,.64,carry)
+		var sign_ := signf(author.point(pose,"upperarm_"+side).x)
+		var wrist := local+Vector3(sign_*.076,-.088,-.090)
+		author.limb(pose,"upperarm_"+side,"lowerarm_"+side,"hand_"+side,wrist,Vector3(sign_*.6,-.8,-.24),weight)
+		pose_helper.orient_palm(pose,rig,author,side,Vector3.BACK,Vector3.RIGHT*sign_,weight)
+	for i in rig.get_bone_count(): rig.set_bone_pose_rotation(i,pose[i].basis.orthonormalized().get_rotation_quaternion())

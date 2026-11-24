@@ -54,16 +54,15 @@ func draw_player(actor: Node3D,human: bool) -> void:
 		if jump.active: charge=clampf(squat.seconds/squat.FULL_LOAD,0,1) if squat.seconds>0 else .67
 		if charge>0: timing_arc(at,outer,0,charge,squat.GREEN_START,squat.GREEN_END)
 		if actor!=game.setter and game.free_target>=0:
-			timing_arc(at,outer,PI,clampf((game.clock-game.free_press)/.75,0,1),.67,.89)
+			timing_arc(at,outer,PI,clampf((game.clock-game.free_press)/.43,0,1),.47,.76)
 		var pressing: bool=game.held>=0 and game.phase in ["walk","feed","pass"]
 		var result: bool=game.clock<game.set_grade_until
 		if actor==game.setter and (pressing or result):
 			var age: float=game.clock-game.pressed_at if pressing else game.graded_hold
-			var until_contact: float=game.contact_time-game.elapsed if game.phase=="pass" else game.contact_time
-			var ideal: float=maxf(0.,age+until_contact if pressing else age-game.set_error)
-			var duration := ideal+.26
+			var ideal: float=game.SET_LOAD
+			var duration := ideal+.17
 			var window: float=game.timing_window()*.6
-			timing_arc(at,outer,PI,clampf(age/duration,0,1),maxf(0.,ideal-window)/duration,(ideal+window)/duration)
+			timing_arc(at,outer,PI,clampf(age/duration,0,1),(ideal-window)/duration,(ideal+window)/duration)
 	var label: String=actor.display_name.strip_edges().get_slice(" ",actor.display_name.strip_edges().count(" ")).to_upper()
 	var origin := at+Vector2(-80,radius.y+19)
 	draw_string_outline(ThemeDB.fallback_font,origin,label,HORIZONTAL_ALIGNMENT_CENTER,160,14,4,Color("10191f"))

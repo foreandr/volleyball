@@ -4,7 +4,7 @@ const FABRIC := preload("res://assets/gym/practice_kit.gdshader")
 
 # Skinning transforms VERTEX before the material runs. Store bind-pose garment
 # coordinates separately so piping and screen printing follow the fabric.
-static func tailored_surface(source: ArrayMesh,surface: int,quad_shape := false) -> ArrayMesh:
+static func tailored_surface(source: ArrayMesh,surface: int,quad_shape := false,jacket := false) -> ArrayMesh:
 	var arrays := source.surface_get_arrays(surface)
 	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 	var coords := PackedVector2Array()
@@ -20,6 +20,10 @@ static func tailored_surface(source: ArrayMesh,surface: int,quad_shape := false)
 			var front := smoothstep(-.012,.064,p.z)
 			var lift := front*(.012*exp(-medial.length_squared())+.015*exp(-lateral.length_squared()))
 			vertices[i]+=Vector3(arrays[Mesh.ARRAY_NORMAL][i])*lift
+		if jacket and p.y>.99 and p.y<1.57:
+			var ease := smoothstep(.99,1.10,p.y)*(1.-smoothstep(1.48,1.57,p.y))
+			vertices[i]+=Vector3(arrays[Mesh.ARRAY_NORMAL][i])*(.01+.021*ease)
+			if absf(p.x)<.20: vertices[i].z+=.039*ease*smoothstep(0,.11,p.z)
 		coords[i] = Vector2(p.x,p.y)
 		depths[i] = Color(clampf((p.z+0.3)/0.6,0,1),0,0,1)
 	arrays[Mesh.ARRAY_VERTEX] = vertices
@@ -60,7 +64,7 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 		kit.set_shader_parameter("jacket",coach)
 		kit.set_shader_parameter("sleeves",sleeves)
 		var shell := MeshInstance3D.new()
-		shell.mesh = tailored_surface(node.mesh,0)
+		shell.mesh = tailored_surface(node.mesh,0,false,coach)
 		shell.skin = node.skin
 		rig.add_child(shell)
 		shell.skeleton = shell.get_path_to(rig)
