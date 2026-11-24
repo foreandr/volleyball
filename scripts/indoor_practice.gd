@@ -534,7 +534,7 @@ func step_practice(delta: float) -> void:
 			var previous := ball.position
 			ball.position = source.lerp(catch_point,elapsed/contact_time)+Vector3.UP*(4.905*elapsed*(contact_time-elapsed))
 			var incoming := ball.position-previous
-			var obstacle := contacts.sweep(world,contacts.ball_shape,previous,incoming,Contact.GYM|Contact.EQUIPMENT|64)
+			var obstacle := contacts.sweep(world,contacts.ball_shape,previous,incoming,Contact.GYM|Contact.EQUIPMENT|64|rotation_drill.CART_WALL)
 			if not obstacle.is_empty():
 				ball.position = previous+incoming*float(obstacle.fraction)
 				miss("Toss deflected off the gym equipment.")
@@ -587,7 +587,7 @@ func step_practice(delta: float) -> void:
 			var t := clampf(elapsed/flight_time,0,1)
 			var desired := arc(source,endpoint,t,APEX[tempo])
 			var motion := desired-ball.position
-			var hit := contacts.sweep(world,contacts.ball_shape,ball.position,motion,Contact.GYM|Contact.EQUIPMENT|64)
+			var hit := contacts.sweep(world,contacts.ball_shape,ball.position,motion,Contact.GYM|Contact.EQUIPMENT|64|rotation_drill.CART_WALL)
 			ball.position += motion*float(hit.get("fraction",1.0))
 			if not hit.is_empty():
 				for net in targets:

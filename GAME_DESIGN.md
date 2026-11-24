@@ -43,4 +43,6 @@ Desktop uses Forward+ with high-resolution shadows. Practice target cords are an
 
 Frame the debrief from player height. Huddle contact comes from behind each teammate: high arms wrap the shoulders, low arms reach around the waistband. Inspect both from the rear. The indoor tryout uses 1.35× linear render scale and 8× MSAA.
 
-Huddle hands open at contact. High palms rest face down on the neighboring shoulder; low palms face into the rear waistband. Training jerseys accumulate localized dampness from distance covered and stamina spent, then dry gradually at rest. Rebuild the skinned practice jersey and shorts with tools/bake_practice_garments.gd.
+Huddle hands open at contact. High palms rest face down on the neighboring shoulder; low palms face into the rear waistband. Training jerseys accumulate localized dampness from distance covered and stamina spent, then dry gradually at rest. Rebuild the shorts and reference skin weights with tools/bake_practice_garments.gd, then fit the sourced tee using tools/fit_training_tee.gd. The player jersey supplies the huddle contact surface. Check the cuff, shoulder, and printed number with arms both raised and lowered.
+
+The four practice carts each have four rolling casters. Balls are stored in cart-local slots and follow the frame when it turns. A loose ball that settles inside an open cart joins its inventory.

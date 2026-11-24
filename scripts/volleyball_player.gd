@@ -41,6 +41,8 @@ func _ready() -> void:
 			if mirror_animation: skin.cull_mode = BaseMaterial3D.CULL_DISABLED
 			skin.roughness = 0.85
 			skin.metallic_specular = 0.2
+			if skin.resource_name=="MI_Hair_1":
+				skin.albedo_color=Color("503d31")
 			if skin.resource_name=="MI_Eyes":
 				skin.roughness=.22
 				skin.metallic_specular=.52

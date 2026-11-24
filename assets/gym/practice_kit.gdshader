@@ -30,10 +30,10 @@ void vertex(){
 		float pleat=sin(angle*8.+rest.y*8.+phase);
 		float wave=sin(angle*4.+rest.y*12.-TIME*10.+phase);
 		float ripple=sin(angle*7.-TIME*15.+phase*.7);
-		float drape=mix(.057,.030,arm)+.014*pleat+motion*(.023+.044*wave+.013*ripple);
+		float drape=mix(.016,.012,arm)+.014*pleat+motion*(.023+.044*wave+.013*ripple);
 		VERTEX+=NORMAL*(free_edge*drape+.009*tension_fold(rest));
 		{
-			VERTEX.y+=(1.-arm)*free_edge*(-.095+motion*(.023*wave+.012*ripple));
+			VERTEX.y+=(1.-arm)*free_edge*(-.018+motion*(.023*wave+.012*ripple));
 		}
 	}
 	{
@@ -65,7 +65,7 @@ void fragment(){
 		float cuff=1.-smoothstep(.002,.005,abs(x-.386));
 		base*=1.-.12*cuff;
 		float collar=1.563-.055*(1.-smoothstep(.045,.109,x))*smoothstep(-.075,.075,rest.z);
-		base=mix(base,trim.rgb,1.-smoothstep(.008,.012,collar-y));
+		base=mix(base,trim.rgb,(1.-smoothstep(.010,.017,abs(collar-y)))*(1.-smoothstep(.074,.123,x)));
 		float rear=1.-smoothstep(-.05,.02,rest.z);
 		vec2 uv=vec2(.5+mix(rest.x,-rest.x,rear)/mix(.205,.262,rear),(1.425-y)/mix(.115,.144,rear));
 		if(all(greaterThanEqual(uv,vec2(0.))) && all(lessThanEqual(uv,vec2(1.)))){

@@ -1,0 +1,1 @@
+Men's Logo T-Shirt 1 by Elvaerwyn, from [MakeHuman Community Shirts 03](https://static.makehumancommunity.org/assets/assetpacks/shirts03.html), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The original mesh is tee.obj. The game adaptation changes the fit and bind pose, transfers skin weights, and adds team fabric, numbers, and sweat.

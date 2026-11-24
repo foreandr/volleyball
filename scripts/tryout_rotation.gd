@@ -1,6 +1,7 @@
 extends RefCounted
 
 const Contact = preload("res://scripts/gym_physics.gd")
+const CART_WALL := 512
 const CART := Vector3(-3.05,0,-1.7)
 const WAIT := [Vector3(0,.04,1.35),Vector3(-1.35,.04,4.9),Vector3(1.65,.04,4.9)]
 const STATIONS := [CART,Vector3(0,0,-1.7),Vector3(3.05,0,-1.7)]
@@ -70,8 +71,7 @@ func configure(host: Control) -> void:
 	var metal: Material = game.gym.material("9faeae")
 	for x in [-.54,.54]:
 		for z in [-.34,.34]:
-			cart_box(Vector3(x,.45,z),Vector3(.045,.84,.045),metal)
-			cart_box(Vector3(x,.10,z),Vector3(.09,.13,.11),metal)
+			cart_box(Vector3(x,.53,z),Vector3(.045,.68,.045),metal)
 		cart_box(Vector3(x,.75,0),Vector3(.035,.35,.72),cloth)
 	for z in [-.35,.35]: cart_box(Vector3(0,.75,z),Vector3(1.10,.35,.035),cloth)
 	cart_box(Vector3(0,1.01,-.42),Vector3(.93,.044,.044),metal)
@@ -83,6 +83,12 @@ func configure(host: Control) -> void:
 		bin.position=post
 		bins.append(bin)
 	for cart in bins+[basket]:
+		for x in [-.54,.54]:
+			for z in [-.34,.34]:
+				var caster := preload("res://scripts/cart_caster.gd").new()
+				var floor_y := .04 if absf(cart.position.x+x)<4.5 else -.02
+				caster.position=Vector3(x,floor_y+caster.RADIUS,z)
+				cart.add_child(caster)
 		var hull := BoxShape3D.new()
 		hull.size=Vector3(1.12,.94,.74)
 		var mount := Node3D.new()
@@ -113,7 +119,7 @@ func new_ball() -> RigidBody3D:
 		if other is StaticBody3D and other.collision_layer==64:
 			net_reaction(body.position,body.linear_velocity))
 	body.collision_layer = 128
-	body.collision_mask = Contact.GYM|Contact.EQUIPMENT|64|128
+	body.collision_mask = Contact.GYM|Contact.EQUIPMENT|64|128|CART_WALL
 	body.angular_damp = .55
 	body.linear_damp = .42
 	var mat := PhysicsMaterial.new()
@@ -138,18 +144,28 @@ func cart_box(at: Vector3,size: Vector3,style: Material) -> void:
 	part.position = at
 	part.material_override = style
 	basket.add_child(part)
+	var shape := BoxShape3D.new()
+	shape.size=size
+	Contact.solid(part,shape,CART_WALL)
 
 func store_ball(body: RigidBody3D) -> void:
 	body.freeze = true
 	body.collision_layer = 0
 	body.show()
+	var i := free_stock_slot()
+	body.set_meta("cart_slot",i)
+	body.position=cart_slot(basket,i)
+	stock.append(body)
+
+func free_stock_slot() -> int:
 	var slots := {}
 	for stored in stock: slots[stored.get_meta("cart_slot",0)]=true
 	var i := 0
 	while slots.has(i): i+=1
-	body.set_meta("cart_slot",i)
-	body.position = basket.position+Vector3((i%5-2)*.211,.70+.181*(i/15),((i/5)%3-1)*.214)
-	stock.append(body)
+	return i
+
+func cart_slot(cart: Node3D,slot: int) -> Vector3:
+	return cart.to_global(Vector3((slot%5-2)*.211,.703+.212*(slot/15),((slot/5)%3-1)*.214))
 
 func station_ready(dt: float) -> bool:
 	var requested := mini(round_index,2)
@@ -347,6 +363,21 @@ func tick(dt: float) -> void:
 		walk(waiting,WAIT[(i-turn+3)%3],dt,5.2)
 	for i in range(loose.size()-1,-1,-1):
 		var body := loose[i]
+		if not body.freeze and body.linear_velocity.length()<.65:
+			var caught := false
+			for cart in bins+[basket]:
+				var local: Vector3=cart.to_local(body.position)
+				if absf(local.x)>.44 or absf(local.z)>.25 or local.y<.63 or local.y>.96: continue
+				for worker in workers:
+					if worker.goal==body: worker.goal=null
+				loose.remove_at(i)
+				body.freeze=true
+				body.collision_layer=0
+				if cart==basket: store_ball(body)
+				else: deposit(bins.find(cart),body)
+				caught=true
+				break
+			if caught: continue
 		if not body.freeze and under_stands(body.position):
 			for w in workers:
 				if w.goal==body:
@@ -595,9 +626,8 @@ func place_in_cart(actor: Node3D,cargo: Array,dt: float) -> void:
 		if not cargo.is_empty(): begin_unload(actor,index,cargo)
 
 func slot_position(index: int) -> Vector3:
-	if index<0: return basket.position+Vector3.UP*.78
-	var slot: int=loads[index].size()
-	return bins[index].position+Vector3((slot%4-1.5)*.226,.7+.17*(slot/8),((slot/4)%2-.5)*.28)
+	if index<0: return cart_slot(basket,free_stock_slot())
+	return cart_slot(bins[index],loads[index].size())
 
 func deposit(index: int,body: RigidBody3D) -> void:
 	body.position=slot_position(index)
@@ -667,7 +697,7 @@ func service_carts(dt: float) -> void:
 	var hand_offset := handle
 	var arrived := perimeter_walk(cart_route,goal+hand_offset,dt)
 	var step := runner.position-before
-	var previous := cart.position
+	var previous := cart.transform
 	if step.length_squared()>.000001:
 		var heading := atan2(step.x,step.z)
 		# Pull back for a short reversal, turn the trolley for longer changes of direction.
@@ -679,7 +709,7 @@ func service_carts(dt: float) -> void:
 		cart.position.y=0
 		wheel_stride=push_pose(runner,cart,wheel_stride,step.length()*(-1 if backwards else 1))
 	else: wheel_stride=push_pose(runner,cart,wheel_stride,0.)
-	for body in loads[exchange]: body.position+=cart.position-previous
+	for body in loads[exchange]: body.position=cart.transform*(previous.affine_inverse()*body.position)
 	if not arrived: return
 	if returning:
 		exchange=-1

@@ -86,7 +86,7 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 			var torso: MeshInstance3D=original.find_child("SuperHero_Male",true,false)
 			var shell := MeshInstance3D.new()
 			var skin_surface := tailored_surface(torso.mesh,0,false,coach)
-			shell.mesh=skin_surface if coach else preload("res://assets/characters/volleyball/practice_jersey.res")
+			shell.mesh=skin_surface if coach else preload("res://assets/characters/volleyball/training_tee/fitted.res")
 			original.free()
 			shell.skin=node.skin
 			rig.add_child(shell)
@@ -104,25 +104,28 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 			if not coach: shorts(rig,node,variant,actor)
 			else:
 				var pants := MeshInstance3D.new()
-				pants.mesh=tailored_surface(node.mesh,1,false,true)
+				var source=preload("res://assets/characters/base/Superhero_Male_FullBody.gltf").instantiate()
+				var body: MeshInstance3D=source.find_child("SuperHero_Male",true,false)
+				pants.mesh=tailored_surface(body.mesh,0,false,true)
+				source.free()
 				pants.skin=node.skin
 				rig.add_child(pants)
 				pants.skeleton=pants.get_path_to(rig)
 				var shell_fabric := ShaderMaterial.new()
 				var trouser_shader := Shader.new()
 				trouser_shader.code="""shader_type spatial;
-				uniform vec3 inertia; uniform float motion;
+				uniform vec3 inertia; uniform float motion; varying vec2 cut;
 				void vertex(){
+					cut=UV2;
 					float weight=1.-smoothstep(.38,1.02,UV2.y);
 					VERTEX+=weight*inertia*.38;
-					VERTEX+=NORMAL*weight*(.011+.018*motion*sin(UV2.y*28.+UV2.x*22.-TIME*12.));
+					VERTEX+=NORMAL*(.019+.011*weight+.012*weight*motion*sin(UV2.y*28.+UV2.x*22.-TIME*12.));
 				}
-				void fragment(){ ALBEDO=vec3(.026,.042,.055); ROUGHNESS=.84; }"""
+				void fragment(){ if(cut.y<.088 || cut.y>1.12)discard; float cuff=1.-smoothstep(.094,.112,cut.y); ALBEDO=vec3(.026,.042,.055)*(1.-cuff*.22); ROUGHNESS=.84; }"""
 				shell_fabric.shader=trouser_shader
 				pants.material_override=shell_fabric
 				actor.jersey_materials.append(shell_fabric)
 				node.set_surface_override_material(1,invisible)
-				for side in ["l","r"]: compression(rig,"calf_"+side,"foot_"+side,.068,.047,Color("253239"))
 	if not coach:
 		var head := rig.find_bone("Head")
 		var mount := BoneAttachment3D.new()
@@ -149,11 +152,19 @@ static func reshape_build(rig: Skeleton3D,coach: bool,variant: int) -> void:
 		if not part.skin or not part.mesh is ArrayMesh: continue
 		var original := part.mesh
 		var shaped := ArrayMesh.new()
+		var covered_skin := not coach and original==preload("res://assets/characters/volleyball/body.res")
 		for i in original.get_surface_count():
 			var arrays := original.surface_get_arrays(i)
 			var verts: PackedVector3Array=arrays[Mesh.ARRAY_VERTEX]
 			for j in verts.size():
 				var v := verts[j]
+				if covered_skin:
+					v.z=lerpf(v.z,-.025,(1.-smoothstep(.14,.21,absf(v.x)))*smoothstep(1.1,1.22,v.y)*(1.-smoothstep(1.47,1.57,v.y))*.32)
+					# Tuck the skin inside the upper sleeve. Fade out before
+					# the cuff so the exposed arm keeps its actual silhouette.
+					var covered := smoothstep(.13,.21,absf(v.x))*(1.-smoothstep(.30,.36,absf(v.x)))*smoothstep(1.24,1.38,v.y)
+					v.y=lerpf(v.y,1.48,covered*.46)
+					v.z=lerpf(v.z,-.035,covered*.46)
 				var arm := smoothstep(.17,.30,absf(v.x))*(1.-smoothstep(.51,.73,absf(v.x)))*smoothstep(1.18,1.35,v.y)
 				var thickness := lerpf(1.,factor,arm)
 				v.y=1.48+(v.y-1.48)*thickness
@@ -303,97 +314,15 @@ static func court_shoe(rig: Skeleton3D,side: String,coach: bool,variant: int) ->
 	var center := rest.origin.lerp(toe,0.54)
 	center.y = 0.0
 	last.transform = rest.affine_inverse()*Transform3D(Basis.looking_at(forward,Vector3.UP,true),center)
-	if not coach and (variant%2==1 or variant==2):
-		var trainer := MeshInstance3D.new()
-		trainer.mesh=preload("res://assets/characters/footwear/running_l.obj") if side=="l" else preload("res://assets/characters/footwear/running_r.obj")
-		var textile := StandardMaterial3D.new()
-		textile.albedo_texture=preload("res://assets/characters/footwear/running_shoes.png")
-		textile.roughness=.78
-		trainer.material_override=textile
-		last.add_child(trainer)
-		rig.set_meta("sole_"+side,last)
-		return
-	var upper: Color = Color("324341") if coach else [Color("ede9df"),Color("23528c"),Color("df7638"),Color("252e38"),Color("b6cc7d")][variant%5]
-	# Loft heel, waist, forefoot and toe sections separately for each layer.
-	var profile := [Vector2(-.14,.044),Vector2(-.115,.062),Vector2(-.064,.065),Vector2(.005,.052),Vector2(.08,.071),Vector2(.133,.065),Vector2(.168,.046),Vector2(.183,.015)]
-	shoe_shell(last,profile,[.023,.022,.021,.02,.019,.02,.027,.036],.019,Color("373934"),side)
-	shoe_shell(last,profile,[.052,.054,.052,.048,.043,.041,.046,.047],.028,Color("e6e1d1"),side)
-	var cut := variant%3
-	var collar := [0.,.026,-.014][cut] as float
-	shoe_shell(last,profile,[.092+collar,.129+collar,.134+collar,.123,.091,.072,.060,.048],.042,upper,side)
-	if cut==1:
-		for sign_ in [-1,1]:
-			shoe_part(last,Vector3(sign_*.047,.134,-.081),Vector3(.028,.045,.085),upper.darkened(.22))
-	elif cut==2:
-		var strap := shoe_part(last,Vector3(0,.125,-.015),Vector3(.119,.018,.036),upper.darkened(.32))
-		strap.rotation.y=.22
-	shoe_part(last,Vector3(0,.113,-.084),Vector3(.104,.038,.091),Color("252a30"))
-	shoe_part(last,Vector3(0,.119,-.020),Vector3(.072,.047,.104),upper.lightened(.18))
-	for i in 4:
-		for sign_ in [-1,1]:
-			var lace := shoe_part(last,Vector3(sign_*.014,.140-i*.007,-.040+i*.021),Vector3(.056,.008,.010),Color("5d6468") if variant==0 else Color("eee9db"))
-			lace.rotation.y=sign_*.43
-	for sign_ in [-1,1]:
-		var panel := shoe_part(last,Vector3(sign_*.055,.077,.017),Vector3(.014,.03,.113),upper.lightened(.40))
-		panel.rotation.x=-.19
-
-static func shoe_shell(parent: Node3D,profile: Array,tops: Array,thickness: float,color: Color,side: String) -> void:
-	var surface := SurfaceTool.new()
-	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var sections := []
-	for i in profile.size():
-		var p: Vector2=profile[i]
-		var row := PackedVector3Array()
-		var top: float=tops[i]
-		var bottom := maxf(.006,top-thickness) if thickness<.04 else .042
-		for j in 20:
-			var a := TAU*j/20.
-			var x := cos(a)*p.y
-			var y := lerpf(bottom,top,(sin(a)+1.)*.5)
-			row.append(Vector3(x+(.012 if side=="l" else -.012)*smoothstep(.08,.18,p.x),y,p.x))
-		sections.append(row)
-	for i in range(sections.size()-1):
-		for j in 20:
-			var k := (j+1)%20
-			for v in [sections[i][j],sections[i+1][j],sections[i][k],sections[i][k],sections[i+1][j],sections[i+1][k]]: surface.add_vertex(v)
-	for j in range(1,19):
-		for v in [sections[0][0],sections[0][j+1],sections[0][j],sections[-1][0],sections[-1][j],sections[-1][j+1]]: surface.add_vertex(v)
-	surface.generate_normals()
-	var mesh := MeshInstance3D.new()
-	mesh.mesh=surface.commit()
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color=color
-	mat.roughness=.77
-	mat.cull_mode=BaseMaterial3D.CULL_DISABLED
-	if thickness>=.04:
-		var textile := Shader.new()
-		textile.code="""shader_type spatial;
-		render_mode cull_disabled;
-		uniform vec4 upper:source_color;
-		varying vec3 p;
-		void vertex(){p=VERTEX;}
-		void fragment(){
-			float resolve=1.-smoothstep(.0004,.002,max(fwidth(p.x),fwidth(p.z)));
-			float mesh=sin(p.x*1800.)*sin(p.z*1750.)*resolve;
-			float wing=smoothstep(.031,.055,abs(p.x));
-			float seam=abs(p.z-(.020+.58*(abs(p.x)-.044)+.55*(p.y-.075)));
-			float stripe=wing*(1.-smoothstep(.006,.010,seam));
-			float toe=smoothstep(.110,.117,p.z+abs(p.x)*.45);
-			float heel=1.-smoothstep(-.094,-.085,p.z);
-			vec3 facing=mix(upper.rgb,upper.rgb*.49,max(toe*.40,heel*.80));
-			ALBEDO=mix(facing*(1.+.035*mesh),vec3(.09,.17,.18),stripe);
-			float perforation=1.-smoothstep(.12,.28,length(fract(p.xz*160.)-.5));
-			float facing_mask=max(toe,heel);
-			ALBEDO*=1.-.18*perforation*resolve*(1.-facing_mask);
-			NORMAL_MAP=normalize(vec3(mesh*.18,perforation*.11*resolve,1.))*.5+.5;
-			ROUGHNESS=mix(.91,.58,facing_mask);
-		}"""
-		var fabric := ShaderMaterial.new()
-		fabric.shader=textile
-		fabric.set_shader_parameter("upper",color)
-		mesh.material_override=fabric
-	else: mesh.material_override=mat
-	parent.add_child(mesh)
+	var trainer := MeshInstance3D.new()
+	trainer.mesh=preload("res://assets/characters/footwear/running_l.obj") if side=="l" else preload("res://assets/characters/footwear/running_r.obj")
+	var textile := StandardMaterial3D.new()
+	textile.albedo_texture=preload("res://assets/characters/footwear/running_shoes.png")
+	textile.albedo_color=Color.WHITE if coach else [Color.WHITE,Color("dfecff"),Color("ffe0a8"),Color("d5e4cf")][variant%4]
+	textile.roughness=.78
+	trainer.material_override=textile
+	last.add_child(trainer)
+	rig.set_meta("sole_"+side,last)
 
 static func face_hair(rig: Skeleton3D,body: MeshInstance3D,mesh: ArrayMesh,coach: bool,variant: int) -> void:
 	# Follow the jaw and scalp vertices so stubble and hairlines inherit the face shape.
@@ -460,20 +389,3 @@ static func haircut(scalp: Node3D,color: Color,variant: int,actor: Node3D) -> vo
 	locks.material_override=mat
 	actor.hair_mount=scalp
 	actor.hair_material=mat
-
-static func shoe_part(parent: Node3D,at: Vector3,dimensions: Vector3,color: Color) -> MeshInstance3D:
-	var mesh := SphereMesh.new()
-	mesh.radius = 0.5
-	mesh.height = 1.0
-	mesh.radial_segments = 20
-	mesh.rings = 10
-	var part := MeshInstance3D.new()
-	part.mesh = mesh
-	part.scale = dimensions
-	part.position = at
-	var material := StandardMaterial3D.new()
-	material.albedo_color = color
-	material.roughness = .76
-	part.material_override = material
-	parent.add_child(part)
-	return part

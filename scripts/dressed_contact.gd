@@ -26,7 +26,7 @@ func configure(part: MeshInstance3D, rig: Skeleton3D) -> void:
 	for i in vertices.size():
 		var arm := smoothstep(.16,.27,absf(uv[i].x))
 		var free_edge := lerpf(1.-smoothstep(1.02,1.54,uv[i].y),.56*smoothstep(.19,.39,absf(uv[i].x)),arm)
-		var ease := .021 if jacket else .012+free_edge*lerpf(.065,.033,arm)
+		var ease := .021 if jacket else .012+free_edge*lerpf(.025,.018,arm)
 		vertices[i]+=normals[i]*ease
 	bones=arrays[Mesh.ARRAY_BONES]
 	weights=arrays[Mesh.ARRAY_WEIGHTS]
