@@ -73,6 +73,13 @@ func show_roster() -> void:
 				roster_pool.append(CareerSession.data.get_value("athletes",id))
 		for i in 48: roster_pool.append(profile_source.generate())
 	StorySession.offline_roster.clear()
+	var ball_choice := OptionButton.new()
+	ball_choice.name = "MatchBall"
+	var brands := preload("res://scripts/animation_ball_preview.gd").BALL_PALETTES.keys()
+	for brand in brands: ball_choice.add_item("Ball: "+str(brand))
+	ball_choice.select(maxi(0,brands.find(StorySession.match_preference("ball_brand","Mikasa"))))
+	ball_choice.item_selected.connect(func(index: int): StorySession.save_match_preference("ball_brand",brands[index]))
+	column.add_child(ball_choice)
 	var teams := HBoxContainer.new()
 	column.add_child(teams)
 	for side in 2:

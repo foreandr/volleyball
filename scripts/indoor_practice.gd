@@ -684,9 +684,15 @@ func _process(delta: float) -> void:
 func catch_pocket() -> Vector3:
 	return Contact.joint(setter,"Head")+Vector3.UP*.18+setter.global_basis.z*.10
 
-func shape_catch_hands() -> void:
-	Hands.apply(setter,ball.position,1.,Vector3.ZERO,0.,0.,false,Vector3.ZERO,0.,Vector3.INF,0.,true,-1.,null,Vector3.ZERO,true)
-	Contact.track_hands(setter,ball.position,true)
+func receive_hand_lift(arrival: float) -> float:
+	var remaining := arrival-elapsed
+	var held_time := maxf(0.,clock-pressed_at)
+	var lift := .48*smoothstep(0.,.50,held_time)+.52*(1.-smoothstep(.035,.34,remaining))
+	return lift*smoothstep(0.,.12,held_time)
+
+func shape_catch_hands(lift := 1.) -> void:
+	Hands.apply(setter,ball.position,lift,Vector3.ZERO,0.,0.,false,Vector3.ZERO,0.,Vector3.INF,0.,true,-1.,null,Vector3.ZERO,true)
+	Contact.track_hands(setter,ball.position,true,lift)
 
 func move_to_camp_toss(delta: float) -> void:
 	var offset := (camp_receive_spot-catch_pocket()).slide(Vector3.UP)
@@ -741,7 +747,7 @@ func step_practice(delta: float) -> void:
 	match phase:
 		"cart":
 			var incoming_ready := not jump.active and not squat.charging and (solo_setting or rotation_drill.walk(setter,BASE,delta,5.2))
-			if held>=0: Hands.apply(setter,catch_point,.55)
+			if held>=0: Hands.apply(setter,catch_point,.18*smoothstep(0.,.5,clock-pressed_at))
 			var coach_ready := rotation_drill.station_ready(delta)
 			coach_goal = rotation_drill.basket.position+rotation_drill.FEED_SPOT
 			if coach_ready and incoming_ready and rotation_drill.floor_clear() and rotation_drill.take_ball():
@@ -762,7 +768,7 @@ func step_practice(delta: float) -> void:
 		"feed":
 			setter.animator.advance(0.0)
 			if cpu_setting: move_to_camp_toss(delta)
-			if held>=0: Hands.apply(setter,catch_point,.55)
+			if held>=0: Hands.apply(setter,catch_point,.18*smoothstep(0.,.5,clock-pressed_at))
 			ball.position = coach_motion.toss(coach,clampf((clock-maxf(clock-elapsed,next_release-.30))/.30,0,1))
 			track_feed_or_target(delta)
 			# Measure the athlete who actually arrived, including their rig scale.
@@ -830,7 +836,7 @@ func step_practice(delta: float) -> void:
 				pressed_at = clock
 			track_feed_or_target(delta)
 			if cpu_setting:
-				if held>=0: shape_catch_hands()
+				if held>=0: shape_catch_hands(receive_hand_lift(forehead_arrival))
 				if elapsed>=forehead_arrival:
 					catch_start_local=setter.to_local(ball.position)
 					begin("forehead_catch")
@@ -838,8 +844,8 @@ func step_practice(delta: float) -> void:
 				return
 			if held>=0:
 				meter.value = set_fill()*100
-				Hands.apply(setter,ball.position,0.35+0.65*smoothstep(contact_time-.55,contact_time-.10,elapsed))
-				if Vector3(0,ball.position.y-setter.position.y,0).length()<setter.height_cm*.013: Contact.track_hands(setter,ball.position)
+				Hands.apply(setter,ball.position,receive_hand_lift(contact_time))
+				if elapsed>=contact_time-.34: Contact.track_hands(setter,ball.position,false,receive_hand_lift(contact_time))
 			if held<0 and not automatic_setter():
 				var head := Contact.joint(setter,"Head")+Vector3.UP*.10+setter.global_basis.z*.048
 				var closest := Geometry3D.get_closest_point_to_segment(head,previous,ball.position)

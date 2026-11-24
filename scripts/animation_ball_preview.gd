@@ -121,10 +121,18 @@ func _ready() -> void:
 	source_ground.hide()
 	hide()
 
-static func make_ball() -> ArrayMesh:
+const BALL_PALETTES := {
+	"Baden": ["faf4e3", "ad2434", "202c55"],
+	"Tachikara": ["f5efdf", "176659", "303e51"],
+	"Mikasa": ["f5f1dd", "2e64b4", "efd13b"],
+	"Molten": ["faf4e7", "cc293c", "196846"],
+	"Wilson": ["f7ecdb", "d87625", "333638"]
+}
+
+static func make_ball(brand := "Mikasa") -> ArrayMesh:
 	var mesh := SurfaceTool.new()
 	mesh.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var colors := [Color("f5f1dd"),Color("2e64b4"),Color("efd13b")]
+	var colors: Array = BALL_PALETTES.get(brand,BALL_PALETTES["Mikasa"])
 	for row in range(12):
 		for column in range(24):
 			var corners: Array[Vector3] = []
@@ -132,7 +140,7 @@ static func make_ball() -> ArrayMesh:
 				var latitude: float = -PI*0.5+PI*(row+corner.y)/12.0
 				var longitude: float = TAU*(column+corner.x)/24.0
 				corners.append(Vector3(cos(latitude)*cos(longitude),sin(latitude),cos(latitude)*sin(longitude)))
-			var color: Color = colors[(int(column/4)+int(row/4))%3]
+			var color: Color = Color(colors[(int(column/4)+int(row/4))%3])
 			for index in [0,1,2,0,2,3]:
 				mesh.set_color(color)
 				mesh.set_normal(corners[index])

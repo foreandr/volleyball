@@ -103,3 +103,5 @@ Grounded pivots alternate support feet, lift the swinging shoe, and settle into 
 Solo CPU camp can be used to inspect reception: the setter stays grounded, moves the forehead under the incoming ball, faces the called set heading and holds the two-handed setting shape for 1.5 seconds before the next toss. View restores playable sets.
 
 The shared natural ready stance raises the torso by 20 degrees while retaining its knee bend and foot placement.
+Grounded turns use longer alternating steps and keep the feet planted through small heading adjustments.
+Setters raise their hands during the hold and finish shaping them as the toss descends. Offline match setup remembers the selected ball brand and displays its panel colors on court.

@@ -9,7 +9,7 @@ var contacts: Array[Transform3D] = []
 var swing := 0
 var progress := 0.0
 var step_duration := .22
-var rest_steps := 0
+var step_active := false
 
 func _process_modification() -> void:
 	if not actor: return
@@ -23,6 +23,7 @@ func _process_modification() -> void:
 	if not initialized or actor.position.y>.065 or travel>maxf(.045,dt*1.3) or absf(angle)>.70:
 		initialized=true
 		contacts.clear()
+		step_active=false
 		return
 	var rotating := absf(angle)>deg_to_rad(.10)
 	if contacts.is_empty() and not rotating: return
@@ -33,11 +34,17 @@ func _process_modification() -> void:
 		contacts.assign(desired)
 		swing=0 if angle>0 else 1
 		progress=0.
-		step_duration=clampf(.50/maxf(.01,absf(angle)/dt),.15,.27)
-	if rotating: rest_steps=0
-	progress=minf(1.,progress+dt/step_duration)
+		step_duration=clampf(1.0/maxf(.01,absf(angle)/dt),.27,.43)
+	if progress == 0. and not step_active:
+		var offset := (desired[swing].origin - contacts[swing].origin).slide(Vector3.UP).length()
+		if offset >= .065:
+			step_active = true
+		elif not rotating:
+			contacts.clear()
+			return
+	if step_active: progress=minf(1.,progress+dt/step_duration)
 	var landing := desired[swing]
-	var advance := clampf(angle/dt,-3.,3.)*.055
+	var advance := clampf(angle/dt,-3.,3.)*.09
 	landing.origin=current.origin+(landing.origin-current.origin).rotated(Vector3.UP,advance)
 	var moving := contacts[swing].interpolate_with(landing,smoothstep(0.,1.,progress))
 	moving.origin.y+=.048*sin(PI*progress)
@@ -63,7 +70,5 @@ func _process_modification() -> void:
 		contacts[swing]=moving
 		swing=1-swing
 		progress=0.
-		step_duration=clampf(.50/maxf(.01,absf(angle)/dt),.15,.27)
-		if not rotating:
-			rest_steps+=1
-			if rest_steps>=2: contacts.clear()
+		step_duration=clampf(1.0/maxf(.01,absf(angle)/dt),.27,.43)
+		step_active=false

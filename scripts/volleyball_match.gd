@@ -278,7 +278,7 @@ func configure(actor: Node3D, board: Label, status: Label, build := "", players_
 		driver.lift_lean_back_degrees = attack_lift_lean
 		attackers.append(driver)
 	ball = MeshInstance3D.new()
-	ball.mesh = BallPreview.make_ball()
+	ball.mesh = BallPreview.make_ball(StorySession.match_preference("ball_brand","Mikasa"))
 	var material := StandardMaterial3D.new()
 	material.vertex_color_use_as_albedo = true
 	ball.material_override = material
