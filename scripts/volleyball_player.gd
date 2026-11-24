@@ -193,12 +193,17 @@ var leg_skin: ShaderMaterial
 var exertion_total := 0.0
 var exertion_sample := 0.0
 var dampness := 0.0
+@export var fabric_airflow := Vector3(.48,0,.15)
+var fabric_time := 0.
 var cloth_offset := Vector3.ZERO
 var cloth_velocity := Vector3.ZERO
 
 func _process(dt: float) -> void:
 	if jersey_materials.is_empty() or dt<=0.: return
-	if sleeve_cloth: sleeve_cloth.update(skeleton,shirt_fabric,dt)
+	fabric_time+=dt
+	var gust := .77+.23*sin(fabric_time*1.7+global_position.x*.6)
+	var air := fabric_airflow*gust
+	if sleeve_cloth: sleeve_cloth.update(skeleton,shirt_fabric,dt,air)
 	if shirt_fabric:
 		var tension := Vector2.ZERO
 		for i in 2:
@@ -238,7 +243,7 @@ func _process(dt: float) -> void:
 		shirt_fabric.set_shader_parameter("dampness",dampness)
 	var drag := Vector3.ZERO
 	if travel<1.:
-		drag=(global_basis.orthonormalized().inverse()*(-displacement)/dt*.012).limit_length(.065)
+		drag=(global_basis.orthonormalized().inverse()*(air-displacement/dt)*.012).limit_length(.065)
 	var steps := maxi(1,ceili(minf(dt,.10)*120.))
 	var h := minf(dt,.10)/steps
 	for i in steps:

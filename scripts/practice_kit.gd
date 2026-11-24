@@ -4,7 +4,7 @@ const FABRIC := preload("res://assets/gym/practice_kit.gdshader")
 
 # Skinning transforms VERTEX before the material runs. Store bind-pose garment
 # coordinates separately so piping and screen printing follow the fabric.
-static func tailored_surface(source: ArrayMesh,surface: int,quad_shape := false,jacket := false) -> ArrayMesh:
+static func tailored_surface(source: ArrayMesh,surface: int,jacket := false) -> ArrayMesh:
 	var arrays := source.surface_get_arrays(surface)
 	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 	var normals: PackedVector3Array=arrays[Mesh.ARRAY_NORMAL]
@@ -14,15 +14,6 @@ static func tailored_surface(source: ArrayMesh,surface: int,quad_shape := false,
 	depths.resize(vertices.size())
 	for i in vertices.size():
 		var p := vertices[i]
-		if quad_shape and p.y>.13 and p.y<.95:
-			var lift := leg_relief(p)
-			var h := .001
-			var gradient := Vector3(
-				leg_relief(p+Vector3.RIGHT*h)-leg_relief(p-Vector3.RIGHT*h),
-				leg_relief(p+Vector3.UP*h)-leg_relief(p-Vector3.UP*h),
-				leg_relief(p+Vector3.BACK*h)-leg_relief(p-Vector3.BACK*h))/(2.*h)
-			vertices[i]+=normals[i]*lift
-			normals[i]=(normals[i]-gradient.slide(normals[i])).normalized()
 		if jacket:
 			# A rounded lower abdomen and fuller flanks continue into the trouser waist.
 			var belly := exp(-pow((p.y-1.075)/.205,2.))*smoothstep(.31,.18,absf(p.x))
@@ -48,16 +39,6 @@ static func tailored_surface(source: ArrayMesh,surface: int,quad_shape := false,
 	var shaped := ArrayMesh.new()
 	shaped.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES,arrays,[],{},source.surface_get_format(surface)&Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS)
 	return shaped
-
-static func leg_relief(p: Vector3) -> float:
-	var x := absf(p.x)
-	var medial := Vector2((x-.077)/.047,(p.y-.555)/.079)
-	var lateral := Vector2((x-.168)/.058,(p.y-.68)/.14)
-	var front := smoothstep(-.012,.064,p.z)
-	var inside_calf := Vector2((x-.092)/.054,(p.y-.327)/.091)
-	var outside_calf := Vector2((x-.174)/.052,(p.y-.35)/.083)
-	var rear := 1.-smoothstep(-.035,.032,p.z)
-	return front*(.014*exp(-medial.length_squared())+.017*exp(-lateral.length_squared()))+rear*(.014*exp(-inside_calf.length_squared())+.011*exp(-outside_calf.length_squared()))
 
 static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 	var rig: Skeleton3D = actor.skeleton
@@ -99,7 +80,7 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 			var original := preload("res://assets/characters/base/Superhero_Male_FullBody.gltf").instantiate()
 			var torso: MeshInstance3D=original.find_child("SuperHero_Male",true,false)
 			var shell := MeshInstance3D.new()
-			var skin_surface := tailored_surface(torso.mesh,0,false,coach)
+			var skin_surface := tailored_surface(torso.mesh,0,coach)
 			shell.mesh=skin_surface if coach else preload("res://assets/characters/volleyball/training_tee/fitted.res")
 			original.free()
 			shell.skin=node.skin
@@ -120,7 +101,7 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 				var pants := MeshInstance3D.new()
 				var source=preload("res://assets/characters/base/Superhero_Male_FullBody.gltf").instantiate()
 				var body: MeshInstance3D=source.find_child("SuperHero_Male",true,false)
-				pants.mesh=tailored_surface(body.mesh,0,false,true)
+				pants.mesh=tailored_surface(body.mesh,0,true)
 				source.free()
 				pants.skin=node.skin
 				rig.add_child(pants)
@@ -197,7 +178,7 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 	var material := ShaderMaterial.new()
 	var shader := Shader.new()
 	shader.code = """shader_type spatial;
-	uniform vec3 inertia; uniform float motion; uniform float hem_y; uniform vec4 cloth:source_color; varying vec2 rest;
+	uniform vec3 inertia; uniform float motion; uniform float hem_y; uniform vec4 cloth:source_color; uniform sampler2D knit_surface:repeat_enable,filter_linear_mipmap_anisotropic; varying vec2 rest;
 	void vertex(){rest=UV2;
 		float tailoring=(hem_y-.69)*(1.-smoothstep(.69,.96,rest.y));
 		VERTEX.y+=tailoring; rest.y+=tailoring;
@@ -215,10 +196,14 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		float piping=1.-smoothstep(.001,.004,abs(abs(rest.x)-.166));
 		ALBEDO=mix(ALBEDO,cloth.rgb*1.65,piping*.55);
 		float folds=sin(rest.x*84.+rest.y*38.)*hem;
-		NORMAL_MAP=normalize(vec3(folds*.12,.035*hem,1.))*.5+.5;
-		ROUGHNESS=.81+.06*hem;
+		vec3 yarn=texture(knit_surface,UV*28.).rgb;
+		vec2 grain=(yarn.rg-.5)*.32;
+		NORMAL_MAP=normalize(vec3(grain+vec2(folds*.12,.035*hem),1.))*.5+.5;
+		ALBEDO*=.97+.06*yarn.b;
+		ROUGHNESS=.78+.06*hem+.07*(yarn.b-.5);
 	}"""
 	material.shader = shader
+	material.set_shader_parameter("knit_surface",preload("res://assets/gym/training_knit.png"))
 	actor.jersey_materials.append(material)
 	var hem := .69+.019*(variant%7)
 	material.set_shader_parameter("hem_y",hem)
@@ -234,7 +219,7 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 	var source := preload("res://assets/characters/base/Superhero_Male_FullBody.gltf").instantiate()
 	var body: MeshInstance3D = source.find_child("SuperHero_Male",true,false)
 	var legs := MeshInstance3D.new()
-	legs.mesh = tailored_surface(body.mesh,0,true)
+	legs.mesh = tailored_surface(body.mesh,0)
 	legs.skin = outfit.skin
 	rig.add_child(legs)
 	legs.skeleton = legs.get_path_to(rig)
@@ -248,6 +233,12 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 	uniform float knee_height;
 	uniform float sock_top;
 	uniform vec4 pad_color:source_color;
+	varying vec3 anatomy;
+	varying vec2 loads;
+	float contour(vec2 point,vec2 center,vec2 radius){
+		vec2 d=(point-center)/radius;
+		return exp(-dot(d,d));
+	}
 	varying float enabled_side;
 	varying float pad;
 	varying float foam;
@@ -262,11 +253,8 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		foam=pad*smoothstep(.50,.64,COLOR.r)*(1.-smoothstep(.050,.079,abs(k)));
 		sock=1.-smoothstep(sock_top,sock_top+.004,y);
 		VERTEX+=NORMAL*(pad*.005+foam*.018+sock*.002);
-		vec2 q=(vec2(abs(UV2.x),y)-vec2(.115,.63))/vec2(.095,.12);
-		float front=smoothstep(.46,.65,COLOR.r);
-		float plantar=UV2.x>0.?calf_load.x:calf_load.y;
-		float calf=exp(-pow((y-.34)/.095,2.))*(1.-smoothstep(.44,.56,COLOR.r));
-		VERTEX+=NORMAL*(.012*flex*front*exp(-dot(q,q))+.009*plantar*calf);
+		anatomy=vec3(abs(UV2.x),y,COLOR.r);
+		loads=vec2(flex,UV2.x>0.?calf_load.x:calf_load.y);
 	}
 	void fragment(){if(y>hem_y+.02 || y<.045)discard; ALBEDO=texture(skin_map,UV).rgb; NORMAL_MAP=texture(muscles,UV).rgb; NORMAL_MAP_DEPTH=.68; ROUGHNESS=mix(.42,.86,texture(roughness_map,UV).r);
 		float yarn=.5+.5*cos(y*1250.)*(1.-smoothstep(.0007,.003,fwidth(y)));
@@ -276,7 +264,18 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		float panel=.5+.5*cos((y-knee_height)*120.);
 		ALBEDO=mix(ALBEDO,pad_color.rgb*(.74+.12*yarn+.14*panel*foam),pad_mask);
 		float gear=max(pad_mask,sock_mask);
-		NORMAL_MAP_DEPTH=mix(.68,.08,gear);
+		vec2 p=anatomy.xy;
+		float front=smoothstep(.46,.61,anatomy.z);
+		float quad=contour(p,vec2(.077,.555),vec2(.038,.076))+contour(p,vec2(.167,.666),vec2(.042,.135));
+		float ham=contour(p,vec2(.084,.644),vec2(.034,.135))+contour(p,vec2(.172,.657),vec2(.039,.14));
+		float calf=contour(p,vec2(.091,.316),vec2(.037,.081))+contour(p,vec2(.156,.352),vec2(.038,.079));
+		float relief=mix(ham,quad,front)*(.005+.003*loads.x)+calf*(1.-front)*(.006+.003*loads.y);
+		vec3 dx=dFdx(VERTEX), dy=dFdy(VERTEX);
+		vec3 u=cross(dy,NORMAL),v=cross(NORMAL,dx);
+		float determinant=dot(dx,u);
+		vec3 slope=dFdx(relief)*u+dFdy(relief)*v;
+		if(abs(determinant)>1e-10) NORMAL=normalize(NORMAL-(1.-gear)*slope/determinant);
+		NORMAL_MAP_DEPTH=mix(.93,.08,gear);
 		SSS_STRENGTH=.18*(1.-gear);
 		SPECULAR=mix(.36,.22,gear);
 		ROUGHNESS=mix(ROUGHNESS,.88,gear);}"""

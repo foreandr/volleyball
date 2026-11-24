@@ -45,7 +45,7 @@ func setup(rig: Skeleton3D) -> void:
 	previous.resize(anchors.size())
 	offsets.resize(anchors.size())
 
-func update(rig: Skeleton3D,material: ShaderMaterial,delta: float) -> void:
+func update(rig: Skeleton3D,material: ShaderMaterial,delta: float,air: Vector3) -> void:
 	var reset := anchors.is_empty()
 	if reset: setup(rig)
 	reset=reset or last_root.distance_to(rig.global_position)>.6
@@ -74,7 +74,9 @@ func update(rig: Skeleton3D,material: ShaderMaterial,delta: float) -> void:
 			else:
 				var ratio := clampf(dt/last_dt,.25,4.) if step==0 and last_dt>0. else 1.
 				var velocity := (old-previous[i])*ratio*exp(-9.*dt)
-				particles[i]+=velocity+(Vector3.DOWN*9.81+(targets[i]-old)*100.)*dt*dt
+				var radial := (targets[i]-Geometry3D.get_closest_point_to_segment(targets[i],shoulders[i/PER_ARM],elbows[i/PER_ARM])).normalized()
+				var pressure := air*absf(air.dot(radial))*2.4
+				particles[i]+=velocity+(pressure+Vector3.DOWN*9.81+(targets[i]-old)*100.)*dt*dt
 			previous[i]=old
 		for iteration in 4:
 			for j in links.size():

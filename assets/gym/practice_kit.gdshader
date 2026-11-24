@@ -98,6 +98,20 @@ void fragment(){
 		vec3 grain=vec3(.10*knit*fade,.07*weave*fade,1.);
 		NORMAL_MAP=normalize(grain)*.5+.5;
 	}
+	// A raised arm pulls diagonal folds towards the armhole. Loose flank
+	// folds settle lower and trail changes in the direction of travel.
+	float flank=smoothstep(.065,.17,x)*(1.-smoothstep(.22,.34,x));
+	float diagonal=y-1.27-x*.75;
+	float lift=rest.x>0.?arm_lift.x:arm_lift.y;
+	float ridge=sin(diagonal*91.+rest.z*12.);
+	float crease=flank*lift*exp(-diagonal*diagonal/.009)*ridge*.0028;
+	float loose=(1.-smoothstep(1.04,1.32,y))*flank;
+	crease+=loose*.0032*sin(y*58.+x*35.+rest.z*18.+inertia.x*32.);
+	vec3 dx=dFdx(VERTEX),dy=dFdy(VERTEX);
+	vec3 u=cross(dy,NORMAL),v=cross(NORMAL,dx);
+	float det=dot(dx,u);
+	vec3 slope=u*dFdx(crease)+v*dFdy(crease);
+	if(abs(det)>1e-10) NORMAL=normalize(NORMAL-slope/det);
 	float pull=tension_fold(rest);
 	float shoulder=smoothstep(1.34,1.48,y)*smoothstep(.07,.20,x);
 	float fold=sin(x*72.+y*43.+sin(y*21.+phase)*.8);
