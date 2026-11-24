@@ -33,8 +33,13 @@ void fragment(){
 	RIM=.23*UV.y;
 	RIM_TINT=.6;
 	ALBEDO=tone.rgb*(.53+.11*fiber+.36*UV.y)*(.68+.32*COLOR.r);
-	ANISOTROPY=.68;
+	// Individual fibers share a broader highlight once a lock falls below a pixel.
+	float footprint=max(fwidth(UV.x),.35*fwidth(UV.y));
+	float unresolved=smoothstep(.075,.70,footprint);
+	float normal_spread=clamp(dot(dFdx(NORMAL),dFdx(NORMAL))+dot(dFdy(NORMAL),dFdy(NORMAL)),0.,1.);
+	ANISOTROPY=mix(.68,.38,unresolved);
 	ANISOTROPY_FLOW=vec2(1.,0.);
-	ROUGHNESS=.48+.16*UV.y+.06*(1.-COLOR.r);
-	SPECULAR=.45;
+	float rough=.48+.16*UV.y+.06*(1.-COLOR.r);
+	ROUGHNESS=sqrt(min(1.,rough*rough+.24*unresolved+.14*normal_spread));
+	SPECULAR=mix(.45,.31,unresolved);
 }
