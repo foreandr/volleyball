@@ -75,12 +75,19 @@ func _initialize() -> void:
 					var idx := nearest[k]*4+influence
 					var bone: int=ref[Mesh.ARRAY_BONES][idx]
 					blend[bone]=blend.get(bone,0.)+float(ref[Mesh.ARRAY_WEIGHTS][idx])/maxf(gaps[k],.00001)
-			var sleeve_weight := smoothstep(.165,.31,absf(p.x))*smoothstep(1.23,1.34,p.y)
+			# A continuous weight field across the raglan panel keeps adjacent
+			# triangles together when the upper arm rotates overhead.
+			var x := absf(p.x)
+			var upper := 8 if p.x>0. else 32
+			var cap := smoothstep(.12,.215,x)*smoothstep(1.275,1.405,p.y)
+			var collar_share := 1.-smoothstep(.145,.280,x)
+			var arm_share := smoothstep(.145,.27,x)
 			var sum := 0.
 			for id in blend: sum+=float(blend[id])
-			for id in blend: blend[id]*=1.-sleeve_weight
-			var upper := 8 if p.x>0. else 32
-			blend[upper]=blend.get(upper,0.)+sum*sleeve_weight
+			for id in blend: blend[id]*=1.-cap
+			blend[upper]=blend.get(upper,0.)+sum*cap*arm_share
+			blend[upper-1]=blend.get(upper-1,0.)+sum*cap*(1.-arm_share)*collar_share
+			blend[4]=blend.get(4,0.)+sum*cap*(1.-arm_share)*(1.-collar_share)
 			var ids := blend.keys()
 			ids.sort_custom(func(a,b): return blend[a]>blend[b])
 			var total := 0.
