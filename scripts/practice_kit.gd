@@ -641,22 +641,27 @@ static func haircut(scalp: Node3D,color: Color,variant: int,actor: Node3D) -> vo
 		var coiled := style in [2,6]
 		var lift := .10 if style==5 else .28
 		if style==1: lift+=.27*smoothstep(-.45,.42,normal.z)*crown
-		var rows := 9 if coiled else (8 if style==1 else 4)
+		# Neighboring ringlets share a direction, while the pitch changes across the crown.
+		var patch := sin(normal.x*9.+normal.z*6.+variant)
+		var turns := TAU*((1.4 if style==2 else 1.9)+.28*patch)
+		var start_angle := 1.3*sin(normal.z*8.-normal.x*5.+variant)
+		var winding := -1. if patch<-.2 else 1.
+		var rows := 16 if coiled else (8 if style==1 else 4)
 		for row in rows:
 			for uv: Vector2 in [Vector2(0,0),Vector2(1,0),Vector2(0,1),Vector2(1,0),Vector2(1,1),Vector2(0,1)]:
 				var t := (row+uv.y)/float(rows)
 				var curl := sin(t*PI)*length*lift
 				var lateral := 0.
 				if coiled:
-					var twist := t*TAU*(1.4 if style==2 else 1.9)
-					curl=length*(.48*t+.14*(1.-cos(twist)))
-					lateral=length*.18*sin(twist)
+					var twist := start_angle+t*turns
+					curl=length*(.55*t+.12*(cos(start_angle)-cos(twist)))
+					lateral=length*.17*winding*(sin(twist)-sin(start_angle))
 				# Orient the material tangent along the curved lock so reflected
 				# gym lights follow its length, including the turn of a coil.
 				var tangent := sweep
 				if coiled:
-					var turns := TAU*(1.4 if style==2 else 1.9)
-					tangent+=normal*(.48+.14*turns*sin(t*turns))+across*.18*turns*cos(t*turns)
+					var twist := start_angle+t*turns
+					tangent+=normal*(.55+.12*turns*sin(twist))+across*.17*winding*turns*cos(twist)
 				else: tangent+=normal*lift*PI*cos(t*PI)
 				tangent=tangent.normalized()
 				var surface_normal := across.cross(tangent).normalized()
