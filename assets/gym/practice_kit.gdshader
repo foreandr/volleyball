@@ -20,22 +20,27 @@ void vertex(){
 	}
 	if(sleeves){
 		float folds=.0018*sin(rest.x*115.0+rest.z*38.0);
-		VERTEX+=NORMAL*(.009+folds+(jacket ? motion*.013*sin(rest.x*24.-TIME*12.) : 0.));
+		float ease=jacket ? (1.-smoothstep(1.19,1.49,rest.y))*(1.-smoothstep(.2,.32,abs(rest.x))) : 0.;
+		VERTEX+=NORMAL*(.009+folds+.022*ease+(jacket ? motion*(.006+.012*ease)*sin(rest.x*24.+rest.y*15.-TIME*12.) : 0.));
 	}
 }
 void fragment(){
 	float x=abs(rest.x), y=rest.y;
 	if(sleeves){
 		if(jacket){
-			if((x<.185 && y<1.50) || x>.69 || y<.98 || y>1.565 || (x<.069 && y>1.52)) discard;
+			if(x>.69 || y<1.012 || y>1.57 || (x<.072 && y>1.538)) discard;
 		}else if(x>.333 || y<1.15 || y>1.565 || (x<.14 && y<1.48)) discard;
 	}
 	if(!sleeves && !jacket && y<1.045)discard;
 	float side=smoothstep(.142,.154,x);
 	vec3 base=mix(fabric.rgb,trim.rgb,side*.54);
 	if(jacket){
-		float shoulder=smoothstep(1.41,1.42,y);
-		base=mix(vec3(.056,.107,.085),vec3(.064,.117,.094),shoulder);
+
+		float seam_y=1.404+.022*smoothstep(.05,.24,x);
+		float seam=1.-smoothstep(.0008,.0035,abs(y-seam_y));
+		float hem=1.-smoothstep(1.025,1.04,y);
+		base=mix(vec3(.052,.099,.080),vec3(.070,.128,.101),smoothstep(seam_y-.003,seam_y+.003,y));
+		base*=1.-.24*seam-.28*hem;
 		float zipper=(1.-smoothstep(.0015,.003,abs(rest.x)))*step(.065,rest.z);
 		base=mix(base,vec3(.50,.53,.50),zipper);
 	}else{

@@ -7,6 +7,7 @@ const FABRIC := preload("res://assets/gym/practice_kit.gdshader")
 static func tailored_surface(source: ArrayMesh,surface: int,quad_shape := false,jacket := false) -> ArrayMesh:
 	var arrays := source.surface_get_arrays(surface)
 	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var normals: PackedVector3Array=arrays[Mesh.ARRAY_NORMAL]
 	var coords := PackedVector2Array()
 	var depths := PackedColorArray()
 	coords.resize(vertices.size())
@@ -31,9 +32,15 @@ static func tailored_surface(source: ArrayMesh,surface: int,quad_shape := false,
 			var ease := smoothstep(.99,1.10,p.y)*(1.-smoothstep(1.48,1.57,p.y))
 			vertices[i]+=Vector3(arrays[Mesh.ARRAY_NORMAL][i])*(.01+.021*ease)
 			if absf(p.x)<.20: vertices[i].z+=.039*ease*smoothstep(0,.11,p.z)
+		if jacket and surface==0:
+			var panel := (1.-smoothstep(.15,.25,absf(p.x)))*(1.-smoothstep(-.10,-.035,p.z))*smoothstep(.98,1.08,p.y)*(1.-smoothstep(1.45,1.55,p.y))
+			var back := -.186+.048*pow(absf(p.x)/.22,2.)
+			vertices[i].z=lerpf(vertices[i].z,minf(vertices[i].z,back),panel)
+			normals[i]=normals[i].lerp(Vector3(p.x*2.8,.05,-1.).normalized(),panel*.95).normalized()
 		coords[i] = Vector2(p.x,p.y)
 		depths[i] = Color(clampf((p.z+0.3)/0.6,0,1),0,0,1)
 	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_NORMAL]=normals
 	arrays[Mesh.ARRAY_TEX_UV2] = coords
 	arrays[Mesh.ARRAY_COLOR] = depths
 	var shaped := ArrayMesh.new()
@@ -74,7 +81,14 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 		kit.set_shader_parameter("jacket",coach)
 		kit.set_shader_parameter("sleeves",sleeves)
 		var shell := MeshInstance3D.new()
-		shell.mesh = tailored_surface(node.mesh,0,false,coach)
+		if coach and sleeves:
+			# The kit body has cutouts beneath the jersey. Use the intact rigged
+			# torso so the back and sleeve caps share topology and bone weights.
+			var original := preload("res://assets/characters/base/Superhero_Male_FullBody.gltf").instantiate()
+			var torso: MeshInstance3D=original.find_child("SuperHero_Male",true,false)
+			shell.mesh=tailored_surface(torso.mesh,0,false,true)
+			original.free()
+		else: shell.mesh = tailored_surface(node.mesh,0,false,coach)
 		shell.skin = node.skin
 		rig.add_child(shell)
 		shell.skeleton = shell.get_path_to(rig)
@@ -127,7 +141,6 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 		if variant%3==2: compression(rig,"lowerarm_r","hand_r",.061,.042,Color("252e35"))
 
 	reshape_build(rig,coach,variant)
-	if coach: coach_jacket(rig,actor)
 
 # Taper upper arms in bind space, before joints pose them, so bare skin and
 # fabric follow the same silhouette. Leave wrists, ankles and face registered.
@@ -156,72 +169,6 @@ static func reshape_build(rig: Skeleton3D,coach: bool,variant: int) -> void:
 			shaped.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES,arrays,[],{},original.surface_get_format(i))
 			shaped.surface_set_material(i,original.surface_get_material(i))
 		part.mesh=shaped
-
-static func coach_jacket(rig: Skeleton3D,actor: Node3D) -> void:
-	# Jacket sections measured from waistband to collar. The forward waist and
-	# lower belly are wider than the chest. Skin the panels across the spine.
-	var sections := [
-		Vector4(.915,.262,.210,.047),Vector4(.952,.273,.218,.053),
-		Vector4(1.01,.294,.245,.068),Vector4(1.09,.312,.258,.072),
-		Vector4(1.18,.306,.252,.070),Vector4(1.27,.288,.228,.058),
-		Vector4(1.37,.260,.199,.038),Vector4(1.445,.250,.182,.004),
-		Vector4(1.50,.228,.156,-.012),Vector4(1.54,.146,.108,-.010),
-		Vector4(1.56,.083,.083,-.012)]
-	var skin := Skin.new()
-	for bone in ["pelvis","spine_01","spine_02","spine_03"]:
-		var id := rig.find_bone(bone)
-		skin.add_bind(id,rig.get_bone_global_rest(id).affine_inverse())
-	var tool := SurfaceTool.new()
-	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for row in range(sections.size()-1):
-		for col in 48:
-			for corner: Vector2i in [Vector2i(0,0),Vector2i(0,1),Vector2i(1,0),Vector2i(0,1),Vector2i(1,1),Vector2i(1,0)]:
-				var ring: Vector4=sections[row+corner.y]
-				var waist := 1.-smoothstep(1.18,1.48,ring.x)
-				ring.y*=1.-.18*waist
-				ring.z*=1.-.24*waist
-				ring.w*=1.-.40*waist
-				var a := (col+corner.x)*TAU/48.
-				var blend := clampf((ring.x-.99)/.16,0.,2.999)
-				var joint := int(blend)
-				var t := blend-joint
-				tool.set_bones(PackedInt32Array([joint,joint+1,0,0]))
-				tool.set_weights(PackedFloat32Array([1.-t,t,0,0]))
-				tool.set_normal(Vector3(sin(a)/ring.y,lerpf(-.7,1.1,smoothstep(.96,1.27,ring.x)),cos(a)/ring.z).normalized())
-				tool.set_uv(Vector2((col+corner.x)/48.,ring.x))
-				tool.add_vertex(Vector3(ring.y*sin(a),ring.x,ring.w+ring.z*cos(a)))
-	var coat := MeshInstance3D.new()
-	coat.mesh=tool.commit()
-	rig.add_child(coat)
-	coat.skin=skin
-	coat.skeleton=coat.get_path_to(rig)
-	var textile := Shader.new()
-	textile.code="""shader_type spatial;
-	render_mode cull_disabled;
-	uniform float motion;
-	void vertex(){
-		float free_edge=1.-smoothstep(.96,1.47,UV.y);
-		float fold=sin(UV.x*44.+UV.y*7.);
-		VERTEX+=NORMAL*free_edge*(.006*fold+motion*.025*sin(UV.x*32.+UV.y*17.-TIME*12.));
-	}
-	void fragment(){
-		float zipper=1.-smoothstep(.001,.0025,min(UV.x,1.-UV.x));
-		float hem=1.-smoothstep(.955,.967,UV.y);
-		float rib=.5+.5*sin(UV.x*1500.);
-		float weave=sin(UV.x*2400.)*sin(UV.y*2100.);
-		vec3 fabric=mix(vec3(.056,.107,.085),vec3(.03,.055,.047),hem);
-		float front=min(UV.x,1.-UV.x);
-		float pocket=(1.-smoothstep(.002,.006,abs(front-(.154+(UV.y-1.11)*.34))))*smoothstep(1.03,1.045,UV.y)*(1.-smoothstep(1.15,1.16,UV.y));
-		float yoke=1.-smoothstep(.001,.0035,abs(UV.y-(1.417+.025*cos(UV.x*6.283))));
-		vec3 panel=mix(fabric,vec3(.079,.142,.110),smoothstep(1.42,1.45,UV.y));
-		panel=mix(panel,vec3(.029,.045,.041),pocket*.9+yoke*.5);
-		ALBEDO=mix(panel*(1.+.025*weave+.06*hem*rib),vec3(.28,.31,.30),zipper);
-		ROUGHNESS=.87;
-	}"""
-	var material := ShaderMaterial.new()
-	material.shader=textile
-	coat.material_override=material
-	actor.jersey_materials.append(material)
 
 static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: Node3D) -> void:
 	var material := ShaderMaterial.new()

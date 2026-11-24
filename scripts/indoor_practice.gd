@@ -474,6 +474,7 @@ func step_practice(delta: float) -> void:
 				change_feed_phase("feed")
 		"feed":
 			setter.animator.advance(0.0)
+			if demonstration or rotation_drill.turn!=0: face_set(setter,called(),delta)
 			if held>=0: Hands.apply(setter,catch_point,.55)
 			ball.position = coach_motion.toss(coach,clampf((clock-maxf(clock-elapsed,next_release-.30))/.30,0,1))
 			# Measure the athlete who actually arrived, including their rig scale.
@@ -500,7 +501,7 @@ func step_practice(delta: float) -> void:
 				var spot := Vector3(catch_point.x,BASE.y,catch_point.z)
 				var travel := (spot-setter.position).slide(Vector3.UP).length()
 				var remaining := maxf(0.,contact_time-elapsed)
-				if travel>.16 and not jump.active:
+				if rep>=16 and not demonstration and travel>.16 and not jump.active:
 					var hurried := travel>2.35*maxf(0.,remaining-.28)
 					var previous_heading := setter.rotation.y
 					rotation_drill.walk(setter,spot,delta,6.2 if hurried else 2.35)
