@@ -105,6 +105,34 @@ func dress(actor: Node3D) -> void:
 	seam.albedo_color=Color("516859")
 	stitching.material_override=seam
 	hat.add_child(stitching)
+	# Fabric-covered button caps the six panel seams. Embroidered eyelets
+	# follow the local crown tangent so they sit flush on each panel.
+	var button := MeshInstance3D.new()
+	var dome := SphereMesh.new()
+	dome.radius=.009
+	dome.height=.009
+	button.mesh=dome
+	button.position.y=.095
+	button.material_override=cloth
+	hat.add_child(button)
+	var eyelet := TorusMesh.new()
+	eyelet.inner_radius=.0018
+	eyelet.outer_radius=.0038
+	eyelet.rings=16
+	eyelet.ring_segments=6
+	for panel in 6:
+		var angle := (panel+.5)*PI/3.
+		var h := .68
+		var rim := MeshInstance3D.new()
+		rim.mesh=eyelet
+		rim.material_override=seam
+		rim.position=Vector3(.098*cos(h)*sin(angle),.094*sin(h)-.018*cos(h)*(1.-cos(angle)),.119*cos(h)*cos(angle))
+		var tangent := Vector3(.098*cos(angle),-.018*sin(angle),-.119*sin(angle))
+		var uphill := Vector3(-.098*sin(h)*sin(angle),.094*cos(h)+.018*sin(h)*(1.-cos(angle)),-.119*sin(h)*cos(angle))
+		var normal := tangent.cross(uphill).normalized()
+		rim.position+=normal*.0009
+		rim.quaternion=Quaternion(Vector3.UP,normal)
+		hat.add_child(rim)
 	var crest := Label3D.new()
 	crest.text="F"
 	crest.font_size=48
