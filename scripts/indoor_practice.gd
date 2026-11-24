@@ -57,6 +57,8 @@ var timing_note := Label.new()
 var timing_until := 0.0
 const ON_TIME := .065
 const HAND_CUSHION := .18
+var buffered_at := 0.
+var buffered_contact_time := 0.
 var pending_release := false
 var input_hold := 0.0
 var contact_local := Vector3.ZERO
@@ -1055,6 +1057,18 @@ func step_practice(delta: float) -> void:
 				var correction := receive-ball.position
 				var lateral := correction.slide(Vector3.UP).limit_length(.22)
 				ball.position+=(lateral+Vector3.UP*correction.y)*settle
+			# Once the meter accepts a release, guide the last part of the toss
+			# into the moving hand pocket. Sweep that path before awarding contact.
+			var buffered_touch := false
+			if pending_release and not automatic_setter():
+				var receive_point := toss_at(buffered_contact_time)
+				shape_catch_hands()
+				reach_for_toss(1.)
+				Contact.track_hands(setter,receive_point,true,1.,159.,.68)
+				var pads := (Contact.palm(setter,"l")+Contact.palm(setter,"r"))*.5+Vector3.UP*.06
+				var settle := smoothstep(buffered_at,buffered_contact_time,elapsed)
+				ball.position=ball.position.lerp(pads,settle)
+				buffered_touch=elapsed>=buffered_contact_time
 			var incoming := ball.position-previous
 			var obstacle := contacts.sweep(world,contacts.ball_shape,previous,incoming,Contact.GYM|Contact.EQUIPMENT|64|rotation_drill.CART_WALL)
 			if not obstacle.is_empty():
@@ -1077,7 +1091,7 @@ func step_practice(delta: float) -> void:
 				if held>=0: shape_catch_hands(receive_hand_lift(contact_time+cpu_release_delay-RELEASE_ADVANCE))
 				if elapsed>=contact_time+cpu_release_delay-RELEASE_ADVANCE: release(called())
 				return
-			if held>=0:
+			if held>=0 and not pending_release:
 				meter.value = set_fill()*100
 				var lift := receive_hand_lift(contact_time)
 				shape_catch_hands(lift)
@@ -1091,7 +1105,7 @@ func step_practice(delta: float) -> void:
 					drop_velocity=(incoming/maxf(delta,.001)).bounce(normal)*.33
 					trace("head_contact",{})
 					return
-			var collided := false
+			var collided := buffered_touch
 			for side in ["l","r"]:
 				for landmark in ["hand_","index_03_","thumb_03_","middle_02_"]:
 					var bone: String = landmark+side
@@ -1105,18 +1119,6 @@ func step_practice(delta: float) -> void:
 				if closest.distance_to(pocket)<.22:
 					collided=true
 					ball.position=closest
-			# Complete a buffered, reachable set as the toss crosses forehead height.
-			if pending_release and not collided and incoming.y<0.:
-				var receive := extended_receive_point()
-				var catch_y := receive.y-.10
-				if previous.y>=catch_y and ball.position.y<=catch_y:
-					var cross_point := previous.lerp(ball.position,(previous.y-catch_y)/maxf(.001,-incoming.y))
-					if (cross_point-Contact.joint(setter,"Head")).slide(Vector3.UP).length()<=.76:
-						Contact.track_hands(setter,cross_point,true,1.,159.,.68)
-						var palms := (Contact.palm(setter,"l")+Contact.palm(setter,"r"))*.5
-						if palms.distance_to(cross_point)<=.30:
-							collided=true
-							ball.position=palms+Vector3.UP*.06
 			if collided and last_contact<0:
 				contact_local=setter.to_local(ball.position)
 				first_contact = clock
@@ -1305,7 +1307,7 @@ func finish_set() -> void:
 
 func miss(reason: String) -> void:
 	success = false
-	if measured_release: show_timing(set_error)
+	if measured_release and not pending_release and not is_zero_approx(set_error): show_timing(set_error)
 	trace("miss",{"reason":reason})
 	drop_velocity = (forehead_target-source)/forehead_arrival+Vector3.UP*9.81*(forehead_arrival/2.0-elapsed)
 	feedback = reason
@@ -1348,7 +1350,9 @@ func contact_band() -> Vector2:
 	if first_contact<0 and not automatic_setter():
 		if elapsed>contact_time and ball.position.y<extended_receive_point().y-.10: return Vector2.ZERO
 		var arrival := toss_at(contact_time)
-		if (arrival-Contact.joint(setter,"Head")).slide(Vector3.UP).length()>.76: return Vector2.ZERO
+		var head := Contact.joint(setter,"Head")
+		if jump.active: head+=jump.horizontal_velocity()*clampf(contact_time-elapsed,0.,.24)
+		if (arrival-head).slide(Vector3.UP).length()>.76: return Vector2.ZERO
 	var ideal := (clock-meter_start-release_offset())*meter_rate
 	return Vector2(clampf(ideal-(timing_window()+.065)*meter_rate,0.,1.),clampf(ideal+late_contact_limit()*meter_rate,0.,1.))
 
@@ -1370,6 +1374,8 @@ func release(index: int) -> void:
 			miss("Out of reach." if grade_contact==Vector2.ZERO else ("Too early for contact." if raw_offset<0. else "Too late for contact."))
 			return
 		if first_contact < 0 and not automatic_setter():
+			buffered_at=elapsed
+			buffered_contact_time=maxf(contact_time,elapsed+.025)
 			pending_release = true
 			measured_release = true
 			return
