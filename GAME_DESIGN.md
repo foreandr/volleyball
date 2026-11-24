@@ -119,3 +119,4 @@ In Animation Frames, holding a rotation arrow repeats at five degrees per increm
 Setters keep a fixed open-hand pose, use the saved elbow lift during preparation and intercept the ball in front of the forehead. Standing setters load the knees and extend on the push. Saving a frame copy returns to the originating drill scene.
 Setting fingers stay broadly fanned on the lift and descent. Wrists stay back through the 50 ms cushion and 25 ms push, then roll forward only in free flight.
 Each athlete's current stamina percentage scales skill effectiveness linearly. Stamina spending and recovery use the same athlete-owned meter; endurance changes the cost of exertion.
+Forward sets hold the wrists flat for 120 ms after easing out of the loaded grip before the wrists turn toward the target.

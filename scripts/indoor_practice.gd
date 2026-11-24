@@ -824,6 +824,11 @@ func step_practice(delta: float) -> void:
 	setter.animator.advance(delta)
 	setter.skeleton.set_meta("fixed_setting_hands",true)
 	var follow := smoothstep(0.,.060,elapsed)*(1.-smoothstep(.14,.32,elapsed)) if phase=="set" else 0.
+	if phase=="set" and target!=2:
+		# The grip interpolates from 26 degrees back to 23 forward.
+		var flat := 26./49.
+		follow=flat*smoothstep(0.,.045,elapsed)+(1.-flat)*smoothstep(.165,.235,elapsed)
+		follow*=1.-smoothstep(.26,.42,elapsed)
 	setter.skeleton.set_meta("wrist_follow",follow)
 	if not jump.active and not jump_rep():
 		if phase=="pass":
