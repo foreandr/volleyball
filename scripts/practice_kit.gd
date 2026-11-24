@@ -179,8 +179,8 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 	var material := ShaderMaterial.new()
 	var shader := Shader.new()
 	shader.code = """shader_type spatial;
-	uniform vec3 inertia; uniform float motion; uniform float hem_y; uniform vec2 stride; uniform vec4 cloth:source_color; uniform sampler2D knit_surface:repeat_enable,filter_linear_mipmap_anisotropic; varying vec2 rest;
-	void vertex(){rest=UV2;
+	uniform vec3 inertia; uniform float motion; uniform float hem_y; uniform vec2 stride; uniform vec4 accent:source_color; varying float depth; uniform vec4 cloth:source_color; uniform sampler2D knit_surface:repeat_enable,filter_linear_mipmap_anisotropic; varying vec2 rest;
+	void vertex(){rest=UV2; depth=COLOR.r*.6-.3;
 		// Length is tailored in bind space so the cuff rotates with the thigh.
 		float raised=rest.x>0.?stride.x:stride.y;
 		float hem=1.-smoothstep(hem_y,hem_y+.22,rest.y);
@@ -192,10 +192,13 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 	void fragment(){
 
 		float hem=1.-smoothstep(hem_y+.005,hem_y+.009,rest.y);
-		float side=smoothstep(.154,.174,abs(rest.x));
-		ALBEDO=mix(cloth.rgb,cloth.rgb*.74,side);
+		float outer=smoothstep(.12,.17,abs(rest.x));
+		float opening=.028+.034*(1.-smoothstep(hem_y,hem_y+.19,rest.y));
+		float seam=abs(depth+.018)-opening;
+		float panel=outer*(1.-smoothstep(-.002,.002,seam));
+		ALBEDO=mix(cloth.rgb,accent.rgb,panel);
 		ALBEDO=mix(ALBEDO,cloth.rgb*1.55,hem*.75);
-		float piping=1.-smoothstep(.001,.004,abs(abs(rest.x)-.166));
+		float piping=outer*(1.-smoothstep(.001,.003+fwidth(seam),abs(seam)));
 		ALBEDO=mix(ALBEDO,cloth.rgb*1.65,piping*.55);
 		float folds=sin(rest.x*84.+rest.y*38.)*hem;
 		vec3 yarn=texture(knit_surface,UV*28.).rgb;
@@ -210,15 +213,20 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 	var hem := .69+.019*(variant%7)
 	material.set_shader_parameter("hem_y",hem)
 	material.set_shader_parameter("cloth",Color.from_hsv(fmod(.55+.147*variant,1.),.32,.24+.045*(variant%4)))
+	material.set_shader_parameter("accent",[Color("415565"),Color("713e32"),Color("42584c"),Color("555063")][variant%4])
 	var part := MeshInstance3D.new()
 	var template := preload("res://assets/characters/volleyball/practice_shorts.res")
 	var arrays := template.surface_get_arrays(0)
 	var positions: PackedVector3Array=arrays[Mesh.ARRAY_VERTEX]
 	var pattern: PackedVector2Array=arrays[Mesh.ARRAY_TEX_UV2]
+	var depths := PackedColorArray()
+	depths.resize(positions.size())
 	for i in positions.size():
+		depths[i]=Color(clampf((positions[i].z+.3)/.6,0.,1.),0.,0.)
 		var shortening := (hem-.69)*(1.-smoothstep(.69,.96,pattern[i].y))
 		positions[i].y+=shortening
 		pattern[i].y+=shortening
+	arrays[Mesh.ARRAY_COLOR]=depths
 	arrays[Mesh.ARRAY_VERTEX]=positions
 	arrays[Mesh.ARRAY_TEX_UV2]=pattern
 	var tailored := ArrayMesh.new()
