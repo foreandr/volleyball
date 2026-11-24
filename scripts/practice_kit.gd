@@ -421,22 +421,28 @@ static func face_hair(rig: Skeleton3D,body: MeshInstance3D,mesh: ArrayMesh,coach
 	part.skeleton=part.get_path_to(rig)
 	var shader := Shader.new()
 	shader.code="""shader_type spatial;
-	uniform bool gray;
+	uniform bool gray; uniform float temple_recess;
 	uniform vec4 tone:source_color;
 	varying vec3 p;
 	void vertex(){p=vec3(UV2,COLOR.r*.6-.3);VERTEX+=NORMAL*.002;}
 	void fragment(){
 		float grain=fract(sin(dot(floor(p.xy*2100.)+floor(p.z*1900.),vec2(12.9898,78.233)))*43758.54);
 		float line=1.685+.065*smoothstep(-.055,.075,p.z)+.01*abs(sin(p.x*32.));
-		bool scalp=p.y>line+grain*.002;
+		float temple=smoothstep(.035,.077,abs(p.x))*smoothstep(-.008,.058,p.z);
+		line+=temple*temple_recess;
+		float growth=smoothstep(line-.006,line+.010,p.y);
+		bool scalp=growth>grain;
 		float edge=1.632+.020*smoothstep(.04,.078,abs(p.x));
 		bool jaw=gray && p.y>1.555 && p.y<edge+grain*.002 && p.z>.008 && abs(p.x)<.092;
 		if(!scalp && !jaw) discard;
-		ALBEDO=tone.rgb*(.72+.47*grain);ROUGHNESS=.94;
+		float silver=gray ? smoothstep(.53,.9,grain)*.28 : 0.;
+		ALBEDO=mix(tone.rgb,tone.rgb*1.65,silver)*(.72+.47*grain);
+		ROUGHNESS=.94;
 	}"""
 	var mat := ShaderMaterial.new()
 	mat.shader=shader
 	mat.set_shader_parameter("gray",coach)
+	mat.set_shader_parameter("temple_recess",.021 if coach else .003+.013*(.5+.5*sin(variant*2.39996)))
 	mat.set_shader_parameter("tone",Color("929087") if coach else Color.from_hsv(.065+.004*variant,.42,.13+.065*(variant%6)))
 	part.material_override=mat
 
