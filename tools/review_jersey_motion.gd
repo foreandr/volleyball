@@ -70,5 +70,25 @@ func review() -> void:
 			gym.camera.position=head+athlete.global_basis.orthonormalized()*Vector3(.56,.27,.67)
 			gym.camera.look_at(head+Vector3.UP*.09)
 			await capture("hair"+str(frame))
+	gym.set_process(false)
+	gym.set_physics_process(false)
+	var coach=gym.coach
+	var cart=gym.rotation_drill.basket
+	coach.animator.callback_mode_process=AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
+	coach.global_basis=cart.global_basis.orthonormalized().scaled(Vector3.ONE*(coach.height_cm/180.))
+	coach.position=cart.to_global(Vector3(0,0,-.87))
+	var stride := 0.
+	for frame in 48:
+		await process_frame
+		if frame<24:
+			gym.ball.position=gym.coach_motion.toss(coach,float(frame)/23.)
+		else:
+			var step: Vector3=cart.global_basis.z.normalized()*.028
+			cart.position+=step
+			coach.position+=step
+			stride=gym.rotation_drill.push_pose(coach,cart,stride,.028)
+		gym.camera.position=coach.to_global(Vector3(1.9,1.70,2.15))
+		gym.camera.look_at(coach.to_global(Vector3(0,1.19,0)))
+		if frame in [6,20,32,44]: await capture("coach"+str(frame))
 	print("Completed running, overhead setting and huddle captures")
 	quit()

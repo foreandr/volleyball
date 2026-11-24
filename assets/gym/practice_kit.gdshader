@@ -83,7 +83,18 @@ void fragment(){
 		base=mix(vec3(.052,.099,.080),vec3(.070,.128,.101),smoothstep(seam_y-.003,seam_y+.003,y));
 		base*=1.-.24*seam-.28*hem;
 		float zipper=(1.-smoothstep(.0015,.003,abs(rest.x)))*step(.065,rest.z);
-		base=mix(base,vec3(.50,.53,.50),zipper);
+		float front=smoothstep(.015,.075,rest.z);
+		float tape=(1.-smoothstep(.005,.008,abs(rest.x)))*front;
+		base=mix(base,base*.46,tape);
+		float teeth=.62+.28*cos(y*2400.)*(1.-smoothstep(.0005,.002,fwidth(y)));
+		base=mix(base,vec3(.50,.53,.50)*teeth,zipper);
+		// Slanted welt pocket openings sit in the lower front panels.
+		float pocket_x=.103+.39*(y-1.14);
+		float pocket=abs(x-pocket_x);
+		float length_mask=smoothstep(1.085,1.10,y)*(1.-smoothstep(1.235,1.25,y))*front;
+		float welt=(1.-smoothstep(.006,.010,pocket))*length_mask;
+		float opening=(1.-smoothstep(.001,.0035,pocket))*length_mask;
+		base*=1.+.15*welt-.64*opening;
 	}else{
 		// Across the back the raglan seam runs from neckline to underarm.
 		// Use bind coordinates so the seam bends with the panel and printing.
