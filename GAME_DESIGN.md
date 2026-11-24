@@ -146,3 +146,5 @@ Airborne setters transfer 22 percent of horizontal takeoff/carry velocity at con
 All three timing bands appear on target press, including before the toss and while moving into range. Physical reach is evaluated separately at release.
 In player-controlled Setting Camp, hold the right stick to aim along the net between the two pins, then return it to center to time a bump set against the visible release meter. The authored forearm reception platform clip supplies preparation, contact and follow-through. RB selects height. Face buttons supersede the bump selection.
 Andre Foreman's Volleyball uses a rotating home ball and keeps its original save directory. The animation menu opens the shared Setting Camp. Bump sets use directional reception reaches and low-save animations. Player equipment and shorts designs are selected in the creator and preserved in the profile.
+
+Forearm sets preserve the approach shuffle, use reception footwork and low saves to intercept the toss, then carry the planted reach into a directional follow-through. Forearm placement varies with effective skill and fatigue.

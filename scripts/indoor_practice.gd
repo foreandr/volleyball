@@ -66,6 +66,7 @@ var bump_touched := false
 var bump_arrival := 0.
 var bump_offset := 0.
 var bump_follow_start := 0.
+var bump_incoming := Vector3.ZERO
 var reception_pose: Node3D
 var pending_release := false
 var input_hold := 0.0
@@ -945,6 +946,7 @@ func aim_bump(stick: Vector2) -> void:
 		if not bump_armed and not bump_aim.is_zero_approx() and not bump_released:
 			if phase=="pass":
 				bump_offset=release_offset()
+				show_timing(signf(bump_offset)*maxf(0.,absf(bump_offset)-ON_TIME))
 				graded_fill=set_fill()
 				grade_band=timing_band()
 				grade_contact=contact_band()
@@ -968,15 +970,19 @@ func play_bump(previous: Vector3, incoming: Vector3, dt: float) -> void:
 	var offset: Vector3=predicted-reception_pose.ready_contact()
 	var remaining := bump_arrival-elapsed
 	var sampler=reception_pose
-	if not bump_touched and remaining<.38 and sampler.reach.is_empty() and not sampler.low_save.active:
-		if offset.slide(Vector3.UP).length()>1.12:
-			if sampler.low_save.plan(setter,toss_at,elapsed,forehead_arrival+.45,sampler.clip,true,false,false,camp_velocity):
+	var distance := offset.slide(Vector3.UP).length()
+	if not bump_touched and remaining<.5 and sampler.reach.is_empty() and not sampler.low_save.active:
+		var lateral := absf((setter.basis.inverse()*offset).x)
+		if distance<=1.32:
+			sampler.plan_reach(offset,lateral>.8 and lateral>distance*.76)
+		if sampler.reach.is_empty() and distance>.65:
+			if sampler.low_save.plan(setter,toss_at,elapsed,forehead_arrival+.65,sampler.clip,true,false,false,camp_velocity,true):
 				bump_arrival=sampler.low_save.contact_time
+				remaining=bump_arrival-elapsed
 				predicted=toss_at(bump_arrival)
-		else:
-			sampler.plan_reach(offset)
+				energy[setter].spend(energy[setter].DIVE_COST,"Dive")
 	var sample_time: float=sampler.contact_frame+minf(0.,elapsed-bump_arrival)
-	sampler.apply_pose(maxf(0.,sample_time),smoothstep(0.,.18,sample_time))
+	sampler.apply_pose(maxf(0.,sample_time),1.-smoothstep(.17,.52,remaining))
 	if sampler.low_save.active:
 		var before := setter.position
 		sampler.low_save.sample(setter,elapsed,bump_arrival+.07,predicted)
@@ -991,8 +997,8 @@ func play_bump(previous: Vector3, incoming: Vector3, dt: float) -> void:
 		setter.position=rotation_drill.move_actor(setter,travel)
 		sampler.reach_travel+=setter.position-before
 		sampler.pose_reach(smoothstep(0.,1.,sampler.reach_progress),predicted)
-	if remaining<.30:
-		sampler.reach_platform(predicted-sampler.platform_center(),1.-smoothstep(.04,.30,remaining),.48,true,true)
+	if remaining<.30 and not sampler.low_save.active:
+		sampler.reach_platform(predicted-sampler.platform_center(),1.-smoothstep(.04,.30,remaining),.48,true,false)
 	var elbows := [Contact.joint(setter,"lowerarm_l"),Contact.joint(setter,"lowerarm_r")]
 	var wrists := [Contact.joint(setter,"hand_l"),Contact.joint(setter,"hand_r")]
 	var platform: Vector3=preload("res://scripts/forearm_contact.gd").surface(elbows,wrists,.055).ball
@@ -1007,6 +1013,7 @@ func play_bump(previous: Vector3, incoming: Vector3, dt: float) -> void:
 	if not bump_touched:
 		if not bump_released: bump_arrival=elapsed
 		bump_touched=true
+		bump_incoming=incoming/maxf(dt,.001)
 		ball.position=platform
 	if not bump_released:
 		ball.position=platform
@@ -1024,13 +1031,19 @@ func play_bump(previous: Vector3, incoming: Vector3, dt: float) -> void:
 	var intended := desired
 	var error := signf(bump_offset)*maxf(0.,absf(bump_offset)-ON_TIME)
 	desired+=(desired-source).slide(Vector3.UP).normalized()*error*lerpf(5.,2.,setter.effective_rating("Forearm setting")/100.)
+	var accuracy=preload("res://scripts/reception_accuracy.gd")
+	var spread: Vector2=accuracy.spread(clampf(absf(error)/timing_window(),0.,1.),bump_incoming.length(),0.,setter.effective_rating("Forearm setting"),true)
+	desired+=accuracy.sample_set_offset(spread)
 	endpoint=setter.reachable_set(source,desired,false,Vector3.ZERO,flight_time,1.20*(.78 if tempo==1 else 1.))
 	camp_call=target
 	placement_error=endpoint.distance_to(intended)
 	success=placement_error<targets[target].mouth_radius-.10
 	feedback="Bump set   /   Target made" if success else "Bump set   /   Off target"
 	energy[setter].spend(2)
-	trace("bump_set",{"aim":str(bump_aim),"from":str(source),"to":str(endpoint)})
+	sampler.touch=source
+	sampler.touch_time=elapsed
+	sampler.outgoing=(endpoint-source+Vector3.UP*4.*APEX[tempo])/flight_time
+	trace("bump_set",{"release_ms":roundi(bump_offset*1000.),"placement_m":placement_error,"reach":sampler.reach.get("tier",0),"dive":sampler.low_save.active,"aim":str(bump_aim),"from":str(source),"to":str(endpoint)})
 	begin("set")
 	message.text=feedback
 
@@ -1208,7 +1221,11 @@ func step_practice(delta: float) -> void:
 			var obstacle := contacts.sweep(world,contacts.ball_shape,previous,incoming,Contact.GYM|Contact.EQUIPMENT|64|rotation_drill.CART_WALL)
 			if not obstacle.is_empty():
 				ball.position = previous+incoming*float(obstacle.fraction)
-				miss("Toss deflected off the gym equipment.")
+				var floor_hit: bool=obstacle.normal.y>.85 and ball.position.y<.25
+				if floor_hit and not bump_aim.is_zero_approx() and reception_pose:
+					play_bump(previous,incoming,delta)
+					if bump_touched or phase!="pass": return
+				miss("Ball reached the floor outside platform reach." if floor_hit else "Toss deflected off the gym equipment.")
 				drop_velocity = (incoming/maxf(.001,delta)).bounce(obstacle.normal)*.45
 				return
 			if elapsed<0.16: coach_motion.toss(coach,1.0)
@@ -1305,10 +1322,9 @@ func step_practice(delta: float) -> void:
 				begin("between")
 		"set":
 			if not bump_aim.is_zero_approx() and reception_pose:
-				var follow_time: float=reception_pose.contact_frame+elapsed
 				if reception_pose.low_save.active and not reception_pose.low_save.finished(bump_follow_start+elapsed):
 					reception_pose.low_save.sample(setter,bump_follow_start+elapsed,bump_follow_start)
-				elif follow_time<reception_pose.clip.length: reception_pose.apply_pose(follow_time,1.-smoothstep(reception_pose.clip.length-.22,reception_pose.clip.length,follow_time))
+				else: reception_pose.follow_forearm(bump_follow_start+elapsed,bump_incoming)
 			if automatic_setter() and elapsed<=Hands.CPU_FOLLOW_TIME: face_set(setter,target,delta)
 			ball.rotate_x(delta*4.0)
 			var t := clampf(elapsed/flight_time,0,1)

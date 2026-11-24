@@ -47,13 +47,14 @@ static func apply(rig: Skeleton3D, author: RefCounted, outgoing: Vector3, power:
 	var yaw := clampf(atan2(direction.x,maxf(0.35,direction.z))*0.22+impulse.x*0.22,-0.25,0.25)
 	var pitch := clampf((lift-0.60)*0.23+(impulse.y-0.55)*0.15,-0.16,0.16)
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,torso*(0.12*load+lerpf(0.13,-0.21,lift)*drive)-pitch*steer)
-	author.rotate_world(pose,"spine_02",Vector3.UP,yaw*steer*0.42)
-	author.rotate_world(pose,"spine_03",Vector3.UP,yaw*steer*0.58)
+	author.rotate_world(pose,"pelvis",Vector3.UP,yaw*steer*0.20)
+	author.rotate_world(pose,"spine_02",Vector3.UP,yaw*steer*0.32)
+	author.rotate_world(pose,"spine_03",Vector3.UP,yaw*steer*0.48)
 	author.rotate_world(pose,"spine_03",Vector3.BACK,-impulse.x*0.12*steer)
 	var chest: Vector3 = author.point(pose,"spine_03")
 	var sweep := Vector3(clampf(direction.x,-0.55,0.55)*0.14,lerpf(0.09,0.25,lift),lerpf(0.24,0.16,lift))*arms*drive
 	for side in ["l","r"]:
-		if absf(rise)>0.001:
+		if absf(rise)>0.001 or absf(yaw*steer)>0.001:
 			var foot_name: String = "foot_"+side
 			var foot: Transform3D = author.world_pose(original,rig.find_bone(foot_name))
 			var knee_pole: Vector3 = author.point(original,"calf_"+side)-author.point(original,"thigh_"+side)
