@@ -61,3 +61,9 @@ When a request begins with “game notes,” record the idea here for future con
   The progression goal is one athlete with a growing repertoire. Each form of volleyball should offer that athlete a reason to play it.
 
 Indoor practice counts descending rim rebounds that enter the called basket. Early release has 65 ms of additional grace while the ball reaches the hands. Timing percentages are measured against the setter's timing window. Collectors turn and accelerate into new paths, and huddle neighbors can reopen a gap for a late arrival. Gameplay pause opens on Resume, with Options, Restart and Quit below.
+
+## Future setter moves
+
+Setters should be able to tip-set to a teammate with either hand, or send the second ball over the net with a left- or right-handed dump. A jumping setter can choose a soft tip dump or a hard, spike-like attack dump. A full spike approach should also support either a set to a teammate or a hit over the net.
+
+The movement system needs to distinguish a straight-up jump from an approach jump while preserving the choice of what to do with the ball in the air. How players signal the jump type, hand and contact is an open control-design question.
