@@ -262,9 +262,22 @@ func walk(actor: Node3D,goal: Vector3,dt: float,speed: float) -> bool:
 		for cart in bins:
 			if cart and not (actor==runner and cart_route.get("pushing",false)): occupied.append(cart.position)
 		routes.detour(actor,goal,occupied)
+		# A pin aisle can be too narrow for two bodies. Step clear of the
+		# nearest person before following the new path around the cart.
+		var nearest_gap := Vector3.ZERO
+		var clearance := .85
+		for point: Vector3 in occupied:
+			var gap := (actor.position-point).slide(Vector3.UP)
+			if gap.length()>.01 and gap.length()<clearance:
+				nearest_gap=gap.normalized()
+				clearance=gap.length()
+		if not nearest_gap.is_zero_approx():
+			track.escape=actor.position+nearest_gap*.9
+			track.until=game.clock+.45
 		track.since=game.clock
 		track.best=dir.length()
 	var waypoint := routes.waypoint(actor,goal,dt)
+	if game.clock<float(track.get("until",0.)): waypoint=track.escape
 	dir = (waypoint-actor.position).slide(Vector3.UP)
 	actor.rotation.y=lerp_angle(actor.rotation.y,atan2(dir.x,dir.z),minf(1,dt*9))
 	var step := dir.limit_length(speed*dt)
