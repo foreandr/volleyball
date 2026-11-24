@@ -132,6 +132,7 @@ func _ready() -> void:
 	coach.play_action("idle")
 	preload("res://scripts/practice_kit.gd").apply(setter,false)
 	preload("res://scripts/practice_kit.gd").apply(coach,true)
+	setter.set_meta("school_photo",SchoolHeadshots.request(setter.attributes))
 	coach_motion.dress(coach)
 	seat_teammates()
 	for i in PINS.size():
@@ -180,6 +181,14 @@ func reset_drill() -> void:
 func start_drill() -> void:
 	start_practice()
 
+func register_student(actor: Node3D, variant: int) -> void:
+	var names := ["Jordan Reyes","Micah Bell","Noah Park","Eli Chen","Kai Singh","Luca Costa","Sam Rivera","Jules Martin","Rin Ito","Ari Kim","Alex Lewis","Sol Evans","Toby Wright","Casey Lee","Morgan Cole","Jamie Hall","Reese Gray","Dev Patel"]
+	var index := variant - 1 if variant < 20 else variant - 12
+	var values := {"name":names[index],"age":15 + index % 4,"hometown":["Hamilton","Burlington","Toronto","Oshawa","Kingston"][index % 5],"handedness":"Left" if index % 4 == 1 else "Right"}
+	if variant >= 20: values.height_cm = 172 + ((variant - 20) * 7) % 29
+	actor.apply_profile(values)
+	actor.set_meta("school_photo",SchoolHeadshots.request(actor.attributes,variant,actor.team_color))
+
 func seat_teammates() -> void:
 	var seats := [[-1,1,-3.0],[1,0,-1.1],[-1,1,0.9],[1,0,1.4],[-1,2,3.3],[1,1,4.2],[-1,0,5.5],[1,2,6.0],[-1,2,7.8],[1,1,8.0]]
 	for i in seats.size():
@@ -187,6 +196,7 @@ func seat_teammates() -> void:
 		var side := int(seat[0])
 		var row := int(seat[1])
 		var athlete_ := athlete(Vector3(side*(6.8+row*.69),0,float(seat[2])),["245447","a34d31","334357"][i%3])
+		register_student(athlete_,20+i)
 		athlete_.set_height_cm(172+(i*7)%29)
 		preload("res://scripts/practice_kit.gd").apply(athlete_,false,20+i)
 		athlete_.rotation.y = -side*PI/2
@@ -260,11 +270,12 @@ func begin(next: String) -> void:
 	held = -1
 
 func update_prompts(next: String) -> void:
-	var group := next if next in ["intro","complete","ground"] else "practice"
+	var group := "spectate" if rotation_drill.turn == 1 and next not in ["intro","complete"] else next if next in ["intro","complete","ground"] else "practice"
 	if group==prompt_phase: return
 	prompt_phase = group
 	var entries := []
 	match group:
+		"spectate": entries = [[JOY_BUTTON_A,"Hold to skip"]]
 		"intro": entries = [[JOY_BUTTON_A,"Hold to skip"]]
 		"complete": entries = [[JOY_BUTTON_A,"Continue"]]
 		"ground": entries = [[JOY_BUTTON_LEFT_SHOULDER,"Next toss"],[JOY_BUTTON_START,"Settings"]]
@@ -277,9 +288,12 @@ func leave() -> void:
 	MenuPresentation.load_scene("res://scenes/story.tscn")
 
 func start_practice() -> void:
+	rotation_drill.advance_turn()
+	skip_time = 0
 	demonstration = false
 	demo_index = 0
 	reset_feed()
+	if rotation_drill.turn == 1: say(coach, "%s, you're up first." % setter.display_name,4.0)
 
 func jump_rep() -> bool:
 	return demo_index%2==1 if demonstration else rotation_drill.round_index==1
@@ -319,7 +333,11 @@ func reset_feed() -> void:
 			if attempt.setter==rotation_drill.turn and attempt.made: made+=1
 		title.text="ZONE %d   /   %s   /   %d/9 MADE" % [[1,6,5][rotation_drill.round_index],TARGETS[called()],made]
 		if called()==2: message.text = "72   /   Back set"
-	panel.visible=demonstration or rotation_drill.turn==0
+	panel.visible=demonstration or rotation_drill.turn in [0,1]
+	if not demonstration and rotation_drill.turn == 1:
+		title.text = "First setter"
+		message.text = "Hold A to skip to your turn"
+		Xbox.prompts(controls_row,[[JOY_BUTTON_A,"Hold to skip"]])
 	hint.text = ""
 	hint.hide()
 	meter.value = 0
@@ -382,6 +400,8 @@ func select_height(stick: Vector2) -> void:
 func chosen_tempo() -> int:
 	return selected_tempo
 
+var still_seconds := 0.0
+
 func move_setter(delta: float,actor: Node3D=setter,off_ball := false) -> bool:
 	var motion := Vector2(axis(JOY_AXIS_LEFT_X),axis(JOY_AXIS_LEFT_Y))
 	motion += Vector2(int(Input.is_key_pressed(KEY_D))-int(Input.is_key_pressed(KEY_A)),int(Input.is_key_pressed(KEY_S))-int(Input.is_key_pressed(KEY_W)))
@@ -406,7 +426,12 @@ func move_setter(delta: float,actor: Node3D=setter,off_ball := false) -> bool:
 		face_set(actor,choice,delta)
 	elif Vector2(facing.x,facing.z).length()>0.05:
 		actor.rotation.y = rotate_toward(actor.rotation.y,atan2(facing.x,facing.z),delta*(3.33 if focus else 4.5))
-	actor.play_action("base/Idle" if at_net else ("idle" if direction.is_zero_approx() or focus else ("base/Sprint" if sprint else "run")))
+	var resting := direction.is_zero_approx() and not focus and not free_squat.charging and not free_jump.active and choice < 0 and (off_ball or phase == "ground")
+	still_seconds = still_seconds + delta if resting else 0.0
+	if still_seconds >= 3.0:
+		actor.play_action("base/Idle",0.65)
+	else:
+		actor.play_action("base/Idle" if at_net else ("idle" if direction.is_zero_approx() or focus else ("base/Sprint" if sprint else "run")))
 
 	if (at_net or focus) and not direction.is_zero_approx():
 		var local := actor.basis.orthonormalized().inverse()*direction
@@ -420,7 +445,50 @@ func move_setter(delta: float,actor: Node3D=setter,off_ball := false) -> bool:
 var angular_speed := {}
 var focus_headings := {}
 
+var changing_turn := false
+
+func change_setter(skipping: bool) -> void:
+	changing_turn = true
+	skip.hide()
+	var curtain := ColorRect.new()
+	curtain.color = Color.BLACK
+	curtain.modulate.a = 0
+	curtain.z_index = 99
+	add_child(curtain)
+	curtain.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var fade := create_tween()
+	fade.tween_property(curtain,"modulate:a",1.0,0.35)
+	await fade.finished
+	if skipping:
+		var previous := scorecard.duplicate(true)
+		var done := 0
+		for entry in scorecard:
+			if entry.setter == 1: done += 1
+		for i in range(done,9):
+			var made := rotation_drill.random.randf() < 0.6
+			scorecard.append({"setter":1,"target":ORDER[i%3],"station":i/3,"made":made,"error":0.22 if made else 1.65})
+		if not save_scorecard():
+			scorecard.assign(previous)
+			curtain.queue_free()
+			changing_turn = false
+			return
+		rotation_drill.free_ball(Vector3.DOWN)
+	rotation_drill.advance_turn()
+	for i in 3:
+		rotation_drill.roster[i].position = BASE if i == rotation_drill.turn else rotation_drill.WAIT[(i-rotation_drill.turn+3)%3]
+	jump.active = false
+	skip_time = 0
+	camera_lead = Vector3.ZERO
+	prompt_phase = ""
+	reset_feed()
+	fade = create_tween()
+	fade.tween_property(curtain,"modulate:a",0.0,0.45)
+	await fade.finished
+	curtain.queue_free()
+	changing_turn = false
+
 func _process(delta: float) -> void:
+	if changing_turn: return
 	update_speech(delta)
 	score_strip.visible=phase not in ["intro","net_guide"] and not settings.visible and (not demonstration or phase=="complete")
 	if settings.visible or phase=="net_guide": return
@@ -428,6 +496,14 @@ func _process(delta: float) -> void:
 		clock+=delta
 		rotation_drill.huddle(delta)
 		return
+	if rotation_drill.turn == 1 and phase != "intro" and not demonstration:
+		var holding := Input.is_key_pressed(KEY_SPACE) or (pad() >= 0 and Input.is_joy_button_pressed(pad(),Xbox.physical(JOY_BUTTON_A)))
+		skip_time = minf(1,skip_time + delta) if holding else 0.0
+		skip.visible = holding
+		skip.value = skip_time * 100
+		if skip_time >= 1:
+			change_setter(true)
+			return
 	var before := {}
 	for actor in rotation_drill.roster+[coach]+rotation_drill.workers.map(func(w): return w.actor):
 		before[actor]=actor.rotation.y
@@ -515,7 +591,7 @@ func step_practice(delta: float) -> void:
 				next_release = clock+2.0
 				if not demonstration: rotation_drill.tosses+=1
 				source = ball.position
-				toss_curve=[.55,1.35,2.65][rotation_drill.tosses%3]*rotation_drill.random.randf_range(.91,1.09)
+				toss_curve=[1.35,2.65,3.95][rotation_drill.tosses%3]*rotation_drill.random.randf_range(.91,1.09)
 				var apex := maxf(source.y,catch_point.y)+toss_curve
 				contact_time=sqrt(2.*(apex-source.y)/9.81)+sqrt(2.*(apex-catch_point.y)/9.81)
 				toss_spin=Vector3([-8.0,1.4,7.5][rotation_drill.tosses%3],rotation_drill.random.randf_range(-3,3),rotation_drill.random.randf_range(-2,2))
@@ -638,6 +714,12 @@ func step_practice(delta: float) -> void:
 				show_attempt_feedback(rotation_drill.turn,success)
 				if scorecard.size()>=27:
 					complete()
+					return
+				var current_count := 0
+				for attempt in scorecard:
+					if attempt.setter == rotation_drill.turn: current_count += 1
+				if current_count == 9:
+					change_setter(false)
 					return
 				rotation_drill.advance_turn()
 				reset_feed()
@@ -767,19 +849,8 @@ func head_position(actor: Node3D) -> Vector3:
 	return rig.to_global(rig.get_bone_global_pose(rig.find_bone("Head")).origin)
 
 func portrait(actor: Node3D) -> TextureRect:
-	var viewport := SubViewport.new()
-	viewport.size = Vector2i(96, 96)
-	viewport.world_3d = world.get_world_3d()
-	viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
-	add_child(viewport)
-	var lens := Camera3D.new()
-	viewport.add_child(lens)
-	var face := head_position(actor) + Vector3.UP * 0.07
-	lens.position = face + actor.global_basis.z.normalized() * 0.72
-	lens.look_at(face)
-	lens.fov = 41
 	var photo := TextureRect.new()
-	photo.texture = viewport.get_texture()
+	photo.texture = actor.get_meta("school_photo")
 	photo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	photo.custom_minimum_size = Vector2(50, 50)
 	photo.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
@@ -837,6 +908,7 @@ func build_score_strip() -> void:
 		nameplate.text = actor.display_name
 		nameplate.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		stack.add_child(nameplate)
+		card.tooltip_text = "%s / Age %d / %s / %s-handed" % [actor.display_name,actor.attributes.age,actor.attributes.hometown,actor.handedness]
 		stack.add_child(label)
 		score_labels.append(label)
 	add_child(score_cue)
@@ -916,6 +988,7 @@ func _exit_tree() -> void:
 	coach_motion.dispose()
 
 func _input(event: InputEvent) -> void:
+	if changing_turn: return
 	if phase=="net_guide": return
 	if event is InputEventKey and event.echo: return
 	if get_tree().paused: return
@@ -943,6 +1016,7 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 	if rotation_drill.turn!=0 and not demonstration:
+		if rotation_drill.turn == 1 and ((event is InputEventJoypadButton and event.button_index == Xbox.physical(JOY_BUTTON_A)) or (event is InputEventKey and event.keycode == KEY_SPACE)): return
 		free_input(event)
 		return
 	if demonstration:

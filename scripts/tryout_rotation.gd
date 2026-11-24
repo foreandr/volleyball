@@ -46,22 +46,14 @@ func configure(host: Control) -> void:
 	random.randomize()
 	roster.append(game.setter)
 	for i in [1,2]: roster.append(game.athlete(WAIT[i],["","377f95","93543a"][i]))
-	roster[1].display_name="Jordan Reyes"
-	roster[2].display_name="Micah Bell"
+	for i in [1,2]: game.register_student(roster[i],i)
 	for i in [1,2]: preload("res://scripts/practice_kit.gd").apply(roster[i],false,i)
+	for actor in roster: key_upright_idle(actor)
 	for i in HOME.size():
 		var actor: Node3D = game.athlete(HOME[i],"395b48")
+		game.register_student(actor,i+3)
 		preload("res://scripts/practice_kit.gd").apply(actor,false,i+3)
-		# The imported idle and walk clips omit spine_01. Key its neutral
-		# rotation so procedural pickup and net-duck poses can blend out.
-		for clip_name in ["base/Idle","base/Walk",actor.animation_slots.get("run","run")]:
-			if not actor.animator.has_animation(clip_name): continue
-			var clip: Animation=actor.animator.get_animation(clip_name)
-			var bone := NodePath("Armature/Skeleton3D:spine_01")
-			if clip.find_track(bone,Animation.TYPE_ROTATION_3D)>=0: continue
-			var track := clip.add_track(Animation.TYPE_ROTATION_3D)
-			clip.track_set_path(track,bone)
-			clip.rotation_track_insert_key(track,0.,actor.skeleton.get_bone_rest(actor.skeleton.find_bone("spine_01")).basis.get_rotation_quaternion())
+		key_upright_idle(actor)
 		workers.append({"actor":actor,"cargo":[],"goal":null,"lifting":0.0,"start":Vector3.ZERO})
 	runner=workers[5].actor
 	basket = Node3D.new()
@@ -166,6 +158,18 @@ func free_stock_slot() -> int:
 
 func cart_slot(cart: Node3D,slot: int) -> Vector3:
 	return cart.to_global(Vector3((slot%5-2)*.211,.703+.212*(slot/15),((slot/5)%3-1)*.214))
+
+func key_upright_idle(actor: Node3D) -> void:
+	# The imported idle and walk clips omit spine_01. Key its neutral
+	# rotation so procedural pickup and net-duck poses can blend out.
+	for clip_name in ["base/Idle","base/Walk",actor.animation_slots.get("run","run")]:
+		if not actor.animator.has_animation(clip_name): continue
+		var clip: Animation=actor.animator.get_animation(clip_name)
+		var bone := NodePath("Armature/Skeleton3D:spine_01")
+		if clip.find_track(bone,Animation.TYPE_ROTATION_3D)>=0: continue
+		var track := clip.add_track(Animation.TYPE_ROTATION_3D)
+		clip.track_set_path(track,bone)
+		clip.rotation_track_insert_key(track,0.,actor.skeleton.get_bone_rest(actor.skeleton.find_bone("spine_01")).basis.get_rotation_quaternion())
 
 func station_ready(dt: float) -> bool:
 	var requested := mini(round_index,2)
@@ -283,21 +287,27 @@ func free_ball(velocity: Vector3) -> void:
 	game.ball.hide()
 
 func advance_turn() -> void:
-	attempts += 1
-	if attempts==3:
-		attempts=0
-		turn=(turn+1)%3
-		manual_wait=false
-		if turn==0:
+	var previous := turn
+	for candidate in [1,0,2]:
+		var count := 0
+		for entry in game.scorecard:
+			if entry.setter == candidate: count += 1
+		if count < 9:
+			turn = candidate
+			round_index = count / 3
+			attempts = count % 3
+			break
+	if previous != turn:
+		manual_wait = false
+		if turn == 0:
 			unloading.erase(roster[0])
 			game.end_free_motion()
-			round_index+=1
 			for body in human_cargo:
-				body.freeze=false
-				body.collision_layer=128
+				body.freeze = false
+				body.collision_layer = 128
 				loose.append(body)
 			human_cargo.clear()
-	game.setter=roster[turn]
+	game.setter = roster[turn]
 
 var walking_progress := {}
 
@@ -829,6 +839,41 @@ var pointing_poses: Array[Dictionary]=[]
 var look_angles: Array[float]=[]
 var shoulder_trim := {}
 var elbow_adjustments := {}
+var approach_reached := {}
+var settled_positions := {}
+var huddle_velocity := {}
+
+func huddle_walk(actor: Node3D, goal: Vector3, dt: float) -> void:
+	var dir := (goal - actor.position).slide(Vector3.UP)
+	if dir.length() < 0.05: return
+	var occupied := []
+	var blocked := false
+	for other in circle:
+		if other == actor: continue
+		var offset: Vector3 = other.position - actor.position
+		occupied.append(other.position)
+		var ahead := offset.dot(dir.normalized())
+		if ahead > 0 and ahead < minf(1.6,dir.length()) and (offset - dir.normalized()*ahead).length() < 0.8: blocked = true
+	for cart in bins + [basket]: occupied.append(cart.position)
+	if not routes.paths.has(actor):
+		if blocked: routes.detour(actor,goal,occupied)
+		else: routes.reroute(actor,goal)
+	var waypoint := routes.waypoint(actor,goal,dt)
+	var toward := (waypoint - actor.position).slide(Vector3.UP)
+	var heading := atan2(toward.x,toward.z)
+	actor.rotation.y = rotate_toward(actor.rotation.y,heading,2.25*dt)
+	var speed := minf(2.35,dir.length()*2.8) * maxf(0.0,cos(angle_difference(actor.rotation.y,heading)))
+	var velocity: Vector3 = huddle_velocity.get(actor,Vector3.ZERO)
+	velocity = velocity.move_toward(Vector3(sin(actor.rotation.y),0,cos(actor.rotation.y))*speed,3.8*dt)
+	var start := actor.position
+	var next := move_actor(actor,velocity*dt)
+	var allowed := velocity.move_toward((next-start)/maxf(dt,0.001),4.0*dt)
+	if (next-start).dot(allowed) > 0:
+		actor.position += allowed.limit_length((next-start).length()/maxf(dt,0.001))*dt
+	huddle_velocity[actor] = (actor.position-start)/maxf(dt,0.001)
+	if speed > 0.4 and actor.position.distance_to(start)<dt*0.25: routes.paths.erase(actor)
+	actor.play_action("base/Walk" if huddle_velocity[actor].length()>0.15 else "base/Idle")
+
 
 func huddle(dt: float) -> void:
 	if huddle_planted:
@@ -838,6 +883,16 @@ func huddle(dt: float) -> void:
 	if circle.is_empty():
 		circle=roster+workers.map(func(w): return w.actor)+[game.coach]
 		circle.sort_custom(func(a,b): return huddle_angle(a)<huddle_angle(b))
+		# Preserve neighboring order, choosing the offset with the least travel.
+		var ordered := circle.duplicate()
+		var best := INF
+		for offset in circle.size():
+			var cost := 0.0
+			for j in circle.size():
+				cost += absf(angle_difference(huddle_angle(ordered[(j+offset)%circle.size()]),TAU*j/circle.size()-PI))
+			if cost < best:
+				best = cost
+				for j in circle.size(): circle[j] = ordered[(j+offset)%circle.size()]
 	# Read the previous displayed pose before the idle clips are advanced.
 	for actor: Node3D in shoulder_trim:
 		var entry: Dictionary=shoulder_trim[actor]
@@ -864,12 +919,21 @@ func huddle(dt: float) -> void:
 			continue
 		actor.animator.advance(dt)
 		var angle := TAU*i/circle.size()-PI
-		var spot := HUDDLE_CENTER+Vector3(sin(angle),0,cos(angle))*1.02
-		if actor.position.distance_to(spot)>.13:
-			walk(actor,spot,dt,3.1)
-			continue
-		actor.position=actor.position.move_toward(spot,dt*.42)
-		if actor.position.distance_to(spot)<.004: present+=1
+		var radial := Vector3(sin(angle),0,cos(angle))
+		var spot := HUDDLE_CENTER + radial*1.17
+		var outer := HUDDLE_CENTER + radial*1.95
+		if not approach_reached.has(actor):
+			if actor.position.distance_to(outer) > 0.35 and actor.position.distance_to(spot) > 0.55:
+				huddle_walk(actor,outer,dt)
+				continue
+			approach_reached[actor] = true
+			routes.paths.erase(actor)
+		if not settled_positions.has(actor):
+			if actor.position.distance_to(spot) > 0.22:
+				huddle_walk(actor,spot,dt)
+				continue
+			settled_positions[actor] = actor.position
+		present += 1
 		actor.play_action("base/Idle")
 		var inward := HUDDLE_CENTER-actor.position
 		actor.rotation.y=rotate_toward(actor.rotation.y,atan2(inward.x,inward.z),dt*2.)
@@ -904,6 +968,7 @@ func huddle(dt: float) -> void:
 			var sign_: float=1. if side=="l" else -1.
 			var arm := "upperarm_"+str(side)
 			var adjacent: Node3D=circle[posmod(i+(1 if side=="r" else -1),circle.size())]
+			if not settled_positions.has(adjacent) or not settled_positions.has(actor): continue
 			var distance := actor.position.distance_to(adjacent.position)
 			var weight := 1.-smoothstep(.77,1.02,distance)
 			var upper := i%2==0
@@ -925,6 +990,12 @@ func huddle(dt: float) -> void:
 			if actor!=game.coach:
 				aim=adjacent.dressed_surface.contact(aim,Vector3.UP if upper else back)
 				if upper: shoulder_normal=Vector3.UP.slerp(adjacent.dressed_surface.hit_normal,.68)
+			if actor != game.coach:
+				var reach := Contact.joint(actor,arm)
+				var elbow_at := Contact.joint(actor,"lowerarm_"+str(side))
+				var hand_at := Contact.joint(actor,"hand_"+str(side))
+				var length := reach.distance_to(elbow_at) + elbow_at.distance_to(hand_at)
+				if reach.distance_to(aim) > length*0.9 or aim.y > reach.y + 0.12: continue
 			var pole := Vector3(sign_*.75,.18 if upper else -.65,-.85)
 
 			if actor==game.coach:

@@ -14,6 +14,18 @@ var paused_before := false
 
 func _ready() -> void:
 	data.load(store_path)
+	if data.has_section("athletes"):
+		var changed := false
+		for id in data.get_section_keys("athletes"):
+			var saved: Dictionary = data.get_value("athletes",id)
+			var clean := Profile.clean(saved)
+			for field in ["age","hometown","handedness","name"]:
+				if not saved.has(field):
+					saved[field] = clean[field]
+					changed = true
+			data.set_value("athletes",id,saved)
+			SchoolHeadshots.request(saved)
+		if changed: persist()
 	athlete_id = data.get_value("selection","athlete","")
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	prompt.title = "Career console"
@@ -71,6 +83,7 @@ func create_athlete(values: Dictionary) -> bool:
 	if spent(values)>100 or str(values.name).strip_edges().is_empty(): return false
 	var id := Crypto.new().generate_random_bytes(12).hex_encode()
 	data.set_value("athletes",id,Profile.clean(values))
+	SchoolHeadshots.request(values)
 	athlete_id = id
 	select(id)
 	return checkpoint("origin",0)

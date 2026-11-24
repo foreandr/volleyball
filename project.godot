@@ -21,6 +21,7 @@ environment/ssil/quality=4
 renderer/rendering_method.mobile="gl_compatibility"
 
 [autoload]
+SchoolHeadshots="*res://scripts/school_headshots.gd"
 StorySession="*res://scripts/story_session.gd"
 MenuPresentation="*res://scripts/menu_presentation.gd"
 CareerSession="*res://scripts/career_session.gd"

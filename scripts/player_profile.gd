@@ -8,6 +8,8 @@ const RATINGS := ["Forearm reception", "Forearm setting", "Forearm defense", "Ha
 
 static func generate() -> Dictionary:
 	var values := {"name":"%s %s" % [["Kai","Maya","Noor","Luca","Sam","Imani","Rin","Alex","Jules","Ari","Leah","Sol"].pick_random(), ["Reyes","Park","Diallo","Costa","Singh","Chen","Silva","Ito","Martin","Aziz","Kim","Rivera"].pick_random()], "height_cm":randf_range(152.4,213.36), "vertical_in":randi_range(30,60), "wingspan_in":randi_range(58,90), "handedness":["Right","Left"].pick_random()}
+	values.age = randi_range(14,18)
+	values.hometown = ["Hamilton","Burlington","Toronto","Oshawa","Kingston"].pick_random()
 	for rating in RATINGS:
 		values[rating] = randi_range(20,99)
 	for key in KIT_CHOICES: values[key]=KIT_CHOICES[key].pick_random()
@@ -23,6 +25,9 @@ static func load_profile() -> Dictionary:
 
 static func clean(profile: Dictionary) -> Dictionary:
 	var result := {"name":str(profile.get("name",DEFAULTS.name)).strip_edges().left(32),"height_cm":clampf(float(profile.get("height_cm",DEFAULTS.height_cm)),152.4,213.36),"handedness":"Left" if profile.get("handedness","Right") == "Left" else "Right"}
+	result.age = clampi(int(profile.get("age",16)),14,18)
+	result.hometown = str(profile.get("hometown","Riverside")).strip_edges().left(64)
+	if result.hometown.is_empty(): result.hometown = "Riverside"
 	for key in KIT_CHOICES:
 		var choice=profile.get(key,KIT_CHOICES[key][0])
 		result[key]=choice if choice in KIT_CHOICES[key] else KIT_CHOICES[key][0]

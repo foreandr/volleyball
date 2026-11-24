@@ -147,6 +147,13 @@ func build_controls(controls: VBoxContainer) -> void:
 	name_field.text_changed.connect(func(value): profile.name = value; update_profile())
 	controls.add_child(name_field)
 	profile = Profile.clean(profile)
+	add_attribute(controls,"Age","age",14,18,profile.age)
+	controls.add_child(label("Hometown",18))
+	var town := LineEdit.new()
+	town.text = profile.hometown
+	town.max_length = 64
+	town.text_changed.connect(func(value): profile.hometown = value)
+	controls.add_child(town)
 	add_attribute(controls,"Height (inches)","height_cm",60,84,profile.height_cm / 2.54)
 	add_attribute(controls,"Vertical jump (inches)","vertical_in",30,60,profile.vertical_in)
 	add_attribute(controls,"Wingspan (inches)","wingspan_in",48,96,profile.wingspan_in)
@@ -205,6 +212,7 @@ func add_attribute(parent: VBoxContainer, caption: String, key: String, minimum:
 func save_player() -> void:
 	profile.name = name_field.text
 	profile.handedness = "Left" if hand_field.selected == 1 else "Right"
+	SchoolHeadshots.request(profile)
 	if CareerSession.creating:
 		if CareerSession.create_athlete(profile):
 			CareerSession.enter_origin = true
