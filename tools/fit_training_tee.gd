@@ -7,7 +7,14 @@ func fit(p: Vector3) -> Vector3:
 	# Open the source A-pose sleeves into the volleyball rig's T-pose.
 	var sleeve := smoothstep(1.40,2.08,absf(p.x))*smoothstep(4.45,4.92,p.y)
 	var x := p.x*.127+signf(p.x)*sleeve*(.119+(6.15-p.y)*.032)
-	return Vector3(x,.800+p.y*.114+sleeve*.084,(p.z-.26)*.119-.018)
+	var fitted := Vector3(x,.800+p.y*.114+sleeve*.084,(p.z-.26)*.119-.018)
+	# Take in the upper sleeve around its centerline, graduating the
+	# alteration through the armhole to preserve the shoulder seam.
+	var taper := smoothstep(.145,.34,absf(x))*smoothstep(1.24,1.36,fitted.y)
+	fitted.y=lerpf(fitted.y,1.48,taper*.22)
+	fitted.z=lerpf(fitted.z,-.035,taper*.19)
+	fitted.x-=signf(x)*.023*smoothstep(.23,.38,absf(x))
+	return fitted
 
 func _initialize() -> void:
 	var ref := REFERENCE.surface_get_arrays(0)
@@ -62,7 +69,7 @@ func _initialize() -> void:
 					var idx := nearest[k]*4+influence
 					var bone: int=ref[Mesh.ARRAY_BONES][idx]
 					blend[bone]=blend.get(bone,0.)+float(ref[Mesh.ARRAY_WEIGHTS][idx])/maxf(gaps[k],.00001)
-			var sleeve_weight := smoothstep(.195,.31,absf(p.x))*smoothstep(1.32,1.39,p.y)
+			var sleeve_weight := smoothstep(.17,.335,absf(p.x))*smoothstep(1.32,1.39,p.y)
 			var sum := 0.
 			for id in blend: sum+=float(blend[id])
 			for id in blend: blend[id]*=1.-sleeve_weight

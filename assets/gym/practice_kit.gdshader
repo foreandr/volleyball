@@ -10,7 +10,7 @@ uniform vec2 arm_lift;
 uniform sampler2D knit_surface : repeat_enable,filter_linear_mipmap_anisotropic;
 uniform vec3 sleeve_offset[60];
 vec3 sleeve_motion(vec3 bind){
-	float ring=clamp((abs(bind.x)-.205)/.082,0.,1.999);
+	float ring=clamp((abs(bind.x)-.195)/.078,0.,1.999);
 	int row=int(floor(ring));
 	float phase_angle=fract(atan(bind.z+.035,bind.y-1.48)/6.2831853+1.)*10.;
 	int j=int(floor(phase_angle))%10;
@@ -43,7 +43,7 @@ void vertex(){
 		float wave=sin(angle*4.+rest.y*12.-TIME*10.+phase);
 		float ripple=sin(angle*7.-TIME*15.+phase*.7);
 		float drape=mix(.016,.012,arm)+.014*pleat+motion*(.023+.044*wave+.013*ripple);
-		VERTEX+=NORMAL*(free_edge*drape*(1.-arm)+.006*tension_fold(rest))+sleeve_motion(rest);
+		VERTEX+=NORMAL*(free_edge*drape*(1.-arm)+.0035*tension_fold(rest))+sleeve_motion(rest);
 		{
 			VERTEX.y+=(1.-arm)*free_edge*(-.018+motion*(.023*wave+.012*ripple));
 		}

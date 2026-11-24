@@ -14,13 +14,15 @@ static func tailored_surface(source: ArrayMesh,surface: int,quad_shape := false,
 	depths.resize(vertices.size())
 	for i in vertices.size():
 		var p := vertices[i]
-		if quad_shape and p.y>.48 and p.y<.95:
-			# Medial teardrop above the knee and the longer lateral sweep of the quad.
-			var medial := Vector2((absf(p.x)-.077)/.047,(p.y-.555)/.079)
-			var lateral := Vector2((absf(p.x)-.168)/.058,(p.y-.68)/.14)
-			var front := smoothstep(-.012,.064,p.z)
-			var lift := front*(.012*exp(-medial.length_squared())+.015*exp(-lateral.length_squared()))
-			vertices[i]+=Vector3(arrays[Mesh.ARRAY_NORMAL][i])*lift
+		if quad_shape and p.y>.13 and p.y<.95:
+			var lift := leg_relief(p)
+			var h := .001
+			var gradient := Vector3(
+				leg_relief(p+Vector3.RIGHT*h)-leg_relief(p-Vector3.RIGHT*h),
+				leg_relief(p+Vector3.UP*h)-leg_relief(p-Vector3.UP*h),
+				leg_relief(p+Vector3.BACK*h)-leg_relief(p-Vector3.BACK*h))/(2.*h)
+			vertices[i]+=normals[i]*lift
+			normals[i]=(normals[i]-gradient.slide(normals[i])).normalized()
 		if jacket:
 			# A rounded lower abdomen and fuller flanks continue into the trouser waist.
 			var belly := exp(-pow((p.y-1.075)/.205,2.))*smoothstep(.31,.18,absf(p.x))
@@ -46,6 +48,16 @@ static func tailored_surface(source: ArrayMesh,surface: int,quad_shape := false,
 	var shaped := ArrayMesh.new()
 	shaped.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES,arrays,[],{},source.surface_get_format(surface)&Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS)
 	return shaped
+
+static func leg_relief(p: Vector3) -> float:
+	var x := absf(p.x)
+	var medial := Vector2((x-.077)/.047,(p.y-.555)/.079)
+	var lateral := Vector2((x-.168)/.058,(p.y-.68)/.14)
+	var front := smoothstep(-.012,.064,p.z)
+	var inside_calf := Vector2((x-.092)/.054,(p.y-.327)/.091)
+	var outside_calf := Vector2((x-.174)/.052,(p.y-.35)/.083)
+	var rear := 1.-smoothstep(-.035,.032,p.z)
+	return front*(.014*exp(-medial.length_squared())+.017*exp(-lateral.length_squared()))+rear*(.014*exp(-inside_calf.length_squared())+.011*exp(-outside_calf.length_squared()))
 
 static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 	var rig: Skeleton3D = actor.skeleton
@@ -231,6 +243,7 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 	cut.code = """shader_type spatial;
 	uniform sampler2D muscles:hint_normal; uniform sampler2D roughness_map; uniform float hem_y; uniform sampler2D skin_map:source_color; varying float y;
 	uniform vec2 knee_flex;
+	uniform vec2 calf_load;
 	uniform vec2 padded;
 	uniform float knee_height;
 	uniform float sock_top;
@@ -251,16 +264,22 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		VERTEX+=NORMAL*(pad*.005+foam*.018+sock*.002);
 		vec2 q=(vec2(abs(UV2.x),y)-vec2(.115,.63))/vec2(.095,.12);
 		float front=smoothstep(.46,.65,COLOR.r);
-		VERTEX+=NORMAL*.012*flex*front*exp(-dot(q,q));
+		float plantar=UV2.x>0.?calf_load.x:calf_load.y;
+		float calf=exp(-pow((y-.34)/.095,2.))*(1.-smoothstep(.44,.56,COLOR.r));
+		VERTEX+=NORMAL*(.012*flex*front*exp(-dot(q,q))+.009*plantar*calf);
 	}
-	void fragment(){if(y>hem_y+.02 || y<.045)discard; ALBEDO=texture(skin_map,UV).rgb; NORMAL_MAP=texture(muscles,UV).rgb; NORMAL_MAP_DEPTH=.30; ROUGHNESS=mix(.42,.86,texture(roughness_map,UV).r);
+	void fragment(){if(y>hem_y+.02 || y<.045)discard; ALBEDO=texture(skin_map,UV).rgb; NORMAL_MAP=texture(muscles,UV).rgb; NORMAL_MAP_DEPTH=.68; ROUGHNESS=mix(.42,.86,texture(roughness_map,UV).r);
 		float yarn=.5+.5*cos(y*1250.)*(1.-smoothstep(.0007,.003,fwidth(y)));
 		float sock_mask=1.-smoothstep(sock_top,sock_top+.003,y);
 		float pad_mask=enabled_side*(1.-smoothstep(.087,.091,abs(y-knee_height)));
 		ALBEDO=mix(ALBEDO,vec3(.68,.69,.66)*(.88+.12*yarn),sock_mask);
 		float panel=.5+.5*cos((y-knee_height)*120.);
 		ALBEDO=mix(ALBEDO,pad_color.rgb*(.74+.12*yarn+.14*panel*foam),pad_mask);
-		ROUGHNESS=mix(ROUGHNESS,.88,max(pad,sock));}"""
+		float gear=max(pad_mask,sock_mask);
+		NORMAL_MAP_DEPTH=mix(.68,.08,gear);
+		SSS_STRENGTH=.18*(1.-gear);
+		SPECULAR=mix(.36,.22,gear);
+		ROUGHNESS=mix(ROUGHNESS,.88,gear);}"""
 	skin.shader = cut
 	var both := variant>=20 or variant==0 or variant%4==1
 	skin.set_shader_parameter("padded",Vector2(float(both or variant%4==2),float(both or variant%4==3)))

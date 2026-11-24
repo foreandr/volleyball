@@ -28,11 +28,11 @@ func setup(rig: Skeleton3D) -> void:
 		var start := rig.get_bone_global_rest(upper[side]).origin
 		var end := rig.get_bone_global_rest(lower[side]).origin
 		for row in 3:
-			var x := sign_*(.205+.082*row)
+			var x := sign_*(.195+.078*row)
 			var center := start.lerp(end,clampf((x-start.x)/(end.x-start.x),0.,1.))
 			for j in AROUND:
 				var angle := TAU*j/AROUND
-				anchors.append(Vector3(x,center.y+.084*cos(angle),center.z+.084*sin(angle)))
+				anchors.append(Vector3(x,center.y+.076*cos(angle),center.z+.076*sin(angle)))
 		for row in 3:
 			for j in AROUND:
 				var a := side*PER_ARM+row*AROUND+j
@@ -95,5 +95,5 @@ func update(rig: Skeleton3D,material: ShaderMaterial,delta: float) -> void:
 	last_dt=dt
 	var inverse := rig.global_basis.inverse()
 	for i in particles.size():
-		offsets[i]=inverse*((particles[i]-targets[i]).limit_length(.045))
+		offsets[i]=inverse*((particles[i]-targets[i]).limit_length(.034))
 	material.set_shader_parameter("sleeve_offset",offsets)

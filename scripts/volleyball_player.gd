@@ -209,12 +209,22 @@ func _process(dt: float) -> void:
 		shirt_fabric.set_shader_parameter("arm_lift",tension)
 	if leg_skin:
 		var flex := Vector2.ZERO
+		var calf_load := Vector2.ZERO
 		for i in 2:
 			var side: String=["l","r"][i]
 			var hip := skeleton.get_bone_global_pose(skeleton.find_bone("thigh_"+side)).origin
 			var knee := skeleton.get_bone_global_pose(skeleton.find_bone("calf_"+side)).origin
 			var ankle := skeleton.get_bone_global_pose(skeleton.find_bone("foot_"+side)).origin
 			flex[i]=smoothstep(.12,1.65,(knee-hip).angle_to(ankle-knee))
+			var toe_id := skeleton.find_bone("ball_"+side)
+			if toe_id>=0:
+				var toe := skeleton.get_bone_global_pose(toe_id).origin
+				var rest_shin := skeleton.get_bone_global_rest(skeleton.find_bone("calf_"+side)).origin
+				var rest_ankle := skeleton.get_bone_global_rest(skeleton.find_bone("foot_"+side)).origin
+				var rest_toe := skeleton.get_bone_global_rest(toe_id).origin
+				var neutral := (rest_shin-rest_ankle).angle_to(rest_toe-rest_ankle)
+				calf_load[i]=smoothstep(.025,.53,(knee-ankle).angle_to(toe-ankle)-neutral)
+		leg_skin.set_shader_parameter("calf_load",calf_load)
 		leg_skin.set_shader_parameter("knee_flex",flex)
 	if hair_material and hair_mount:
 		update_hair(dt)
