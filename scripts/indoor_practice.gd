@@ -18,7 +18,8 @@ var forehead_arrival := 1.0
 var catch_start_local := Vector3.ZERO
 const CATCH_GIVE := .115
 const SET_RECEIVE_TIME := .050
-const SET_PUSH_TIME := .033
+const SET_PUSH_TIME := .025
+const FOREHEAD_REACH := .15
 var receive_local := Vector3.ZERO
 var push_axis := Vector3.UP
 var camp_receive_spot := BASE
@@ -716,11 +717,11 @@ func _process(delta: float) -> void:
 
 func receive_stance(yaw_angle: float) -> Vector3:
 	var local_head := setter.to_local(Contact.joint(setter,"Head"))
-	var offset := (local_head.slide(Vector3.UP)+Vector3.BACK*.19).rotated(Vector3.UP,yaw_angle)
+	var offset := (local_head.slide(Vector3.UP)+Vector3.BACK*FOREHEAD_REACH).rotated(Vector3.UP,yaw_angle)
 	return camp_receive_spot-offset
 
 func catch_pocket() -> Vector3:
-	return Contact.joint(setter,"Head")+Vector3.UP*.235+setter.global_basis.z*.19
+	return Contact.joint(setter,"Head")+Vector3.UP*.235+setter.global_basis.z*FOREHEAD_REACH
 
 func extended_receive_point() -> Vector3:
 	return catch_pocket()+Vector3.UP*CATCH_GIVE+setter.global_basis.z*.085
@@ -1028,7 +1029,9 @@ func step_practice(delta: float) -> void:
 				ball.position=fingers+Vector3.UP*.060
 				if elapsed>=SET_RECEIVE_TIME+SET_PUSH_TIME:
 					source=ball.position
+					var flight_age := elapsed-SET_RECEIVE_TIME-SET_PUSH_TIME
 					begin("set")
+					elapsed=maxf(0.,flight_age)
 		"forehead_catch":
 			var give := 1.-pow(1.-clampf(elapsed/.19,0.,1.),3.)
 			ball.position=setter.to_global(catch_start_local).lerp(catch_pocket(),give)
