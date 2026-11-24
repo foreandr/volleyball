@@ -124,6 +124,10 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 				var trouser_shader := Shader.new()
 				trouser_shader.code="""shader_type spatial;
 				uniform vec3 inertia; uniform float motion; varying vec2 cut; varying float azimuth;
+				float ankle_fold(float height,float angle){
+					float gathered=smoothstep(.092,.135,height)*(1.-smoothstep(.22,.42,height));
+					return gathered*.006*cos(height*89.+1.7*sin(angle)+.45*cos(angle*3.));
+				}
 				float knee_fold(vec2 pattern,float angle){
 					float offset=pattern.y-.493+.032*cos(angle)+.012*sin(2.*angle);
 					float rear=1.-smoothstep(-.45,.82,sin(angle));
@@ -134,8 +138,8 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 					cut=UV2;
 					azimuth=atan(COLOR.r*.6-.30,abs(cut.x)-.13);
 					float ankle=smoothstep(.092,.135,cut.y)*(1.-smoothstep(.22,.42,cut.y));
-					float gather=cos(cut.y*89.+1.7*sin(azimuth)+.45*cos(azimuth*3.));
-					VERTEX+=NORMAL*(ankle*(.014+.006*gather)+knee_fold(cut,azimuth));
+					float gather=ankle_fold(cut.y,azimuth);
+					VERTEX+=NORMAL*(ankle*.014+gather+knee_fold(cut,azimuth));
 					float weight=1.-smoothstep(.38,1.02,UV2.y);
 					VERTEX+=weight*inertia*.38;
 					VERTEX+=NORMAL*(.019+.011*weight+.012*weight*motion*sin(UV2.y*28.+UV2.x*22.-TIME*12.));
@@ -158,7 +162,7 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 					ALBEDO=mix(ALBEDO,vec3(.23,.26,.225),piping*.78);
 					float rib=cos(azimuth*65.)*(1.-smoothstep(.009,.045,fwidth(azimuth)));
 					ALBEDO*=1.-cuff*(.24-.08*rib);
-					float relief=knee_fold(cut,azimuth);
+					float relief=knee_fold(cut,azimuth)+ankle_fold(cut.y,azimuth);
 					vec3 dx=dFdx(VERTEX), dy=dFdy(VERTEX);
 					vec3 u=cross(dy,NORMAL), v=cross(NORMAL,dx);
 					float det=dot(dx,u);
