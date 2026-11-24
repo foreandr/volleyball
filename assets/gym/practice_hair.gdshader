@@ -17,7 +17,16 @@ void vertex(){
 	// Slide loose ends along the scalp when a head turn drives them inward.
 	vec3 outward=normalize(vec3(radial.x,sqrt(max(0.,1.-dot(radial,radial))),radial.y));
 	motion-=outward*min(dot(outward,motion),0.);
-	VERTEX+=tips*motion*(COLOR.g*1.6);
+	vec3 travel=motion*(COLOR.g*1.6);
+	VERTEX+=tips*travel;
+	// Bend the highlight frame with the lock, using the slope of its displacement.
+	if(COLOR.b>.001){
+		vec3 bent=normalize(TANGENT+travel*(6.*UV.y*(1.-UV.y)/max(.004,COLOR.b*.20)));
+		vec3 across=normalize(cross(NORMAL,TANGENT));
+		NORMAL=normalize(cross(bent,across));
+		TANGENT=bent;
+		BINORMAL=normalize(cross(NORMAL,bent))*sign(dot(BINORMAL,across));
+	}
 }
 void fragment(){
 	// Vary fiber spacing and tip splits per lock, keeping the pattern attached during motion.

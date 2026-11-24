@@ -777,7 +777,7 @@ static func haircut(scalp: Node3D,color: Color,variant: int,actor: Node3D) -> vo
 				tool.set_tangent(Plane(tangent,1.))
 				tool.set_uv(Vector2(uv.x,t))
 				tool.set_uv2(Vector2(normal.x,normal.z)*.5+Vector2.ONE*.5)
-				tool.set_color(Color(pigment,compliance,0))
+				tool.set_color(Color(pigment,compliance,clampf(length/.20,0.,1.)))
 				tool.add_vertex(root+sweep*length*t+normal*(curl+.002+.003*t)+across*(lateral+(uv.x-.5)*width*(1.-.87*t)))
 	# Gather longer cuts into a wrapped knot at the back of the crown.
 	# Each ribbon coils around the tie; overlap keeps the interior opaque.
