@@ -282,7 +282,7 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		float line=abs(height+.014-abs(lateral)*.40);
 		return 1.-smoothstep(.0015,.0055,line);
 	}
-	uniform float sock_top;
+	uniform float sock_top; uniform vec4 sock_trim:source_color; uniform float striped;
 	uniform vec4 pad_color:source_color;
 	varying vec3 anatomy;
 	varying vec2 loads;
@@ -316,7 +316,14 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		float pad_mask=enabled_side*(1.-smoothstep(.087,.091,abs(y-knee_height)));
 		float back_hole=rear_opening(anatomy.x-knee_center,y-knee_height,anatomy.z);
 		pad_mask*=1.-back_hole;
-		ALBEDO=mix(ALBEDO,vec3(.68,.69,.66)*(.88+.12*yarn),sock_mask);
+		float below_cuff=sock_top-y;
+		float stripe_dist=min(abs(below_cuff-.014),abs(below_cuff-.025));
+		float stripe=striped*(1.-smoothstep(.002,.003+fwidth(y),stripe_dist));
+		float cuff=1.-smoothstep(.030,.036,below_cuff);
+		float angle=atan((anatomy.z-.5)*.6,anatomy.x-knee_center);
+		float rib=cos(angle*56.)*(1.-smoothstep(.015,.055,fwidth(angle)));
+		vec3 knit_color=mix(vec3(.68,.69,.66),sock_trim.rgb,stripe);
+		ALBEDO=mix(ALBEDO,knit_color*(.91+.09*yarn-.08*cuff+.095*cuff*rib),sock_mask);
 		float height=y-knee_height;
 		float lateral=anatomy.x-knee_center;
 		float face=pad_face(lateral,height)*smoothstep(.49,.62,anatomy.z);
@@ -347,6 +354,8 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 	var both := variant>=20 or variant==0 or variant%4==1
 	skin.set_shader_parameter("padded",Vector2(float(both or variant%4==2),float(both or variant%4==3)))
 	skin.set_shader_parameter("pad_color",Color("dfdfd7") if variant%3==1 else Color("343d44"))
+	skin.set_shader_parameter("striped",float(variant%3!=0))
+	skin.set_shader_parameter("sock_trim",[Color("5c674f"),Color("844238"),Color("384c62")][variant%3])
 	skin.set_shader_parameter("sock_top",.155+.027*(variant%4))
 	var knee := rig.get_bone_global_rest(rig.find_bone("calf_l")).origin
 	skin.set_shader_parameter("knee_height",knee.y)
