@@ -181,6 +181,14 @@ void fragment(){
 		base*=1.-panel*(.035+.20*(eyelet-.15)*resolved);
 		float binding=1.-smoothstep(.001,.003+fwidth(border),abs(border));
 		base*=1.-.18*insert*binding;
+		// A tapered contrast stripe follows the front seam of each ventilated panel.
+		float stripe_span=smoothstep(1.025,1.10,y)*(1.-smoothstep(1.30,1.39,y));
+		float stripe_width=.008*stripe_span;
+		float stripe_edge=rest.z+.023-insert_width;
+		float stripe_aa=max(.0005,fwidth(stripe_edge));
+		float stripe=smoothstep(-stripe_width-stripe_aa,-stripe_width,stripe_edge)
+			*(1.-smoothstep(-stripe_aa,0.,stripe_edge));
+		base=mix(base,mix(trim.rgb,vec3(.74,.65,.52),.58),insert*stripe*stripe_span);
 		float cuff=1.-smoothstep(.18,.40,COLOR.g);
 		// The sleeve opening carries a narrow contrast welt inside a rib-knit band.
 		float cuff_mm=COLOR.g*35.;
