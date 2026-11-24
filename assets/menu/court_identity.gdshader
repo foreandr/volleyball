@@ -36,5 +36,5 @@ void fragment(){
 	}
 	float sweep=exp(-70.*abs(p.x+p.y*.26-mod(TIME*.11,2.4)+.65));
 	base+=vec3(.012,.043,.038)*sweep;
-	COLOR=vec4(base,1.);
+	COLOR=vec4(base,COLOR.a);
 }

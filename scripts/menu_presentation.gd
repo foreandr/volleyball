@@ -170,6 +170,7 @@ var loading_detail: Label
 
 func show_loading(destination: String) -> void:
 	loading_screen = ColorRect.new()
+	loading_screen.modulate.a = 0.
 	loading_screen.color = Color("112433")
 	loading_screen.process_mode = Node.PROCESS_MODE_ALWAYS
 	overlay.add_child(loading_screen)
@@ -198,7 +199,13 @@ func painted() -> void:
 	if DisplayServer.get_name() != "headless":
 		await RenderingServer.frame_post_draw
 
+func fade_loading(alpha: float, seconds: float) -> void:
+	var fade := create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS).set_ignore_time_scale(true)
+	fade.tween_property(loading_screen,"modulate:a",alpha,seconds).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	await fade.finished
+
 func close_loading() -> void:
+	await fade_loading(0.,.38)
 	loading_screen.hide()
 	loading_screen.queue_free()
 	loading_screen = null
@@ -206,6 +213,7 @@ func close_loading() -> void:
 func load_stage(destination: String, build: Callable) -> void:
 	if is_instance_valid(loading_screen): return
 	show_loading(destination)
+	await fade_loading(1.,.18)
 	await painted()
 	if build.is_valid(): build.call()
 	await painted()
@@ -216,6 +224,7 @@ func load_scene(path: String) -> void:
 	var key := path.get_file().get_basename()
 	var names := {"main":"Main menu","story":"My Career","drills":"Training camp","create":"Create player","setter_tryout":"Setter tryout","story_animations":"Court session"}
 	show_loading(names.get(key,key.capitalize()))
+	await fade_loading(1.,.18)
 	await painted()
 	var error := ResourceLoader.load_threaded_request(path,"PackedScene")
 	if error == OK:
