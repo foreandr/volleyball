@@ -154,7 +154,14 @@ void fragment(){
 		float binding=1.-smoothstep(.001,.003+fwidth(border),abs(border));
 		base*=1.-.18*insert*binding;
 		float cuff=1.-smoothstep(.18,.40,COLOR.g);
-		base*=1.-.12*cuff;
+		// The sleeve opening carries a narrow contrast welt inside a rib-knit band.
+		float cuff_mm=COLOR.g*35.;
+		float cuff_aa=max(.32,fwidth(cuff_mm));
+		float welt=1.-smoothstep(2.3,2.3+cuff_aa,abs(cuff_mm-8.0));
+		float knit_phase=atan(rest.z+.035,rest.y-1.46)*96.;
+		float cuff_rib=cos(knit_phase)*(1.-smoothstep(.55,2.8,fwidth(knit_phase)));
+		base=mix(base,trim.rgb*(.90+.10*cuff_rib),.75*cuff);
+		base=mix(base,mix(vec3(.78,.73,.63),base,.32),welt*.88);
 		// Distance to the fitted neckline follows its asymmetric front and back.
 		float neck_band=1.-smoothstep(.31,.41,COLOR.b);
 		float seam=1.-smoothstep(.028,.082,abs(COLOR.b-.37));
