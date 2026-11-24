@@ -149,8 +149,11 @@ void fragment(){
 	ALBEDO=base*(1.+.04*weave*fade);
 	float knit=sin(rest.x*1650.+sin(y*1300.))*cos(y*1300.);
 	if(!jacket){
-		float seam=1.-smoothstep(.0008,.0028,abs(y-1.054));
-		ALBEDO*=1.-.18*seam;
+		float from_edge=COLOR.a*.040;
+		float twin=min(abs(from_edge-.010),abs(from_edge-.014));
+		float seam=1.-smoothstep(.00055,.0014+fwidth(from_edge),twin);
+		float facing=1.-smoothstep(.013,.018,from_edge);
+		ALBEDO*=1.-.095*facing-.21*seam;
 	}
 	ROUGHNESS=.79+.075*knit*fade;
 	if(!jacket){

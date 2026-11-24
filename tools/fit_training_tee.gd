@@ -49,14 +49,20 @@ func _initialize() -> void:
 				var edge := Vector2i(mini(a,b),maxi(a,b))
 				edges[edge]=edges.get(edge,0)+1
 	var cuffs := PackedVector3Array()
+	var hem_edges: Array[Vector2i]=[]
 	var neckline := PackedVector3Array()
 	for edge: Vector2i in edges:
 		if edges[edge]==1:
+			if maxf(original[edge.x].y,original[edge.y].y)<3.: hem_edges.append(edge)
 			for endpoint in [edge.x,edge.y]:
 				var point := original[int(endpoint)]
 				if absf(point.x)<1.2 and point.y>5.5: neckline.append(fit(point))
 		var v := original[edge.x]
 		if edges[edge]==1 and absf(v.x)>1.60 and v.y>4.9: cuffs.append(fit(v))
+	var hem := PackedVector3Array()
+	for edge in hem_edges:
+		hem.append(fit(original[edge.x]))
+		hem.append(fit(original[edge.y]))
 	var result := ArrayMesh.new()
 	for slot in SOURCE.get_surface_count():
 		var arrays := SOURCE.surface_get_arrays(slot)
@@ -111,7 +117,12 @@ func _initialize() -> void:
 			for edge in cuffs: cuff_distance=minf(cuff_distance,p.distance_to(edge))
 			var collar_distance := INF
 			for point in neckline: collar_distance=minf(collar_distance,p.distance_to(point))
-			colors.append(Color((p.z+.3)/.6,clampf(cuff_distance/.035,0.,1.),clampf(collar_distance/.045,0.,1.)))
+			var hem_distance := .040
+			if p.y<1.16:
+				for j in range(0,hem.size(),2):
+					var closest := Geometry3D.get_closest_point_to_segment(p,hem[j],hem[j+1])
+					hem_distance=minf(hem_distance,p.distance_to(closest))
+			colors.append(Color((p.z+.3)/.6,clampf(cuff_distance/.035,0.,1.),clampf(collar_distance/.045,0.,1.),hem_distance/.040))
 		arrays[Mesh.ARRAY_VERTEX]=source
 		arrays[Mesh.ARRAY_BONES]=bones
 		arrays[Mesh.ARRAY_WEIGHTS]=weights
