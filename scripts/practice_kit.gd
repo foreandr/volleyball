@@ -453,10 +453,16 @@ static func face_hair(rig: Skeleton3D,body: MeshInstance3D,mesh: ArrayMesh,coach
 		float growth=smoothstep(line-.006,line+.010,p.y);
 		bool scalp=growth>grain;
 		float edge=1.632+.020*smoothstep(.04,.078,abs(p.x));
-		bool jaw=gray && p.y>1.555 && p.y<edge+grain*.002 && p.z>.008 && abs(p.x)<.092;
+		float cheek=smoothstep(-.005,.009,edge-p.y);
+		float taper=smoothstep(1.551,1.566,p.y)*smoothstep(.005,.018,p.z);
+		float lip=exp(-dot(vec2(p.x/.031,(p.y-1.624)/.009),vec2(p.x/.031,(p.y-1.624)/.009)));
+		float density=cheek*taper*(1.-lip)*(.78+.18*(1.-smoothstep(1.58,1.62,p.y)));
+		bool jaw=gray && abs(p.x)<.092 && density>grain;
 		if(!scalp && !jaw) discard;
-		float silver=gray ? smoothstep(.53,.9,grain)*.28 : 0.;
+		float strand=.5+.5*cos(p.y*620.+abs(p.x)*390.+p.z*160.);
+		float silver=gray ? smoothstep(.37,.88,grain)*(.26+.32*strand) : 0.;
 		ALBEDO=mix(tone.rgb,tone.rgb*1.65,silver)*(.72+.47*grain);
+		if(jaw) ALBEDO*=.70+.30*strand;
 		ROUGHNESS=.94;
 	}"""
 	var mat := ShaderMaterial.new()
