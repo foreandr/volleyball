@@ -370,10 +370,10 @@ static func court_shoe(rig: Skeleton3D,side: String,coach: bool,variant: int) ->
 	last.transform = rest.affine_inverse()*Transform3D(Basis.looking_at(forward,Vector3.UP,true),center)
 	var trainer := MeshInstance3D.new()
 	trainer.mesh=preload("res://assets/characters/footwear/running_l.obj") if side=="l" else preload("res://assets/characters/footwear/running_r.obj")
-	var textile := StandardMaterial3D.new()
-	textile.albedo_texture=preload("res://assets/characters/footwear/running_shoes.png")
-	textile.albedo_color=Color.WHITE if coach else [Color.WHITE,Color("dfecff"),Color("ffe0a8"),Color("d5e4cf")][variant%4]
-	textile.roughness=.78
+	var textile := ShaderMaterial.new()
+	textile.shader=preload("res://assets/gym/court_shoe.gdshader")
+	textile.set_shader_parameter("shoe_atlas",preload("res://assets/characters/footwear/running_shoes.png"))
+	textile.set_shader_parameter("tint",Color.WHITE if coach else [Color.WHITE,Color("dfecff"),Color("ffe0a8"),Color("d5e4cf")][variant%4])
 	trainer.material_override=textile
 	last.add_child(trainer)
 	rig.set_meta("sole_"+side,last)
