@@ -7,6 +7,7 @@ const ForwardDive = preload("res://scripts/forward_reception_dive.gd")
 const SideKneeSlide = preload("res://scripts/side_knee_slide.gd")
 const PassRecipes = preload("res://scripts/pass_recipe_library.gd")
 
+var stamina := preload("res://scripts/player_stamina.gd").new()
 var attributes: Dictionary = Profile.clean({})
 var kit_material: StandardMaterial3D
 var pose_author: RefCounted
@@ -98,8 +99,11 @@ func play_ground_gait(speed: float) -> void:
 	elif speed<4.75: play_action("run")
 	else: play_action("base/Sprint")
 
+func effective_rating(skill: String) -> float:
+	return float(attributes.get(skill,65))*stamina.effectiveness()
+
 func reachable_set(origin: Vector3, requested: Vector3) -> Vector3:
-	var distance_limit := lerpf(5.,13.,float(attributes.get("Strength",65))/100.)
+	var distance_limit := lerpf(5.,13.,float(attributes.get("Strength",65))/100.)*stamina.effectiveness()
 	var horizontal := (requested-origin).slide(Vector3.UP).limit_length(distance_limit)
 	return Vector3(origin.x+horizontal.x,requested.y,origin.z+horizontal.z)
 
@@ -133,6 +137,7 @@ func install_custom(resource: Resource, slot := "idle", save := true) -> bool:
 func apply_profile(profile: Dictionary) -> void:
 	var values := Profile.clean(profile)
 	attributes = values
+	stamina.endurance=values.Stamina
 	refresh_kit()
 	display_name = values.name
 	set_height_cm(values.height_cm)

@@ -10,11 +10,17 @@ var value := 100.0
 var delay := 0.0
 var exhausted := false
 
+var endurance := 65.
+
+func effectiveness() -> float:
+	return clampf(value/100.,0.,1.)
+
 func can_sprint() -> bool:
 	return not exhausted and value > 0.0
 
 func spend(amount: float) -> void:
-	spent_total+=minf(value,maxf(0.,amount))
+	amount=maxf(0.,amount)*100./(67.5+.5*endurance)
+	spent_total+=minf(value,amount)
 	value = maxf(0.0,value-amount)
 	delay = RECOVERY_DELAY
 	if value <= 0.0: exhausted = true

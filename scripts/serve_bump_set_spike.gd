@@ -229,7 +229,7 @@ func cpu_set_target_depth() -> float:
 
 func manual_set_spread() -> Vector2:
 	var pace := (pass_motion+Vector3.DOWN*Flight.GRAVITY*cpu_contact_time).length() if stage == Stage.PASS else 0.0
-	return BumpSetting.Accuracy.spread(0.0,pace,0.0,StorySession.setting_skill,true)
+	return BumpSetting.Accuracy.spread(0.0,pace,0.0,StorySession.setting_skill*setter.stamina.effectiveness(),true)
 
 func released_set_velocity(origin: Vector3) -> Vector3:
 	if is_instance_valid(manual_set_cone): manual_set_cone.hide()

@@ -69,6 +69,7 @@ func draw_player(actor: Node3D,human: bool) -> void:
 	arc_band(at,radius,PI,TAU,color,2)
 	arc_band(at,radius,0,PI*game.energy[actor].value/100.,color,4)
 	if actor==game.setter or human:
+		draw_string(ThemeDB.fallback_font,at+Vector2(-75,radius.y+18),"Stamina / skills %d%%" % roundi(actor.stamina.value),HORIZONTAL_ALIGNMENT_CENTER,150,14)
 		var squat: RefCounted=game.squat if actor==game.setter else game.free_squat
 		var jump: RefCounted=game.jump if actor==game.setter else game.free_jump
 		var outer := radius+Vector2(4,4)

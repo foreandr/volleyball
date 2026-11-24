@@ -43,7 +43,7 @@ var reach_rear_diagonal := false
 var indicator: Label
 var save_clock := 0.0
 var footwork: RefCounted
-var stamina := Stamina.new()
+var stamina: RefCounted
 var sprinting := false
 var sprint_requested := false
 var locomotion := ""
@@ -56,6 +56,7 @@ var setter_step_rate := QUICK_STEP_RATE
 
 func _init(host: Control) -> void:
 	page = host
+	stamina=page.preview_player.stamina
 	footwork = preload("res://scripts/directional_footwork.gd").new(page.preview_player)
 	side_steps = preload("res://scripts/right_side_steps.gd").new(page.preview_player)
 	indicator = Label.new()
@@ -493,7 +494,7 @@ func move_cpu_toward(travel: Vector3, delta: float, track_ball := true) -> void:
 	sprint_requested = distance>0.85
 	move_player(Vector2(direction.dot(forward.cross(Vector3.UP)),direction.dot(forward)),delta,track_ball)
 
-func move_player(direction: Vector2, delta: float, track_ball := true, setting_target := Vector3.INF, movement_scale := 1.0, court_weight := 0.0, turn_with_ball := true, front_limit := 2.5, approach_speed := 0.0, approach_rate := 0.0, run_after_pass := false) -> void:
+func move_player(direction: Vector2, delta: float, track_ball := true, setting_target := Vector3.INF, movement_scale := 1.0, court_weight := 0.0, turn_with_ball := true, front_limit := 2.5, approach_speed := 0.0, approach_rate := 0.0, run_after_pass := false, recover_stamina := true) -> void:
 	var actor: Node3D = page.preview_player
 	var session = page.get_node("/root/StorySession")
 	var setting := setting_target.is_finite()
@@ -551,7 +552,7 @@ func move_player(direction: Vector2, delta: float, track_ball := true, setting_t
 	sprinting = sprinting and now_moving
 	if quick_step and now_moving:
 		stamina.spend(Stamina.SPRINT_DRAIN*delta)
-	else:
+	elif recover_stamina:
 		stamina.recover(delta)
 	update_stamina_ring()
 	var action := "run" if sprinting else "idle"

@@ -263,6 +263,7 @@ func accuracy_bounds(error: float, incoming: Vector3, spin_rps: float) -> Vector
 	var skill := StorySession.setting_skill if setting else (StorySession.hand_reception_skill if hand_setting else StorySession.forearm_reception_skill)
 	var override := setting_skill_override if setting else passing_skill_override
 	if override >= 0.0: skill = override
+	if is_instance_valid(setter): skill*=setter.stamina.effectiveness()
 	var bounds := Accuracy.spread(error,incoming.length(),spin_rps,skill,setting)
 	if hand_setting and defensive_hand_dig: bounds = bounds*1.32+Vector2(0.30,0.25)
 	if hard_dig:

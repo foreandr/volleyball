@@ -75,6 +75,7 @@ var human: Node3D
 var saved_transform: Transform3D
 var saved_callback: int
 var saved_arrows: bool
+var displayed_stamina := -1
 var score_label: Label
 var info: Label
 var ball: MeshInstance3D
@@ -593,6 +594,9 @@ func start_serve() -> void:
 
 func update_score() -> void:
 	score_label.text = ("BLUE  %d  –  %d  ORANGE" if spectator else "YOU  %d  –  %d  CPU") % [score[0],score[1]]
+	if not players.is_empty():
+		displayed_stamina=roundi(players[0].stamina.value)
+		score_label.text+="   |   Stamina / skills %d%%" % displayed_stamina
 
 func award(side: int, reason: String) -> void:
 	if phase != Phase.LIVE: return
@@ -651,6 +655,11 @@ func launch(point: Vector3, motion: Vector3, kind: String, from: int, spin_rate 
 	for index in players.size():
 		var save: RefCounted = platforms[index].low_save
 		if save.active and not save.finished(elapsed): begin_recovery(index)
+	if from>=0 and from<players.size():
+		var athlete := players[from]
+		if kind in ["serve","spike","dump","block"]:
+			motion*=athlete.stamina.effectiveness()
+		athlete.stamina.spend(5. if kind in ["serve","spike","block"] else 2.)
 	flight_number += 1
 	origin = point
 	velocity = motion
@@ -1178,7 +1187,7 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 		var minimum := maxf((driver.set_contact_height()+0.22) if is_human(index) else 2.96,point.y+0.18)
 		var apex: float = bump.height if is_human(index) else cpu_set_apex(index,point,pin,incoming.length())
 		apex = maxf(minimum,apex)
-		var error := Bump.Accuracy.sample_set_offset(Bump.Accuracy.spread(0.0,incoming.length(),spin,setting_skill,true))
+		var error := Bump.Accuracy.sample_set_offset(Bump.Accuracy.spread(0.0,incoming.length(),spin,bump.setting_skill_override*players[index].stamina.effectiveness(),true))
 		var set_width := pin.x-setter_x
 		pin += error.slide(Vector3.UP)
 		if not is_human(index) and absf(set_width) >= 1.0 and (pin.x-setter_x)*signf(set_width) < 1.0:
@@ -1428,7 +1437,7 @@ func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_f
 		yaw = atan2(receive_facing.x,receive_facing.z)
 		if not turn_to_travel: yaw = clampf(yaw,-1.03,1.03)
 	actor.rotation.y = rotate_toward(actor.rotation.y,yaw,delta*minf(turn_rate,GymPaths.TURN_RATE))
-	var sprint := may_run and heading.dot(actor.basis.z.normalized()) >= run_alignment
+	var sprint: bool = may_run and actor.stamina.can_sprint() and heading.dot(actor.basis.z.normalized()) >= run_alignment
 	var previous_body_pose := {}
 	if paced_run:
 		var rig: Skeleton3D = actor.skeleton
@@ -1438,6 +1447,7 @@ func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_f
 	var pace := minf(speed,4.35)*CPU_SHUFFLE_SPEED_SCALE
 	if sprint:
 		pace = clampf(speed,0.65,CPU_SPRINT_SPEED) if paced_run else clampf(speed*1.24,5.85,CPU_SPRINT_SPEED)
+	if sprint: actor.stamina.spend(delta*25.)
 	var before := actor.position
 	var velocity: Vector3 = court_velocities.get(index,Vector3.ZERO)
 	if match_clock-float(movement_times.get(index,match_clock))>delta*2.: velocity=Vector3.ZERO
@@ -2754,6 +2764,8 @@ func report_review_evidence(evidence: Dictionary) -> void:
 
 func step_match(delta: float, controls: RefCounted) -> void:
 	match_clock += delta
+	for athlete in players: athlete.stamina.recover(delta)
+	if not players.is_empty() and roundi(players[0].stamina.value)!=displayed_stamina: update_score()
 	if trace.file != null and match_clock >= trace.next_sample: trace.sample(match_clock,trace_snapshot())
 	animated.fill(false)
 	update_player_guide()
@@ -2840,9 +2852,9 @@ func step_match(delta: float, controls: RefCounted) -> void:
 		if receive_prepared:
 			mobility *= 0.30
 		if roster_active:
-			mobility *= lerpf(0.78,1.18,human.attributes.Speed / 100.0)
+			mobility *= lerpf(0.78,1.18,human.effective_rating("Speed") / 100.0)
 		animated[0] = true
-		controls.move_player(motion,delta,false,ball.global_position,mobility,0.15,true,3.42,0.0,0.0,true)
+		controls.move_player(motion,delta,false,ball.global_position,mobility,0.15,true,3.42,0.0,0.0,true,false)
 	advance_attackers(delta)
 	if flight_number != current_flight: return
 	position_attack(delta)

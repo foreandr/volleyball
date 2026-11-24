@@ -17,8 +17,8 @@ const ORDER := [0,2,1]
 var forehead_arrival := 1.0
 var catch_start_local := Vector3.ZERO
 const CATCH_GIVE := .115
-const SET_RECEIVE_TIME := .105
-const SET_PUSH_TIME := .040
+const SET_RECEIVE_TIME := .050
+const SET_PUSH_TIME := .033
 var receive_local := Vector3.ZERO
 var push_axis := Vector3.UP
 var camp_receive_spot := BASE
@@ -215,7 +215,7 @@ func _ready() -> void:
 	world.add_child(ball)
 	rotation_drill.configure(self)
 	add_child(replay_inspector)
-	for a in rotation_drill.roster: energy[a]=preload("res://scripts/player_stamina.gd").new()
+	for a in rotation_drill.roster: energy[a]=a.stamina
 	var rings := preload("res://scripts/tryout_player_ring.gd").new()
 	rings.game=self
 	add_child(rings)
@@ -775,6 +775,7 @@ func move_to_camp_toss(delta: float) -> void:
 		camp_velocity=camp_velocity.move_toward(offset.normalized()*pace,14.*delta)
 		setter.position=rotation_drill.move_actor(setter,(camp_velocity*delta).limit_length(offset.length()))
 		setter.play_ground_gait(camp_velocity.length())
+		if camp_velocity.length()>4.75: setter.stamina.spend(delta*25.)
 		focus_headings[setter]=target_yaw if remaining<.95 else atan2(offset.x,offset.z)
 		return
 	if plant_time<0. and offset.length()>.16:
@@ -784,6 +785,7 @@ func move_to_camp_toss(delta: float) -> void:
 		camp_velocity=camp_velocity.move_toward(offset.normalized()*pace,14.*delta)
 		setter.position=rotation_drill.move_actor(setter,(camp_velocity*delta).limit_length(offset.length()))
 		setter.play_ground_gait(camp_velocity.length())
+		if camp_velocity.length()>4.75: setter.stamina.spend(delta*25.)
 		focus_headings[setter]=atan2(offset.x,offset.z)
 		return
 	if plant_time<0.:
@@ -820,6 +822,8 @@ func step_practice(delta: float) -> void:
 	setter.skeleton.set_meta("fast_set_push",phase=="set_contact" and elapsed+delta>SET_RECEIVE_TIME or phase=="set" and elapsed<.04)
 	setter.animator.advance(delta)
 	setter.skeleton.set_meta("fixed_setting_hands",true)
+	var follow := smoothstep(0.,.060,elapsed)*(1.-smoothstep(.14,.32,elapsed)) if phase=="set" else 0.
+	setter.skeleton.set_meta("wrist_follow",follow)
 	if not jump.active and not jump_rep():
 		if phase=="pass":
 			standing_set_load(smoothstep(contact_time-.24,contact_time,elapsed))
@@ -1182,7 +1186,7 @@ func show_timing(offset: float) -> void:
 	timing_until = clock + 2.2
 
 func timing_window() -> float:
-	return .085+.135*clampf(float(setter.attributes.get("Hand setting",40))/100.,0,1)
+	return .085+.135*clampf(float(setter.effective_rating("Hand setting"))/100.,0,1)
 
 # Predict arrival in flight, then anchor the cue to the hands cushioning the ball.
 func release_offset() -> float:
@@ -1219,7 +1223,7 @@ func release(index: int) -> void:
 	set_grade_until=clock+.65
 	trace("release",{"target":TARGETS[index],"held_s":input_hold,"alignment":set_alignment(setter,index),"timing_error":set_error,"air_m":setter.position.y-BASE.y})
 	held = -1
-	var skill := float(setter.attributes.get("Hand setting",40))/100
+	var skill := float(setter.effective_rating("Hand setting"))/100
 	var gap := Vector2(setter.position.x-catch_point.x,setter.position.z-catch_point.z).length()
 	var airborne := setter.position.y-BASE.y
 	var technique_feedback := ""
@@ -1232,7 +1236,6 @@ func release(index: int) -> void:
 		if set_error < -(timing_window()+0.065) or set_error > timing_window() or gap>0.72+0.36*skill:
 			miss("Missed contact. Hold the target and release above your forehead.")
 			return
-	energy[setter].spend(2)
 	target = index
 	tempo = chosen_tempo() if not automatic_setter() else 1
 	source = ball.position
@@ -1254,6 +1257,7 @@ func release(index: int) -> void:
 		var late := clampf((absf(set_error)-.065)/.135,0,1)
 		endpoint.z += 1.5*late
 	endpoint=setter.reachable_set(source,endpoint)
+	energy[setter].spend(2)
 	placement_error=endpoint.distance_to(PINS[target])
 	success = technique_feedback.is_empty() and target==called() and endpoint.distance_to(PINS[target])<targets[target].mouth_radius-0.10
 	feedback = TARGETS[target]+"   /   Target made" if success else "Missed the called target. Try it again."

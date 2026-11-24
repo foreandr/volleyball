@@ -38,7 +38,7 @@ var receiver: Node3D
 var setter: Node3D
 var status: Label
 var cpu_stamina_ring: MeshInstance3D
-var cpu_stamina := Stamina.new()
+var cpu_stamina: RefCounted
 var ball: MeshInstance3D
 var region: MeshInstance3D
 var region_style := StandardMaterial3D.new()
@@ -81,6 +81,7 @@ func configure(player: Node3D, readout: Label, use_bump: bool, build := "") -> v
 	setter = player
 	status = readout
 	receiver = Player.new()
+	cpu_stamina=receiver.stamina
 	receiver.name = "CPUReceiver"
 	receiver.player_number = 2
 	receiver.team_color = Color("35b59b")

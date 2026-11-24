@@ -528,7 +528,7 @@ static func practice_timing_error(receive_elapsed: float) -> float:
 func practice_accuracy_bounds(error: float, time: float) -> Vector2:
 	var speed := (practice_position(time+0.001)-practice_position(time-0.001)).length()/0.002
 	var spin_rps := float(feed_info.get("spin_rate",0.0))/TAU
-	return Accuracy.spread(error,speed,spin_rps,StorySession.forearm_reception_skill,false)
+	return Accuracy.spread(error,speed,spin_rps,StorySession.forearm_reception_skill*actor.stamina.effectiveness(),false)
 
 func update_practice_cone(show_timing: bool, receive_elapsed: float) -> void:
 	var target: Dictionary = actor.get_meta("pass_target",{})

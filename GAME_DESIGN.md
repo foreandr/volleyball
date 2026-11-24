@@ -117,3 +117,5 @@ The reference setting lift leads with open hands past the chest and face while t
 Setting Camp exposes Edit set frames directly from Pause and opens on the recorded contact. The 105 ms cushion leads into a 40 ms outward push.
 In Animation Frames, holding a rotation arrow repeats at five degrees per increment; single clicks adjust one tenth of a degree.
 Setters keep a fixed open-hand pose, use the saved elbow lift during preparation and intercept the ball in front of the forehead. Standing setters load the knees and extend on the push. Saving a frame copy returns to the originating drill scene.
+Setting fingers stay broadly fanned on the lift and descent. Wrists stay back through the 50 ms cushion and 33 ms push, then roll forward only in free flight.
+Each athlete's current stamina percentage scales skill effectiveness linearly. Stamina spending and recovery use the same athlete-owned meter; endurance changes the cost of exertion.

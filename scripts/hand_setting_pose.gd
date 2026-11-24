@@ -26,6 +26,32 @@ static func contact_center(actor: Node3D) -> Vector3:
 		center += rig.get_bone_global_pose(rig.find_bone("thumb_03_"+side)).origin
 	return rig.to_global(center*0.25+Vector3(0,0.075,0.07))
 
+# The same local joint poses drive the contact calculation and the rendered fingers.
+static func setting_grip(rig: Skeleton3D) -> Dictionary:
+	if rig.has_meta("setting_grip"): return rig.get_meta("setting_grip")
+	var grip := {}
+	var spread := {"thumb":20.,"index":18.,"middle":5.,"ring":-9.,"pinky":-25.}
+	for side in ["l","r"]:
+		var hand := rig.find_bone("hand_"+side)
+		var rest := rig.get_bone_global_rest(hand)
+		var along := (rig.get_bone_global_rest(rig.find_bone("middle_01_"+side)).origin-rest.origin).normalized()
+		var across := (rig.get_bone_global_rest(rig.find_bone("index_01_"+side)).origin-rig.get_bone_global_rest(rig.find_bone("pinky_01_"+side)).origin).slide(along).normalized()
+		var normal := along.cross(across).normalized()
+		var palm := normal*(1. if side=="l" else -1.)
+		var bend_axis := rest.basis.inverse()*(along.cross(-palm).normalized())
+		var neutral := rig.get_bone_rest(hand).basis.orthonormalized().get_rotation_quaternion()
+		grip[hand]=[neutral*Quaternion(bend_axis.normalized(),deg_to_rad(26.)),neutral*Quaternion(bend_axis.normalized(),deg_to_rad(-23.))]
+		for digit in spread:
+			for segment in range(1,4):
+				var id := rig.find_bone("%s_%02d_%s"%[digit,segment,side])
+				var q := rig.get_bone_rest(id).basis.orthonormalized().get_rotation_quaternion()
+				if segment==1:
+					var axis := rig.get_bone_global_rest(id).basis.inverse()*normal
+					q=q*Quaternion(axis.normalized(),deg_to_rad(spread[digit]))
+				grip[id]=[q,q]
+	rig.set_meta("setting_grip",grip)
+	return grip
+
 static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.ZERO, cushion := 0.0, torso_follow := 0.0, face_save := false, ball_direction := Vector3.ZERO, set_extension := -1.0, set_offset := Vector3.INF, arch_progress := 0.0, overhead_set := false, wrist_turn := -1.0, wrist_finish: Variant = null, receive_facing := Vector3.ZERO, steady_torso := false) -> void:
 	if blend <= 0.0: return
 	var rig: Skeleton3D = actor.skeleton
@@ -214,7 +240,13 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 			wrist_finish[hand_bone] = pose[hand_bone].basis.get_rotation_quaternion()
 			pose[hand_bone].basis = current_basis
 		if rig.get_meta("fixed_setting_hands",false):
-			pose[hand_bone].basis=rig.get_bone_rest(hand_bone).basis
+			var grip := setting_grip(rig)
+			var follow_weight: float=rig.get_meta("wrist_follow",0.)
+			pose[hand_bone].basis=Basis(grip[hand_bone][0].slerp(grip[hand_bone][1],follow_weight))
+			for digit in ["thumb","index","middle","ring","pinky"]:
+				for segment in range(1,4):
+					var id := rig.find_bone("%s_%02d_%s"%[digit,segment,side])
+					pose[id].basis=Basis(grip[id][0])
 			continue
 		var index_tip := diamond+Vector3(sign_*0.032,0.077,0.025)
 		var thumb_tip := diamond+Vector3(sign_*0.009,-0.047,0.045)

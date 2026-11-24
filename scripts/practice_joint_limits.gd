@@ -9,7 +9,6 @@ var previous: Array[Quaternion]=[]
 var max_rate: Array[float]=[]
 var push_arm: Array[bool]=[]
 
-var hand_joints: Array[int]=[]
 var editor_bones: Array[Transform3D] = []
 var replay_bones: Array[Transform3D] = []
 
@@ -18,7 +17,6 @@ func _process_modification() -> void:
 	if joints.is_empty():
 		for i in rig.get_bone_count():
 			var bone := String(rig.get_bone_name(i))
-			if bone.get_slice("_",0) in ["hand","thumb","index","middle","ring","pinky"]: hand_joints.append(i)
 			var cone := 0.
 			var rate := 540.
 			if bone.begins_with("spine"): cone=38.; rate=210.
@@ -45,8 +43,10 @@ func _process_modification() -> void:
 		previous[j]=q
 
 	if rig.get_meta("fixed_setting_hands",false):
-		for joint in hand_joints:
-			rig.set_bone_pose_rotation(joint,rig.get_bone_rest(joint).basis.get_rotation_quaternion())
+		var grip := preload("res://scripts/hand_setting_pose.gd").setting_grip(rig)
+		var follow: float=rig.get_meta("wrist_follow",0.)
+		for joint in grip:
+			rig.set_bone_pose_rotation(joint,grip[joint][0].slerp(grip[joint][1],follow))
 	enforce_court_floor(rig)
 	if not editor_bones.is_empty():
 		for i in rig.get_bone_count(): editor_bones[i]=rig.get_bone_pose(i)
