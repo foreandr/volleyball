@@ -53,6 +53,11 @@ func review() -> void:
 				gym.camera.position=athlete.to_global(Vector3(1.08,.58,1.20))
 				gym.camera.look_at(athlete.to_global(Vector3(0,.49,0)))
 				await capture("knees"+str(frame))
+			if action=="set" and frame in [33,60]:
+				var hands := Setting.contact_center(athlete)
+				gym.camera.position=hands+athlete.global_basis.orthonormalized()*Vector3(.36,.12,.44)
+				gym.camera.look_at(hands-Vector3.UP*.045)
+				await capture("hands"+str(frame))
 			if frame in ([6,12,18] if action=="run" else [16,36,64]): await capture(action+str(frame))
 	athlete.animator.callback_mode_process=playback
 	athlete.position=start

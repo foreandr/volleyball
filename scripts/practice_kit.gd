@@ -339,9 +339,8 @@ static func number_texture(number: int) -> Texture2D:
 
 # Separate wraps follow their own finger bones, leaving the joints free.
 static func tape_hand(rig: Skeleton3D,side: String,count: int,palm_wrap: bool) -> void:
-	var cloth := StandardMaterial3D.new()
-	cloth.albedo_color=Color("e5e0d3")
-	cloth.roughness=.98
+	var cloth := ShaderMaterial.new()
+	cloth.shader=preload("res://assets/gym/athletic_tape.gdshader")
 	for i in count:
 		var digit: String=["index","middle","ring"][i]
 		var bone := digit+"_01_"+side
