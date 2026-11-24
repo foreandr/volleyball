@@ -274,6 +274,10 @@ void fragment(){
 	vec2 spine=vec2(rest.x/(.024+.042*dampness),(y-1.27)/(.095+.19*dampness));
 	vec2 sternum=vec2(rest.x/(.033+.079*dampness),(y-1.47)/(.048+.14*dampness));
 	spread=max(spread,max(rear*exp(-dot(spine,spine)),(1.-rear)*exp(-dot(sternum,sternum))*.85));
+	// As exertion builds, perspiration spreads sideways where the back meets the waistband.
+	vec2 lumbar=vec2(rest.x/(.048+.105*dampness),(y-1.105-.018*cos(rest.x*18.))/.064);
+	float waist_wet=rear*exp(-dot(lumbar,lumbar))*smoothstep(.28,.83,dampness);
+	spread=max(spread,waist_wet);
 	float wet=dampness*smoothstep(.16,.56,spread+wick)*(1.-.91*print_coverage);
 	ALBEDO*=1.-.47*wet;
 	ROUGHNESS=mix(ROUGHNESS,.52,wet);
