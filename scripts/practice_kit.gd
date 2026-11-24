@@ -302,9 +302,11 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		vec2 radius=vec2(lateral/.069,height/.070);
 		return 1.-smoothstep(.72,1.06,length(radius));
 	}
-	float flex_channel(float lateral,float height){
+	float flex_channel(float lateral,float height,float bend){
 		float line=abs(height+.014-abs(lateral)*.40);
-		return 1.-smoothstep(.0015,.0055,line);
+		float lower_line=abs(height+.042-abs(lateral)*.24);
+		float width=mix(.0035,.0075,bend);
+		return max(1.-smoothstep(.0015,width,line),.72*(1.-smoothstep(.001,width*.8,lower_line)));
 	}
 	uniform float sock_top; uniform vec4 sock_trim:source_color; uniform float striped;
 	uniform vec4 pad_color:source_color;
@@ -331,7 +333,7 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		pad*=1.-rear_opening(lateral,k,depth);
 		foam=pad*smoothstep(.49,.62,depth)*pad_face(lateral,k);
 		knee_facing=depth;
-		foam*=1.-.38*flex_channel(lateral,k);
+		foam*=1.-mix(.24,.52,flex)*flex_channel(lateral,k,flex);
 		sock=1.-smoothstep(sock_top,sock_top+.004,y);
 		// Compress the sock inside the heel cup and release it above the collar.
 		float inside_shoe=1.-smoothstep(.064,.117,y);
@@ -356,7 +358,7 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		float height=y-knee_height;
 		float lateral=anatomy.x-knee_center;
 		float face=pad_face(lateral,height)*smoothstep(.49,.62,knee_facing);
-		float channel=flex_channel(lateral,height)*face;
+		float channel=flex_channel(lateral,height,loads.x)*face;
 		float binding=smoothstep(.075,.081,abs(height));
 		float edging=1.-smoothstep(.001,.0035,abs(abs(height)-.076));
 		float opening_edge=1.-smoothstep(.03,.14,abs(length(vec2(lateral/.046,height/.031))-1.));
