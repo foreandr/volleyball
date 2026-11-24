@@ -42,6 +42,16 @@ void fragment(){
 	float hole=1.-smoothstep(.15,.39,length(fract(cell)-.5));
 	vec3 mesh_color=mix(upper,vec3(.076,.081,.083),.58)*(.97-.52*hole*detail);
 	ALBEDO=mix(ALBEDO,mesh_color,quarter*(1.-guard)*(1.-counter));
+	// Two bonded supports fan out from the lace row into the midsole.
+	float rise=clamp((height-.027)/.052,0.,1.);
+	float forward_band=abs(shoe.z-mix(.085,.042,rise));
+	float rear_band=abs(shoe.z-mix(-.008,.031,rise));
+	float band_distance=min(forward_band,rear_band);
+	float band_width=mix(.006,.0038,rise);
+	float support=(1.-smoothstep(band_width-.001,band_width+fwidth(band_distance),band_distance))
+		*smoothstep(.023,.034,abs(shoe.x))*smoothstep(.024,.029,height)*(1.-smoothstep(.075,.082,height));
+	float bevel=smoothstep(band_width-.0025,band_width,band_distance);
+	ALBEDO=mix(ALBEDO,mix(counter_color.rgb,upper,.38)*(.79+.23*bevel),support);
 	float bead=1.-smoothstep(.0004,.0014+fwidth(height),abs(height-.022));
 	// Compression-molded foam forms a continuous sidewall above the rubber tread.
 	float sculpt=sin(height*1380.+3.*smoothstep(-.09,.11,shoe.z));
@@ -52,5 +62,6 @@ void fragment(){
 	ROUGHNESS=mix(mix(.74,.88,foam),.84,rubber);
 	ROUGHNESS=mix(ROUGHNESS,.44,counter);
 	ROUGHNESS=mix(ROUGHNESS,.49,guard);
+	ROUGHNESS=mix(ROUGHNESS,.51,support*(1.-foam));
 	SPECULAR=mix(mix(.26,.34,rubber),.46,counter);
 }
