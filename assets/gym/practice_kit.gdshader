@@ -40,6 +40,12 @@ uniform float motion=0.;
 uniform float dampness;
 uniform float phase=0.;
 varying vec3 rest;
+// A shallow overlapping storm flap spans the back between the armholes.
+float back_flap(vec3 p){
+	float edge=1.386+.030*smoothstep(.025,.19,abs(p.x));
+	return (1.-smoothstep(.155,.205,abs(p.x)))*(1.-smoothstep(-.055,-.016,p.z))
+		*smoothstep(edge-.003,edge+.002,p.y)*(1.-smoothstep(edge+.006,edge+.052,p.y));
+}
 void vertex(){
 	// Capture the undistorted garment coordinates from UV2 for animated tailoring.
 	rest=vec3(UV2, COLOR.r*0.6-0.3);
@@ -68,7 +74,7 @@ void vertex(){
 		// Gather the loose shell into the narrower elastic at the wrist.
 		float cuff=smoothstep(.625,.65,abs(rest.x));
 		float gather=sin(rest.x*168.+rest.z*51.)*exp(-pow(abs(abs(rest.x)-.616)/.031,2.));
-		float shell_clearance=jacket ? (.009-.012*cuff+.0045*gather) : mix(.0015,.009,smoothstep(.12,.95,COLOR.g));
+		float shell_clearance=jacket ? (.009-.012*cuff+.0045*gather+.006*back_flap(rest)) : mix(.0015,.009,smoothstep(.12,.95,COLOR.g));
 		VERTEX+=NORMAL*(shell_clearance+folds+.022*ease+(jacket ? motion*(.006+.012*ease)*sin(rest.x*24.+rest.y*15.-TIME*12.) : 0.));
 	}
 }
@@ -91,6 +97,9 @@ void fragment(){
 		float hem=1.-smoothstep(1.025,1.04,y);
 		base=mix(vec3(.052,.099,.080),vec3(.070,.128,.101),smoothstep(seam_y-.003,seam_y+.003,y));
 		base*=1.-.24*seam-.28*hem;
+		float flap=back_flap(rest);
+		float underlap=max(0.,back_flap(rest+vec3(0.,.006,0.))-flap);
+		base*=1.+.12*flap-.38*underlap;
 		// The coach windbreaker has contrasting woven shoulder inserts.
 		float yoke_edge=1.49-.075*smoothstep(.10,.39,x);
 		float sleeve_span=smoothstep(.07,.15,x)*(1.-smoothstep(.52,.59,x));
