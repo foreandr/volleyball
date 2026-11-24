@@ -31,12 +31,13 @@ var camera := Camera3D.new()
 var world := Node3D.new()
 var setter: Node3D
 var targets: Array[Node3D] = []
+var squat := preload("res://scripts/tryout_squat.gd").new()
 var jump := preload("res://scripts/setter_jump.gd").new()
 var demonstration := false
 var demo_index := 0
 var pressed_at := 0.0
 var endpoint := Vector3.ZERO
-var settings := Window.new()
+var settings := preload("res://scripts/tryout_pause.gd").new()
 var yaw := 0.0
 var elevation := 27.0
 var distance := 12.0
@@ -93,6 +94,7 @@ func _ready() -> void:
 	preload("res://scripts/practice_kit.gd").apply(setter,false)
 	preload("res://scripts/practice_kit.gd").apply(coach,true)
 	coach_motion.dress(coach)
+	seat_teammates()
 	for i in 4:
 		var basket := preload("res://scripts/tryout_target.gd").new()
 		basket.position = PINS[i]
@@ -128,6 +130,7 @@ func _ready() -> void:
 	landing.material_override = paint
 	world.add_child(landing)
 	landing.hide()
+	squat.configure(world)
 	build_hud()
 	build_settings()
 	rep = CareerSession.progress()
@@ -135,6 +138,22 @@ func _ready() -> void:
 		"intro": begin("intro")
 		"complete": complete()
 		_: start_practice()
+
+func seat_teammates() -> void:
+	var seats := [[-1,1,-3.0],[1,0,-1.1],[-1,1,0.9],[1,0,1.4],[-1,2,3.3],[1,1,4.2],[-1,0,5.5],[1,2,6.0],[-1,2,7.8],[1,1,8.0]]
+	for i in seats.size():
+		var seat: Array = seats[i]
+		var side := int(seat[0])
+		var row := int(seat[1])
+		var athlete_ := athlete(Vector3(side*(6.8+row*.69),0,float(seat[2])),["245447","a34d31","334357"][i%3])
+		athlete_.set_height_cm(172+(i*7)%29)
+		athlete_.rotation.y = -side*PI/2
+		athlete_.play_action("base/Sitting_Talking",0)
+		athlete_.animator.seek(i*.31,true)
+		var rig: Skeleton3D = athlete_.skeleton
+		var hips := rig.to_global(rig.get_bone_global_pose(rig.find_bone("pelvis")).origin)
+		athlete_.position.y += .48+row*.37+.16-hips.y
+		athlete_.animator.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_IDLE
 
 func build_hud() -> void:
 	panel.anchor_top = 1
@@ -205,7 +224,7 @@ func update_prompts(next: String) -> void:
 		"ground": entries = [[JOY_BUTTON_LEFT_SHOULDER,"Next toss"],[JOY_BUTTON_START,"Settings"]]
 		_:
 			for i in BUTTONS.size(): entries.append([BUTTONS[i],TARGETS[i]])
-			entries.append_array([[JOY_BUTTON_RIGHT_STICK,"Jump"],["LT","Focus"],["RT","Sprint"],[JOY_BUTTON_START,"Settings"]])
+			entries.append_array([[JOY_BUTTON_RIGHT_STICK,"Hold / release jump"],["LT","Focus"],["RT","Sprint"],[JOY_BUTTON_START,"Settings"]])
 	Xbox.prompts(controls_row,entries)
 
 func leave() -> void:
@@ -226,6 +245,7 @@ func reset_feed() -> void:
 	begin("walk")
 	station = (station+1)%TOSS_SPOTS.size()
 	coach_goal = TOSS_SPOTS[station]
+	squat.cancel()
 	jump.active = false
 	last_flick = 0
 	flick_at = -10
@@ -256,94 +276,7 @@ func apply_camera() -> void:
 	camera.look_at(pivot)
 
 func build_settings() -> void:
-	settings.title = "Practice settings"
-	settings.size = Vector2i(430,440)
-	settings.exclusive = true
-	settings.transient = true
-	settings.visible = false
-	add_child(settings)
-	settings.close_requested.connect(settings.hide)
-	settings.window_input.connect(func(e):
-		if e is InputEventJoypadButton and e.pressed and e.button_index == Xbox.physical(JOY_BUTTON_START): settings.hide())
-	var column := VBoxContainer.new()
-	settings.add_child(column)
-	column.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT,Control.PRESET_MODE_MINSIZE,16)
-	for field in [["Camera orbit",-145,145,12],["Elevation",12,56,18],["Distance",6,15,10],["Master volume",0,100,80]]:
-		var key := str(field[0])
-		var label := Label.new()
-		label.text = key
-		column.add_child(label)
-		var slider := HSlider.new()
-		slider.min_value = field[1]
-		slider.max_value = field[2]
-		var update := func(value: float):
-			match key:
-				"Camera orbit": yaw = deg_to_rad(value)
-				"Elevation": elevation = value
-				"Distance": distance = value
-				"Master volume": AudioServer.set_bus_volume_db(0,linear_to_db(value/100))
-			apply_camera()
-			StorySession.game_options.set_value("tryout_camera",key,value)
-			StorySession.save_options()
-		slider.value = db_to_linear(AudioServer.get_bus_volume_db(0))*100 if key=="Master volume" else StorySession.game_options.get_value("tryout_camera",key,field[3])
-		match key:
-			"Camera orbit": yaw = deg_to_rad(slider.value)
-			"Elevation": elevation = slider.value
-			"Distance": distance = slider.value
-		slider.value_changed.connect(update)
-		column.add_child(slider)
-	var bindings_scroll := ScrollContainer.new()
-	settings.add_child(bindings_scroll)
-	bindings_scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT,Control.PRESET_MODE_MINSIZE,16)
-	bindings_scroll.follow_focus = true
-	var bindings := VBoxContainer.new()
-	bindings.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	bindings_scroll.add_child(bindings)
-	bindings_scroll.hide()
-	for caption in ["Continue","Controller bindings","Replay demonstration","My Career"]:
-		var item := Button.new()
-		item.text = caption
-		column.add_child(item)
-		item.pressed.connect(func():
-			if caption == "Controller bindings":
-				column.hide()
-				bindings_scroll.show()
-				build_bindings(bindings,column,bindings_scroll)
-				bindings.get_child(0).grab_focus()
-				return
-			settings.hide()
-			if caption == "Replay demonstration":
-				skip.hide()
-				finish.hide()
-				demonstration = true
-				demo_index = 0
-				reset_feed()
-			elif caption == "My Career": leave())
-	settings.visibility_changed.connect(func():
-		prompt_phase = ""
-		update_prompts(phase)
-		if settings.visible:
-			bindings_scroll.hide()
-			column.show()
-			column.get_child(8).grab_focus())
-
-func build_bindings(bindings: VBoxContainer,column: VBoxContainer,scroll: ScrollContainer) -> void:
-	for child in bindings.get_children():
-		bindings.remove_child(child)
-		child.queue_free()
-	Xbox.settings(bindings,func():
-		prompt_phase = ""
-		update_prompts(phase)
-		build_bindings(bindings,column,scroll))
-	var back := Button.new()
-	back.text = "Back"
-	bindings.add_child(back)
-	back.pressed.connect(func():
-		prompt_phase = ""
-		update_prompts(phase)
-		scroll.hide()
-		column.show()
-		column.get_child(9).grab_focus())
+	settings.configure(self)
 
 func arc(a: Vector3,b: Vector3,t: float,height: float) -> Vector3:
 	var u := clampf(t,0,1)
@@ -389,8 +322,10 @@ func _process(delta: float) -> void:
 	var lead := (ball.position-Vector3(0,1.6,1.0))*Vector3(0.10,0.08,0.055)
 	camera_lead = camera_lead.lerp(lead.limit_length(0.5),1.0-exp(-3.2*delta))
 	apply_camera()
+	squat.update(setter,delta)
+	landing.visible = not squat.ring.visible and phase in ["walk","feed","pass"]
 	if jump.active: jump.step(setter,delta,Vector2.ZERO)
-	elif not demonstration: move_setter(delta)
+	elif not demonstration and not squat.charging: move_setter(delta)
 	var stick := axis(JOY_AXIS_RIGHT_Y)
 	if absf(stick)>0.45 or Input.is_key_pressed(KEY_UP) or Input.is_key_pressed(KEY_DOWN):
 		last_flick = 1 if stick < -0.45 or Input.is_key_pressed(KEY_UP) else 2
@@ -547,11 +482,17 @@ func _exit_tree() -> void:
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.echo: return
-	if settings.visible or get_tree().paused: return
+	if get_tree().paused: return
+	if settings.visible:
+		if event.is_action_pressed("ui_cancel") or (event is InputEventJoypadButton and event.button_index==Xbox.physical(JOY_BUTTON_START) and event.pressed):
+			settings.hide()
+			get_viewport().set_input_as_handled()
+		return
 	if event is InputEventJoypadButton: active_pad = event.device
 	if (event is InputEventKey and event.keycode==KEY_ESCAPE or event is InputEventJoypadButton and event.button_index==Xbox.physical(JOY_BUTTON_START)) and event.is_pressed():
 		trace("pause",{})
-		settings.popup_centered()
+		squat.cancel()
+		settings.show()
 		get_viewport().set_input_as_handled()
 		return
 	if phase in ["intro","complete"]: return
@@ -564,10 +505,14 @@ func _input(event: InputEvent) -> void:
 		return
 	if event is InputEventJoypadButton and event.button_index==Xbox.physical(JOY_BUTTON_RIGHT_STICK) or event is InputEventKey and event.keycode==KEY_SPACE:
 		if event.is_pressed():
-			trace("jump_request",{"accepted":not jump.active})
-			if not jump.active: jump.begin_set_jump(setter,0.22,0.55)
-			else: message.text = "Landing before next jump"
-		else: jump.release()
+			var allowed := not jump.active and not squat.charging
+			trace("squat_press",{"accepted":allowed})
+			if allowed:
+				squat.begin(setter)
+				message.text = "Release in green to jump"
+		elif squat.charging:
+			message.text = squat.release(setter,jump)
+			trace("jump_release",{"seconds":squat.seconds,"quality":message.text,"height":jump.height})
 		get_viewport().set_input_as_handled()
 		return
 	var index := -1

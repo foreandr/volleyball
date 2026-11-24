@@ -16,7 +16,7 @@ void vertex(){
 }
 void fragment(){
 	float x=abs(rest.x), y=rest.y;
-	if(sleeves && (x>.69 || y<1.15 || y>1.565 || (x<.14 && y<1.48))) discard;
+	if(sleeves && (x>(jacket?.69:.333) || y<1.15 || y>1.565 || (x<.14 && y<1.48))) discard;
 	float side=smoothstep(.142,.154,x);
 	vec3 base=mix(fabric.rgb,trim.rgb,side*.54);
 	if(jacket){
@@ -27,7 +27,7 @@ void fragment(){
 	}else{
 		float piping=1.-smoothstep(.0015,.004,abs(x-.145));
 		base=mix(base,trim.rgb,piping);
-		vec2 uv=vec2(.5+rest.x/.255,(1.39-y)/.32);
+		vec2 uv=vec2(.5+rest.x/.247,(1.425-y)/.135);
 		if(all(greaterThanEqual(uv,vec2(0.))) && all(lessThanEqual(uv,vec2(1.)))){
 			vec4 ink=texture(lettering,uv);
 			base=mix(base,vec3(.95,.90,.77),ink.a);

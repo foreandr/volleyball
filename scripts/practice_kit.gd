@@ -26,13 +26,13 @@ static func apply(actor: Node3D,coach: bool) -> void:
 	for side in ["l","r"]: court_shoe(rig,side,coach)
 	for node: MeshInstance3D in rig.find_children("*","MeshInstance3D",true,false):
 		var shirt := node.mesh == preload("res://assets/characters/volleyball/outfit.res")
-		var sleeves := coach and node.mesh == preload("res://assets/characters/volleyball/body.res")
+		var sleeves := node.mesh == preload("res://assets/characters/volleyball/body.res")
 		if not shirt and not sleeves: continue
 		var kit := ShaderMaterial.new()
 		kit.shader = FABRIC
 		kit.set_shader_parameter("fabric",Color("223d3c") if coach else Color("b34421"))
 		kit.set_shader_parameter("trim",Color("cad4bf") if coach else Color("182d36"))
-		kit.set_shader_parameter("lettering",preload("res://assets/gym/varsity_mark.png"))
+		kit.set_shader_parameter("lettering",preload("res://assets/gym/practice_502.svg"))
 		kit.set_shader_parameter("jacket",coach)
 		kit.set_shader_parameter("sleeves",sleeves)
 		var shell := MeshInstance3D.new()
@@ -47,6 +47,60 @@ static func apply(actor: Node3D,coach: bool) -> void:
 			invisible.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 			invisible.albedo_color = Color.TRANSPARENT
 			node.set_surface_override_material(0,invisible)
+			if not coach: shorts(rig,node)
+	if not coach:
+		for side in ["l","r"]: knee_pad(rig,side)
+
+static func shorts(rig: Skeleton3D,outfit: MeshInstance3D) -> void:
+	var material := ShaderMaterial.new()
+	var shader := Shader.new()
+	shader.code = """shader_type spatial;
+	varying vec2 rest;
+	void vertex(){rest=UV2;VERTEX+=NORMAL*.004;}
+	void fragment(){
+		if(rest.y<.70) discard;
+		float hem=1.-smoothstep(.704,.714,rest.y);
+		ALBEDO=mix(vec3(.022,.045,.053),vec3(.80,.43,.21),hem);
+		ROUGHNESS=.84;
+	}"""
+	material.shader = shader
+	var part := MeshInstance3D.new()
+	part.mesh = tailored_surface(outfit.mesh,1)
+	part.skin = outfit.skin
+	rig.add_child(part)
+	part.skeleton = part.get_path_to(rig)
+	part.material_override = material
+	outfit.set_surface_override_material(1,outfit.get_surface_override_material(0))
+	# Restore the underlying skinned legs from the source character.
+	var source := preload("res://assets/characters/base/Superhero_Male_FullBody.gltf").instantiate()
+	var body: MeshInstance3D = source.find_child("SuperHero_Male",true,false)
+	var legs := MeshInstance3D.new()
+	legs.mesh = tailored_surface(body.mesh,0)
+	legs.skin = outfit.skin
+	rig.add_child(legs)
+	legs.skeleton = legs.get_path_to(rig)
+	var skin := ShaderMaterial.new()
+	var cut := Shader.new()
+	cut.code = """shader_type spatial;
+	uniform sampler2D skin_map:source_color; varying float y;
+	void vertex(){y=UV2.y;} void fragment(){if(y>.72 || y<.095)discard; ALBEDO=texture(skin_map,UV).rgb; ROUGHNESS=.75;}"""
+	skin.shader = cut
+	skin.set_shader_parameter("skin_map",preload("res://assets/characters/base/T_Superhero_Male_Light.png"))
+	legs.material_override = skin
+	source.free()
+
+static func knee_pad(rig: Skeleton3D,side: String) -> void:
+	var name_ := "calf_"+side
+	var rest := rig.get_bone_global_rest(rig.find_bone(name_))
+	var socket := BoneAttachment3D.new()
+	socket.bone_name = name_
+	rig.add_child(socket)
+	var pad := Node3D.new()
+	socket.add_child(pad)
+	pad.transform = rest.affine_inverse()*Transform3D(Basis.IDENTITY,rest.origin)
+	shoe_part(pad,Vector3(0,-.018,0),Vector3(.146,.186,.151),Color("1d252b"))
+	shoe_part(pad,Vector3(0,-.008,.056),Vector3(.125,.12,.076),Color("36414a"))
+
 
 # Build the shoe in rig rest space, then inherit the ankle's animated transform.
 static func court_shoe(rig: Skeleton3D,side: String,coach: bool) -> void:
