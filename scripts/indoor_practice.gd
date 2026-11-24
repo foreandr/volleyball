@@ -1028,8 +1028,7 @@ func play_bump(previous: Vector3, incoming: Vector3, dt: float) -> void:
 				remaining=bump_arrival-elapsed
 				predicted=toss_at(bump_arrival)
 				energy[setter].spend(energy[setter].DIVE_COST,"Dive")
-	var sample_time: float=sampler.contact_frame+minf(0.,-remaining)
-	sampler.apply_pose(maxf(0.,sample_time),1.-smoothstep(.17,.52,remaining))
+	sampler.apply_pose(sampler.contact_frame,1.-smoothstep(.14,.48,remaining))
 	if sampler.low_save.active:
 		var before := setter.position
 		sampler.low_save.sample(setter,elapsed,bump_arrival+.07,predicted)
@@ -1057,9 +1056,15 @@ func play_bump(previous: Vector3, incoming: Vector3, dt: float) -> void:
 		sampler.pose_bump_receive(sampler.bump_receive_phase)
 	if remaining<.38 and not sampler.low_save.active:
 		var platform_height: float= setter.position.y+setter.height_cm*.0055
-		var tracking := toss_at(elapsed+.025)
-		if bump_released and bump_offset<0. and elapsed<intercept_time+.07:
-			tracking=predicted
+		# Prepare at intercept height while the toss is overhead. Follow it lower only
+		# after the intended contact time, when the player is still holding for a late set.
+		var tracking := predicted
+		if cpu_setting:
+			tracking=toss_at(bump_arrival+cpu_release_delay)
+		elif remaining<0. and not bump_released:
+			tracking=toss_at(elapsed)
+		elif bump_released and bump_offset>0.:
+			tracking=toss_at(bump_arrival+bump_offset)
 		tracking.y=clampf(tracking.y,setter.position.y+.27,setter.position.y+setter.height_cm*.0081)
 		var low := smoothstep(.05,.52,platform_height-tracking.y)
 		sampler.reach_platform(tracking-sampler.platform_center(),1.-smoothstep(.055,.38,remaining),.77,true,false,low)
