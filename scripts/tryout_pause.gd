@@ -33,12 +33,15 @@ func configure(host: Node, layer: Node = null) -> void:
 	primary = bar(home,"Resume",hide)
 	options_button = bar(home,"Options",open_options)
 	if practice and "solo_setting" in game and game.solo_setting:
+		bar(home,"Sliders",open_sliders)
 		bar(home,"Edit set frames",open_frame_editor)
 	bar(home,"Restart",restart)
 	bar(home,"Quit",quit_gameplay)
 	options.custom_minimum_size.x = 400
 	options.add_child(categories)
-	for caption in ["Camera","Audio","Controls"]:
+	var sections := ["Camera","Audio","Controls"]
+	if practice and "solo_setting" in game and game.solo_setting: sections.append("Sliders")
+	for caption in sections:
 		var tab := bar(categories,caption,show_section.bind(caption))
 		tab.toggle_mode = true
 	var scroll := ScrollContainer.new()
@@ -84,6 +87,52 @@ func show_home() -> void:
 	options.hide()
 	home.show()
 	primary.grab_focus()
+
+func open_sliders() -> void:
+	home.hide()
+	options.show()
+	show_section("Sliders")
+	for control in body.get_children():
+		if control is HSlider:
+			control.grab_focus()
+			break
+
+func tuning_controls() -> void:
+	var athlete = game.setter
+	var range_label := Label.new()
+	var refresh := func(): range_label.text="Set range    Medium %.1f m    High %.1f m" % [game.camp_range(0),game.camp_range(1)]
+	for field in [["Stamina",0,100,athlete.stamina.value,"%"],["Endurance",0,100,athlete.stamina.endurance,""],["Strength",1,100,athlete.attributes.Strength,""],["Hand setting",0,100,athlete.attributes["Hand setting"],""],["Speed",0,100,athlete.attributes.Speed,""],["Jump height",10,120,game.camp_jump_height*100," cm"],["Jump ability",0,100,game.camp_jump_ability,""]]:
+		var caption := Label.new()
+		body.add_child(caption)
+		var slider := HSlider.new()
+		slider.name=str(field[0]).replace(" ","")
+		slider.min_value=field[1]
+		slider.max_value=field[2]
+		slider.step=1
+		slider.value=field[3]
+		slider.custom_minimum_size.y=28
+		body.add_child(slider)
+		var format_value := func(v: float): caption.text="%s    %d%s" % [field[0],roundi(v),field[4]]
+		format_value.call(slider.value)
+		slider.value_changed.connect(func(v):
+			format_value.call(v)
+			match field[0]:
+				"Stamina":
+					athlete.stamina.value=v
+					athlete.stamina.exhausted=v<=0.
+				"Endurance": athlete.stamina.endurance=v
+				"Jump height":
+					game.camp_jump_height=v*.01
+				"Jump ability": game.camp_jump_ability=v
+				_: athlete.attributes[field[0]]=v
+			refresh.call())
+	var arc := OptionButton.new()
+	for label_ in game.TEMPOS: arc.add_item(label_+" set")
+	arc.select(game.selected_tempo)
+	arc.item_selected.connect(func(index): game.selected_tempo=index)
+	body.add_child(arc)
+	body.add_child(range_label)
+	refresh.call()
 
 func open_options() -> void:
 	home.hide()
@@ -164,6 +213,9 @@ func show_section(caption: String) -> void:
 	for item in body.get_children():
 		body.remove_child(item)
 		item.queue_free()
+	if caption=="Sliders":
+		tuning_controls()
+		return
 	if caption=="Controls":
 		Xbox.settings(body,show_section.bind(caption))
 		return

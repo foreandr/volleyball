@@ -120,3 +120,5 @@ Setters keep a fixed open-hand pose, use the saved elbow lift during preparation
 Setting fingers stay broadly fanned on the lift and descent. Wrists stay back through the 50 ms cushion and 25 ms push, then roll forward only in free flight.
 Each athlete's current stamina percentage scales skill effectiveness linearly. Stamina spending and recovery use the same athlete-owned meter; endurance changes the cost of exertion.
 Forward sets hold the wrists flat for 120 ms after easing out of the loaded grip before the wrists turn toward the target.
+Camp pause sliders tune the active setter for this session and show current medium/high set ranges. Fingers open on the gather from the relaxed running gait.
+RB cycles set heights. The incoming toss shows its projected flight and floor landing ring. Holding the set input begins opening the hands.

@@ -46,7 +46,8 @@ func _process_modification() -> void:
 		var grip := preload("res://scripts/hand_setting_pose.gd").setting_grip(rig)
 		var follow: float=rig.get_meta("wrist_follow",0.)
 		for joint in grip:
-			rig.set_bone_pose_rotation(joint,grip[joint][0].slerp(grip[joint][1],follow))
+			var target: Quaternion=grip[joint][0].slerp(grip[joint][1],follow)
+			rig.set_bone_pose_rotation(joint,rig.get_bone_pose_rotation(joint).slerp(target,rig.get_meta("grip_open",1.)))
 	enforce_court_floor(rig)
 	if not editor_bones.is_empty():
 		for i in rig.get_bone_count(): editor_bones[i]=rig.get_bone_pose(i)

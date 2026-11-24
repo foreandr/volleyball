@@ -23,6 +23,7 @@ func _draw() -> void:
 	if not game or not game.is_node_ready() or game.settings.visible or game.phase in ["intro","net_guide","complete"]: return
 	var human: Node3D=game.rotation_drill.roster[0]
 	draw_player(human,true)
+	if game.phase=="pass": draw_incoming_toss()
 	if game.preview_enabled: draw_set_path(human)
 	if game.phase in ["feed","pass"]:
 		var called: int=game.called()
@@ -42,14 +43,38 @@ func _draw() -> void:
 			draw_string(font,left+Vector2(62,0),game.TARGETS[called],HORIZONTAL_ALIGNMENT_LEFT,-1,16)
 	if game.setter!=human: draw_player(game.setter,false)
 
+func draw_incoming_toss() -> void:
+	var time: float=game.forehead_arrival
+	var vy: float=(game.forehead_target.y-game.source.y)/time+4.905*time
+	var floor_y := .15
+	var landing_time := (vy+sqrt(vy*vy+19.62*maxf(0.,game.source.y-floor_y)))/9.81
+	var landing: Vector3=game.toss_at(landing_time)
+	landing.y=.055
+	var camera: Camera3D=game.camera
+	if camera.is_position_behind(landing): return
+	var ring := PackedVector2Array()
+	for i in 33:
+		var angle := TAU*i/32.
+		ring.append(camera.unproject_position(landing+Vector3(cos(angle),0,sin(angle))*.26))
+	draw_polyline(ring,Color("17302e"),5,true)
+	draw_polyline(ring,Color("61ebcc"),2.5,true)
+	for i in 24:
+		var point: Vector3=game.toss_at(lerpf(minf(game.elapsed,landing_time),landing_time,i/23.))
+		if not camera.is_position_behind(point): draw_circle(camera.unproject_position(point),2.,Color("8ff5dc"))
+
 func draw_set_path(actor: Node3D) -> void:
 	var active: bool=actor==game.setter
 	var target: int=game.held if active else game.free_target
-	if target<0 and (game.clock<game.preview_until or game.stick_latched): target=game.called()
+	if target<0 and game.clock<game.preview_until: target=game.called()
 	if target<0: return
 	var a: Vector3=game.catch_point if active else (game.Contact.palm(actor,"l")+game.Contact.palm(actor,"r"))*.5
 	var b: Vector3=game.PINS[target]
 	var tempo: int=game.chosen_tempo()
+	if game.solo_setting and active:
+		var aim := (b-a).slide(Vector3.UP).limit_length(game.camp_range(tempo))
+		b=Vector3(a.x+aim.x,b.y,a.z+aim.z)
+	if game.clock<game.preview_until and not game.camera.is_position_behind(b):
+		draw_string(ThemeDB.fallback_font,game.camera.unproject_position(b)+Vector2(8,-14),game.TEMPOS[tempo],HORIZONTAL_ALIGNMENT_LEFT,-1,16)
 	var height: float=game.APEX[tempo] if active else 9.81*pow(game.DURATION[tempo],2)/8.
 	for i in 41:
 		var pos: Vector3=game.arc(a,b,i/40.,height)

@@ -67,12 +67,13 @@ func update(actor: Node3D,delta: float) -> void:
 	for i in rig.get_bone_count():
 		rig.set_bone_pose_rotation(i,pose[i].basis.orthonormalized().get_rotation_quaternion())
 
-func release(actor: Node3D,jump: RefCounted) -> String:
+func release(actor: Node3D,jump: RefCounted, height_override := -1., ability := 65.) -> String:
 	var depth := clampf(seconds/FULL_LOAD,0,1)
-	var quality := smoothstep(0,GREEN_START,depth)
+	var quality := smoothstep(0,GREEN_START*lerpf(1.26,.86,ability/100.),depth)
 	charging = false
 	feedback_time = .65
-	var height := clampf(actor.attributes.vertical_in,30,60)*.0254*lerpf(.28,1,quality)
+	var maximum := height_override if height_override>0. else clampf(actor.attributes.vertical_in,30,60)*.0254
+	var height := maximum*lerpf(.28,1,quality)
 	jump.begin_set_jump(actor,.02,height)
 	jump.height = height
 	jump.air_time = jump.flight_duration(height,true)
