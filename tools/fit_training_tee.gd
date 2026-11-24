@@ -102,9 +102,11 @@ func _initialize() -> void:
 			var x := absf(p.x)
 			var upper := 8 if p.x>0. else 32
 			var cap := smoothstep(.085,.182,x)*smoothstep(1.245,1.36,p.y)
-			var collar_share := 1.-smoothstep(.145,.280,x)
+			# Route the sleeve through the clavicle into the upper arm. Leaving
+			# chest influence near the cuff pulls it behind a raised shoulder.
+			var collar_share := smoothstep(.095,.175,x)
 			var armpit := 1.-smoothstep(1.34,1.49,p.y)
-			var arm_share := smoothstep(.135+.028*armpit,.305+.018*armpit,x)
+			var arm_share := smoothstep(.128+.028*armpit,.257+.018*armpit,x)
 			var sum := 0.
 			for id in blend: sum+=float(blend[id])
 			for id in blend: blend[id]*=1.-cap

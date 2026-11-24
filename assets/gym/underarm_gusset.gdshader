@@ -15,7 +15,10 @@ void vertex(){
 void fragment(){
 	float side=abs(bind.x);
 	float underarm=length(vec2((side-.193)/.117,(bind.y-1.418)/.132));
-	if(underarm>1.) discard;
+	// Cut the lining back on the outside of the deltoid. Only the
+	// underside of the sleeve needs a bridge to the torso.
+	float outer_cap=smoothstep(.182,.265,side)*smoothstep(1.408,1.468,bind.y);
+	if(underarm+.76*outer_cap>1.) discard;
 	float yarn=cos(bind.y*1450.)*(1.-smoothstep(.0006,.0025,fwidth(bind.y)));
 	ALBEDO=vec3(.31,.047,.022)*(.94+.05*yarn);
 	// A staggered mesh knit opens along the bias as the arm lifts.
