@@ -18,7 +18,18 @@ void fragment(){
 	float resolution=1.-smoothstep(.8,3.1,fwidth(chevron));
 	float groove=smoothstep(.38,.9,cos(chevron))*resolution;
 	vec3 outsole=mix(vec3(.115,.101,.085),vec3(.055,.048,.040),groove);
-	ALBEDO=mix(upper,outsole,rubber*.78);
+	// The forefoot pivots on concentric rubber ribs surrounded by angled tread.
+	vec2 pivot=vec2(shoe.x,shoe.z-.078);
+	float radius=length(pivot);
+	float disc=1.-smoothstep(.033,.037,radius);
+	float ring=radius*1120.;
+	float ring_cut=smoothstep(.12,.82,cos(ring))*(1.-smoothstep(.8,3.,fwidth(ring)));
+	float tread=mix(groove,ring_cut,disc);
+	float bottom=1.-smoothstep(.004,.010,height);
+	vec3 gum=mix(vec3(.27,.15,.073),vec3(.077,.052,.033),tread);
+	float flex=1.-smoothstep(.0015,.0035,abs(shoe.z-.127+.21*abs(shoe.x)));
+	outsole=mix(outsole,gum*(1.-.55*flex),bottom);
+	ALBEDO=mix(upper,outsole,rubber*mix(.78,.96,bottom));
 	// The heel counter hugs the cup and tapers into two lower side wings.
 	float wing=smoothstep(-.123,.012,shoe.z);
 	float lip=mix(.076,.033,wing);

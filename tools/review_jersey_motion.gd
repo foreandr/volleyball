@@ -57,6 +57,11 @@ func review() -> void:
 				gym.camera.position=ankle+athlete.global_basis.orthonormalized()*Vector3(.46,.13,.31)
 				gym.camera.look_at(ankle+heading*.052)
 				await capture("shoe"+str(frame))
+				if frame==15:
+					var sole: Node3D=athlete.skeleton.get_meta("sole_l")
+					gym.camera.position=sole.to_global(Vector3(.08,-.40,.065))
+					gym.camera.look_at(sole.to_global(Vector3(0.,.01,.026)),sole.global_basis.z.normalized())
+					await capture("shoe_outsole15")
 			if action=="set" and frame in [33,60]:
 				var hands := Setting.contact_center(athlete)
 				gym.camera.position=hands+athlete.global_basis.orthonormalized()*Vector3(.36,.12,.44)
