@@ -74,7 +74,9 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 		if sleeves:
 			var kit := ShaderMaterial.new()
 			kit.shader=FABRIC
+			kit.set_shader_parameter("knit_surface",preload("res://assets/gym/training_knit.png"))
 			actor.shirt_fabric=kit
+			if not coach: actor.sleeve_cloth=preload("res://scripts/sleeve_cloth.gd").new()
 			actor.jersey_origin=actor.global_position
 			actor.jersey_materials.append(kit)
 			kit.set_shader_parameter("phase",variant*1.79)
@@ -162,7 +164,7 @@ static func reshape_build(rig: Skeleton3D,coach: bool,variant: int) -> void:
 					v.z=lerpf(v.z,-.025,(1.-smoothstep(.14,.21,absf(v.x)))*smoothstep(1.1,1.22,v.y)*(1.-smoothstep(1.47,1.57,v.y))*.32)
 					# Tuck the skin inside the upper sleeve. Fade out before
 					# the cuff so the exposed arm keeps its actual silhouette.
-					var covered := smoothstep(.13,.21,absf(v.x))*(1.-smoothstep(.30,.36,absf(v.x)))*smoothstep(1.24,1.38,v.y)
+					var covered := smoothstep(.09,.18,absf(v.x))*(1.-smoothstep(.32,.37,absf(v.x)))*smoothstep(1.19,1.34,v.y)
 					v.y=lerpf(v.y,1.48,covered*.46)
 					v.z=lerpf(v.z,-.035,covered*.46)
 				var arm := smoothstep(.17,.30,absf(v.x))*(1.-smoothstep(.51,.73,absf(v.x)))*smoothstep(1.18,1.35,v.y)

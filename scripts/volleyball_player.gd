@@ -187,6 +187,7 @@ var jersey_materials: Array[ShaderMaterial]=[]
 var jersey_origin := Vector3.ZERO
 var jersey_speed := 0.
 var dressed_surface := preload("res://scripts/dressed_contact.gd").new()
+var sleeve_cloth: RefCounted
 var shirt_fabric: ShaderMaterial
 var leg_skin: ShaderMaterial
 var exertion_total := 0.0
@@ -197,6 +198,7 @@ var cloth_velocity := Vector3.ZERO
 
 func _process(dt: float) -> void:
 	if jersey_materials.is_empty() or dt<=0.: return
+	if sleeve_cloth: sleeve_cloth.update(skeleton,shirt_fabric,dt)
 	if shirt_fabric:
 		var tension := Vector2.ZERO
 		for i in 2:

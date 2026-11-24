@@ -7,6 +7,18 @@ uniform bool jacket = false;
 
 uniform vec3 inertia;
 uniform vec2 arm_lift;
+uniform sampler2D knit_surface : repeat_enable,filter_linear_mipmap_anisotropic;
+uniform vec3 sleeve_offset[60];
+vec3 sleeve_motion(vec3 bind){
+	float ring=clamp((abs(bind.x)-.205)/.082,0.,1.999);
+	int row=int(floor(ring));
+	float phase_angle=fract(atan(bind.z+.035,bind.y-1.48)/6.2831853+1.)*10.;
+	int j=int(floor(phase_angle))%10;
+	int base=(bind.x>0.?0:30)+row*10;
+	vec3 a=mix(sleeve_offset[base+j],sleeve_offset[base+(j+1)%10],fract(phase_angle));
+	vec3 b=mix(sleeve_offset[base+10+j],sleeve_offset[base+10+(j+1)%10],fract(phase_angle));
+	return mix(a,b,fract(ring));
+}
 float tension_fold(vec3 bind){
 	float x=abs(bind.x);
 	float tension=bind.x>0.?arm_lift.x:arm_lift.y;
@@ -31,7 +43,7 @@ void vertex(){
 		float wave=sin(angle*4.+rest.y*12.-TIME*10.+phase);
 		float ripple=sin(angle*7.-TIME*15.+phase*.7);
 		float drape=mix(.016,.012,arm)+.014*pleat+motion*(.023+.044*wave+.013*ripple);
-		VERTEX+=NORMAL*(free_edge*drape+.009*tension_fold(rest));
+		VERTEX+=NORMAL*(free_edge*drape*(1.-arm)+.006*tension_fold(rest))+sleeve_motion(rest);
 		{
 			VERTEX.y+=(1.-arm)*free_edge*(-.018+motion*(.023*wave+.012*ripple));
 		}
@@ -62,7 +74,7 @@ void fragment(){
 		float zipper=(1.-smoothstep(.0015,.003,abs(rest.x)))*step(.065,rest.z);
 		base=mix(base,vec3(.50,.53,.50),zipper);
 	}else{
-		float cuff=1.-smoothstep(.002,.005,abs(x-.386));
+		float cuff=1.-smoothstep(.18,.40,COLOR.g);
 		base*=1.-.12*cuff;
 		float collar=1.563-.055*(1.-smoothstep(.045,.109,x))*smoothstep(-.075,.075,rest.z);
 		base=mix(base,trim.rgb,(1.-smoothstep(.010,.017,abs(collar-y)))*(1.-smoothstep(.074,.123,x)));
@@ -100,6 +112,14 @@ void fragment(){
 	float wet=dampness*smoothstep(.16,.56,spread+wick);
 	ALBEDO*=1.-.47*wet;
 	ROUGHNESS=mix(ROUGHNESS,.52,wet);
+	if(!jacket){
+		vec3 yarn=texture(knit_surface,UV*31.).rgb;
+		float cuff=1.-smoothstep(.20,.42,COLOR.g);
+		float stitches=(1.-smoothstep(.035,.11,abs(COLOR.g-.28)))*(.6+.4*yarn.b);
+		ALBEDO*=mix(.97,1.03,yarn.b)*(1.-.12*cuff-.18*stitches);
+		NORMAL_MAP.xy+=(yarn.rg-.5)*.28;
+		ROUGHNESS=clamp(ROUGHNESS+.08*(yarn.b-.5)-.025*cuff,0.,1.);
+	}
 	RIM=.16;
 	RIM_TINT=.32;
 	SPECULAR=.28;
