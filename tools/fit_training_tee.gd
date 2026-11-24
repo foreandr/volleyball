@@ -49,7 +49,12 @@ func _initialize() -> void:
 				var edge := Vector2i(mini(a,b),maxi(a,b))
 				edges[edge]=edges.get(edge,0)+1
 	var cuffs := PackedVector3Array()
+	var neckline := PackedVector3Array()
 	for edge: Vector2i in edges:
+		if edges[edge]==1:
+			for endpoint in [edge.x,edge.y]:
+				var point := original[int(endpoint)]
+				if absf(point.x)<1.2 and point.y>5.5: neckline.append(fit(point))
 		var v := original[edge.x]
 		if edges[edge]==1 and absf(v.x)>1.60 and v.y>4.9: cuffs.append(fit(v))
 	var result := ArrayMesh.new()
@@ -104,7 +109,9 @@ func _initialize() -> void:
 			uv2.append(Vector2(p.x,p.y))
 			var cuff_distance := INF
 			for edge in cuffs: cuff_distance=minf(cuff_distance,p.distance_to(edge))
-			colors.append(Color((p.z+.3)/.6,clampf(cuff_distance/.035,0.,1.),0))
+			var collar_distance := INF
+			for point in neckline: collar_distance=minf(collar_distance,p.distance_to(point))
+			colors.append(Color((p.z+.3)/.6,clampf(cuff_distance/.035,0.,1.),clampf(collar_distance/.045,0.,1.)))
 		arrays[Mesh.ARRAY_VERTEX]=source
 		arrays[Mesh.ARRAY_BONES]=bones
 		arrays[Mesh.ARRAY_WEIGHTS]=weights

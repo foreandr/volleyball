@@ -124,8 +124,13 @@ void fragment(){
 		base*=1.-.18*insert*binding;
 		float cuff=1.-smoothstep(.18,.40,COLOR.g);
 		base*=1.-.12*cuff;
-		float collar=1.563-.055*(1.-smoothstep(.045,.109,x))*smoothstep(-.075,.075,rest.z);
-		base=mix(base,trim.rgb,(1.-smoothstep(.010,.017,abs(collar-y)))*(1.-smoothstep(.074,.123,x)));
+		// Distance to the fitted neckline follows its asymmetric front and back.
+		float neck_band=1.-smoothstep(.31,.41,COLOR.b);
+		float seam=1.-smoothstep(.028,.082,abs(COLOR.b-.37));
+		float ribs=cos(atan(rest.z+.018,rest.x)*112.);
+		float resolved_ribs=1.-smoothstep(.001,.004,fwidth(rest.x)+fwidth(rest.z));
+		base=mix(base,trim.rgb*(1.+.085*ribs*resolved_ribs),neck_band);
+		base*=1.-.22*seam;
 		float rear=1.-smoothstep(-.05,.02,rest.z);
 		vec2 uv=vec2(.5+mix(rest.x,-rest.x,rear)/mix(.205,.262,rear),(1.425-y)/mix(.115,.144,rear));
 		if(all(greaterThanEqual(uv,vec2(0.))) && all(lessThanEqual(uv,vec2(1.)))){
