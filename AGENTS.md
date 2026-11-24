@@ -5,7 +5,7 @@
 - Share applicable drill behavior across all drills through common code. Fix shared camera, replay, editing, setup persistence, and diagnostics at their source. Keep each drill's saved setup independent.
 
 - Godot 4.6 / GDScript, Compatibility renderer. Keep character assets and saves independent from FightLab and Alien Optimization.
-- Implement the requested change, run a focused check, commit, and launch a fresh maximized game window. Close only previous Volleyball game windows. Defer broad tests and documentation until requested.
+- Implement the requested change, run a focused check, commit, and launch a fresh maximized game window at the exact scene and state most recently changed. Verify the playable handoff before sending the GitHub commit. Preserve the real career save when jumping to a review checkpoint. Close only previous Volleyball game windows. Defer broad tests and documentation until requested.
 - Keep the UI minimal. No unsolicited instructions, explanatory copy, view buttons or metadata.
 - Use the user-supplied Goalkeeper Idle animation as the default ready stance.
 - For every authored animation, review the entire motion from front and side, including transitions, balance, contacts and recovery. Judge whether a professional in that sport would recognize believable technique. Fix problems before calling the animation finished; report limitations honestly.
