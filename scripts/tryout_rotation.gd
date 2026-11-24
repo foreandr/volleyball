@@ -7,7 +7,8 @@ const STATIONS := [CART,Vector3(0,0,-1.7),Vector3(3.05,0,-1.7)]
 const FEED_SPOT := Vector3(.85,.04,-.40)
 const HANDLE := Vector3(.10,.04,-.68)
 var wheel_stride := 0.0
-var coach_steps: RefCounted
+var coach_pushing := false
+var coach_stride := 0.0
 var tosses := 0
 var station := 0
 var routes := preload("res://scripts/tryout_paths.gd").new()
@@ -42,7 +43,6 @@ var random := RandomNumberGenerator.new()
 func configure(host: Control) -> void:
 	game = host
 	random.randomize()
-	coach_steps=preload("res://scripts/right_side_steps.gd").new(game.coach)
 	roster.append(game.setter)
 	for i in [1,2]: roster.append(game.athlete(WAIT[i],["","377f95","93543a"][i]))
 	roster[1].display_name="Jordan Reyes"
@@ -131,24 +131,42 @@ func store_ball(body: RigidBody3D) -> void:
 func station_ready(dt: float) -> bool:
 	var requested := (tosses/10)%STATIONS.size()
 	if requested!=station:
-		if game.coach.position.distance_to(basket.position+HANDLE)>.18:
-			walk(game.coach,basket.position+HANDLE,dt,2.25)
-			return false
-		var previous := basket.position
+		var coach: Node3D=game.coach
+		if not coach_pushing:
+			if not walk(coach,basket.to_global(HANDLE),dt,2.25): return false
+			coach_pushing=true
+			coach_stride=0.
+		var previous := basket.transform
+		var before := coach.position
 		var travel: Vector3=STATIONS[requested]-basket.position
-		var stride: float=coach_steps.advance(Vector2(-signf(travel.x),0),dt*1.35)
-		basket.position=basket.position.move_toward(STATIONS[requested],absf(stride)*game.coach.scale.y)
-		for body in stock: body.position+=basket.position-previous
-		game.coach.position=basket.position+HANDLE
-		game.coach.rotation.y=0
-		game.coach.play_action("idle")
-		coach_steps.apply_pose()
-		grip_handle(game.coach,basket)
-		if basket.position.distance_to(STATIONS[requested])<.01:
+		# Swing the handle around the cart first, push forward, then park
+		# with the handle accessible from the coach's usual feeding spot.
+		var parking := travel.length()<.01
+		var heading := 0. if parking else atan2(travel.x,travel.z)
+		basket.rotation.y=rotate_toward(basket.rotation.y,heading,dt*2.8)
+		var aligned := absf(angle_difference(basket.rotation.y,heading))<.01
+		if aligned and not parking:
+			basket.position=basket.position.move_toward(STATIONS[requested],dt*2.15)
+		coach.position=basket.to_global(HANDLE)
+		coach.rotation.y=basket.rotation.y
+		coach_stride=push_pose(coach,basket,coach_stride,before.distance_to(coach.position))
+		for body in stock: body.position=basket.transform*(previous.affine_inverse()*body.position)
+		if parking and aligned:
+			coach_pushing=false
 			station=requested
 			game.trace("cart_station",{"station":station,"tosses":tosses})
 		return false
 	return walk(game.coach,basket.position+FEED_SPOT,dt,4.2)
+
+func push_pose(actor: Node3D,cart: Node3D,stride: float,distance: float) -> float:
+	if absf(distance)>.00001:
+		var clip: Animation=actor.animator.get_animation("base/Walk")
+		stride=fposmod(stride+distance*clip.length/1.30,clip.length)
+		actor.play_action("base/Walk",0.)
+		actor.animator.seek(stride,true)
+	else: actor.play_action("base/Idle")
+	grip_handle(actor,cart)
+	return stride
 
 func grip_handle(actor: Node3D,cart: Node3D) -> void:
 	var rig: Skeleton3D = actor.skeleton
@@ -587,12 +605,8 @@ func service_carts(dt: float) -> void:
 		runner.rotation.y=cart.rotation.y
 		cart.position=runner.position-cart.basis*handle
 		cart.position.y=0
-		var clip: Animation=runner.animator.get_animation("base/Walk")
-		wheel_stride=fposmod(wheel_stride+step.length()*clip.length/1.30*(-1 if backwards else 1),clip.length)
-		runner.play_action("base/Walk",0.)
-		runner.animator.seek(wheel_stride,true)
-	else: runner.play_action("base/Idle")
-	grip_handle(runner,cart)
+		wheel_stride=push_pose(runner,cart,wheel_stride,step.length()*(-1 if backwards else 1))
+	else: wheel_stride=push_pose(runner,cart,wheel_stride,0.)
 	for body in loads[exchange]: body.position+=cart.position-previous
 	if not arrived: return
 	if returning:
