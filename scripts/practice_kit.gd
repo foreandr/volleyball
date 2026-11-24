@@ -465,6 +465,28 @@ static func haircut(scalp: Node3D,color: Color,variant: int,actor: Node3D) -> vo
 				tool.set_uv2(Vector2(normal.x,normal.z)*.5+Vector2.ONE*.5)
 				tool.set_color(Color(pigment,0,0))
 				tool.add_vertex(root+sweep*length*t+normal*(curl+.002+.003*t)+across*(lateral+(uv.x-.5)*width*(1.-.87*t)))
+	# Gather longer cuts into a wrapped knot at the back of the crown.
+	# Each ribbon coils around the tie; overlap keeps the interior opaque.
+	if style==5 or (style==3 and variant>=7):
+		var radius := .037+.003*(variant%4)
+		var center := Vector3(parting*.025,.196+.005*(variant%3),-.092)
+		for strand in 144:
+			var latitude := asin(rng.randf_range(-1.,1.))
+			var longitude := rng.randf()*TAU
+			var pigment := rng.randf_range(.62,1.)
+			for row in 8:
+				for corner: Vector2 in [Vector2.ZERO,Vector2.RIGHT,Vector2.DOWN,Vector2.RIGHT,Vector2.ONE,Vector2.DOWN]:
+					var t := (row+corner.y)/8.
+					var lat := clampf(latitude+(corner.x-.5)*.16+.14*sin(t*PI),-1.55,1.55)
+					var lon := longitude+t*2.4
+					var n := Vector3(cos(lat)*cos(lon),sin(lat),cos(lat)*sin(lon))
+					var tangent := Vector3(-sin(lon),0,cos(lon))
+					tool.set_normal(n)
+					tool.set_tangent(Plane(tangent,1.))
+					tool.set_color(Color(pigment,0,0))
+					tool.set_uv(Vector2(corner.x,t*.38))
+					tool.set_uv2(Vector2(.5,.05))
+					tool.add_vertex(center+n*radius*(1.+.06*sin(PI*t)))
 	var locks := MeshInstance3D.new()
 	locks.mesh=tool.commit()
 	scalp.add_child(locks)
