@@ -3,16 +3,21 @@ uniform sampler2D shoe_atlas : source_color,filter_linear_mipmap_anisotropic;
 uniform vec4 tint : source_color = vec4(1.);
 uniform vec4 counter_color : source_color;
 varying vec3 shoe;
+varying float sole_facing;
 
 void vertex(){
 	shoe=VERTEX;
+	sole_facing=-NORMAL.y;
 }
 
 void fragment(){
 	vec3 upper=texture(shoe_atlas,UV).rgb*tint.rgb;
 	// Follow the toe rocker as the sole turns up under the forefoot.
 	float height=shoe.y-.011*smoothstep(.09,.18,shoe.z);
-	float rubber=1.-smoothstep(.012,.016,height);
+	// Raised heel and toe rubber follow the underside of the last even above
+	// the flat contact plane. Keep the padded collar out of this mask.
+	float underside=smoothstep(.30,.74,sole_facing)*(1.-smoothstep(.035,.058,height));
+	float rubber=max(underside,1.-smoothstep(.012,.016,height));
 	float foam=(1.-rubber)*(1.-smoothstep(.026,.035,height));
 	float chevron=(shoe.z+abs(shoe.x)*.68)*960.;
 	float resolution=1.-smoothstep(.8,3.1,fwidth(chevron));
@@ -25,7 +30,7 @@ void fragment(){
 	float ring=radius*1120.;
 	float ring_cut=smoothstep(.12,.82,cos(ring))*(1.-smoothstep(.8,3.,fwidth(ring)));
 	float tread=mix(groove,ring_cut,disc);
-	float bottom=1.-smoothstep(.004,.010,height);
+	float bottom=max(underside,1.-smoothstep(.004,.010,height));
 	vec3 gum=mix(vec3(.27,.15,.073),vec3(.077,.052,.033),tread);
 	float flex=1.-smoothstep(.0015,.0035,abs(shoe.z-.127+.21*abs(shoe.x)));
 	outsole=mix(outsole,gum*(1.-.55*flex),bottom);
@@ -70,6 +75,7 @@ void fragment(){
 	vec3 midsole=mix(vec3(.51,.49,.45),tint.rgb,.14)*(.96+.055*sculpt*resolved);
 	ALBEDO=mix(ALBEDO,midsole,foam*.91);
 	ALBEDO*=1.-foam*.19*bead;
+	ALBEDO=mix(ALBEDO,gum*(1.-.55*flex),underside);
 	ROUGHNESS=mix(mix(.74,.88,foam),.84,rubber);
 	ROUGHNESS=mix(ROUGHNESS,.44,counter);
 	ROUGHNESS=mix(ROUGHNESS,.49,guard);
