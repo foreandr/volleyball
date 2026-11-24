@@ -11,6 +11,15 @@ void fragment(){
 	vec2 fade=1.-smoothstep(vec2(.15),vec2(.5),fwidth(thread));
 	vec2 yarn=cos(thread*6.283185)*fade;
 	ALBEDO=vec3(.79,.755,.68)*(1.-lap*.14+.025*yarn.x+.018*yarn.y);
+	// A torn finishing tab lies across the last turn with a slightly uneven edge.
+	float torn=.54+.075*UV.y+.007*sin(157.*UV.y)+.004*sin(263.*UV.y);
+	float edge=UV.x-torn;
+	float width=max(.003,fwidth(edge));
+	float span=smoothstep(.08,.14,UV.y)*(1.-smoothstep(.83,.90,UV.y));
+	float tab=span*smoothstep(-width,width,edge)*(1.-smoothstep(.08,.16,edge));
+	float shadow=span*(1.-smoothstep(.003,.011+width,abs(edge+.005)));
+	ALBEDO=mix(ALBEDO,vec3(.86,.83,.76)*(1.+.03*yarn.x),tab*.83);
+	ALBEDO*=1.-.29*shadow;
 	ROUGHNESS=.94;
 	SPECULAR=.20;
 	NORMAL_MAP=normalize(vec3(.075*yarn.x,.065*yarn.y+.11*lap,1.))*.5+.5;
