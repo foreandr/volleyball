@@ -374,6 +374,7 @@ static func face_hair(rig: Skeleton3D,body: MeshInstance3D,mesh: ArrayMesh,coach
 
 static func haircut(scalp: Node3D,color: Color,variant: int,actor: Node3D) -> void:
 	var style := variant%7
+	var parting := sin(variant*2.39996)*.46
 	var tool := SurfaceTool.new()
 	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var rng := RandomNumberGenerator.new()
@@ -385,20 +386,40 @@ static func haircut(scalp: Node3D,color: Color,variant: int,actor: Node3D) -> vo
 		var radial := sqrt(1.-y*y)
 		var normal := Vector3(radial*cos(a),y,radial*sin(a))
 		var root := Vector3(.084*normal.x,.134+.074*y,-.013+.093*normal.z)
-		var sweep := Vector3(.25 if style%2==0 else -.35,-.35,-.95).slide(normal).normalized()
+		var comb := Vector3(parting,-.35,-.95)
+		var length_factor := 1.
+		var crown := smoothstep(.22,.86,y)
+		match style:
+			0: length_factor=.48+.54*crown
+			1: comb=Vector3(.92,-.18,parting)
+			2: length_factor=.38+1.35*crown
+			3: comb=Vector3(signf(normal.x-parting),-.6,.42)
+			4:
+				length_factor=.25+1.24*(1.-smoothstep(.22,.68,absf(normal.x-parting*.4)))
+				comb=Vector3(parting,.70,-.85)
+			5: comb=Vector3(parting,-.65,.92)
+			6: length_factor=.62+.68*crown
+		var sweep := comb.slide(normal).normalized()
 		var across := normal.cross(sweep).normalized()
-		var length := (.022+.009*style)*rng.randf_range(.75,1.25)
+		var length: float = actor.hair_length*length_factor*rng.randf_range(.75,1.25)
 		var width := rng.randf_range(.005,.011)
 		var pigment := rng.randf_range(.65,1.)
-		for row in 4:
+		var coiled := style in [2,6]
+		var rows := 9 if coiled else 4
+		for row in rows:
 			for uv: Vector2 in [Vector2(0,0),Vector2(1,0),Vector2(0,1),Vector2(1,0),Vector2(1,1),Vector2(0,1)]:
-				var t := (row+uv.y)*.25
-				var curl := sin(t*PI*(1.8 if style in [2,6] else 1.))*length*.28
+				var t := (row+uv.y)/float(rows)
+				var curl := sin(t*PI)*length*.28
+				var lateral := 0.
+				if coiled:
+					var twist := t*TAU*(1.4 if style==2 else 1.9)
+					curl=length*(.48*t+.14*(1.-cos(twist)))
+					lateral=length*.18*sin(twist)
 				tool.set_normal(normal)
 				tool.set_uv(Vector2(uv.x,t))
 				tool.set_uv2(Vector2(normal.x,normal.z)*.5+Vector2.ONE*.5)
 				tool.set_color(Color(pigment,0,0))
-				tool.add_vertex(root+sweep*length*t+normal*(curl+.002+.003*t)+across*(uv.x-.5)*width*(1.-.87*t))
+				tool.add_vertex(root+sweep*length*t+normal*(curl+.002+.003*t)+across*(lateral+(uv.x-.5)*width*(1.-.87*t)))
 	var locks := MeshInstance3D.new()
 	locks.mesh=tool.commit()
 	scalp.add_child(locks)

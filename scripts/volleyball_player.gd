@@ -179,6 +179,8 @@ func update_hair(dt: float) -> void:
 				# The head moves the roots immediately. Unsupported tips
 				# retain world-space inertia before the lock springs back.
 				hair_offsets[i]-=shift/steps
+				var wind_force := fabric_airflow*hair_length*(12.+3.*sin(fabric_time*2.2+i))
+				hair_speeds[i]+=wind_force*h
 				hair_speeds[i]+=(-hair_offsets[i]*(290.+i*12.)-hair_speeds[i]*19.)*h
 				hair_offsets[i]=(hair_offsets[i]+hair_speeds[i]*h).limit_length(hair_length*.58)
 		hair_material.set_shader_parameter("guide_"+str(i),local_basis*hair_offsets[i])
