@@ -602,6 +602,13 @@ static func face_hair(rig: Skeleton3D,body: MeshInstance3D,mesh: ArrayMesh,coach
 		if(scalp){
 			float root_light=1.-smoothstep(.018,.055,edge_height);
 			ALBEDO*=(1.+.34*fibers)*(1.+.36*root_light);
+			if(gray){
+				// Group short silver fibers into locks combed toward the nape.
+				float flow=p.x*810.+3.2*sin(p.y*48.+p.z*18.)+.7*sin(p.x*135.);
+				float lock=.5+.5*cos(flow)*(1.-smoothstep(.85,3.,fwidth(flow)));
+				float salt=smoothstep(.35,.76,.58*lock+.42*grain);
+				ALBEDO=tone.rgb*mix(.36,1.20,salt)*(.88+.18*fibers);
+			}
 		}
 		if(jaw){
 			float whisker=p.y*1850.+abs(p.x)*mix(820.,350.,moustache)+p.z*460.;
