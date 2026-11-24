@@ -170,6 +170,10 @@ func credit_rep() -> bool:
 func finish_intro() -> bool:
 	return true
 
+func reset_drill() -> void:
+	trace("drill_reset",{})
+	get_tree().reload_current_scene()
+
 func start_drill() -> void:
 	start_practice()
 
@@ -451,18 +455,18 @@ func _process(delta: float) -> void:
 			setter.animator.advance(0.0)
 			if held>=0: Hands.apply(setter,catch_point,.55)
 			ball.position = coach_motion.toss(coach,clampf((clock-maxf(clock-elapsed,next_release-.30))/.30,0,1))
-			if elapsed>=.30 and clock>=next_release:
+			# Measure the athlete who actually arrived, including their rig scale.
+			var head := Contact.joint(setter,"Head")
+			catch_point.y=BASE.y+head.y-setter.position.y+.20+(.52 if jump_rep() else 0.)
+			if rep<16 or demonstration:
+				catch_point.x=head.x
+				catch_point.z=head.z
+			landing.position=Vector3(catch_point.x,.075,catch_point.z)
+			if elapsed>=.30 and clock>=next_release and rotation_drill.floor_clear():
 				last_toss = clock
 				next_release = clock+2.0
 				if not demonstration: rotation_drill.tosses+=1
 				source = ball.position
-				# Measure the athlete who actually arrived, including their rig scale.
-				var head := Contact.joint(setter,"Head")
-				catch_point.y=BASE.y+head.y-setter.position.y+.20+(.52 if jump_rep() else 0.)
-				if rep<16 or demonstration:
-					catch_point.x=head.x
-					catch_point.z=head.z
-				landing.position=Vector3(catch_point.x,.075,catch_point.z)
 				toss_curve=[.55,1.35,2.65][rotation_drill.tosses%3]*rotation_drill.random.randf_range(.91,1.09)
 				var apex := maxf(source.y,catch_point.y)+toss_curve
 				contact_time=sqrt(2.*(apex-source.y)/9.81)+sqrt(2.*(apex-catch_point.y)/9.81)

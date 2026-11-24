@@ -130,3 +130,29 @@ func pose_reception_dive(ready: Array[Transform3D], clasp: Array[Transform3D], s
 
 func pose_reception_knee_slide(from_pose: Array[Transform3D], ready: Array[Transform3D], start: Vector3, side: String, time: float, contact: Dictionary) -> void:
 	SideKneeSlide.sample(self,get_pose_author(),from_pose,ready,start,side,time,contact)
+
+var hair_material: ShaderMaterial
+var hair_mount: Node3D
+var hair_last := Vector3.ZERO
+var hair_lag := Vector3.ZERO
+var hair_velocity := Vector3.ZERO
+var jersey_materials: Array[ShaderMaterial]=[]
+var jersey_origin := Vector3.ZERO
+var jersey_speed := 0.
+
+func _process(dt: float) -> void:
+	if jersey_materials.is_empty() or dt<=0.: return
+	if hair_material and hair_mount:
+		var head := hair_mount.to_global(Vector3(0,.18,0))
+		var velocity := (head-hair_last)/dt if head.distance_to(hair_last)<.8 else Vector3.ZERO
+		hair_last=head
+		var target := (hair_mount.global_basis.orthonormalized().inverse()*velocity*-.009).limit_length(.035)
+		var step := minf(dt,.033)
+		hair_velocity+=((target-hair_lag)*175.-hair_velocity*19.)*step
+		hair_lag+=hair_velocity*step
+		hair_material.set_shader_parameter("lag",hair_lag)
+	var travel := global_position.distance_to(jersey_origin)
+	jersey_origin=global_position
+	var speed := clampf(travel/dt/6.2,0.,1.) if travel<1. else 0.
+	jersey_speed=lerpf(jersey_speed,speed,1.-exp(-dt*(12. if speed>jersey_speed else 5.)))
+	for material in jersey_materials: material.set_shader_parameter("motion",jersey_speed)

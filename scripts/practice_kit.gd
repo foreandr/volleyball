@@ -65,6 +65,10 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 		if not shirt and not sleeves: continue
 		var kit := ShaderMaterial.new()
 		kit.shader = FABRIC
+		if not coach:
+			actor.jersey_origin=actor.global_position
+			actor.jersey_materials.append(kit)
+			kit.set_shader_parameter("phase",variant*1.79)
 		kit.set_shader_parameter("fabric",Color("223d3c") if coach else Color("b34421"))
 		kit.set_shader_parameter("trim",Color("cad4bf") if coach else Color("182d36"))
 		kit.set_shader_parameter("lettering",print_texture)
@@ -85,7 +89,7 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 			invisible.albedo_color = Color.TRANSPARENT
 			node.set_surface_override_material(0,invisible)
 			node.set_surface_override_material(2,invisible)
-			if not coach: shorts(rig,node,variant)
+			if not coach: shorts(rig,node,variant,actor)
 			else:
 				var pants := MeshInstance3D.new()
 				pants.mesh=tailored_surface(node.mesh,1,false,true)
@@ -105,7 +109,7 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 		var rest := rig.get_bone_global_rest(head)
 		scalp.transform=rest.affine_inverse()*Transform3D(Basis.IDENTITY,rest.origin)
 		var hair := Color.from_hsv(.065+.004*variant,.42,.13+.065*(variant%6))
-		haircut(scalp,hair,variant)
+		haircut(scalp,hair,variant,actor)
 		for side in ["l","r"]:
 			if variant>=20 or variant==0 or variant%4==1 or (variant%4==2 and side=="l") or (variant%4==3 and side=="r"): knee_pad(rig,side,variant%3==1)
 			if variant%3==1: compression(rig,"calf_"+side,"foot_"+side,.067,.044,Color("e3ded2"))
@@ -197,12 +201,16 @@ static func coach_jacket(rig: Skeleton3D) -> void:
 	material.shader=textile
 	coat.material_override=material
 
-static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int) -> void:
+static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: Node3D) -> void:
 	var material := ShaderMaterial.new()
 	var shader := Shader.new()
 	shader.code = """shader_type spatial;
-	uniform float hem_y; uniform vec4 cloth:source_color; varying vec2 rest;
-	void vertex(){rest=UV2;VERTEX+=NORMAL*.004;}
+	uniform float motion; uniform float hem_y; uniform vec4 cloth:source_color; varying vec2 rest;
+	void vertex(){rest=UV2;
+		float hem=1.-smoothstep(hem_y,hem_y+.22,rest.y);
+		float ripple=sin(rest.x*47.+rest.y*25.-TIME*14.);
+		VERTEX+=NORMAL*(.004+hem*(.009+motion*(.012+.016*ripple)));
+		VERTEX.y+=hem*motion*.009*ripple;}
 	void fragment(){
 		if(rest.y<hem_y) discard;
 		float hem=1.-smoothstep(hem_y+.004,hem_y+.014,rest.y);
@@ -210,6 +218,7 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int) -> void:
 		ROUGHNESS=.84;
 	}"""
 	material.shader = shader
+	actor.jersey_materials.append(material)
 	var hem := .69+.019*(variant%7)
 	material.set_shader_parameter("hem_y",hem)
 	material.set_shader_parameter("cloth",Color.from_hsv(fmod(.55+.147*variant,1.),.32,.24+.045*(variant%4)))
@@ -320,7 +329,15 @@ static func court_shoe(rig: Skeleton3D,side: String,coach: bool,variant: int) ->
 	var profile := [Vector2(-.14,.044),Vector2(-.115,.062),Vector2(-.064,.065),Vector2(.005,.052),Vector2(.08,.071),Vector2(.133,.065),Vector2(.168,.046),Vector2(.183,.015)]
 	shoe_shell(last,profile,[.023,.022,.021,.02,.019,.02,.027,.036],.019,Color("373934"),side)
 	shoe_shell(last,profile,[.052,.054,.052,.048,.043,.041,.046,.047],.028,Color("e6e1d1"),side)
-	shoe_shell(last,profile,[.092,.129,.134,.123,.091,.072,.060,.048],.042,upper,side)
+	var cut := variant%3
+	var collar := [0.,.026,-.014][cut] as float
+	shoe_shell(last,profile,[.092+collar,.129+collar,.134+collar,.123,.091,.072,.060,.048],.042,upper,side)
+	if cut==1:
+		for sign_ in [-1,1]:
+			shoe_part(last,Vector3(sign_*.047,.134,-.081),Vector3(.028,.045,.085),upper.darkened(.22))
+	elif cut==2:
+		var strap := shoe_part(last,Vector3(0,.125,-.015),Vector3(.119,.018,.036),upper.darkened(.32))
+		strap.rotation.y=.22
 	shoe_part(last,Vector3(0,.113,-.084),Vector3(.104,.038,.091),Color("252a30"))
 	shoe_part(last,Vector3(0,.119,-.020),Vector3(.072,.047,.104),upper.lightened(.18))
 	for i in 4:
@@ -412,29 +429,39 @@ static func face_hair(rig: Skeleton3D,body: MeshInstance3D,mesh: ArrayMesh,coach
 	mat.set_shader_parameter("tone",Color("929087") if coach else Color.from_hsv(.065+.004*variant,.42,.13+.065*(variant%6)))
 	part.material_override=mat
 
-static func haircut(scalp: Node3D,color: Color,variant: int) -> void:
+static func haircut(scalp: Node3D,color: Color,variant: int,actor: Node3D) -> void:
 	var style := variant%7
-
-	if style==0: return
-	match style:
-		1,5:
-			for i in 8:
-				var strand := shoe_part(scalp,Vector3((i-3.5)*.021,.20-absf(i-3.5)*.006,-.02),Vector3(.032,.046,.19),color.lightened(.015*(i%3)))
-				strand.rotation.y=.13 if style==1 else -.27
-			if style==5: shoe_part(scalp,Vector3(0,.166,-.121),Vector3(.12,.103,.105),color)
-		2,6:
-			for i in 38:
-				var h := (i+.5)/38.
-				var a := i*2.39996
-				var r := sqrt(1.-h*h)
-				var loc := Vector3(.088*r*cos(a),.16+.061*h,-.016+.096*r*sin(a))
-				shoe_part(scalp,loc,Vector3.ONE*(.049 if style==2 else .069),color.lightened(.012*(i%4)))
-		3:
-			for i in 6:
-				var lock := shoe_part(scalp,Vector3((i-2.5)*.027,.205,-.005),Vector3(.056,.059,.164),color)
-				lock.rotation.z=-.48
-		4:
-			shoe_part(scalp,Vector3(0,.224,-.076),Vector3(.115,.095,.115),color)
+	var tool := SurfaceTool.new()
+	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var rng := RandomNumberGenerator.new()
+	rng.seed=217+variant
+	for i in 420:
+		var y := rng.randf()
+		var a := rng.randf()*TAU
+		var radial := sqrt(1.-y*y)
+		var normal := Vector3(radial*cos(a),y,radial*sin(a))
+		var root := Vector3(.084*normal.x,.134+.074*y,-.013+.093*normal.z)
+		var sweep := Vector3(.25 if style%2==0 else -.35,-.35,-.95).slide(normal).normalized()
+		var across := normal.cross(sweep).normalized()
+		var length := (.022+.009*style)*rng.randf_range(.75,1.25)
+		var width := rng.randf_range(.008,.015)
+		for row in 4:
+			for uv: Vector2 in [Vector2(0,0),Vector2(1,0),Vector2(0,1),Vector2(1,0),Vector2(1,1),Vector2(0,1)]:
+				var t := (row+uv.y)*.25
+				var curl := sin(t*PI*(1.8 if style in [2,6] else 1.))*length*.28
+				tool.set_normal(normal)
+				tool.set_uv(Vector2(uv.x,t))
+				tool.add_vertex(root+sweep*length*t+normal*(curl+.008)+across*(uv.x-.5)*width*(1.-.87*t))
+	var locks := MeshInstance3D.new()
+	locks.mesh=tool.commit()
+	scalp.add_child(locks)
+	var mat := ShaderMaterial.new()
+	mat.shader=preload("res://assets/gym/practice_hair.gdshader")
+	mat.set_shader_parameter("tone",color)
+	mat.set_shader_parameter("phase",variant*1.79)
+	locks.material_override=mat
+	actor.hair_mount=scalp
+	actor.hair_material=mat
 
 static func shoe_part(parent: Node3D,at: Vector3,dimensions: Vector3,color: Color) -> MeshInstance3D:
 	var mesh := SphereMesh.new()

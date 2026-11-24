@@ -57,6 +57,10 @@ func configure(host: Control) -> void:
 	primary.custom_minimum_size.y = 46
 	primary.pressed.connect(hide)
 	column.add_child(primary)
+	var restart := Button.new()
+	restart.text="Reset drill"
+	restart.pressed.connect(game.reset_drill)
+	column.add_child(restart)
 	var actions := HBoxContainer.new()
 	column.add_child(actions)
 	for caption in ["Watch demo","Recordings","My Career"]:

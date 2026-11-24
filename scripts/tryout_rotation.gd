@@ -51,6 +51,16 @@ func configure(host: Control) -> void:
 	for i in HOME.size():
 		var actor: Node3D = game.athlete(HOME[i],"395b48")
 		preload("res://scripts/practice_kit.gd").apply(actor,false,i+3)
+		# The imported idle and walk clips omit spine_01. Key its neutral
+		# rotation so procedural pickup and net-duck poses can blend out.
+		for clip_name in ["base/Idle","base/Walk",actor.animation_slots.get("run","run")]:
+			if not actor.animator.has_animation(clip_name): continue
+			var clip: Animation=actor.animator.get_animation(clip_name)
+			var bone := NodePath("Armature/Skeleton3D:spine_01")
+			if clip.find_track(bone,Animation.TYPE_ROTATION_3D)>=0: continue
+			var track := clip.add_track(Animation.TYPE_ROTATION_3D)
+			clip.track_set_path(track,bone)
+			clip.rotation_track_insert_key(track,0.,actor.skeleton.get_bone_rest(actor.skeleton.find_bone("spine_01")).basis.get_rotation_quaternion())
 		workers.append({"actor":actor,"cargo":[],"goal":null,"lifting":0.0,"start":Vector3.ZERO})
 	runner=workers[5].actor
 	basket = Node3D.new()
@@ -72,40 +82,45 @@ func configure(host: Control) -> void:
 		game.world.add_child(bin)
 		bin.position=post
 		bins.append(bin)
-	for i in 30:
-		var body := RigidBody3D.new()
-		body.name = "PracticeBall%d" % (i+1)
-		body.freeze = true
-		body.mass = .27
-		body.continuous_cd = true
-		body.contact_monitor = true
-		body.max_contacts_reported = 4
-		body.body_entered.connect(func(other):
-			if other is StaticBody3D and other.collision_layer==64:
-				net_reaction(body.position,body.linear_velocity))
-		body.collision_layer = 128
-		body.collision_mask = Contact.GYM|Contact.EQUIPMENT|64|128
-		body.angular_damp = .55
-		body.linear_damp = .42
-		var mat := PhysicsMaterial.new()
-		mat.bounce = .56
-		mat.friction = .7
-		body.physics_material_override = mat
-		var collider := CollisionShape3D.new()
-		collider.shape = game.contacts.ball_shape
-		body.add_child(collider)
-		var visual := MeshInstance3D.new()
-		visual.mesh = game.ball.mesh
-		visual.material_override = game.ball.material_override
-		body.add_child(visual)
-		game.world.add_child(body)
-		store_ball(body)
+	for i in 30: store_ball(new_ball())
 	var net := Node3D.new()
 	game.world.add_child(net)
 	net.position = Vector3(0,1.97,4)
 	var net_shape := BoxShape3D.new()
 	net_shape.size = Vector3(9.6,1,.04)
 	Contact.solid(net,net_shape,64)
+
+var ball_count := 0
+
+func new_ball() -> RigidBody3D:
+	ball_count+=1
+	var body := RigidBody3D.new()
+	body.name = "PracticeBall%d" % ball_count
+	body.freeze = true
+	body.mass = .27
+	body.continuous_cd = true
+	body.contact_monitor = true
+	body.max_contacts_reported = 4
+	body.body_entered.connect(func(other):
+		if other is StaticBody3D and other.collision_layer==64:
+			net_reaction(body.position,body.linear_velocity))
+	body.collision_layer = 128
+	body.collision_mask = Contact.GYM|Contact.EQUIPMENT|64|128
+	body.angular_damp = .55
+	body.linear_damp = .42
+	var mat := PhysicsMaterial.new()
+	mat.bounce = .56
+	mat.friction = .7
+	body.physics_material_override = mat
+	var collider := CollisionShape3D.new()
+	collider.shape = game.contacts.ball_shape
+	body.add_child(collider)
+	var visual := MeshInstance3D.new()
+	visual.mesh = game.ball.mesh
+	visual.material_override = game.ball.material_override
+	body.add_child(visual)
+	game.world.add_child(body)
+	return body
 
 func cart_box(at: Vector3,size: Vector3,style: Material) -> void:
 	var part := MeshInstance3D.new()
@@ -328,6 +343,17 @@ func tick(dt: float) -> void:
 					w.erase("destination")
 			loose.remove_at(i)
 			game.trace("ball_left_under_stands",{"id":body.name})
+			# Keep a working supply during long sessions. Stage replacement balls
+			# at a sideline cart; the crew still has to bring them to the coach.
+			var available := stock.size()+loose.size()+human_cargo.size()+int(waiting_ball!=null)+int(issued!=null)
+			for load in loads: available+=load.size()
+			for w in workers: available+=w.cargo.size()
+			if available<10:
+				var index := closest_bin(body.position)
+				var spare := new_ball()
+				spare.collision_layer=0
+				deposit(index,spare)
+				game.trace("sideline_spare",{"id":spare.name,"bin":index})
 	for worker in workers:
 		if exchange<0 or worker.actor!=runner: collect(worker,dt)
 	service_carts(dt)
@@ -380,12 +406,23 @@ func collect(w: Dictionary,dt: float) -> void:
 	if unloading.has(actor):
 		place_in_cart(actor,cargo,dt)
 		return
-	if game.phase=="cart" and in_feed_lane(actor.position) and not stock.is_empty() and not w.lifting:
-		var away: Vector3 = (actor.position-game.catch_point).slide(Vector3.UP).cross(Vector3.UP).normalized()
+	if game.phase in ["cart","feed"] and in_feed_lane(actor.position) and (not stock.is_empty() or waiting_ball or issued) and not w.lifting:
+		var line: Vector3=(game.catch_point-game.coach.position).slide(Vector3.UP).normalized()
+		var away := line.cross(Vector3.UP)
+		if (actor.position-game.coach.position).dot(away)<0: away=-away
 		if away.is_zero_approx(): away=Vector3.RIGHT
 		walk(actor,actor.position+away*1.1,dt,4.5)
 		for i in cargo.size(): cargo[i].position=Contact.palm(actor,"l" if i==0 else "r")
 		return
+	if stock.is_empty() and not waiting_ball and game.phase=="cart" and not human_cargo.is_empty() and not unloading.has(roster[0]) and w==workers[3] and cargo.is_empty() and not w.lifting:
+		if actor.position.distance_to(roster[0].position)<1.0:
+			w.goal=null
+			cargo.append(human_cargo.pop_back())
+			game.trace("setter_cart_handoff",{"id":cargo.back().name})
+		elif not w.goal:
+			var approach: Vector3=(actor.position-roster[0].position).slide(Vector3.UP).normalized()
+			perimeter_walk(w,roster[0].position+approach*.64,dt)
+			return
 	if w.goal and not w.goal.freeze:
 		var stuck: float=w.get("stuck",0.)
 		if actor.position.distance_to(w.get("mark",actor.position))>.22:
@@ -399,14 +436,14 @@ func collect(w: Dictionary,dt: float) -> void:
 			w.goal=null
 			w.stuck=0.
 			w.erase("destination")
-	if not w.goal and cargo.size()<2:
+	if not w.goal and cargo.size()<2 and (cargo.is_empty() or not stock.is_empty()):
 		w.mark=actor.position
 		w.stuck=0.
 		w.goal=nearest(actor.position,w,2.7 if not cargo.is_empty() else INF)
 	if w.goal:
 		var body: RigidBody3D=w.goal
 		var delta := (body.position-actor.position).slide(Vector3.UP)
-		if delta.length()>.95:
+		if w.lifting<=0 and delta.length()>.95:
 			perimeter_walk(w,body.position-delta.normalized()*.48,dt)
 		else:
 			actor.rotation.y=atan2(delta.x,delta.z)
@@ -441,6 +478,15 @@ func collect(w: Dictionary,dt: float) -> void:
 				w.goal=null
 				w.lifting=0.
 	elif not cargo.is_empty():
+		if stock.is_empty() and not waiting_ball and not coach_pushing and actor.position.distance_to(basket.position)<1.12:
+			begin_unload(actor,-1,cargo)
+			place_in_cart(actor,cargo,dt)
+			return
+		if stock.is_empty() and not waiting_ball and not coach_pushing and exchange<0 and workers.find(w)>=3:
+			var drop := basket.position+Vector3(0,.04,-.82)
+			perimeter_walk(w,drop,dt)
+			for i in cargo.size(): cargo[i].position=Contact.palm(actor,"l" if i==0 else "r")
+			return
 		var index := workers.find(w)%3
 		if index==exchange: index=closest_bin(actor.position)
 		if index>=0 and (actor.position.distance_to(bins[index].position)<1.05 or perimeter_walk(w,bins[index].position+Vector3(.1,.04,-.65),dt)):
@@ -489,7 +535,7 @@ func place_in_cart(actor: Node3D,cargo: Array,dt: float) -> void:
 		return
 	var state: Dictionary=unloading[actor]
 	var index: int=state.bin
-	var cart := bins[index]
+	var cart := basket if index<0 else bins[index]
 	var body: RigidBody3D=cargo.back()
 	var side: String=state.side
 	var offset := (cart.position-actor.position).slide(Vector3.UP)
@@ -518,7 +564,8 @@ func place_in_cart(actor: Node3D,cargo: Array,dt: float) -> void:
 		var t := clampf((age-.36)/.34,0.,1.)
 		body.position=Vector3(state.release).lerp(slot_position(index),t)+Vector3.UP*.56*t*(1.-t)
 	if age>=.70:
-		deposit(index,body)
+		if index<0: store_ball(body)
+		else: deposit(index,body)
 		cargo.pop_back()
 		if actor==roster[0] and CareerSession.credit_team_return():
 			game.trace("team_chemistry",{"value":CareerSession.team_chemistry()})
@@ -527,6 +574,7 @@ func place_in_cart(actor: Node3D,cargo: Array,dt: float) -> void:
 		if not cargo.is_empty(): begin_unload(actor,index,cargo)
 
 func slot_position(index: int) -> Vector3:
+	if index<0: return basket.position+Vector3.UP*.78
 	var slot: int=loads[index].size()
 	return bins[index].position+Vector3((slot%4-1.5)*.226,.7+.17*(slot/8),((slot/4)%2-.5)*.28)
 
@@ -567,7 +615,7 @@ func service_carts(dt: float) -> void:
 		for i in bins.size():
 			var partner := workers[i+3]
 			if not partner.cargo.is_empty() or partner.lifting>0 or unloading.has(partner.actor): continue
-			if unloading.values().any(func(place): return place.bin==i): continue
+			if unloading.values().any(func(place): return place.bin in [i,-1]): continue
 			if not loads[i].is_empty() and (exchange<0 or loads[i].size()>loads[exchange].size()): exchange=i
 		if exchange<0: return
 		var partner := workers[exchange+3]
@@ -660,11 +708,6 @@ func perimeter_walk(w: Dictionary,target: Vector3,dt: float) -> bool:
 	if not w.path.is_empty():
 		if actor.position.distance_to(w.path[0])<.58 or walk(actor,w.path[0],dt,2.15 if actor==runner and cart_route.get("pushing",false) else 5.7): w.path.pop_front()
 		return false
-	if absf(target.x)<3.3 and target.z>-5 and target.z<13 and workers.has(w) and not on_drill_floor(actor.position):
-		for other in workers:
-			if other.actor!=actor and absf(other.actor.position.x)<3.4 and other.actor.position.z>-5 and other.actor.position.z<13:
-				actor.play_action("base/Idle")
-				return false
 	return walk(actor,target,dt,2.15 if actor==runner and cart_route.get("pushing",false) else 5.7)
 
 func move_actor(actor: Node3D,step: Vector3) -> Vector3:

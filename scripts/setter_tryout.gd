@@ -21,3 +21,6 @@ func complete() -> void:
 	var badges: Array = CareerSession.data.get_value("badges",CareerSession.athlete_id,[])
 	hint.show()
 	hint.text = "Badges   •   "+"   /   ".join(badges) if not badges.is_empty() else ""
+
+func reset_drill() -> void:
+	if CareerSession.checkpoint("tutorial",0): super.reset_drill()
