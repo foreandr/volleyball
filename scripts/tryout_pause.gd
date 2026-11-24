@@ -32,6 +32,8 @@ func configure(host: Node, layer: Node = null) -> void:
 	home.add_theme_constant_override("separation",8)
 	primary = bar(home,"Resume",hide)
 	options_button = bar(home,"Options",open_options)
+	if practice and "solo_setting" in game and game.solo_setting:
+		bar(home,"Edit set frames",open_frame_editor)
 	bar(home,"Restart",restart)
 	bar(home,"Quit",quit_gameplay)
 	options.custom_minimum_size.x = 400
@@ -90,7 +92,7 @@ func open_options() -> void:
 	categories.get_child(0).grab_focus()
 
 func open_frame_editor() -> void:
-	if practice and game.solo_setting and game.replay_inspector.setter_frames.size()>1:
+	if practice and "solo_setting" in game and game.solo_setting and (game.replay_inspector.setter_frames.size()>1 or not game.replay_inspector.previous_set.is_empty()):
 		game.replay_inspector.edit_setter_frames()
 	else:
 		StorySession.prepare_ready_frame_editor()

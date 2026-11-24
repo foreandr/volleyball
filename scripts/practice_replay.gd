@@ -106,6 +106,8 @@ func _exit_tree() -> void:
 	if not camera.is_inside_tree(): camera.free()
 
 var setter_frames: Array[Dictionary] = []
+var previous_set: Array[Dictionary] = []
+var previous_contact := -1
 var rep_clock := 0.
 var last_toss := -INF
 var contact_index := -1
@@ -114,7 +116,10 @@ func record_setter(delta: float) -> void:
 	if not game.solo_setting or game.phase not in ["pass","forehead_catch","set_contact","set"]: return
 	if last_toss!=game.last_toss:
 		last_toss=game.last_toss
-		setter_frames.clear()
+		if contact_index>=0:
+			previous_set=setter_frames
+			previous_contact=contact_index
+		setter_frames=[]
 		rep_clock=0.
 		contact_index=-1
 	rep_clock+=delta
@@ -132,10 +137,12 @@ func record_setter(delta: float) -> void:
 
 func edit_setter_frames() -> void:
 	var replay := preload("res://scripts/match_replay.gd").new()
-	replay.frames=setter_frames
-	replay.index=setter_frames.size()-1
-	StorySession.edit_animation=replay.bake_recorded_actor(game.setter,0,"Setter catch",contact_index,true)
-	StorySession.edit_entry={"id":"camp_setter_catch","name":"Setter catch","category":"Setting","type":"Overhead"}
+	var use_previous := contact_index<0 and not previous_set.is_empty()
+	replay.frames=previous_set if use_previous else setter_frames
+	var contact := previous_contact if use_previous else contact_index
+	replay.index=contact if contact>=0 else replay.frames.size()-1
+	StorySession.edit_animation=replay.bake_recorded_actor(game.setter,0,"Setter release",contact,true)
+	StorySession.edit_entry={"id":"camp_setter_catch","name":"Setter release","category":"Setting","type":"Overhead"}
 	StorySession.animation_draft.clear()
 
 func _process(delta: float) -> void:

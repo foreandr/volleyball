@@ -7,6 +7,7 @@ var neutral: Array[Quaternion]=[]
 var excursion: Array[float]=[]
 var previous: Array[Quaternion]=[]
 var max_rate: Array[float]=[]
+var push_arm: Array[bool]=[]
 
 var editor_bones: Array[Transform3D] = []
 var replay_bones: Array[Transform3D] = []
@@ -25,6 +26,7 @@ func _process_modification() -> void:
 			elif bone.begins_with("hand_") or bone.begins_with("foot_"): cone=95.
 			else: continue
 			joints.append(i)
+			push_arm.append(bone.begins_with("upperarm") or bone.begins_with("lowerarm") or bone.begins_with("hand_"))
 			neutral.append(rig.get_bone_rest(i).basis.orthonormalized().get_rotation_quaternion())
 			previous.append(rig.get_bone_pose_rotation(i))
 			excursion.append(deg_to_rad(cone))
@@ -35,7 +37,8 @@ func _process_modification() -> void:
 		var span := neutral[j].angle_to(q)
 		if span>excursion[j]: q=neutral[j].slerp(q,excursion[j]/span)
 		var change := previous[j].angle_to(q)
-		if change>max_rate[j]*dt: q=previous[j].slerp(q,max_rate[j]*dt/change)
+		var rate := deg_to_rad(1800.) if push_arm[j] and rig.get_meta("fast_set_push",false) else max_rate[j]
+		if change>rate*dt: q=previous[j].slerp(q,rate*dt/change)
 		rig.set_bone_pose_rotation(joints[j],q)
 		previous[j]=q
 

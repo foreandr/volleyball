@@ -18,7 +18,7 @@ var forehead_arrival := 1.0
 var catch_start_local := Vector3.ZERO
 const CATCH_GIVE := .115
 const SET_RECEIVE_TIME := .105
-const SET_PUSH_TIME := .085
+const SET_PUSH_TIME := .040
 var receive_local := Vector3.ZERO
 var push_axis := Vector3.UP
 var camp_receive_spot := BASE
@@ -792,6 +792,7 @@ func move_to_camp_toss(delta: float) -> void:
 	footwork.set_sequence(fraction,true,target_yaw)
 
 func step_practice(delta: float) -> void:
+	setter.skeleton.set_meta("fast_set_push",phase=="set_contact" and elapsed+delta>SET_RECEIVE_TIME or phase=="set" and elapsed<.04)
 	setter.animator.advance(delta)
 	coach.animator.advance(delta)
 	for seat in seats_in_use:
