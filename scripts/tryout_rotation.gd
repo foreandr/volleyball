@@ -1019,7 +1019,7 @@ func huddle(dt: float) -> void:
 		settle_time=0.
 	if present==circle.size() and not debrief_started:
 		debrief_started=true
-		game.message.text="Coach Ellis: Good work. Give your hitters time to approach. Bring it in."
+		game.say(game.coach, "Good work. Give your hitters time to approach. Bring it in.", 5.0)
 
 func prepare_pointing_poses() -> void:
 	var rig: Skeleton3D=game.coach.skeleton

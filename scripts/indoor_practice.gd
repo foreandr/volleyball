@@ -317,7 +317,7 @@ func reset_feed() -> void:
 		var made := 0
 		for attempt in scorecard:
 			if attempt.setter==rotation_drill.turn and attempt.made: made+=1
-		title.text="%s   /   ZONE %d   /   %s   /   %d/9 MADE" % [setter.display_name,[1,6,5][rotation_drill.round_index],TARGETS[called()],made]
+		title.text="ZONE %d   /   %s   /   %d/9 MADE" % [[1,6,5][rotation_drill.round_index],TARGETS[called()],made]
 		if called()==2: message.text = "72   /   Back set"
 	panel.visible=demonstration or rotation_drill.turn==0
 	hint.text = ""
@@ -421,7 +421,8 @@ var angular_speed := {}
 var focus_headings := {}
 
 func _process(delta: float) -> void:
-	score_strip.visible=phase not in ["intro","complete","net_guide"] and not settings.visible and not demonstration
+	update_speech(delta)
+	score_strip.visible=phase not in ["intro","net_guide"] and not settings.visible and (not demonstration or phase=="complete")
 	if settings.visible or phase=="net_guide": return
 	if phase=="complete":
 		clock+=delta
@@ -650,7 +651,10 @@ func play_intro(delta: float) -> void:
 	camera.look_at(coach.position+Vector3.UP*1.5 if line==1 else setter.position+Vector3.UP*1.4)
 	coach.rotation.y = atan2(setter.position.x-coach.position.x,setter.position.z-coach.position.z)
 	title.text = "INDOOR  /  DAY ONE     •     COACH ELLIS"
-	message.text = LINES[0] % CareerSession.profile().name if line==0 else LINES[line]
+	message.text = ""
+	if line != intro_line:
+		intro_line = line
+		say(coach, LINES[0] % CareerSession.profile().name if line==0 else LINES[line], 4.2)
 	hint.hide()
 	var holding := Input.is_key_pressed(KEY_SPACE) or (pad()>=0 and Input.is_joy_button_pressed(pad(),Xbox.physical(JOY_BUTTON_A)))
 	skip_time = minf(1,skip_time+delta) if holding else 0.0
@@ -658,6 +662,7 @@ func play_intro(delta: float) -> void:
 	skip.value = skip_time*100
 	if skip_time>=1 or elapsed>=12.6:
 		if finish_intro():
+			speech_left = 0
 			skip.hide()
 			start_practice()
 
@@ -732,7 +737,84 @@ func release(index: int) -> void:
 	Hands.apply(setter,source,1.0,(endpoint-source).normalized()*.22,0,.3,false,Vector3.ZERO,1.,endpoint-source,.6,true)
 	begin("set")
 
+var bubble := PanelContainer.new()
+var words := Label.new()
+var speaker: Node3D
+var speech_left := 0.0
+var intro_line := -1
+
+func say(actor: Node3D, speech: String, seconds: float) -> void:
+	speaker = actor
+	words.text = speech
+	speech_left = seconds
+	bubble.reset_size()
+	update_speech(0)
+
+func update_speech(delta: float) -> void:
+	speech_left = maxf(0, speech_left - delta)
+	bubble.visible = speech_left > 0 and not settings.visible
+	if not bubble.visible: return
+	var target := head_position(speaker) + Vector3.UP * 0.25
+	if camera.is_position_behind(target):
+		bubble.hide()
+		return
+	var tip := camera.unproject_position(target)
+	bubble.position = (tip - Vector2(bubble.size.x / 2, bubble.size.y + 8)).clamp(Vector2.ZERO, (size - bubble.size).max(Vector2.ZERO))
+	bubble.modulate.a = minf(1, speech_left / 0.35)
+
+func head_position(actor: Node3D) -> Vector3:
+	var rig: Skeleton3D = actor.skeleton
+	return rig.to_global(rig.get_bone_global_pose(rig.find_bone("Head")).origin)
+
+func portrait(actor: Node3D) -> TextureRect:
+	var viewport := SubViewport.new()
+	viewport.size = Vector2i(96, 96)
+	viewport.world_3d = world.get_world_3d()
+	viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+	add_child(viewport)
+	var lens := Camera3D.new()
+	viewport.add_child(lens)
+	var face := head_position(actor) + Vector3.UP * 0.07
+	lens.position = face + actor.global_basis.z.normalized() * 0.72
+	lens.look_at(face)
+	lens.fov = 41
+	var photo := TextureRect.new()
+	photo.texture = viewport.get_texture()
+	photo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	photo.custom_minimum_size = Vector2(50, 50)
+	photo.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	var mask := Shader.new()
+	mask.code = """shader_type canvas_item;
+	void fragment() {
+		float r = length(UV - vec2(0.5));
+		vec3 photo = texture(TEXTURE, UV).rgb;
+		COLOR = vec4(mix(photo,vec3(0.68,0.85,0.83),smoothstep(0.46,0.48,r)),1.0-smoothstep(0.48,0.5,r));
+	}"""
+	var mat := ShaderMaterial.new()
+	mat.shader = mask
+	photo.material = mat
+	return photo
+
 func build_score_strip() -> void:
+	add_child(bubble)
+	bubble.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bubble.z_index = 4
+	var style := MenuPresentation.box(Color("f5f5ef"),Color("304957"),2)
+	style.set_corner_radius_all(12)
+	style.content_margin_left = 12
+	style.content_margin_right = 12
+	bubble.add_theme_stylebox_override("panel",style)
+	words.custom_minimum_size.x = 260
+	words.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	words.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	words.add_theme_color_override("font_color",Color("172b39"))
+	bubble.add_child(words)
+	var tail := Polygon2D.new()
+	tail.color = Color("f5f5ef")
+	tail.polygon = PackedVector2Array([Vector2(-8,-3),Vector2(8,-3),Vector2(0,8)])
+	bubble.add_child(tail)
+	bubble.resized.connect(func(): tail.position = Vector2(bubble.size.x / 2, bubble.size.y - 2))
+	bubble.hide()
 	var anchor := CenterContainer.new()
 	anchor.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
 	anchor.offset_top=12
@@ -748,7 +830,14 @@ func build_score_strip() -> void:
 		label.custom_minimum_size=Vector2(156,38)
 		label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 		label.add_theme_font_size_override("font_size",16)
-		card.add_child(label)
+		var stack := VBoxContainer.new()
+		card.add_child(stack)
+		stack.add_child(portrait(actor))
+		var nameplate := Label.new()
+		nameplate.text = actor.display_name
+		nameplate.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		stack.add_child(nameplate)
+		stack.add_child(label)
 		score_labels.append(label)
 	add_child(score_cue)
 
@@ -760,8 +849,7 @@ func refresh_scores() -> void:
 			if entry.setter==i:
 				taken+=1
 				if entry.made: hits+=1
-		var surname: String=rotation_drill.roster[i].display_name.get_slice(" ",rotation_drill.roster[i].display_name.count(" "))
-		score_labels[i].text="%s   %d/%d" % [surname.to_upper(),hits,taken]
+		score_labels[i].text="%d/%d made" % [hits,taken]
 		score_labels[i].add_theme_color_override("font_color",Color("ffce75") if i==rotation_drill.turn else Color.WHITE)
 
 func show_attempt_feedback(index: int,made: bool) -> void:
@@ -794,6 +882,7 @@ func rankings() -> Array:
 func complete() -> void:
 	for net in targets: net.beacon.hide()
 	begin("complete")
+	refresh_scores()
 	for actor in rotation_drill.roster+rotation_drill.workers.map(func(w): return w.actor):
 		actor.play_action("base/Idle",0.)
 		actor.animator.advance(0.)

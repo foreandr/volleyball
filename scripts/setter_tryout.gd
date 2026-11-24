@@ -40,13 +40,12 @@ func complete() -> void:
 	if scorecard.size()!=27:
 		message.text="Setter tryout complete"
 		return
-	var lines := PackedStringArray()
-	for row in rankings():
-		var place := lines.size()
-		lines.append("%s   %s   %d/9" % [["Starting setter","Backup setter","Cut"][place],rotation_drill.roster[row.id].display_name,row.made])
+	var order := rankings()
+	for place in order.size():
+		var row: Dictionary = order[place]
+		score_labels[row.id].text = "%s\n%d/9 made" % [["Starting setter","Backup setter","Cut"][place],row.made]
+		score_strip.move_child(score_labels[row.id].get_parent().get_parent(),place)
 	message.text="Final standings"
-	hint.text="\n".join(lines)
-	hint.show()
 
 func save_scorecard() -> bool:
 	CareerSession.data.set_value(CareerSession.key(),"tryout_scorecard",scorecard.duplicate(true))
