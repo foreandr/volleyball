@@ -11,5 +11,13 @@ void fragment(){
 	float mortar=1.-smoothstep(.0005,.003+fwidth(d),d);
 	float v=fract(sin(dot(floor(tile),vec2(32.5,12.4)))*4321.6);
 	ALBEDO=mix(vec3(.58,.56,.49)*(.95+.05*v),vec3(.39,.38,.34),mortar*.58);
-	ROUGHNESS=.87;
+	float pits=fract(sin(dot(floor(p*460.),vec2(17.13,93.7)))*4271.7);
+	float grain=(pits-.5)*(1.-smoothstep(.001,.005,max(fwidth(p.x),fwidth(p.y))));
+	ALBEDO*=1.+grain*.12;
+	float rise=smoothstep(.001,.008,d);
+	vec3 dx=dFdx(VERTEX),dy=dFdy(VERTEX);
+	vec3 u=cross(dy,NORMAL),vdir=cross(NORMAL,dx);
+	float det=dot(dx,u);
+	NORMAL=normalize(abs(det)*NORMAL-sign(det)*(dFdx(rise)*u+dFdy(rise)*vdir)*.0025+NORMAL*.0000001);
+	ROUGHNESS=.83+.10*mortar;
 }

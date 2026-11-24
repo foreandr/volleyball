@@ -814,8 +814,8 @@ func huddle(dt: float) -> void:
 			continue
 		actor.animator.advance(dt)
 		var angle := TAU*i/circle.size()-PI
-		var spot := HUDDLE_CENTER+Vector3(sin(angle),0,cos(angle))*1.22
-		if actor.position.distance_to(spot)>.22:
+		var spot := HUDDLE_CENTER+Vector3(sin(angle),0,cos(angle))*1.02
+		if actor.position.distance_to(spot)>.13:
 			walk(actor,spot,dt,3.1)
 			continue
 		present+=1
@@ -830,12 +830,27 @@ func huddle(dt: float) -> void:
 			var sign_: float=1. if side=="l" else -1.
 			var arm := "upperarm_"+str(side)
 			var adjacent: Node3D=circle[posmod(i+(1 if side=="r" else -1),circle.size())]
-			var weight := smoothstep(1.05,.76,actor.position.distance_to(adjacent.position))
-			var aim := Contact.joint(adjacent,"spine_03")+Vector3.UP*(.06 if i%2==0 else -.12)
+			var distance := actor.position.distance_to(adjacent.position)
+			var weight := 1.-smoothstep(.77,1.02,distance)
+			var upper := i%2==0
+			var back := -adjacent.global_basis.z.normalized()
+			var lateral := adjacent.global_basis.x.normalized()
+			if lateral.dot(actor.position-adjacent.position)<0.: lateral=-lateral
+			var shoulder := Contact.joint(adjacent,"spine_03")
+			var pelvis := Contact.joint(adjacent,"pelvis")
+			# Approach from outside the circle. The palm rests on the rear
+			# shoulder blade or the rear waistband, clear of the spine.
+			var size: float=adjacent.height_cm/180.
+			var aim := shoulder+Vector3.UP*.085*size if upper else pelvis.lerp(shoulder,.28)
+			aim+=(back*(.16 if upper else .18)+lateral*.085)*size
+			var pole := Vector3(sign_*.75,.18 if upper else -.65,-.85)
 			if actor==game.coach:
 				weight=.85
 				aim=actor.to_global(Vector3(sign_*.32,1.15+.09*sin(game.clock*2.+sign_),.37))
-			author.limb(pose,arm,"lowerarm_"+str(side),"hand_"+str(side),rig.to_local(aim),Vector3(sign_*.7,-.65,-.15),weight)
+				pole=Vector3(sign_*.7,-.65,-.15)
+			var wrist := "hand_"+str(side)
+			var palm_offset: Vector3=(author.point(pose,"middle_01_"+str(side))-author.point(pose,wrist))*.8
+			author.limb(pose,arm,"lowerarm_"+str(side),wrist,rig.to_local(aim)-palm_offset,pole,weight)
 			for bone in [arm,"lowerarm_"+str(side)]:
 				var j := rig.find_bone(bone)
 				rig.set_bone_pose_rotation(j,pose[j].basis.orthonormalized().get_rotation_quaternion())

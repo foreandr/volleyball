@@ -9,7 +9,12 @@ void vertex(){
 	VERTEX+=tips*(lag+vec3(.003*wind,0.,.0015*wind));
 }
 void fragment(){
-	float fiber=sin(UV.x*33.+UV.y*4.);
+	float strand=UV.x*42.+sin(UV.y*7.+phase)*.65;
+	float fiber=sin(strand)*(1.-smoothstep(.55,2.8,fwidth(strand)));
+	float edge=min(UV.x,1.-UV.x);
+	if(edge<.045+.018*sin(UV.y*19.+phase)) discard;
+	RIM=.23*UV.y;
+	RIM_TINT=.6;
 	ALBEDO=tone.rgb*(.80+.17*fiber+.46*UV.y);
 	ROUGHNESS=.52+.18*UV.y;
 	SPECULAR=.45;

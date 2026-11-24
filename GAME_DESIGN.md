@@ -40,3 +40,5 @@ Support forward, backward and sideways strapback, snapback and fitted caps; sung
 The setter tryout starts with high sets. RS down or sideways selects medium, and RS up selects high. D-pad up toggles 35% speed. During a teammateâ€™s turn the score strip stays visible. Carts block player movement, including while being pushed. After scoring, the crew collects reachable balls and joins the setters and coach for a center-court huddle.
 
 Desktop uses Forward+ with high-resolution shadows. Practice target cords are anchored at the rim and transmit localized impact through neighboring knots. Clothing responds to changes in movement, and the seated team tracks the current ball. Test the full scored rotation as well as off-center rim impacts when changing simulation or presentation.
+
+Frame the debrief from player height. Huddle contact comes from behind each teammate: high arms wrap the shoulders, low arms reach around the waistband. Inspect both from the rear. The indoor tryout uses 1.35× linear render scale and 8× MSAA.

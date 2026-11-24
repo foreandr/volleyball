@@ -6,6 +6,14 @@ uniform sampler2D lettering : source_color,filter_linear_mipmap_anisotropic;
 uniform bool jacket = false;
 
 uniform vec3 inertia;
+uniform vec2 arm_lift;
+float tension_fold(vec3 bind){
+	float x=abs(bind.x);
+	float tension=bind.x>0.?arm_lift.x:arm_lift.y;
+	float diagonal=bind.y-1.27-x*.75;
+	float panel=smoothstep(.035,.12,x)*(1.-smoothstep(.22,.31,x));
+	return tension*panel*exp(-diagonal*diagonal/.011)*sin(diagonal*86.);
+}
 uniform float motion=0.;
 uniform float phase=0.;
 varying vec3 rest;
@@ -21,8 +29,8 @@ void vertex(){
 		float pleat=sin(angle*8.+rest.y*8.+phase);
 		float wave=sin(angle*4.+rest.y*12.-TIME*10.+phase);
 		float ripple=sin(angle*7.-TIME*15.+phase*.7);
-		float drape=.062+.014*pleat+motion*(.023+.044*wave+.013*ripple);
-		VERTEX+=NORMAL*free_edge*drape;
+		float drape=mix(.057,.030,arm)+.014*pleat+motion*(.023+.044*wave+.013*ripple);
+		VERTEX+=NORMAL*(free_edge*drape+.009*tension_fold(rest));
 		{
 			VERTEX.y+=(1.-arm)*free_edge*(-.095+motion*(.023*wave+.012*ripple));
 		}
@@ -77,5 +85,14 @@ void fragment(){
 		vec3 grain=vec3(.10*knit*fade,.07*weave*fade,1.);
 		NORMAL_MAP=normalize(grain)*.5+.5;
 	}
+	float pull=tension_fold(rest);
+	float shoulder=smoothstep(1.34,1.48,y)*smoothstep(.07,.20,x);
+	float fold=sin(x*72.+y*43.+sin(y*21.+phase)*.8);
+	float stitch=1.-smoothstep(.001,.003,abs(y-(1.48-.16*x)));
+	float thread=.55+.45*cos(x*720.)*(1.-smoothstep(.001,.004,fwidth(x)));
+	ALBEDO*=1.-.1*shoulder*stitch*thread;
+	NORMAL_MAP=normalize(vec3(.09*knit*fade+.09*shoulder*fold-.09*pull,.06*weave*fade+.13*pull,1.))*.5+.5;
+	RIM=.16;
+	RIM_TINT=.32;
 	SPECULAR=.28;
 }

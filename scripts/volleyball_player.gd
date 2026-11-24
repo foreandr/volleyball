@@ -41,7 +41,25 @@ func _ready() -> void:
 			if mirror_animation: skin.cull_mode = BaseMaterial3D.CULL_DISABLED
 			skin.roughness = 0.85
 			skin.metallic_specular = 0.2
+			if skin.resource_name=="MI_Eyes":
+				skin.roughness=.22
+				skin.metallic_specular=.52
+				skin.clearcoat_enabled=true
+				skin.clearcoat=.82
+				skin.clearcoat_roughness=.075
+				skin.normal_enabled=true
+				skin.normal_texture=preload("res://assets/characters/base/T_Eye_Normal.png")
+				skin.normal_scale=.32
 			if skin.resource_name.begins_with("MI_Superhero"):
+				skin.normal_enabled=true
+				skin.normal_texture=preload("res://assets/characters/base/T_Superhero_Male_Normal.png")
+				skin.normal_scale=.65
+				skin.roughness_texture=preload("res://assets/characters/base/T_Superhero_Male_Roughness.png")
+				skin.roughness=.83
+				skin.metallic_specular=.36
+				skin.subsurf_scatter_enabled=true
+				skin.subsurf_scatter_skin_mode=true
+				skin.subsurf_scatter_strength=.18
 				mesh.mesh = preload("res://assets/characters/volleyball/body.res")
 				skin.albedo_texture = preload("res://assets/characters/base/T_Superhero_Male_Light.png")
 				var outfit := MeshInstance3D.new()
@@ -139,12 +157,21 @@ var hair_velocity := Vector3.ZERO
 var jersey_materials: Array[ShaderMaterial]=[]
 var jersey_origin := Vector3.ZERO
 var jersey_speed := 0.
+var shirt_fabric: ShaderMaterial
 var leg_skin: ShaderMaterial
 var cloth_offset := Vector3.ZERO
 var cloth_velocity := Vector3.ZERO
 
 func _process(dt: float) -> void:
 	if jersey_materials.is_empty() or dt<=0.: return
+	if shirt_fabric:
+		var tension := Vector2.ZERO
+		for i in 2:
+			var side: String=["l","r"][i]
+			var shoulder := skeleton.get_bone_global_pose(skeleton.find_bone("upperarm_"+side)).origin
+			var elbow := skeleton.get_bone_global_pose(skeleton.find_bone("lowerarm_"+side)).origin
+			tension[i]=smoothstep(-.82,.20,(elbow-shoulder).normalized().y)
+		shirt_fabric.set_shader_parameter("arm_lift",tension)
 	if leg_skin:
 		var flex := Vector2.ZERO
 		for i in 2:

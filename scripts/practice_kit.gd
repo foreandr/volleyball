@@ -73,6 +73,7 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 		if sleeves:
 			var kit := ShaderMaterial.new()
 			kit.shader=FABRIC
+			actor.shirt_fabric=kit
 			actor.jersey_origin=actor.global_position
 			actor.jersey_materials.append(kit)
 			kit.set_shader_parameter("phase",variant*1.79)
@@ -183,7 +184,11 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		float side=smoothstep(.154,.174,abs(rest.x));
 		ALBEDO=mix(cloth.rgb,cloth.rgb*.74,side);
 		ALBEDO=mix(ALBEDO,cloth.rgb*1.55,hem*.75);
-		ROUGHNESS=.84;
+		float piping=1.-smoothstep(.001,.004,abs(abs(rest.x)-.166));
+		ALBEDO=mix(ALBEDO,cloth.rgb*1.65,piping*.55);
+		float folds=sin(rest.x*84.+rest.y*38.)*hem;
+		NORMAL_MAP=normalize(vec3(folds*.12,.035*hem,1.))*.5+.5;
+		ROUGHNESS=.81+.06*hem;
 	}"""
 	material.shader = shader
 	actor.jersey_materials.append(material)
@@ -281,6 +286,8 @@ static func knee_pad(rig: Skeleton3D,side: String,white: bool) -> void:
 		band.material_override=knit
 		pad.add_child(band)
 	shoe_part(pad,Vector3(0,-.003,.070),Vector3(.145,.142,.050),Color("d9d9d0") if white else Color("343e47"))
+	for y in [-.039,.0,.039]:
+		shoe_part(pad,Vector3(0,y,.088),Vector3(.109,.031,.019),Color("d5d7d0") if white else Color("38414a"))
 	for x in [-.045,.045]:
 		shoe_part(pad,Vector3(x,.002,.086),Vector3(.008,.085,.008),Color("b6b8ae") if white else Color("485058"))
 
@@ -359,7 +366,8 @@ static func shoe_shell(parent: Node3D,profile: Array,tops: Array,thickness: floa
 		varying vec3 p;
 		void vertex(){p=VERTEX;}
 		void fragment(){
-			float mesh=sin(p.x*1800.)*sin(p.z*1750.);
+			float resolve=1.-smoothstep(.0004,.002,max(fwidth(p.x),fwidth(p.z)));
+			float mesh=sin(p.x*1800.)*sin(p.z*1750.)*resolve;
 			float wing=smoothstep(.031,.055,abs(p.x));
 			float seam=abs(p.z-(.020+.58*(abs(p.x)-.044)+.55*(p.y-.075)));
 			float stripe=wing*(1.-smoothstep(.006,.010,seam));
@@ -367,7 +375,11 @@ static func shoe_shell(parent: Node3D,profile: Array,tops: Array,thickness: floa
 			float heel=1.-smoothstep(-.094,-.085,p.z);
 			vec3 facing=mix(upper.rgb,upper.rgb*.49,max(toe*.40,heel*.80));
 			ALBEDO=mix(facing*(1.+.035*mesh),vec3(.09,.17,.18),stripe);
-			ROUGHNESS=mix(.91,.65,max(toe,heel));
+			float perforation=1.-smoothstep(.12,.28,length(fract(p.xz*160.)-.5));
+			float facing_mask=max(toe,heel);
+			ALBEDO*=1.-.18*perforation*resolve*(1.-facing_mask);
+			NORMAL_MAP=normalize(vec3(mesh*.18,perforation*.11*resolve,1.))*.5+.5;
+			ROUGHNESS=mix(.91,.58,facing_mask);
 		}"""
 		var fabric := ShaderMaterial.new()
 		fabric.shader=textile
@@ -410,7 +422,7 @@ static func haircut(scalp: Node3D,color: Color,variant: int,actor: Node3D) -> vo
 	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var rng := RandomNumberGenerator.new()
 	rng.seed=217+variant
-	for i in 420:
+	for i in 780:
 		var y := rng.randf()
 		var a := rng.randf()*TAU
 		var radial := sqrt(1.-y*y)

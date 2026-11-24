@@ -110,12 +110,18 @@ func athlete(at: Vector3,color: String) -> Node3D:
 	actor.skeleton.add_child(preload("res://scripts/practice_joint_limits.gd").new())
 	return actor
 
+var original_render_scale := 1.0
+var original_msaa := Viewport.MSAA_DISABLED
+
 func _ready() -> void:
+	original_render_scale=get_viewport().scaling_3d_scale
+	original_msaa=get_viewport().msaa_3d
 	MenuPresentation.set_music(false)
 	add_child(world)
 	world.add_child(gym)
 	preload("res://scripts/tryout_gym.gd").light_gym(world)
-	get_viewport().msaa_3d = Viewport.MSAA_4X
+	get_viewport().msaa_3d = Viewport.MSAA_8X
+	get_viewport().scaling_3d_scale=1.35
 	camera.fov = 52
 	world.add_child(camera)
 	camera.current = true
@@ -789,8 +795,9 @@ func complete() -> void:
 	for actor in rotation_drill.roster+rotation_drill.workers.map(func(w): return w.actor):
 		actor.play_action("base/Idle",0.)
 		actor.animator.advance(0.)
-	camera.position = Vector3(0,6,-9)
-	camera.look_at(Vector3(0,1.4,2))
+	camera.position = Vector3(-2.7,2.65,-5.6)
+	camera.fov=40.
+	camera.look_at(rotation_drill.HUDDLE_CENTER+Vector3.UP*1.04)
 	ball.hide()
 	coach.show()
 	panel.show()
@@ -812,6 +819,8 @@ func change_feed_phase(next: String) -> void:
 	held = prepared
 
 func _exit_tree() -> void:
+	get_viewport().scaling_3d_scale=original_render_scale
+	get_viewport().msaa_3d=original_msaa
 	if slow_motion: Engine.time_scale=previous_time_scale
 	coach_motion.dispose()
 

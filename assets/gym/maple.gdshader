@@ -39,6 +39,7 @@ void fragment(){
 	ALBEDO=mix(ALBEDO,vec3(.17,.14,.10),dust*.32+rub*.46);
 	ROUGHNESS=dust*.26+rub*.30+.28+grain*.05+.17*smoothstep(.49,.72,scuff);
 	SPECULAR=.63;
-	CLEARCOAT=.38;
-	CLEARCOAT_ROUGHNESS=.2;
+	float lanes=exp(-pow((abs(p.x)-2.7)/1.25,2.))*smoothstep(-5.,-2.,p.y)*(1.-smoothstep(5.,8.,p.y));
+	CLEARCOAT=clamp(.55-.18*lanes-.35*dust-.22*rub,.05,.60);
+	CLEARCOAT_ROUGHNESS=.14+.13*lanes+.18*rub;
 }

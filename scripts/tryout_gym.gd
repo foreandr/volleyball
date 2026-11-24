@@ -176,6 +176,7 @@ static func light_gym(world: Node3D) -> void:
 			lamp.omni_range = 13.5
 			lamp.omni_attenuation = 1.35
 			lamp.light_energy = 1.85
+			lamp.light_size=.22
 			lamp.shadow_enabled = true
 			world.add_child(lamp)
 	var bounce := OmniLight3D.new()

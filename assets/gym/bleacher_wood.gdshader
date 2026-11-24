@@ -22,5 +22,7 @@ void fragment(){
 	float bolt=1.-smoothstep(.009,.016,length(hole));
 	ALBEDO=mix(ALBEDO,vec3(.18,.19,.175),bolt);
 	METALLIC=bolt*.8;
+	CLEARCOAT=.33*(1.-worn)*(1.-bolt);
+	CLEARCOAT_ROUGHNESS=.19+.28*worn;
 	ROUGHNESS=.43+.19*grain+.25*worn;
 }
