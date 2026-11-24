@@ -314,11 +314,13 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		foam=pad*smoothstep(.49,.62,COLOR.r)*pad_face(lateral,k);
 		foam*=1.-.38*flex_channel(lateral,k);
 		sock=1.-smoothstep(sock_top,sock_top+.004,y);
-		VERTEX+=NORMAL*(pad*.005+foam*.018+sock*.002);
+		// Compress the sock inside the heel cup and release it above the collar.
+		float inside_shoe=1.-smoothstep(.064,.117,y);
+		VERTEX+=NORMAL*(pad*.005+foam*.018+sock*.002-inside_shoe*.012);
 		anatomy=vec3(abs(UV2.x),y,COLOR.r);
 		loads=vec2(flex,UV2.x>0.?calf_load.x:calf_load.y);
 	}
-	void fragment(){if(y>hem_y+.02 || y<.045)discard; ALBEDO=texture(skin_map,UV).rgb; NORMAL_MAP=texture(muscles,UV).rgb; NORMAL_MAP_DEPTH=.68; ROUGHNESS=mix(.42,.86,texture(roughness_map,UV).r);
+	void fragment(){if(y>hem_y+.02 || y<.070)discard; ALBEDO=texture(skin_map,UV).rgb; NORMAL_MAP=texture(muscles,UV).rgb; NORMAL_MAP_DEPTH=.68; ROUGHNESS=mix(.42,.86,texture(roughness_map,UV).r);
 		float yarn=.5+.5*cos(y*1250.)*(1.-smoothstep(.0007,.003,fwidth(y)));
 		float sock_mask=1.-smoothstep(sock_top,sock_top+.003,y);
 		float pad_mask=enabled_side*(1.-smoothstep(.087,.091,abs(y-knee_height)));
