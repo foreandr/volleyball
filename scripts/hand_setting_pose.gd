@@ -95,8 +95,15 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 	var back_arch := backset*lerpf(.35,1.,smoothstep(.8,9.,-set_depth_m))
 	if arch_progress > 0.0 and back_arch > 0.0:
 		var arch := deg_to_rad(24.0)*back_arch*arch_progress*blend
-		author.rotate_world(pose,"spine_01",Vector3.RIGHT,-arch*0.45)
-		author.rotate_world(pose,"spine_02",Vector3.RIGHT,-arch*0.55)
+		var travel_local := rig.global_basis.inverse()*set_offset
+		var arch_axis := Vector3.UP.cross(travel_local.slide(Vector3.UP)).normalized()
+		author.rotate_world(pose,"spine_01",arch_axis,arch*.40)
+		author.rotate_world(pose,"spine_02",arch_axis,arch*.42)
+		author.rotate_world(pose,"spine_03",arch_axis,arch*.18)
+		# Lift the gaze with the chest throughout extension and recovery.
+		var chin := deg_to_rad(18.)*backset*arch_progress*blend
+		author.rotate_world(pose,"neck_01",arch_axis,chin*.55)
+		author.rotate_world(pose,"Head",arch_axis,chin*.45)
 	var shoulders: Vector3=(author.point(pose,"upperarm_l")+author.point(pose,"upperarm_r"))*.5
 	var spine_axis: Vector3=(shoulders-author.point(pose,"pelvis")).normalized()
 	var turn := 0.0

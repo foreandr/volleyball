@@ -136,3 +136,4 @@ Setting camp supports B back sets in addition to outside and eligible middle set
 Energy capacity is 25 plus five points per Stamina rating. Endurance sets rested recovery at 1-10 energy per second. Willpower allows one point of negative balance per rating point. Debt recovers at half rate and permits reduced skill until the reserve is depleted.
 Back sets extend the arms together above the shoulders, following the spine as the torso arches farther for longer sets.
 Back-set contact cups the ball with upward palms. The wrists extend into a palms-up finish and the shared follow-through tracks the outgoing arc tangent within overhead shoulder reach.
+During back-set extension the chest, neck and chin lift together toward the outgoing set, easing down through recovery.
