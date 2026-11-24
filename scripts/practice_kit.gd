@@ -586,6 +586,11 @@ static func face_hair(rig: Skeleton3D,body: MeshInstance3D,mesh: ArrayMesh,coach
 		float line=1.685+.065*smoothstep(-.055,.075,p.z)+.01*abs(sin(p.x*32.));
 		float temple=smoothstep(.035,.077,abs(p.x))*smoothstep(-.008,.058,p.z);
 		line+=temple*temple_recess;
+		// Crop above the ear and leave a narrow tapered sideburn in front of it.
+		float side=smoothstep(.055,.077,abs(p.x));
+		float ear_arch=exp(-pow(abs(p.z+.017)/.028,2.));
+		float sideburn=exp(-pow(abs(p.z-.025)/.012,2.));
+		line+=side*(.017*ear_arch-(.027+.38*temple_recess)*sideburn);
 		// Short growth blends the hairline into the longer moving locks.
 		float comb=p.x*2100.+p.z*540.+sin(p.y*55.+p.x*33.)*4.;
 		float fibers=cos(comb)*(1.-smoothstep(.9,3.,fwidth(comb)));
