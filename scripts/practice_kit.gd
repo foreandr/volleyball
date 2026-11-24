@@ -222,10 +222,16 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		float opening=.028+.034*(1.-smoothstep(hem_y,hem_y+.19,rest.y));
 		float seam=abs(depth+.018)-opening;
 		float panel=outer*(1.-smoothstep(-.002,.002,seam));
-		ALBEDO=mix(cloth.rgb,accent.rgb,panel);
+		// Open-knit side inserts end above the folded leg opening.
+		vec2 cell=vec2(depth/.0042,rest.y/.0048);
+		float detail=1.-smoothstep(.22,.8,max(fwidth(cell.x),fwidth(cell.y)));
+		cell.x+=.5*mod(floor(cell.y),2.);
+		float eyelet=1.-smoothstep(.12,.36,length(fract(cell)-.5));
+		vec3 insert=accent.rgb*(1.12-.49*detail*eyelet*(1.-hem));
+		ALBEDO=mix(cloth.rgb,insert,panel);
 		ALBEDO=mix(ALBEDO,cloth.rgb*1.55,hem*.75);
 		float piping=outer*(1.-smoothstep(.001,.003+fwidth(seam),abs(seam)));
-		ALBEDO=mix(ALBEDO,cloth.rgb*1.65,piping*.55);
+		ALBEDO=mix(ALBEDO,mix(cloth.rgb,accent.rgb,.42)*1.8,piping*.82);
 		float folds=sin(rest.x*84.+rest.y*38.)*hem;
 		vec3 yarn=texture(knit_surface,UV*28.).rgb;
 		vec2 grain=(yarn.rg-.5)*.32;
