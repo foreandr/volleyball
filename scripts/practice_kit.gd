@@ -448,6 +448,7 @@ static func palm_tape(rig: Skeleton3D,body: MeshInstance3D,skin_surface: ArrayMe
 	material.shader=preload("res://assets/gym/palm_tape.gdshader")
 	material.set_shader_parameter("center",wrist.lerp(knuckles,.59))
 	material.set_shader_parameter("axis",(knuckles-wrist).normalized())
+	material.set_shader_parameter("across",(index-pinky).slide((knuckles-wrist).normalized()).normalized())
 	var wrap := MeshInstance3D.new()
 	wrap.mesh=skin_surface
 	wrap.skin=body.skin
