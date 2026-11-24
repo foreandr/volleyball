@@ -76,6 +76,7 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 			kit.set_shader_parameter("fabric",Color("223d3c") if coach else Color("ac4029"))
 			kit.set_shader_parameter("trim",Color("cad4bf") if coach else Color("55302c"))
 			kit.set_shader_parameter("lettering",print_texture)
+			kit.set_shader_parameter("team_crest",preload("res://assets/gym/falcon.svg"))
 			kit.set_shader_parameter("jacket",coach)
 			var original := preload("res://assets/characters/base/Superhero_Male_FullBody.gltf").instantiate()
 			var torso: MeshInstance3D=original.find_child("SuperHero_Male",true,false)

@@ -3,6 +3,7 @@ render_mode cull_disabled;
 uniform vec4 fabric : source_color;
 uniform vec4 trim : source_color;
 uniform sampler2D lettering : source_color,filter_linear_mipmap_anisotropic;
+uniform sampler2D team_crest : source_color,filter_linear_mipmap_anisotropic;
 uniform bool jacket = false;
 
 uniform vec3 inertia;
@@ -176,6 +177,13 @@ void fragment(){
 		base*=1.-.22*seam;
 		// Print only the torso panels. Blending mirrored UVs collapses the
 		// number onto the side of the jersey as the depth passes through zero.
+		// A small transfer below the back collar repeats the gym's falcon insignia.
+		vec2 crest_uv=vec2(.5-rest.x/.062,(1.493-y)/.044);
+		if(rest.z<-.04 && all(greaterThanEqual(crest_uv,vec2(0.))) && all(lessThanEqual(crest_uv,vec2(1.)))){
+			vec4 crest=texture(team_crest,crest_uv);
+			base=mix(base,crest.rgb,crest.a);
+			print_coverage=crest.a;
+		}
 		float rear=1.-step(0.,rest.z);
 		vec2 uv=vec2(.5+mix(rest.x,-rest.x,rear)/mix(.205,.262,rear),(1.425-y)/mix(.115,.144,rear));
 		if(x<.136 && abs(rest.z)>.035 && all(greaterThanEqual(uv,vec2(0.))) && all(lessThanEqual(uv,vec2(1.)))){
