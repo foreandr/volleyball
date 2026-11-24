@@ -160,3 +160,4 @@ The bump timing arc dedicates most of its width to playable releases. Follow-thr
 Setting Camp Sliders allow natural, early, on-time and late CPU releases. An accepted early forearm release prepares the high intercept before the ball reaches the usual waist-height contact.
 While watching the CPU in Setting Camp, left-stick click cycles release timing and right-stick click switches between hand and bump sets. CPU targets are drawn automatically from the eligible pins and middle.
 During forearm preparation the platform aims at the anticipated intercept. A high descending toss does not pull the arms up and back down before the strike.
+Player-controlled bump sets allow up to 23 cm of collision-checked assistance toward a nearby ball. A buffered release uses the last verified descending forearm overlap so a fast ball cannot invalidate good contact before the input is processed.

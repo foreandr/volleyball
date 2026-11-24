@@ -65,6 +65,8 @@ var bump_armed := true
 var bump_released := false
 var bump_touched := false
 var bump_overlap_time := -INF
+var bump_overlap_point := Vector3.ZERO
+var bump_assist_travel := 0.0
 var bump_arrival := 0.
 var bump_offset := 0.
 var bump_follow_start := 0.
@@ -516,6 +518,7 @@ func reset_feed() -> void:
 	bump_released=false
 	bump_touched=false
 	bump_overlap_time=-INF
+	bump_assist_travel=0.
 	if reception_pose: reception_pose.reset()
 	if solo_setting:
 		camp_receive_spot=choose_camp_toss()
@@ -1066,6 +1069,13 @@ func play_bump(previous: Vector3, incoming: Vector3, dt: float) -> void:
 		elif bump_released and bump_offset>0.:
 			tracking=toss_at(bump_arrival+bump_offset)
 		tracking.y=clampf(tracking.y,setter.position.y+.27,setter.position.y+setter.height_cm*.0081)
+		if not automatic_setter() and remaining<.26:
+			var correction: Vector3=(tracking-sampler.platform_center()).slide(Vector3.UP)
+			if correction.length()>.12 and correction.length()<.80:
+				var travel := correction.limit_length(minf(maxf(0.,.23-bump_assist_travel),dt*1.5))
+				var before := setter.position
+				setter.position=rotation_drill.move_actor(setter,travel)
+				bump_assist_travel+=before.distance_to(setter.position)
 		var low := smoothstep(.05,.52,platform_height-tracking.y)
 		sampler.reach_platform(tracking-sampler.platform_center(),1.-smoothstep(.055,.38,remaining),.77,true,false,low)
 	var elbows := [Contact.joint(setter,"lowerarm_l"),Contact.joint(setter,"lowerarm_r")]
@@ -1076,17 +1086,22 @@ func play_bump(previous: Vector3, incoming: Vector3, dt: float) -> void:
 	for side in 2:
 		var pair := Geometry3D.get_closest_points_between_segments(previous,ball.position,elbows[side],wrists[side])
 		gap=minf(gap,pair[0].distance_to(pair[1]))
-	if incoming.y<0. and gap<=.27: bump_overlap_time=elapsed
+	if incoming.y<0. and gap<=.27:
+		bump_overlap_time=elapsed
+		bump_overlap_point=platform
 	if not bump_released:
 		if elapsed>bump_arrival+late_contact_limit(): miss("Bump release too late.")
 		return
-	if incoming.y>=0. or elapsed-bump_overlap_time>.065 or gap>.52:
+	# A fast descending ball can travel nearly a metre during a green release.
+	# Resolve from the last real forearm overlap inside the input grace period.
+	var contact_grace := BUMP_ON_TIME+.035 if not automatic_setter() else .065
+	if incoming.y>=0. or elapsed-bump_overlap_time>contact_grace:
 		if elapsed>forehead_arrival+.35: miss("Outside platform reach.")
 		return
 	bump_touched=true
 	bump_incoming=incoming/maxf(dt,.001)
 	bump_follow_start=elapsed
-	source=platform
+	source=bump_overlap_point
 	ball.position=source
 	target=0
 	var desired := bump_destination()
