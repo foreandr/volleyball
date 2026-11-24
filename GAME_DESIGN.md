@@ -42,3 +42,5 @@ The setter tryout starts with high sets. RS down or sideways selects medium, and
 Desktop uses Forward+ with high-resolution shadows. Practice target cords are anchored at the rim and transmit localized impact through neighboring knots. Clothing responds to changes in movement, and the seated team tracks the current ball. Test the full scored rotation as well as off-center rim impacts when changing simulation or presentation.
 
 Frame the debrief from player height. Huddle contact comes from behind each teammate: high arms wrap the shoulders, low arms reach around the waistband. Inspect both from the rear. The indoor tryout uses 1.35× linear render scale and 8× MSAA.
+
+Huddle hands open at contact. High palms rest face down on the neighboring shoulder; low palms face into the rear waistband. Training jerseys accumulate localized dampness from distance covered and stamina spent, then dry gradually at rest. Rebuild the skinned practice jersey and shorts with tools/bake_practice_garments.gd.

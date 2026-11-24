@@ -157,8 +157,12 @@ var hair_velocity := Vector3.ZERO
 var jersey_materials: Array[ShaderMaterial]=[]
 var jersey_origin := Vector3.ZERO
 var jersey_speed := 0.
+var dressed_surface := preload("res://scripts/dressed_contact.gd").new()
 var shirt_fabric: ShaderMaterial
 var leg_skin: ShaderMaterial
+var exertion_total := 0.0
+var exertion_sample := 0.0
+var dampness := 0.0
 var cloth_offset := Vector3.ZERO
 var cloth_velocity := Vector3.ZERO
 
@@ -192,6 +196,12 @@ func _process(dt: float) -> void:
 		hair_material.set_shader_parameter("lag",hair_lag)
 	var displacement := global_position-jersey_origin
 	var travel := displacement.length()
+	if shirt_fabric:
+		var work := maxf(0.,exertion_total-exertion_sample)*.004
+		if travel<1.: work+=travel*.0017
+		exertion_sample=exertion_total
+		dampness=clampf(dampness+work-dt*.00012,0.,1.)
+		shirt_fabric.set_shader_parameter("dampness",dampness)
 	var drag := Vector3.ZERO
 	if travel<1.:
 		drag=(global_basis.orthonormalized().inverse()*(-displacement)/dt*.012).limit_length(.065)

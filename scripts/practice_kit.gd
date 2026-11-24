@@ -49,6 +49,7 @@ static func tailored_surface(source: ArrayMesh,surface: int,quad_shape := false,
 
 static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 	var rig: Skeleton3D = actor.skeleton
+	var outer_shirt: MeshInstance3D
 	if coach:
 		actor.set_height_cm(174)
 		actor.scale*=Vector3(1.01,1,1.01)
@@ -84,13 +85,15 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 			var original := preload("res://assets/characters/base/Superhero_Male_FullBody.gltf").instantiate()
 			var torso: MeshInstance3D=original.find_child("SuperHero_Male",true,false)
 			var shell := MeshInstance3D.new()
-			shell.mesh=tailored_surface(torso.mesh,0,false,coach)
+			var skin_surface := tailored_surface(torso.mesh,0,false,coach)
+			shell.mesh=skin_surface if coach else preload("res://assets/characters/volleyball/practice_jersey.res")
 			original.free()
 			shell.skin=node.skin
 			rig.add_child(shell)
 			shell.skeleton=shell.get_path_to(rig)
 			shell.material_override=kit
-			face_hair(rig,node,shell.mesh,coach,variant)
+			outer_shirt=shell
+			face_hair(rig,node,skin_surface,coach,variant)
 		if shirt:
 			# The skinned print replaces only the jersey. Keep shoes and trousers.
 			var invisible := StandardMaterial3D.new()
@@ -138,6 +141,7 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 		if variant%3==2: compression(rig,"lowerarm_r","hand_r",.061,.042,Color("252e35"))
 
 	reshape_build(rig,coach,variant)
+	if outer_shirt: actor.dressed_surface.configure(outer_shirt,rig)
 
 # Taper upper arms in bind space, before joints pose them, so bare skin and
 # fabric follow the same silhouette. Leave wrists, ankles and face registered.
@@ -173,13 +177,15 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 	shader.code = """shader_type spatial;
 	uniform vec3 inertia; uniform float motion; uniform float hem_y; uniform vec4 cloth:source_color; varying vec2 rest;
 	void vertex(){rest=UV2;
+		float tailoring=(hem_y-.69)*(1.-smoothstep(.69,.96,rest.y));
+		VERTEX.y+=tailoring; rest.y+=tailoring;
 		float hem=1.-smoothstep(hem_y,hem_y+.22,rest.y);
 		float ripple=sin(rest.x*47.+rest.y*25.-TIME*14.);
 		VERTEX+=NORMAL*(.004+hem*(.017+motion*(.018+.025*ripple)));
 		VERTEX+=hem*inertia*.65;
 		VERTEX.y+=hem*motion*.009*ripple;}
 	void fragment(){
-		if(rest.y<hem_y) discard;
+
 		float hem=1.-smoothstep(hem_y+.005,hem_y+.009,rest.y);
 		float side=smoothstep(.154,.174,abs(rest.x));
 		ALBEDO=mix(cloth.rgb,cloth.rgb*.74,side);
@@ -196,7 +202,7 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 	material.set_shader_parameter("hem_y",hem)
 	material.set_shader_parameter("cloth",Color.from_hsv(fmod(.55+.147*variant,1.),.32,.24+.045*(variant%4)))
 	var part := MeshInstance3D.new()
-	part.mesh = tailored_surface(outfit.mesh,1)
+	part.mesh = preload("res://assets/characters/volleyball/practice_shorts.res")
 	part.skin = outfit.skin
 	rig.add_child(part)
 	part.skeleton = part.get_path_to(rig)

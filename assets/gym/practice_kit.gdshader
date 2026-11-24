@@ -15,6 +15,7 @@ float tension_fold(vec3 bind){
 	return tension*panel*exp(-diagonal*diagonal/.011)*sin(diagonal*86.);
 }
 uniform float motion=0.;
+uniform float dampness;
 uniform float phase=0.;
 varying vec3 rest;
 void vertex(){
@@ -46,7 +47,7 @@ void fragment(){
 	{
 		if(jacket){
 			if(x>.69 || y<1.012 || y>1.57 || (x<.072 && y>1.538)) discard;
-		}else if(x>.394 || y<1.045 || y>1.563-.055*(1.-smoothstep(.045,.109,x))*smoothstep(-.075,.075,rest.z)) discard;
+		}
 	}
 
 	float side=smoothstep(.18,.24,x)*(1.-smoothstep(1.29,1.43,y));
@@ -92,6 +93,13 @@ void fragment(){
 	float thread=.55+.45*cos(x*720.)*(1.-smoothstep(.001,.004,fwidth(x)));
 	ALBEDO*=1.-.1*shoulder*stitch*thread;
 	NORMAL_MAP=normalize(vec3(.09*knit*fade+.09*shoulder*fold-.09*pull,.06*weave*fade+.13*pull,1.))*.5+.5;
+	vec2 back_uv=vec2(rest.x/(.045+.14*dampness),(y-1.37)/(.095+.20*dampness));
+	vec2 axilla=vec2((x-.208)/(.025+.095*dampness),(y-1.403)/(.045+.13*dampness));
+	float spread=max(exp(-dot(back_uv,back_uv))*(1.-smoothstep(-.065,.0,rest.z)),exp(-dot(axilla,axilla)));
+	float wick=.035*sin(y*99.+rest.x*83.)+.022*sin(y*181.-rest.x*119.);
+	float wet=dampness*smoothstep(.16,.56,spread+wick);
+	ALBEDO*=1.-.47*wet;
+	ROUGHNESS=mix(ROUGHNESS,.52,wet);
 	RIM=.16;
 	RIM_TINT=.32;
 	SPECULAR=.28;

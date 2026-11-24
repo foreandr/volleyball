@@ -841,17 +841,56 @@ func huddle(dt: float) -> void:
 			# Approach from outside the circle. The palm rests on the rear
 			# shoulder blade or the rear waistband, clear of the spine.
 			var size: float=adjacent.height_cm/180.
-			var aim := shoulder+Vector3.UP*.085*size if upper else pelvis.lerp(shoulder,.28)
-			aim+=(back*(.16 if upper else .18)+lateral*.085)*size
+			var aim := pelvis.lerp(shoulder,.28)+(back*.18+lateral*.085)*size
+			if upper:
+				var left := Contact.joint(adjacent,"upperarm_l")
+				var right := Contact.joint(adjacent,"upperarm_r")
+				var near_shoulder := left if left.distance_squared_to(actor.position)<right.distance_squared_to(actor.position) else right
+				aim=near_shoulder+(Vector3.UP*.10+back*.020+lateral*.035)*size
+			if actor!=game.coach:
+				aim=adjacent.dressed_surface.contact(aim,Vector3.UP if upper else back)
 			var pole := Vector3(sign_*.75,.18 if upper else -.65,-.85)
 			if actor==game.coach:
 				weight=.85
 				aim=actor.to_global(Vector3(sign_*.32,1.15+.09*sin(game.clock*2.+sign_),.37))
 				pole=Vector3(sign_*.7,-.65,-.15)
 			var wrist := "hand_"+str(side)
+			var orientation := Basis.IDENTITY
+			var blend := weight if actor!=game.coach else 0.
+			if blend>0.:
+				var frame := rig.global_basis.orthonormalized().inverse()
+				var direction := (-lateral*.35-back*.94).normalized() if upper else -lateral
+				var along := (frame*direction).normalized()
+				var normal := (frame*(Vector3.DOWN if upper else -back)).slide(along).normalized()
+				var across := normal.cross(along)*sign_
+				var base: Transform3D=author.world_pose(pose,rig.find_bone(wrist))
+				var fingers: Vector3=author.point(pose,"middle_01_"+str(side))-base.origin
+				var span: Vector3=author.point(pose,"index_01_"+str(side))-author.point(pose,"pinky_01_"+str(side))
+				var hands=preload("res://scripts/hand_setting_pose.gd")
+				orientation=hands.hand_basis(along,across)*hands.hand_basis(fingers,span).inverse()*base.basis.orthonormalized()
+				author.set_world_basis(pose,wrist,orientation)
+				for digit in ["thumb","index","middle","ring","pinky"]:
+					for joint in ["01","02","03"]:
+						var id := rig.find_bone("%s_%s_%s"%[digit,joint,side])
+						if id>=0:
+							rig.set_bone_pose_rotation(id,rig.get_bone_pose_rotation(id).slerp(rig.get_bone_rest(id).basis.orthonormalized().get_rotation_quaternion(),blend))
 			var palm_offset: Vector3=(author.point(pose,"middle_01_"+str(side))-author.point(pose,wrist))*.8
+			if blend>.01:
+				var outward := Vector3.UP if upper else back
+				var clearance := 0.
+				# The thumb protrudes past the palm. Check it and the outer
+				# knuckles against the same surface before solving the arm.
+				for digit in ["thumb_03_","pinky_02_","index_02_"]:
+					var relative: Vector3=author.point(pose,digit+str(side))-author.point(pose,wrist)-palm_offset
+					var finger := aim+rig.global_basis*relative
+					var surface: Vector3=adjacent.dressed_surface.contact(finger,outward)
+					clearance=maxf(clearance,(surface-finger).dot(outward))
+				aim+=outward*clearance
 			author.limb(pose,arm,"lowerarm_"+str(side),wrist,rig.to_local(aim)-palm_offset,pole,weight)
-			for bone in [arm,"lowerarm_"+str(side)]:
+			if blend>0.:
+				var solved: Transform3D=author.world_pose(pose,rig.find_bone(wrist))
+				author.set_world_basis(pose,wrist,solved.basis.orthonormalized().slerp(orientation,blend))
+			for bone in [arm,"lowerarm_"+str(side),wrist]:
 				var j := rig.find_bone(bone)
 				rig.set_bone_pose_rotation(j,pose[j].basis.orthonormalized().get_rotation_quaternion())
 

@@ -457,7 +457,9 @@ func step_practice(delta: float) -> void:
 		seat.update()
 		seat.watch(ball.position if ball.visible else coach.position+Vector3.UP*1.5,delta)
 		seat.applause(delta)
-	for a in energy: energy[a].recover(delta)
+	for a in energy:
+		energy[a].recover(delta)
+		a.exertion_total=energy[a].spent_total
 	clock += delta
 	elapsed += delta
 	if phase == "intro":
