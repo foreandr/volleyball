@@ -71,7 +71,12 @@ void vertex(){
 		drape=mix(drape,.003+.006*pleat+motion*(.008+.019*wave),facing);
 		VERTEX+=NORMAL*(free_edge*drape*(1.-arm)*(1.-.55*cling)+.0035*tension_fold(rest)+sleeve_crease(rest))+sleeve_motion(rest)*arm;
 		{
-			VERTEX.y+=(1.-arm)*free_edge*(-.018-.014*facing-.014*cling+flutter*(.023*wave+.012*ripple)*(1.-.48*facing));
+			// Carry the reach down the side seam into the loose hem.
+			// Interpolate across the torso so opposite arm heights stay continuous.
+			float reach=mix(arm_lift.y,arm_lift.x,smoothstep(-.10,.10,rest.x));
+			float side_pull=smoothstep(.035,.175,abs(rest.x));
+			float seam_lift=.038*reach*side_pull*(1.-smoothstep(1.03,1.38,rest.y));
+			VERTEX.y+=seam_lift+(1.-arm)*free_edge*(-.018-.014*facing-.014*cling+flutter*(.023*wave+.012*ripple)*(1.-.48*facing));
 		}
 	}
 	{
