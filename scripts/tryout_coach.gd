@@ -60,6 +60,13 @@ func dress(actor: Node3D) -> void:
 				var h := uv.y*PI/20.
 				var r := cos(h)
 				surface.add_vertex(Vector3(.098*r*sin(angle),.094*sin(h)-.018*r*(1.-cos(angle)),.119*r*cos(angle)))
+	# The sweatband follows the low edge of the crown and encloses the visor seam.
+	for i in 48:
+		for corner: Vector2 in [Vector2.ZERO,Vector2.RIGHT,Vector2.DOWN,Vector2.RIGHT,Vector2.ONE,Vector2.DOWN]:
+			var angle := (i+corner.x)*TAU/48.
+			var drop := corner.y*.012
+			surface.set_color(Color(.79,.82,.80))
+			surface.add_vertex(Vector3(.098*sin(angle),-.018*(1.-cos(angle))-drop,.119*cos(angle)))
 	# A bound visor has a top, shaded underside and a rounded leading edge.
 	for i in 48:
 		var a := float(i)/24.-1.
@@ -110,8 +117,10 @@ func dress(actor: Node3D) -> void:
 
 static func visor_point(x: float,along: float) -> Vector3:
 	var front := .090+.085*sqrt(maxf(0.,1.-x*x))
-	var back := .060+.050*(1.-x*x)
-	return Vector3(x*.102,-.004-.021*x*x-.010*along,lerpf(back,front,along))
+	var angle := x*1.25
+	var root := Vector3(.098*sin(angle),-.018*(1.-cos(angle))-.006,.119*cos(angle))
+	var tip := Vector3(x*.102,-.014-.021*x*x,front)
+	return root.lerp(tip,along)
 
 func fetch_pose(actor: Node3D,center: Vector3,reach: float,carry: float) -> void:
 	var rig: Skeleton3D=actor.skeleton
