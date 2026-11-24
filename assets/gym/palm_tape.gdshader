@@ -23,8 +23,13 @@ void fragment(){
 	float feather=max(.00035,fwidth(seam));
 	float shadow=1.-smoothstep(0.,.0017+feather,abs(seam+.00065));
 	float rim=1.-smoothstep(0.,feather+.00035,abs(seam-.00035));
+	// At the crossover, only the edge lying on the lower course casts a lap shadow.
+	float lower_coverage=1.-smoothstep(.009-feather,.009+feather,abs(course+.005));
+	shadow*=lower_coverage;
+	rim*=lower_coverage;
+	float top_coverage=1.-smoothstep(.009-feather,.009+feather,abs(upper));
 	float transverse=lateral+.50*depth;
-	vec2 thread=vec2(course/.00125,transverse/.00105);
+	vec2 thread=mix(vec2(course,transverse+.16*along),vec2(upper,transverse-.12*along),top_coverage)/vec2(.00125,.00105);
 	vec2 detail=1.-smoothstep(vec2(.18),vec2(.5),fwidth(thread));
 	vec2 weave=cos(thread*6.283185)*detail;
 	ALBEDO=vec3(.79,.755,.68)*(1.-.24*shadow+.10*rim+.035*weave.x+.023*weave.y);
