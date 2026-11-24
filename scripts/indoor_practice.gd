@@ -153,7 +153,7 @@ var set_error := 0.0
 var energy := {}
 var toss_curve := 1.0
 var toss_spin := Vector3.ZERO
-var preview_enabled := true
+var preview_enabled := false
 var tempo := 0
 var success := false
 var feedback := ""
@@ -561,7 +561,6 @@ func face_set(actor: Node3D,choice: int,dt: float) -> void:
 func cycle_height() -> void:
 	selected_tempo=(selected_tempo+1)%TEMPOS.size()
 	preview_until=clock+2.
-	preview_enabled=true
 
 func toss_at(time: float) -> Vector3:
 	return source.lerp(forehead_target,time/forehead_arrival)+Vector3.UP*(4.905*time*(forehead_arrival-time))

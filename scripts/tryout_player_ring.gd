@@ -2,6 +2,7 @@ extends Control
 
 const PromptControls = preload("res://scripts/xbox_controls.gd")
 var game: Control
+var jump_readouts := {}
 
 func _ready() -> void:
 	mouse_filter=Control.MOUSE_FILTER_IGNORE
@@ -52,15 +53,9 @@ func draw_incoming_toss() -> void:
 	landing.y=.055
 	var camera: Camera3D=game.camera
 	if camera.is_position_behind(landing): return
-	var ring := PackedVector2Array()
-	for i in 33:
-		var angle := TAU*i/32.
-		ring.append(camera.unproject_position(landing+Vector3(cos(angle),0,sin(angle))*.26))
-	draw_polyline(ring,Color("17302e"),5,true)
-	draw_polyline(ring,Color("61ebcc"),2.5,true)
-	for i in 24:
-		var point: Vector3=game.toss_at(lerpf(minf(game.elapsed,landing_time),landing_time,i/23.))
-		if not camera.is_position_behind(point): draw_circle(camera.unproject_position(point),2.,Color("8ff5dc"))
+	var point := camera.unproject_position(landing)
+	draw_circle(point,4.5,Color.WHITE,true,-1,true)
+	draw_circle(point,3.,Color("15191e"),true,-1,true)
 
 func draw_set_path(actor: Node3D) -> void:
 	var active: bool=actor==game.setter
@@ -103,24 +98,33 @@ func draw_player(actor: Node3D,human: bool) -> void:
 		if spent>0.: draw_rect(Rect2(origin+Vector2(available,0),Vector2(spent,7)),Color("51cbe9"))
 		var caption := "Stamina %d/100" % roundi(energy.value)
 		if energy.action!="": caption+="   %s -%d" % [energy.action,ceili(energy.action_cost)]
+		elif actor==game.setter: caption+="   Set %d/%d" % [roundi(actor.effective_rating("Hand setting")),roundi(actor.attributes["Hand setting"])]
 		var text_pos := origin+Vector2(-48,22)
 		draw_string_outline(ThemeDB.fallback_font,text_pos,caption,HORIZONTAL_ALIGNMENT_CENTER,200,13,4,ink)
 		draw_string(ThemeDB.fallback_font,text_pos,caption,HORIZONTAL_ALIGNMENT_CENTER,200,13)
 		var squat: RefCounted=game.squat if actor==game.setter else game.free_squat
 		var jump: RefCounted=game.jump if actor==game.setter else game.free_jump
 		var outer := radius+Vector2(4,4)
+		var cpu: bool=actor==game.setter and game.automatic_setter()
+		var readout: Vector2=jump_readouts.get(actor,Vector2(0.,-100.))
 		if squat.charging or jump.active:
-			var fill := clampf(squat.seconds/squat.FULL_LOAD,0.,1.)
-			if jump.active and game.automatic_setter() and actor==game.setter: fill=clampf(jump.height/game.camp_jump_height,0.,1.)
+			if squat.charging or not cpu:
+				readout.x=clampf(squat.seconds/squat.FULL_LOAD,0.,1.)
+			else:
+				readout.x=clampf(jump.elapsed/maxf(.001,jump.load_duration()),0.,1.)
+			readout.y=game.clock
+			jump_readouts[actor]=readout
+		var opacity := 1.-smoothstep(.85,1.15,game.clock-readout.y)
+		if opacity>0.:
 			var base := at+Vector2(radius.x+10,2)
-			draw_rect(Rect2(base-Vector2(2,34),Vector2(14,36)),Color.WHITE)
-			draw_rect(Rect2(base-Vector2(0,32),Vector2(10,32)),ink)
-			draw_rect(Rect2(base-Vector2(0,32*fill),Vector2(10,32*fill)),Color("51cbe9"))
+			draw_rect(Rect2(base-Vector2(2,34),Vector2(14,36)),Color(Color.WHITE,opacity))
+			draw_rect(Rect2(base-Vector2(0,32),Vector2(10,32)),Color(ink,opacity))
+			draw_rect(Rect2(base-Vector2(0,32*readout.x),Vector2(10,32*readout.x)),Color(Color("51cbe9"),opacity))
 		if actor!=game.setter and game.free_target>=0:
 			timing_arc(at,outer,PI,clampf((game.clock-game.free_press)/.43,0,1),.47,.76)
 		var pressing: bool=game.held>=0 and game.phase in ["cart","walk","feed","pass"]
 		var result: bool=game.clock<game.set_grade_until
-		if actor==game.setter and (pressing or result):
+		if actor==game.setter and not game.automatic_setter() and not squat.charging and (pressing or result):
 			var fill: float=game.set_fill() if pressing else game.graded_fill
 			timing_arc(at,outer,PI,fill,.55,.85)
 	var label: String=actor.display_name.strip_edges().get_slice(" ",actor.display_name.strip_edges().count(" ")).to_upper()

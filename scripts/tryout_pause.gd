@@ -118,6 +118,7 @@ func tuning_controls() -> void:
 			format_value.call(v)
 			match field[0]:
 				"Stamina":
+					athlete.stamina.rested_capacity=maxf(athlete.stamina.rested_capacity,v)
 					athlete.stamina.value=v
 					athlete.stamina.exhausted=v<=0.
 				"Endurance": athlete.stamina.endurance=v

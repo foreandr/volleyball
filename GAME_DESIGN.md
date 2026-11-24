@@ -126,3 +126,5 @@ On descending tosses an active setter can lean and reach to either side. Contact
 
 Setting camp feeds cluster around the home between zones 2 and 3. Inside the attack line the setter can also call middle. The coach prepares the next toss during flight. Planted sets load the knees according to distance and available strength. Airborne contact has 77% of planted horizontal range.
 Consecutive setting-camp tosses differ by at least one meter on each court axis. The practice HUD separates player identity, stamina, action expenditure, vertical jump charge and sport timing.
+Incoming tosses use a small dark landing dot with a light edge. The outgoing arc is opt-in with left-stick click. Jump charge holds through flight and for 0.85 seconds after landing, then fades over 0.30 seconds and CPU observation hides the set input meter.
+Exertion also accrues slow-recovering fatigue. Endurance scales recovery between reps. The setter HUD reports effective versus fresh hand setting when there is no recent expenditure. Restarting the drill restores a fresh athlete.

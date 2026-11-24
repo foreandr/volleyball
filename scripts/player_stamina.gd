@@ -8,6 +8,7 @@ const RECOVERY_RATE := 17.0
 var action := ""
 var action_cost := 0.0
 var action_linger := 0.0
+var rested_capacity := 100.0
 var spent_total := 0.0
 var value := 100.0
 var delay := 0.0
@@ -28,7 +29,9 @@ func spend(amount: float, cause := "") -> void:
 		action=cause
 		action_linger=.45
 		action_cost+=minf(value,amount)
-	spent_total+=minf(value,amount)
+	var used := minf(value,amount)
+	spent_total+=used
+	rested_capacity=maxf(0.,rested_capacity-used*.20)
 	value = maxf(0.0,value-amount)
 	delay = RECOVERY_DELAY
 	if value <= 0.0: exhausted = true
@@ -40,5 +43,7 @@ func recover(delta: float) -> void:
 		action_cost=0.
 	var rest := maxf(0.0,delta-delay)
 	delay = maxf(0.0,delay-delta)
-	value = minf(100.0,value+rest*RECOVERY_RATE)
+	var recovery := lerpf(.45,1.30,clampf(endurance/100.,0.,1.))
+	rested_capacity=minf(100.,rested_capacity+rest*.16*recovery)
+	value = minf(rested_capacity,value+rest*RECOVERY_RATE*recovery)
 	if value >= 25.0: exhausted = false
