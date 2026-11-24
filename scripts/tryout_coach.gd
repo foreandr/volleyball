@@ -48,9 +48,11 @@ func dress(actor: Node3D) -> void:
 	var cloth := StandardMaterial3D.new()
 	cloth.albedo_color=Color("244c3d")
 	cloth.roughness=.94
+	cloth.vertex_color_use_as_albedo=true
 	cloth.cull_mode=BaseMaterial3D.CULL_DISABLED
 	var surface := SurfaceTool.new()
 	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+	surface.set_color(Color.WHITE)
 	for j in 10:
 		for i in 48:
 			for uv: Vector2 in [Vector2(i,j),Vector2(i+1,j),Vector2(i,j+1),Vector2(i,j+1),Vector2(i+1,j),Vector2(i+1,j+1)]:
@@ -58,11 +60,23 @@ func dress(actor: Node3D) -> void:
 				var h := uv.y*PI/20.
 				var r := cos(h)
 				surface.add_vertex(Vector3(.098*r*sin(angle),.094*sin(h)-.018*r*(1.-cos(angle)),.119*r*cos(angle)))
-	for i in 24:
-		for uv: Vector2 in [Vector2(i,0),Vector2(i+1,0),Vector2(i,1),Vector2(i,1),Vector2(i+1,0),Vector2(i+1,1)]:
-			var x := uv.x/12.-1.
-			var z := lerpf(.060+.050*(1.-x*x),.090+.085*sqrt(maxf(0.,1.-x*x)),uv.y)
-			surface.add_vertex(Vector3(x*.102,-.004-.021*x*x-.010*uv.y,z))
+	# A bound visor has a top, shaded underside and a rounded leading edge.
+	for i in 48:
+		var a := float(i)/24.-1.
+		var b := float(i+1)/24.-1.
+		for underside in [false,true]:
+			for corner: Vector2 in [Vector2.ZERO,Vector2.RIGHT,Vector2.DOWN,Vector2.RIGHT,Vector2.ONE,Vector2.DOWN]:
+				var x := lerpf(a,b,corner.x)
+				var along := corner.y
+				var pt := visor_point(x,along)
+				if underside: pt.y-=.0042
+				surface.set_color(Color(.48,.53,.50) if underside else Color.WHITE)
+				surface.add_vertex(pt)
+		for corner: Vector2 in [Vector2.ZERO,Vector2.RIGHT,Vector2.DOWN,Vector2.RIGHT,Vector2.ONE,Vector2.DOWN]:
+			var pt := visor_point(lerpf(a,b,corner.x),1.)
+			pt.y-=corner.y*.0042
+			surface.set_color(Color(.71,.75,.73))
+			surface.add_vertex(pt)
 	surface.generate_normals()
 	var mesh := MeshInstance3D.new()
 	mesh.mesh=surface.commit()
@@ -93,6 +107,11 @@ func dress(actor: Node3D) -> void:
 	crest.position=Vector3(0,.032,.115)
 	crest.rotation.x=-.29
 	hat.add_child(crest)
+
+static func visor_point(x: float,along: float) -> Vector3:
+	var front := .090+.085*sqrt(maxf(0.,1.-x*x))
+	var back := .060+.050*(1.-x*x)
+	return Vector3(x*.102,-.004-.021*x*x-.010*along,lerpf(back,front,along))
 
 func fetch_pose(actor: Node3D,center: Vector3,reach: float,carry: float) -> void:
 	var rig: Skeleton3D=actor.skeleton
