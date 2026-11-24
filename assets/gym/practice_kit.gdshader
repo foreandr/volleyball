@@ -61,11 +61,16 @@ void vertex(){
 		// A doubled hem hangs under its own weight. Keep the broader fold
 		// above it and damp the small ripples at the stitched edge.
 		float facing=max(1.-smoothstep(.16,.89,COLOR.a),1.-smoothstep(1.05,1.14,rest.y))*(1.-arm);
-		float drape=mix(.016,.012,arm)+.014*pleat+motion*(.023+.044*wave+.013*ripple);
+		// Moist fabric near the spine carries more weight and flutters less.
+		float back=1.-smoothstep(-.065,.015,rest.z);
+		float cling=back*dampness*exp(-pow(abs(rest.x)/(.054+.10*dampness),2.))
+			*smoothstep(1.015,1.15,rest.y)*(1.-smoothstep(1.40,1.52,rest.y));
+		float flutter=motion*(1.-.68*cling);
+		float drape=mix(.016,.012,arm)+.014*pleat+flutter*(.023+.044*wave+.013*ripple);
 		drape=mix(drape,.003+.006*pleat+motion*(.008+.019*wave),facing);
-		VERTEX+=NORMAL*(free_edge*drape*(1.-arm)+.0035*tension_fold(rest)+sleeve_crease(rest))+sleeve_motion(rest)*arm;
+		VERTEX+=NORMAL*(free_edge*drape*(1.-arm)*(1.-.55*cling)+.0035*tension_fold(rest)+sleeve_crease(rest))+sleeve_motion(rest)*arm;
 		{
-			VERTEX.y+=(1.-arm)*free_edge*(-.018-.014*facing+motion*(.023*wave+.012*ripple)*(1.-.48*facing));
+			VERTEX.y+=(1.-arm)*free_edge*(-.018-.014*facing-.014*cling+flutter*(.023*wave+.012*ripple)*(1.-.48*facing));
 		}
 	}
 	{
