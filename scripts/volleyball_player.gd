@@ -126,6 +126,8 @@ func apply_profile(profile: Dictionary) -> void:
 	handedness = values.handedness
 
 func refresh_kit() -> void:
+	if beard_material:
+		beard_material.set_shader_parameter("beard_style",Profile.KIT_CHOICES["Facial hair"].find(attributes["Facial hair"]))
 	if shirt_fabric:
 		shirt_fabric.set_shader_parameter("hem_shift",{"Short":.052,"Long":-.065}.get(attributes["Jersey length"],0.))
 		shirt_fabric.set_shader_parameter("tucked",attributes["Jersey fit"]=="Tucked")
@@ -204,6 +206,7 @@ var jersey_origin := Vector3.ZERO
 var jersey_speed := 0.
 var dressed_surface := preload("res://scripts/dressed_contact.gd").new()
 var hem_cloth: RefCounted
+var beard_material: ShaderMaterial
 var shirt_fabric: ShaderMaterial
 var leg_skin: ShaderMaterial
 var exertion_total := 0.0

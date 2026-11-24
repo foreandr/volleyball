@@ -102,7 +102,10 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 				layer.set_shader_parameter("sleeve_end",[0.,.42,.66,0.,0.][variant%5])
 				arms.material_override=layer
 			if not coach and variant%3==2: compression(rig,node,skin_surface)
-			face_hair(rig,node,skin_surface,coach,variant)
+			var grooming := face_hair(rig,node,skin_surface,coach,variant)
+			if not coach and variant==0:
+				actor.beard_material=grooming
+				actor.refresh_kit()
 			if not coach and variant%4==1 and variant%5!=4:
 				palm_tape(rig,node,skin_surface,"l" if variant%2==0 else "r")
 		if shirt:
@@ -627,7 +630,7 @@ static func court_shoe(rig: Skeleton3D,side: String,coach: bool,variant: int) ->
 	last.add_child(trainer)
 	rig.set_meta("sole_"+side,last)
 
-static func face_hair(rig: Skeleton3D,body: MeshInstance3D,mesh: ArrayMesh,coach: bool,variant: int) -> void:
+static func face_hair(rig: Skeleton3D,body: MeshInstance3D,mesh: ArrayMesh,coach: bool,variant: int) -> ShaderMaterial:
 	# Follow the jaw and scalp vertices so stubble and hairlines inherit the face shape.
 	var part := MeshInstance3D.new()
 	part.mesh=mesh
@@ -636,7 +639,7 @@ static func face_hair(rig: Skeleton3D,body: MeshInstance3D,mesh: ArrayMesh,coach
 	part.skeleton=part.get_path_to(rig)
 	var shader := Shader.new()
 	shader.code="""shader_type spatial;
-	uniform bool gray; uniform float temple_recess;
+	uniform bool gray; uniform int beard_style; uniform float temple_recess;
 	uniform vec4 tone:source_color;
 	varying vec3 p;
 	void vertex(){p=vec3(UV2,COLOR.r*.6-.3);VERTEX+=NORMAL*.002;}
@@ -667,7 +670,12 @@ static func face_hair(rig: Skeleton3D,body: MeshInstance3D,mesh: ArrayMesh,coach
 		float moustache=(1.-smoothstep(.78,1.,wing))*(1.-smoothstep(.002,.006,abs(p.y-lip_line)))
 			*smoothstep(.045,.068,p.z)*(.62+.38*smoothstep(.001,.007,abs(p.x)));
 		density=max(density,.91*moustache);
-		bool jaw=gray && abs(p.x)<.092 && density>grain;
+		if(!gray){
+			if(beard_style==1) density*=.43;
+			if(beard_style==2) density=moustache;
+			if(beard_style==3) density=max(moustache,density*(1.-smoothstep(.024,.039,abs(p.x))));
+		}
+		bool jaw=(gray || beard_style>0) && abs(p.x)<.092 && density>grain;
 		if(!scalp && !jaw) discard;
 		float strand=.5+.5*cos(p.y*620.+abs(p.x)*390.+p.z*160.);
 		float silver=gray ? smoothstep(.37,.88,grain)*(.26+.32*strand) : 0.;
@@ -693,9 +701,11 @@ static func face_hair(rig: Skeleton3D,body: MeshInstance3D,mesh: ArrayMesh,coach
 	var mat := ShaderMaterial.new()
 	mat.shader=shader
 	mat.set_shader_parameter("gray",coach)
+	mat.set_shader_parameter("beard_style",[0,4,1,2,3,0,1][variant%7])
 	mat.set_shader_parameter("temple_recess",.021 if coach else .003+.013*(.5+.5*sin(variant*2.39996)))
 	mat.set_shader_parameter("tone",Color("929087") if coach else Color.from_hsv(.065+.004*variant,.42,.13+.065*(variant%6)))
 	part.material_override=mat
+	return mat
 
 static func haircut(scalp: Node3D,color: Color,variant: int,actor: Node3D) -> void:
 	var style := variant%7
