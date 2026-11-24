@@ -27,6 +27,14 @@ float tension_fold(vec3 bind){
 	float panel=smoothstep(.035,.12,x)*(1.-smoothstep(.22,.31,x));
 	return tension*panel*exp(-diagonal*diagonal/.011)*sin(diagonal*86.);
 }
+// The loose lower panel buckles above the hem when the near arm lifts.
+float waist_fold(vec3 p){
+	float side=abs(p.x);
+	float reach=mix(arm_lift.y,arm_lift.x,smoothstep(-.06,.06,p.x));
+	float line=p.y-1.107-side*.29-p.z*.14;
+	float envelope=exp(-line*line/.003)*smoothstep(.045,.16,side);
+	return .0065*reach*envelope*sin(line*98.);
+}
 // Short compression folds form on the underside of a raised sleeve.
 float sleeve_crease(vec3 bind){
 	float x=abs(bind.x);
@@ -69,7 +77,7 @@ void vertex(){
 		float flutter=motion*(1.-.68*cling);
 		float drape=mix(.016,.012,arm)+.014*pleat+flutter*(.023+.044*wave+.013*ripple);
 		drape=mix(drape,.003+.006*pleat+motion*(.008+.019*wave),facing);
-		VERTEX+=NORMAL*(free_edge*drape*(1.-arm)*(1.-.55*cling)+.0035*tension_fold(rest)+sleeve_crease(rest))+sleeve_motion(rest)*arm;
+		VERTEX+=NORMAL*(free_edge*drape*(1.-arm)*(1.-.55*cling)+.0035*tension_fold(rest)+waist_fold(rest)+sleeve_crease(rest))+sleeve_motion(rest)*arm;
 		{
 			// Carry the reach down the side seam into the loose hem.
 			// Interpolate across the torso so opposite arm heights stay continuous.
@@ -257,7 +265,7 @@ void fragment(){
 	float lift=rest.x>0.?arm_lift.x:arm_lift.y;
 	float ridge=sin(diagonal*91.+rest.z*12.);
 	float crease=flank*lift*exp(-diagonal*diagonal/.009)*ridge*.0028;
-	if(!jacket) crease+=sleeve_crease(rest);
+	if(!jacket) crease+=sleeve_crease(rest)+.52*waist_fold(rest);
 	float loose=(1.-smoothstep(1.04,1.32,y))*flank;
 	crease+=loose*.0032*sin(y*58.+x*35.+rest.z*18.+inertia.x*32.);
 	vec3 dx=dFdx(VERTEX),dy=dFdy(VERTEX);
