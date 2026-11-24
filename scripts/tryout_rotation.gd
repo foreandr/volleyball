@@ -821,10 +821,22 @@ func move_actor(actor: Node3D,step: Vector3) -> Vector3:
 const HUDDLE_CENTER := Vector3(0,.04,.35)
 var circle: Array = []
 var debrief_started := false
+var settle_time := 0.
+var huddle_planted := false
+var coach_head_rest := Quaternion.IDENTITY
 var shoulder_trim := {}
 var elbow_adjustments := {}
 
 func huddle(dt: float) -> void:
+	if huddle_planted:
+		# Only the speaker's head moves during the debrief. The manually
+		# advanced skeletons retain their solved hand and foot contacts.
+		var rig: Skeleton3D=game.coach.skeleton
+		var head:=rig.find_bone("Head")
+		settle_time+=dt
+		var nod:=.032*sin((settle_time-.75)*2.4)
+		rig.set_bone_pose_rotation(head,coach_head_rest*Quaternion(Vector3.RIGHT,nod))
+		return
 	if circle.is_empty():
 		circle=roster+workers.map(func(w): return w.actor)+[game.coach]
 		circle.sort_custom(func(a,b): return huddle_angle(a)<huddle_angle(b))
@@ -836,6 +848,7 @@ func huddle(dt: float) -> void:
 		if not surface.is_equal_approx(palm):
 			entry.trim=clampf(entry.trim+(surface.y-.012-palm.y)*minf(1.,dt*5.),-.06,.06)
 	var present := 0
+	var facing_center := true
 	for i in circle.size():
 		var actor: Node3D=circle[i]
 		var work := workers.find_custom(func(w): return w.actor==actor)
@@ -861,10 +874,13 @@ func huddle(dt: float) -> void:
 		actor.play_action("base/Idle")
 		var inward := HUDDLE_CENTER-actor.position
 		actor.rotation.y=rotate_toward(actor.rotation.y,atan2(inward.x,inward.z),dt*2.)
+		if absf(angle_difference(actor.rotation.y,atan2(inward.x,inward.z)))>.015: facing_center=false
 		var author: RefCounted=actor.get_pose_author()
 		var rig: Skeleton3D=actor.skeleton
 		var pose: Array=[]
 		for j in rig.get_bone_count(): pose.append(rig.get_bone_pose(j))
+		var mid_z: float=(author.point(pose,"foot_l").z+author.point(pose,"foot_r").z)*.5
+		var lead: float=[0.,.095,-.095][i%3]
 		# Idle feet can settle below the floor. Correct the ankle through
 		# the leg chain so the shoe and the sock stay joined.
 		for leg in ["l","r"]:
@@ -878,8 +894,8 @@ func huddle(dt: float) -> void:
 			for z: float in [-.13,.0,.15]:
 				for x: float in [-.045,.045]:
 					lowest=minf(lowest,(shoe_frame*Vector3(x,.009,z)).y)
-			if lowest>=.041: continue
 			var shift := rig.global_basis.inverse()*(Vector3.UP*(.041-lowest))
+			shift.z+=mid_z+(lead if leg=="l" else -lead)-ankle_pose.origin.z
 			author.limb(pose,"thigh_"+leg,"calf_"+leg,ankle,ankle_pose.origin+shift,Vector3.BACK)
 			author.set_world_basis(pose,ankle,ankle_pose.basis.orthonormalized())
 			for bone in ["thigh_"+leg,"calf_"+leg,ankle]:
@@ -914,7 +930,7 @@ func huddle(dt: float) -> void:
 
 			if actor==game.coach:
 				weight=.85
-				aim=actor.to_global(Vector3(sign_*.32,1.15+.09*sin(game.clock*2.+sign_),.37))
+				aim=actor.to_global(Vector3(sign_*.32,1.15,.37))
 				pole=Vector3(sign_*.7,-.65,-.15)
 			var wrist := "hand_"+str(side)
 			var orientation := Basis.IDENTITY
@@ -989,6 +1005,15 @@ func huddle(dt: float) -> void:
 				var j := rig.find_bone(bone)
 				rig.set_bone_pose_rotation(j,pose[j].basis.orthonormalized().get_rotation_quaternion())
 
+	if present==circle.size() and facing_center:
+		settle_time+=dt
+		if settle_time>=.75:
+			huddle_planted=true
+			settle_time=.75
+			var coach_rig: Skeleton3D=game.coach.skeleton
+			coach_head_rest=coach_rig.get_bone_pose_rotation(coach_rig.find_bone("Head"))
+	else:
+		settle_time=0.
 	if present==circle.size() and not debrief_started:
 		debrief_started=true
 		game.message.text="Coach Ellis: Good work. Give your hitters time to approach. Bring it in."
