@@ -8,15 +8,15 @@ uniform bool jacket = false;
 uniform vec3 inertia;
 uniform vec2 arm_lift;
 uniform sampler2D knit_surface : repeat_enable,filter_linear_mipmap_anisotropic;
-uniform vec3 sleeve_offset[60];
+uniform vec3 sleeve_offset[160];
 vec3 sleeve_motion(vec3 bind){
-	float ring=clamp((abs(bind.x)-.195)/.078,0.,1.999);
+	float ring=clamp((abs(bind.x)-.195)/.039,0.,3.999);
 	int row=int(floor(ring));
-	float phase_angle=fract(atan(bind.z+.035,bind.y-1.48)/6.2831853+1.)*10.;
-	int j=int(floor(phase_angle))%10;
-	int base=(bind.x>0.?0:30)+row*10;
-	vec3 a=mix(sleeve_offset[base+j],sleeve_offset[base+(j+1)%10],fract(phase_angle));
-	vec3 b=mix(sleeve_offset[base+10+j],sleeve_offset[base+10+(j+1)%10],fract(phase_angle));
+	float phase_angle=fract(atan(bind.z+.035,bind.y-1.48)/6.2831853+1.)*16.;
+	int j=int(floor(phase_angle))%16;
+	int base=(bind.x>0.?0:80)+row*16;
+	vec3 a=mix(sleeve_offset[base+j],sleeve_offset[base+(j+1)%16],fract(phase_angle));
+	vec3 b=mix(sleeve_offset[base+16+j],sleeve_offset[base+16+(j+1)%16],fract(phase_angle));
 	return mix(a,b,fract(ring));
 }
 float tension_fold(vec3 bind){

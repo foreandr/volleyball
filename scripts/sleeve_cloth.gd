@@ -1,23 +1,24 @@
 extends RefCounted
 
-# Two free rows and a pinned seam around each upper arm. The displacement
+# Four mobile rings hang from the pinned armhole. The displacement
 # field is sampled on the skinned garment in its original bind coordinates.
-const AROUND := 10
-const PER_ARM := AROUND*3
+const AROUND := 16
+const ROWS := 5
+const PER_ARM := AROUND*ROWS
 var particles := PackedVector3Array()
 var previous := PackedVector3Array()
 var anchors := PackedVector3Array()
 var offsets := PackedVector3Array()
 var links: Array[Vector2i]=[]
-var lengths := PackedFloat32Array()
+var stiffness := PackedFloat32Array()
 var last_dt := 0.
 var upper := PackedInt32Array()
 var lower := PackedInt32Array()
 var last_root := Vector3.ZERO
 
-func link(a: int,b: int) -> void:
+func link(a: int,b: int,strength := 1.) -> void:
 	links.append(Vector2i(a,b))
-	lengths.append(anchors[a].distance_to(anchors[b]))
+	stiffness.append(strength)
 
 func setup(rig: Skeleton3D) -> void:
 	for side in ["l","r"]:
@@ -27,13 +28,13 @@ func setup(rig: Skeleton3D) -> void:
 		var sign_ := 1. if side==0 else -1.
 		var start := rig.get_bone_global_rest(upper[side]).origin
 		var end := rig.get_bone_global_rest(lower[side]).origin
-		for row in 3:
-			var x := sign_*(.195+.078*row)
+		for row in ROWS:
+			var x := sign_*(.195+.039*row)
 			var center := start.lerp(end,clampf((x-start.x)/(end.x-start.x),0.,1.))
 			for j in AROUND:
 				var angle := TAU*j/AROUND
 				anchors.append(Vector3(x,center.y+.076*cos(angle),center.z+.076*sin(angle)))
-		for row in 3:
+		for row in ROWS:
 			for j in AROUND:
 				var a := side*PER_ARM+row*AROUND+j
 				var b := side*PER_ARM+row*AROUND+(j+1)%AROUND
@@ -41,6 +42,7 @@ func setup(rig: Skeleton3D) -> void:
 				if row>0:
 					link(a,a-AROUND)
 					link(a,b-AROUND)
+				if row>1: link(a,a-2*AROUND,.10)
 	particles.resize(anchors.size())
 	previous.resize(anchors.size())
 	offsets.resize(anchors.size())
@@ -65,6 +67,12 @@ func update(rig: Skeleton3D,material: ShaderMaterial,delta: float,air: Vector3) 
 			if reset:
 				particles[i]=targets[i]
 				previous[i]=targets[i]
+	# Measure in the posed frame so a larger athlete does not contract
+	# the sleeve towards the dimensions of the source mannequin.
+	var lengths := PackedFloat32Array()
+	lengths.resize(links.size())
+	for j in links.size():
+		lengths[j]=targets[links[j].x].distance_to(targets[links[j].y])
 	var steps := maxi(1,ceili(minf(delta,.067)*120.))
 	var dt := minf(delta,.067)/steps
 	for step in steps:
@@ -83,7 +91,7 @@ func update(rig: Skeleton3D,material: ShaderMaterial,delta: float,air: Vector3) 
 				var a := links[j].x
 				var b := links[j].y
 				var difference := particles[b]-particles[a]
-				var correction := difference*(1.-lengths[j]/maxf(.00001,difference.length()))
+				var correction := stiffness[j]*difference*(1.-lengths[j]/maxf(.00001,difference.length()))
 				var free_a := a%PER_ARM>=AROUND
 				var free_b := b%PER_ARM>=AROUND
 				if free_a: particles[a]+=correction*(.5 if free_b else 1.)
