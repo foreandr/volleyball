@@ -183,7 +183,12 @@ void fragment(){
 	vec2 axilla=vec2((x-.208)/(.025+.095*dampness),(y-1.403)/(.045+.13*dampness));
 	float spread=max(exp(-dot(back_uv,back_uv))*(1.-smoothstep(-.065,.0,rest.z)),exp(-dot(axilla,axilla)));
 	float wick=.035*sin(y*99.+rest.x*83.)+.022*sin(y*181.-rest.x*119.);
-	float wet=dampness*smoothstep(.16,.56,spread+wick);
+	// Sweat follows the spine and wicks down from the front neckline.
+	float rear=1.-smoothstep(-.055,.018,rest.z);
+	vec2 spine=vec2(rest.x/(.024+.042*dampness),(y-1.27)/(.095+.19*dampness));
+	vec2 sternum=vec2(rest.x/(.033+.079*dampness),(y-1.47)/(.048+.14*dampness));
+	spread=max(spread,max(rear*exp(-dot(spine,spine)),(1.-rear)*exp(-dot(sternum,sternum))*.85));
+	float wet=dampness*smoothstep(.16,.56,spread+wick)*(1.-.91*print_coverage);
 	ALBEDO*=1.-.47*wet;
 	ROUGHNESS=mix(ROUGHNESS,.52,wet);
 	if(!jacket){
