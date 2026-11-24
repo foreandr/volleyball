@@ -148,7 +148,7 @@ func build_controls(controls: VBoxContainer) -> void:
 	controls.add_child(name_field)
 	profile = Profile.clean(profile)
 	add_attribute(controls,"Height (inches)","height_cm",60,84,profile.height_cm / 2.54)
-	add_attribute(controls,"Vertical jump (inches)","vertical_in",10,60,profile.vertical_in)
+	add_attribute(controls,"Vertical jump (inches)","vertical_in",30,60,profile.vertical_in)
 	add_attribute(controls,"Wingspan (inches)","wingspan_in",48,96,profile.wingspan_in)
 	if CareerSession.creating:
 		budget_label = Label.new()

@@ -59,12 +59,15 @@ func configure(host: Control) -> void:
 	column.add_child(primary)
 	var actions := HBoxContainer.new()
 	column.add_child(actions)
-	for caption in ["Watch demo","My Career"]:
+	for caption in ["Watch demo","Recordings","My Career"]:
 		var item := Button.new()
 		item.text = caption
 		item.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		actions.add_child(item)
 		item.pressed.connect(func():
+			if caption=="Recordings":
+				OS.shell_open(ProjectSettings.globalize_path("user://recordings"))
+				return
 			hide()
 			if caption == "My Career": game.leave()
 			else:

@@ -1,5 +1,6 @@
 extends Node3D
 
+var beacon := MeshInstance3D.new()
 var is_net := false
 var mouth_radius := 0.46
 var depth := 0.64
@@ -39,6 +40,23 @@ func _ready() -> void:
 	paint.albedo_color = Color("ed7543")
 	rim.material_override = paint
 	add_child(rim)
+	var halo := TorusMesh.new()
+	halo.inner_radius=mouth_radius+.055
+	halo.outer_radius=mouth_radius+.102
+	beacon.mesh=halo
+	beacon.position.y=.032
+	beacon.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var glow := Shader.new()
+	glow.code="""shader_type spatial;
+	render_mode unshaded;
+	void vertex(){ VERTEX.xz*=1.+.06*sin(TIME*3.); }
+	void fragment(){ ALBEDO=vec3(.12,.94,.78)*(1.2+.22*sin(TIME*3.)); }
+	"""
+	var highlight := ShaderMaterial.new()
+	highlight.shader=glow
+	beacon.material_override=highlight
+	add_child(beacon)
+	beacon.hide()
 	for i in 20:
 		var a := TAU*i/20.
 		var b := TAU*(i+1)/20.

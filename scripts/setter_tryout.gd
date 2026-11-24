@@ -8,11 +8,11 @@ const TEMPOS := ["Normal","High","Fast"]
 const Xbox = preload("res://scripts/xbox_controls.gd")
 const BUTTONS := [JOY_BUTTON_X,JOY_BUTTON_Y,JOY_BUTTON_A,JOY_BUTTON_B]
 const KEYS := [KEY_J,KEY_I,KEY_K,KEY_L]
-const PINS := [Vector3(4.75,2.15,3.0),Vector3(0.55,2.15,3.3),Vector3(0.55,2.15,2.3),Vector3(-4.75,2.15,3.0)]
+const PINS := [Vector3(4.75,2.15,3.0),Vector3(1.05,2.15,3.3),Vector3(-0.45,2.15,2.3),Vector3(-4.75,2.15,3.0)]
 # Midway between the centers of zones 2 (x=-3) and 3 (x=0).
 const BASE := Vector3(-1.5,0.04,1.35)
 const ORDER := [0,3,2,1]
-const CONTACT := 1.0
+var contact_time := 1.0
 const DURATION := [0.65,1.52,0.48]
 const APEX := [1.1,2.5,0.32]
 const LINES := ["Welcome to the team, %s. I’m Coach Ellis.","You’re trying out at setter. Watch the four targets. I’ll toss the first ones right to you.","Two to each spot. First stay planted, then jump set. After that, I’ll make you move."]
@@ -72,6 +72,14 @@ var flick_at := -10.0
 var source := Vector3.ZERO
 var catch_point := Vector3.ZERO
 var target := 0
+var free_squat := preload("res://scripts/tryout_squat.gd").new()
+var free_jump := preload("res://scripts/setter_jump.gd").new()
+var free_target := -1
+var free_press := 0.0
+var lateral_steps := {}
+var set_grade_until := 0.0
+var set_error := 0.0
+var energy := {}
 var toss_curve := 1.0
 var toss_spin := Vector3.ZERO
 var tempo := 0
@@ -130,6 +138,10 @@ func _ready() -> void:
 	ball.material_override = leather
 	world.add_child(ball)
 	rotation_drill.configure(self)
+	for a in rotation_drill.roster: energy[a]=preload("res://scripts/player_stamina.gd").new()
+	var rings := preload("res://scripts/tryout_player_ring.gd").new()
+	rings.game=self
+	add_child(rings)
 	var ring := TorusMesh.new()
 	ring.inner_radius = 0.53
 	ring.outer_radius = 0.58
@@ -141,6 +153,8 @@ func _ready() -> void:
 	world.add_child(landing)
 	landing.hide()
 	squat.configure(world)
+	free_squat.configure(world)
+	free_jump.front_limit=14.0
 	build_hud()
 	build_settings()
 	rep = CareerSession.progress()
@@ -219,7 +233,7 @@ func build_hud() -> void:
 func begin(next: String) -> void:
 	trace("phase",{"next":next})
 	update_prompts(next)
-	meter.visible = next=="pass"
+	meter.hide()
 	phase = next
 	elapsed = 0
 	held = -1
@@ -253,6 +267,7 @@ func called() -> int:
 	return ORDER[demo_index if demonstration else rotation_drill.round_index%4]
 
 func reset_feed() -> void:
+	for i in targets.size(): targets[i].beacon.visible=i==called()
 	last_contact = -100
 	cushion = 0
 	old_palms.clear()
@@ -319,14 +334,25 @@ func move_setter(delta: float,actor: Node3D=setter,off_ball := false) -> bool:
 		focused = focus
 		trace("focus",{"active":focus})
 		message.text = ("Focused on ball   /   " if focus else "")+TARGETS[called()]
+	sprint=sprint and energy[actor].can_sprint()
+	if sprint and not focus and not direction.is_zero_approx(): energy[actor].spend(delta*25)
 	var speed := 2.35 if focus else (6.2 if sprint else 4.3)
 	actor.position = rotation_drill.move_actor(actor,direction*delta*speed)
 	if not off_ball: actor.position.z = minf(actor.position.z,3.65)
+	var at_net := absf(actor.position.z-4.)<1.55 and absf(direction.x)>absf(direction.z)*1.35 and not sprint
 	var facing := ball.position-actor.position if focus else (coach.position-actor.position if phase=="walk" and direction.is_zero_approx() else direction)
+	if at_net and not focus: facing=Vector3(0,0,1 if actor.position.z<4 else -1)
 	if Vector2(facing.x,facing.z).length()>0.05:
 		actor.rotation.y = lerp_angle(actor.rotation.y,atan2(facing.x,facing.z),minf(1,delta*14))
-	actor.play_action("idle" if direction.is_zero_approx() or focus else "run")
+	actor.play_action("idle" if direction.is_zero_approx() or focus else ("base/Sprint" if sprint else "run"))
 
+	if (at_net or focus) and not direction.is_zero_approx():
+		var local := actor.basis.orthonormalized().inverse()*direction
+		if absf(local.x)>.3:
+			if not lateral_steps.has(actor): lateral_steps[actor]=preload("res://scripts/right_side_steps.gd").new(actor)
+			var steps: RefCounted=lateral_steps[actor]
+			steps.advance(Vector2(-local.x,local.z),delta)
+			steps.apply_pose(1.0-smoothstep(.1,.8,1.-absf(actor.position.z-4.))*.65)
 	return not direction.is_zero_approx()
 
 func _process(delta: float) -> void:
@@ -337,6 +363,7 @@ func _process(delta: float) -> void:
 		seat.actor.animator.advance(delta)
 		seat.update()
 		seat.applause(delta)
+	for a in energy: energy[a].recover(delta)
 	clock += delta
 	elapsed += delta
 	if phase == "intro":
@@ -349,6 +376,7 @@ func _process(delta: float) -> void:
 	camera_lead = camera_lead.lerp(lead.limit_length(0.5),1.0-exp(-3.2*delta))
 	apply_camera()
 	squat.update(setter,delta)
+	squat.ring.hide()
 	landing.visible = not squat.ring.visible and phase in ["walk","feed","pass"]
 	if jump.active: jump.step(setter,delta,Vector2.ZERO)
 	elif not demonstration and rotation_drill.turn==0 and not squat.charging and phase!="cart": move_setter(delta)
@@ -384,19 +412,22 @@ func _process(delta: float) -> void:
 				next_release = clock+2.0
 				if not demonstration: rotation_drill.tosses+=1
 				source = ball.position
-				toss_curve=rotation_drill.random.randf_range(.86,1.35)
-				toss_spin=Vector3(rotation_drill.random.randf_range(-3,3),rotation_drill.random.randf_range(-2,2),rotation_drill.random.randf_range(-3,3))
-				trace("coach_release",{"from":str(source),"to":str(catch_point)})
+				toss_curve=[.55,1.35,2.65][rotation_drill.tosses%3]*rotation_drill.random.randf_range(.91,1.09)
+				var apex := maxf(source.y,catch_point.y)+toss_curve
+				contact_time=sqrt(2.*(apex-source.y)/9.81)+sqrt(2.*(apex-catch_point.y)/9.81)
+				toss_spin=Vector3([-8.0,1.4,7.5][rotation_drill.tosses%3],rotation_drill.random.randf_range(-3,3),rotation_drill.random.randf_range(-2,2))
+				trace("coach_release",{"from":str(source),"to":str(catch_point),"arc":toss_curve,"spin":str(toss_spin)})
 				change_feed_phase("pass")
 		"pass":
 			ball.rotation+=toss_spin*delta
-			if (demonstration or rotation_drill.turn!=0) and jump_rep() and not jump.active and elapsed>=.60 and elapsed<.78:
+			if (demonstration or rotation_drill.turn!=0) and jump_rep() and not jump.active and elapsed>=contact_time-.40 and elapsed<contact_time-.22:
+				energy[setter].spend(5)
 				jump.begin_set_jump(setter,.07,.52)
 				jump.height=.52
 				jump.air_time=jump.flight_duration(.52,true)
 				jump.release()
 			var previous := ball.position
-			ball.position = source.lerp(catch_point,elapsed/CONTACT)+Vector3.UP*(4.905*toss_curve*elapsed*(CONTACT-elapsed))
+			ball.position = source.lerp(catch_point,elapsed/contact_time)+Vector3.UP*(4.905*elapsed*(contact_time-elapsed))
 			var incoming := ball.position-previous
 			var obstacle := contacts.sweep(world,contacts.ball_shape,previous,incoming,Contact.GYM|Contact.EQUIPMENT|64)
 			if not obstacle.is_empty():
@@ -406,7 +437,7 @@ func _process(delta: float) -> void:
 				return
 			if elapsed<0.22: coach_motion.toss(coach,1.0)
 			ball.position.y = maxf(0.15,ball.position.y)
-			if (demonstration or rotation_drill.turn!=0) and held<0 and elapsed>=.36:
+			if (demonstration or rotation_drill.turn!=0) and held<0 and elapsed>=contact_time-.64:
 				held = called()
 				pressed_at = clock
 			if held>=0:
@@ -414,8 +445,8 @@ func _process(delta: float) -> void:
 					var opposite := (setter.position-PINS[3]).slide(Vector3.UP)
 					setter.rotation.y=lerp_angle(setter.rotation.y,atan2(opposite.x,opposite.z),minf(1,delta*9))
 				meter.value = clampf((clock-pressed_at)/0.65,0,1)*100
-				Hands.apply(setter,ball.position,0.35+0.65*smoothstep(.25,.86,elapsed))
-				Contact.track_hands(setter,ball.position)
+				Hands.apply(setter,ball.position,0.35+0.65*smoothstep(contact_time-.55,contact_time-.10,elapsed))
+				if Vector3(0,ball.position.y-setter.position.y,0).length()<setter.height_cm*.013: Contact.track_hands(setter,ball.position)
 			var collided := false
 			for side in ["l","r"]:
 				for landmark in ["hand_","index_03_","thumb_03_","middle_02_"]:
@@ -434,8 +465,8 @@ func _process(delta: float) -> void:
 			if collided: last_contact = clock
 			if held>=0 and clock-last_contact<.11:
 				Hands.apply(setter,ball.position-Vector3.UP*cushion,1.0,Vector3.ZERO,cushion)
-			if (demonstration or rotation_drill.turn!=0) and elapsed>=CONTACT: release(called())
-			elif elapsed>CONTACT+0.25: miss("The toss dropped. Hold the target, then release at contact.")
+			if (demonstration or rotation_drill.turn!=0) and elapsed>=contact_time: release(called())
+			elif elapsed>contact_time+0.25: miss("The toss dropped. Hold the target, then release at contact.")
 		"set":
 			ball.rotate_x(delta*4.0)
 			var t := clampf(elapsed/flight_time,0,1)
@@ -508,14 +539,19 @@ func play_intro(delta: float) -> void:
 func miss(reason: String) -> void:
 	success = false
 	trace("miss",{"reason":reason})
-	drop_velocity = (catch_point-source)/CONTACT+Vector3.UP*9.81*(CONTACT/2.0-elapsed)
+	drop_velocity = (catch_point-source)/contact_time+Vector3.UP*9.81*(contact_time/2.0-elapsed)
 	feedback = reason
 	begin("drop")
 	message.text = reason
 
+func timing_window() -> float:
+	return .085+.135*clampf(float(setter.attributes.get("Hand setting",40))/100.,0,1)
+
 func release(index: int) -> void:
 	if phase!="pass" or held!=index: return
-	trace("release",{"target":TARGETS[index],"held_s":clock-pressed_at,"timing_error":elapsed-CONTACT,"air_m":setter.position.y-BASE.y})
+	set_error=elapsed-contact_time
+	set_grade_until=clock+.65
+	trace("release",{"target":TARGETS[index],"held_s":clock-pressed_at,"timing_error":elapsed-contact_time,"air_m":setter.position.y-BASE.y})
 	held = -1
 	var skill := float(CareerSession.profile().get("Hand setting",40))/100
 	var gap := Vector2(setter.position.x-catch_point.x,setter.position.z-catch_point.z).length()
@@ -527,24 +563,25 @@ func release(index: int) -> void:
 		if not jump_rep() and airborne>0.12:
 			miss("Stay planted for this set.")
 			return
-		if clock-last_contact>.13:
+		if clock-last_contact>minf(.17,timing_window()):
 			miss("No hand contact. Get under the ball before release.")
 			return
-		if clock-pressed_at<0.12 or absf(elapsed-CONTACT)>0.20 or gap>0.72+0.36*skill:
+		if clock-pressed_at<0.12 or absf(elapsed-contact_time)>timing_window() or gap>0.72+0.36*skill:
 			miss("Missed contact. Hold the target and release above your forehead.")
 			return
+	energy[setter].spend(2)
 	target = index
 	tempo = 1 if demonstration or rep<8 else (last_flick if clock-flick_at<0.35 else 0)
 	source = ball.position
 	flight_time = DURATION[tempo]
-	var error := 0.0 if demonstration else (elapsed-CONTACT)*(3.6-skill)+gap*0.22
+	var error := 0.0 if demonstration else (elapsed-contact_time)*(3.6-skill)+gap*0.22
 	endpoint = PINS[target]+Vector3(error,0,error*0.4)
 	if rotation_drill.turn!=0 and not demonstration:
 		var scatter := .19 if rotation_drill.random.randf()<.67 else 1.65
 		endpoint += Vector3(rotation_drill.random.randf_range(-scatter,scatter),0,rotation_drill.random.randf_range(-scatter,scatter))
 	elif not demonstration:
 		# Poor releases can carry past the pin into the tape or court.
-		var late := clampf((absf(elapsed-CONTACT)-.065)/.135,0,1)
+		var late := clampf((absf(elapsed-contact_time)-.065)/.135,0,1)
 		endpoint.z += 1.5*late
 	success = target==called() and endpoint.distance_to(PINS[target])<targets[target].mouth_radius-0.10
 	feedback = TARGETS[target]+"   /   Target made" if success else "Missed the called target. Try it again."
@@ -553,6 +590,7 @@ func release(index: int) -> void:
 	begin("set")
 
 func complete() -> void:
+	for net in targets: net.beacon.hide()
 	landing.hide()
 	begin("complete")
 	camera.position = Vector3(0,6,-9)
@@ -594,7 +632,10 @@ func _input(event: InputEvent) -> void:
 		settings.show()
 		get_viewport().set_input_as_handled()
 		return
-	if phase in ["intro","complete"] or (rotation_drill.turn!=0 and not demonstration): return
+	if phase in ["intro","complete"]: return
+	if rotation_drill.turn!=0 and not demonstration:
+		free_input(event)
+		return
 	if demonstration:
 		if event is InputEventJoypadButton: trace("input_in_demo",{"id":event.button_index})
 		return
@@ -607,6 +648,7 @@ func _input(event: InputEvent) -> void:
 			var allowed := not jump.active and not squat.charging
 			trace("squat_press",{"accepted":allowed})
 			if allowed:
+				energy[setter].spend(5)
 				squat.begin(setter)
 				message.text = "Release in green to jump"
 		elif squat.charging:
@@ -636,3 +678,57 @@ func _input(event: InputEvent) -> void:
 			message.text = "Released before the toss"
 	else: trace("unmatched_release",{"target":TARGETS[index]})
 	get_viewport().set_input_as_handled()
+
+func end_free_motion() -> void:
+	free_squat.cancel()
+	free_jump.active=false
+	free_target=-1
+	rotation_drill.roster[0].position.y=BASE.y
+
+func free_motion(dt: float,actor: Node3D) -> bool:
+	free_squat.update(actor,dt)
+	free_squat.ring.hide()
+	if free_jump.active: free_jump.step(actor,dt,Vector2.ZERO)
+	if free_target>=0:
+		var hands: Vector3 = actor.position+Vector3.UP*(actor.height_cm*.0108)+actor.basis.z*.14
+		Hands.apply(actor,hands,smoothstep(0,.22,clock-free_press))
+	return free_jump.active or free_squat.charging or free_target>=0
+
+func free_input(event: InputEvent) -> void:
+	var actor := rotation_drill.roster[0]
+	if rotation_drill.unloading.has(actor): return
+	if (event is InputEventJoypadButton and event.button_index==Xbox.physical(JOY_BUTTON_RIGHT_STICK)) or (event is InputEventKey and event.keycode==KEY_SPACE):
+		if event.is_pressed() and not free_squat.charging and not free_jump.active:
+			energy[actor].spend(5)
+			free_squat.begin(actor)
+		elif not event.is_pressed() and free_squat.charging: free_squat.release(actor,free_jump)
+		rotation_drill.manual_wait=true
+		get_viewport().set_input_as_handled()
+		return
+	for i in BUTTONS.size():
+		if not ((event is InputEventJoypadButton and event.button_index==Xbox.physical(BUTTONS[i])) or (event is InputEventKey and event.keycode==KEYS[i])): continue
+		if event.is_pressed():
+			free_target=i
+			free_press=clock
+			rotation_drill.manual_wait=true
+		elif free_target==i:
+			free_target=-1
+			var palms := (Contact.palm(actor,"l")+Contact.palm(actor,"r"))*.5
+			var body: RigidBody3D
+			if not rotation_drill.human_cargo.is_empty():
+				body=rotation_drill.human_cargo.pop_back()
+				body.position=palms
+				rotation_drill.loose.append(body)
+			else:
+				for candidate in rotation_drill.loose:
+					if not candidate.freeze and candidate.position.distance_to(palms)<.38: body=candidate; break
+			if body:
+				body.freeze=false
+				body.collision_layer=128
+				body.sleeping=false
+				var duration := 1.4
+				body.linear_velocity=(PINS[i]-body.position)/duration+Vector3.UP*4.905*duration
+				energy[actor].spend(2)
+			trace("off_turn_set",{"target":TARGETS[i],"contact":body!=null})
+		get_viewport().set_input_as_handled()
+		return

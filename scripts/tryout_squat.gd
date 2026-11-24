@@ -69,10 +69,10 @@ func update(actor: Node3D,delta: float) -> void:
 
 func release(actor: Node3D,jump: RefCounted) -> String:
 	var depth := clampf(seconds/FULL_LOAD,0,1)
-	var quality := smoothstep(0,GREEN_START,depth)*(1.-.55*smoothstep(GREEN_END,1,depth))
+	var quality := smoothstep(0,GREEN_START,depth)
 	charging = false
 	feedback_time = .65
-	var height := clampf(actor.attributes.vertical_in*.0254,.25,1.52)*lerpf(.28,1,quality)
+	var height := clampf(actor.attributes.vertical_in,30,60)*.0254*lerpf(.28,1,quality)
 	jump.begin_set_jump(actor,.02,height)
 	jump.height = height
 	jump.air_time = jump.flight_duration(height,true)
