@@ -18,7 +18,7 @@ func arc_band(center: Vector2,radius: Vector2,start: float,end: float,color: Col
 	draw_polyline(points,color,width,true)
 
 func _draw() -> void:
-	if not game or not game.is_node_ready() or game.settings.visible or game.phase=="intro": return
+	if not game or not game.is_node_ready() or game.settings.visible or game.phase in ["intro","net_guide","complete"]: return
 	var human: Node3D=game.rotation_drill.roster[0]
 	draw_player(human,true)
 	if game.preview_enabled: draw_set_path(human)

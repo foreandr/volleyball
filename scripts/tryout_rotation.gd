@@ -144,7 +144,7 @@ func store_ball(body: RigidBody3D) -> void:
 	stock.append(body)
 
 func station_ready(dt: float) -> bool:
-	var requested := (tosses/10)%STATIONS.size()
+	var requested := mini(round_index,2)
 	if requested!=station:
 		var coach: Node3D=game.coach
 		if not coach_pushing:
@@ -199,7 +199,7 @@ func grip_handle(actor: Node3D,cart: Node3D) -> void:
 			rig.set_bone_pose_rotation(idx,pose[idx].basis.orthonormalized().get_rotation_quaternion())
 
 func prepare_next_ball(dt: float) -> void:
-	if coach_pushing or (tosses/10)%STATIONS.size()!=station: return
+	if coach_pushing or mini(round_index,2)!=station: return
 	if game.demonstration or game.phase in ["intro","complete","feed","walk"]: return
 	if game.phase=="pass" and game.elapsed<.16: return
 	var coach: Node3D=game.coach
@@ -219,7 +219,7 @@ func prepare_next_ball(dt: float) -> void:
 	var to_cart := (basket.position-coach.position).slide(Vector3.UP)
 	if fetch_time<.40 and to_cart.length_squared()>.01:
 		coach.rotation.y=lerp_angle(coach.rotation.y,atan2(to_cart.x,to_cart.z),minf(1.,dt*12.))
-	if fetch_time>.32 and (tosses/10)%STATIONS.size()==station:
+	if fetch_time>.32 and mini(round_index,2)==station:
 		var toward := (game.setter as Node3D).position-coach.position
 		coach.rotation.y=lerp_angle(coach.rotation.y,atan2(toward.x,toward.z),minf(1.,dt*8.))
 	var cradle: Vector3=rig.to_global(author.point(author.baseline,"pelvis")+Vector3(0,.12,.41))
@@ -260,7 +260,7 @@ func free_ball(velocity: Vector3) -> void:
 
 func advance_turn() -> void:
 	attempts += 1
-	if attempts==2:
+	if attempts==3:
 		attempts=0
 		turn=(turn+1)%3
 		manual_wait=false
@@ -591,9 +591,12 @@ func shag_player(dt: float) -> void:
 	if unloading.has(actor):
 		place_in_cart(actor,human_cargo,dt)
 		return
-	if game.free_motion(dt,actor): manual_wait=true
-	elif game.move_setter(dt,actor,true): manual_wait=true
-	elif not manual_wait: walk(actor,WAIT[(3-turn)%3],dt,4.8)
+	var moving: bool=game.move_setter(dt,actor,true)
+	var acting: bool=game.free_motion(dt,actor)
+	if moving or acting: manual_wait=true
+	var blocking_station: bool= game.phase=="cart" and (actor.position-game.BASE).slide(Vector3.UP).length()<1.05
+	if not moving and not game.free_jump.active and (blocking_station or (not acting and not manual_wait)):
+		walk(actor,WAIT[(3-turn)%3],dt,4.8)
 	var index := closest_bin(actor.position)
 	if index>=0 and not human_cargo.is_empty() and not game.free_jump.active and game.free_target<0 and actor.position.distance_to(bins[index].position)<1.05:
 		begin_unload(actor,index,human_cargo)

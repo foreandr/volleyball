@@ -70,31 +70,26 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 		var shirt := node.mesh == preload("res://assets/characters/volleyball/outfit.res")
 		var sleeves := node.mesh == preload("res://assets/characters/volleyball/body.res")
 		if not shirt and not sleeves: continue
-		var kit := ShaderMaterial.new()
-		kit.shader = FABRIC
-		actor.jersey_origin=actor.global_position
-		actor.jersey_materials.append(kit)
-		kit.set_shader_parameter("phase",variant*1.79)
-		kit.set_shader_parameter("fabric",Color("223d3c") if coach else Color("b34421"))
-		kit.set_shader_parameter("trim",Color("cad4bf") if coach else Color("182d36"))
-		kit.set_shader_parameter("lettering",print_texture)
-		kit.set_shader_parameter("jacket",coach)
-		kit.set_shader_parameter("sleeves",sleeves)
-		var shell := MeshInstance3D.new()
-		if coach and sleeves:
-			# The kit body has cutouts beneath the jersey. Use the intact rigged
-			# torso so the back and sleeve caps share topology and bone weights.
+		if sleeves:
+			var kit := ShaderMaterial.new()
+			kit.shader=FABRIC
+			actor.jersey_origin=actor.global_position
+			actor.jersey_materials.append(kit)
+			kit.set_shader_parameter("phase",variant*1.79)
+			kit.set_shader_parameter("fabric",Color("223d3c") if coach else Color("ac4029"))
+			kit.set_shader_parameter("trim",Color("cad4bf") if coach else Color("55302c"))
+			kit.set_shader_parameter("lettering",print_texture)
+			kit.set_shader_parameter("jacket",coach)
 			var original := preload("res://assets/characters/base/Superhero_Male_FullBody.gltf").instantiate()
 			var torso: MeshInstance3D=original.find_child("SuperHero_Male",true,false)
-			shell.mesh=tailored_surface(torso.mesh,0,false,true)
+			var shell := MeshInstance3D.new()
+			shell.mesh=tailored_surface(torso.mesh,0,false,coach)
 			original.free()
-		else: shell.mesh = tailored_surface(node.mesh,0,false,coach)
-		shell.skin = node.skin
-		rig.add_child(shell)
-		shell.skeleton = shell.get_path_to(rig)
-		shell.material_override = kit
-		if coach and shirt: shell.hide()
-		if sleeves: face_hair(rig,node,shell.mesh,coach,variant)
+			shell.skin=node.skin
+			rig.add_child(shell)
+			shell.skeleton=shell.get_path_to(rig)
+			shell.material_override=kit
+			face_hair(rig,node,shell.mesh,coach,variant)
 		if shirt:
 			# The skinned print replaces only the jersey. Keep shoes and trousers.
 			var invisible := StandardMaterial3D.new()
@@ -182,8 +177,10 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		VERTEX.y+=hem*motion*.009*ripple;}
 	void fragment(){
 		if(rest.y<hem_y) discard;
-		float hem=1.-smoothstep(hem_y+.004,hem_y+.014,rest.y);
-		ALBEDO=mix(cloth.rgb,vec3(.80,.43,.21),hem);
+		float hem=1.-smoothstep(hem_y+.005,hem_y+.009,rest.y);
+		float side=smoothstep(.154,.174,abs(rest.x));
+		ALBEDO=mix(cloth.rgb,cloth.rgb*.74,side);
+		ALBEDO=mix(ALBEDO,cloth.rgb*1.55,hem*.75);
 		ROUGHNESS=.84;
 	}"""
 	material.shader = shader
@@ -220,14 +217,12 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 	source.free()
 
 static func number_texture(number: int) -> Texture2D:
-	var rows := ["75557","26227","71747","71717","55711","74717","74757","71111","75757","75717"]
-	var img := Image.create(96,48,false,Image.FORMAT_RGBA8)
 	var digits := str(number)
-	for n in digits.length():
-		var glyph: String=rows[int(digits[n])]
-		for y in 5:
-			for x in 3:
-				if int(glyph[y]) & (4>>x): img.fill_rect(Rect2(4+n*31+x*8,4+y*8,8,8),Color.WHITE)
+	var sheet := preload("res://assets/gym/jersey_digits.png").get_image()
+	var img := Image.create(96*digits.length(),144,false,Image.FORMAT_RGBA8)
+	for i in digits.length():
+		img.blit_rect(sheet,Rect2i(int(digits[i])*96,0,96,144),Vector2i(i*96,0))
+	img.generate_mipmaps()
 	return ImageTexture.create_from_image(img)
 
 static func compression(rig: Skeleton3D,bone: String,child: String,upper: float,lower: float,color: Color) -> void:

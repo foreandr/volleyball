@@ -53,6 +53,7 @@ func run_command() -> void:
 	elif stage not in ["intro","tutorial","complete"]: return
 	if athlete_id.is_empty(): create_athlete(base_profile())
 	creating = false
+	data.set_value(key(),"tryout_scorecard",[])
 	if not checkpoint(stage,32 if stage == "complete" else rep): return
 	get_tree().change_scene_to_file.call_deferred(CHAPTER)
 
@@ -116,7 +117,7 @@ func credit(rep: int) -> bool:
 			if required not in cleared: earned = false
 		if earned and BADGES[i] not in badges: badges.append(BADGES[i])
 	data.set_value("badges",athlete_id,badges)
-	return checkpoint("complete" if rep == 31 else "tutorial",rep+1)
+	return checkpoint("tutorial",rep+1)
 
 
 func team_chemistry() -> int:

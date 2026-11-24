@@ -8,6 +8,7 @@ func _ready() -> void:
 	if CareerSession.enter_origin:
 		CareerSession.enter_origin = false
 		origin()
+	elif CareerSession.stage()=="after_tryout": after_tryout()
 	else: show_home()
 
 func clear_menu(title: String) -> void:
@@ -81,7 +82,20 @@ func resume() -> void:
 	match CareerSession.stage():
 		"origin": origin()
 		"position": position_menu()
+		"after_tryout": after_tryout()
 		_: get_tree().change_scene_to_file(CareerSession.CHAPTER)
+
+func after_tryout() -> void:
+	clear_menu("AFTER TRYOUTS")
+	var place := clampi(CareerSession.data.get_value(CareerSession.key(),"tryout_place",2),0,2)
+	var coach := Label.new()
+	coach.text=["Coach Ellis: You earned the starting spot. See you at practice.","Coach Ellis: You're our backup setter. Stay ready.","Coach Ellis: You didn't make this roster. You can try out again."][place]
+	column.add_child(coach)
+	add_button("Player development",development).grab_focus()
+	add_button("Repeat tryout",func():
+		CareerSession.data.set_value(CareerSession.key(),"tryout_scorecard",[])
+		if CareerSession.checkpoint("tutorial",0): get_tree().change_scene_to_file(CareerSession.CHAPTER))
+	add_button("My Career",show_home)
 
 func origin() -> void:
 	clear_menu("CHOOSE YOUR ORIGIN")

@@ -228,7 +228,7 @@ func add_digit(x: float) -> void:
 
 func update_board(made: int) -> void:
 	var patterns := [63,6,91,79,102,109,125,7,127,111]
-	var values := [made/10,made%10,3,2]
+	var values := [made/10,made%10,0,9]
 	for n in digits.size():
 		for segment in 7:
 			digits[n][segment].visible = (int(patterns[values[n]]) & (1<<segment))!=0

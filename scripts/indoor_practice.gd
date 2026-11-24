@@ -3,7 +3,7 @@ extends Control
 const Court = preload("res://scripts/preview_court.gd")
 const Player = preload("res://scripts/volleyball_player.gd")
 const Hands = preload("res://scripts/hand_setting_pose.gd")
-const TARGETS := ["Left side","31","Right side"]
+const TARGETS := ["10","32","72"]
 const TEMPOS := ["Normal","High","Fast"]
 const Xbox = preload("res://scripts/xbox_controls.gd")
 const BUTTONS := [JOY_BUTTON_X,JOY_BUTTON_Y,JOY_BUTTON_B]
@@ -16,7 +16,7 @@ const SET_LOAD := .26
 var contact_time := 1.0
 const DURATION := [0.65,1.52,0.48]
 const APEX := [1.1,2.5,0.32]
-const LINES := ["Welcome to the team, %s. I’m Coach Ellis.","You’re trying out at setter. Watch the three targets. I’ll toss the first ones right to you.","Two to each spot. First stay planted, then jump set. After that, I’ll make you move."]
+const LINES := ["Welcome to the team, %s. I’m Coach Ellis.","You’re trying out at setter. Watch the three targets. I’ll toss the first ones right to you.","Three calls from each coach station. First stay planted, then jump set. After that, you’ll move."]
 var coach_motion := preload("res://scripts/tryout_coach.gd").new()
 var last_toss := -10.0
 var next_release := 0.0
@@ -65,9 +65,15 @@ var prompt_phase := ""
 var hint := Label.new()
 var skip := TextureProgressBar.new()
 var finish := Button.new()
+var retry := Button.new()
+var score_strip := HBoxContainer.new()
+var score_labels: Array[Label]=[]
+var score_cue := AudioStreamPlayer.new()
+var scorecard: Array=[]
+var placement_error := 10.
 var rep := 0
 var held := -1
-var selected_tempo := 1
+var selected_tempo := 0
 var stick_latched := false
 var preview_until := 0.0
 var source := Vector3.ZERO
@@ -152,11 +158,9 @@ func _ready() -> void:
 	free_squat.configure(world)
 	free_jump.front_limit=14.0
 	build_hud()
+	build_score_strip()
 	build_settings()
 	start_drill()
-
-func credit_rep() -> bool:
-	return true
 
 func finish_intro() -> bool:
 	return true
@@ -212,7 +216,11 @@ func build_hud() -> void:
 	meter.hide()
 	meter.show_percentage = false
 	column.add_child(meter)
-	finish.text = "Return to My Career"
+	retry.text="Restart tryout"
+	retry.pressed.connect(reset_drill)
+	column.add_child(retry)
+	retry.hide()
+	finish.text = "Continue story"
 	finish.pressed.connect(leave)
 	column.add_child(finish)
 	finish.hide()
@@ -266,12 +274,15 @@ func start_practice() -> void:
 	reset_feed()
 
 func jump_rep() -> bool:
-	return (demo_index%2==1 if demonstration else (rotation_drill.attempts==1 if rotation_drill.turn!=0 else (rep/8)%2==1))
+	return demo_index%2==1 if demonstration else rotation_drill.round_index==1
 
 func called() -> int:
-	return ORDER[demo_index if demonstration else rotation_drill.round_index%ORDER.size()]
+	return ORDER[demo_index if demonstration else rotation_drill.attempts]
 
 func reset_feed() -> void:
+	refresh_scores()
+	placement_error=10.
+	success=false
 	set_grade_until=0.0
 	for i in targets.size(): targets[i].beacon.visible=i==called()
 	last_contact = -100
@@ -288,17 +299,19 @@ func reset_feed() -> void:
 	setter.rotation.y = atan2(coach.position.x-BASE.x,coach.position.z-BASE.z)
 	setter.play_action("idle")
 	catch_point = BASE + Vector3.UP*(1.93*setter.height_cm/180.0 + (0.52 if jump_rep() else 0.0))
-	if not demonstration and rep>=16: catch_point.z += 1.25 if rep%2==0 else -1.25
+	if not demonstration and rotation_drill.round_index==2: catch_point.z += 1.25 if rotation_drill.attempts%2==0 else -1.25
 	coach.show()
 	coach.rotation.y = atan2(catch_point.x-coach.position.x,catch_point.z-coach.position.z)
 	ball.visible = demonstration or rotation_drill.issued!=null
 	apply_camera()
-	title.text = "COACH DEMO    /    %d OF 3" % (demo_index+1) if demonstration else "SETTER TRYOUT    /    %02d OF 32    •    %s" % [rep+1,"MOVING" if rep>=16 else "STATIONARY"]
+	title.text = "COACH DEMO    /    %d OF 3" % (demo_index+1) if demonstration else "SETTER TRYOUT    /    %02d OF 32    •    %s" % [rep+1,"MOVING" if rotation_drill.round_index==2 else "STATIONARY"]
 	message.text = TARGETS[called()]+"    /    "+("Jump set" if jump_rep() else "Standing set")
 	if not demonstration:
-		title.text = "SETTER TRYOUT   /   %s    •    BALL %d OF 2" % ["YOUR TURN" if rotation_drill.turn==0 else ("SETTER %d" % (rotation_drill.turn+1)),rotation_drill.attempts+1]
-		if called()==2: message.text = "Back set   /   Right side"
-	if demonstration or rep<8: title.text += "    •    HIGH BALLS"
+		var made := 0
+		for attempt in scorecard:
+			if attempt.setter==rotation_drill.turn and attempt.made: made+=1
+		title.text="%s   /   ZONE %d   /   %s   /   %d/9 MADE" % [setter.display_name,[1,6,5][rotation_drill.round_index],TARGETS[called()],made]
+		if called()==2: message.text = "72   /   Back set"
 	if not demonstration and rotation_drill.turn!=0: message.text = "Shag loose balls   /   Return to a cart"
 	hint.text = ""
 	hint.hide()
@@ -366,7 +379,7 @@ func move_setter(delta: float,actor: Node3D=setter,off_ball := false) -> bool:
 	var motion := Vector2(axis(JOY_AXIS_LEFT_X),axis(JOY_AXIS_LEFT_Y))
 	motion += Vector2(int(Input.is_key_pressed(KEY_D))-int(Input.is_key_pressed(KEY_A)),int(Input.is_key_pressed(KEY_S))-int(Input.is_key_pressed(KEY_W)))
 	if motion.length()<0.16: motion = Vector2.ZERO
-	var direction := Vector3(-motion.x,0,-motion.y).limit_length(1) if rep>=16 or off_ball else Vector3.ZERO
+	var direction := Vector3(-motion.x,0,-motion.y).limit_length(1) if rotation_drill.round_index==2 or off_ball else Vector3.ZERO
 	var focus := axis(Xbox.trigger(true))>0.25 or Input.is_key_pressed(KEY_CTRL)
 	var sprint := axis(Xbox.trigger(false))>0.25 or Input.is_key_pressed(KEY_SHIFT)
 	if not off_ball and focus!=focused:
@@ -401,7 +414,8 @@ var angular_speed := {}
 var focus_headings := {}
 
 func _process(delta: float) -> void:
-	if settings.visible: return
+	score_strip.visible=phase not in ["intro","complete","net_guide"] and not settings.visible and not demonstration
+	if settings.visible or phase=="net_guide": return
 	var before := {}
 	for actor in rotation_drill.roster+[coach]+rotation_drill.workers.map(func(w): return w.actor):
 		before[actor]=actor.rotation.y
@@ -480,7 +494,7 @@ func step_practice(delta: float) -> void:
 			# Measure the athlete who actually arrived, including their rig scale.
 			var head := Contact.joint(setter,"Head")
 			catch_point.y=BASE.y+head.y-setter.position.y+.20+(.52 if jump_rep() else 0.)
-			if rep<16 or demonstration:
+			if rotation_drill.round_index<2 or demonstration:
 				catch_point.x=head.x
 				catch_point.z=head.z
 			if elapsed>=.30 and clock>=next_release and rotation_drill.floor_clear():
@@ -501,7 +515,7 @@ func step_practice(delta: float) -> void:
 				var spot := Vector3(catch_point.x,BASE.y,catch_point.z)
 				var travel := (spot-setter.position).slide(Vector3.UP).length()
 				var remaining := maxf(0.,contact_time-elapsed)
-				if rep>=16 and not demonstration and travel>.16 and not jump.active:
+				if rotation_drill.round_index==2 and not demonstration and travel>.16 and not jump.active:
 					var hurried := travel>2.35*maxf(0.,remaining-.28)
 					var previous_heading := setter.rotation.y
 					rotation_drill.walk(setter,spot,delta,6.2 if hurried else 2.35)
@@ -588,9 +602,7 @@ func step_practice(delta: float) -> void:
 				if endpoint.distance_to(PINS[target])<targets[target].mouth_radius-0.10: targets[target].impact()
 				if success and not demonstration:
 					if rotation_drill.turn==0:
-						if not credit_rep(): return
-						rep += 1
-						gym.update_board(rep)
+						gym.update_board(rep+1)
 					for i in seats_in_use.size():
 						seats_in_use[i].celebrate(i,rep%8==0)
 					trace("bleacher_applause",{"completed":rep})
@@ -617,9 +629,15 @@ func step_practice(delta: float) -> void:
 					begin("between")
 		"between":
 			if elapsed>.025 and not jump.active and not free_jump.active:
-				if rotation_drill.attempts==1: next_release = maxf(next_release,last_toss+3.5)
+				if rotation_drill.attempts==2: next_release = maxf(next_release,last_toss+3.5)
+				var entry := {"setter":rotation_drill.turn,"target":called(),"station":rotation_drill.station,"made":success,"error":placement_error}
+				scorecard.append(entry)
+				if not save_scorecard():
+					scorecard.pop_back()
+					return
+				show_attempt_feedback(rotation_drill.turn,success)
 				rotation_drill.advance_turn()
-				if rep>=32: complete()
+				if scorecard.size()>=27: complete()
 				else: reset_feed()
 
 	rotation_drill.prepare_next_ball(delta)
@@ -691,7 +709,7 @@ func release(index: int) -> void:
 			return
 	energy[setter].spend(2)
 	target = index
-	tempo = chosen_tempo() if not demonstration and rotation_drill.turn==0 else (1 if demonstration or rep<8 else 0)
+	tempo = chosen_tempo() if not demonstration and rotation_drill.turn==0 else 0
 	source = ball.position
 	flight_time = DURATION[tempo]
 	var error := 0.0 if demonstration else set_error*(3.6-skill)+gap*0.22
@@ -705,12 +723,72 @@ func release(index: int) -> void:
 		# Poor releases can carry past the pin into the tape or court.
 		var late := clampf((absf(set_error)-.065)/.135,0,1)
 		endpoint.z += 1.5*late
+	placement_error=endpoint.distance_to(PINS[target])
 	success = technique_feedback.is_empty() and target==called() and endpoint.distance_to(PINS[target])<targets[target].mouth_radius-0.10
 	feedback = TARGETS[target]+"   /   Target made" if success else "Missed the called target. Try it again."
 	if not technique_feedback.is_empty(): feedback=technique_feedback
 	trace("set",{"technique":technique_feedback,"requested":TARGETS[called()],"actual":TARGETS[target],"made":success,"error_m":error})
 	Hands.apply(setter,source,1.0,(endpoint-source).normalized()*.22,0,.3,false,Vector3.ZERO,1.,endpoint-source,.6,true)
 	begin("set")
+
+func build_score_strip() -> void:
+	var anchor := CenterContainer.new()
+	anchor.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	anchor.offset_top=12
+	anchor.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	add_child(anchor)
+	anchor.add_child(score_strip)
+	for actor in rotation_drill.roster:
+		var card := PanelContainer.new()
+		card.mouse_filter=Control.MOUSE_FILTER_IGNORE
+		card.add_theme_stylebox_override("panel",MenuPresentation.box(Color("102431e8"),Color("50636d"),1))
+		score_strip.add_child(card)
+		var label := Label.new()
+		label.custom_minimum_size=Vector2(156,38)
+		label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+		label.add_theme_font_size_override("font_size",16)
+		card.add_child(label)
+		score_labels.append(label)
+	add_child(score_cue)
+
+func refresh_scores() -> void:
+	for i in score_labels.size():
+		var hits := 0
+		var taken := 0
+		for entry in scorecard:
+			if entry.setter==i:
+				taken+=1
+				if entry.made: hits+=1
+		var surname: String=rotation_drill.roster[i].display_name.get_slice(" ",rotation_drill.roster[i].display_name.count(" "))
+		score_labels[i].text="%s   %d/%d" % [surname.to_upper(),hits,taken]
+		score_labels[i].add_theme_color_override("font_color",Color("ffce75") if i==rotation_drill.turn else Color.WHITE)
+
+func show_attempt_feedback(index: int,made: bool) -> void:
+	refresh_scores()
+	var label := score_labels[index]
+	label.modulate=Color("74f6a9") if made else Color("ff9283")
+	var tween := create_tween()
+	tween.tween_interval(.65)
+	tween.tween_property(label,"modulate",Color.WHITE,.35)
+	score_cue.stream=preload("res://assets/audio/tryout_made.wav") if made else preload("res://assets/audio/tryout_miss.wav")
+	score_cue.play()
+
+func save_scorecard() -> bool:
+	if rotation_drill.turn==0 and success: rep+=1
+	return true
+
+func rankings() -> Array:
+	var table := []
+	for i in 3: table.append({"id":i,"made":0,"error":0.})
+	for attempt in scorecard:
+		var row: Dictionary=table[attempt.setter]
+		if attempt.made: row.made+=1
+		row.error+=attempt.error
+	table.sort_custom(func(a,b):
+		if a.made!=b.made: return a.made>b.made
+		if a.error!=b.error: return a.error<b.error
+		return a.id<b.id)
+	return table
 
 func complete() -> void:
 	for net in targets: net.beacon.hide()
@@ -723,7 +801,8 @@ func complete() -> void:
 	message.text = "Practice complete"
 	hint.hide()
 	finish.show()
-	finish.grab_focus()
+	retry.show()
+	retry.grab_focus()
 
 func trace(kind: String, fields: Dictionary) -> void:
 	fields.merge({"phase":phase,"rep":rep+1,"demo":demonstration,"phase_s":elapsed})
@@ -739,6 +818,7 @@ func _exit_tree() -> void:
 	coach_motion.dispose()
 
 func _input(event: InputEvent) -> void:
+	if phase=="net_guide": return
 	if event is InputEventKey and event.echo: return
 	if get_tree().paused: return
 	if settings.visible:
