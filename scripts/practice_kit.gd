@@ -512,7 +512,17 @@ static func haircut(scalp: Node3D,color: Color,variant: int,actor: Node3D) -> vo
 				comb=Vector3(parting,.70,-.85)
 			5: comb=Vector3(parting,-.65,.92)
 			6: length_factor=.62+.68*crown
-		var sweep := comb.slide(normal).normalized()
+		# Let the crown grow out of a whorl before it joins the combed sides.
+		var crown_axis := Vector3(parting*.62,.95,-.28).normalized()
+		var outward := (normal-crown_axis).slide(normal)
+		var swirl := crown_axis.cross(normal)
+		var handed := 1. if variant%2==0 else -1.
+		var whorl := (outward*.78+swirl*handed).normalized()
+		var influence := smoothstep(.68,.97,normal.dot(crown_axis))
+		var sweep := comb.slide(normal).normalized().lerp(whorl,influence*.92).normalized()
+		if style in [1,3]:
+			var part_line := absf(normal.x-parting-.16*normal.z)
+			length_factor*=lerpf(.38,1.,smoothstep(.01,.12,part_line)*crown+1.-crown)
 		var across := normal.cross(sweep).normalized()
 		var length: float = actor.hair_length*length_factor*rng.randf_range(.75,1.25)
 		var width := rng.randf_range(.005,.011)
