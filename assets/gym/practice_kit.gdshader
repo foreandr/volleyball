@@ -9,17 +9,6 @@ uniform bool jacket = false;
 uniform vec3 inertia;
 uniform vec2 arm_lift;
 uniform sampler2D knit_surface : repeat_enable,filter_linear_mipmap_anisotropic;
-uniform vec3 sleeve_offset[160];
-vec3 sleeve_motion(vec3 bind){
-	float ring=clamp((abs(bind.x)-.195)/.039,0.,3.999);
-	int row=int(floor(ring));
-	float phase_angle=fract(atan(bind.z+.035,bind.y-1.48)/6.2831853+1.)*16.;
-	int j=int(floor(phase_angle))%16;
-	int base=(bind.x>0.?0:80)+row*16;
-	vec3 a=mix(sleeve_offset[base+j],sleeve_offset[base+(j+1)%16],fract(phase_angle));
-	vec3 b=mix(sleeve_offset[base+16+j],sleeve_offset[base+16+(j+1)%16],fract(phase_angle));
-	return mix(a,b,fract(ring));
-}
 float tension_fold(vec3 bind){
 	float x=abs(bind.x);
 	float tension=bind.x>0.?arm_lift.x:arm_lift.y;
@@ -34,16 +23,6 @@ float waist_fold(vec3 p){
 	float line=p.y-1.107-side*.29-p.z*.14;
 	float envelope=exp(-line*line/.003)*smoothstep(.045,.16,side);
 	return .0065*reach*envelope*sin(line*98.);
-}
-// Short compression folds form on the underside of a raised sleeve.
-float sleeve_crease(vec3 bind){
-	float x=abs(bind.x);
-	float lift=bind.x>0.?arm_lift.x:arm_lift.y;
-	float underside=1.-smoothstep(1.46,1.53,bind.y);
-	float envelope=smoothstep(.195,.235,x)*(1.-smoothstep(.305,.354,x));
-	float line=x+.32*(bind.y-1.46)+.25*bind.z;
-	float fold=sin((line-.23)*132.);
-	return .0038*lift*smoothstep(1.37,1.42,bind.y)*underside*envelope*fold;
 }
 uniform float motion=0.;
 uniform float dampness;
@@ -77,7 +56,7 @@ void vertex(){
 		float flutter=motion*(1.-.68*cling);
 		float drape=mix(.016,.012,arm)+.014*pleat+flutter*(.023+.044*wave+.013*ripple);
 		drape=mix(drape,.003+.006*pleat+motion*(.008+.019*wave),facing);
-		VERTEX+=NORMAL*(free_edge*drape*(1.-arm)*(1.-.55*cling)+.0035*tension_fold(rest)+waist_fold(rest)+sleeve_crease(rest))+sleeve_motion(rest)*arm;
+		VERTEX+=NORMAL*(free_edge*drape*(1.-arm)*(1.-.55*cling)+.0035*tension_fold(rest)+waist_fold(rest));
 		{
 			// Carry the reach down the side seam into the loose hem.
 			// Interpolate across the torso so opposite arm heights stay continuous.
@@ -204,15 +183,12 @@ void fragment(){
 		float stripe=smoothstep(-stripe_width-stripe_aa,-stripe_width,stripe_edge)
 			*(1.-smoothstep(-stripe_aa,0.,stripe_edge));
 		base=mix(base,mix(trim.rgb,vec3(.74,.65,.52),.58),insert*stripe*stripe_span);
-		float cuff=1.-smoothstep(.18,.40,COLOR.g);
-		// The sleeve opening carries a narrow contrast welt inside a rib-knit band.
-		float cuff_mm=COLOR.g*35.;
-		float cuff_aa=max(.32,fwidth(cuff_mm));
-		float welt=1.-smoothstep(2.3,2.3+cuff_aa,abs(cuff_mm-8.0));
-		float knit_phase=atan(rest.z+.035,rest.y-1.46)*96.;
-		float cuff_rib=cos(knit_phase)*(1.-smoothstep(.55,2.8,fwidth(knit_phase)));
-		base=mix(base,trim.rgb*(.90+.10*cuff_rib),.75*cuff);
-		base=mix(base,mix(vec3(.78,.73,.63),base,.32),welt*.88);
+		// The bound opening curves inward over the shoulder and down into the axilla.
+		float armhole=x-(.165-.026*smoothstep(1.39,1.54,y)+.17*abs(rest.z));
+		float cut=min(armhole,y-1.342+.22*(x-.16));
+		if(cut>0.) discard;
+		float binding_width=1.-smoothstep(.005,.009,-cut);
+		base=mix(base,trim.rgb,binding_width*.82);
 		// Distance to the fitted neckline follows its asymmetric front and back.
 		float neck_band=1.-smoothstep(.31,.41,COLOR.b);
 		float seam=1.-smoothstep(.028,.082,abs(COLOR.b-.37));
@@ -265,7 +241,7 @@ void fragment(){
 	float lift=rest.x>0.?arm_lift.x:arm_lift.y;
 	float ridge=sin(diagonal*91.+rest.z*12.);
 	float crease=flank*lift*exp(-diagonal*diagonal/.009)*ridge*.0028;
-	if(!jacket) crease+=sleeve_crease(rest)+.52*waist_fold(rest);
+	if(!jacket) crease+=.52*waist_fold(rest);
 	float loose=(1.-smoothstep(1.04,1.32,y))*flank;
 	crease+=loose*.0032*sin(y*58.+x*35.+rest.z*18.+inertia.x*32.);
 	vec3 dx=dFdx(VERTEX),dy=dFdy(VERTEX);

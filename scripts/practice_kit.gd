@@ -69,7 +69,6 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 			kit.shader=FABRIC
 			kit.set_shader_parameter("knit_surface",preload("res://assets/gym/training_knit.png"))
 			actor.shirt_fabric=kit
-			if not coach: actor.sleeve_cloth=preload("res://scripts/sleeve_cloth.gd").new()
 			actor.jersey_origin=actor.global_position
 			actor.jersey_materials.append(kit)
 			kit.set_shader_parameter("phase",variant*1.79)
@@ -90,15 +89,17 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 			shell.material_override=kit
 			outer_shirt=shell
 			if not coach:
-				var gusset := MeshInstance3D.new()
-				gusset.mesh=skin_surface
-				gusset.skin=node.skin
-				rig.add_child(gusset)
-				gusset.skeleton=gusset.get_path_to(rig)
-				var lining := ShaderMaterial.new()
-				lining.shader=preload("res://assets/gym/underarm_gusset.gdshader")
-				gusset.material_override=lining
-				actor.underarm_fabric=lining
+				var arms := MeshInstance3D.new()
+				arms.mesh=skin_surface
+				arms.skin=node.skin
+				rig.add_child(arms)
+				arms.skeleton=arms.get_path_to(rig)
+				var layer := ShaderMaterial.new()
+				layer.shader=preload("res://assets/gym/practice_underlayer.gdshader")
+				layer.set_shader_parameter("skin_map",node.get_surface_override_material(0).albedo_texture)
+				layer.set_shader_parameter("skin_normal",preload("res://assets/characters/base/T_Superhero_Male_Normal.png"))
+				layer.set_shader_parameter("sleeve_end",[0.,.42,.66,0.,0.][variant%5])
+				arms.material_override=layer
 			if not coach and variant%3==2: compression(rig,node,skin_surface)
 			face_hair(rig,node,skin_surface,coach,variant)
 			if not coach and variant%4==1 and variant%5!=4:
@@ -126,7 +127,8 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 				uniform vec3 inertia; uniform float motion; varying vec2 cut; varying float azimuth;
 				float ankle_fold(float height,float angle){
 					float gathered=smoothstep(.092,.135,height)*(1.-smoothstep(.22,.42,height));
-					return gathered*.006*cos(height*89.+1.7*sin(angle)+.45*cos(angle*3.));
+					float crease=height-.157-.022*cos(angle);
+					return gathered*.0025*exp(-crease*crease/.0009)*sin(crease*97.);
 				}
 				float knee_fold(vec2 pattern,float angle){
 					float offset=pattern.y-.493+.032*cos(angle)+.012*sin(2.*angle);
@@ -139,10 +141,10 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 					azimuth=atan(COLOR.r*.6-.30,abs(cut.x)-.13);
 					float ankle=smoothstep(.092,.135,cut.y)*(1.-smoothstep(.22,.42,cut.y));
 					float gather=ankle_fold(cut.y,azimuth);
-					VERTEX+=NORMAL*(ankle*.014+gather+knee_fold(cut,azimuth));
+					VERTEX+=NORMAL*(ankle*.005+gather+knee_fold(cut,azimuth));
 					float weight=1.-smoothstep(.38,1.02,UV2.y);
 					VERTEX+=weight*inertia*.38;
-					VERTEX+=NORMAL*(.019+.011*weight+.012*weight*motion*sin(UV2.y*28.+UV2.x*22.-TIME*12.));
+					VERTEX+=NORMAL*(.019+.004*weight+.005*weight*motion*sin(UV2.y*28.+UV2.x*22.-TIME*12.));
 				}
 				void fragment(){
 					if(cut.y<.088 || cut.y>1.12)discard;
