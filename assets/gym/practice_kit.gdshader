@@ -5,6 +5,7 @@ uniform vec4 trim : source_color;
 uniform sampler2D lettering : source_color,filter_linear_mipmap_anisotropic;
 uniform sampler2D team_crest : source_color,filter_linear_mipmap_anisotropic;
 uniform vec3 hem_particles[12];
+uniform vec3 strap_offsets[4];
 uniform float hem_shift;
 uniform bool tucked;
 uniform vec4 waist_color : source_color;
@@ -97,6 +98,13 @@ void vertex(){
 		float waist=1.-smoothstep(1.055,1.19,rest.y);
 		float clearance=.0035+(tucked?.009:.045)*waist;
 		if(tucked) VERTEX=mix(body_point+body_normal*clearance,VERTEX,smoothstep(1.064,1.115,rest.y));
+		float shoulder=smoothstep(1.405,1.505,rest.y)*smoothstep(.058,.105,abs(rest.x));
+		int strap=rest.x>0.?0:2;
+		vec3 slide=mix(strap_offsets[strap+1],strap_offsets[strap],smoothstep(-.065,.045,rest.z));
+		vec3 free_strap=VERTEX-body_point+slide;
+		// Let the fabric slide along the skin; keep only a thin layer of ease over the trap.
+		vec3 resting=body_point+free_strap-body_normal*dot(free_strap,body_normal)+body_normal*.0038;
+		VERTEX=mix(VERTEX,resting,shoulder);
 		float gap=dot(VERTEX-body_point,body_normal);
 		VERTEX+=body_normal*max(0.,clearance-gap);
 	}
