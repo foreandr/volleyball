@@ -49,6 +49,10 @@ func review() -> void:
 				Setting.apply(athlete,contact,smoothstep(0.,10.,frame),(Vector3.UP+heading*.3).normalized()*.22,0.,.3,false,Vector3.ZERO,smoothstep(32.,58.,frame),heading*4.,.5,true)
 			gym.camera.position=athlete.to_global(Vector3(1.45,1.63,1.88))
 			gym.camera.look_at(athlete.to_global(Vector3(0,1.38,0)))
+			if action=="run" and frame in [8,15,20]:
+				gym.camera.position=athlete.to_global(Vector3(1.08,.58,1.20))
+				gym.camera.look_at(athlete.to_global(Vector3(0,.49,0)))
+				await capture("knees"+str(frame))
 			if frame in ([6,12,18] if action=="run" else [16,36,64]): await capture(action+str(frame))
 	athlete.animator.callback_mode_process=playback
 	athlete.position=start

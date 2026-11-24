@@ -231,6 +231,16 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 	uniform vec2 calf_load;
 	uniform vec2 padded;
 	uniform float knee_height;
+	uniform float knee_center;
+	// Rounded foam face with lateral wings and articulation channels.
+	float pad_face(float lateral,float height){
+		vec2 radius=vec2(lateral/.069,height/.070);
+		return 1.-smoothstep(.72,1.06,length(radius));
+	}
+	float flex_channel(float lateral,float height){
+		float line=abs(height+.014-abs(lateral)*.40);
+		return 1.-smoothstep(.0015,.0055,line);
+	}
 	uniform float sock_top;
 	uniform vec4 pad_color:source_color;
 	varying vec3 anatomy;
@@ -250,7 +260,9 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		float enabled=UV2.x>0.?padded.x:padded.y;
 		enabled_side=enabled;
 		pad=enabled*(1.-smoothstep(.087,.094,abs(k)));
-		foam=pad*smoothstep(.50,.64,COLOR.r)*(1.-smoothstep(.050,.079,abs(k)));
+		float lateral=abs(UV2.x)-knee_center;
+		foam=pad*smoothstep(.49,.62,COLOR.r)*pad_face(lateral,k);
+		foam*=1.-.38*flex_channel(lateral,k);
 		sock=1.-smoothstep(sock_top,sock_top+.004,y);
 		VERTEX+=NORMAL*(pad*.005+foam*.018+sock*.002);
 		anatomy=vec3(abs(UV2.x),y,COLOR.r);
@@ -261,8 +273,14 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		float sock_mask=1.-smoothstep(sock_top,sock_top+.003,y);
 		float pad_mask=enabled_side*(1.-smoothstep(.087,.091,abs(y-knee_height)));
 		ALBEDO=mix(ALBEDO,vec3(.68,.69,.66)*(.88+.12*yarn),sock_mask);
-		float panel=.5+.5*cos((y-knee_height)*120.);
-		ALBEDO=mix(ALBEDO,pad_color.rgb*(.74+.12*yarn+.14*panel*foam),pad_mask);
+		float height=y-knee_height;
+		float lateral=anatomy.x-knee_center;
+		float face=pad_face(lateral,height)*smoothstep(.49,.62,anatomy.z);
+		float channel=flex_channel(lateral,height)*face;
+		float binding=smoothstep(.075,.081,abs(height));
+		float edging=1.-smoothstep(.001,.0035,abs(abs(height)-.076));
+		float cover=.74+.12*yarn+.14*face-.25*channel-.16*binding+.11*edging;
+		ALBEDO=mix(ALBEDO,pad_color.rgb*cover,pad_mask);
 		float gear=max(pad_mask,sock_mask);
 		vec2 p=anatomy.xy;
 		float front=smoothstep(.46,.61,anatomy.z);
@@ -284,7 +302,9 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 	skin.set_shader_parameter("padded",Vector2(float(both or variant%4==2),float(both or variant%4==3)))
 	skin.set_shader_parameter("pad_color",Color("dfdfd7") if variant%3==1 else Color("343d44"))
 	skin.set_shader_parameter("sock_top",.155+.027*(variant%4))
-	skin.set_shader_parameter("knee_height",rig.get_bone_global_rest(rig.find_bone("calf_l")).origin.y)
+	var knee := rig.get_bone_global_rest(rig.find_bone("calf_l")).origin
+	skin.set_shader_parameter("knee_height",knee.y)
+	skin.set_shader_parameter("knee_center",absf(knee.x))
 	skin.set_shader_parameter("muscles",preload("res://assets/characters/base/T_Superhero_Male_Normal.png"))
 	skin.set_shader_parameter("roughness_map",preload("res://assets/characters/base/T_Superhero_Male_Roughness.png"))
 	skin.set_shader_parameter("hem_y",hem)
