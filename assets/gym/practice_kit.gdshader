@@ -142,9 +142,11 @@ void fragment(){
 		float resolved_ribs=1.-smoothstep(.001,.004,fwidth(rest.x)+fwidth(rest.z));
 		base=mix(base,trim.rgb*(1.+.085*ribs*resolved_ribs),neck_band);
 		base*=1.-.22*seam;
-		float rear=1.-smoothstep(-.05,.02,rest.z);
+		// Print only the torso panels. Blending mirrored UVs collapses the
+		// number onto the side of the jersey as the depth passes through zero.
+		float rear=1.-step(0.,rest.z);
 		vec2 uv=vec2(.5+mix(rest.x,-rest.x,rear)/mix(.205,.262,rear),(1.425-y)/mix(.115,.144,rear));
-		if(all(greaterThanEqual(uv,vec2(0.))) && all(lessThanEqual(uv,vec2(1.)))){
+		if(x<.136 && abs(rest.z)>.035 && all(greaterThanEqual(uv,vec2(0.))) && all(lessThanEqual(uv,vec2(1.)))){
 			vec4 ink=texture(lettering,uv);
 			// A narrow backing print holds the number outline over bright folds.
 			vec2 inset=vec2(.009,.014);
