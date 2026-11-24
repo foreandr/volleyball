@@ -309,7 +309,7 @@ func _process(delta: float) -> void:
 		if not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) or not get_window().has_focus():
 			release_rotation_arrow()
 		elif Time.get_ticks_msec()-rotation_press_ms>=250:
-			held_rotation_field.custom_arrow_step=held_rotation_field.step*10.
+			held_rotation_field.custom_arrow_step=held_rotation_field.step*50.
 
 	super._process(delta)
 	if session == null: return
