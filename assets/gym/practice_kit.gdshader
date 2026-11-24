@@ -118,6 +118,13 @@ void fragment(){
 		float piping=(1.-smoothstep(.0014,.0032+fwidth(y),abs(y-yoke_edge)))*sleeve_span;
 		base=mix(base,vec3(.081,.164,.129),insert*.87);
 		base=mix(base,vec3(.22,.30,.25),piping*.68);
+		// Reinforcing yarns cross the shoulder panel in a small ripstop grid.
+		vec2 ripstop=vec2(rest.x+.17*rest.z,rest.z-.36*y)/.006;
+		vec2 thread_dist=abs(fract(ripstop+.5)-.5);
+		vec2 footprint=max(fwidth(ripstop),vec2(.015));
+		vec2 yarns=(1.-smoothstep(vec2(.035),vec2(.035)+footprint,thread_dist))
+			*(1.-smoothstep(vec2(.16),vec2(.65),footprint));
+		base*=1.+insert*(.15*max(yarns.x,yarns.y)+.06*yarns.x*yarns.y);
 		float neck_binding=smoothstep(neckline-.013,neckline-.010,y)*(1.-smoothstep(.092,.122,x));
 		float neck_stitch=1.-smoothstep(.0007,.0025,abs(y-neckline+.010));
 		base=mix(base,vec3(.032,.066,.050)*(.91+.19*neck_stitch),neck_binding);
