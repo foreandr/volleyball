@@ -8,16 +8,16 @@ const TEMPOS := ["Normal","High","Fast"]
 const Xbox = preload("res://scripts/xbox_controls.gd")
 const BUTTONS := [JOY_BUTTON_X,JOY_BUTTON_Y,JOY_BUTTON_A,JOY_BUTTON_B]
 const KEYS := [KEY_J,KEY_I,KEY_K,KEY_L]
-const PINS := [Vector3(3.75,2.15,3.0),Vector3(0.55,0.54,3.3),Vector3(0,0.54,-2.3),Vector3(-3.75,2.15,3.0)]
+const PINS := [Vector3(4.75,2.15,3.0),Vector3(0.55,2.15,3.3),Vector3(0.55,2.15,2.3),Vector3(-4.75,2.15,3.0)]
 const BASE := Vector3(0,0.04,1.35)
 const ORDER := [0,3,2,1]
-const CONTACT := 1.65
-const DURATION := [1.05,1.65,0.68]
+const CONTACT := 1.0
+const DURATION := [0.65,1.0,0.48]
 const APEX := [1.1,2.5,0.32]
 const LINES := ["Welcome to the team, %s. I’m Coach Ellis.","You’re trying out at setter. Watch the four targets. I’ll toss the first ones right to you.","Two to each spot. First stay planted, then jump set. After that, I’ll make you move."]
-const TOSS_SPOTS := [Vector3(-2.5,0.04,-1.2),Vector3(2.8,0.04,-1.8),Vector3(2.7,0.04,2.45),Vector3(-2.9,0.04,2.4)]
 var coach_motion := preload("res://scripts/tryout_coach.gd").new()
-var station := -1
+var last_toss := -10.0
+var next_release := 0.0
 var coach_goal := Vector3.ZERO
 var focused := false
 var active_pad := -1
@@ -75,7 +75,6 @@ var tempo := 0
 var success := false
 var feedback := ""
 var flight_time := 1.0
-var contact_sound := AudioStreamPlayer.new()
 
 func athlete(at: Vector3,color: String) -> Node3D:
 	var actor := Player.new()
@@ -107,7 +106,7 @@ func _ready() -> void:
 	for i in 4:
 		var basket := preload("res://scripts/tryout_target.gd").new()
 		basket.position = PINS[i]
-		basket.is_net = i in [0,3]
+		basket.is_net = true
 		basket.depth = 0.88 if basket.is_net else 0.50
 		world.add_child(basket)
 		targets.append(basket)
@@ -128,8 +127,6 @@ func _ready() -> void:
 	ball.material_override = leather
 	world.add_child(ball)
 	rotation_drill.configure(self)
-	contact_sound.stream = preload("res://assets/audio/set_touch.wav")
-	add_child(contact_sound)
 	var ring := TorusMesh.new()
 	ring.inner_radius = 0.53
 	ring.outer_radius = 0.58
@@ -257,8 +254,7 @@ func reset_feed() -> void:
 	cushion = 0
 	old_palms.clear()
 	begin("cart" if not demonstration else "walk")
-	station = (station+1)%TOSS_SPOTS.size()
-	coach_goal = TOSS_SPOTS[station]
+	coach_goal = rotation_drill.basket.position+rotation_drill.HANDLE
 	squat.cancel()
 	jump.active = false
 	last_flick = 0
@@ -355,11 +351,13 @@ func _process(delta: float) -> void:
 		flick_at = clock
 	match phase:
 		"cart":
-			var incoming_ready := rotation_drill.walk(setter,BASE,delta,2.45)
-			var coach_ready := rotation_drill.walk(coach,rotation_drill.CART+Vector3(.48,.04,-.50),delta,2.25)
+			var incoming_ready := rotation_drill.walk(setter,BASE,delta,5.2)
+			var coach_ready := rotation_drill.station_ready(delta)
+			coach_goal = rotation_drill.basket.position+rotation_drill.HANDLE
 			if coach_ready and incoming_ready and rotation_drill.take_ball():
 				setter.rotation.y = atan2(coach.position.x-setter.position.x,coach.position.z-setter.position.z)
-				change_feed_phase("walk")
+				change_feed_phase("feed")
+				coach.rotation.y = atan2(catch_point.x-coach.position.x,catch_point.z-coach.position.z)
 		"walk":
 			var step := coach_goal-coach.position
 			if step.length()>0.05:
@@ -373,8 +371,11 @@ func _process(delta: float) -> void:
 				change_feed_phase("feed")
 		"feed":
 			setter.animator.advance(0.0)
-			ball.position = coach_motion.toss(coach,clampf(elapsed/0.95,0,1))
-			if elapsed>=0.95:
+			ball.position = coach_motion.toss(coach,clampf((clock-maxf(clock-elapsed,next_release-.30))/.30,0,1))
+			if elapsed>=.30 and clock>=next_release:
+				last_toss = clock
+				next_release = clock+2.0
+				if not demonstration: rotation_drill.tosses+=1
 				source = ball.position
 				trace("coach_release",{"from":str(source),"to":str(catch_point)})
 				change_feed_phase("pass")
@@ -390,7 +391,7 @@ func _process(delta: float) -> void:
 				return
 			if elapsed<0.22: coach_motion.toss(coach,1.0)
 			ball.position.y = maxf(0.15,ball.position.y)
-			if (demonstration or rotation_drill.turn!=0) and held<0 and elapsed>=0.85:
+			if (demonstration or rotation_drill.turn!=0) and held<0 and elapsed>=.36:
 				held = called()
 				pressed_at = clock
 			if held>=0:
@@ -398,7 +399,7 @@ func _process(delta: float) -> void:
 					var opposite := (setter.position-PINS[3]).slide(Vector3.UP)
 					setter.rotation.y=lerp_angle(setter.rotation.y,atan2(opposite.x,opposite.z),minf(1,delta*9))
 				meter.value = clampf((clock-pressed_at)/0.65,0,1)*100
-				Hands.apply(setter,ball.position,0.35+0.65*smoothstep(0.8,1.55,elapsed))
+				Hands.apply(setter,ball.position,0.35+0.65*smoothstep(.25,.86,elapsed))
 				Contact.track_hands(setter,ball.position)
 			var collided := false
 			for side in ["l","r"]:
@@ -456,7 +457,7 @@ func _process(delta: float) -> void:
 				if ball.position.y<.16: begin("result")
 		"result":
 			if success: ball.position = endpoint-Vector3.UP*minf(targets[target].depth-.12,elapsed*3.1)
-			if elapsed>.45:
+			if elapsed>.08:
 				if demonstration:
 					demo_index+=1
 					if demo_index>=4: demonstration=false
@@ -465,7 +466,8 @@ func _process(delta: float) -> void:
 					rotation_drill.free_ball(Vector3.DOWN*.4 if success else (endpoint-source).normalized()*2.9)
 					begin("between")
 		"between":
-			if elapsed>.85:
+			if elapsed>.025:
+				if rotation_drill.attempts==1: next_release = maxf(next_release,last_toss+3.5)
 				rotation_drill.advance_turn()
 				if rep>=32: complete()
 				else: reset_feed()
@@ -532,7 +534,6 @@ func release(index: int) -> void:
 	success = target==called() and endpoint.distance_to(PINS[target])<targets[target].mouth_radius-0.10
 	feedback = TARGETS[target]+"   /   Target made" if success else "Missed the called target. Try it again."
 	trace("set",{"requested":TARGETS[called()],"actual":TARGETS[target],"made":success,"error_m":error})
-	contact_sound.play()
 	Hands.apply(setter,source,1.0,(endpoint-source).normalized()*.22,0,.3,false,Vector3.ZERO,1.,endpoint-source,.6,true)
 	begin("set")
 

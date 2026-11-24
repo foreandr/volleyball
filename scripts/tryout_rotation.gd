@@ -2,7 +2,12 @@ extends RefCounted
 
 const Contact = preload("res://scripts/gym_physics.gd")
 const CART := Vector3(-3.5,0,-2.6)
-const WAIT := [Vector3(0,.04,1.35),Vector3(-1.8,.04,6.7),Vector3(1.9,.04,7.3)]
+const WAIT := [Vector3(0,.04,1.35),Vector3(-1.35,.04,.2),Vector3(1.65,.04,.25)]
+const STATIONS := [CART,Vector3(3.5,0,-2.6)]
+const HANDLE := Vector3(.12,.04,-.78)
+var tosses := 0
+var station := 0
+var routes := preload("res://scripts/tryout_paths.gd").new()
 var game: Control
 var roster: Array[Node3D] = []
 var workers: Array[Dictionary] = []
@@ -22,8 +27,10 @@ func configure(host: Control) -> void:
 	random.randomize()
 	roster.append(game.setter)
 	for i in [1,2]: roster.append(game.athlete(WAIT[i],["","377f95","93543a"][i]))
+	for i in [1,2]: preload("res://scripts/practice_kit.gd").apply(roster[i],false,i)
 	for i in 2:
 		var actor: Node3D = game.athlete(Vector3(-4+i*8,.04,5),"395b48")
+		preload("res://scripts/practice_kit.gd").apply(actor,false,i+3)
 		workers.append({"actor":actor,"cargo":[],"goal":null,"lifting":0.0,"start":Vector3.ZERO})
 	basket = Node3D.new()
 	game.world.add_child(basket)
@@ -36,6 +43,8 @@ func configure(host: Control) -> void:
 			cart_box(Vector3(x,.10,z),Vector3(.09,.13,.11),metal)
 		cart_box(Vector3(x,.75,0),Vector3(.035,.35,.72),cloth)
 	for z in [-.35,.35]: cart_box(Vector3(0,.75,z),Vector3(1.10,.35,.035),cloth)
+	cart_box(Vector3(0,1.01,-.42),Vector3(.93,.044,.044),metal)
+	for x in [-.43,.43]: cart_box(Vector3(x,.91,-.42),Vector3(.044,.20,.044),metal)
 	cart_box(Vector3(0,.58,0),Vector3(1.10,.035,.72),cloth)
 	for i in 12:
 		var body := RigidBody3D.new()
@@ -86,8 +95,37 @@ func store_ball(body: RigidBody3D) -> void:
 	body.collision_layer = 0
 	body.show()
 	var i := stock.size()
-	body.position = CART+Vector3((i%4-1.5)*.226,.70+.17*(i/8),((i/4)%2-.5)*.28)
+	body.position = basket.position+Vector3((i%4-1.5)*.226,.70+.17*(i/8),((i/4)%2-.5)*.28)
 	stock.append(body)
+
+func station_ready(dt: float) -> bool:
+	var requested := (tosses/10)%2
+	if requested!=station:
+		var previous := basket.position
+		basket.position=basket.position.move_toward(STATIONS[requested],dt*4.7)
+		for body in stock: body.position+=basket.position-previous
+		game.coach.position=basket.position+HANDLE
+		game.coach.rotation.y=0
+		game.coach.play_action("base/Walk")
+		grip_handle()
+		if basket.position.distance_to(STATIONS[requested])<.01:
+			station=requested
+			game.trace("cart_station",{"station":station,"tosses":tosses})
+		return false
+	return walk(game.coach,basket.position+HANDLE,dt,4.2)
+
+func grip_handle() -> void:
+	var rig: Skeleton3D = game.coach.skeleton
+	var author: RefCounted = game.coach.get_pose_author()
+	var pose: Array = []
+	for i in rig.get_bone_count(): pose.append(rig.get_bone_pose(i))
+	for side in ["l","r"]:
+		var x := .19 if side=="l" else -.19
+		var hand := basket.position+Vector3(x,1.035,-.48)
+		author.limb(pose,"upperarm_"+side,"lowerarm_"+side,"hand_"+side,rig.to_local(hand),Vector3(signf(x),-.8,0))
+		for bone in ["upperarm_"+side,"lowerarm_"+side]:
+			var idx := rig.find_bone(bone)
+			rig.set_bone_pose_rotation(idx,pose[idx].basis.orthonormalized().get_rotation_quaternion())
 
 func take_ball() -> bool:
 	if issued: return true
@@ -124,12 +162,14 @@ func walk(actor: Node3D,goal: Vector3,dt: float,speed: float) -> bool:
 	if dir.length()<.12:
 		actor.play_action("idle")
 		return true
+	var waypoint := routes.waypoint(actor,goal,dt)
+	dir = (waypoint-actor.position).slide(Vector3.UP)
 	actor.rotation.y=lerp_angle(actor.rotation.y,atan2(dir.x,dir.z),minf(1,dt*9))
 	var step := dir.limit_length(speed*dt)
 	var next: Vector3 = game.contacts.travel(game.world,actor.position,step,actor.height_cm*.01)
-	if next.distance_to(actor.position)<step.length()*.35:
-		var tangent := Vector3(-dir.z,0,dir.x).normalized()
-		next=game.contacts.travel(game.world,actor.position,tangent*speed*dt,actor.height_cm*.01)
+	var along := (next-actor.position).dot(dir.normalized())
+	if along<step.length()*.65: routes.reroute(actor,goal)
+	next.y=actor.position.y
 	actor.position=next
 	actor.play_action("base/Walk" if speed<2.4 else "run")
 	return false
@@ -139,7 +179,7 @@ func tick(dt: float) -> void:
 		if i==turn: continue
 		var waiting := roster[i]
 		waiting.animator.advance(dt)
-		walk(waiting,WAIT[(i-turn+3)%3],dt,2.5)
+		walk(waiting,WAIT[(i-turn+3)%3],dt,5.2)
 	for worker in workers: collect(worker,dt)
 	if not net_hit.is_empty():
 		game.gym.get_node("DynamicNet").sample(net_hit,game.clock)
@@ -169,12 +209,12 @@ func collect(w: Dictionary,dt: float) -> void:
 		var body: RigidBody3D=w.goal
 		var delta := (body.position-actor.position).slide(Vector3.UP)
 		if delta.length()>.79:
-			walk(actor,body.position-delta.normalized()*.48,dt,3.0)
+			walk(actor,body.position-delta.normalized()*.48,dt,5.7)
 		else:
 			actor.rotation.y=atan2(delta.x,delta.z)
 			actor.play_action("idle")
 			var side := "l" if cargo.is_empty() else "r"
-			var bend := sin(PI*clampf(float(w.lifting)/.76,0,1))
+			var bend := sin(PI*clampf(float(w.lifting)/.42,0,1))
 			var pose: Array = actor.get_pose_author().baseline.duplicate()
 			var rig: Skeleton3D = actor.skeleton
 			var author: RefCounted = actor.get_pose_author()
@@ -195,15 +235,15 @@ func collect(w: Dictionary,dt: float) -> void:
 				body.freeze=true
 				body.collision_layer=0
 			w.lifting+=dt
-			body.position=w.start.lerp(hand,smoothstep(.28,.71,w.lifting))
-			if w.lifting>=.76:
+			body.position=w.start.lerp(hand,smoothstep(.12,.39,w.lifting))
+			if w.lifting>=.42:
 				loose.erase(body)
 				cargo.append(body)
 				game.trace("shag_pickup",{"id":body.name,"carrying":cargo.size()})
 				w.goal=null
 				w.lifting=0.
 	elif not cargo.is_empty():
-		if walk(actor,CART+Vector3(.1,.04,.72),dt,2.35):
+		if walk(actor,basket.position+Vector3(.1,.04,.72),dt,5.1):
 			for body in cargo:
 				store_ball(body)
 				game.trace("cart_return",{"id":body.name,"remaining":stock.size()})

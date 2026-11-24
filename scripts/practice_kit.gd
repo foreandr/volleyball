@@ -21,16 +21,16 @@ static func tailored_surface(source: ArrayMesh,surface: int) -> ArrayMesh:
 	shaped.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES,arrays,[],{},source.surface_get_format(surface)&Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS)
 	return shaped
 
-static func apply(actor: Node3D,coach: bool) -> void:
+static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 	var rig: Skeleton3D = actor.skeleton
-	for side in ["l","r"]: court_shoe(rig,side,coach)
+	for side in ["l","r"]: court_shoe(rig,side,coach,variant)
 	for node: MeshInstance3D in rig.find_children("*","MeshInstance3D",true,false):
 		var shirt := node.mesh == preload("res://assets/characters/volleyball/outfit.res")
 		var sleeves := node.mesh == preload("res://assets/characters/volleyball/body.res")
 		if not shirt and not sleeves: continue
 		var kit := ShaderMaterial.new()
 		kit.shader = FABRIC
-		kit.set_shader_parameter("fabric",Color("223d3c") if coach else Color("b34421"))
+		kit.set_shader_parameter("fabric",Color("223d3c") if coach else (Color("b34421") if variant==0 else actor.team_color))
 		kit.set_shader_parameter("trim",Color("cad4bf") if coach else Color("182d36"))
 		kit.set_shader_parameter("lettering",preload("res://assets/gym/practice_502.svg"))
 		kit.set_shader_parameter("jacket",coach)
@@ -49,7 +49,10 @@ static func apply(actor: Node3D,coach: bool) -> void:
 			node.set_surface_override_material(0,invisible)
 			if not coach: shorts(rig,node)
 	if not coach:
-		for side in ["l","r"]: knee_pad(rig,side)
+		for side in ["l","r"]:
+			knee_pad(rig,side)
+			if variant in [1,3]: compression(rig,"calf_"+side,"foot_"+side,.067,.044,Color("e3ded2"))
+		if variant in [2,4]: compression(rig,"lowerarm_r","hand_r",.061,.042,Color("252e35"))
 
 static func shorts(rig: Skeleton3D,outfit: MeshInstance3D) -> void:
 	var material := ShaderMaterial.new()
@@ -89,6 +92,24 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D) -> void:
 	legs.material_override = skin
 	source.free()
 
+static func compression(rig: Skeleton3D,bone: String,child: String,upper: float,lower: float,color: Color) -> void:
+	var socket := BoneAttachment3D.new()
+	socket.bone_name = bone
+	rig.add_child(socket)
+	var axis := rig.get_bone_rest(rig.find_bone(child)).origin
+	var part := MeshInstance3D.new()
+	var sleeve := CylinderMesh.new()
+	sleeve.bottom_radius = upper
+	sleeve.top_radius = lower
+	sleeve.height = axis.length()*.79
+	part.mesh = sleeve
+	part.position = axis*.56
+	part.quaternion = Quaternion(Vector3.UP,axis.normalized())
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = color
+	part.material_override = mat
+	socket.add_child(part)
+
 static func knee_pad(rig: Skeleton3D,side: String) -> void:
 	var name_ := "calf_"+side
 	var rest := rig.get_bone_global_rest(rig.find_bone(name_))
@@ -103,7 +124,7 @@ static func knee_pad(rig: Skeleton3D,side: String) -> void:
 
 
 # Build the shoe in rig rest space, then inherit the ankle's animated transform.
-static func court_shoe(rig: Skeleton3D,side: String,coach: bool) -> void:
+static func court_shoe(rig: Skeleton3D,side: String,coach: bool,variant: int) -> void:
 	var name_ := "foot_"+side
 	var rest := rig.get_bone_global_rest(rig.find_bone(name_))
 	var toe := rig.get_bone_global_rest(rig.find_bone("ball_"+side)).origin
@@ -116,7 +137,7 @@ static func court_shoe(rig: Skeleton3D,side: String,coach: bool) -> void:
 	var center := rest.origin.lerp(toe,0.54)
 	center.y = 0.0
 	last.transform = rest.affine_inverse()*Transform3D(Basis.looking_at(forward,Vector3.UP,true),center)
-	var upper := Color("324341") if coach else Color("e4e0cf")
+	var upper: Color = Color("324341") if coach else [Color("e4e0cf"),Color("23528c"),Color("df7638"),Color("252e38"),Color("b6cc7d")][variant%5]
 	shoe_part(last,Vector3(0,.022,.015),Vector3(.135,.052,.31),Color("413e36"))
 	shoe_part(last,Vector3(0,.043,.015),Vector3(.14,.062,.306),Color("e4d9bb"))
 	shoe_part(last,Vector3(0,.075,.017),Vector3(.133,.095,.302),upper)

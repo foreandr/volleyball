@@ -1,11 +1,9 @@
 extends RefCounted
 
 const Contact = preload("res://scripts/gym_physics.gd")
-var sound := AudioStreamPlayer3D.new()
 var beat := .36
 var age := 0.0
 var duration := 0.0
-var last_beat := -1
 var planted := {}
 var actor: Node3D
 var bench: MeshInstance3D
@@ -15,12 +13,6 @@ var foot_height := 0.0
 
 func configure(player: Node3D,seat: MeshInstance3D,below: MeshInstance3D,aisle_side: int,z: float) -> void:
 	actor = player
-	sound.stream = preload("res://assets/audio/bleacher_clap.wav")
-	sound.unit_size = 8
-	sound.volume_db = -8
-	sound.max_distance = 32
-	actor.add_child(sound)
-	sound.position.y = 1.2
 	bench = seat
 	side = aisle_side
 	court_z = z
@@ -61,8 +53,6 @@ func celebrate(index: int,block_complete: bool) -> void:
 	age = -.10-fmod(index*.137,.36)
 	beat = .31+fmod(index*.073,.13)
 	duration = beat*(5 if block_complete else 3)
-	last_beat = -1
-	sound.pitch_scale = .89+fmod(index*.091,.24)
 
 func applause(delta: float) -> void:
 	if duration<=0: return
@@ -94,7 +84,3 @@ func applause(delta: float) -> void:
 		for name_ in ["upperarm_"+side_,"lowerarm_"+side_,wrist]:
 			var idx := rig.find_bone(name_)
 			rig.set_bone_pose_rotation(idx,pose[idx].basis.orthonormalized().get_rotation_quaternion())
-	var count := floori(age/beat)
-	if phase>=.47 and last_beat!=count:
-		last_beat = count
-		sound.play()
