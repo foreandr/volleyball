@@ -154,3 +154,4 @@ Back bump sets open the hips toward the hitting pin and carry the joined forearm
 On close bump sets, the setter steps into the incoming ball, plants before contact, and lets the elbows bend through the swing, especially on back bumps.
 Grounded bump sets load the knees before contact and extend through the arm swing. Longer sets use a deeper load.
 On grounded bump sets, the torso hinges forward with the knee bend and starts rising before contact. The back bump carries that rise into the overhead follow-through.
+Grounded forearm sets use both the intended distance and arc height to scale the knee load and platform swing. The hands retain the reception grip through follow-through.

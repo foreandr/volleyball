@@ -90,6 +90,7 @@ var ready_knee_bend_depth := 0.0
 var lunge_bend_depth := 0.0
 var defense_ground_y := 0.0
 var contact_destination := Vector2.ZERO
+var planned_bump_effort := -1.0
 var bump_load_depth := 0.0
 var bump_receive_phase := 0.0
 var touch_time := -INF
@@ -157,6 +158,7 @@ func set_custom_backward(animation: Animation) -> void:
 
 func reset() -> void:
 	bump_load_depth=0.0
+	planned_bump_effort=-1.0
 	early_dig_arms.clear()
 	hard_dig = false
 	fast_hand_dig = false
@@ -874,7 +876,7 @@ func follow_forearm(time: float, incoming: Vector3) -> void:
 	apply_pose(contact_frame+follow,blend)
 	pose_reach(smoothstep(0.0,1.0,reach_progress)*(1.0-smoothstep(0.10,0.40,follow)),touch)
 	pose_bump_receive(bump_receive_phase+follow)
-	Drive.apply(setter.skeleton,setter.get_pose_author(),outgoing,Drive.effort(incoming,outgoing),follow,true,incoming,Drive.swing_effort(touch,outgoing))
+	Drive.apply(setter.skeleton,setter.get_pose_author(),outgoing,Drive.effort(incoming,outgoing),follow,true,incoming,planned_bump_effort if planned_bump_effort>=0. else Drive.swing_effort(touch,outgoing))
 
 func pose_reach(weight: float, intercept: Vector3) -> void:
 	if reach.is_empty() or weight <= 0.0: return

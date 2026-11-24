@@ -57,8 +57,10 @@ static func apply(rig: Skeleton3D, author: RefCounted, outgoing: Vector3, power:
 	var sweep := Vector3(flat.x*0.30,0.18+0.20*lift+0.32*rear,flat.z*0.23)
 	var target := hand_center+sweep*arms*drive
 	target.y = minf(target.y,chest.y+lerpf(0.32,0.55,rear))
-	var lateral := Vector3.RIGHT.rotated(Vector3.UP,hip_turn+yaw*steer*0.5)
-	var elbow_angle := PlatformPose.ELBOW_ANGLE-lerpf(8.,20.,rear)*drive
+	# Keep the joined wrists lined up with the turning shoulders.
+	var across: Vector3=(author.point(pose,"upperarm_l")-author.point(pose,"upperarm_r")).normalized()
+	var lateral := across.rotated(Vector3.UP,yaw*steer*0.16)
+	var elbow_angle := PlatformPose.ELBOW_ANGLE-lerpf(8.,20.,rear)*drive*lerpf(.65,1.,arms)
 	PlatformPose.connect_arms(pose,author,target,clampf((load+drive)*1.7*arms+steer*0.65,0.0,1.0),0.0,lateral,false,false,elbow_angle)
 	for name_ in ["pelvis","thigh_l","calf_l","foot_l","thigh_r","calf_r","foot_r","spine_02","spine_03","upperarm_l","upperarm_r","lowerarm_l","lowerarm_r","hand_l","hand_r"]:
 		var bone := rig.find_bone(name_)

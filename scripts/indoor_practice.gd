@@ -1020,7 +1020,12 @@ func play_bump(previous: Vector3, incoming: Vector3, dt: float) -> void:
 	if not sampler.low_save.active:
 		var distance_to_target := predicted.slide(Vector3.UP).distance_to(bump_destination().slide(Vector3.UP))
 		if not bump_touched:
-			sampler.bump_load_depth=lerpf(.15,.24,smoothstep(2.,9.,distance_to_target))
+			var height: float=APEX[chosen_tempo()]
+			# Peak rise of arc(source, target, t, height), relative to contact.
+			var rise := pow(clampf(bump_destination().y-predicted.y+4.*height,0.,8.*height),2)/(16.*height)
+			var demand := .60*smoothstep(.7,9.,distance_to_target)+.40*smoothstep(2.,4.6,rise)
+			sampler.planned_bump_effort=lerpf(.26,1.,demand)
+			sampler.bump_load_depth=lerpf(.12,.26,demand)
 			sampler.bump_receive_phase=-remaining
 		sampler.pose_bump_receive(sampler.bump_receive_phase)
 	if remaining<.30 and not sampler.low_save.active:
@@ -1078,19 +1083,20 @@ func step_practice(delta: float) -> void:
 	setter.skeleton.set_meta("fast_set_push",phase=="set_contact" and elapsed+delta>SET_RECEIVE_TIME or phase=="set" and elapsed<.04)
 	setter.animator.advance(delta)
 	var gathering := phase=="pass" and (plant_time>=0. or jump.active or squat.charging or (held>=0 and (not cpu_setting or jump_rep() and contact_time-elapsed<.46)))
-	var open := gathering or phase=="set_contact" or (phase=="set" and elapsed<(.34 if target==2 else .28))
+	var overhead := bump_aim.is_zero_approx()
+	var open := overhead and (gathering or phase=="set_contact" or (phase=="set" and elapsed<(.34 if target==2 else .28)))
 	grip_open=move_toward(grip_open,1. if open else 0.,delta*6.)
 	setter.skeleton.set_meta("grip_open",grip_open)
-	setter.skeleton.set_meta("fixed_setting_hands",grip_open>0.)
+	setter.skeleton.set_meta("fixed_setting_hands",overhead and grip_open>0.)
 	var follow := smoothstep(0.,.060,elapsed)*(1.-smoothstep(.14,.32,elapsed)) if phase=="set" else 0.
 	if phase=="set" and target!=2:
 		# The grip interpolates from 26 degrees back to 23 forward.
 		var flat := 26./49.
 		follow=flat*smoothstep(0.,.045,elapsed)+(1.-flat)*smoothstep(.165,.235,elapsed)
 		follow*=1.-smoothstep(.26,.42,elapsed)
-	setter.skeleton.set_meta("wrist_follow",follow)
+	setter.skeleton.set_meta("wrist_follow",follow if overhead else 0.)
 	var back_finish := 0.
-	if target==2 and phase=="set":
+	if overhead and target==2 and phase=="set":
 		back_finish=smoothstep(0.,.095,elapsed)*(1.-smoothstep(.16,.32,elapsed))
 		setter.skeleton.set_meta("wrist_follow",0.)
 	setter.skeleton.set_meta("back_grip",back_finish)
