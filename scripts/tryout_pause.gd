@@ -46,6 +46,8 @@ func configure(host: Node, layer: Node = null) -> void:
 	options.add_child(scroll)
 	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(body)
+	bar(options,"Animation Frames",open_frame_editor)
+	StorySession.add_saved_frame_picker(options,hide)
 	bar(options,"Back",show_home)
 	if practice:
 		for field in fields(): apply_field(field[0],saved(field),false)
@@ -86,6 +88,14 @@ func open_options() -> void:
 	options.show()
 	show_section("Camera")
 	categories.get_child(0).grab_focus()
+
+func open_frame_editor() -> void:
+	if practice and game.solo_setting and game.replay_inspector.setter_frames.size()>1:
+		game.replay_inspector.edit_setter_frames()
+	else:
+		StorySession.prepare_ready_frame_editor()
+	hide()
+	MenuPresentation.load_scene("res://scenes/animation_editor.tscn")
 
 func restart() -> void:
 	hide()

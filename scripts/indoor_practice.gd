@@ -19,6 +19,9 @@ var catch_start_local := Vector3.ZERO
 const CATCH_GIVE := .115
 var camp_receive_spot := BASE
 var camp_velocity := Vector3.ZERO
+var plant_time := -1.0
+var plant_start_yaw := 0.0
+const PLANT_DURATION := .64
 var forehead_target := Vector3.ZERO
 var contact_time := 1.0
 const DURATION := [1.25,1.62]
@@ -150,6 +153,7 @@ func athlete(at: Vector3,color: String) -> Node3D:
 	actor.animator.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
 	actor.get_node("DirectionArrows").hide()
 	var turn_steps := preload("res://scripts/ground_turn_steps.gd").new()
+	turn_steps.name="GroundTurnSteps"
 	turn_steps.actor=actor
 	actor.skeleton.add_child(turn_steps)
 	actor.skeleton.add_child(preload("res://scripts/practice_joint_limits.gd").new())
@@ -411,8 +415,12 @@ func called() -> int:
 
 func reset_feed() -> void:
 	if solo_setting:
-		var angle := rotation_drill.random.randf()*TAU
-		camp_receive_spot=BASE+Vector3(cos(angle),0,sin(angle))*sqrt(rotation_drill.random.randf())
+		var rng = rotation_drill.random
+		var deep := setter.position.z > BASE.z-1.8
+		var depth := rng.randf_range(2.6,4.1) if deep else rng.randf_range(.0,.9)
+		camp_receive_spot=BASE+Vector3(rng.randf_range(.45,2.4),0,-depth)
+		plant_time=-1.
+		setter.skeleton.get_node("GroundTurnSteps").set_sequence(-1.,cpu_setting)
 		camp_velocity=Vector3.ZERO
 	refresh_scores()
 	pending_release = false
@@ -663,6 +671,7 @@ func _process(delta: float) -> void:
 	# turn budget per actor even when several actions change in one frame.
 	var dt := minf(delta,.05)
 	for actor: Node3D in before:
+		if actor==setter and cpu_setting and plant_time>=0.: continue
 		var old: float=before[actor]
 		var heading: float=focus_headings.get(actor,actor.rotation.y)
 		var change := angle_difference(old,heading)
@@ -685,35 +694,41 @@ func catch_pocket() -> Vector3:
 	return Contact.joint(setter,"Head")+Vector3.UP*.18+setter.global_basis.z*.10
 
 func receive_hand_lift(arrival: float) -> float:
+	if solo_setting and elapsed<arrival:
+		var distance_to_head := ball.position.distance_to(catch_pocket())
+		if elapsed<arrival*.5: return 0.
+		return (1.-smoothstep(.14,1.14,distance_to_head))*smoothstep(0.,.075,maxf(0.,clock-pressed_at))
 	var remaining := arrival-elapsed
 	var held_time := maxf(0.,clock-pressed_at)
 	var lift := .48*smoothstep(0.,.50,held_time)+.52*(1.-smoothstep(.035,.34,remaining))
 	return lift*smoothstep(0.,.12,held_time)
 
 func shape_catch_hands(lift := 1.) -> void:
+	if lift<=0.: return
 	Hands.apply(setter,ball.position,lift,Vector3.ZERO,0.,0.,false,Vector3.ZERO,0.,Vector3.INF,0.,true,-1.,null,Vector3.ZERO,true)
 	Contact.track_hands(setter,ball.position,true,lift)
 
 func move_to_camp_toss(delta: float) -> void:
-	var offset := (camp_receive_spot-catch_pocket()).slide(Vector3.UP)
-	# Approach behind the ball along the intended stance; finish under it.
-	var yaw := set_heading(setter,called())
-	var behind := -Vector3(sin(yaw),0,cos(yaw))
-	if phase=="feed" or (phase=="pass" and elapsed<contact_time*.4):
-		offset+=behind*.22*smoothstep(.25,.9,offset.length())
-	var pace := minf(3.5,sqrt(2.*7.*offset.length()))
-	camp_velocity=camp_velocity.move_toward(offset.normalized()*pace,7.*delta)
-	var before := setter.position
-	setter.position=rotation_drill.move_actor(setter,(camp_velocity*delta).limit_length(offset.length()))
-	var moved := setter.position-before
-	if moved.length()<.003:
-		setter.play_action("idle")
+	var footwork = setter.skeleton.get_node("GroundTurnSteps")
+	var target_yaw := set_heading(setter,called())
+	var stance := camp_receive_spot-Vector3(sin(target_yaw),0,cos(target_yaw))*.10
+	var offset := (stance-setter.position).slide(Vector3.UP)
+	if plant_time<0. and offset.length()>.16:
+		var pace := minf(4.6,sqrt(2.*12.*offset.length()))
+		camp_velocity=camp_velocity.move_toward(offset.normalized()*pace,12.*delta)
+		setter.position=rotation_drill.move_actor(setter,(camp_velocity*delta).limit_length(offset.length()))
+		setter.play_action("run")
+		focus_headings[setter]=atan2(offset.x,offset.z)
 		return
-	if not lateral_steps.has(setter): lateral_steps[setter]=preload("res://scripts/right_side_steps.gd").new(setter)
-	var local := setter.basis.orthonormalized().inverse()*moved.normalized()
-	var steps: RefCounted=lateral_steps[setter]
-	steps.advance(Vector2(-local.x,local.z),delta)
-	steps.apply_pose(1.)
+	if plant_time<0.:
+		plant_time=0.
+		plant_start_yaw=setter.rotation.y
+		setter.play_action("idle",.18)
+	plant_time=minf(PLANT_DURATION,plant_time+delta)
+	var fraction := plant_time/PLANT_DURATION
+	var turn := .22*smoothstep(0.,.38,fraction)+.78*smoothstep(.30,1.,fraction)
+	setter.rotation.y=lerp_angle(plant_start_yaw,target_yaw,turn)
+	footwork.set_sequence(fraction,true)
 
 func step_practice(delta: float) -> void:
 	setter.animator.advance(delta)
@@ -747,7 +762,7 @@ func step_practice(delta: float) -> void:
 	match phase:
 		"cart":
 			var incoming_ready := not jump.active and not squat.charging and (solo_setting or rotation_drill.walk(setter,BASE,delta,5.2))
-			if held>=0: Hands.apply(setter,catch_point,.18*smoothstep(0.,.5,clock-pressed_at))
+			if held>=0 and not solo_setting: Hands.apply(setter,catch_point,.18*smoothstep(0.,.5,clock-pressed_at))
 			var coach_ready := rotation_drill.station_ready(delta)
 			coach_goal = rotation_drill.basket.position+rotation_drill.FEED_SPOT
 			if coach_ready and incoming_ready and rotation_drill.floor_clear() and rotation_drill.take_ball():
@@ -767,8 +782,8 @@ func step_practice(delta: float) -> void:
 				change_feed_phase("feed")
 		"feed":
 			setter.animator.advance(0.0)
-			if cpu_setting: move_to_camp_toss(delta)
-			if held>=0: Hands.apply(setter,catch_point,.18*smoothstep(0.,.5,clock-pressed_at))
+			if cpu_setting: setter.play_action("idle")
+			if held>=0 and not solo_setting: Hands.apply(setter,catch_point,.18*smoothstep(0.,.5,clock-pressed_at))
 			ball.position = coach_motion.toss(coach,clampf((clock-maxf(clock-elapsed,next_release-.30))/.30,0,1))
 			track_feed_or_target(delta)
 			# Measure the athlete who actually arrived, including their rig scale.
@@ -779,13 +794,18 @@ func step_practice(delta: float) -> void:
 				forehead_target.x=camp_receive_spot.x
 				forehead_target.z=camp_receive_spot.z
 			catch_point=forehead_target+Vector3.UP*(.09+(.52 if jump_rep() else 0.))
-			if elapsed>=.30 and clock>=next_release and rotation_drill.floor_clear() and (not cpu_setting or (camp_receive_spot-catch_pocket()).slide(Vector3.UP).length()<.65):
+			if elapsed>=.30 and clock>=next_release and rotation_drill.floor_clear():
 				last_toss = clock
 				next_release = clock+2.0
 				if not demonstration: rotation_drill.tosses+=1
 				source = ball.position
 				toss_curve=[1.35,2.65,3.95][rotation_drill.tosses%3]*rotation_drill.random.randf_range(.91,1.09)
+				if solo_setting:
+					var run_distance := (camp_receive_spot-setter.position).slide(Vector3.UP).length()
+					var air_time := run_distance/4.0+.42+PLANT_DURATION+.30
+					toss_curve=maxf(3.2,9.81*air_time*air_time/8.)
 				var apex := maxf(source.y,catch_point.y)+toss_curve
+				if solo_setting: apex=minf(apex,8.15) # Leave clearance under the gym roof steel.
 				forehead_arrival=sqrt(2.*(apex-source.y)/9.81)+sqrt(2.*(apex-forehead_target.y)/9.81)
 				contact_time=sqrt(2.*(apex-source.y)/9.81)+sqrt(2.*(apex-catch_point.y)/9.81)
 				toss_spin=Vector3([-8.0,1.4,7.5][rotation_drill.tosses%3],rotation_drill.random.randf_range(-3,3),rotation_drill.random.randf_range(-2,2))
@@ -834,7 +854,7 @@ func step_practice(delta: float) -> void:
 			if automatic_setter() and held<0 and elapsed>=.07 and (contact_time+cpu_release_delay-elapsed<=turn_lead or (incoming.y<0 and ball.position.distance_to(catch_point)<=2.10)):
 				held = called()
 				pressed_at = clock
-			track_feed_or_target(delta)
+			if not cpu_setting: track_feed_or_target(delta)
 			if cpu_setting:
 				if held>=0: shape_catch_hands(receive_hand_lift(forehead_arrival))
 				if elapsed>=forehead_arrival:

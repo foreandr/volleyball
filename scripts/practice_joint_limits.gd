@@ -8,6 +8,7 @@ var excursion: Array[float]=[]
 var previous: Array[Quaternion]=[]
 var max_rate: Array[float]=[]
 
+var editor_bones: Array[Transform3D] = []
 var replay_bones: Array[Transform3D] = []
 
 func _process_modification() -> void:
@@ -39,26 +40,35 @@ func _process_modification() -> void:
 		previous[j]=q
 
 	enforce_court_floor(rig)
+	if not editor_bones.is_empty():
+		for i in rig.get_bone_count(): editor_bones[i]=rig.get_bone_pose(i)
+		editor_bones=[]
 	if not replay_bones.is_empty():
 		for i in rig.get_bone_count(): replay_bones[i] = rig.get_bone_pose(i)
 		replay_bones = []
 
 static var sole_hulls := {}
 
+static func sole_floor_gap(rig: Skeleton3D, side: String, ankle: Transform3D) -> float:
+	if not rig.has_meta("sole_"+side): return 0.
+	var sole: Node3D=rig.get_meta("sole_"+side)
+	if not sole: return 0.
+	var shoe := sole.get_child(0) as MeshInstance3D
+	if not sole_hulls.has(shoe.mesh):
+		sole_hulls[shoe.mesh]=shoe.mesh.create_convex_shape(true,false).points
+	var frame := ankle*sole.transform*shoe.transform
+	var gap := INF
+	for local: Vector3 in sole_hulls[shoe.mesh]:
+		var point := frame*local
+		gap=minf(gap,point.y-floor_height(point))
+	return gap
+
 func enforce_court_floor(rig: Skeleton3D) -> void:
 	var lift := 0.0
 	for side in ["l","r"]:
-		if not rig.has_meta("sole_"+side): continue
-		var sole: Node3D = rig.get_meta("sole_"+side)
-		if not sole: continue
-		var shoe := sole.get_child(0) as MeshInstance3D
-		if not sole_hulls.has(shoe.mesh):
-			sole_hulls[shoe.mesh] = shoe.mesh.create_convex_shape(true,false).points
 		var ankle := rig.find_bone("foot_"+side)
-		var frame := rig.global_transform * rig.get_bone_global_pose(ankle) * sole.transform * shoe.transform
-		for local: Vector3 in sole_hulls[shoe.mesh]:
-			var point := frame * local
-			lift = maxf(lift, floor_height(point)-point.y)
+		var frame := rig.global_transform*rig.get_bone_global_pose(ankle)
+		lift=maxf(lift,-sole_floor_gap(rig,side,frame))
 	for bone in ["Head","pelvis","spine_03","calf_l","calf_r","lowerarm_l","lowerarm_r","hand_l","hand_r","middle_03_l","middle_03_r"]:
 		var index := rig.find_bone(bone)
 		if index < 0: continue

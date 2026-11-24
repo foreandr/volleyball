@@ -195,3 +195,27 @@ func _input(event: InputEvent) -> void:
 	game_options.set_value("audio","muted",AudioServer.is_bus_mute(master))
 	save_options()
 	get_viewport().set_input_as_handled()
+
+func prepare_ready_frame_editor() -> void:
+	edit_entry={"id":"shared_ready","name":"Ready stance","category":"Setting","type":"Overhead"}
+	edit_animation=preload("res://assets/animations/goalkeeper_idle.tres")
+	animation_draft.clear()
+
+func add_saved_frame_picker(parent: Container, before_open: Callable) -> void:
+	var library := preload("res://scripts/volleyball_animations.gd")
+	var choices := library.custom_entries()
+	if choices.is_empty(): return
+	var picker := OptionButton.new()
+	picker.add_item("Open saved animation...")
+	for saved in choices: picker.add_item(saved.name)
+	parent.add_child(picker)
+	picker.item_selected.connect(func(index: int):
+		if index<1: return
+		var saved := choices[index-1]
+		var clip := load(saved.path) as Animation
+		if not clip: return
+		edit_entry=saved
+		edit_animation=clip
+		animation_draft.clear()
+		before_open.call()
+		MenuPresentation.load_scene("res://scenes/animation_editor.tscn"))

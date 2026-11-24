@@ -216,6 +216,9 @@ func build_controls(controls: VBoxContainer) -> void:
 	copy_button.name = "SaveCopy"
 	copy_button.custom_minimum_size.y = 44
 	controls.add_child(copy_button)
+	if str(entry.get("id","")).begins_with("custom_") and entry.has("path"):
+		controls.add_child(button("Copy animation file path",func():
+			DisplayServer.clipboard_set(ProjectSettings.globalize_path(entry.path))))
 
 func refresh_ball_angle() -> void:
 	ball_preview.configure(preview_player,session.source,session)
@@ -556,7 +559,9 @@ func save_copy() -> void:
 		if field.get_line_edit().has_focus(): field.apply()
 	var original := entry.duplicate()
 	if session.source.has_meta("editor_feed"): original.id = entry.get("source",entry.id)
-	var saved := Catalog.save_copy(session.bake(),original,copy_name.text)
+	var edited: Animation = session.bake()
+	edited.set_meta("editor_initial_frame",frame)
+	var saved := Catalog.save_copy(edited,original,copy_name.text)
 	if saved.is_empty():
 		var dialog := AcceptDialog.new()
 		dialog.dialog_text = "Unable to save animation."

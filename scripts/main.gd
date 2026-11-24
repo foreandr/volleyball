@@ -129,6 +129,10 @@ func show_settings() -> void:
 	soundtrack.toggled.connect(MenuPresentation.toggle_music)
 	column.add_child(soundtrack)
 	preload("res://scripts/xbox_controls.gd").settings(column,show_settings)
+	add_menu_button(column,"AnimationFrames","Animation Frames",func():
+		StorySession.prepare_ready_frame_editor()
+		go("animation_editor"))
+	StorySession.add_saved_frame_picker(column,func(): pass)
 	add_menu_button(column,"IterationLab","Iteration Lab",func(): go("iteration_lab"))
 	add_menu_button(column,"Back","Back",show_home)
 

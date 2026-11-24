@@ -180,7 +180,9 @@ func open_drill_rep(match_: Node3D, history: Array, rep: int, autoplay: bool) ->
 	return true
 
 func bake_actor(match_: Node3D, actor_index: int, title: String, contact_frame := -1, include_ball := false) -> Animation:
-	var actor: Node3D = match_.players[actor_index]
+	return bake_recorded_actor(match_.players[actor_index],actor_index,title,contact_frame,include_ball)
+
+func bake_recorded_actor(actor: Node3D, actor_index: int, title: String, contact_frame: int, include_ball: bool) -> Animation:
 	var start: Transform3D = frames[0].actors[actor_index].root
 	var rig_to_actor: Transform3D = actor.global_transform.affine_inverse()*actor.skeleton.global_transform
 	var root_bone: int = actor.skeleton.find_bone("root")

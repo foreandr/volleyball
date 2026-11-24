@@ -106,3 +106,4 @@ The shared natural ready stance raises the torso by 20 degrees while retaining i
 Grounded turns use longer alternating steps and keep the feet planted through small heading adjustments.
 Setters raise their hands during the hold and finish shaping them as the toss descends. Offline match setup remembers the selected ball brand and displays its panel colors on court.
 Grounded square-ups use a short right plant and a longer left swing. The hips finish turning with the left foot.
+In Setting Camp the CPU runs toward higher backcourt tosses and finishes each approach with one right-left plant. The hands rise within roughly a meter of the forehead. Pause Options can open Animation Frames on the recorded setter rep; saved copies retain the selected frame.

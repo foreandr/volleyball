@@ -105,6 +105,39 @@ func _exit_tree() -> void:
 	if active: get_tree().paused = false
 	if not camera.is_inside_tree(): camera.free()
 
+var setter_frames: Array[Dictionary] = []
+var rep_clock := 0.
+var last_toss := -INF
+var contact_index := -1
+
+func record_setter(delta: float) -> void:
+	if not game.solo_setting or game.phase not in ["pass","forehead_catch","set"]: return
+	if last_toss!=game.last_toss:
+		last_toss=game.last_toss
+		setter_frames.clear()
+		rep_clock=0.
+		contact_index=-1
+	rep_clock+=delta
+	var frame_count := mini(360,1+floori(rep_clock*60.))
+	if setter_frames.size()>=frame_count: return
+	var actor = game.setter
+	var pose: Array[Transform3D]=[]
+	for i in actor.skeleton.get_bone_count(): pose.append(actor.skeleton.get_bone_pose(i))
+	for modifier in actor.skeleton.get_children():
+		if "editor_bones" in modifier: modifier.editor_bones=pose
+	if game.phase in ["forehead_catch","set"] and contact_index<0: contact_index=setter_frames.size()
+	while setter_frames.size()<frame_count:
+		setter_frames.append({"time":setter_frames.size()/60.,"ball":game.ball.global_transform,
+			"actors":[{"root":actor.transform,"bones":pose}]})
+
+func edit_setter_frames() -> void:
+	var replay := preload("res://scripts/match_replay.gd").new()
+	replay.frames=setter_frames
+	replay.index=setter_frames.size()-1
+	StorySession.edit_animation=replay.bake_recorded_actor(game.setter,0,"Setter catch",contact_index,true)
+	StorySession.edit_entry={"id":"camp_setter_catch","name":"Setter catch","category":"Setting","type":"Overhead"}
+	StorySession.animation_draft.clear()
+
 func _process(delta: float) -> void:
 	if active:
 		if CareerSession.prompt.visible: return
@@ -112,6 +145,7 @@ func _process(delta: float) -> void:
 		var rise := float(Input.is_physical_key_pressed(KEY_E))-float(Input.is_physical_key_pressed(KEY_Q))
 		camera.global_position += (camera.global_basis*direction+Vector3.UP*rise).limit_length(1)*delta*5.0
 	elif not get_tree().paused:
+		record_setter(delta)
 		elapsed += delta
 		if elapsed >= SAMPLE_INTERVAL:
 			elapsed = fmod(elapsed,SAMPLE_INTERVAL)
