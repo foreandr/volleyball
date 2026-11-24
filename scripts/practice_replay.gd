@@ -47,9 +47,10 @@ func capture(rendered := false) -> Dictionary:
 			objects[obj.model] = [obj.model.transform,obj.model.visible]
 		elif obj != game.ball and obj is not RigidBody3D and obj not in game.rotation_drill.bins and obj != game.rotation_drill.basket: continue
 		objects[obj] = [obj.transform,obj.visible]
-	return {"objects":objects,"poses":poses}
+	return {"objects":objects,"poses":poses,"whistle_height":game.coach_motion.raised}
 
 func apply(sample: Dictionary) -> void:
+	game.coach_motion.raised = sample.whistle_height
 	for obj in live.objects:
 		if not is_instance_valid(obj): continue
 		if not sample.objects.has(obj):

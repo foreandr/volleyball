@@ -340,6 +340,7 @@ func leave() -> void:
 	MenuPresentation.load_scene("res://scenes/story.tscn")
 
 func start_practice() -> void:
+	coach_motion.signal_drill(coach)
 	coach.position = rotation_drill.basket.position + rotation_drill.FEED_SPOT
 	rotation_drill.advance_turn()
 	skip_time = 0
@@ -498,6 +499,15 @@ var focus_headings := {}
 
 var changing_turn := false
 
+func cpu_aims_inside(id: int) -> bool:
+	var remaining := 9
+	var needed := 3 if id == 1 else 4
+	for entry in scorecard:
+		if entry.setter == id:
+			remaining -= 1
+			if entry.made: needed -= 1
+	return remaining > 0 and rotation_drill.random.randi_range(1,remaining) <= needed
+
 func change_setter(skipping: bool) -> void:
 	changing_turn = true
 	skip.hide()
@@ -516,7 +526,7 @@ func change_setter(skipping: bool) -> void:
 		for entry in scorecard:
 			if entry.setter == 1: done += 1
 		for i in range(done,9):
-			var made := rotation_drill.random.randf() < 0.6
+			var made := cpu_aims_inside(1)
 			scorecard.append({"setter":1,"target":ORDER[i%3],"station":i/3,"made":made,"error":0.22 if made else 1.65})
 		if not save_scorecard():
 			scorecard.assign(previous)
@@ -545,6 +555,7 @@ func _process(delta: float) -> void:
 	timing_note.visible = clock < timing_until and phase != "complete" and not settings.visible
 	score_strip.visible=phase not in ["intro","net_guide"] and not settings.visible and (not demonstration or phase=="complete")
 	if settings.visible or phase=="net_guide": return
+	if coach_motion.step_whistle(coach,delta): return
 	if phase=="complete":
 		clock+=delta
 		rotation_drill.huddle(delta)
@@ -915,8 +926,9 @@ func release(index: int) -> void:
 	if not demonstration:
 		endpoint+=facing_scatter(setter,target)
 	if rotation_drill.turn!=0 and not demonstration:
-		var scatter := .22 if rotation_drill.random.randf()<.60 else 1.65
-		endpoint += Vector3(rotation_drill.random.randf_range(-scatter,scatter),0,rotation_drill.random.randf_range(-scatter,scatter))
+		var angle := rotation_drill.random.randf()*TAU
+		var distance := rotation_drill.random.randf_range(.03,.15) if cpu_aims_inside(rotation_drill.turn) else rotation_drill.random.randf_range(.82,1.55)
+		endpoint = PINS[target]+Vector3(cos(angle),0,sin(angle))*distance
 	elif not demonstration:
 		# Poor releases can carry past the pin into the tape or court.
 		var late := clampf((absf(set_error)-.065)/.135,0,1)
@@ -1063,6 +1075,7 @@ func rankings() -> Array:
 	return table
 
 func complete() -> void:
+	coach_motion.signal_drill(coach)
 	for net in targets: net.beacon.hide()
 	begin("complete")
 	refresh_scores()
