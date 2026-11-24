@@ -96,6 +96,8 @@ var gym := preload("res://scripts/tryout_gym.gd").new()
 var seats_in_use: Array[RefCounted] = []
 var last_contact := -100.0
 var cushion := 0.0
+var early_switch_until := -1.0
+var roll_time := -1.0
 var drop_velocity := Vector3.ZERO
 var old_palms := {}
 var jump := preload("res://scripts/setter_jump.gd").new()
@@ -405,6 +407,8 @@ func build_hud() -> void:
 	skip.hide()
 
 func begin(next: String) -> void:
+	early_switch_until=-1.
+	if next=="drop": roll_time=-1.
 	trace("phase",{"next":next})
 	update_prompts(next)
 	meter.hide()
@@ -1131,6 +1135,10 @@ func play_bump(previous: Vector3, incoming: Vector3, dt: float) -> void:
 	message.text=feedback
 
 func step_practice(delta: float) -> void:
+	if phase=="pass" and early_switch_until>=0. and clock>=early_switch_until:
+		measured_release=true
+		set_grade_until=clock+.65
+		miss("Too early for contact.")
 	if solo_setting and not cpu_setting: aim_bump(Vector2(axis(JOY_AXIS_RIGHT_X),axis(JOY_AXIS_RIGHT_Y)))
 	setter.skeleton.set_meta("fast_set_push",phase=="set_contact" and elapsed+delta>SET_RECEIVE_TIME or phase=="set" and elapsed<.04)
 	setter.animator.advance(delta)
@@ -1314,6 +1322,10 @@ func step_practice(delta: float) -> void:
 					if bump_touched or phase!="pass": return
 				miss("Ball reached the floor outside platform reach." if floor_hit else "Toss deflected off the gym equipment.")
 				drop_velocity = (incoming/maxf(.001,delta)).bounce(obstacle.normal)*.45
+				if floor_hit:
+					roll_time=0.
+					drop_velocity.y=0.
+					ball.position.y+=.004
 				return
 			if elapsed<0.16: coach_motion.toss(coach,1.0)
 			ball.position.y = maxf(0.15,ball.position.y)
@@ -1470,14 +1482,13 @@ func step_practice(delta: float) -> void:
 					drop_velocity = velocity
 					return
 		"drop":
-			if not demonstration:
-				rotation_drill.free_ball(drop_velocity)
-				begin("between")
-				message.text = feedback
-			else:
-				drop_velocity.y-=9.81*delta
-				ball.position+=drop_velocity*delta
-				if ball.position.y<.16: begin("result")
+			advance_missed_ball(delta)
+			if roll_time>=.5:
+				if demonstration: begin("result")
+				else:
+					rotation_drill.free_ball(drop_velocity)
+					begin("between")
+					message.text=feedback
 		"result":
 			if success: ball.position = endpoint-Vector3.UP*minf(targets[target].depth-.12,elapsed*3.1)
 			if elapsed>(.045 if solo_setting else .08) and (not demonstration or not jump.active):
@@ -1543,6 +1554,31 @@ func play_intro(delta: float) -> void:
 			skip.hide()
 			start_practice()
 
+func advance_missed_ball(delta: float) -> void:
+	var remaining := delta
+	while remaining>.00001:
+		var dt := minf(remaining,1./120.)
+		remaining-=dt
+		if roll_time<0.:
+			drop_velocity.y-=9.81*dt
+		else:
+			roll_time+=dt
+			drop_velocity=drop_velocity.move_toward(Vector3.ZERO,1.5*dt)
+		var motion := drop_velocity*dt
+		var hit := contacts.sweep(world,contacts.ball_shape,ball.position,motion,Contact.GYM|Contact.EQUIPMENT|64|rotation_drill.CART_WALL)
+		ball.position+=motion*float(hit.get("fraction",1.))
+		if roll_time<0. and ((not hit.is_empty() and hit.normal.y>.8 and ball.position.y<.25) or ball.position.y<=Contact.BALL_RADIUS+.004):
+			roll_time=0.
+			ball.position.y=maxf(ball.position.y,Contact.BALL_RADIUS+.004)+.003
+			drop_velocity=drop_velocity.slide(Vector3.UP)*.72
+		elif not hit.is_empty():
+			ball.position+=Vector3(hit.normal)*.004
+			drop_velocity=drop_velocity.bounce(hit.normal)*.45
+			if roll_time>=0.: drop_velocity.y=0.
+		var flat := drop_velocity.slide(Vector3.UP)
+		if flat.length_squared()>.0001:
+			ball.rotate(Vector3.UP.cross(flat).normalized(),flat.length()*dt/Contact.BALL_RADIUS)
+
 func finish_set() -> void:
 	if success and not demonstration:
 		if rotation_drill.turn==0:
@@ -1550,7 +1586,11 @@ func finish_set() -> void:
 		for i in seats_in_use.size():
 			seats_in_use[i].celebrate(i,rep%8==0)
 		trace("bleacher_applause",{"completed":rep})
-	begin("result")
+	if success:
+		begin("result")
+	else:
+		if phase=="set": drop_velocity=(endpoint-source-Vector3.UP*4.*APEX[tempo])/flight_time
+		begin("drop")
 	message.text = feedback
 	if not success and measured_release: show_timing(set_error)
 
@@ -1632,7 +1672,12 @@ func release(index: int) -> void:
 		if not automatic_setter():
 			set_error = signf(raw_offset)*maxf(0.,absf(raw_offset)-ON_TIME)
 			trace("set_button_up",{"raw_offset_s":raw_offset,"held_s":input_hold,"ball":str(ball.position),"head":str(Contact.joint(setter,"Head"))})
-		if not automatic_setter() and (raw_offset < -(timing_window()+.065) or raw_offset>late_contact_limit() or not toss_in_reach()):
+		if not automatic_setter() and raw_offset < -(timing_window()+.065):
+			# Allow the thumb to cross between face buttons before committing an early miss.
+			early_switch_until=clock+.14
+			held=-1
+			return
+		if not automatic_setter() and (raw_offset>late_contact_limit() or not toss_in_reach()):
 			measured_release=true
 			set_grade_until=clock+.65
 			miss("Out of reach." if not toss_in_reach() else ("Too early for contact." if raw_offset<0. else "Too late for contact."))
@@ -1929,6 +1974,7 @@ func _input(event: InputEvent) -> void:
 		trace("target_unavailable",{"target":TARGETS[index],"down":event.is_pressed()})
 		if phase=="ground": message.text = "Call the next toss"
 	elif event.is_pressed():
+		early_switch_until=-1.
 		if solo_setting:
 			bump_aim=Vector3.ZERO
 			bump_released=false
