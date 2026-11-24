@@ -132,7 +132,8 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 		scalp.transform=rest.affine_inverse()*Transform3D(Basis.IDENTITY,rest.origin)
 		var hair := Color.from_hsv(.065+.004*variant,.42,.13+.065*(variant%6))
 		haircut(scalp,hair,variant,actor)
-		if variant%4==1: compression(rig,"hand_l","middle_01_l",.042,.041,Color("d6cdc0"))
+		if variant%5!=4:
+			tape_hand(rig,"l" if variant%2==0 else "r",1+variant%3,variant%4==1)
 		if variant%3==2: compression(rig,"lowerarm_r","hand_r",.061,.042,Color("252e35"))
 
 	reshape_build(rig,coach,variant)
@@ -335,6 +336,40 @@ static func number_texture(number: int) -> Texture2D:
 		img.blit_rect(sheet,Rect2i(int(digits[i])*96,0,96,144),Vector2i(i*96,0))
 	img.generate_mipmaps()
 	return ImageTexture.create_from_image(img)
+
+# Separate wraps follow their own finger bones, leaving the joints free.
+static func tape_hand(rig: Skeleton3D,side: String,count: int,palm_wrap: bool) -> void:
+	var cloth := StandardMaterial3D.new()
+	cloth.albedo_color=Color("e5e0d3")
+	cloth.roughness=.98
+	for i in count:
+		var digit: String=["index","middle","ring"][i]
+		var bone := digit+"_01_"+side
+		var joint := rig.get_bone_rest(rig.find_bone(digit+"_02_"+side)).origin
+		var radius := clampf(joint.length()*.38,.012,.017)
+		tape_band(rig,bone,joint*.52,joint.normalized(),radius,radius,joint.length()*.60,cloth)
+	if palm_wrap:
+		var frame := rig.get_bone_global_rest(rig.find_bone("hand_"+side)).affine_inverse()
+		var index: Vector3=frame*rig.get_bone_global_rest(rig.find_bone("index_01_"+side)).origin
+		var pinky: Vector3=frame*rig.get_bone_global_rest(rig.find_bone("pinky_01_"+side)).origin
+		var axis := (index+pinky).normalized()
+		tape_band(rig,"hand_"+side,(index+pinky)*.33,axis,index.distance_to(pinky)*.86,.033,.030,cloth,(index-pinky).slide(axis).normalized())
+
+static func tape_band(rig: Skeleton3D,bone: String,center: Vector3,axis: Vector3,width: float,depth: float,height: float,cloth: Material,across := Vector3.ZERO) -> void:
+	var mount := BoneAttachment3D.new()
+	mount.bone_name=bone
+	rig.add_child(mount)
+	var band := CylinderMesh.new()
+	band.top_radius=1.
+	band.bottom_radius=1.04
+	band.height=1.
+	band.radial_segments=24
+	var part := MeshInstance3D.new()
+	part.mesh=band
+	part.material_override=cloth
+	mount.add_child(part)
+	var basis_ := Basis(Quaternion(Vector3.UP,axis)) if across.is_zero_approx() else Basis(across,axis,across.cross(axis))
+	part.transform=Transform3D(basis_*Basis.from_scale(Vector3(width,height,depth)),center)
 
 static func compression(rig: Skeleton3D,bone: String,child: String,upper: float,lower: float,color: Color) -> void:
 	var socket := BoneAttachment3D.new()
