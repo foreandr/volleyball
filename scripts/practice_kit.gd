@@ -544,7 +544,8 @@ static func haircut(scalp: Node3D,color: Color,variant: int,actor: Node3D) -> vo
 	var rng := RandomNumberGenerator.new()
 	rng.seed=217+variant
 	actor.hair_length=.022+.009*style
-	for i in 1080:
+	var lock_count := 3600 if style==1 else 1080
+	for i in lock_count:
 		var y := rng.randf()
 		var a := rng.randf()*TAU
 		var radial := sqrt(1.-y*y)
@@ -582,10 +583,17 @@ static func haircut(scalp: Node3D,color: Color,variant: int,actor: Node3D) -> vo
 		var length: float = actor.hair_length*length_factor*rng.randf_range(.75,1.25)
 		var width := rng.randf_range(.005,.011)
 		var pigment := rng.randf_range(.65,1.)
+		if style==1:
+			# Interleave short underlayers with fine surface locks so daylight
+			# cannot reveal the lattice beneath a lifted forelock.
+			var layer := rng.randf()
+			length*=lerpf(.62,1.,layer)
+			width*=lerpf(1.05,.42,layer)
+			pigment*=lerpf(.72,1.,layer)
 		var coiled := style in [2,6]
 		var lift := .28
 		if style==1: lift+=.27*smoothstep(-.45,.42,normal.z)*crown
-		var rows := 9 if coiled else 4
+		var rows := 9 if coiled else (8 if style==1 else 4)
 		for row in rows:
 			for uv: Vector2 in [Vector2(0,0),Vector2(1,0),Vector2(0,1),Vector2(1,0),Vector2(1,1),Vector2(0,1)]:
 				var t := (row+uv.y)/float(rows)
