@@ -135,7 +135,10 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 			var length := shoulder.distance_to(elbow)+elbow.distance_to(hand_point)
 			var aim_weight := smoothstep(0.0,1.0,set_extension)
 			var release_direction := local_push.normalized()
-			release_direction=release_direction.slerp(spine_axis,backset)
+			# Let the arms follow the launch tangent within a safe overhead reach.
+			var angle := spine_axis.angle_to(release_direction)
+			if backset>0. and angle>deg_to_rad(16.):
+				release_direction=release_direction.slerp(spine_axis,backset*(1.-deg_to_rad(16.)/angle))
 			var set_axis := release_direction
 			set_axis = (set_axis-Vector3.RIGHT*sign_*(0.055*backset+0.24*frontset)).normalized()
 			var direction := (wrist-shoulder).normalized().slerp(set_axis,lerpf(0.65,1.0,backset)*aim_weight)

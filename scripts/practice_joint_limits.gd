@@ -48,6 +48,10 @@ func _process_modification() -> void:
 		for joint in grip:
 			var target: Quaternion=grip[joint][0].slerp(grip[joint][1],follow)
 			rig.set_bone_pose_rotation(joint,rig.get_bone_pose_rotation(joint).slerp(target,rig.get_meta("grip_open",1.)))
+		var back_grip: float=rig.get_meta("back_grip",0.)
+		if back_grip>0.:
+			for side in ["l","r"]:
+				orient_back_palm(rig,side,back_grip,rig.get_meta("back_extension",0.))
 	enforce_court_floor(rig)
 	if not editor_bones.is_empty():
 		for i in rig.get_bone_count(): editor_bones[i]=rig.get_bone_pose(i)
@@ -55,6 +59,23 @@ func _process_modification() -> void:
 	if not replay_bones.is_empty():
 		for i in rig.get_bone_count(): replay_bones[i] = rig.get_bone_pose(i)
 		replay_bones = []
+
+func orient_back_palm(rig: Skeleton3D, side: String, weight: float, extension: float) -> void:
+	var hand := rig.find_bone("hand_"+side)
+	var frame := rig.get_bone_global_pose(hand)
+	var fingers := rig.get_bone_global_pose(rig.find_bone("middle_01_"+side)).origin-frame.origin
+	var across := rig.get_bone_global_pose(rig.find_bone("index_01_"+side)).origin-rig.get_bone_global_pose(rig.find_bone("pinky_01_"+side)).origin
+	var sign_ := 1. if side=="l" else -1.
+	var normal := (Vector3.UP-Vector3.RIGHT*sign_*lerpf(.42,.045,extension)).normalized()
+	var fingertips := Vector3(sign_*.32,0.,-1.).slide(normal).normalized()
+	var solver=preload("res://scripts/hand_setting_pose.gd")
+	var desired: Basis=solver.hand_basis(fingertips,normal.cross(fingertips)*sign_)*solver.hand_basis(fingers,across).inverse()*frame.basis
+	var parent := rig.get_bone_global_pose(rig.get_bone_parent(hand))
+	var local := (parent.basis.inverse()*desired).orthonormalized().get_rotation_quaternion()
+	var neutral_hand := rig.get_bone_rest(hand).basis.orthonormalized().get_rotation_quaternion()
+	var angle := neutral_hand.angle_to(local)
+	if angle>deg_to_rad(95.): local=neutral_hand.slerp(local,deg_to_rad(95.)/angle)
+	rig.set_bone_pose_rotation(hand,rig.get_bone_pose_rotation(hand).slerp(local,weight))
 
 static var sole_hulls := {}
 

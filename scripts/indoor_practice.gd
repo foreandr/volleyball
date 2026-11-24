@@ -909,6 +909,13 @@ func step_practice(delta: float) -> void:
 		follow=flat*smoothstep(0.,.045,elapsed)+(1.-flat)*smoothstep(.165,.235,elapsed)
 		follow*=1.-smoothstep(.26,.42,elapsed)
 	setter.skeleton.set_meta("wrist_follow",follow)
+	var back_grip := 0.
+	if phase=="pass" and held==2:
+		back_grip=receive_hand_lift(contact_time)
+	elif target==2 and phase in ["set_contact","set"]:
+		back_grip=1.-smoothstep(.12,.26,elapsed) if phase=="set" else 1.
+	setter.skeleton.set_meta("back_grip",back_grip)
+	setter.skeleton.set_meta("back_extension",smoothstep(SET_RECEIVE_TIME,SET_RECEIVE_TIME+push_time,elapsed) if phase=="set_contact" else (1. if phase=="set" else 0.))
 	if not jump.active and (not automatic_setter() or not jump_rep()):
 		if phase=="pass":
 			standing_set_load(smoothstep(contact_time-.24,contact_time,elapsed))
@@ -1138,6 +1145,7 @@ func step_practice(delta: float) -> void:
 				ball.position=fingers+Vector3.UP*.060
 				if elapsed>=SET_RECEIVE_TIME+push_time:
 					source=ball.position
+					push_axis=(endpoint-source+Vector3.UP*4.*APEX[tempo]).normalized()
 					var flight_age := elapsed-SET_RECEIVE_TIME-push_time
 					begin("set")
 					elapsed=maxf(0.,flight_age)
@@ -1401,7 +1409,7 @@ func release(index: int) -> void:
 	if not automatic_setter(): show_timing(set_error)
 	trace("set",{"requested":TARGETS[called()],"actual":TARGETS[target],"made":success,"error_m":error})
 	receive_local=setter.to_local(ball.position)
-	push_axis=((endpoint-source).slide(Vector3.UP).normalized()*.60+Vector3.UP*.80).normalized()
+	push_axis=(endpoint-source+Vector3.UP*4.*APEX[tempo]).normalized()
 	shape_catch_hands()
 	begin("set_contact")
 
