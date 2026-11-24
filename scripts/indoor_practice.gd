@@ -34,7 +34,11 @@ var spectator_text := Label.new()
 var spectator_icon := TextureRect.new()
 var timing_note := Label.new()
 var timing_until := 0.0
-var buffered_early := false
+const ON_TIME := .065
+const HAND_CUSHION := .18
+var pending_release := false
+var input_hold := 0.0
+var contact_local := Vector3.ZERO
 var measured_release := false
 var spectator_progress := ProgressBar.new()
 var keyboard_prompt := true
@@ -359,7 +363,7 @@ func called() -> int:
 
 func reset_feed() -> void:
 	refresh_scores()
-	buffered_early = false
+	pending_release = false
 	measured_release = false
 	placement_error=10.
 	success=false
@@ -690,6 +694,14 @@ func step_practice(delta: float) -> void:
 				jump.height=.52
 				jump.air_time=jump.flight_duration(.52,true)
 				jump.release()
+			if held>=0 and first_contact>=0 and not demonstration and rotation_drill.turn==0:
+				if clock-first_contact <= HAND_CUSHION:
+					ball.position=setter.to_global(contact_local)-Vector3.UP*cushion*smoothstep(0,HAND_CUSHION,clock-first_contact)
+					Hands.apply(setter,ball.position,1.0)
+					Contact.track_hands(setter,ball.position)
+					return
+				miss("Held through contact. Release as the ball reaches your hands.")
+				return
 			var previous := ball.position
 			ball.position = source.lerp(forehead_target,elapsed/forehead_arrival)+Vector3.UP*(4.905*elapsed*(forehead_arrival-elapsed))
 			var incoming := ball.position-previous
@@ -727,17 +739,25 @@ func step_practice(delta: float) -> void:
 					var hand := Contact.joint(setter,bone)
 					if Contact.touched(previous,ball.position,old_palms.get(bone,hand),hand): collided = true
 					old_palms[bone] = hand
+			if held>=0 and not demonstration and rotation_drill.turn==0 and incoming.y<0:
+				# Cover the space between the palms as well as individual fingers.
+				var pocket := Contact.joint(setter,"Head")+setter.global_basis.z*.095+Vector3.UP*.24
+				var closest := Geometry3D.get_closest_point_to_segment(pocket,previous,ball.position)
+				if closest.distance_to(pocket)<.19:
+					collided=true
+					ball.position=closest
 			if collided and last_contact<0:
+				contact_local=setter.to_local(ball.position)
 				first_contact = clock
 				last_contact = clock
 				cushion = clampf(previous.distance_to(ball.position)/maxf(delta,.001)*.012,.02,.10)
-				trace("palm_contact",{"held":held,"give_m":cushion})
+				trace("palm_contact",{"held":held,"give_m":cushion,"ball":str(ball.position),"head":str(Contact.joint(setter,"Head"))})
 				if held<0:
 					miss("Loose ball off the hands.")
 					drop_velocity += setter.basis.z*.85
 					return
 			if collided: last_contact = clock
-			if buffered_early and collided:
+			if pending_release and collided:
 				release(held)
 				return
 			if held>=0 and clock-last_contact<.11:
@@ -892,7 +912,7 @@ func timing_window() -> float:
 
 # Predict arrival in flight, then anchor the cue to the hands cushioning the ball.
 func release_offset() -> float:
-	if first_contact>=0: return clock-first_contact-.045
+	if first_contact>=0: return clock-first_contact-.055
 	return elapsed-contact_time
 
 func set_fill() -> float:
@@ -909,16 +929,21 @@ func set_fill() -> float:
 func release(index: int) -> void:
 	if phase!="pass" or held!=index: return
 	graded_fill=set_fill()
-	if not buffered_early:
-		set_error = release_offset()
-		if first_contact < 0 and not demonstration and rotation_drill.turn == 0 and set_error < 0 and set_error >= -(timing_window()+0.065):
-			buffered_early = true
+	if not pending_release:
+		var raw_offset := release_offset()
+		set_error = raw_offset
+		input_hold=clock-pressed_at
+		if rotation_drill.turn==0 and not demonstration:
+			set_error = signf(raw_offset)*maxf(0.,absf(raw_offset)-ON_TIME)
+			trace("set_button_up",{"raw_offset_s":raw_offset,"held_s":input_hold,"ball":str(ball.position),"head":str(Contact.joint(setter,"Head"))})
+		if first_contact < 0 and not demonstration and rotation_drill.turn == 0 and raw_offset <= ON_TIME and raw_offset >= -(timing_window()+0.065):
+			pending_release = true
 			measured_release = true
 			return
-	buffered_early = false
+	pending_release = false
 	measured_release = true
 	set_grade_until=clock+.65
-	trace("release",{"target":TARGETS[index],"held_s":clock-pressed_at,"alignment":set_alignment(setter,index),"timing_error":set_error,"air_m":setter.position.y-BASE.y})
+	trace("release",{"target":TARGETS[index],"held_s":input_hold,"alignment":set_alignment(setter,index),"timing_error":set_error,"air_m":setter.position.y-BASE.y})
 	held = -1
 	var skill := float(setter.attributes.get("Hand setting",40))/100
 	var gap := Vector2(setter.position.x-catch_point.x,setter.position.z-catch_point.z).length()
@@ -927,7 +952,7 @@ func release(index: int) -> void:
 	if not demonstration and rotation_drill.turn==0:
 		if jump_rep() and airborne<.20: technique_feedback="Jump set requested. Jump before contact."
 		elif not jump_rep() and airborne>.12: technique_feedback="Standing set requested. Stay planted."
-		if first_contact<0 or clock-last_contact>minf(.17,timing_window()):
+		if first_contact<0 or clock-last_contact>HAND_CUSHION:
 			miss("No hand contact. Get under the ball before release.")
 			return
 		if set_error < -(timing_window()+0.065) or set_error > timing_window() or gap>0.72+0.36*skill:
@@ -1193,6 +1218,7 @@ func _input(event: InputEvent) -> void:
 		trace("target_unavailable",{"target":TARGETS[index],"down":event.is_pressed()})
 		if phase=="ground": message.text = "Call the next toss"
 	elif event.is_pressed():
+		pending_release = false
 		held = index
 		pressed_at = clock
 		message.text = "Preparing   /   "+TARGETS[index]
