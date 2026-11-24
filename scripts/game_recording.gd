@@ -15,12 +15,28 @@ var stream_length_at := 0
 var next_frame := 0
 var last_jpeg := PackedByteArray()
 var cleanup_at := 0
+var clock_label := Label.new()
 
 func _ready() -> void:
 	if DisplayServer.get_name()=="headless" or OS.get_cmdline_args().has("-s") or OS.get_cmdline_args().has("--script"):
 		set_process(false)
 		return
 	process_mode=Node.PROCESS_MODE_ALWAYS
+	var overlay := CanvasLayer.new()
+	overlay.layer=100
+	add_child(overlay)
+	overlay.add_child(clock_label)
+	clock_label.position=Vector2(12,10)
+	clock_label.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	clock_label.add_theme_font_size_override("font_size",19)
+	var plate := StyleBoxFlat.new()
+	plate.bg_color=Color("10191fdb")
+	plate.set_corner_radius_all(4)
+	plate.content_margin_left=8
+	plate.content_margin_right=8
+	plate.content_margin_top=2
+	plate.content_margin_bottom=2
+	clock_label.add_theme_stylebox_override("normal",plate)
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(FOLDER))
 	prune()
 
@@ -110,6 +126,8 @@ func finish() -> void:
 func _process(_dt: float) -> void:
 	var now := Time.get_ticks_msec()
 	if now<next_frame: return
+	var tenth := int(Time.get_unix_time_from_system()*10.)%10
+	clock_label.text="%s.%d"%[Time.get_time_string_from_system(),tenth]
 	if now>=cleanup_at:
 		prune()
 		cleanup_at=now+30000
