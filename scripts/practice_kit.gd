@@ -648,6 +648,10 @@ static func haircut(scalp: Node3D,color: Color,variant: int,actor: Node3D) -> vo
 			length*=lerpf(.62,1.,layer)
 			width*=lerpf(1.05,.42,layer)
 			pigment*=lerpf(.72,1.,layer)
+		# The green channel stores compliance relative to the simulated guide length.
+		# Cropped sides track the scalp while long tips lag behind a head turn.
+		var compliance := clampf(length/actor.hair_length,.12,1.6)/1.6
+		if style==5: compliance*=.45
 		var coiled := style in [2,6]
 		var lift := .10 if style==5 else .28
 		if style==1: lift+=.27*smoothstep(-.45,.42,normal.z)*crown
@@ -682,7 +686,7 @@ static func haircut(scalp: Node3D,color: Color,variant: int,actor: Node3D) -> vo
 				tool.set_tangent(Plane(tangent,1.))
 				tool.set_uv(Vector2(uv.x,t))
 				tool.set_uv2(Vector2(normal.x,normal.z)*.5+Vector2.ONE*.5)
-				tool.set_color(Color(pigment,0,0))
+				tool.set_color(Color(pigment,compliance,0))
 				tool.add_vertex(root+sweep*length*t+normal*(curl+.002+.003*t)+across*(lateral+(uv.x-.5)*width*(1.-.87*t)))
 	# Gather longer cuts into a wrapped knot at the back of the crown.
 	# Each ribbon coils around the tie; overlap keeps the interior opaque.
@@ -702,7 +706,7 @@ static func haircut(scalp: Node3D,color: Color,variant: int,actor: Node3D) -> vo
 					var tangent := Vector3(-sin(lon),0,cos(lon))
 					tool.set_normal(n)
 					tool.set_tangent(Plane(tangent,1.))
-					tool.set_color(Color(pigment,0,0))
+					tool.set_color(Color(pigment,.06,0))
 					tool.set_uv(Vector2(corner.x,t*.38))
 					tool.set_uv2(Vector2(.5,.05))
 					tool.add_vertex(center+n*radius*(1.+.06*sin(PI*t)))

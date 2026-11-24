@@ -17,7 +17,7 @@ void vertex(){
 	// Slide loose ends along the scalp when a head turn drives them inward.
 	vec3 outward=normalize(vec3(radial.x,sqrt(max(0.,1.-dot(radial,radial))),radial.y));
 	motion-=outward*min(dot(outward,motion),0.);
-	VERTEX+=tips*motion;
+	VERTEX+=tips*motion*(COLOR.g*1.6);
 }
 void fragment(){
 	float strand=UV.x*42.+sin(UV.y*7.+phase)*.65;
