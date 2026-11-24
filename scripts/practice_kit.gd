@@ -244,7 +244,12 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 	void fragment(){
 
 		// A bound side vent gives the cuff clearance over the outside of the thigh.
-		float vent= .034*(1.-smoothstep(0.,.020,abs(depth+.018)))*smoothstep(.145,.19,abs(rest.x));
+		float side=smoothstep(.135,.19,abs(rest.x));
+		// Dolphin hems sweep upward over the outer thigh. The rear panel hangs lower.
+		float vent_depth=depth+.018;
+		float vent_span=mix(.047,.080,smoothstep(-.012,.012,vent_depth));
+		float sweep=1.-smoothstep(0.,vent_span,abs(vent_depth));
+		float vent=side*(.043*sweep+.009*smoothstep(.01,.095,vent_depth));
 		float edge_height=rest.y-hem_y-vent;
 		if(edge_height<-.001) discard;
 		float hem=1.-smoothstep(.005,.009,edge_height);
@@ -397,7 +402,7 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		anatomy=vec3(abs(UV2.x),y,COLOR.r);
 		loads=vec2(flex,UV2.x>0.?calf_load.x:calf_load.y);
 	}
-	void fragment(){if(y>hem_y+.039 || y<.070)discard; ALBEDO=texture(skin_map,UV).rgb; NORMAL_MAP=texture(muscles,UV).rgb; NORMAL_MAP_DEPTH=.68; ROUGHNESS=mix(.42,.86,texture(roughness_map,UV).r);
+	void fragment(){if(y>hem_y+.055 || y<.070)discard; ALBEDO=texture(skin_map,UV).rgb; NORMAL_MAP=texture(muscles,UV).rgb; NORMAL_MAP_DEPTH=.68; ROUGHNESS=mix(.42,.86,texture(roughness_map,UV).r);
 		float yarn=.5+.5*cos(y*1250.)*(1.-smoothstep(.0007,.003,fwidth(y)));
 		float sock_mask=1.-smoothstep(sock_top,sock_top+.003,y);
 		float pad_mask=enabled_side*(1.-smoothstep(.087,.091,abs(y-knee_height)));
