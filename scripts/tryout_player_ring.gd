@@ -98,7 +98,6 @@ func draw_player(actor: Node3D,human: bool) -> void:
 		if spent>0.: draw_rect(Rect2(origin+Vector2(available,0),Vector2(spent,7)),Color("51cbe9"))
 		var caption := "Stamina %d/100" % roundi(energy.value)
 		if energy.action!="": caption+="   %s -%d" % [energy.action,ceili(energy.action_cost)]
-		elif actor==game.setter: caption+="   Set %d/%d" % [roundi(actor.effective_rating("Hand setting")),roundi(actor.attributes["Hand setting"])]
 		var text_pos := origin+Vector2(-48,22)
 		draw_string_outline(ThemeDB.fallback_font,text_pos,caption,HORIZONTAL_ALIGNMENT_CENTER,200,13,4,ink)
 		draw_string(ThemeDB.fallback_font,text_pos,caption,HORIZONTAL_ALIGNMENT_CENTER,200,13)
