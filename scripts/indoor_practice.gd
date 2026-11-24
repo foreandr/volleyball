@@ -368,10 +368,12 @@ func update_prompts(next: String) -> void:
 		"complete": entries = [[JOY_BUTTON_A,"Continue"]]
 		"ground": entries = [[JOY_BUTTON_LEFT_SHOULDER,"Next toss"],[JOY_BUTTON_START,"Settings"]]
 		_:
-			for i in BUTTONS.size(): entries.append([BUTTONS[i],TARGETS[i]])
+			if solo_setting: entries.append([BUTTONS[0],"Hold to set to 4"])
+			else:
+				for i in BUTTONS.size(): entries.append([BUTTONS[i],TARGETS[i]])
 			entries.append_array([["RS","Set height"],[JOY_BUTTON_LEFT_STICK,"Show / hide arc"],[JOY_BUTTON_A,"Hold / release jump"],["LT","Focus"],["RT","Sprint"],[JOY_BUTTON_START,"Settings"]])
 	if solo_setting:
-		if cpu_setting: entries=[[JOY_BUTTON_START,"Settings"]]
+		if cpu_setting: entries=[[BUTTONS[0],"CPU set to 4"],[JOY_BUTTON_START,"Settings"]]
 		entries.push_front(["View","Take control" if cpu_setting else "Watch CPU set"])
 	Xbox.prompts(controls_row,entries)
 
@@ -407,18 +409,32 @@ func start_practice() -> void:
 	if rotation_drill.turn == 1: say(coach, "%s, you're up first." % setter.display_name,4.0)
 
 func jump_rep() -> bool:
-	if solo_setting: return not cpu_setting and (rep/3)%2==1
+	if solo_setting: return rep%2==1
 	return demo_index%2==1 if demonstration else rotation_drill.round_index==1
 
 func called() -> int:
+	if solo_setting: return 0 # Outside pin, position four.
 	return ORDER[demo_index if demonstration else rotation_drill.attempts]
+
+func choose_camp_toss() -> Vector3:
+	var rng = rotation_drill.random
+	var start := Vector3(setter.position.x,BASE.y,setter.position.z)
+	for attempt in 64:
+		var spot := Vector3(rng.randf_range(-5.85,5.85),BASE.y,rng.randf_range(-5.85,1.8))
+		var distance := start.distance_to(spot)
+		if distance<1.5 or distance>4.65: continue
+		var clear := true
+		for obstacle in [coach,rotation_drill.basket]:
+			var center := Vector3(obstacle.position.x,BASE.y,obstacle.position.z)
+			if Geometry3D.get_closest_point_to_segment(center,start,spot).distance_to(center)<1.35:
+				clear=false
+				break
+		if clear: return spot
+	return start
 
 func reset_feed() -> void:
 	if solo_setting:
-		var rng = rotation_drill.random
-		var deep := setter.position.z > BASE.z-1.8
-		var depth := rng.randf_range(2.6,4.1) if deep else rng.randf_range(.0,.9)
-		camp_receive_spot=BASE+Vector3(rng.randf_range(.45,2.4),0,-depth)
+		camp_receive_spot=choose_camp_toss()
 		plant_time=-1.
 		setter.skeleton.get_node("GroundTurnSteps").set_sequence(-1.,cpu_setting)
 		camp_velocity=Vector3.ZERO
@@ -448,7 +464,7 @@ func reset_feed() -> void:
 	ball.visible = demonstration or rotation_drill.issued!=null
 	apply_camera()
 	if demonstration: title.text="COACH DEMO   /   %d OF 3" % (demo_index+1)
-	message.text = TARGETS[called()]+"    /    "+("Jump set" if jump_rep() else "Standing set")
+	message.text = ("Position 4" if solo_setting else TARGETS[called()])+"    /    "+("Jump set" if jump_rep() else "Standing set")
 	if not demonstration:
 		var made := 0
 		for attempt in scorecard:
@@ -546,7 +562,9 @@ func move_setter(delta: float,actor: Node3D=setter,off_ball := false) -> bool:
 	sprint=sprint and energy[actor].can_sprint()
 	if sprint and not direction.is_zero_approx(): energy[actor].spend(delta*25)
 	var speed := (4.1 if sprint else 2.35) if focus else (6.2 if sprint else 4.3)
+	var previous_position := actor.position
 	actor.position = rotation_drill.move_actor(actor,direction*delta*speed)
+	if solo_setting and not off_ball: camp_velocity=(actor.position-previous_position)/maxf(.001,delta)
 	if not off_ball: actor.position.z = minf(actor.position.z,3.65)
 	var at_net := absf(actor.position.z-4.)<1.55 and absf(direction.x)>absf(direction.z)*1.35 and not sprint
 	var focus_point := ball.position if ball.visible else coach.position
@@ -708,16 +726,47 @@ func shape_catch_hands(lift := 1.) -> void:
 	Hands.apply(setter,ball.position,lift,Vector3.ZERO,0.,0.,false,Vector3.ZERO,0.,Vector3.INF,0.,true,-1.,null,Vector3.ZERO,true)
 	Contact.track_hands(setter,ball.position,true,lift)
 
+func player_jump_carry() -> Vector3:
+	if phase!="pass" or camp_velocity.length()<.25: return camp_velocity
+	# Intersect the descending toss with the forehead along this charged jump.
+	var last_gap := ball.position.y-catch_pocket().y
+	for frame in range(1,ceili(jump.air_time*120.)):
+		var t := frame/120.
+		var flight := t/jump.air_time
+		var toss_t := elapsed+t
+		var toss := source.lerp(forehead_target,toss_t/forehead_arrival)+Vector3.UP*(4.905*toss_t*(forehead_arrival-toss_t))
+		var head := forehead_target.y+.055+4.*jump.height*flight*(1.-flight)
+		var gap := toss.y-head
+		if last_gap>=0. and gap<=0. and t>.05:
+			var offset := (toss-catch_pocket()).slide(Vector3.UP)
+			var needed := offset/t
+			if needed.dot(camp_velocity)>0.:
+				return camp_velocity.move_toward(needed,minf(.85,camp_velocity.length()*.25))
+			break
+		last_gap=gap
+	return camp_velocity
+
 func move_to_camp_toss(delta: float) -> void:
 	var footwork = setter.skeleton.get_node("GroundTurnSteps")
 	var target_yaw := set_heading(setter,called())
 	var stance := camp_receive_spot-Vector3(sin(target_yaw),0,cos(target_yaw))*.10
 	var offset := (stance-setter.position).slide(Vector3.UP)
-	if plant_time<0. and offset.length()>.16:
-		var pace := minf(4.6,sqrt(2.*12.*offset.length()))
-		camp_velocity=camp_velocity.move_toward(offset.normalized()*pace,12.*delta)
+	var moving_jump := jump_rep() and rep%4==3 and not cpu_jump_started
+	if moving_jump:
+		var remaining := maxf(.08,contact_time+cpu_release_delay-elapsed-.07)
+		var pace := minf(6.2,offset.length()/remaining)
+		camp_velocity=camp_velocity.move_toward(offset.normalized()*pace,14.*delta)
 		setter.position=rotation_drill.move_actor(setter,(camp_velocity*delta).limit_length(offset.length()))
-		setter.play_action("run")
+		setter.play_action("base/Sprint" if camp_velocity.length()>4.4 else "run")
+		focus_headings[setter]=target_yaw if remaining<.95 else atan2(offset.x,offset.z)
+		return
+	if plant_time<0. and offset.length()>.16:
+		var available := maxf(.15,contact_time-elapsed-PLANT_DURATION-(cpu_jump_lead if jump_rep() else .08))
+		var max_pace := 6.2 if offset.length()/available>3.8 else 4.0
+		var pace := minf(max_pace,sqrt(2.*14.*offset.length()))
+		camp_velocity=camp_velocity.move_toward(offset.normalized()*pace,14.*delta)
+		setter.position=rotation_drill.move_actor(setter,(camp_velocity*delta).limit_length(offset.length()))
+		setter.play_action("base/Sprint" if camp_velocity.length()>4.4 else "run")
 		focus_headings[setter]=atan2(offset.x,offset.z)
 		return
 	if plant_time<0.:
@@ -754,6 +803,9 @@ func step_practice(delta: float) -> void:
 	var lead := (ball.position-Vector3(0,1.6,1.0))*Vector3(0.10,0.08,0.055)
 	camera_lead = camera_lead.lerp(lead.limit_length(0.5),1.0-exp(-3.2*delta))
 	apply_camera()
+	if solo_setting and squat.charging:
+		camp_velocity=camp_velocity.move_toward(Vector3.ZERO,3.5*delta)
+		setter.position=rotation_drill.move_actor(setter,camp_velocity*delta)
 	squat.update(setter,delta)
 	squat.ring.hide()
 	if jump.active: jump.step(setter,delta,Vector2.ZERO)
@@ -802,7 +854,7 @@ func step_practice(delta: float) -> void:
 				toss_curve=[1.35,2.65,3.95][rotation_drill.tosses%3]*rotation_drill.random.randf_range(.91,1.09)
 				if solo_setting:
 					var run_distance := (camp_receive_spot-setter.position).slide(Vector3.UP).length()
-					var air_time := run_distance/4.0+.42+PLANT_DURATION+.30
+					var air_time := run_distance/4.8+.45+PLANT_DURATION+(.48 if jump_rep() else .30)
 					toss_curve=maxf(3.2,9.81*air_time*air_time/8.)
 				var apex := maxf(source.y,catch_point.y)+toss_curve
 				if solo_setting: apex=minf(apex,8.15) # Leave clearance under the gym roof steel.
@@ -822,6 +874,11 @@ func step_practice(delta: float) -> void:
 				jump.begin_set_jump(setter,.07,.52)
 				jump.height=.52
 				jump.air_time=jump.flight_duration(.52,true)
+				if cpu_setting and rep%4==3:
+					var air_remaining := maxf(.08,contact_time+cpu_release_delay-elapsed-jump.load_duration())
+					var aim := set_heading(setter,called())
+					var stance := camp_receive_spot-Vector3(sin(aim),0,cos(aim))*.10
+					jump.carry_velocity=((stance-setter.position).slide(Vector3.UP)/air_remaining).limit_length(camp_velocity.length()+.4)
 				jump.release()
 			if held>=0 and first_contact>=0 and not automatic_setter():
 				if clock-first_contact <= HAND_CUSHION:
@@ -835,11 +892,12 @@ func step_practice(delta: float) -> void:
 			var flight_t := minf(elapsed,forehead_arrival) if cpu_setting else elapsed
 			ball.position = source.lerp(forehead_target,flight_t/forehead_arrival)+Vector3.UP*(4.905*flight_t*(forehead_arrival-flight_t))
 			if cpu_setting:
-				# In catch practice the final handoff follows the animated forehead;
-				# retain the horizontal approach and avoid a one-frame attachment snap.
-				var receive := catch_pocket()+Vector3.UP*CATCH_GIVE
-				var settle := smoothstep(forehead_arrival-.23,forehead_arrival,flight_t)
-				ball.position+=(receive-forehead_target)*settle
+				var release_time := contact_time+cpu_release_delay
+				var receive := catch_pocket()+Vector3.UP*.055
+				var settle := smoothstep(release_time-.16,release_time,elapsed)
+				var correction := receive-ball.position
+				var lateral := correction.slide(Vector3.UP).limit_length(.22)
+				ball.position+=(lateral+Vector3.UP*correction.y)*settle
 			var incoming := ball.position-previous
 			var obstacle := contacts.sweep(world,contacts.ball_shape,previous,incoming,Contact.GYM|Contact.EQUIPMENT|64|rotation_drill.CART_WALL)
 			if not obstacle.is_empty():
@@ -855,12 +913,10 @@ func step_practice(delta: float) -> void:
 				held = called()
 				pressed_at = clock
 			if not cpu_setting: track_feed_or_target(delta)
+			elif jump.active: focus_headings[setter]=set_heading(setter,called())
 			if cpu_setting:
-				if held>=0: shape_catch_hands(receive_hand_lift(forehead_arrival))
-				if elapsed>=forehead_arrival:
-					catch_start_local=setter.to_local(ball.position)
-					begin("forehead_catch")
-					message.text="Forehead catch   /   "+TARGETS[called()]
+				if held>=0: shape_catch_hands(receive_hand_lift(contact_time+cpu_release_delay))
+				if elapsed>=contact_time+cpu_release_delay: release(called())
 				return
 			if held>=0:
 				meter.value = set_fill()*100
@@ -1368,6 +1424,7 @@ func _input(event: InputEvent) -> void:
 				message.text = "Release in green to jump"
 		elif squat.charging:
 			message.text = squat.release(setter,jump)
+			if solo_setting: jump.carry_velocity=player_jump_carry()
 			trace("jump_release",{"seconds":squat.seconds,"quality":message.text,"height":jump.height})
 		get_viewport().set_input_as_handled()
 		return
@@ -1377,6 +1434,7 @@ func _input(event: InputEvent) -> void:
 			if event.button_index==Xbox.physical(BUTTONS[i]): index = i
 	elif event is InputEventKey: index = KEYS.find(event.keycode)
 	if index<0: return
+	if solo_setting and index!=0: return
 	if phase not in ["cart","walk","feed","pass"]:
 		trace("target_unavailable",{"target":TARGETS[index],"down":event.is_pressed()})
 		if phase=="ground": message.text = "Call the next toss"

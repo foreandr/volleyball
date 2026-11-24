@@ -26,6 +26,7 @@ var air_time := FULL_AIR_TIME
 var start: Vector3
 var heading: Vector3
 var stride := 0.0
+var carry_velocity := Vector3.ZERO
 var air_velocity := Vector3.ZERO
 var air_offset := Vector3.ZERO
 const LEAD_STEP_TIME := 0.24
@@ -69,6 +70,7 @@ func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time
 	height = TAP_HEIGHT
 	elapsed = 0.0
 	air_velocity = Vector3.ZERO
+	carry_velocity = Vector3.ZERO
 	air_offset = Vector3.ZERO
 	start = actor.position
 	var travel := Vector3(-input.x,0,input.y)
@@ -181,7 +183,7 @@ func release() -> void:
 	held = false
 
 func horizontal_velocity() -> Vector3:
-	return air_velocity+heading*(stride*AIR_TRAVEL_FRACTION/air_time+attack_glide*glide_speed())
+	return carry_velocity+air_velocity+heading*(stride*AIR_TRAVEL_FRACTION/air_time+attack_glide*glide_speed())
 
 func glide_speed() -> float:
 	return (1.0-smoothstep(0.46,0.66,elapsed-load_duration()))/0.46
@@ -204,7 +206,7 @@ func step(actor: Node3D, delta: float, input: Vector2) -> void:
 	if air_delta > 0.0:
 		var steering := Vector3(-input.x,0.0,input.y).limit_length()*AIR_STEER_SPEED
 		air_velocity = air_velocity.move_toward(steering,AIR_STEER_ACCELERATION*air_delta)
-		air_offset += air_velocity*air_delta
+		air_offset += (carry_velocity+air_velocity)*air_delta
 	var flight := clampf((elapsed-load_time)/air_time,0.0,1.0)
 	var pose_time := minf(maxf(0.0,elapsed-lead_time),load_time-lead_time)*LOAD_TIME/(load_time-lead_time)+maxf(0.0,elapsed-load_time)
 	var first := smoothstep(0.015,0.12,pose_time)
