@@ -780,22 +780,23 @@ func reach_for_toss(lift: float) -> void:
 	var lateral := (ball.position-pocket).slide(Vector3.UP)
 	var distance := lateral.length()
 	var vertical := ball.position.y-pocket.y
-	var weight := lift*(1.-smoothstep(.63,.83,distance))*(1.-smoothstep(.36,1.2,absf(vertical)))
+	var head_gap := (ball.position-Contact.joint(setter,"Head")).slide(Vector3.UP).length()
+	var weight := lift*(1.-smoothstep(.76,1.02,head_gap))*(1.-smoothstep(.48,1.45,absf(vertical)))
 	if weight<=0. or distance<.045: return
 	var rig: Skeleton3D=setter.skeleton
 	var author: RefCounted=setter.get_pose_author()
 	var pose: Array=[]
 	for i in rig.get_bone_count(): pose.append(rig.get_bone_pose(i))
 	var axis := (rig.global_basis.inverse()*Vector3.UP.cross(lateral.normalized())).normalized()
-	var bend := deg_to_rad(26.)*smoothstep(.045,.48,distance)*weight
+	var bend := deg_to_rad(36.)*smoothstep(.08,.70,distance)*weight
 	for spine in ["spine_01","spine_02"]:
 		author.rotate_world(pose,spine,axis,bend*.5)
 		var id := rig.find_bone(spine)
 		rig.set_bone_pose_rotation(id,pose[id].basis.orthonormalized().get_rotation_quaternion())
 	var target_point := extended_receive_point()
-	target_point+=(ball.position-target_point).slide(Vector3.UP).limit_length(.34)
-	target_point.y=clampf(ball.position.y,target_point.y-.18,target_point.y+.13)
-	Contact.track_hands(setter,target_point,true,weight,136.)
+	target_point+=(ball.position-target_point).slide(Vector3.UP).limit_length(.66)
+	target_point.y=clampf(ball.position.y,pocket.y-.36,pocket.y+.15)
+	Contact.track_hands(setter,target_point,true,weight,159.,.68)
 
 func jump_modifier() -> bool:
 	var id := pad()

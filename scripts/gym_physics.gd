@@ -57,7 +57,7 @@ static func joint(actor: Node3D,bone: String) -> Vector3:
 static func palm(actor: Node3D,side: String) -> Vector3:
 	return joint(actor,"hand_"+side).lerp(joint(actor,"middle_01_"+side),.80)
 
-static func track_hands(actor: Node3D,ball: Vector3,catching := false,weight := 1.0,elbow_limit := 180.) -> void:
+static func track_hands(actor: Node3D,ball: Vector3,catching := false,weight := 1.0,elbow_limit := 180., reach_step := .45) -> void:
 	var rig: Skeleton3D = actor.skeleton
 	var author: RefCounted = actor.get_pose_author()
 	var pose: Array = []
@@ -68,7 +68,7 @@ static func track_hands(actor: Node3D,ball: Vector3,catching := false,weight := 
 		var shoulder := "upperarm_"+str(side)
 		var midpoint: Vector3 = author.point(pose,wrist).lerp(author.point(pose,"middle_01_"+side),.80)
 		var wanted := rig.to_local(ball+actor.global_basis.x*sign_*.082+Vector3.DOWN*.060)
-		var offset: Vector3 = (wanted-midpoint).limit_length(.45)*weight
+		var offset: Vector3 = (wanted-midpoint).limit_length(reach_step)*weight
 		author.limb(pose,shoulder,"lowerarm_"+str(side),wrist,author.point(pose,wrist)+offset,Vector3(sign_*.65,-.55,-.25),1.,elbow_limit)
 		for name_ in [shoulder,"lowerarm_"+str(side)]:
 			var idx := rig.find_bone(name_)
