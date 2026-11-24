@@ -98,6 +98,15 @@ func open_sliders() -> void:
 			break
 
 func tuning_controls() -> void:
+	var timing_label := Label.new()
+	timing_label.text="CPU release timing"
+	body.add_child(timing_label)
+	var timing := OptionButton.new()
+	for choice in ["Natural","Early","On time","Late"]:
+		timing.add_item(choice)
+	timing.select(game.cpu_timing_mode)
+	timing.item_selected.connect(game.set_cpu_timing_mode)
+	body.add_child(timing)
 	var athlete = game.setter
 	var range_label := Label.new()
 	var refresh := func(): range_label.text="Set range    Medium %.1f m    High %.1f m" % [game.camp_range(0),game.camp_range(1)]

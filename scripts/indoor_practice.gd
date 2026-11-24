@@ -100,6 +100,7 @@ var jump := preload("res://scripts/setter_jump.gd").new()
 var cpu_setting := false
 var cpu_bump := false
 var cpu_jump_lead := .40
+var cpu_timing_mode := 0
 var cpu_release_delay := 0.
 var cpu_jump_started := false
 
@@ -116,6 +117,18 @@ func plan_cpu_timing() -> void:
 	var clean_chance: float = setter.effective_rating("Forearm setting" if cpu_bump and cpu_setting else "Hand setting")/100. if solo_setting else .32
 	if rng.randf()>clean_chance:
 		cpu_release_delay=rng.randf_range(.012,.055)*(-1. if rng.randf()<.5 else 1.)
+
+	if cpu_setting and cpu_timing_mode!=0:
+		cpu_release_delay=cpu_preview_offset()
+
+func cpu_preview_offset() -> float:
+	# Late forearm contact must still happen above the floor on fast feeds.
+	return [-0.14,0.0,0.065][cpu_timing_mode-1] if cpu_bump else [-0.10,0.0,0.10][cpu_timing_mode-1]
+
+func set_cpu_timing_mode(mode: int) -> void:
+	cpu_timing_mode=mode
+	if cpu_setting and phase=="pass" and not bump_released:
+		plan_cpu_timing()
 
 var demonstration := false
 
@@ -961,6 +974,7 @@ func aim_bump(stick: Vector2) -> void:
 			if phase=="pass":
 				bump_offset=release_offset()
 				show_timing(signf(bump_offset)*maxf(0.,absf(bump_offset)-BUMP_ON_TIME))
+				trace("bump_release",{"offset_ms":roundi(bump_offset*1000.),"early_limit_ms":roundi(-(timing_window()+.065)*1000.),"setter":str(setter.position),"ball":str(ball.position)})
 				graded_fill=set_fill()
 				grade_band=timing_band()
 				grade_contact=contact_band()
@@ -980,9 +994,16 @@ func aim_bump(stick: Vector2) -> void:
 	message.text="Bump set"
 
 func play_bump(previous: Vector3, incoming: Vector3, dt: float) -> void:
-	var predicted := toss_at(bump_arrival)
+	var intercept_time := bump_arrival
+	if bump_released and bump_offset<0. and not reception_pose.low_save.active:
+		# Buffer the early command to the first descending, shoulder-high intercept.
+		var shoulder_height: float=setter.position.y+setter.height_cm*.0081
+		var vy := (forehead_target.y-source.y)/forehead_arrival+4.905*forehead_arrival
+		var upper_time := (vy+sqrt(maxf(0.,vy*vy-19.62*(shoulder_height-source.y))))/9.81
+		intercept_time=clampf(bump_arrival+bump_offset,upper_time,bump_arrival)
+	var predicted := toss_at(intercept_time)
 	var offset: Vector3=predicted-reception_pose.ready_contact()
-	var remaining := bump_arrival-elapsed
+	var remaining := intercept_time-elapsed
 	var sampler=reception_pose
 	var distance := offset.slide(Vector3.UP).length()
 	if not bump_touched and remaining<.5 and sampler.reach.is_empty() and not sampler.low_save.active:
@@ -1004,7 +1025,7 @@ func play_bump(previous: Vector3, incoming: Vector3, dt: float) -> void:
 				remaining=bump_arrival-elapsed
 				predicted=toss_at(bump_arrival)
 				energy[setter].spend(energy[setter].DIVE_COST,"Dive")
-	var sample_time: float=sampler.contact_frame+minf(0.,elapsed-bump_arrival)
+	var sample_time: float=sampler.contact_frame+minf(0.,-remaining)
 	sampler.apply_pose(maxf(0.,sample_time),1.-smoothstep(.17,.52,remaining))
 	if sampler.low_save.active:
 		var before := setter.position
@@ -1034,6 +1055,8 @@ func play_bump(previous: Vector3, incoming: Vector3, dt: float) -> void:
 	if remaining<.38 and not sampler.low_save.active:
 		var platform_height: float= setter.position.y+setter.height_cm*.0055
 		var tracking := toss_at(elapsed+.025)
+		if bump_released and bump_offset<0. and elapsed<intercept_time+.07:
+			tracking=predicted
 		tracking.y=clampf(tracking.y,setter.position.y+.27,setter.position.y+setter.height_cm*.0081)
 		var low := smoothstep(.05,.52,platform_height-tracking.y)
 		sampler.reach_platform(tracking-sampler.platform_center(),1.-smoothstep(.055,.38,remaining),.77,true,false,low)
