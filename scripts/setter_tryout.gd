@@ -278,7 +278,9 @@ func reset_feed() -> void:
 	begin("cart" if not demonstration else "walk")
 	coach_goal = rotation_drill.basket.position+rotation_drill.HANDLE
 	squat.cancel()
-	jump.active = false
+	if jump.active:
+		jump.active=false
+		setter.position.y=BASE.y
 	last_flick = 0
 	flick_at = -10
 	if demonstration: setter.position = BASE
@@ -391,7 +393,7 @@ func _process(delta: float) -> void:
 		flick_at = clock
 	match phase:
 		"cart":
-			var incoming_ready := rotation_drill.walk(setter,BASE,delta,5.2)
+			var incoming_ready := not jump.active and not squat.charging and rotation_drill.walk(setter,BASE,delta,5.2)
 			var coach_ready := rotation_drill.station_ready(delta)
 			coach_goal = rotation_drill.basket.position+rotation_drill.HANDLE
 			if coach_ready and incoming_ready and rotation_drill.floor_clear() and rotation_drill.take_ball():
@@ -518,7 +520,7 @@ func _process(delta: float) -> void:
 				if ball.position.y<.16: begin("result")
 		"result":
 			if success: ball.position = endpoint-Vector3.UP*minf(targets[target].depth-.12,elapsed*3.1)
-			if elapsed>.08:
+			if elapsed>.08 and (not demonstration or not jump.active):
 				if demonstration:
 					demo_index+=1
 					if demo_index>=4: demonstration=false
@@ -527,7 +529,7 @@ func _process(delta: float) -> void:
 					rotation_drill.free_ball(Vector3.DOWN*.4 if success else (endpoint-source).normalized()*2.9)
 					begin("between")
 		"between":
-			if elapsed>.025:
+			if elapsed>.025 and not jump.active and not free_jump.active:
 				if rotation_drill.attempts==1: next_release = maxf(next_release,last_toss+3.5)
 				rotation_drill.advance_turn()
 				if rep>=32: complete()
