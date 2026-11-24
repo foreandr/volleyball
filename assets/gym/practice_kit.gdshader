@@ -4,6 +4,10 @@ uniform vec4 fabric : source_color;
 uniform vec4 trim : source_color;
 uniform sampler2D lettering : source_color,filter_linear_mipmap_anisotropic;
 uniform sampler2D team_crest : source_color,filter_linear_mipmap_anisotropic;
+uniform vec3 hem_particles[12];
+uniform float hem_shift;
+uniform bool tucked;
+uniform vec4 waist_color : source_color;
 uniform bool jacket = false;
 
 uniform vec3 inertia;
@@ -37,6 +41,16 @@ float back_flap(vec3 p){
 void vertex(){
 	// Capture the undistorted garment coordinates from UV2 for animated tailoring.
 	rest=vec3(UV2, COLOR.r*0.6-0.3);
+	vec3 body_point=VERTEX;
+	vec3 body_normal=normalize(NORMAL);
+	if(!jacket){
+		float lower=1.-smoothstep(1.02,1.29,rest.y);
+		float section=fract(atan(rest.x,rest.z+.018)/6.2831853+1.)*12.;
+		int i=int(floor(section))%12;
+		VERTEX+=lower*(tucked?.12:1.)*mix(hem_particles[i],hem_particles[(i+1)%12],fract(section));
+		VERTEX.y+=lower*(tucked?0.:hem_shift);
+		if(tucked) VERTEX-=NORMAL*.043*(1.-smoothstep(1.04,1.14,rest.y));
+	}
 	float freedom=1.-smoothstep(1.04,1.48,rest.y);
 	VERTEX+=freedom*(inertia*.38+NORMAL*max(0.,dot(inertia,NORMAL))*.85)*(jacket?.65:1.);
 	if(!jacket){
@@ -72,14 +86,28 @@ void vertex(){
 		// Gather the loose shell into the narrower elastic at the wrist.
 		float cuff=smoothstep(.625,.65,abs(rest.x));
 		float gather=sin(rest.x*168.+rest.z*51.)*exp(-pow(abs(abs(rest.x)-.616)/.031,2.));
-		float shell_clearance=jacket ? (.009-.012*cuff+.0045*gather+.006*back_flap(rest)) : mix(.0015,.009,smoothstep(.12,.95,COLOR.g));
+		float strap=smoothstep(1.455,1.55,rest.y)*(1.-smoothstep(.18,.22,abs(rest.x)));
+		float shell_clearance=jacket ? (.009-.012*cuff+.0045*gather+.006*back_flap(rest)) : mix(.022,.004,strap);
 		VERTEX+=NORMAL*(shell_clearance+folds+.022*ease+(jacket ? motion*(.006+.012*ease)*sin(rest.x*24.+rest.y*15.-TIME*12.) : 0.));
+	}
+	if(!jacket){
+		// Both layers use the same body vertices and bone weights. Resolve inward
+		// displacement against the animated skin after gravity, drag and tailoring.
+		// The shorts are a second layer beneath an untucked hem.
+		float waist=1.-smoothstep(1.055,1.19,rest.y);
+		float clearance=.0035+(tucked?.009:.045)*waist;
+		if(tucked) VERTEX=mix(body_point+body_normal*clearance,VERTEX,smoothstep(1.064,1.115,rest.y));
+		float gap=dot(VERTEX-body_point,body_normal);
+		VERTEX+=body_normal*max(0.,clearance-gap);
 	}
 }
 void fragment(){
 	float x=abs(rest.x), y=rest.y;
+	float hemline=tucked?1.033:.997;
+	if(!jacket && (y<hemline || x>.249)) discard;
 	float neckline=1.572-.041*(1.-smoothstep(.022,.108,x))*smoothstep(-.085,.09,rest.z);
 	{
+		if(!jacket && y>neckline-.009) discard;
 		if(jacket){
 			if(x>.69 || y<1.012 || y>neckline) discard;
 		}
@@ -190,8 +218,8 @@ void fragment(){
 		float binding_width=1.-smoothstep(.005,.009,-cut);
 		base=mix(base,trim.rgb,binding_width*.82);
 		// Distance to the fitted neckline follows its asymmetric front and back.
-		float neck_band=1.-smoothstep(.31,.41,COLOR.b);
-		float seam=1.-smoothstep(.028,.082,abs(COLOR.b-.37));
+		float neck_band=1.-smoothstep(.007,.014,neckline-.009-y);
+		float seam=1.-smoothstep(.028,.082,abs((neckline-.009-y-.012)*32.));
 		float ribs=cos(atan(rest.z+.018,rest.x)*112.);
 		float resolved_ribs=1.-smoothstep(.001,.004,fwidth(rest.x)+fwidth(rest.z));
 		base=mix(base,trim.rgb*(1.+.085*ribs*resolved_ribs),neck_band);
@@ -223,7 +251,7 @@ void fragment(){
 	ALBEDO=base*(1.+.04*weave*fade);
 	float knit=sin(rest.x*1650.+sin(y*1300.))*cos(y*1300.);
 	if(!jacket){
-		float from_edge=COLOR.a*.040;
+		float from_edge=y-hemline;
 		float twin=min(abs(from_edge-.010),abs(from_edge-.014));
 		float seam=1.-smoothstep(.00055,.0014+fwidth(from_edge),twin);
 		float facing=1.-smoothstep(.013,.018,from_edge);
@@ -274,8 +302,8 @@ void fragment(){
 	ROUGHNESS=mix(ROUGHNESS,.52,wet);
 	if(!jacket){
 		vec3 yarn=texture(knit_surface,UV*31.).rgb;
-		float cuff=1.-smoothstep(.20,.42,COLOR.g);
-		float stitches=(1.-smoothstep(.035,.11,abs(COLOR.g-.28)))*(.6+.4*yarn.b);
+		float cuff=0.;
+		float stitches=0.;
 		ALBEDO*=mix(.97,1.03,yarn.b)*(1.-.12*cuff-.18*stitches);
 		NORMAL_MAP.xy+=(yarn.rg-.5)*.28;
 		ROUGHNESS=clamp(ROUGHNESS+.08*(yarn.b-.5)-.025*cuff,0.,1.);
@@ -283,6 +311,13 @@ void fragment(){
 	// Transfer film bridges the yarn valleys while retaining broad folds.
 	NORMAL_MAP.xy=mix(NORMAL_MAP.xy,vec2(.5),.39*print_coverage);
 	ROUGHNESS=mix(ROUGHNESS,.53,print_coverage);
+	// The elastic waistband is the outer layer when the shirt is tucked.
+	if(!jacket && tucked && y<1.073){
+		float band_aa=max(.0005,fwidth(y));
+		float edge=1.-smoothstep(.0008,.0008+band_aa,abs(y-1.069));
+		ALBEDO=waist_color.rgb*(.87+.18*edge+.045*weave*fade);
+		ROUGHNESS=.87;
+	}
 	RIM=.16;
 	RIM_TINT=.32;
 	SPECULAR=.28;

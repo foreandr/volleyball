@@ -69,6 +69,7 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 			kit.shader=FABRIC
 			kit.set_shader_parameter("knit_surface",preload("res://assets/gym/training_knit.png"))
 			actor.shirt_fabric=kit
+			if not coach: actor.hem_cloth=preload("res://scripts/jersey_hem.gd").new()
 			actor.jersey_origin=actor.global_position
 			actor.jersey_materials.append(kit)
 			kit.set_shader_parameter("phase",variant*1.79)
@@ -81,7 +82,7 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 			var torso: MeshInstance3D=original.find_child("SuperHero_Male",true,false)
 			var shell := MeshInstance3D.new()
 			var skin_surface := tailored_surface(torso.mesh,0,coach)
-			shell.mesh=skin_surface if coach else preload("res://assets/characters/volleyball/training_tee/fitted.res")
+			shell.mesh=skin_surface
 			original.free()
 			shell.skin=node.skin
 			rig.add_child(shell)
@@ -270,6 +271,8 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		float eyelet=1.-smoothstep(.12,.36,length(fract(cell)-.5));
 		vec3 insert=accent.rgb*(1.12-.49*detail*eyelet*(1.-hem));
 		ALBEDO=mix(cloth.rgb,insert,panel);
+		float waistband=smoothstep(.984,.992,rest.y);
+		ALBEDO*=1.-waistband*(.19+.055*cos(rest.y*1130.));
 		ALBEDO=mix(ALBEDO,cloth.rgb*1.55,hem*.75);
 		float topstitch=1.-smoothstep(.00065,.0015+fwidth(edge_height),abs(edge_height-.006));
 		ALBEDO*=1.-.21*topstitch;
@@ -335,6 +338,7 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 	part.mesh=tailored
 	material.set_shader_parameter("leg_number",number)
 	actor.shorts_fabric=material
+	actor.shirt_fabric.set_shader_parameter("waist_color",material.get_shader_parameter("cloth"))
 	part.skin = outfit.skin
 	rig.add_child(part)
 	part.skeleton = part.get_path_to(rig)
@@ -374,7 +378,7 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		float width=mix(.0035,.0075,bend);
 		return max(1.-smoothstep(.0015,width,line),.72*(1.-smoothstep(.001,width*.8,lower_line)));
 	}
-	uniform float sock_top; uniform vec4 sock_trim:source_color; uniform float striped;
+	uniform int ankle_support; uniform int knee_support; uniform float sock_top; uniform vec4 sock_trim:source_color; uniform float striped;
 	uniform vec4 pad_color:source_color;
 	varying vec3 anatomy;
 	varying vec2 loads;
@@ -391,7 +395,7 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		y=UV2.y;
 		float flex=UV2.x>0.?knee_flex.x:knee_flex.y;
 		float k=y-knee_height;
-		float enabled=UV2.x>0.?padded.x:padded.y;
+		float enabled=knee_support==0 ? (UV2.x>0.?padded.x:padded.y) : 0.;
 		enabled_side=enabled;
 		pad=enabled*(1.-smoothstep(.087,.094,abs(k)));
 		float lateral=abs(UV2.x)-knee_center;
@@ -404,7 +408,9 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		// Compress the sock inside the heel cup and release it above the collar.
 		float inside_shoe=1.-smoothstep(.064,.117,y);
 		float rolled_edge=pad*smoothstep(.073,.079,abs(k))*(1.-smoothstep(.083,.091,abs(k)));
-		VERTEX+=NORMAL*(pad*.005+rolled_edge*.003+foam*.018+sock*.002-inside_shoe*.012);
+		float ankle_shell=ankle_support==2 ? .0045*(1.-smoothstep(.043,.061,abs(y-.148))) : 0.;
+		float knee_shell=knee_support==2 ? .006*(1.-smoothstep(.078,.099,abs(k))) : 0.;
+		VERTEX+=NORMAL*(ankle_shell+knee_shell+pad*.005+rolled_edge*.003+foam*.018+sock*.002-inside_shoe*.012);
 		anatomy=vec3(abs(UV2.x),y,COLOR.r);
 		loads=vec2(flex,UV2.x>0.?calf_load.x:calf_load.y);
 	}
@@ -462,7 +468,26 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		float folded_edge=1.-smoothstep(.0008,.0026+fwidth(height),abs(abs(height)-.084));
 		cover+=binding*(.105*cuff_ribs+.14*folded_edge);
 		ALBEDO=mix(ALBEDO,pad_color.rgb*cover,pad_mask);
-		float gear=max(pad_mask,sock_mask);
+		float support=0.;
+		for(int joint=0;joint<2;joint++){
+			int kind=joint==0?ankle_support:knee_support;
+			if(kind==0) continue;
+			float t=(y-(joint==0?.148:knee_height))/(joint==0?.056:.094);
+			float wrap=abs(t+.25*cos(angle));
+			float mask=1.-smoothstep(.93,1.,wrap);
+			if(kind==1){
+				float overlap=fract(t*2.2+angle/6.283);
+				float lap=smoothstep(.78,.96,overlap);
+				ALBEDO=mix(ALBEDO,vec3(.82,.78,.68)*(.97-.16*lap+.04*yarn),mask);
+			}else{
+				if(joint==1) mask*=smoothstep(.58,.80,radius)+(1.-smoothstep(.58,.80,radius))*(1.-face);
+				float strap=1.-smoothstep(.10,.17,abs(abs(t+.19*cos(angle))-.53));
+				float stay=smoothstep(.78,.95,abs(cos(angle)))*(1.-smoothstep(.65,.84,abs(t)));
+				ALBEDO=mix(ALBEDO,mix(vec3(.044,.053,.060),vec3(.12,.14,.15),max(strap,stay))*(.94+.08*yarn),mask);
+			}
+			support=max(support,mask);
+		}
+		float gear=max(support,max(pad_mask,sock_mask));
 		vec2 p=anatomy.xy;
 		float front=smoothstep(.46,.61,anatomy.z);
 		float quad=contour(p,vec2(.077,.555),vec2(.038,.076))+contour(p,vec2(.167,.666),vec2(.042,.135));
@@ -499,6 +524,12 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 	skin.set_shader_parameter("hem_y",hem)
 	skin.set_shader_parameter("skin_map",preload("res://assets/characters/base/T_Superhero_Male_Light.png"))
 	actor.leg_skin=skin
+	if variant==0: actor.refresh_kit()
+	else:
+		actor.shirt_fabric.set_shader_parameter("hem_shift",[0.,-.055,.045][variant%3])
+		actor.shirt_fabric.set_shader_parameter("tucked",variant%4==1)
+		skin.set_shader_parameter("ankle_support",[0,1,0,2,0][variant%5])
+		skin.set_shader_parameter("knee_support",[0,0,1,0,2,0,0][variant%7])
 	legs.material_override = skin
 	source.free()
 

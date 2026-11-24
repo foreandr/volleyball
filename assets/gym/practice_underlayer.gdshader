@@ -10,7 +10,7 @@ void vertex(){
 }
 void fragment(){
 	float x=abs(bind.x);
-	if(bind.y<1.28 || x<.115 || x>.675 || (x<.20 && bind.y>1.56)) discard;
+	if(bind.y<1.28 || x<.062 || x>.675 || (x<.20 && bind.y>1.56)) discard;
 	bool covered=sleeve_end>0. && x<sleeve_end;
 	if(covered){
 		float cuff=1.-smoothstep(.009,.013,sleeve_end-x);

@@ -2,12 +2,15 @@ extends RefCounted
 const PATH := "user://player.cfg"
 const DEFAULTS := {"name":"Player","height_cm":195.58,"handedness":"Right"}
 
+const KIT_CHOICES := {"Jersey length":["Standard","Short","Long"],"Jersey fit":["Untucked","Tucked"],"Ankle support":["None","Tape","Brace"],"Knee support":["None","Tape","Brace"]}
+
 const RATINGS := ["Forearm reception", "Forearm setting", "Forearm defense", "Hand setting", "Hand reception", "Hand defense", "Blocking", "Speed", "Stamina", "Underhand serve", "Standing float", "Jump float", "Spin serve", "Hybrid spin to float", "Hybrid float to spin", "Sky ball"]
 
 static func generate() -> Dictionary:
 	var values := {"name":"%s %s" % [["Kai","Maya","Noor","Luca","Sam","Imani","Rin","Alex","Jules","Ari","Leah","Sol"].pick_random(), ["Reyes","Park","Diallo","Costa","Singh","Chen","Silva","Ito","Martin","Aziz","Kim","Rivera"].pick_random()], "height_cm":randf_range(152.4,213.36), "vertical_in":randi_range(30,60), "wingspan_in":randi_range(58,90), "handedness":["Right","Left"].pick_random()}
 	for rating in RATINGS:
 		values[rating] = randi_range(20,99)
+	for key in KIT_CHOICES: values[key]=KIT_CHOICES[key].pick_random()
 	return clean(values)
 
 static func load_profile() -> Dictionary:
@@ -20,6 +23,9 @@ static func load_profile() -> Dictionary:
 
 static func clean(profile: Dictionary) -> Dictionary:
 	var result := {"name":str(profile.get("name",DEFAULTS.name)).strip_edges().left(32),"height_cm":clampf(float(profile.get("height_cm",DEFAULTS.height_cm)),152.4,213.36),"handedness":"Left" if profile.get("handedness","Right") == "Left" else "Right"}
+	for key in KIT_CHOICES:
+		var choice=profile.get(key,KIT_CHOICES[key][0])
+		result[key]=choice if choice in KIT_CHOICES[key] else KIT_CHOICES[key][0]
 	result.vertical_in = clampf(float(profile.get("vertical_in",30)),30,60)
 	result.wingspan_in = clampf(float(profile.get("wingspan_in",result.height_cm / 2.54)),48,96)
 	for rating in RATINGS:

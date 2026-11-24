@@ -165,6 +165,13 @@ func build_controls(controls: VBoxContainer) -> void:
 	hand_field.custom_minimum_size.y = 42
 	hand_field.item_selected.connect(func(index): profile.handedness = "Left" if index == 1 else "Right"; update_profile())
 	controls.add_child(hand_field)
+	for key in Profile.KIT_CHOICES:
+		controls.add_child(label(key,18))
+		var picker := OptionButton.new()
+		for choice in Profile.KIT_CHOICES[key]: picker.add_item(choice)
+		picker.select(Profile.KIT_CHOICES[key].find(profile[key]))
+		picker.item_selected.connect(func(index): profile[key]=Profile.KIT_CHOICES[key][index]; update_profile())
+		controls.add_child(picker)
 	if not CareerSession.creating:
 		controls.add_child(button("Generate player",func():
 			profile = Profile.generate()
@@ -228,6 +235,7 @@ func build_preview(viewport: SubViewport) -> void:
 	preview_player.position.y = 0.04
 	preview_player.apply_profile(profile)
 	world.add_child(preview_player)
+	preload("res://scripts/practice_kit.gd").apply(preview_player,false)
 	preview_camera = Camera3D.new()
 	preview_camera.name = "PreviewCamera"
 	preview_camera.fov = 38.0
