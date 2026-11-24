@@ -81,4 +81,15 @@ void fragment(){
 	ROUGHNESS=mix(ROUGHNESS,.49,guard);
 	ROUGHNESS=mix(ROUGHNESS,.51,support*(1.-foam));
 	SPECULAR=mix(mix(.26,.34,rubber),.46,counter);
+	// A recessed midfoot shank bridges the heel and forefoot rubber.
+	float arch_z=(shoe.z+.016)/.050;
+	float width=mix(.016,.026,smoothstep(.0,1.,abs(arch_z)));
+	float outline=max(abs(arch_z),abs(shoe.x)/width);
+	float plate=underside*(1.-smoothstep(.91,1.,outline));
+	float rim=smoothstep(.76,.90,outline);
+	float spine=cos((shoe.x+.18*shoe.z)*1050.);
+	float visible=1.-smoothstep(.8,3.,fwidth((shoe.x+.18*shoe.z)*1050.));
+	vec3 shank=mix(vec3(.042,.047,.048),counter_color.rgb,.27)*(.86+.12*spine*visible+.28*rim);
+	ALBEDO=mix(ALBEDO,shank,plate);
+	ROUGHNESS=mix(ROUGHNESS,.43,plate);
 }
