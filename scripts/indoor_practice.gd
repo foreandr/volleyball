@@ -61,6 +61,11 @@ var buffered_at := 0.
 var buffered_contact_time := 0.
 var bump_aim := Vector3.ZERO
 var bump_armed := true
+var bump_released := false
+var bump_touched := false
+var bump_arrival := 0.
+var bump_offset := 0.
+var reception_pose: Node3D
 var pending_release := false
 var input_hold := 0.0
 var contact_local := Vector3.ZERO
@@ -399,7 +404,7 @@ func update_prompts(next: String) -> void:
 				entries.append([BUTTONS[0],"Hold to set to 4"])
 				if middle_available(): entries.append([BUTTONS[1],"Hold to set middle"])
 				entries.append([BUTTONS[2],"Hold to back set"])
-				entries.append(["RS","Aim bump set"])
+				entries.append(["RS","Aim / release to bump"])
 			else:
 				for i in BUTTONS.size(): entries.append([BUTTONS[i],TARGETS[i]])
 			entries.append_array([[JOY_BUTTON_RIGHT_SHOULDER,"Set height"],[JOY_BUTTON_LEFT_STICK,"Show / hide arc"],[JOY_BUTTON_LEFT_SHOULDER,"Hold with target to jump set"],["LT","Focus"],["RT","Sprint"],[JOY_BUTTON_START,"Settings"]])
@@ -479,6 +484,8 @@ func choose_camp_toss() -> Vector3:
 
 func reset_feed() -> void:
 	bump_aim=Vector3.ZERO
+	bump_released=false
+	bump_touched=false
 	if solo_setting:
 		camp_receive_spot=choose_camp_toss()
 		if not camp_receive_spot.is_finite():
@@ -914,30 +921,49 @@ func standing_set_load(depth: float) -> void:
 			var id := rig.find_bone(joint)
 			rig.set_bone_pose_rotation(id,pose[id].basis.get_rotation_quaternion())
 
+func bump_destination() -> Vector3:
+	var lateral := bump_aim.x
+	return Vector3(PINS[1]).lerp(PINS[0] if lateral<0. else PINS[2],absf(lateral))
+
+func start_bump_meter() -> void:
+	if not reception_pose:
+		var sampler=preload("res://scripts/bump_setting.gd").new()
+		setter.PassRecipes.refresh()
+		sampler.configure(setter,setter.PassRecipes.clip(setter,setter.FOREARM_PLATFORM))
+		add_child(sampler)
+		sampler.hide()
+		reception_pose=sampler
+	var vy := (forehead_target.y-source.y)/forehead_arrival+4.905*forehead_arrival
+	var contact_height: float=setter.position.y+setter.height_cm*.0055
+	bump_arrival=(vy+sqrt(maxf(0.,vy*vy-19.62*(contact_height-source.y))))/9.81
+	start_set_meter()
+
 func aim_bump(stick: Vector2) -> void:
 	if stick.length()<.25:
+		if not bump_armed and not bump_aim.is_zero_approx() and not bump_released:
+			if phase=="pass":
+				bump_offset=release_offset()
+				graded_fill=set_fill()
+				grade_band=timing_band()
+				grade_contact=contact_band()
+				bump_released=true
+				set_grade_until=clock+.65
+				if bump_offset< -(timing_window()+.065) or bump_offset>late_contact_limit():
+					miss("Bump released too early." if bump_offset<0. else "Bump released too late.")
+			elif phase in ["cart","feed"]: bump_aim=Vector3.ZERO
 		bump_armed=true
 		return
-	if stick.length()<.55 or not solo_setting or automatic_setter() or held>=0 or pending_release: return
+	if stick.length()<.55 or not solo_setting or automatic_setter() or held>=0 or pending_release or bump_released: return
 	if phase not in ["cart","feed","pass"] or (not bump_armed and bump_aim.is_zero_approx()): return
-	var right := camera.global_basis.x.slide(Vector3.UP).normalized()
-	bump_aim=(right*stick.x+right.cross(Vector3.UP)*stick.y).normalized()
+	var starting := bump_aim.is_zero_approx()
+	bump_aim=Vector3(stick.normalized().x,0.,-stick.normalized().y)
+	if starting and phase=="pass": start_bump_meter()
 	bump_armed=false
 	message.text="Bump set"
 
 func play_bump(previous: Vector3, incoming: Vector3) -> void:
-	var rig: Skeleton3D=setter.skeleton
-	var author: RefCounted=setter.get_pose_author()
-	var pose: Array=[]
-	for i in rig.get_bone_count(): pose.append(rig.get_bone_pose(i))
-	var chest: Vector3=author.point(pose,"spine_03")
-	var reach := rig.to_local(ball.position)-chest
-	var wanted := chest+Vector3(clampf(reach.x,-.5,.5),-.16,clampf(reach.z,.26,.68))
-	preload("res://scripts/reception_platform_pose.gd").connect_arms(pose,author,wanted,1.)
-	for side in ["l","r"]:
-		for stem in ["clavicle_","upperarm_","lowerarm_","hand_"]:
-			var bone := rig.find_bone(stem+side)
-			rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
+	var sample_time: float=reception_pose.contact_frame+minf(0.,elapsed-bump_arrival)
+	reception_pose.apply_pose(maxf(0.,sample_time),smoothstep(0.,.18,sample_time))
 	var elbows := [Contact.joint(setter,"lowerarm_l"),Contact.joint(setter,"lowerarm_r")]
 	var wrists := [Contact.joint(setter,"hand_l"),Contact.joint(setter,"hand_r")]
 	var platform: Vector3=preload("res://scripts/forearm_contact.gd").surface(elbows,wrists,.055).ball
@@ -946,27 +972,30 @@ func play_bump(previous: Vector3, incoming: Vector3) -> void:
 	for side in 2:
 		var pair := Geometry3D.get_closest_points_between_segments(previous,ball.position,elbows[side],wrists[side])
 		gap=minf(gap,pair[0].distance_to(pair[1]))
-	if incoming.y>=0. or gap>.27:
+	if not bump_touched and (incoming.y>=0. or gap>.27):
 		if elapsed>forehead_arrival+.35: miss("Outside platform reach.")
+		return
+	if not bump_touched:
+		bump_touched=true
+		ball.position=platform
+	if not bump_released:
+		ball.position=platform
+		if elapsed>bump_arrival+late_contact_limit(): miss("Held through platform contact.")
 		return
 	source=platform
 	ball.position=source
 	target=0
-	var alignment := -2.
+	var desired := bump_destination()
 	for i in PINS.size():
-		var lane: Vector3=(PINS[i]-source).slide(Vector3.UP)
-		var score := lane.normalized().dot(bump_aim)
-		if score>alignment:
-			alignment=score
-			target=i
-	var lane_length := (Vector3(PINS[target])-source).slide(Vector3.UP).length()
+		if desired.distance_squared_to(PINS[i])<desired.distance_squared_to(PINS[target]): target=i
 	tempo=chosen_tempo()
 	flight_time=DURATION[tempo]
-	var desired := source+bump_aim*lane_length
-	desired.y=PINS[target].y
+	var intended := desired
+	var error := signf(bump_offset)*maxf(0.,absf(bump_offset)-ON_TIME)
+	desired+=(desired-source).slide(Vector3.UP).normalized()*error*lerpf(5.,2.,setter.effective_rating("Forearm setting")/100.)
 	endpoint=setter.reachable_set(source,desired,false,Vector3.ZERO,flight_time,1.20*(.78 if tempo==1 else 1.))
 	camp_call=target
-	placement_error=endpoint.distance_to(PINS[target])
+	placement_error=endpoint.distance_to(intended)
 	success=placement_error<targets[target].mouth_radius-.10
 	feedback="Bump set   /   Target made" if success else "Bump set   /   Off target"
 	energy[setter].spend(2)
@@ -1086,7 +1115,11 @@ func step_practice(delta: float) -> void:
 				plan_cpu_timing()
 				change_feed_phase("pass")
 				if held>=0: start_set_meter()
+				elif not bump_aim.is_zero_approx(): start_bump_meter()
 		"pass":
+			if bump_touched and not bump_aim.is_zero_approx():
+				play_bump(ball.position,Vector3.ZERO)
+				return
 			ball.rotation+=toss_spin*delta
 			if cpu_setting and not jump.active: move_to_camp_toss(delta)
 			var height := camp_jump_height if solo_setting else .52
@@ -1240,6 +1273,9 @@ func step_practice(delta: float) -> void:
 				rotation_drill.free_ball(Vector3.ZERO)
 				begin("between")
 		"set":
+			if not bump_aim.is_zero_approx() and reception_pose:
+				var follow_time: float=reception_pose.contact_frame+elapsed
+				if follow_time<reception_pose.clip.length: reception_pose.apply_pose(follow_time,1.-smoothstep(reception_pose.clip.length-.22,reception_pose.clip.length,follow_time))
 			if automatic_setter() and elapsed<=Hands.CPU_FOLLOW_TIME: face_set(setter,target,delta)
 			ball.rotate_x(delta*4.0)
 			var t := clampf(elapsed/flight_time,0,1)
@@ -1396,10 +1432,12 @@ func show_timing(offset: float) -> void:
 	timing_until = clock + 2.2
 
 func timing_window() -> float:
+	if not bump_aim.is_zero_approx(): return .085+.135*setter.effective_rating("Forearm setting")/100.
 	return .085+.135*clampf(float(setter.effective_rating("Hand setting"))/100.,0,1)
 
 # Predict arrival in flight, then anchor the cue to the hands cushioning the ball.
 func release_offset() -> float:
+	if not bump_aim.is_zero_approx(): return elapsed-bump_arrival
 	if first_contact>=0: return clock-first_contact-.055+RELEASE_ADVANCE
 	return elapsed-contact_time+RELEASE_ADVANCE
 
@@ -1737,6 +1775,8 @@ func _input(event: InputEvent) -> void:
 	elif event.is_pressed():
 		if solo_setting:
 			bump_aim=Vector3.ZERO
+			bump_released=false
+			bump_touched=false
 			camp_call=index
 			for i in targets.size(): targets[i].beacon.visible=i==index
 		pending_release = false

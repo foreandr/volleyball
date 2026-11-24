@@ -25,7 +25,13 @@ func _draw() -> void:
 	var human: Node3D=game.rotation_drill.roster[0]
 	draw_player(human,true)
 	if game.phase=="pass": draw_incoming_toss()
-	if game.preview_enabled: draw_set_path(human)
+	if not game.bump_aim.is_zero_approx() and game.phase in ["feed","pass"]:
+		var aim: Vector3=game.bump_destination()
+		if not game.camera.is_position_behind(aim):
+			var dot: Vector2=game.camera.unproject_position(aim)
+			draw_circle(dot,6.,Color("182329"))
+			draw_circle(dot,4.,Color.WHITE)
+	elif game.preview_enabled: draw_set_path(human)
 	if game.phase in ["feed","pass"]:
 		var called: int=game.called()
 		var anchor: Vector3=game.targets[called].global_position+Vector3.UP*.43
@@ -122,7 +128,7 @@ func draw_player(actor: Node3D,human: bool) -> void:
 			draw_rect(Rect2(base-Vector2(0,32*readout.x),Vector2(10,32*readout.x)),Color(Color("51cbe9"),opacity))
 		if actor!=game.setter and game.free_target>=0:
 			timing_arc(at,outer,PI,clampf((game.clock-game.free_press)/.43,0,1),.47,.76)
-		var pressing: bool=game.held>=0 and game.phase in ["cart","walk","feed","pass"] and not game.pending_release
+		var pressing: bool=(game.held>=0 or (not game.bump_aim.is_zero_approx() and not game.bump_released)) and game.phase in ["cart","walk","feed","pass"] and not game.pending_release
 		var result: bool=game.clock<game.set_grade_until or game.pending_release
 		if actor==game.setter and (pressing or result):
 			var fill: float=game.set_fill() if pressing else game.graded_fill
