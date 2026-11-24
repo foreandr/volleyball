@@ -90,6 +90,7 @@ var ready_knee_bend_depth := 0.0
 var lunge_bend_depth := 0.0
 var defense_ground_y := 0.0
 var contact_destination := Vector2.ZERO
+var bump_load_depth := 0.0
 var touch_time := -INF
 var touch: Vector3
 var hand_anchor: Vector3
@@ -154,6 +155,7 @@ func set_custom_backward(animation: Animation) -> void:
 		custom_backward_mirror_tracks.append(custom_backward_tracks[opposite])
 
 func reset() -> void:
+	bump_load_depth=0.0
 	early_dig_arms.clear()
 	hard_dig = false
 	fast_hand_dig = false
@@ -827,6 +829,29 @@ func plan_reach(offset: Vector3, deep_side := false) -> void:
 func backward_reach_active() -> bool:
 	return reach.get("backward",false) and (grade == Timing.Grade.WAITING or (is_finite(touch_time) and rear_follow < 0.25))
 
+func load_bump_legs(depth: float) -> void:
+	if depth<=0.001: return
+	var rig: Skeleton3D=setter.skeleton
+	var author=setter.get_pose_author()
+	var pose: Array=[]
+	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
+	var original := pose.duplicate()
+	var hips := rig.find_bone("pelvis")
+	var parent: Transform3D=author.world_pose(pose,rig.get_bone_parent(hips))
+	pose[hips].origin+=parent.basis.inverse()*(rig.global_basis.inverse()*(Vector3.DOWN*depth))
+	rig.set_bone_pose_position(hips,pose[hips].origin)
+	for side in ["l","r"]:
+		var thigh: String="thigh_"+side
+		var calf: String="calf_"+side
+		var foot: String="foot_"+side
+		var anchor: Transform3D=author.world_pose(original,rig.find_bone(foot))
+		var pole: Vector3=author.point(original,calf)-author.point(original,thigh)
+		author.limb(pose,thigh,calf,foot,anchor.origin,pole,1.,178.,true)
+		author.set_world_basis(pose,foot,anchor.basis)
+		for joint in [thigh,calf,foot]:
+			var id := rig.find_bone(joint)
+			rig.set_bone_pose_rotation(id,pose[id].basis.get_rotation_quaternion())
+
 func follow_forearm(time: float, incoming: Vector3) -> void:
 	var follow := time-touch_time
 	rear_follow = follow
@@ -837,6 +862,7 @@ func follow_forearm(time: float, incoming: Vector3) -> void:
 		return
 	apply_pose(contact_frame+follow,blend)
 	pose_reach(smoothstep(0.0,1.0,reach_progress)*(1.0-smoothstep(0.10,0.40,follow)),touch)
+	load_bump_legs(bump_load_depth*(1.-smoothstep(0.,.17,follow)))
 	Drive.apply(setter.skeleton,setter.get_pose_author(),outgoing,Drive.effort(incoming,outgoing),follow,true,incoming,Drive.swing_effort(touch,outgoing))
 
 func pose_reach(weight: float, intercept: Vector3) -> void:

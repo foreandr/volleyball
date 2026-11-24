@@ -152,3 +152,4 @@ Grounded forearm reception uses authored forward and lateral plant presets. Targ
 In Setting Camp, clicking the right stick while watching the CPU switches between overhead and forearm sets. View returns control to the player.
 Back bump sets open the hips toward the hitting pin and carry the joined forearms upward through release. The planted feet anchor the turn.
 On close bump sets, the setter steps into the incoming ball, plants before contact, and lets the elbows bend through the swing, especially on back bumps.
+Grounded bump sets load the knees before contact and extend through the arm swing. Longer sets use a deeper load.
