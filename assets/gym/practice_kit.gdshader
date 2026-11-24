@@ -104,7 +104,14 @@ void vertex(){
 		// displacement against the animated skin after gravity, drag and tailoring.
 		// The shorts are a second layer beneath an untucked hem.
 		float waist=1.-smoothstep(1.055,1.19,rest.y);
-		float clearance=.0035+(tucked?.009:.045)*waist;
+		float rear_waist=(1.-smoothstep(-.07,.01,rest.z))*(1.-smoothstep(1.06,1.24,rest.y));
+		float clearance=.0035+(tucked?.009:mix(.045,.014,rear_waist))*waist;
+		// Anchor the back panel to the animated waist. Bound the combined hem,
+		// flutter and inertia offsets while retaining the selected shirt length.
+		vec3 travel=VERTEX-body_point;
+		vec3 fitted=body_point+body_normal*clamp(dot(travel,body_normal),clearance,clearance+.006);
+		fitted.y+=(tucked?0.:hem_shift)*(1.-smoothstep(1.02,1.29,rest.y));
+		VERTEX=mix(VERTEX,fitted,rear_waist);
 		if(tucked) VERTEX=mix(body_point+body_normal*clearance,VERTEX,smoothstep(1.064,1.115,rest.y));
 		float shoulder=smoothstep(1.405,1.505,rest.y)*smoothstep(.058,.105,abs(rest.x));
 		int strap=rest.x>0.?0:2;

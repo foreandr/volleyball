@@ -331,6 +331,7 @@ func leave() -> void:
 	MenuPresentation.load_scene("res://scenes/story.tscn")
 
 func start_practice() -> void:
+	coach.position = rotation_drill.basket.position + rotation_drill.FEED_SPOT
 	rotation_drill.advance_turn()
 	skip_time = 0
 	demonstration = false

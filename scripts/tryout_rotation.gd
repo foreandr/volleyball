@@ -5,8 +5,9 @@ const CART_WALL := 512
 const CART := Vector3(-3.05,0,-1.7)
 const WAIT := [Vector3(0,.04,1.35),Vector3(-1.35,.04,4.9),Vector3(1.65,.04,4.9)]
 const STATIONS := [CART,Vector3(0,0,-1.7),Vector3(3.05,0,-1.7)]
-const FEED_SPOT := Vector3(.85,.04,-.40)
-const HANDLE := Vector3(.10,.04,-.68)
+const FEED_SPOT := Vector3(.58,.04,-.87)
+const FEED_REACH := 0.36
+const HANDLE := Vector3(.10,.04,-.76)
 var wheel_stride := 0.0
 var coach_pushing := false
 var coach_stride := 0.0
@@ -206,7 +207,12 @@ func station_ready(dt: float) -> bool:
 			station=requested
 			game.trace("cart_station",{"station":station,"tosses":tosses})
 		return false
-	return walk(game.coach,basket.position+FEED_SPOT,dt,4.2)
+	var feed_position := basket.position + FEED_SPOT
+	if game.coach.position.distance_to(feed_position) <= FEED_REACH:
+		routes.velocities.erase(game.coach)
+		walking_progress.erase(game.coach)
+		return true
+	return walk(game.coach,feed_position,dt,4.2)
 
 func push_pose(actor: Node3D,cart: Node3D,stride: float,distance: float) -> float:
 	if absf(distance)>.00001:
@@ -237,7 +243,7 @@ func prepare_next_ball(dt: float) -> void:
 	if game.phase=="pass" and game.elapsed<.16: return
 	var coach: Node3D=game.coach
 	if not waiting_ball:
-		if stock.is_empty() or coach.position.distance_to(basket.position+FEED_SPOT)>.36: return
+		if stock.is_empty() or coach.position.distance_to(basket.position+FEED_SPOT)>FEED_REACH: return
 		waiting_ball=stock.back()
 		for candidate in stock:
 			var dz := candidate.position.y-waiting_ball.position.y
@@ -250,9 +256,10 @@ func prepare_next_ball(dt: float) -> void:
 	var rig: Skeleton3D=coach.skeleton
 	var author: RefCounted=coach.get_pose_author()
 	var to_cart := (basket.position-coach.position).slide(Vector3.UP)
-	if fetch_time<.40 and to_cart.length_squared()>.01:
+	var at_feed_spot := coach.position.distance_to(basket.position+FEED_SPOT) <= FEED_REACH
+	if at_feed_spot and fetch_time<.40 and to_cart.length_squared()>.01:
 		coach.rotation.y=lerp_angle(coach.rotation.y,atan2(to_cart.x,to_cart.z),minf(1.,dt*12.))
-	if fetch_time>.32 and mini(round_index,2)==station:
+	if at_feed_spot and fetch_time>.32 and mini(round_index,2)==station:
 		var toward := (game.setter as Node3D).position-coach.position
 		coach.rotation.y=lerp_angle(coach.rotation.y,atan2(toward.x,toward.z),minf(1.,dt*8.))
 	var cradle: Vector3=rig.to_global(author.point(author.baseline,"pelvis")+Vector3(0,.12,.46))
