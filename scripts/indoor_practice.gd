@@ -100,6 +100,7 @@ var jump := preload("res://scripts/setter_jump.gd").new()
 var cpu_setting := false
 var cpu_bump := false
 var cpu_jump_lead := .40
+const CPU_TIMINGS := ["Natural","Early","On time","Late"]
 var cpu_timing_mode := 0
 var cpu_release_delay := 0.
 var cpu_jump_started := false
@@ -127,6 +128,8 @@ func cpu_preview_offset() -> float:
 
 func set_cpu_timing_mode(mode: int) -> void:
 	cpu_timing_mode=mode
+	prompt_phase=""
+	update_prompts(phase)
 	if cpu_setting and phase=="pass" and not bump_released:
 		plan_cpu_timing()
 
@@ -427,9 +430,9 @@ func update_prompts(next: String) -> void:
 				for i in BUTTONS.size(): entries.append([BUTTONS[i],TARGETS[i]])
 			entries.append_array([[JOY_BUTTON_RIGHT_SHOULDER,"Set height"],[JOY_BUTTON_LEFT_STICK,"Show / hide arc"],[JOY_BUTTON_LEFT_SHOULDER,"Hold with target to jump set"],["LT","Focus"],["RT","Sprint"],[JOY_BUTTON_START,"Settings"]])
 	if solo_setting:
-		if cpu_setting: entries=[[BUTTONS[called()],["CPU set to 4","CPU set middle","CPU back set"][called()]],[JOY_BUTTON_RIGHT_SHOULDER,"Set height"],[JOY_BUTTON_START,"Settings"]]
 		if cpu_setting:
-			if cpu_bump: entries[0]=["RS","CPU bump to "+["4","middle","right pin"][called()]]
+			entries=[[JOY_BUTTON_LEFT_STICK,"Timing: "+CPU_TIMINGS[cpu_timing_mode]],[JOY_BUTTON_RIGHT_SHOULDER,"Set height"],[JOY_BUTTON_START,"Settings"]]
+			if not cpu_bump: entries.push_front([BUTTONS[called()],["CPU set to 4","CPU set middle","CPU back set"][called()]])
 			entries.push_front([JOY_BUTTON_RIGHT_STICK,"Watch hand sets" if cpu_bump else "Watch bump sets"])
 		entries.push_front(["View","Take control" if cpu_setting else "Watch CPU set"])
 	Xbox.prompts(controls_row,entries)
@@ -1869,7 +1872,9 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 	if event is InputEventJoypadButton and event.button_index==Xbox.physical(JOY_BUTTON_LEFT_STICK) and event.pressed:
-		preview_enabled=not preview_enabled
+		if solo_setting and cpu_setting:
+			set_cpu_timing_mode((cpu_timing_mode+1)%CPU_TIMINGS.size())
+		else: preview_enabled=not preview_enabled
 		get_viewport().set_input_as_handled()
 		return
 	if solo_setting and ((event is InputEventJoypadButton and event.button_index==JOY_BUTTON_BACK) or (event is InputEventKey and event.physical_keycode==KEY_TAB)):

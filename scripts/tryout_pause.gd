@@ -102,7 +102,7 @@ func tuning_controls() -> void:
 	timing_label.text="CPU release timing"
 	body.add_child(timing_label)
 	var timing := OptionButton.new()
-	for choice in ["Natural","Early","On time","Late"]:
+	for choice in game.CPU_TIMINGS:
 		timing.add_item(choice)
 	timing.select(game.cpu_timing_mode)
 	timing.item_selected.connect(game.set_cpu_timing_mode)

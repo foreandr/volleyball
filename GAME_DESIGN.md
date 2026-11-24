@@ -158,3 +158,4 @@ Grounded forearm sets use both the intended distance and arc height to scale the
 Grounded bump setters track the descending ball through a range of forearm heights. A low contact adds torso lean and wrist tilt. The back-bump follow-through runs at 75 percent speed.
 The bump timing arc dedicates most of its width to playable releases. Follow-through starts from the actual forearm contact pose and uses a single directional swing.
 Setting Camp Sliders allow natural, early, on-time and late CPU releases. An accepted early forearm release prepares the high intercept before the ball reaches the usual waist-height contact.
+While watching the CPU in Setting Camp, left-stick click cycles release timing and right-stick click switches between hand and bump sets. CPU targets are drawn automatically from the eligible pins and middle.
