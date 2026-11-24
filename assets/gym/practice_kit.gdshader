@@ -131,6 +131,15 @@ void fragment(){
 		base=mix(base,base*.46,tape);
 		float teeth=.62+.28*cos(y*2400.)*(1.-smoothstep(.0005,.002,fwidth(y)));
 		base=mix(base,vec3(.50,.53,.50)*teeth,zipper);
+		// A brushed metal slider and open pull tab finish the center zipper.
+		vec2 slider=vec2(rest.x,y-1.507);
+		float aa=max(.00045,fwidth(rest.x)+fwidth(y));
+		float body=1.-smoothstep(-aa,aa,length(slider/vec2(.0045,.006))*.0045-.0045);
+		vec2 tab=vec2(rest.x-.20*(1.504-y),y-1.495);
+		float tab_edge=length(vec2(tab.x,max(abs(tab.y)-.005,0.)));
+		float loop=1.-smoothstep(.0007,.0007+aa,abs(tab_edge-.0031));
+		float metal=max(body,loop)*front;
+		base=mix(base,vec3(.37,.40,.38)*(.73+.45*smoothstep(-.003,.003,-tab.x)),metal);
 		// Slanted welt pocket openings sit in the lower front panels.
 		float pocket_x=.103+.39*(y-1.14);
 		float pocket=abs(x-pocket_x);
