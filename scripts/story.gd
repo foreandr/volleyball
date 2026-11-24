@@ -34,7 +34,7 @@ func show_home() -> void:
 		add_button("Player development",development)
 	var create := add_button("Create athlete",func():
 		CareerSession.creating = true
-		get_tree().change_scene_to_file("res://scenes/create.tscn"))
+		MenuPresentation.load_scene("res://scenes/create.tscn"))
 	if CareerSession.athlete_id.is_empty(): create.grab_focus()
 	if CareerSession.data.has_section("athletes"): add_button("Select athlete",choose_athlete)
 	if not StorySession.saved_stories().is_empty(): add_button("Legacy careers",show_load)
@@ -83,7 +83,7 @@ func resume() -> void:
 		"origin": origin()
 		"position": position_menu()
 		"after_tryout": after_tryout()
-		_: get_tree().change_scene_to_file(CareerSession.CHAPTER)
+		_: MenuPresentation.load_scene(CareerSession.CHAPTER)
 
 func after_tryout() -> void:
 	clear_menu("AFTER TRYOUTS")
@@ -94,7 +94,7 @@ func after_tryout() -> void:
 	add_button("Player development",development).grab_focus()
 	add_button("Repeat tryout",func():
 		CareerSession.data.set_value(CareerSession.key(),"tryout_scorecard",[])
-		if CareerSession.checkpoint("tutorial",0): get_tree().change_scene_to_file(CareerSession.CHAPTER))
+		if CareerSession.checkpoint("tutorial",0): MenuPresentation.load_scene(CareerSession.CHAPTER))
 	add_button("My Career",show_home)
 
 func origin() -> void:
@@ -137,7 +137,7 @@ func show_load() -> void:
 	if saves.get_child_count() > 0: saves.get_child(0).grab_focus()
 
 func open_menu() -> void:
-	get_tree().change_scene_to_file("res://scenes/main.tscn")
+	MenuPresentation.load_scene("res://scenes/main.tscn")
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):

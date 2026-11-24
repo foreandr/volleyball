@@ -470,4 +470,4 @@ func edit_role(actor: int, title: String, category: String, type: String, role: 
 	StorySession.edit_animation = replay.bake_actor(game,actor,title,contacts.get(role,replay.index),include_ball or setup_key() == "Butterfly")
 	StorySession.edit_entry = {"id":setup_key()+"_"+title,"name":title,"category":category,"type":type}
 	StorySession.animation_draft.clear()
-	get_tree().change_scene_to_file("res://scenes/animation_editor.tscn")
+	MenuPresentation.load_scene("res://scenes/animation_editor.tscn")

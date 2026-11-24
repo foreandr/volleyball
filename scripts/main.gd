@@ -36,20 +36,20 @@ func page(title_text: String, current: String) -> void:
 	MenuPresentation.heading(column,current,title_text)
 
 func go(scene: String) -> void:
-	get_tree().change_scene_to_file("res://scenes/%s.tscn" % scene)
+	MenuPresentation.load_scene("res://scenes/%s.tscn" % scene)
 
 func show_home() -> void:
 	page("VOLLEYBALL","Home")
 	add_menu_button(column,"Career","My Career",func(): go("story"))
-	add_menu_button(column,"Play","Play",show_play).grab_focus()
+	add_menu_button(column,"Play","Play",MenuPresentation.load_stage.bind("Play",show_play)).grab_focus()
 	add_menu_button(column,"Create","Create player",func(): go("create"))
 	add_menu_button(column,"Training","Training camp",func(): go("drills"))
-	add_menu_button(column,"Settings","Settings",show_settings)
+	add_menu_button(column,"Settings","Settings",MenuPresentation.load_stage.bind("Settings",show_settings))
 	add_menu_button(column,"Quit","Quit",func(): get_tree().quit())
 
 func show_play() -> void:
 	page("PLAY","Play")
-	add_menu_button(column,"Offline","Offline",show_offline).grab_focus()
+	add_menu_button(column,"Offline","Offline",MenuPresentation.load_stage.bind("Offline",show_offline)).grab_focus()
 	add_menu_button(column,"Online","Online",Callable()).disabled = true
 	add_menu_button(column,"Simulate","Simulate",open_simulation)
 	add_menu_button(column,"Back","Back",show_home)
@@ -59,7 +59,7 @@ func show_offline() -> void:
 	for size in range(2,7):
 		var item := add_menu_button(column,"Size%d" % size,"%dv%d" % [size,size],func():
 			StorySession.offline_size = size
-			show_roster())
+			MenuPresentation.load_stage("Match setup",show_roster))
 		if size == 2: item.grab_focus()
 	add_menu_button(column,"Back","Back",show_play)
 
@@ -141,7 +141,7 @@ func open_simulation() -> void:
 func open_match(playable: bool) -> void:
 	StorySession.open_home_play = playable
 	StorySession.open_home_simulation = true
-	get_tree().change_scene_to_file.call_deferred("res://scenes/story_animations.tscn")
+	MenuPresentation.load_scene.call_deferred("res://scenes/story_animations.tscn")
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):

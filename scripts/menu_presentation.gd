@@ -164,3 +164,77 @@ func build_theme() -> void:
 		skin.set_stylebox("focus",kind,focus)
 	skin.set_stylebox("panel","PopupMenu",box(Color("142c3d"),Color("59d7c4"),2))
 	skin.set_stylebox("normal","LineEdit",box(Color("102331"),Color("43727a"),2))
+
+var loading_screen: ColorRect
+var loading_detail: Label
+
+func show_loading(destination: String) -> void:
+	loading_screen = ColorRect.new()
+	loading_screen.color = Color("112433")
+	loading_screen.process_mode = Node.PROCESS_MODE_ALWAYS
+	overlay.add_child(loading_screen)
+	loading_screen.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	backdrop(loading_screen,false)
+	var center := CenterContainer.new()
+	loading_screen.add_child(center)
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var column := VBoxContainer.new()
+	center.add_child(column)
+	var title := Label.new()
+	title.text = destination
+	title.add_theme_font_size_override("font_size",48)
+	column.add_child(title)
+	loading_detail = Label.new()
+	loading_detail.text = "Loading…"
+	loading_detail.add_theme_color_override("font_color",Color("73e1d2"))
+	column.add_child(loading_detail)
+
+func _input(_event: InputEvent) -> void:
+	if is_instance_valid(loading_screen):
+		get_viewport().set_input_as_handled()
+
+func painted() -> void:
+	await get_tree().process_frame
+	if DisplayServer.get_name() != "headless":
+		await RenderingServer.frame_post_draw
+
+func close_loading() -> void:
+	loading_screen.hide()
+	loading_screen.queue_free()
+	loading_screen = null
+
+func load_stage(destination: String, build: Callable) -> void:
+	if is_instance_valid(loading_screen): return
+	show_loading(destination)
+	await painted()
+	if build.is_valid(): build.call()
+	await painted()
+	close_loading()
+
+func load_scene(path: String) -> void:
+	if is_instance_valid(loading_screen): return
+	var key := path.get_file().get_basename()
+	var names := {"main":"Main menu","story":"My Career","drills":"Training camp","create":"Create player","setter_tryout":"Setter tryout","story_animations":"Court session"}
+	show_loading(names.get(key,key.capitalize()))
+	await painted()
+	var error := ResourceLoader.load_threaded_request(path,"PackedScene")
+	if error == OK:
+		var progress := []
+		var status := ResourceLoader.load_threaded_get_status(path,progress)
+		while status == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+			if progress.size(): loading_detail.text = "Loading…  %d%%" % roundi(progress[0]*100.)
+			await get_tree().process_frame
+			status = ResourceLoader.load_threaded_get_status(path,progress)
+		if status == ResourceLoader.THREAD_LOAD_LOADED:
+			loading_detail.text = "Preparing court…" if key in ["setter_tryout","story_animations","court"] else "Opening menu…"
+			await painted()
+			error = get_tree().change_scene_to_packed(ResourceLoader.load_threaded_get(path))
+			if error == OK:
+				await get_tree().scene_changed
+				await painted()
+		else: error = ERR_CANT_OPEN
+	if error != OK:
+		push_error("Could not open "+path+": "+error_string(error))
+		loading_detail.text = "Could not open this destination"
+		await get_tree().create_timer(1.5).timeout
+	close_loading()

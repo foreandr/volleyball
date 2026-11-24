@@ -18,7 +18,7 @@ var setting_skill := 100.0
 func begin_new() -> void:
 	creating_story = true
 	draft = Profile.DEFAULTS.duplicate(true)
-	get_tree().change_scene_to_file("res://scenes/create.tscn")
+	MenuPresentation.load_scene("res://scenes/create.tscn")
 
 func cancel_creation() -> void:
 	creating_story = false
@@ -82,7 +82,7 @@ func load_story(id: String) -> bool:
 	active = record
 	cancel_creation()
 	remember(id)
-	get_tree().change_scene_to_file("res://scenes/story_animations.tscn")
+	MenuPresentation.load_scene("res://scenes/story_animations.tscn")
 	return true
 
 var edit_animation: Animation

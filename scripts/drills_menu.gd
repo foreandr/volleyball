@@ -114,10 +114,10 @@ func show_category(name_: String) -> void:
 		var title: String = drill.title
 		add_item(title,func():
 			if scene_path.is_empty():
-				open_setting_stage(title)
+				MenuPresentation.load_stage(title,open_setting_stage.bind(title))
 				return
 			StorySession.open_passing_drill = name_ == "Passing"
-			get_tree().change_scene_to_file(scene_path))
+			MenuPresentation.load_scene(scene_path))
 	list.get_child(0).grab_focus()
 
 func open_setting_stage(title: String) -> void:
@@ -406,7 +406,7 @@ func go_back() -> void:
 		scroll.show()
 		show_category(category)
 	elif category.is_empty():
-		get_tree().change_scene_to_file("res://scenes/main.tscn")
+		MenuPresentation.load_scene("res://scenes/main.tscn")
 	else:
 		show_categories()
 

@@ -100,7 +100,7 @@ func box(size: Vector3, point: Vector3, color: Color) -> MeshInstance3D:
 	return result
 
 func open_menu() -> void:
-	get_tree().change_scene_to_file("res://scenes/main.tscn")
+	MenuPresentation.load_scene("res://scenes/main.tscn")
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE: open_menu()

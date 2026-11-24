@@ -55,7 +55,7 @@ func run_command() -> void:
 	creating = false
 	data.set_value(key(),"tryout_scorecard",[])
 	if not checkpoint(stage,32 if stage == "complete" else rep): return
-	get_tree().change_scene_to_file.call_deferred(CHAPTER)
+	MenuPresentation.load_scene.call_deferred(CHAPTER)
 
 func base_profile() -> Dictionary:
 	var values := Profile.load_profile()

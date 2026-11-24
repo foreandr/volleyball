@@ -235,7 +235,7 @@ func show_categories() -> void:
 	var match_button := button("Demo Match | 2v2",start_demo_match)
 	match_button.custom_minimum_size.y = 52
 	content.add_child(match_button)
-	content.add_child(button("Iteration Lab",func(): get_tree().change_scene_to_file("res://scenes/iteration_lab.tscn")))
+	content.add_child(button("Iteration Lab",func(): MenuPresentation.load_scene("res://scenes/iteration_lab.tscn")))
 
 func start_passing_drill() -> void:
 	start_demo_match(2,false,true,true,true)
@@ -467,7 +467,7 @@ func edit_passing_replay() -> void:
 	StorySession.edit_entry = {"id":"passing_replay_edit","name":"Passing replay","category":"Forearm reception","type":"Forearm"}
 	StorySession.animation_draft.clear()
 	StorySession.edit_animation = clip
-	get_tree().change_scene_to_file("res://scenes/animation_editor.tscn")
+	MenuPresentation.load_scene("res://scenes/animation_editor.tscn")
 
 func move_match_camera(delta: float) -> void:
 	var movement: Vector2 = player_controls.movement_input()
@@ -1933,7 +1933,7 @@ func open_low_bow_editor() -> void:
 		StorySession.edit_animation = Catalog.load_clip(StorySession.edit_entry,preview_player)
 	else:
 		StorySession.edit_animation = bake_low_bow_starter(shot_target)
-	get_tree().change_scene_to_file("res://scenes/animation_editor.tscn")
+	MenuPresentation.load_scene("res://scenes/animation_editor.tscn")
 
 func bake_low_bow_starter(shot_target: Vector3) -> Animation:
 	var drill = setting_drill
@@ -2005,7 +2005,7 @@ func open_backward_editor() -> void:
 	else:
 		StorySession.edit_animation = bake_backward_starter()
 	StorySession.edit_animation.set_meta("editor_frame_count",15)
-	get_tree().change_scene_to_file("res://scenes/animation_editor.tscn")
+	MenuPresentation.load_scene("res://scenes/animation_editor.tscn")
 
 func bake_backward_starter() -> Animation:
 	reception_review.toggle_play()
@@ -2044,7 +2044,7 @@ func open_editor(index := -1) -> void:
 	StorySession.edit_entry = selected_entry.duplicate(true)
 	StorySession.edit_animation = render_clip
 	StorySession.animation_return = {"category":selected_category,"type":current_type(),"id":selected_entry.id}
-	get_tree().change_scene_to_file("res://scenes/animation_editor.tscn")
+	MenuPresentation.load_scene("res://scenes/animation_editor.tscn")
 
 func cycle_type(direction: int) -> void:
 	if is_instance_valid(demo_match) or is_instance_valid(blocking_practice) or is_instance_valid(setting_drill) or selected_category.is_empty() or selected_category in ["Setting","Attacking"]: return
@@ -2054,20 +2054,20 @@ func cycle_type(direction: int) -> void:
 func open_menu() -> void:
 	if passing_drill != null:
 		StorySession.drill_menu_category = "Passing"
-		get_tree().change_scene_to_file("res://scenes/drills.tscn")
+		MenuPresentation.load_scene("res://scenes/drills.tscn")
 		return
 	if match_from_lab_replay and is_instance_valid(demo_match):
-		get_tree().change_scene_to_file("res://scenes/iteration_lab.tscn")
+		MenuPresentation.load_scene("res://scenes/iteration_lab.tscn")
 		return
 	if match_from_home and is_instance_valid(demo_match):
-		get_tree().change_scene_to_file("res://scenes/main.tscn")
+		MenuPresentation.load_scene("res://scenes/main.tscn")
 		return
 	if not selected_category.is_empty():
 		var previous := selected_category
 		show_categories()
 		if category_buttons.has(previous): category_buttons[previous].grab_focus()
-	elif not StorySession.active.is_empty(): get_tree().change_scene_to_file("res://scenes/story.tscn")
-	else: get_tree().change_scene_to_file("res://scenes/main.tscn")
+	elif not StorySession.active.is_empty(): MenuPresentation.load_scene("res://scenes/story.tscn")
+	else: MenuPresentation.load_scene("res://scenes/main.tscn")
 
 func update_match_pad_aim(delta: float) -> void:
 	var pads := Input.get_connected_joypads()

@@ -202,11 +202,11 @@ func save_player() -> void:
 		if CareerSession.create_athlete(profile):
 			CareerSession.enter_origin = true
 			CareerSession.creating = false
-			get_tree().change_scene_to_file("res://scenes/story.tscn")
+			MenuPresentation.load_scene("res://scenes/story.tscn")
 		return
 	if StorySession.creating_story:
 		if StorySession.save_new(profile) == OK:
-			get_tree().change_scene_to_file("res://scenes/story_animations.tscn")
+			MenuPresentation.load_scene("res://scenes/story_animations.tscn")
 		else: show_save_error()
 	else:
 		if Profile.save_profile(profile) == OK: open_menu()
@@ -361,12 +361,12 @@ func update_profile() -> void:
 func open_menu() -> void:
 	if CareerSession.creating:
 		CareerSession.creating = false
-		get_tree().change_scene_to_file("res://scenes/story.tscn")
+		MenuPresentation.load_scene("res://scenes/story.tscn")
 		return
 	if StorySession.creating_story:
 		StorySession.cancel_creation()
-		get_tree().change_scene_to_file("res://scenes/story.tscn")
-	else: get_tree().change_scene_to_file("res://scenes/main.tscn")
+		MenuPresentation.load_scene("res://scenes/story.tscn")
+	else: MenuPresentation.load_scene("res://scenes/main.tscn")
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventJoypadButton and event.is_action_pressed("ui_cancel"):

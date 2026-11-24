@@ -62,7 +62,7 @@ func _ready() -> void:
 	background_task = button("Start background task",toggle_background_task)
 	header.add_child(background_task)
 	header.add_child(button("Tools",func(): tool_panel.visible = not tool_panel.visible))
-	header.add_child(button("Back",func(): get_tree().change_scene_to_file("res://scenes/main.tscn")))
+	header.add_child(button("Back",func(): MenuPresentation.load_scene("res://scenes/main.tscn")))
 
 	proposal_description = label("",16)
 	proposal_description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -359,7 +359,7 @@ func watch_latest() -> void:
 
 func open_finding(path: String) -> void:
 	StorySession.lab_replay_path = path
-	get_tree().change_scene_to_file("res://scenes/story_animations.tscn")
+	MenuPresentation.load_scene("res://scenes/story_animations.tscn")
 
 func refresh_proposals() -> void:
 	update_proposals(read_pending_proposals(), false)

@@ -175,7 +175,7 @@ func finish_intro() -> bool:
 
 func reset_drill() -> void:
 	trace("drill_reset",{})
-	get_tree().reload_current_scene()
+	MenuPresentation.load_scene(scene_file_path)
 
 func start_drill() -> void:
 	start_practice()
@@ -274,7 +274,7 @@ func update_prompts(next: String) -> void:
 	Xbox.prompts(controls_row,entries)
 
 func leave() -> void:
-	get_tree().change_scene_to_file("res://scenes/story.tscn")
+	MenuPresentation.load_scene("res://scenes/story.tscn")
 
 func start_practice() -> void:
 	demonstration = false
