@@ -344,9 +344,8 @@ func facing_scatter(actor: Node3D,choice: int) -> Vector3:
 
 func face_set(actor: Node3D,choice: int,dt: float) -> void:
 	var heading := set_heading(actor,choice)
-	var clockwise := fposmod(actor.rotation.y-heading,TAU)
-	if absf(angle_difference(actor.rotation.y,heading))<.035: actor.rotation.y=heading
-	else: actor.rotation.y-=minf(clockwise,dt*(10./3.))
+	focus_headings[actor]=heading
+	actor.rotation.y=rotate_toward(actor.rotation.y,heading,dt*(10./3.))
 
 func select_height(stick: Vector2) -> void:
 	if stick.length()<.32:
@@ -399,24 +398,31 @@ func move_setter(delta: float,actor: Node3D=setter,off_ball := false) -> bool:
 	return not direction.is_zero_approx()
 
 var angular_speed := {}
+var focus_headings := {}
 
 func _process(delta: float) -> void:
 	if settings.visible: return
 	var before := {}
 	for actor in rotation_drill.roster+[coach]+rotation_drill.workers.map(func(w): return w.actor):
 		before[actor]=actor.rotation.y
+	focus_headings.clear()
 	step_practice(delta)
 	# Compose all AI, input and animation requests first. Enforce a single
 	# turn budget per actor even when several actions change in one frame.
 	var dt := minf(delta,.05)
 	for actor: Node3D in before:
 		var old: float=before[actor]
-		var change := angle_difference(old,actor.rotation.y)
-		var limit := 3.33 if actor==setter and focused else 4.5
+		var heading: float=focus_headings.get(actor,actor.rotation.y)
+		var change := angle_difference(old,heading)
+		var limit := 3.33 if focus_headings.has(actor) or (actor==setter and focused) else 4.5
+		if focus_headings.has(actor): limit=minf(limit,sqrt(2.*20.*absf(change)))
 		var desired := clampf(change/maxf(.0001,dt),-limit,limit)
 		var velocity := move_toward(float(angular_speed.get(actor,0.)),desired,dt*20.)
+		if focus_headings.has(actor) and (absf(change)<.001 or (velocity*change>0. and absf(velocity*dt)>=absf(change))):
+			actor.rotation.y=heading
+			velocity=0.
+		else: actor.rotation.y=old+velocity*dt
 		angular_speed[actor]=velocity
-		actor.rotation.y=old+velocity*dt
 
 func step_practice(delta: float) -> void:
 	setter.animator.advance(delta)
@@ -672,13 +678,10 @@ func release(index: int) -> void:
 	var skill := float(setter.attributes.get("Hand setting",40))/100
 	var gap := Vector2(setter.position.x-catch_point.x,setter.position.z-catch_point.z).length()
 	var airborne := setter.position.y-BASE.y
+	var technique_feedback := ""
 	if not demonstration and rotation_drill.turn==0:
-		if jump_rep() and airborne<0.20:
-			miss("Jump set requested. Jump before contact.")
-			return
-		if not jump_rep() and airborne>0.12:
-			miss("Stay planted for this set.")
-			return
+		if jump_rep() and airborne<.20: technique_feedback="Jump set requested. Jump before contact."
+		elif not jump_rep() and airborne>.12: technique_feedback="Standing set requested. Stay planted."
 		if first_contact<0 or clock-last_contact>minf(.17,timing_window()):
 			miss("No hand contact. Get under the ball before release.")
 			return
@@ -701,9 +704,10 @@ func release(index: int) -> void:
 		# Poor releases can carry past the pin into the tape or court.
 		var late := clampf((absf(set_error)-.065)/.135,0,1)
 		endpoint.z += 1.5*late
-	success = target==called() and endpoint.distance_to(PINS[target])<targets[target].mouth_radius-0.10
+	success = technique_feedback.is_empty() and target==called() and endpoint.distance_to(PINS[target])<targets[target].mouth_radius-0.10
 	feedback = TARGETS[target]+"   /   Target made" if success else "Missed the called target. Try it again."
-	trace("set",{"requested":TARGETS[called()],"actual":TARGETS[target],"made":success,"error_m":error})
+	if not technique_feedback.is_empty(): feedback=technique_feedback
+	trace("set",{"technique":technique_feedback,"requested":TARGETS[called()],"actual":TARGETS[target],"made":success,"error_m":error})
 	Hands.apply(setter,source,1.0,(endpoint-source).normalized()*.22,0,.3,false,Vector3.ZERO,1.,endpoint-source,.6,true)
 	begin("set")
 
