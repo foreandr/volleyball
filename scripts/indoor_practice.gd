@@ -96,6 +96,7 @@ var drop_velocity := Vector3.ZERO
 var old_palms := {}
 var jump := preload("res://scripts/setter_jump.gd").new()
 var cpu_setting := false
+var cpu_bump := false
 var cpu_jump_lead := .40
 var cpu_release_delay := 0.
 var cpu_jump_started := false
@@ -110,7 +111,7 @@ func plan_cpu_timing() -> void:
 	if solo_setting:
 		var jump_error: float = (1.-camp_jump_ability*setter.stamina.effectiveness()/100.)*.14
 		cpu_jump_lead=.07+jump.flight_duration(camp_jump_height,true)*.5+rng.randf_range(-jump_error,jump_error)
-	var clean_chance: float = setter.effective_rating("Hand setting")/100. if solo_setting else .32
+	var clean_chance: float = setter.effective_rating("Forearm setting" if cpu_bump and cpu_setting else "Hand setting")/100. if solo_setting else .32
 	if rng.randf()>clean_chance:
 		cpu_release_delay=rng.randf_range(.012,.055)*(-1. if rng.randf()<.5 else 1.)
 
@@ -412,14 +413,21 @@ func update_prompts(next: String) -> void:
 			entries.append_array([[JOY_BUTTON_RIGHT_SHOULDER,"Set height"],[JOY_BUTTON_LEFT_STICK,"Show / hide arc"],[JOY_BUTTON_LEFT_SHOULDER,"Hold with target to jump set"],["LT","Focus"],["RT","Sprint"],[JOY_BUTTON_START,"Settings"]])
 	if solo_setting:
 		if cpu_setting: entries=[[BUTTONS[called()],["CPU set to 4","CPU set middle","CPU back set"][called()]],[JOY_BUTTON_RIGHT_SHOULDER,"Set height"],[JOY_BUTTON_START,"Settings"]]
+		if cpu_setting:
+			if cpu_bump: entries[0]=["RS","CPU bump to "+["4","middle","right pin"][called()]]
+			entries.push_front([JOY_BUTTON_RIGHT_STICK,"Watch hand sets" if cpu_bump else "Watch bump sets"])
 		entries.push_front(["View","Take control" if cpu_setting else "Watch CPU set"])
 	Xbox.prompts(controls_row,entries)
 
 func camp_title() -> String:
+	if cpu_setting and cpu_bump: return "SET TO TARGET   /   CPU BUMP SETTER"
 	return "SET TO TARGET   /   CPU SETTER" if cpu_setting else "SET TO TARGET   /   PLAYER SETTER"
 
 func switch_camp_control() -> void:
 	cpu_setting = not cpu_setting
+	refresh_camp_control()
+
+func refresh_camp_control() -> void:
 	squat.cancel()
 	focused=false
 	held=-1
@@ -447,6 +455,7 @@ func start_practice() -> void:
 	if rotation_drill.turn == 1: say(coach, "%s, you're up first." % setter.display_name,4.0)
 
 func jump_rep() -> bool:
+	if cpu_setting and cpu_bump: return false
 	if not automatic_setter(): return jump.active or (held>=0 and jump_modifier())
 	if solo_setting: return rep%2==1
 	return demo_index%2==1 if demonstration else rotation_drill.round_index==1
@@ -870,6 +879,8 @@ func move_to_camp_toss(delta: float) -> void:
 	var footwork = setter.skeleton.get_node("GroundTurnSteps")
 	var target_yaw := set_heading(setter,called())
 	var stance := receive_stance(target_yaw)
+	if cpu_bump and cpu_setting:
+		stance=toss_at(bump_arrival)-Vector3.BACK.rotated(Vector3.UP,target_yaw)*.62
 	var offset := (stance-setter.position).slide(Vector3.UP)
 	var moving_jump := jump_rep() and rep%4==3 and not cpu_jump_started
 	if moving_jump:
@@ -1158,14 +1169,20 @@ func step_practice(delta: float) -> void:
 				cue_until=clock+1.05
 				plan_cpu_timing()
 				change_feed_phase("pass")
+				if cpu_setting and cpu_bump: bump_aim=[Vector3.LEFT,Vector3.FORWARD,Vector3.RIGHT][called()]
 				if held>=0: start_set_meter()
 				elif not bump_aim.is_zero_approx(): start_bump_meter()
 		"pass":
+			var cpu_forearm := cpu_setting and cpu_bump
+			if cpu_forearm and not bump_released and elapsed>=bump_arrival+cpu_release_delay:
+				bump_armed=false
+				aim_bump(Vector2.ZERO)
+				if phase!="pass": return
 			if bump_touched and not bump_aim.is_zero_approx():
 				play_bump(ball.position,Vector3.ZERO,delta)
 				return
 			ball.rotation+=toss_spin*delta
-			if cpu_setting and not jump.active: move_to_camp_toss(delta)
+			if cpu_setting and not jump.active and (not cpu_forearm or (reception_pose.reach.is_empty() and not reception_pose.low_save.active)): move_to_camp_toss(delta)
 			var height := camp_jump_height if solo_setting else .52
 			var takeoff_lead := cpu_jump_lead
 			if not automatic_setter():
@@ -1196,9 +1213,9 @@ func step_practice(delta: float) -> void:
 				miss("Held through contact. Release as the ball reaches your hands.")
 				return
 			var previous := ball.position
-			var flight_t := minf(elapsed,forehead_arrival) if cpu_setting else elapsed
+			var flight_t := minf(elapsed,forehead_arrival) if cpu_setting and not cpu_forearm else elapsed
 			ball.position = toss_at(flight_t)
-			if cpu_setting:
+			if cpu_setting and not cpu_forearm:
 				var release_time := contact_time+cpu_release_delay-RELEASE_ADVANCE
 				var receive := extended_receive_point()
 				var settle := smoothstep(release_time-.16,release_time,elapsed)
@@ -1230,6 +1247,9 @@ func step_practice(delta: float) -> void:
 				return
 			if elapsed<0.16: coach_motion.toss(coach,1.0)
 			ball.position.y = maxf(0.15,ball.position.y)
+			if cpu_forearm:
+				play_bump(previous,incoming,delta)
+				return
 			var turn_gap := angle_difference(setter.rotation.y,set_heading(setter,called()))
 			var turn_lead := Hands.preparation_lead(turn_gap,called()==2 and not cpu_setting)
 			if cpu_setting: turn_lead=maxf(turn_lead,.48)
@@ -1799,7 +1819,12 @@ func _input(event: InputEvent) -> void:
 		if event.is_pressed(): switch_camp_control()
 		get_viewport().set_input_as_handled()
 		return
-	if cpu_setting: return
+	if cpu_setting:
+		if solo_setting and event is InputEventJoypadButton and event.button_index==Xbox.physical(JOY_BUTTON_RIGHT_STICK) and event.pressed:
+			cpu_bump=not cpu_bump
+			refresh_camp_control()
+			get_viewport().set_input_as_handled()
+		return
 	if rotation_drill.turn!=0 and not demonstration:
 		if rotation_drill.turn == 1 and ((event is InputEventJoypadButton and event.button_index == Xbox.physical(JOY_BUTTON_A)) or (event is InputEventKey and event.keycode == KEY_SPACE)): return
 		free_input(event)
