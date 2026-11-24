@@ -22,8 +22,11 @@ func fit(p: Vector3) -> Vector3:
 	fitted.z=lerpf(fitted.z,-.035,cuff*.12)
 	var radial := Vector2(fitted.y-1.48,fitted.z+.035)
 	# Take up excess fabric at the opening without flattening the folded hem.
-	var excess := maxf(radial.length()-.072,0.)
-	radial-=radial.normalized()*excess*.82*cuff
+	# Grade the sleeve opening down toward the upper arm. Leave more room
+	# underneath than on top so the raised cuff clears the shoulder cap.
+	var cuff_radius := lerpf(.071,.058,smoothstep(-.050,.038,radial.x))
+	var excess := maxf(radial.length()-cuff_radius,0.)
+	radial-=radial.normalized()*excess*.94*cuff
 	fitted.y=1.48+radial.x
 	fitted.z=-.035+radial.y
 	return fitted
@@ -58,7 +61,9 @@ func _initialize() -> void:
 				var point := original[int(endpoint)]
 				if absf(point.x)<1.2 and point.y>5.5: neckline.append(fit(point))
 		var v := original[edge.x]
-		if edges[edge]==1 and absf(v.x)>1.60 and v.y>4.9: cuffs.append(fit(v))
+		if edges[edge]==1 and absf(v.x)>1.60 and v.y>4.9:
+			cuffs.append(fit(v))
+			cuffs.append(fit(original[edge.y]))
 	var hem := PackedVector3Array()
 	for edge in hem_edges:
 		hem.append(fit(original[edge.x]))
@@ -115,7 +120,9 @@ func _initialize() -> void:
 				weights.append(blend[ids[k]]/total if k<ids.size() else 0.)
 			uv2.append(Vector2(p.x,p.y))
 			var cuff_distance := INF
-			for edge in cuffs: cuff_distance=minf(cuff_distance,p.distance_to(edge))
+			for j in range(0,cuffs.size(),2):
+				var nearest_edge := Geometry3D.get_closest_point_to_segment(p,cuffs[j],cuffs[j+1])
+				cuff_distance=minf(cuff_distance,p.distance_to(nearest_edge))
 			var collar_distance := INF
 			for point in neckline: collar_distance=minf(collar_distance,p.distance_to(point))
 			var hem_distance := .040
