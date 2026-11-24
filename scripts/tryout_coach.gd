@@ -11,14 +11,14 @@ func toss(actor: Node3D,t: float) -> Vector3:
 	var rig: Skeleton3D = actor.skeleton
 	var author: RefCounted = actor.get_pose_author()
 	var pose: Array = author.baseline.duplicate()
-	var dip := sin(PI*clampf(t/0.55,0,1))
+	var dip := sin(PI*smoothstep(0.,.55,t))
 	var drive := smoothstep(0.40,1.0,t)
 	author.rotate_world(pose,"spine_01",Vector3.RIGHT,0.12*dip-0.08*drive)
-	var center: Vector3 = author.point(pose,"pelvis")+Vector3(0,0.12-0.16*dip+0.46*drive,0.41+0.13*drive)
+	var center: Vector3 = author.point(pose,"pelvis")+Vector3(0,0.12-0.16*dip+0.46*drive,0.46+0.10*drive)
 	for side in ["l","r"]:
 		var sign_ := 1.0 if author.point(pose,"upperarm_"+side).x>center.x else -1.0
-		var wrist := center+Vector3(sign_*.076,-.088,-.090)
-		author.limb(pose,"upperarm_"+side,"lowerarm_"+side,"hand_"+side,wrist,Vector3(sign_*0.65,-0.9,-0.25))
+		var wrist := center+Vector3(sign_*.085,-.080,-.065)
+		author.limb(pose,"upperarm_"+side,"lowerarm_"+side,"hand_"+side,wrist,Vector3(sign_*.86,-.72,.12))
 		pose_helper.orient_palm(pose,rig,author,side,Vector3.BACK,Vector3.RIGHT*sign_,1.0)
 	for i in rig.get_bone_count(): rig.set_bone_pose_rotation(i,pose[i].basis.orthonormalized().get_rotation_quaternion())
 	var palms: Vector3 = (author.point(pose,"middle_01_l")+author.point(pose,"middle_01_r"))*0.5
@@ -96,7 +96,7 @@ func fetch_pose(actor: Node3D,center: Vector3,reach: float,carry: float) -> void
 	for side in ["r","l"]:
 		var weight := reach if side=="r" else smoothstep(.04,.64,carry)
 		var sign_ := signf(author.point(pose,"upperarm_"+side).x)
-		var wrist := local+Vector3(sign_*.076,-.088,-.090)
-		author.limb(pose,"upperarm_"+side,"lowerarm_"+side,"hand_"+side,wrist,Vector3(sign_*.6,-.8,-.24),weight)
+		var wrist := local+Vector3(sign_*.085,-.080,-.065)
+		author.limb(pose,"upperarm_"+side,"lowerarm_"+side,"hand_"+side,wrist,Vector3(sign_*.86,-.72,.12),weight)
 		pose_helper.orient_palm(pose,rig,author,side,Vector3.BACK,Vector3.RIGHT*sign_,weight)
 	for i in rig.get_bone_count(): rig.set_bone_pose_rotation(i,pose[i].basis.orthonormalized().get_rotation_quaternion())

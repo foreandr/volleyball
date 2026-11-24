@@ -16,7 +16,7 @@ const SET_LOAD := .26
 var contact_time := 1.0
 const DURATION := [0.65,1.52,0.48]
 const APEX := [1.1,2.5,0.32]
-const LINES := ["Welcome to the team, %s. I’m Coach Ellis.","You’re trying out at setter. Watch the three targets. I’ll toss the first ones right to you.","Three calls from each coach station. First stay planted, then jump set. After that, you’ll move."]
+const LINES := ["Welcome to the team, %s. I’m Coach Ellis.","You’re trying out at setter. Watch the three targets. I’ll toss the first ones right to you.","Three calls from each coach station. Keep your spot. I’ll toss above your forehead, including on the jump sets."]
 var coach_motion := preload("res://scripts/tryout_coach.gd").new()
 var last_toss := -10.0
 var next_release := 0.0
@@ -299,12 +299,11 @@ func reset_feed() -> void:
 	setter.rotation.y = atan2(coach.position.x-BASE.x,coach.position.z-BASE.z)
 	setter.play_action("idle")
 	catch_point = BASE + Vector3.UP*(1.93*setter.height_cm/180.0 + (0.52 if jump_rep() else 0.0))
-	if not demonstration and rotation_drill.round_index==2: catch_point.z += 1.25 if rotation_drill.attempts%2==0 else -1.25
 	coach.show()
 	coach.rotation.y = atan2(catch_point.x-coach.position.x,catch_point.z-coach.position.z)
 	ball.visible = demonstration or rotation_drill.issued!=null
 	apply_camera()
-	title.text = "COACH DEMO    /    %d OF 3" % (demo_index+1) if demonstration else "SETTER TRYOUT    /    %02d OF 32    •    %s" % [rep+1,"MOVING" if rotation_drill.round_index==2 else "STATIONARY"]
+	if demonstration: title.text="COACH DEMO   /   %d OF 3" % (demo_index+1)
 	message.text = TARGETS[called()]+"    /    "+("Jump set" if jump_rep() else "Standing set")
 	if not demonstration:
 		var made := 0
@@ -379,7 +378,7 @@ func move_setter(delta: float,actor: Node3D=setter,off_ball := false) -> bool:
 	var motion := Vector2(axis(JOY_AXIS_LEFT_X),axis(JOY_AXIS_LEFT_Y))
 	motion += Vector2(int(Input.is_key_pressed(KEY_D))-int(Input.is_key_pressed(KEY_A)),int(Input.is_key_pressed(KEY_S))-int(Input.is_key_pressed(KEY_W)))
 	if motion.length()<0.16: motion = Vector2.ZERO
-	var direction := Vector3(-motion.x,0,-motion.y).limit_length(1) if rotation_drill.round_index==2 or off_ball else Vector3.ZERO
+	var direction := Vector3(-motion.x,0,-motion.y).limit_length(1) if off_ball else Vector3.ZERO
 	var focus := axis(Xbox.trigger(true))>0.25 or Input.is_key_pressed(KEY_CTRL)
 	var sprint := axis(Xbox.trigger(false))>0.25 or Input.is_key_pressed(KEY_SHIFT)
 	if not off_ball and focus!=focused:
@@ -415,7 +414,7 @@ var focus_headings := {}
 
 func _process(delta: float) -> void:
 	score_strip.visible=phase not in ["intro","complete","net_guide"] and not settings.visible and not demonstration
-	if settings.visible or phase=="net_guide": return
+	if settings.visible or phase in ["net_guide","complete"]: return
 	var before := {}
 	for actor in rotation_drill.roster+[coach]+rotation_drill.workers.map(func(w): return w.actor):
 		before[actor]=actor.rotation.y
@@ -455,7 +454,6 @@ func step_practice(delta: float) -> void:
 	stick+=Input.get_vector("ui_left","ui_right","ui_up","ui_down") if (Input.is_key_pressed(KEY_LEFT) or Input.is_key_pressed(KEY_RIGHT) or Input.is_key_pressed(KEY_UP) or Input.is_key_pressed(KEY_DOWN)) else Vector2.ZERO
 	select_height(stick)
 	rotation_drill.tick(delta)
-	if phase == "complete": return
 	# Leave the three targets in frame while easing toward the live ball.
 	var lead := (ball.position-Vector3(0,1.6,1.0))*Vector3(0.10,0.08,0.055)
 	camera_lead = camera_lead.lerp(lead.limit_length(0.5),1.0-exp(-3.2*delta))
@@ -494,9 +492,8 @@ func step_practice(delta: float) -> void:
 			# Measure the athlete who actually arrived, including their rig scale.
 			var head := Contact.joint(setter,"Head")
 			catch_point.y=BASE.y+head.y-setter.position.y+.20+(.52 if jump_rep() else 0.)
-			if rotation_drill.round_index<2 or demonstration:
-				catch_point.x=head.x
-				catch_point.z=head.z
+			catch_point.x=head.x
+			catch_point.z=head.z
 			if elapsed>=.30 and clock>=next_release and rotation_drill.floor_clear():
 				last_toss = clock
 				next_release = clock+2.0
@@ -512,22 +509,7 @@ func step_practice(delta: float) -> void:
 		"pass":
 			ball.rotation+=toss_spin*delta
 			if demonstration or rotation_drill.turn!=0:
-				var spot := Vector3(catch_point.x,BASE.y,catch_point.z)
-				var travel := (spot-setter.position).slide(Vector3.UP).length()
-				var remaining := maxf(0.,contact_time-elapsed)
-				if rotation_drill.round_index==2 and not demonstration and travel>.16 and not jump.active:
-					var hurried := travel>2.35*maxf(0.,remaining-.28)
-					var previous_heading := setter.rotation.y
-					rotation_drill.walk(setter,spot,delta,6.2 if hurried else 2.35)
-					if not hurried:
-						setter.rotation.y=previous_heading
-						face_set(setter,called(),delta)
-						var local := setter.basis.orthonormalized().inverse()*(spot-setter.position).slide(Vector3.UP).normalized()
-						if absf(local.x)>.3:
-							if not lateral_steps.has(setter): lateral_steps[setter]=preload("res://scripts/right_side_steps.gd").new(setter)
-							lateral_steps[setter].advance(Vector2(-local.x,local.z),delta)
-							lateral_steps[setter].apply_pose(1.)
-				else: face_set(setter,called(),delta)
+				face_set(setter,called(),delta)
 			if (demonstration or rotation_drill.turn!=0) and jump_rep() and not jump.active and elapsed>=contact_time-.40 and elapsed<contact_time-.22:
 				energy[setter].spend(5)
 				jump.begin_set_jump(setter,.07,.52)
@@ -636,9 +618,11 @@ func step_practice(delta: float) -> void:
 					scorecard.pop_back()
 					return
 				show_attempt_feedback(rotation_drill.turn,success)
+				if scorecard.size()>=27:
+					complete()
+					return
 				rotation_drill.advance_turn()
-				if scorecard.size()>=27: complete()
-				else: reset_feed()
+				reset_feed()
 
 	rotation_drill.prepare_next_ball(delta)
 
@@ -793,6 +777,9 @@ func rankings() -> Array:
 func complete() -> void:
 	for net in targets: net.beacon.hide()
 	begin("complete")
+	for actor in rotation_drill.roster+rotation_drill.workers.map(func(w): return w.actor):
+		actor.play_action("base/Idle",0.)
+		actor.animator.advance(0.)
 	camera.position = Vector3(0,6,-9)
 	camera.look_at(Vector3(0,1.4,2))
 	ball.hide()

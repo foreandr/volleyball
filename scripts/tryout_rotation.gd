@@ -222,7 +222,7 @@ func prepare_next_ball(dt: float) -> void:
 	if fetch_time>.32 and mini(round_index,2)==station:
 		var toward := (game.setter as Node3D).position-coach.position
 		coach.rotation.y=lerp_angle(coach.rotation.y,atan2(toward.x,toward.z),minf(1.,dt*8.))
-	var cradle: Vector3=rig.to_global(author.point(author.baseline,"pelvis")+Vector3(0,.12,.41))
+	var cradle: Vector3=rig.to_global(author.point(author.baseline,"pelvis")+Vector3(0,.12,.46))
 	var carry := smoothstep(.28,.74,fetch_time)
 	var pivot := coach.position
 	var start_radius := (fetch_start-pivot).slide(Vector3.UP)

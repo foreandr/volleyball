@@ -14,9 +14,8 @@ func start_drill() -> void:
 		panel.hide()
 		var guide := preload("res://scripts/setter_net_guide.gd").new()
 		add_child(guide)
-		guide.dismissed.connect(func(skip_rest: bool):
+		guide.dismissed.connect(func():
 			StorySession.game_options.set_value("tutorial","seen_net_guide",true)
-			StorySession.game_options.set_value("tutorial","skip_setter_intro",skip_rest)
 			StorySession.save_options()
 			guide.queue_free()
 			panel.show()

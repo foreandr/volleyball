@@ -1,6 +1,6 @@
 extends ColorRect
 
-signal dismissed(skip_rest: bool)
+signal dismissed
 
 func _ready() -> void:
 	z_index=12
@@ -28,12 +28,19 @@ func _ready() -> void:
 	column.add_child(tip)
 	var actions := HBoxContainer.new()
 	column.add_child(actions)
-	for caption in ["Continue tutorial","Skip remaining tutorial"]:
-		var button := Button.new()
-		button.text=caption
-		actions.add_child(button)
-		button.pressed.connect(func(): dismissed.emit(caption=="Skip remaining tutorial"))
-		if caption=="Continue tutorial": button.grab_focus()
+	var button := Button.new()
+	button.icon=preload("res://scripts/xbox_controls.gd").glyph(JOY_BUTTON_A)
+	button.add_theme_constant_override("icon_max_width",38)
+	button.tooltip_text="Continue"
+	button.custom_minimum_size=Vector2(62,40)
+	actions.add_child(button)
+	button.pressed.connect(func(): dismissed.emit())
+	button.grab_focus()
+
+func _input(event: InputEvent) -> void:
+	if event is InputEventJoypadButton and event.pressed and event.button_index==preload("res://scripts/xbox_controls.gd").physical(JOY_BUTTON_A):
+		get_viewport().set_input_as_handled()
+		dismissed.emit()
 
 func draw_diagram(view: Control) -> void:
 	var font := ThemeDB.fallback_font
