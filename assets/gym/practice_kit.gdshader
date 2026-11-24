@@ -74,9 +74,10 @@ void vertex(){
 }
 void fragment(){
 	float x=abs(rest.x), y=rest.y;
+	float neckline=1.572-.041*(1.-smoothstep(.022,.108,x))*smoothstep(-.085,.09,rest.z);
 	{
 		if(jacket){
-			if(x>.69 || y<1.012 || y>1.57 || (x<.072 && y>1.538)) discard;
+			if(x>.69 || y<1.012 || y>neckline) discard;
 		}
 	}
 
@@ -97,6 +98,9 @@ void fragment(){
 		float piping=(1.-smoothstep(.0014,.0032+fwidth(y),abs(y-yoke_edge)))*sleeve_span;
 		base=mix(base,vec3(.081,.164,.129),insert*.87);
 		base=mix(base,vec3(.22,.30,.25),piping*.68);
+		float neck_binding=smoothstep(neckline-.013,neckline-.010,y)*(1.-smoothstep(.092,.122,x));
+		float neck_stitch=1.-smoothstep(.0007,.0025,abs(y-neckline+.010));
+		base=mix(base,vec3(.032,.066,.050)*(.91+.19*neck_stitch),neck_binding);
 		float wrist=smoothstep(.637,.641,x);
 		float cuff_join=1.-smoothstep(.001,.0035,abs(x-.639));
 		float ribs=cos(y*1020.+rest.z*610.)*(1.-smoothstep(.0008,.003,fwidth(y)+fwidth(rest.z)));
