@@ -240,7 +240,11 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		VERTEX.y+=hem*motion*.009*ripple;}
 	void fragment(){
 
-		float hem=1.-smoothstep(hem_y+.005,hem_y+.009,rest.y);
+		// A bound side vent gives the cuff clearance over the outside of the thigh.
+		float vent= .034*(1.-smoothstep(0.,.020,abs(depth+.018)))*smoothstep(.145,.19,abs(rest.x));
+		float edge_height=rest.y-hem_y-vent;
+		if(edge_height<-.001) discard;
+		float hem=1.-smoothstep(.005,.009,edge_height);
 		float outer=smoothstep(.12,.17,abs(rest.x));
 		float opening=.028+.034*(1.-smoothstep(hem_y,hem_y+.19,rest.y));
 		float seam=abs(depth+.018)-opening;
@@ -253,6 +257,8 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		vec3 insert=accent.rgb*(1.12-.49*detail*eyelet*(1.-hem));
 		ALBEDO=mix(cloth.rgb,insert,panel);
 		ALBEDO=mix(ALBEDO,cloth.rgb*1.55,hem*.75);
+		float topstitch=1.-smoothstep(.00065,.0015+fwidth(edge_height),abs(edge_height-.006));
+		ALBEDO*=1.-.21*topstitch;
 		float piping=outer*(1.-smoothstep(.001,.003+fwidth(seam),abs(seam)));
 		ALBEDO=mix(ALBEDO,mix(cloth.rgb,accent.rgb,.42)*1.8,piping*.82);
 		// Recover the changing pleat slope in view space so the gym lights
@@ -378,7 +384,7 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		anatomy=vec3(abs(UV2.x),y,COLOR.r);
 		loads=vec2(flex,UV2.x>0.?calf_load.x:calf_load.y);
 	}
-	void fragment(){if(y>hem_y+.02 || y<.070)discard; ALBEDO=texture(skin_map,UV).rgb; NORMAL_MAP=texture(muscles,UV).rgb; NORMAL_MAP_DEPTH=.68; ROUGHNESS=mix(.42,.86,texture(roughness_map,UV).r);
+	void fragment(){if(y>hem_y+.039 || y<.070)discard; ALBEDO=texture(skin_map,UV).rgb; NORMAL_MAP=texture(muscles,UV).rgb; NORMAL_MAP_DEPTH=.68; ROUGHNESS=mix(.42,.86,texture(roughness_map,UV).r);
 		float yarn=.5+.5*cos(y*1250.)*(1.-smoothstep(.0007,.003,fwidth(y)));
 		float sock_mask=1.-smoothstep(sock_top,sock_top+.003,y);
 		float pad_mask=enabled_side*(1.-smoothstep(.087,.091,abs(y-knee_height)));
