@@ -423,6 +423,12 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		float face=pad_face(lateral,height)*smoothstep(.49,.62,knee_facing);
 		float channel=flex_channel(lateral,height,loads.x)*face;
 		float binding=smoothstep(.075,.081,abs(height));
+		// Foam bunches into a soft lip above each articulation groove on a bent knee.
+		float fold_width=mix(.0035,.0075,loads.x);
+		float fold_top=height+.014-abs(lateral)*.40-fold_width;
+		float fold_bottom=height+.042-abs(lateral)*.24-fold_width*.8;
+		float fold_edge=min(abs(fold_top),abs(fold_bottom));
+		float foam_lip=(1.-smoothstep(.001,.004+fwidth(height),fold_edge))*face;
 		float edging=1.-smoothstep(.001,.0035,abs(abs(height)-.076));
 		float opening_edge=1.-smoothstep(.03,.14,abs(length(vec2(lateral/.046,height/.031))-1.));
 		float edging_back=open_back*opening_edge*(1.-smoothstep(.37,.49,knee_facing));
@@ -438,7 +444,7 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		vent_grid.x+=.5*mod(floor(vent_grid.y),2.);
 		float vent=1.-smoothstep(.12,.26,length(fract(vent_grid)-.5));
 		float vent_zone=(1.-face)*(1.-smoothstep(.054,.069,abs(height)));
-		cover+=face*(.075-.11*yarn)-seam*(.27-.15*stitch)-.24*vent*vent_zone;
+		cover+=foam_lip*(.08+.21*loads.x)+face*(.075-.11*yarn)-seam*(.27-.15*stitch)-.24*vent*vent_zone;
 		// The elastic binding is knitted around the leg, across the direction of stretch.
 		float cuff_phase=angle*96.;
 		float cuff_ribs=cos(cuff_phase)*(1.-smoothstep(.65,2.8,fwidth(cuff_phase)));
