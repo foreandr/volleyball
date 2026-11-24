@@ -23,7 +23,8 @@ func _ready() -> void:
 	var block := ShaderMaterial.new()
 	block.shader = preload("res://assets/gym/masonry.gdshader")
 	var paint := material("385545")
-	var wood := material("98633b")
+	var wood := ShaderMaterial.new()
+	wood.shader=preload("res://assets/gym/bleacher_wood.gdshader")
 	var steel := material("535951")
 	var white := material("e7dfc9")
 	box("North wall",Vector3(24,9,0.3),Vector3(0,4.4,14.8),block)
@@ -34,7 +35,12 @@ func _ready() -> void:
 		for row in 4:
 			var x: float = side*(6.8+row*0.69)
 			box("Bleacher bench",Vector3(0.65,0.15,15),Vector3(x,0.48+row*0.37,3),wood)
+			var height := .48+row*.37
+			box("Seat front lip",Vector3(.037,.036,14.98),Vector3(x-side*.312,height+.048,3),wood)
+			box("Seat underframe",Vector3(.06,.085,14.96),Vector3(x,height-.115,3),steel)
 			for z in [-3,1,5,9]:
+				box("Bleacher foot plate",Vector3(.30,.028,.22),Vector3(x,.018,z),steel)
+				brace(Vector3(x,.10,z),Vector3(x,height-.1,z+.75),.045,steel)
 				box("Folding support",Vector3(0.1,0.45+row*0.37,0.1),Vector3(x,(0.45+row*0.37)/2,z),steel)
 	for dir in [-1,1]:
 		var z := 14.57 if dir==1 else -10.8

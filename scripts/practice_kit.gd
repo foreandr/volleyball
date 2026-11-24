@@ -4,7 +4,7 @@ const FABRIC := preload("res://assets/gym/practice_kit.gdshader")
 
 # Skinning transforms VERTEX before the material runs. Store bind-pose garment
 # coordinates separately so piping and screen printing follow the fabric.
-static func tailored_surface(source: ArrayMesh,surface: int) -> ArrayMesh:
+static func tailored_surface(source: ArrayMesh,surface: int,quad_shape := false) -> ArrayMesh:
 	var arrays := source.surface_get_arrays(surface)
 	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 	var coords := PackedVector2Array()
@@ -13,8 +13,16 @@ static func tailored_surface(source: ArrayMesh,surface: int) -> ArrayMesh:
 	depths.resize(vertices.size())
 	for i in vertices.size():
 		var p := vertices[i]
+		if quad_shape and p.y>.48 and p.y<.95:
+			# Medial teardrop above the knee and the longer lateral sweep of the quad.
+			var medial := Vector2((absf(p.x)-.077)/.047,(p.y-.555)/.079)
+			var lateral := Vector2((absf(p.x)-.168)/.058,(p.y-.68)/.14)
+			var front := smoothstep(-.012,.064,p.z)
+			var lift := front*(.012*exp(-medial.length_squared())+.015*exp(-lateral.length_squared()))
+			vertices[i]+=Vector3(arrays[Mesh.ARRAY_NORMAL][i])*lift
 		coords[i] = Vector2(p.x,p.y)
 		depths[i] = Color(clampf((p.z+0.3)/0.6,0,1),0,0,1)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
 	arrays[Mesh.ARRAY_TEX_UV2] = coords
 	arrays[Mesh.ARRAY_COLOR] = depths
 	var shaped := ArrayMesh.new()
@@ -27,9 +35,9 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 		actor.set_height_cm(174)
 		actor.scale*=Vector3(1.23,1,1.32)
 	elif variant>0:
-		actor.set_height_cm(166+(variant*13)%36)
+		if variant<20: actor.set_height_cm(166+(variant*13)%36)
 		actor.scale*=Vector3(.88+.036*(variant%7),1,.90+.045*((variant*3)%6))
-	if variant>0:
+	if variant>0 and variant<20:
 		var build := float((variant*5)%9)/8.
 		for side in ["l","r"]:
 			var thigh := rig.find_bone("thigh_"+side)
@@ -80,7 +88,7 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 		var hair := Color.from_hsv(.065+.004*variant,.42,.13+.065*(variant%6))
 		haircut(scalp,hair,variant)
 		for side in ["l","r"]:
-			if variant==0 or variant%4==1 or (variant%4==2 and side=="l") or (variant%4==3 and side=="r"): knee_pad(rig,side)
+			if variant>=20 or variant==0 or variant%4==1 or (variant%4==2 and side=="l") or (variant%4==3 and side=="r"): knee_pad(rig,side,variant%3==1)
 			if variant%3==1: compression(rig,"calf_"+side,"foot_"+side,.067,.044,Color("e3ded2"))
 		if variant%4==1: compression(rig,"hand_l","middle_01_l",.042,.041,Color("d6cdc0"))
 		if variant%3==2: compression(rig,"lowerarm_r","hand_r",.061,.042,Color("252e35"))
@@ -98,7 +106,7 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int) -> void:
 		ROUGHNESS=.84;
 	}"""
 	material.shader = shader
-	var hem := .65+.019*(variant%7)
+	var hem := .69+.019*(variant%7)
 	material.set_shader_parameter("hem_y",hem)
 	material.set_shader_parameter("cloth",Color.from_hsv(fmod(.55+.147*variant,1.),.32,.24+.045*(variant%4)))
 	var part := MeshInstance3D.new()
@@ -112,16 +120,18 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int) -> void:
 	var source := preload("res://assets/characters/base/Superhero_Male_FullBody.gltf").instantiate()
 	var body: MeshInstance3D = source.find_child("SuperHero_Male",true,false)
 	var legs := MeshInstance3D.new()
-	legs.mesh = tailored_surface(body.mesh,0)
+	legs.mesh = tailored_surface(body.mesh,0,true)
 	legs.skin = outfit.skin
 	rig.add_child(legs)
 	legs.skeleton = legs.get_path_to(rig)
 	var skin := ShaderMaterial.new()
 	var cut := Shader.new()
 	cut.code = """shader_type spatial;
-	uniform float hem_y; uniform sampler2D skin_map:source_color; varying float y;
-	void vertex(){y=UV2.y;} void fragment(){if(y>hem_y+.02 || y<.095)discard; ALBEDO=texture(skin_map,UV).rgb; ROUGHNESS=.75;}"""
+	uniform sampler2D muscles:hint_normal; uniform sampler2D roughness_map; uniform float hem_y; uniform sampler2D skin_map:source_color; varying float y;
+	void vertex(){y=UV2.y;} void fragment(){if(y>hem_y+.02 || y<.095)discard; ALBEDO=texture(skin_map,UV).rgb; NORMAL_MAP=texture(muscles,UV).rgb; NORMAL_MAP_DEPTH=1.15; ROUGHNESS=mix(.42,.86,texture(roughness_map,UV).r);}"""
 	skin.shader = cut
+	skin.set_shader_parameter("muscles",preload("res://assets/characters/base/T_Superhero_Male_Normal.png"))
+	skin.set_shader_parameter("roughness_map",preload("res://assets/characters/base/T_Superhero_Male_Roughness.png"))
 	skin.set_shader_parameter("hem_y",hem)
 	skin.set_shader_parameter("skin_map",preload("res://assets/characters/base/T_Superhero_Male_Light.png"))
 	legs.material_override = skin
@@ -156,7 +166,7 @@ static func compression(rig: Skeleton3D,bone: String,child: String,upper: float,
 	part.material_override = mat
 	socket.add_child(part)
 
-static func knee_pad(rig: Skeleton3D,side: String) -> void:
+static func knee_pad(rig: Skeleton3D,side: String,white: bool) -> void:
 	var name_ := "calf_"+side
 	var rest := rig.get_bone_global_rest(rig.find_bone(name_))
 	var socket := BoneAttachment3D.new()
@@ -178,12 +188,13 @@ static func knee_pad(rig: Skeleton3D,side: String) -> void:
 		band.scale.z=1.06
 		var knit := StandardMaterial3D.new()
 		knit.albedo_color=Color("313840") if i!=1 else Color("232b31")
+		if white: knit.albedo_color=Color("e3e2d9") if i==1 else Color("c6c8c0")
 		knit.roughness=.96
 		band.material_override=knit
 		pad.add_child(band)
-	shoe_part(pad,Vector3(0,-.003,.070),Vector3(.145,.142,.050),Color("343e47"))
+	shoe_part(pad,Vector3(0,-.003,.070),Vector3(.145,.142,.050),Color("d9d9d0") if white else Color("343e47"))
 	for x in [-.045,.045]:
-		shoe_part(pad,Vector3(x,.002,.086),Vector3(.008,.085,.008),Color("485058"))
+		shoe_part(pad,Vector3(x,.002,.086),Vector3(.008,.085,.008),Color("b6b8ae") if white else Color("485058"))
 
 
 # Build the shoe in rig rest space, then inherit the ankle's animated transform.

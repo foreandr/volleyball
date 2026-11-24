@@ -27,24 +27,42 @@ func toss(actor: Node3D,t: float) -> Vector3:
 func dress(actor: Node3D) -> void:
 	var rig: Skeleton3D = actor.skeleton
 	var head := rig.find_bone("Head")
-	var cap := SphereMesh.new()
-	cap.radius = 0.127
-	cap.height = 0.19
-	var crown := attach(rig,rig.get_bone_name(head),cap,Color("20342f"))
-	crown.global_position = rig.to_global(rig.get_bone_global_pose(head).origin)+Vector3.UP*0.144
-	var bill := BoxMesh.new()
-	bill.size = Vector3(0.17,0.012,0.12)
-	var brim := attach(rig,rig.get_bone_name(head),bill,Color("20342f"))
-	brim.global_position = crown.global_position+actor.basis.z*0.105
+	var mount := BoneAttachment3D.new()
+	mount.bone_name=rig.get_bone_name(head)
+	rig.add_child(mount)
+	var hat := Node3D.new()
+	mount.add_child(hat)
+	hat.transform=rig.get_bone_global_rest(head).affine_inverse()*Transform3D(Basis.IDENTITY,Vector3(0,1.744,-.021))
+	var cloth := StandardMaterial3D.new()
+	cloth.albedo_color=Color("214438")
+	cloth.roughness=.94
+	cloth.cull_mode=BaseMaterial3D.CULL_DISABLED
+	var surface := SurfaceTool.new()
+	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for j in 10:
+		for i in 48:
+			for uv: Vector2 in [Vector2(i,j),Vector2(i+1,j),Vector2(i,j+1),Vector2(i,j+1),Vector2(i+1,j),Vector2(i+1,j+1)]:
+				var angle := uv.x*TAU/48.
+				var h := uv.y*PI/20.
+				var r := cos(h)
+				surface.add_vertex(Vector3(.098*r*sin(angle),.094*sin(h)-.018*r*(1.-cos(angle)),.119*r*cos(angle)))
+	for i in 24:
+		for uv: Vector2 in [Vector2(i,0),Vector2(i+1,0),Vector2(i,1),Vector2(i,1),Vector2(i+1,0),Vector2(i+1,1)]:
+			var x := uv.x/12.-1.
+			var z := lerpf(.060+.050*(1.-x*x),.094+.104*sqrt(maxf(0.,1.-x*x)),uv.y)
+			surface.add_vertex(Vector3(x*.102,-.004-.021*x*x-.010*uv.y,z))
+	surface.generate_normals()
+	var mesh := MeshInstance3D.new()
+	mesh.mesh=surface.commit()
+	mesh.material_override=cloth
+	hat.add_child(mesh)
 
-func attach(rig: Skeleton3D,bone: String,mesh: Mesh,color: Color) -> MeshInstance3D:
-	var socket := BoneAttachment3D.new()
-	socket.bone_name = bone
-	rig.add_child(socket)
-	var part := MeshInstance3D.new()
-	part.mesh = mesh
-	var fabric := StandardMaterial3D.new()
-	fabric.albedo_color = color
-	part.material_override = fabric
-	socket.add_child(part)
-	return part
+func fetch_pose(actor: Node3D,point: Vector3,weight: float) -> void:
+	var rig: Skeleton3D=actor.skeleton
+	var author: RefCounted=actor.get_pose_author()
+	var pose: Array=author.baseline.duplicate()
+	author.rotate_world(pose,"spine_01",Vector3.RIGHT,.19*weight)
+	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",rig.to_local(point),Vector3(-.45,-1,0),weight)
+	for bone in ["spine_01","upperarm_r","lowerarm_r","hand_r"]:
+		var i := rig.find_bone(bone)
+		rig.set_bone_pose_rotation(i,pose[i].basis.orthonormalized().get_rotation_quaternion())

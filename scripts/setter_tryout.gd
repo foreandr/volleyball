@@ -8,7 +8,7 @@ const TEMPOS := ["Normal","High","Fast"]
 const Xbox = preload("res://scripts/xbox_controls.gd")
 const BUTTONS := [JOY_BUTTON_X,JOY_BUTTON_Y,JOY_BUTTON_A,JOY_BUTTON_B]
 const KEYS := [KEY_J,KEY_I,KEY_K,KEY_L]
-const PINS := [Vector3(4.75,2.15,3.0),Vector3(1.05,2.15,3.3),Vector3(-0.45,2.15,2.3),Vector3(-4.75,2.15,3.0)]
+const PINS := [Vector3(4.75,2.65,3.0),Vector3(1.05,2.65,3.3),Vector3(-0.45,2.65,2.3),Vector3(-4.75,2.65,3.0)]
 # Midway between the centers of zones 2 (x=-3) and 3 (x=0).
 const BASE := Vector3(-1.5,0.04,1.35)
 const ORDER := [0,3,2,1]
@@ -77,6 +77,8 @@ var free_jump := preload("res://scripts/setter_jump.gd").new()
 var free_target := -1
 var free_press := 0.0
 var lateral_steps := {}
+var cue_until := 0.0
+var graded_hold := 0.0
 var set_grade_until := 0.0
 var set_error := 0.0
 var energy := {}
@@ -172,6 +174,7 @@ func seat_teammates() -> void:
 		var row := int(seat[1])
 		var athlete_ := athlete(Vector3(side*(6.8+row*.69),0,float(seat[2])),["245447","a34d31","334357"][i%3])
 		athlete_.set_height_cm(172+(i*7)%29)
+		preload("res://scripts/practice_kit.gd").apply(athlete_,false,20+i)
 		athlete_.rotation.y = -side*PI/2
 		athlete_.play_action("base/Sitting_Talking",0)
 		athlete_.animator.seek(i*.31,true)
@@ -267,6 +270,7 @@ func called() -> int:
 	return ORDER[demo_index if demonstration else rotation_drill.round_index%4]
 
 func reset_feed() -> void:
+	set_grade_until=0.0
 	for i in targets.size(): targets[i].beacon.visible=i==called()
 	last_contact = -100
 	cushion = 0
@@ -370,6 +374,7 @@ func _process(delta: float) -> void:
 		play_intro(delta)
 		return
 	rotation_drill.tick(delta)
+	rotation_drill.prepare_next_ball(delta)
 	if phase == "complete": return
 	# Leave the four targets in frame while easing toward the live ball.
 	var lead := (ball.position-Vector3(0,1.6,1.0))*Vector3(0.10,0.08,0.055)
@@ -417,6 +422,7 @@ func _process(delta: float) -> void:
 				contact_time=sqrt(2.*(apex-source.y)/9.81)+sqrt(2.*(apex-catch_point.y)/9.81)
 				toss_spin=Vector3([-8.0,1.4,7.5][rotation_drill.tosses%3],rotation_drill.random.randf_range(-3,3),rotation_drill.random.randf_range(-2,2))
 				trace("coach_release",{"from":str(source),"to":str(catch_point),"arc":toss_curve,"spin":str(toss_spin)})
+				cue_until=clock+1.05
 				change_feed_phase("pass")
 		"pass":
 			ball.rotation+=toss_spin*delta
@@ -435,7 +441,7 @@ func _process(delta: float) -> void:
 				miss("Toss deflected off the gym equipment.")
 				drop_velocity = (incoming/maxf(.001,delta)).bounce(obstacle.normal)*.45
 				return
-			if elapsed<0.22: coach_motion.toss(coach,1.0)
+			if elapsed<0.16: coach_motion.toss(coach,1.0)
 			ball.position.y = maxf(0.15,ball.position.y)
 			if (demonstration or rotation_drill.turn!=0) and held<0 and elapsed>=contact_time-.64:
 				held = called()
@@ -447,6 +453,15 @@ func _process(delta: float) -> void:
 				meter.value = clampf((clock-pressed_at)/0.65,0,1)*100
 				Hands.apply(setter,ball.position,0.35+0.65*smoothstep(contact_time-.55,contact_time-.10,elapsed))
 				if Vector3(0,ball.position.y-setter.position.y,0).length()<setter.height_cm*.013: Contact.track_hands(setter,ball.position)
+			if held<0 and not demonstration and rotation_drill.turn==0:
+				var head := Contact.joint(setter,"Head")+Vector3.UP*.10
+				var closest := Geometry3D.get_closest_point_to_segment(head,previous,ball.position)
+				if head.distance_to(closest)<.205 and incoming.y<0:
+					var normal := (closest-head).normalized()
+					miss("Loose ball off the head.")
+					drop_velocity=(incoming/maxf(delta,.001)).bounce(normal)*.33
+					trace("head_contact",{})
+					return
 			var collided := false
 			for side in ["l","r"]:
 				for landmark in ["hand_","index_03_","thumb_03_","middle_02_"]:
@@ -549,6 +564,7 @@ func timing_window() -> float:
 
 func release(index: int) -> void:
 	if phase!="pass" or held!=index: return
+	graded_hold=clock-pressed_at
 	set_error=elapsed-contact_time
 	set_grade_until=clock+.65
 	trace("release",{"target":TARGETS[index],"held_s":clock-pressed_at,"timing_error":elapsed-contact_time,"air_m":setter.position.y-BASE.y})
@@ -610,6 +626,7 @@ func trace(kind: String, fields: Dictionary) -> void:
 	InteractionTrace.record(kind,fields)
 
 func change_feed_phase(next: String) -> void:
+	if next=="feed": cue_until=clock+1.05
 	var prepared := held
 	begin(next)
 	held = prepared

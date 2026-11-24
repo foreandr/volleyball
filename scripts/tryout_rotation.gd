@@ -16,6 +16,8 @@ var workers: Array[Dictionary] = []
 var stock: Array[RigidBody3D] = []
 var loose: Array[RigidBody3D] = []
 var paused_balls := {}
+var waiting_ball: RigidBody3D
+var fetch_time := 0.0
 var issued: RigidBody3D
 var turn := 0
 var attempts := 0
@@ -154,10 +156,28 @@ func grip_handle(actor: Node3D,cart: Node3D) -> void:
 			var idx := rig.find_bone(bone)
 			rig.set_bone_pose_rotation(idx,pose[idx].basis.orthonormalized().get_rotation_quaternion())
 
+func prepare_next_ball(dt: float) -> void:
+	if game.demonstration or game.phase in ["intro","complete","feed","walk"]: return
+	if game.phase=="pass" and game.elapsed<.16: return
+	var coach: Node3D=game.coach
+	if not waiting_ball:
+		if stock.is_empty() or coach.position.distance_to(basket.position+HANDLE)>.55: return
+		waiting_ball=stock.pop_back()
+		fetch_time=0.
+	fetch_time+=dt
+	var cradle := coach.position+Vector3.UP*1.16+coach.basis.z*.33-coach.basis.x*.13
+	var point := waiting_ball.position if fetch_time<.30 else cradle
+	var weight := smoothstep(0,.29,fetch_time)
+	game.coach_motion.fetch_pose(coach,point,weight)
+	if fetch_time>=.30:
+		var palm := Contact.palm(coach,"r")+Vector3.UP*.07
+		waiting_ball.position=waiting_ball.position.lerp(palm,minf(1.,dt*18.))
+
 func take_ball() -> bool:
 	if issued: return true
-	if stock.is_empty(): return false
-	issued = stock.pop_back()
+	if not waiting_ball or fetch_time<.48: return false
+	issued=waiting_ball
+	waiting_ball=null
 	issued.hide()
 	game.ball.show()
 	game.trace("cart_out",{"id":issued.name,"remaining":stock.size()})

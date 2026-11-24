@@ -16,7 +16,11 @@ void vertex(){
 }
 void fragment(){
 	float x=abs(rest.x), y=rest.y;
-	if(sleeves && (x>(jacket?.69:.333) || y<1.15 || y>1.565 || (x<.14 && y<1.48))) discard;
+	if(sleeves){
+		if(jacket){
+			if(x>.69 || y<.98 || y>1.565 || (x<.069 && y>1.52)) discard;
+		}else if(x>.333 || y<1.15 || y>1.565 || (x<.14 && y<1.48)) discard;
+	}
 	float side=smoothstep(.142,.154,x);
 	vec3 base=mix(fabric.rgb,trim.rgb,side*.54);
 	if(jacket){

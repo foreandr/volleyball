@@ -29,7 +29,15 @@ void fragment(){
 	float band=smoothstep(.04,.06,outer)*(1.-smoothstep(.43,.45,outer));
 	ALBEDO=mix(ALBEDO,vec3(.038,.128,.10)*(1.+grain*.1),band);
 	float scuff=noise2(p*vec2(8.,85.))*noise2(p*1.8);
-	ROUGHNESS=.28+grain*.05+.17*smoothstep(.49,.72,scuff);
+	// Dust collects along the bleacher bases; pivoting shoes leave broken rubber arcs.
+	float dust=smoothstep(5.6,8.0,abs(p.x))*smoothstep(.26,.73,noise2(p*1.7))*(.45+.55*noise2(p*42.));
+	vec2 tile=floor(p/.67);
+	vec2 d=fract(p/.67)-vec2(.32+.32*hash(tile),.48);
+	float spin=hash(tile+9.)*6.283;
+	d=mat2(vec2(cos(spin),sin(spin)),vec2(-sin(spin),cos(spin)))*d;
+	float rub=(1.-smoothstep(.007,.027,abs(length(d*vec2(1.,1.65))-.23)))*smoothstep(.02,.13,d.x)*step(.85,hash(tile+3.))*noise2(p*95.);
+	ALBEDO=mix(ALBEDO,vec3(.17,.14,.10),dust*.32+rub*.46);
+	ROUGHNESS=dust*.26+rub*.30+.28+grain*.05+.17*smoothstep(.49,.72,scuff);
 	SPECULAR=.63;
 	CLEARCOAT=.38;
 	CLEARCOAT_ROUGHNESS=.2;
