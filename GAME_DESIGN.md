@@ -76,4 +76,6 @@ Occasionally a referee should make an incorrect call. Teams should be able to ch
 
 The tilde console lists career and diagnostic commands. In indoor practice, replay pauses the drill and exposes recent poses with a scrubber and independent inspection camera. The gym court surface and player floor clearance follow the raised maple deck.
 
-The practice coach wears a whistle and signals the start and finish before handling another ball. Rival setters aim for roughly three and four makes per nine attempts, including skipped attempts.
+The practice coach wears a whistle and signals the start and finish before handling another ball. Rival setters aim for two to four makes per nine attempts, including skipped attempts.
+
+Feeding resumes at the active setter and station. Coaches can feed from either side or the handle of a cart. A missed jump-set toss continues to forehead height. The whistle cue is shared for future officials. Huddles use idle legs and can clear movable carts and target stands. Practice footwear includes low, mid and high collars, varied upper panels, sock colors and heights, and full or three-quarter tights.

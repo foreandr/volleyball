@@ -2,11 +2,15 @@ shader_type spatial;
 uniform sampler2D shoe_atlas : source_color,filter_linear_mipmap_anisotropic;
 uniform vec4 tint : source_color = vec4(1.);
 uniform vec4 counter_color : source_color;
+uniform float collar_rise = 0.;
+uniform int design = 0;
 varying vec3 shoe;
 varying float sole_facing;
 
 void vertex(){
 	shoe=VERTEX;
+	float collar=smoothstep(.052,.098,shoe.y)*(1.-smoothstep(-.005,.062,shoe.z));
+	VERTEX.y+=collar*collar_rise;
 	sole_facing=-NORMAL.y;
 }
 
@@ -63,6 +67,9 @@ void fragment(){
 	float forward_band=abs(shoe.z-mix(.085,.042,rise));
 	float rear_band=abs(shoe.z-mix(-.008,.031,rise));
 	float band_distance=min(forward_band,rear_band);
+	if(design==1){band_distance=abs(abs(shoe.z-.032+.30*rise*.10)-.014);}
+	if(design==2){band_distance=abs(height-.048-.013*sin(shoe.z*29.));}
+	if(design==3){band_distance=abs(abs(shoe.z-.022)-.035*(1.-rise));}
 	float band_width=mix(.006,.0038,rise);
 	float support=(1.-smoothstep(band_width-.001,band_width+fwidth(band_distance),band_distance))
 		*smoothstep(.023,.034,abs(shoe.x))*smoothstep(.024,.029,height)*(1.-smoothstep(.075,.082,height));

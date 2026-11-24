@@ -9,6 +9,7 @@ var equipment_clearance: Array[Rect2] = []
 var initialized := false
 
 func build(world: Node3D) -> void:
+	graph.clear()
 	graph.region = Rect2i(-29,-26,59,67)
 	graph.cell_size = Vector2.ONE*STEP
 	graph.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_ONLY_IF_NO_OBSTACLES

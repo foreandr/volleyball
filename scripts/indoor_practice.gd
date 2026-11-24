@@ -13,6 +13,8 @@ const PINS := [Vector3(4.75,2.65,3.0),Vector3(1.05,2.65,3.3),Vector3(-4.75,2.65,
 const BASE := Vector3(-1.5,0.04,1.35)
 const ORDER := [0,2,1]
 const SET_LOAD := .26
+var forehead_arrival := 1.0
+var forehead_target := Vector3.ZERO
 var contact_time := 1.0
 const DURATION := [1.25,1.62]
 const APEX := [1.92,3.22]
@@ -340,9 +342,9 @@ func leave() -> void:
 	MenuPresentation.load_scene("res://scenes/story.tscn")
 
 func start_practice() -> void:
-	coach_motion.signal_drill(coach)
-	coach.position = rotation_drill.basket.position + rotation_drill.FEED_SPOT
+	coach_motion.whistle_cue.signal_drill(coach)
 	rotation_drill.advance_turn()
+	rotation_drill.stage_start()
 	skip_time = 0
 	demonstration = false
 	demo_index = 0
@@ -471,7 +473,9 @@ func move_setter(delta: float,actor: Node3D=setter,off_ball := false) -> bool:
 	actor.position = rotation_drill.move_actor(actor,direction*delta*speed)
 	if not off_ball: actor.position.z = minf(actor.position.z,3.65)
 	var at_net := absf(actor.position.z-4.)<1.55 and absf(direction.x)>absf(direction.z)*1.35 and not sprint
-	var facing := ball.position-actor.position if focus else (coach.position-actor.position if phase=="walk" and direction.is_zero_approx() else direction)
+	var focus_point := ball.position if ball.visible else coach.position
+	if not off_ball and phase=="pass": focus_point=source
+	var facing := focus_point-actor.position if focus else (coach.position-actor.position if phase=="walk" and direction.is_zero_approx() else direction)
 	if at_net and not focus: facing=Vector3(0,0,1 if actor.position.z<4 else -1)
 	var choice := free_target if off_ball else held
 	if focus and choice>=0:
@@ -499,9 +503,20 @@ var focus_headings := {}
 
 var changing_turn := false
 
+var cpu_goals := {}
+
+func cpu_goal(id: int) -> int:
+	if not cpu_goals.has(id):
+		for entry in scorecard:
+			if entry.setter==id and entry.has("cpu_goal"):
+				cpu_goals[id]=entry.cpu_goal
+				return cpu_goals[id]
+		cpu_goals[id]=rotation_drill.random.randi_range(2,4)
+	return cpu_goals[id]
+
 func cpu_aims_inside(id: int) -> bool:
 	var remaining := 9
-	var needed := 3 if id == 1 else 4
+	var needed := cpu_goal(id)
 	for entry in scorecard:
 		if entry.setter == id:
 			remaining -= 1
@@ -527,7 +542,7 @@ func change_setter(skipping: bool) -> void:
 			if entry.setter == 1: done += 1
 		for i in range(done,9):
 			var made := cpu_aims_inside(1)
-			scorecard.append({"setter":1,"target":ORDER[i%3],"station":i/3,"made":made,"error":0.22 if made else 1.65})
+			scorecard.append({"setter":1,"cpu_goal":cpu_goal(1),"target":ORDER[i%3],"station":i/3,"made":made,"error":0.22 if made else 1.65})
 		if not save_scorecard():
 			scorecard.assign(previous)
 			curtain.queue_free()
@@ -555,7 +570,7 @@ func _process(delta: float) -> void:
 	timing_note.visible = clock < timing_until and phase != "complete" and not settings.visible
 	score_strip.visible=phase not in ["intro","net_guide"] and not settings.visible and (not demonstration or phase=="complete")
 	if settings.visible or phase=="net_guide": return
-	if coach_motion.step_whistle(coach,delta): return
+	if coach_motion.whistle_cue.step_whistle(coach,delta): return
 	if phase=="complete":
 		clock+=delta
 		rotation_drill.huddle(delta)
@@ -649,9 +664,9 @@ func step_practice(delta: float) -> void:
 			ball.position = coach_motion.toss(coach,clampf((clock-maxf(clock-elapsed,next_release-.30))/.30,0,1))
 			# Measure the athlete who actually arrived, including their rig scale.
 			var head := Contact.joint(setter,"Head")
-			catch_point.y=BASE.y+head.y-setter.position.y+.20+(.52 if jump_rep() else 0.)
-			catch_point.x=head.x
-			catch_point.z=head.z
+			forehead_target=head+Vector3.UP*.17+setter.global_basis.z*.048
+			forehead_target.y-=maxf(0,setter.position.y-BASE.y)
+			catch_point=forehead_target+Vector3.UP*(.09+(.52 if jump_rep() else 0.))
 			if elapsed>=.30 and clock>=next_release and rotation_drill.floor_clear():
 				last_toss = clock
 				next_release = clock+2.0
@@ -659,6 +674,7 @@ func step_practice(delta: float) -> void:
 				source = ball.position
 				toss_curve=[1.35,2.65,3.95][rotation_drill.tosses%3]*rotation_drill.random.randf_range(.91,1.09)
 				var apex := maxf(source.y,catch_point.y)+toss_curve
+				forehead_arrival=sqrt(2.*(apex-source.y)/9.81)+sqrt(2.*(apex-forehead_target.y)/9.81)
 				contact_time=sqrt(2.*(apex-source.y)/9.81)+sqrt(2.*(apex-catch_point.y)/9.81)
 				toss_spin=Vector3([-8.0,1.4,7.5][rotation_drill.tosses%3],rotation_drill.random.randf_range(-3,3),rotation_drill.random.randf_range(-2,2))
 				trace("coach_release",{"from":str(source),"to":str(catch_point),"arc":toss_curve,"spin":str(toss_spin)})
@@ -675,7 +691,7 @@ func step_practice(delta: float) -> void:
 				jump.air_time=jump.flight_duration(.52,true)
 				jump.release()
 			var previous := ball.position
-			ball.position = source.lerp(catch_point,elapsed/contact_time)+Vector3.UP*(4.905*elapsed*(contact_time-elapsed))
+			ball.position = source.lerp(forehead_target,elapsed/forehead_arrival)+Vector3.UP*(4.905*elapsed*(forehead_arrival-elapsed))
 			var incoming := ball.position-previous
 			var obstacle := contacts.sweep(world,contacts.ball_shape,previous,incoming,Contact.GYM|Contact.EQUIPMENT|64|rotation_drill.CART_WALL)
 			if not obstacle.is_empty():
@@ -696,7 +712,7 @@ func step_practice(delta: float) -> void:
 				Hands.apply(setter,ball.position,0.35+0.65*smoothstep(contact_time-.55,contact_time-.10,elapsed))
 				if Vector3(0,ball.position.y-setter.position.y,0).length()<setter.height_cm*.013: Contact.track_hands(setter,ball.position)
 			if held<0 and not demonstration and rotation_drill.turn==0:
-				var head := Contact.joint(setter,"Head")+Vector3.UP*.10
+				var head := Contact.joint(setter,"Head")+Vector3.UP*.10+setter.global_basis.z*.048
 				var closest := Geometry3D.get_closest_point_to_segment(head,previous,ball.position)
 				if head.distance_to(closest)<.205 and incoming.y<0:
 					var normal := (closest-head).normalized()
@@ -727,7 +743,7 @@ func step_practice(delta: float) -> void:
 			if held>=0 and clock-last_contact<.11:
 				Hands.apply(setter,ball.position-Vector3.UP*cushion,1.0,Vector3.ZERO,cushion)
 			if (demonstration or rotation_drill.turn!=0) and elapsed>=contact_time: release(called())
-			elif elapsed>contact_time+0.25: miss("The toss dropped. Hold the target, then release at contact.")
+			elif elapsed>forehead_arrival+0.25: miss("The toss dropped. Hold the target, then release at contact.")
 		"set":
 			ball.rotate_x(delta*4.0)
 			var t := clampf(elapsed/flight_time,0,1)
@@ -802,6 +818,7 @@ func step_practice(delta: float) -> void:
 			if elapsed>.025 and not jump.active and not free_jump.active:
 				if rotation_drill.attempts==2: next_release = maxf(next_release,last_toss+3.5)
 				var entry := {"setter":rotation_drill.turn,"target":called(),"station":rotation_drill.station,"made":success,"error":placement_error}
+				if rotation_drill.turn!=0: entry["cpu_goal"]=cpu_goal(rotation_drill.turn)
 				scorecard.append(entry)
 				if not save_scorecard():
 					scorecard.pop_back()
@@ -858,7 +875,7 @@ func miss(reason: String) -> void:
 	success = false
 	if measured_release: show_timing(set_error)
 	trace("miss",{"reason":reason})
-	drop_velocity = (catch_point-source)/contact_time+Vector3.UP*9.81*(contact_time/2.0-elapsed)
+	drop_velocity = (forehead_target-source)/forehead_arrival+Vector3.UP*9.81*(forehead_arrival/2.0-elapsed)
 	feedback = reason
 	begin("drop")
 	message.text = reason
@@ -1075,7 +1092,7 @@ func rankings() -> Array:
 	return table
 
 func complete() -> void:
-	coach_motion.signal_drill(coach)
+	coach_motion.whistle_cue.signal_drill(coach)
 	for net in targets: net.beacon.hide()
 	begin("complete")
 	refresh_scores()

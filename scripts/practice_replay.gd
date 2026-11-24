@@ -45,12 +45,12 @@ func capture(rendered := false) -> Dictionary:
 				for modifier in rig.get_children():
 					if "replay_bones" in modifier: modifier.replay_bones = bones
 			objects[obj.model] = [obj.model.transform,obj.model.visible]
-		elif obj != game.ball and obj is not RigidBody3D and obj not in game.rotation_drill.bins and obj != game.rotation_drill.basket: continue
+		elif obj != game.ball and obj is not RigidBody3D and obj not in game.targets and obj not in game.rotation_drill.bins and obj != game.rotation_drill.basket: continue
 		objects[obj] = [obj.transform,obj.visible]
-	return {"objects":objects,"poses":poses,"whistle_height":game.coach_motion.raised}
+	return {"objects":objects,"poses":poses,"whistle_height":game.coach_motion.whistle_cue.raised}
 
 func apply(sample: Dictionary) -> void:
-	game.coach_motion.raised = sample.whistle_height
+	game.coach_motion.whistle_cue.raised = sample.whistle_height
 	for obj in live.objects:
 		if not is_instance_valid(obj): continue
 		if not sample.objects.has(obj):

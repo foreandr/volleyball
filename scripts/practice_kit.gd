@@ -385,7 +385,7 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		float width=mix(.0035,.0075,bend);
 		return max(1.-smoothstep(.0015,width,line),.72*(1.-smoothstep(.001,width*.8,lower_line)));
 	}
-	uniform int ankle_support; uniform int knee_support; uniform bool leggings = false;
+	uniform int ankle_support; uniform int knee_support; uniform float tights_hem = 2.; uniform vec4 sock_color:source_color;
 	uniform float sock_top; uniform vec4 sock_trim:source_color; uniform float striped;
 	uniform vec4 pad_color:source_color;
 	varying vec3 anatomy;
@@ -424,7 +424,8 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 	}
 	void fragment(){if(y>hem_y+.055 || y<.070)discard; ALBEDO=texture(skin_map,UV).rgb; NORMAL_MAP=texture(muscles,UV).rgb; NORMAL_MAP_DEPTH=.68; ROUGHNESS=mix(.42,.86,texture(roughness_map,UV).r);
 		float yarn=.5+.5*cos(y*1250.)*(1.-smoothstep(.0007,.003,fwidth(y)));
-		if(leggings){ ALBEDO=vec3(.032,.040,.052)*(.96+.04*yarn); NORMAL_MAP_DEPTH=.12; ROUGHNESS=.87; }
+		float tights=smoothstep(tights_hem,tights_hem+.004,y);
+		if(tights>.0){ ALBEDO=mix(ALBEDO,vec3(.032,.040,.052)*(.96+.04*yarn)*(1.-.18*(1.-smoothstep(.004,.010,y-tights_hem))),tights); NORMAL_MAP_DEPTH=.12; ROUGHNESS=.87; }
 		float sock_mask=1.-smoothstep(sock_top,sock_top+.003,y);
 		float pad_mask=enabled_side*(1.-smoothstep(.087,.091,abs(y-knee_height)));
 		float back_hole=rear_opening(anatomy.x-knee_center,y-knee_height,knee_facing);
@@ -441,7 +442,7 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		float knit_phase=angle*45.+course*970.;
 		float diagonal=cos(knit_phase)*(1.-smoothstep(.65,2.9,fwidth(knit_phase)));
 		float selvage=1.-smoothstep(.0006,.0019+fwidth(course),abs(abs(course)-.010));
-		vec3 sock_base=mix(vec3(.68,.69,.66),mix(vec3(.53,.55,.52),sock_trim.rgb,.13),ankle_band);
+		vec3 sock_base=mix(sock_color.rgb,mix(sock_color.rgb*.78,sock_trim.rgb,.13),ankle_band);
 		vec3 knit_color=mix(sock_base*(1.+ankle_band*(.075*diagonal-.13*selvage)),sock_trim.rgb,stripe);
 		ALBEDO=mix(ALBEDO,knit_color*(.91+.09*yarn-.08*cuff+.095*cuff*rib),sock_mask);
 		float height=y-knee_height;
@@ -496,7 +497,7 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 			}
 			support=max(support,mask);
 		}
-		float gear=max(support,max(pad_mask,sock_mask));
+		float gear=max(tights,max(support,max(pad_mask,sock_mask)));
 		vec2 p=anatomy.xy;
 		float front=smoothstep(.46,.61,anatomy.z);
 		float quad=contour(p,vec2(.077,.555),vec2(.038,.076))+contour(p,vec2(.167,.666),vec2(.042,.135));
@@ -522,8 +523,9 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 	skin.set_shader_parameter("pad_color",Color("dfdfd7") if variant%3==1 else Color("343d44"))
 	skin.set_shader_parameter("striped",float(variant%3!=0))
 	skin.set_shader_parameter("sock_trim",[Color("5c674f"),Color("844238"),Color("384c62")][variant%3])
-	skin.set_shader_parameter("leggings",variant > 0 and variant % 4 == 2)
-	skin.set_shader_parameter("sock_top",.155+.027*(variant%4))
+	skin.set_shader_parameter("tights_hem",[2.,.30,.075,2.,.33,2.,.29][variant%7])
+	skin.set_shader_parameter("sock_color",[Color("f1eee6"),Color("fafafa"),Color("313947"),Color("892f38"),Color("f5f2e8"),Color("284661"),Color("36393a"),Color("33635b")][variant%8])
+	skin.set_shader_parameter("sock_top",[.32,.12,.21,.42,.17,.28,.48][variant%7])
 	var knee := rig.get_bone_global_rest(rig.find_bone("calf_l")).origin
 	skin.set_shader_parameter("knee_depth",knee.z)
 	skin.set_shader_parameter("knee_height",knee.y)
@@ -631,8 +633,12 @@ static func court_shoe(rig: Skeleton3D,side: String,coach: bool,variant: int) ->
 	var textile := ShaderMaterial.new()
 	textile.shader=preload("res://assets/gym/court_shoe.gdshader")
 	textile.set_shader_parameter("shoe_atlas",preload("res://assets/characters/footwear/running_shoes.png"))
-	textile.set_shader_parameter("tint",Color.WHITE if coach else [Color.WHITE,Color("dfecff"),Color("ffe0a8"),Color("d5e4cf")][variant%4])
-	textile.set_shader_parameter("counter_color",Color("303737") if coach else [Color("374351"),Color("b2583a"),Color("545d66"),Color("496663"),Color("c6aa69")][variant%5])
+	var uppers := ["eceee9","192e48","f2eee6","b64136","35414b","f1cc60","416864","405da1","ded8d0"]
+	var accents := ["284538","efaa41","bf4654","fff2c9","60c9be","423647","f4c39a","ecf0ee"]
+	textile.set_shader_parameter("tint",Color.WHITE if coach else Color(uppers[variant%uppers.size()]))
+	textile.set_shader_parameter("counter_color",Color("414947") if coach else Color(accents[variant%accents.size()]))
+	textile.set_shader_parameter("collar_rise",0. if coach else [0.,.038,.082][variant%3])
+	textile.set_shader_parameter("design",0 if coach else variant%4)
 	trainer.material_override=textile
 	last.add_child(trainer)
 	rig.set_meta("sole_"+side,last)

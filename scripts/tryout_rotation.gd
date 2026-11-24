@@ -177,6 +177,20 @@ func key_upright_idle(actor: Node3D) -> void:
 		clip.track_set_path(track,bone)
 		clip.rotation_track_insert_key(track,0.,actor.skeleton.get_bone_rest(actor.skeleton.find_bone("spine_01")).basis.get_rotation_quaternion())
 
+func within_cart_reach() -> bool:
+	var local := basket.to_local(game.coach.position)
+	var edge := Vector2(maxf(absf(local.x)-.54,0),maxf(absf(local.z)-.35,0))
+	return edge.length() <= .67
+
+func stage_start() -> void:
+	station = mini(round_index,2)
+	var shift: Vector3 = STATIONS[station]-basket.position
+	basket.position += shift
+	for body in stock: body.position += shift
+	game.coach.position = basket.to_global(HANDLE)
+	for i in roster.size():
+		roster[i].position = game.BASE if i == turn else WAIT[(i-turn+3)%3]
+
 func station_ready(dt: float) -> bool:
 	var requested := mini(round_index,2)
 	if requested!=station:
@@ -191,7 +205,7 @@ func station_ready(dt: float) -> bool:
 		# Swing the handle around the cart first, push forward, then park
 		# with the handle accessible from the coach's usual feeding spot.
 		var parking := travel.length()<.01
-		var heading := 0. if parking else atan2(travel.x,travel.z)
+		var heading := basket.rotation.y if parking else atan2(travel.x,travel.z)
 		basket.rotation.y=rotate_toward(basket.rotation.y,heading,dt*2.8)
 		var aligned := absf(angle_difference(basket.rotation.y,heading))<.01
 		if aligned and not parking:
@@ -208,7 +222,7 @@ func station_ready(dt: float) -> bool:
 			game.trace("cart_station",{"station":station,"tosses":tosses})
 		return false
 	var feed_position := basket.position + FEED_SPOT
-	if game.coach.position.distance_to(feed_position) <= FEED_REACH:
+	if within_cart_reach():
 		routes.velocities.erase(game.coach)
 		walking_progress.erase(game.coach)
 		return true
@@ -243,25 +257,23 @@ func prepare_next_ball(dt: float) -> void:
 	if game.phase=="pass" and game.elapsed<.16: return
 	var coach: Node3D=game.coach
 	if not waiting_ball:
-		if stock.is_empty() or coach.position.distance_to(basket.position+FEED_SPOT)>FEED_REACH: return
+		if stock.is_empty() or not within_cart_reach(): return
 		waiting_ball=stock.back()
 		for candidate in stock:
-			var dz := candidate.position.y-waiting_ball.position.y
-			if dz>.02 or (absf(dz)<.02 and candidate.position.distance_to(coach.position)<waiting_ball.position.distance_to(coach.position)):
+			var cost := candidate.position.distance_to(coach.position) - .75*candidate.position.y
+			if cost < waiting_ball.position.distance_to(coach.position) - .75*waiting_ball.position.y:
 				waiting_ball=candidate
 		stock.erase(waiting_ball)
 		fetch_start=waiting_ball.position
+		var x := basket.to_local(fetch_start).x-basket.to_local(coach.position).x
+		game.coach_motion.toss_hand = "" if absf(x)<.22 else ("l" if coach.to_local(fetch_start).x > 0 else "r")
 		fetch_time=0.
 	fetch_time+=dt
 	var rig: Skeleton3D=coach.skeleton
 	var author: RefCounted=coach.get_pose_author()
-	var to_cart := (basket.position-coach.position).slide(Vector3.UP)
-	var at_feed_spot := coach.position.distance_to(basket.position+FEED_SPOT) <= FEED_REACH
-	if at_feed_spot and fetch_time<.40 and to_cart.length_squared()>.01:
-		coach.rotation.y=lerp_angle(coach.rotation.y,atan2(to_cart.x,to_cart.z),minf(1.,dt*12.))
-	if at_feed_spot and fetch_time>.32 and mini(round_index,2)==station:
-		var toward := (game.setter as Node3D).position-coach.position
-		coach.rotation.y=lerp_angle(coach.rotation.y,atan2(toward.x,toward.z),minf(1.,dt*8.))
+	var toward := (game.setter as Node3D).position-coach.position
+	if toward.length_squared()>.01:
+		coach.rotation.y = rotate_toward(coach.rotation.y,atan2(toward.x,toward.z),dt*2.4)
 	var cradle: Vector3=rig.to_global(author.point(author.baseline,"pelvis")+Vector3(0,.12,.46))
 	var carry := smoothstep(.28,.74,fetch_time)
 	var pivot := coach.position
@@ -920,8 +932,72 @@ var approach_reached := {}
 var settled_positions := {}
 var huddle_velocity := {}
 
+var huddle_recovery := {}
+var moving_gear := {}
+
+func clear_huddle_path(actor: Node3D, goal: Vector3, dt: float) -> bool:
+	var state: Dictionary = huddle_recovery.get(actor,{})
+	if state.is_empty() or (not state.has("gear") and actor.position.distance_to(state.at)>.22):
+		state={"at":actor.position,"since":huddle_elapsed}
+		huddle_recovery[actor]=state
+	if not state.has("gear"):
+		if huddle_elapsed-state.since<1.4: return false
+		state.since=huddle_elapsed
+		routes.paths.erase(actor)
+		var toward := (goal-actor.position).slide(Vector3.UP).normalized()
+		for item: Node3D in bins+[basket]+game.targets:
+			var gap := (item.position-actor.position).slide(Vector3.UP)
+			if gap.length()>1.22 or gap.dot(toward)<-.05 or moving_gear.has(item): continue
+			var axis := gap.normalized()
+			var shape := BoxShape3D.new()
+			var target: bool = item in game.targets
+			shape.size=Vector3(1.55,2.4,1.8) if target else Vector3(1.34,.98,1.34)
+			var excluded: Array[RID]=[]
+			for body in item.find_children("*","StaticBody3D",true,false): excluded.append(body.get_rid())
+			var origin := Vector3(item.position.x,.07+shape.size.y*.5,item.position.z)
+			for yaw: float in [.68,-.68,0.]:
+				var push := axis.rotated(Vector3.UP,yaw)
+				if not game.contacts.sweep(game.world,shape,origin,push*.82,Contact.GYM|Contact.EQUIPMENT|64|256|CART_WALL,excluded).is_empty(): continue
+				var room := true
+				for member: Node3D in circle:
+					if member==actor: continue
+					var near := Geometry3D.get_closest_point_to_segment(member.position.slide(Vector3.UP),origin.slide(Vector3.UP),origin.slide(Vector3.UP)+push*.82)
+					if near.distance_to(member.position.slide(Vector3.UP))<1.35: room=false
+				if not room: continue
+				state.gear=item
+				state.push=push
+				state.distance=0.
+				moving_gear[item]=actor
+				break
+			if state.has("gear"): break
+		if not state.has("gear"): return false
+	var gear: Node3D=state.gear
+	var step: Vector3=state.push*minf(dt*.55,.82-state.distance)
+	gear.position+=step
+	if gear==basket or gear in bins:
+		var cargo: Array=stock if gear==basket else loads[bins.find(gear)]
+		for body in cargo: body.position+=step
+	actor.position=move_actor(actor,step)
+	var offset := gear.position-actor.position
+	actor.rotation.y=rotate_toward(actor.rotation.y,atan2(offset.x,offset.z),dt*2.25)
+	actor.play_action("base/Walk")
+	var reach := actor.position+offset.slide(Vector3.UP).normalized()*.49+Vector3.UP*.97
+	game.coach_motion.fetch_pose(actor,reach,1.,1.)
+	state.distance+=step.length()
+	if state.distance>=.819:
+		moving_gear.erase(gear)
+		huddle_recovery.erase(actor)
+		routes.paths.clear()
+		routes.equipment_clearance.clear()
+		for net in game.targets:
+			var half := Vector2(net.mouth_radius+.4,.91)
+			routes.equipment_clearance.append(Rect2(Vector2(net.position.x,net.position.z)-half,half*2))
+		routes.initialized=false
+	return true
+
 func huddle_walk(actor: Node3D, goal: Vector3, dt: float) -> void:
 	routes.ignored_cart.erase(actor)
+	if clear_huddle_path(actor,goal,dt): return
 	var dir := (goal - actor.position).slide(Vector3.UP)
 	if dir.length() < 0.05: return
 	var occupied := []
@@ -937,7 +1013,7 @@ func huddle_walk(actor: Node3D, goal: Vector3, dt: float) -> void:
 	var capsule: CapsuleShape3D = game.contacts.capsule
 	capsule.height = maxf(0.68,actor.height_cm*0.01)
 	var origin := actor.position + Vector3.UP*(capsule.height*0.5+0.025)
-	var obstacle: Dictionary = game.contacts.sweep(game.world,capsule,origin,dir.limit_length(2.0),Contact.GYM|Contact.EQUIPMENT|CART_WALL)
+	var obstacle: Dictionary = game.contacts.sweep(game.world,capsule,origin,dir.limit_length(2.0),Contact.GYM|Contact.EQUIPMENT|256|CART_WALL)
 	if routes.paths.has(actor) or blocked or not obstacle.is_empty():
 		if not routes.paths.has(actor): routes.detour(actor,goal,occupied)
 		waypoint = routes.waypoint(actor,goal,dt)
@@ -1050,28 +1126,6 @@ func huddle(dt: float) -> void:
 		var rig: Skeleton3D=actor.skeleton
 		var pose: Array=[]
 		for j in rig.get_bone_count(): pose.append(rig.get_bone_pose(j))
-		var mid_z: float=(author.point(pose,"foot_l").z+author.point(pose,"foot_r").z)*.5
-		var lead: float=[0.,.095,-.095][i%3]
-		# Idle feet can settle below the floor. Correct the ankle through
-		# the leg chain so the shoe and the sock stay joined.
-		for leg in ["l","r"]:
-			if not rig.has_meta("sole_"+leg): continue
-			var mount: Node3D=rig.get_meta("sole_"+leg)
-			var ankle := "foot_"+str(leg)
-			var id := rig.find_bone(ankle)
-			var ankle_pose: Transform3D=author.world_pose(pose,id)
-			var shoe_frame: Transform3D=rig.global_transform*ankle_pose*mount.transform
-			var lowest := INF
-			for z: float in [-.13,.0,.15]:
-				for x: float in [-.045,.045]:
-					lowest=minf(lowest,(shoe_frame*Vector3(x,.009,z)).y)
-			var shift := rig.global_basis.inverse()*(Vector3.UP*(.041-lowest))
-			shift.z+=mid_z+(lead if leg=="l" else -lead)-ankle_pose.origin.z
-			author.limb(pose,"thigh_"+leg,"calf_"+leg,ankle,ankle_pose.origin+shift,Vector3.BACK)
-			author.set_world_basis(pose,ankle,ankle_pose.basis.orthonormalized())
-			for bone in ["thigh_"+leg,"calf_"+leg,ankle]:
-				var joint := rig.find_bone(bone)
-				rig.set_bone_pose_rotation(joint,pose[joint].basis.orthonormalized().get_rotation_quaternion())
 		for side in ["l","r"]:
 			var sign_: float=1. if side=="l" else -1.
 			var arm := "upperarm_"+str(side)
