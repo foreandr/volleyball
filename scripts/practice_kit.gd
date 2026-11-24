@@ -404,14 +404,14 @@ static func tape_hand(rig: Skeleton3D,side: String,count: int,palm_wrap: bool) -
 		var digit: String=["index","middle","ring"][i]
 		var bone := digit+"_01_"+side
 		var joint := rig.get_bone_rest(rig.find_bone(digit+"_02_"+side)).origin
-		var radius := clampf(joint.length()*.38,.012,.017)
+		var radius := clampf(joint.length()*.37,.0115,.0165)
 		tape_band(rig,bone,joint*.52,joint.normalized(),radius,radius,joint.length()*.60,cloth)
 	if palm_wrap:
 		var frame := rig.get_bone_global_rest(rig.find_bone("hand_"+side)).affine_inverse()
 		var index: Vector3=frame*rig.get_bone_global_rest(rig.find_bone("index_01_"+side)).origin
 		var pinky: Vector3=frame*rig.get_bone_global_rest(rig.find_bone("pinky_01_"+side)).origin
 		var axis := (index+pinky).normalized()
-		tape_band(rig,"hand_"+side,(index+pinky)*.33,axis,index.distance_to(pinky)*.86,.033,.030,cloth,(index-pinky).slide(axis).normalized())
+		tape_band(rig,"hand_"+side,(index+pinky)*.33,axis,index.distance_to(pinky)*.79,.031,.026,cloth,(index-pinky).slide(axis).normalized())
 
 static func tape_band(rig: Skeleton3D,bone: String,center: Vector3,axis: Vector3,width: float,depth: float,height: float,cloth: Material,across := Vector3.ZERO) -> void:
 	var mount := BoneAttachment3D.new()
@@ -421,7 +421,9 @@ static func tape_band(rig: Skeleton3D,bone: String,center: Vector3,axis: Vector3
 	band.top_radius=1.
 	band.bottom_radius=1.04
 	band.height=1.
-	band.radial_segments=24
+	band.cap_top=false
+	band.cap_bottom=false
+	band.radial_segments=36
 	var part := MeshInstance3D.new()
 	part.mesh=band
 	part.material_override=cloth
