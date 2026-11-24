@@ -56,6 +56,7 @@ var spectator_icon := TextureRect.new()
 var timing_note := Label.new()
 var timing_until := 0.0
 const ON_TIME := .065
+const BUMP_ON_TIME := .085
 const HAND_CUSHION := .18
 var buffered_at := 0.
 var buffered_contact_time := 0.
@@ -959,7 +960,7 @@ func aim_bump(stick: Vector2) -> void:
 		if not bump_armed and not bump_aim.is_zero_approx() and not bump_released:
 			if phase=="pass":
 				bump_offset=release_offset()
-				show_timing(signf(bump_offset)*maxf(0.,absf(bump_offset)-ON_TIME))
+				show_timing(signf(bump_offset)*maxf(0.,absf(bump_offset)-BUMP_ON_TIME))
 				graded_fill=set_fill()
 				grade_band=timing_band()
 				grade_contact=contact_band()
@@ -1063,7 +1064,7 @@ func play_bump(previous: Vector3, incoming: Vector3, dt: float) -> void:
 	tempo=chosen_tempo()
 	flight_time=DURATION[tempo]
 	var intended := desired
-	var error := signf(bump_offset)*maxf(0.,absf(bump_offset)-ON_TIME)
+	var error := signf(bump_offset)*maxf(0.,absf(bump_offset)-BUMP_ON_TIME)
 	desired+=(desired-source).slide(Vector3.UP).normalized()*error*lerpf(5.,2.,setter.effective_rating("Forearm setting")/100.)
 	var accuracy=preload("res://scripts/reception_accuracy.gd")
 	var spread: Vector2=accuracy.spread(clampf(absf(error)/timing_window(),0.,1.),bump_incoming.length(),0.,setter.effective_rating("Forearm setting"),true)
@@ -1075,6 +1076,7 @@ func play_bump(previous: Vector3, incoming: Vector3, dt: float) -> void:
 	feedback="Bump set   /   Target made" if success else "Bump set   /   Off target"
 	energy[setter].spend(2)
 	sampler.bump_playback_rate=.75 if target==2 else .94
+	sampler.capture_bump_contact()
 	sampler.touch=source
 	sampler.touch_time=elapsed
 	sampler.outgoing=(endpoint-source+Vector3.UP*4.*APEX[tempo])/flight_time
@@ -1367,7 +1369,7 @@ func step_practice(delta: float) -> void:
 				if reception_pose.low_save.active and not reception_pose.low_save.finished(bump_follow_start+elapsed):
 					reception_pose.low_save.sample(setter,bump_follow_start+elapsed,bump_follow_start)
 				else: reception_pose.follow_forearm(bump_follow_start+elapsed,bump_incoming)
-			if automatic_setter() and elapsed<=Hands.CPU_FOLLOW_TIME: face_set(setter,target,delta)
+			if bump_aim.is_zero_approx() and automatic_setter() and elapsed<=Hands.CPU_FOLLOW_TIME: face_set(setter,target,delta)
 			ball.rotate_x(delta*4.0)
 			var t := clampf(elapsed/flight_time,0,1)
 			var desired := arc(source,endpoint,t,APEX[tempo])
@@ -1539,9 +1541,17 @@ func start_set_meter() -> void:
 
 func set_fill() -> float:
 	if phase!="pass": return 0.
+	if not bump_aim.is_zero_approx(): return bump_meter_position(release_offset())
 	return clampf((clock-meter_start)*meter_rate,0.,1.)
 
+# Reserve the bulk of the arc for playable releases, independently of toss duration.
+func bump_meter_position(offset: float) -> float:
+	var early := -(timing_window()+.065)
+	var late := late_contact_limit()
+	return clampf(inverse_lerp(early-.055,late+.055,offset),0.,1.)
+
 func timing_band() -> Vector2:
+	if not bump_aim.is_zero_approx(): return Vector2(bump_meter_position(-BUMP_ON_TIME),bump_meter_position(BUMP_ON_TIME))
 	if phase!="pass": return Vector2(.55,.85)
 	var ideal := (clock-meter_start-release_offset())*meter_rate
 	return Vector2(clampf(ideal-ON_TIME*meter_rate,0.,1.),clampf(ideal+ON_TIME*meter_rate,0.,1.))
@@ -1559,6 +1569,7 @@ func toss_in_reach() -> bool:
 	return (arrival-head).slide(Vector3.UP).length()<=.76
 
 func contact_band() -> Vector2:
+	if not bump_aim.is_zero_approx(): return Vector2(bump_meter_position(-(timing_window()+.065)),bump_meter_position(late_contact_limit()))
 	if phase!="pass": return Vector2(.30,.96)
 	var ideal := (clock-meter_start-release_offset())*meter_rate
 	return Vector2(clampf(ideal-(timing_window()+.065)*meter_rate,0.,1.),clampf(ideal+late_contact_limit()*meter_rate,0.,1.))

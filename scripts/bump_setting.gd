@@ -90,6 +90,7 @@ var ready_knee_bend_depth := 0.0
 var lunge_bend_depth := 0.0
 var defense_ground_y := 0.0
 var contact_destination := Vector2.ZERO
+var bump_contact_pose: Array[Transform3D] = []
 var bump_playback_rate := 1.0
 var planned_bump_effort := -1.0
 var bump_load_depth := 0.0
@@ -161,6 +162,7 @@ func reset() -> void:
 	bump_load_depth=0.0
 	planned_bump_effort=-1.0
 	bump_playback_rate=1.0
+	bump_contact_pose.clear()
 	early_dig_arms.clear()
 	hard_dig = false
 	fast_hand_dig = false
@@ -867,11 +869,26 @@ func pose_bump_receive(time_from_contact: float) -> void:
 			var id := rig.find_bone(joint)
 			rig.set_bone_pose_rotation(id,pose[id].basis.get_rotation_quaternion())
 
+func capture_bump_contact() -> void:
+	bump_contact_pose.clear()
+	for bone in setter.skeleton.get_bone_count():
+		bump_contact_pose.append(setter.skeleton.get_bone_pose(bone))
+
 func follow_forearm(time: float, incoming: Vector3) -> void:
 	var follow := (time-touch_time)*bump_playback_rate
 	rear_follow = follow
 	if follow <= 0.0 or follow >= FOREARM_RECOVERY_TIME: return
 	var blend := 1.0-smoothstep(0.13,FOREARM_RECOVERY_TIME,follow)
+	if not bump_contact_pose.is_empty():
+		# Swing once from the actual tracked platform. Fade into locomotion as the legs rise.
+		var rig: Skeleton3D=setter.skeleton
+		var plant := 1.-smoothstep(0.,.36,follow)
+		for bone in rig.get_bone_count():
+			var pose := rig.get_bone_pose(bone).interpolate_with(bump_contact_pose[bone],plant)
+			rig.set_bone_pose_position(bone,pose.origin)
+			rig.set_bone_pose_rotation(bone,pose.basis.get_rotation_quaternion())
+		Drive.apply(rig,setter.get_pose_author(),outgoing,Drive.effort(incoming,outgoing),follow,true,incoming,planned_bump_effort)
+		return
 	if reach.has("custom_clip"):
 		apply_custom_backward(custom_backward_time+follow,blend)
 		return

@@ -156,3 +156,4 @@ Grounded bump sets load the knees before contact and extend through the arm swin
 On grounded bump sets, the torso hinges forward with the knee bend and starts rising before contact. The back bump carries that rise into the overhead follow-through.
 Grounded forearm sets use both the intended distance and arc height to scale the knee load and platform swing. The hands retain the reception grip through follow-through.
 Grounded bump setters track the descending ball through a range of forearm heights. A low contact adds torso lean and wrist tilt. The back-bump follow-through runs at 75 percent speed.
+The bump timing arc dedicates most of its width to playable releases. Follow-through starts from the actual forearm contact pose and uses a single directional swing.
