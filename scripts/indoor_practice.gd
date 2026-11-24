@@ -554,8 +554,9 @@ func reset_feed() -> void:
 		jump.active=false
 		setter.position.y=BASE.y
 	if demonstration: setter.position = BASE
-	setter.rotation.y = atan2(coach.position.x-BASE.x,coach.position.z-BASE.z)
-	setter.play_action("idle")
+	if not solo_setting or automatic_setter() or Vector3(ground_velocity.get(setter,Vector3.ZERO)).length()<.075:
+		setter.rotation.y = atan2(coach.position.x-BASE.x,coach.position.z-BASE.z)
+		setter.play_action("idle")
 	catch_point = BASE + Vector3.UP*(1.93*setter.height_cm/180.0 + ((camp_jump_height if solo_setting else .52) if jump_rep() else 0.0))
 	coach.show()
 	coach.rotation.y = atan2(catch_point.x-coach.position.x,catch_point.z-coach.position.z)
@@ -654,7 +655,8 @@ var still_seconds := 0.0
 func move_setter(delta: float,actor: Node3D=setter,off_ball := false) -> bool:
 	var motion := Vector2(axis(JOY_AXIS_LEFT_X),axis(JOY_AXIS_LEFT_Y))
 	motion += Vector2(int(Input.is_key_pressed(KEY_D))-int(Input.is_key_pressed(KEY_A)),int(Input.is_key_pressed(KEY_S))-int(Input.is_key_pressed(KEY_W)))
-	if motion.length()<0.16: motion = Vector2.ZERO
+	var amount := clampf((motion.length()-.14)/.86,0.,1.)
+	motion=motion.normalized()*amount*lerpf(.64,1.,amount)
 	var direction := Vector3(-motion.x,0,-motion.y).limit_length(1) if off_ball else Vector3.ZERO
 	if solo_setting and not off_ball:
 		var right := camera.global_basis.x.slide(Vector3.UP).normalized()

@@ -94,8 +94,11 @@ func _ready() -> void:
 	animator.advance(float(player_number)*0.31)
 
 func play_ground_gait(speed: float) -> void:
-	if speed<.15: play_action("idle")
-	elif speed<1.75: play_action("base/Walk")
+	var walking := animator.current_animation=="base/Walk"
+	var jogging := animator.current_animation=="volleyball/slow_jog"
+	if speed<(.035 if walking else .075): play_action("idle")
+	elif speed<(1.55 if jogging else 1.95):
+		animator.play("base/Walk",.20,clampf(speed/1.45,.24,1.25))
 	elif speed<3.25: play_action("volleyball/slow_jog")
 	elif speed<4.75: play_action("run")
 	else: play_action("base/Sprint")
