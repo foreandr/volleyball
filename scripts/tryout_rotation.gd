@@ -966,6 +966,13 @@ func huddle(dt: float) -> void:
 				huddle_walk(actor,spot,dt)
 				continue
 			settled_positions[actor] = actor.position
+		# Keep the entrance wide until the last teammate has arrived.
+		# Then close the ring together, with each player staying in their slot.
+		if settled_positions.size() == circle.size():
+			var close_spot := HUDDLE_CENTER + radial*1.02
+			var step := (close_spot-actor.position).slide(Vector3.UP).limit_length(dt*0.52)
+			actor.position += step
+			if actor.position.distance_to(close_spot) > 0.06: facing_center = false
 		present += 1
 		actor.play_action("base/Idle")
 		var inward := HUDDLE_CENTER-actor.position
@@ -1000,7 +1007,11 @@ func huddle(dt: float) -> void:
 		for side in ["l","r"]:
 			var sign_: float=1. if side=="l" else -1.
 			var arm := "upperarm_"+str(side)
-			var adjacent: Node3D=circle[posmod(i+(1 if side=="r" else -1),circle.size())]
+			var next: Node3D = circle[(i+1)%circle.size()]
+			var previous: Node3D = circle[posmod(i-1,circle.size())]
+			var shoulders := Contact.joint(actor,"upperarm_r")-Contact.joint(actor,"upperarm_l")
+			var right_faces_next := shoulders.dot(next.position-previous.position) >= 0.0
+			var adjacent: Node3D = next if (side=="r") == right_faces_next else previous
 			if not settled_positions.has(adjacent) or not settled_positions.has(actor): continue
 			var distance := actor.position.distance_to(adjacent.position)
 			var weight := 1.-smoothstep(.77,1.02,distance)
@@ -1028,7 +1039,15 @@ func huddle(dt: float) -> void:
 				var elbow_at := Contact.joint(actor,"lowerarm_"+str(side))
 				var hand_at := Contact.joint(actor,"hand_"+str(side))
 				var length := reach.distance_to(elbow_at) + elbow_at.distance_to(hand_at)
-				if reach.distance_to(aim) > length*0.9 or aim.y > reach.y + 0.12: continue
+				# Aim for the nearer back panel when height differences put the
+				# original shoulder or waistband beyond a comfortable palm reach.
+				var palm_reach := length + 0.65*hand_at.distance_to(Contact.joint(actor,"middle_01_"+str(side)))
+				if reach.distance_to(aim) > palm_reach or aim.y > reach.y + 0.14:
+					upper = false
+					var near_back := shoulder + (back*0.15 + lateral*0.14)*size
+					near_back.y = clampf(reach.y-0.16,pelvis.y,shoulder.y)
+					aim = adjacent.dressed_surface.contact(near_back,back)
+					if reach.distance_to(aim) > palm_reach: continue
 			var pole := Vector3(sign_*.75,.18 if upper else -.65,-.85)
 
 			if actor==game.coach:
