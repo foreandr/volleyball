@@ -33,7 +33,12 @@ void fragment(){
 	float weld=1.-smoothstep(.0005,.0016+fwidth(height),abs(height-guard_height+.002));
 	ALBEDO=mix(ALBEDO,mix(upper*.68,counter_color.rgb,.40)*(.91+.15*weld),guard);
 	float bead=1.-smoothstep(.0004,.0014+fwidth(height),abs(height-.022));
-	ALBEDO*=1.-foam*.15*bead;
+	// Compression-molded foam forms a continuous sidewall above the rubber tread.
+	float sculpt=sin(height*1380.+3.*smoothstep(-.09,.11,shoe.z));
+	float resolved=1.-smoothstep(.7,2.6,fwidth(height)*1380.);
+	vec3 midsole=mix(vec3(.51,.49,.45),tint.rgb,.14)*(.96+.055*sculpt*resolved);
+	ALBEDO=mix(ALBEDO,midsole,foam*.91);
+	ALBEDO*=1.-foam*.19*bead;
 	ROUGHNESS=mix(mix(.74,.88,foam),.84,rubber);
 	ROUGHNESS=mix(ROUGHNESS,.44,counter);
 	ROUGHNESS=mix(ROUGHNESS,.49,guard);
