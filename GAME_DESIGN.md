@@ -150,3 +150,4 @@ Andre Foreman's Volleyball uses a rotating home ball and keeps its original save
 Forearm sets preserve the approach shuffle, use reception footwork and low saves to intercept the toss, then carry the planted reach into a directional follow-through. Forearm placement varies with effective skill and fatigue.
 Grounded forearm reception uses authored forward and lateral plant presets. Target steering affects the spine and arms. The frame editor preserves recorded body motion by default.
 In Setting Camp, clicking the right stick while watching the CPU switches between overhead and forearm sets. View returns control to the player.
+Back bump sets open the hips toward the hitting pin and carry the joined forearms upward through release. The planted feet anchor the turn.

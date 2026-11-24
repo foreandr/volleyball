@@ -28,20 +28,37 @@ static func apply(rig: Skeleton3D, author: RefCounted, outgoing: Vector3, power:
 	var impulse := (to_rig*(outgoing-incoming)).normalized()
 	var lift := clampf(direction.y,0.0,1.0)
 	# Follow the intended pass and account for how much the incoming ball must turn.
-	var yaw := clampf(atan2(direction.x,maxf(0.35,direction.z))*0.22+impulse.x*0.22,-0.25,0.25)
+	var flat := direction.slide(Vector3.UP).normalized()
+	var rear := smoothstep(0.05,0.85,-flat.z)
+	var yaw := clampf(flat.x*0.70+impulse.x*0.12,-0.72,0.72)
+	# For a straight back bump, open around the staggered stance even with no lateral aim.
+	var stance: Vector3=author.point(original,"foot_l")-author.point(original,"foot_r")
+	var pivot_sign := 1.0 if stance.z>=0.0 else -1.0
+	if absf(flat.x)>0.08: pivot_sign=signf(flat.x)
+	var hip_turn := lerpf(yaw*0.38,pivot_sign*deg_to_rad(29.),rear)*steer
+	author.rotate_world(pose,"pelvis",Vector3.UP,hip_turn)
+	if absf(hip_turn)>0.0001:
+		for side in ["l","r"]:
+			var thigh: String="thigh_"+side
+			var calf: String="calf_"+side
+			var foot: String="foot_"+side
+			var planted: Transform3D=author.world_pose(original,rig.find_bone(foot))
+			var pole: Vector3=author.point(original,calf)-author.point(original,thigh)
+			author.limb(pose,thigh,calf,foot,planted.origin,pole,1.,180.,true)
+			author.set_world_basis(pose,foot,planted.basis)
 	var pitch := clampf((lift-0.60)*0.23+(impulse.y-0.55)*0.15,-0.16,0.16)
-	author.rotate_world(pose,"spine_02",Vector3.RIGHT,torso*(0.12*load+lerpf(0.13,-0.21,lift)*drive)-pitch*steer)
+	author.rotate_world(pose,"spine_02",Vector3.RIGHT,torso*(0.12*load+lerpf(0.13,-0.21,lift)*drive)-(pitch+rear*0.23)*steer)
 	author.rotate_world(pose,"spine_02",Vector3.UP,yaw*steer*0.32)
 	author.rotate_world(pose,"spine_03",Vector3.UP,yaw*steer*0.48)
 	author.rotate_world(pose,"spine_03",Vector3.BACK,-impulse.x*0.12*steer)
+	author.rotate_world(pose,"spine_03",Vector3.RIGHT,-rear*0.16*steer)
 	var chest: Vector3 = author.point(pose,"spine_03")
-	var sweep := Vector3(clampf(direction.x,-0.55,0.55)*0.14,lerpf(0.09,0.25,lift),lerpf(0.24,0.16,lift))*arms*drive
-	var hand_center: Vector3 = (author.point(original,"hand_l")+author.point(original,"hand_r"))*0.5
-	var aim_sweep := Vector3(yaw*0.32,pitch*0.64,0.025)*steer
-	var target := hand_center+sweep+aim_sweep
-	target.z = maxf(target.z,chest.z+0.25)
-	target.y = minf(target.y,maxf(hand_center.y,chest.y+0.16))
-	PlatformPose.connect_arms(pose,author,target,clampf((load+drive)*1.7*arms+steer*0.65,0.0,1.0),0.0)
-	for name_ in ["spine_02","spine_03","upperarm_l","upperarm_r","lowerarm_l","lowerarm_r","hand_l","hand_r"]:
+	var hand_center: Vector3 = (author.point(pose,"hand_l")+author.point(pose,"hand_r"))*0.5
+	var sweep := Vector3(flat.x*0.30,0.18+0.20*lift+0.32*rear,flat.z*0.23)
+	var target := hand_center+sweep*arms*drive
+	target.y = minf(target.y,chest.y+lerpf(0.32,0.55,rear))
+	var lateral := Vector3.RIGHT.rotated(Vector3.UP,hip_turn+yaw*steer*0.5)
+	PlatformPose.connect_arms(pose,author,target,clampf((load+drive)*1.7*arms+steer*0.65,0.0,1.0),0.0,lateral)
+	for name_ in ["pelvis","thigh_l","calf_l","foot_l","thigh_r","calf_r","foot_r","spine_02","spine_03","upperarm_l","upperarm_r","lowerarm_l","lowerarm_r","hand_l","hand_r"]:
 		var bone := rig.find_bone(name_)
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
