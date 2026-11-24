@@ -824,6 +824,7 @@ var debrief_started := false
 var settle_time := 0.
 var huddle_planted := false
 var speech_joints := {}
+var coach_dip := {}
 var pointing_poses: Array[Dictionary]=[]
 var look_angles: Array[float]=[]
 var shoulder_trim := {}
@@ -867,7 +868,8 @@ func huddle(dt: float) -> void:
 		if actor.position.distance_to(spot)>.13:
 			walk(actor,spot,dt,3.1)
 			continue
-		present+=1
+		actor.position=actor.position.move_toward(spot,dt*.42)
+		if actor.position.distance_to(spot)<.004: present+=1
 		actor.play_action("base/Idle")
 		var inward := HUDDLE_CENTER-actor.position
 		actor.rotation.y=rotate_toward(actor.rotation.y,atan2(inward.x,inward.z),dt*2.)
@@ -1024,6 +1026,23 @@ func prepare_pointing_poses() -> void:
 	var author: RefCounted=game.coach.get_pose_author()
 	var rest: Array=[]
 	for id in rig.get_bone_count(): rest.append(rig.get_bone_pose(id))
+	# Bend both knees against fixed soles. Countertranslate the lower spine
+	# so the shoulders stay under the neighboring players' palms.
+	var dip:=rest.duplicate()
+	var hips:=rig.find_bone("pelvis")
+	var spine:=rig.find_bone("spine_01")
+	var shift:=Vector3(.025,-.052,0.)
+	var hip_parent:=rig.get_bone_parent(hips)
+	dip[hips].origin+=author.world_pose(rest,hip_parent).basis.inverse()*shift
+	dip[spine].origin-=author.world_pose(rest,rig.get_bone_parent(spine)).basis.inverse()*shift
+	for side in ["l","r"]:
+		var foot: String="foot_"+side
+		var ankle: Transform3D=author.world_pose(rest,rig.find_bone(foot))
+		author.limb(dip,"thigh_"+side,"calf_"+side,foot,ankle.origin,Vector3.BACK)
+		author.set_world_basis(dip,foot,ankle.basis.orthonormalized())
+	for joint in ["pelvis","spine_01","thigh_l","calf_l","foot_l","thigh_r","calf_r","foot_r"]:
+		var id:=rig.find_bone(joint)
+		coach_dip[id]=[rest[id],dip[id]]
 	var center:=circle.find(game.coach)
 	for offset in [-3,3]:
 		var neighbor: Node3D=circle[posmod(center+offset,circle.size())]
@@ -1070,6 +1089,10 @@ func coach_address(t: float) -> void:
 	var rig: Skeleton3D=game.coach.skeleton
 	var face: ShaderMaterial=game.coach.get_meta("coach_face")
 	face.set_shader_parameter("shout",voice)
+	var emphasis:=maxf(.70*first,maxf(.35*second,finish))
+	for id in coach_dip:
+		var start: Transform3D=coach_dip[id][0]
+		rig.set_bone_pose(id,start.interpolate_with(coach_dip[id][1],emphasis))
 	for joint in speech_joints:
 		var data: Array=speech_joints[joint]
 		var pitch:=first*.55+finish*.28 if joint=="lowerarm_r" else second*.47+finish*.24
@@ -1079,7 +1102,7 @@ func coach_address(t: float) -> void:
 			yaw=look_angles[turn]*(first+.66*second)+look_angles[1-turn]*finish
 		rig.set_bone_pose_rotation(data[0],Quaternion(data[3],yaw)*Quaternion(data[2],-pitch)*data[1])
 	for i in pointing_poses.size():
-		var strength:=maxf(first,.65*second) if i==turn else finish
+		var strength:=maxf(first,maxf(.65*second,.70*finish)) if i==turn else finish
 		for id in pointing_poses[i]:
 			var keys: Array=pointing_poses[i][id]
 			if strength>.001:
