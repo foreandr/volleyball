@@ -20,12 +20,15 @@ void vertex(){
 	VERTEX+=tips*motion*(COLOR.g*1.6);
 }
 void fragment(){
-	float strand=UV.x*42.+sin(UV.y*7.+phase)*.65;
+	// Vary fiber spacing and tip splits per lock, keeping the pattern attached during motion.
+	float lock_seed=fract(COLOR.r*63.71);
+	float lock_phase=phase+6.283*lock_seed;
+	float strand=UV.x*mix(33.,51.,lock_seed)+sin(UV.y*7.+lock_phase)*.65;
 	float fiber=sin(strand)*(1.-smoothstep(.55,2.8,fwidth(strand)));
 	float edge=min(UV.x,1.-UV.x);
 	// Split the outer portion of each lock into staggered, tapered wisps.
-	float lane=UV.x*5.+.09*sin(5.*UV.y+phase);
-	float seed=fract(sin(floor(lane)*19.13+phase)*314.17);
+	float lane=UV.x*mix(4.,6.,lock_seed)+.12*sin(5.*UV.y+lock_phase);
+	float seed=fract(sin(floor(lane)*19.13+lock_phase)*314.17);
 	float tip_end=.82+.18*seed;
 	float taper=smoothstep(.48+.15*seed,tip_end,UV.y);
 	float separation=abs(fract(lane)-.5);
