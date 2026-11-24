@@ -1,10 +1,17 @@
 shader_type spatial;
 render_mode cull_disabled;
 uniform vec4 tone:source_color;
-uniform vec3 lag;
+uniform vec3 guide_0;
+uniform vec3 guide_1;
+uniform vec3 guide_2;
+uniform vec3 guide_3;
 uniform float phase;
 void vertex(){
-	float tips=UV.y*UV.y;
+	vec2 radial=UV2*2.-1.;
+	vec4 weights=vec4(max(-radial.x,0.),max(radial.x,0.),max(radial.y,0.),max(-radial.y,0.))+vec4(.06);
+	weights/=dot(weights,vec4(1.));
+	vec3 lag=guide_0*weights.x+guide_1*weights.y+guide_2*weights.z+guide_3*weights.w;
+	float tips=UV.y*UV.y*(3.-2.*UV.y);
 	float wind=sin(TIME*2.6+phase+VERTEX.x*28.)+.35*sin(TIME*5.+VERTEX.z*31.);
 	VERTEX+=tips*(lag+vec3(.003*wind,0.,.0015*wind));
 }
@@ -15,7 +22,7 @@ void fragment(){
 	if(edge<.045+.018*sin(UV.y*19.+phase)) discard;
 	RIM=.23*UV.y;
 	RIM_TINT=.6;
-	ALBEDO=tone.rgb*(.80+.17*fiber+.46*UV.y);
+	ALBEDO=tone.rgb*(.53+.11*fiber+.36*UV.y)*(.68+.32*COLOR.r);
 	ROUGHNESS=.52+.18*UV.y;
 	SPECULAR=.45;
 }

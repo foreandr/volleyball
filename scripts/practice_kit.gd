@@ -428,7 +428,8 @@ static func haircut(scalp: Node3D,color: Color,variant: int,actor: Node3D) -> vo
 	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var rng := RandomNumberGenerator.new()
 	rng.seed=217+variant
-	for i in 780:
+	actor.hair_length=.022+.009*style
+	for i in 1080:
 		var y := rng.randf()
 		var a := rng.randf()*TAU
 		var radial := sqrt(1.-y*y)
@@ -437,14 +438,17 @@ static func haircut(scalp: Node3D,color: Color,variant: int,actor: Node3D) -> vo
 		var sweep := Vector3(.25 if style%2==0 else -.35,-.35,-.95).slide(normal).normalized()
 		var across := normal.cross(sweep).normalized()
 		var length := (.022+.009*style)*rng.randf_range(.75,1.25)
-		var width := rng.randf_range(.008,.015)
+		var width := rng.randf_range(.005,.011)
+		var pigment := rng.randf_range(.65,1.)
 		for row in 4:
 			for uv: Vector2 in [Vector2(0,0),Vector2(1,0),Vector2(0,1),Vector2(1,0),Vector2(1,1),Vector2(0,1)]:
 				var t := (row+uv.y)*.25
 				var curl := sin(t*PI*(1.8 if style in [2,6] else 1.))*length*.28
 				tool.set_normal(normal)
 				tool.set_uv(Vector2(uv.x,t))
-				tool.add_vertex(root+sweep*length*t+normal*(curl+.008)+across*(uv.x-.5)*width*(1.-.87*t))
+				tool.set_uv2(Vector2(normal.x,normal.z)*.5+Vector2.ONE*.5)
+				tool.set_color(Color(pigment,0,0))
+				tool.add_vertex(root+sweep*length*t+normal*(curl+.002+.003*t)+across*(uv.x-.5)*width*(1.-.87*t))
 	var locks := MeshInstance3D.new()
 	locks.mesh=tool.commit()
 	scalp.add_child(locks)

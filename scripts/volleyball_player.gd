@@ -151,9 +151,36 @@ func pose_reception_knee_slide(from_pose: Array[Transform3D], ready: Array[Trans
 
 var hair_material: ShaderMaterial
 var hair_mount: Node3D
-var hair_last := Vector3.ZERO
-var hair_lag := Vector3.ZERO
-var hair_velocity := Vector3.ZERO
+const HAIR_GUIDES := [Vector3(-.08,.18,0),Vector3(.08,.18,0),Vector3(0,.18,.08),Vector3(0,.18,-.09)]
+var hair_anchors := PackedVector3Array()
+var hair_offsets := PackedVector3Array()
+var hair_speeds := PackedVector3Array()
+var hair_length := .04
+
+func update_hair(dt: float) -> void:
+	if hair_anchors.is_empty():
+		hair_offsets.resize(4)
+		hair_speeds.resize(4)
+		for guide: Vector3 in HAIR_GUIDES: hair_anchors.append(hair_mount.to_global(guide))
+	var local_basis := hair_mount.global_basis.inverse()
+	var steps := maxi(1,ceili(minf(dt,.12)*120.))
+	var h := minf(dt,.12)/steps
+	for i in HAIR_GUIDES.size():
+		var anchor := hair_mount.to_global(HAIR_GUIDES[i])
+		var shift := anchor-hair_anchors[i]
+		hair_anchors[i]=anchor
+		if shift.length()>.45:
+			hair_offsets[i]=Vector3.ZERO
+			hair_speeds[i]=Vector3.ZERO
+		else:
+			for j in steps:
+				# The head moves the roots immediately. Unsupported tips
+				# retain world-space inertia before the lock springs back.
+				hair_offsets[i]-=shift/steps
+				hair_speeds[i]+=(-hair_offsets[i]*(290.+i*12.)-hair_speeds[i]*19.)*h
+				hair_offsets[i]=(hair_offsets[i]+hair_speeds[i]*h).limit_length(hair_length*.58)
+		hair_material.set_shader_parameter("guide_"+str(i),local_basis*hair_offsets[i])
+
 var jersey_materials: Array[ShaderMaterial]=[]
 var jersey_origin := Vector3.ZERO
 var jersey_speed := 0.
@@ -186,14 +213,7 @@ func _process(dt: float) -> void:
 			flex[i]=smoothstep(.12,1.65,(knee-hip).angle_to(ankle-knee))
 		leg_skin.set_shader_parameter("knee_flex",flex)
 	if hair_material and hair_mount:
-		var head := hair_mount.to_global(Vector3(0,.18,0))
-		var velocity := (head-hair_last)/dt if head.distance_to(hair_last)<.8 else Vector3.ZERO
-		hair_last=head
-		var target := (hair_mount.global_basis.orthonormalized().inverse()*velocity*-.009).limit_length(.035)
-		var step := minf(dt,.033)
-		hair_velocity+=((target-hair_lag)*175.-hair_velocity*19.)*step
-		hair_lag+=hair_velocity*step
-		hair_material.set_shader_parameter("lag",hair_lag)
+		update_hair(dt)
 	var displacement := global_position-jersey_origin
 	var travel := displacement.length()
 	if shirt_fabric:
