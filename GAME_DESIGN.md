@@ -130,3 +130,4 @@ Incoming tosses use a small dark landing dot with a light edge. The outgoing arc
 Exertion also accrues slow-recovering fatigue. Endurance scales recovery between reps. The stamina bar communicates skill deterioration without a separate skill rating. Restarting the drill restores a fresh athlete.
 Hold LB with a setting target to time an automatic jump to the descending toss. LT controls alignment independently. The timing arc uses the same on-time tolerance as release feedback and retains the original grade for buffered input.
 For a playable off-center toss, the setter leans through the spine and extends both arms as the ball descends. Hand contact still determines the set.
+The set cursor travels at one speed from the in-flight press through release. The green timing band reflects the contact tolerance at that speed. Perfect sets have a shorter outward push.

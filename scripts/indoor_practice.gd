@@ -19,6 +19,8 @@ var catch_start_local := Vector3.ZERO
 const CATCH_GIVE := .115
 const SET_RECEIVE_TIME := .050
 const SET_PUSH_TIME := .025
+const PERFECT_PUSH_TIME := .016
+const RELEASE_ADVANCE := .016
 const FOREHEAD_REACH := .15
 var receive_local := Vector3.ZERO
 var push_axis := Vector3.UP
@@ -147,6 +149,10 @@ var free_target := -1
 var free_press := 0.0
 var lateral_steps := {}
 var cue_until := 0.0
+var meter_start := 0.
+var meter_rate := 1.
+var grade_band := Vector2(.55,.85)
+var push_time := SET_PUSH_TIME
 var graded_fill := 0.0
 var first_contact := -100.0
 var set_grade_until := 0.0
@@ -734,7 +740,7 @@ func _process(delta: float) -> void:
 		if actor==setter and automatic_setter() and (held>=0 or phase=="set") and focus_headings.has(actor):
 			limit=Hands.CPU_SQUARE_RATE
 			if phase=="pass":
-				var remaining := maxf(.08,contact_time+cpu_release_delay-elapsed-(.05 if held==2 else .18))
+				var remaining := maxf(.08,contact_time+cpu_release_delay-RELEASE_ADVANCE-elapsed-(.05 if held==2 else .18))
 				limit=clampf(absf(change)/remaining,limit,3.45 if held==2 else 4.3)
 		if focus_headings.has(actor): limit=minf(limit,sqrt(2.*20.*absf(change)))
 		var desired := clampf(change/maxf(.0001,dt),-limit,limit)
@@ -829,7 +835,7 @@ func move_to_camp_toss(delta: float) -> void:
 	var offset := (stance-setter.position).slide(Vector3.UP)
 	var moving_jump := jump_rep() and rep%4==3 and not cpu_jump_started
 	if moving_jump:
-		var remaining := maxf(.08,contact_time+cpu_release_delay-elapsed-.07)
+		var remaining := maxf(.08,contact_time+cpu_release_delay-RELEASE_ADVANCE-elapsed-.07)
 		var pace := minf(6.2*camp_speed_scale(),offset.length()/remaining)
 		camp_velocity=camp_velocity.move_toward(offset.normalized()*pace,14.*delta)
 		setter.position=rotation_drill.move_actor(setter,(camp_velocity*delta).limit_length(offset.length()))
@@ -899,7 +905,7 @@ func step_practice(delta: float) -> void:
 		if phase=="pass":
 			standing_set_load(smoothstep(contact_time-.24,contact_time,elapsed))
 		elif phase=="set_contact":
-			standing_set_load(1.-smoothstep(SET_RECEIVE_TIME,SET_RECEIVE_TIME+SET_PUSH_TIME,elapsed))
+			standing_set_load(1.-smoothstep(SET_RECEIVE_TIME,SET_RECEIVE_TIME+push_time,elapsed))
 	coach.animator.advance(delta)
 	for seat in seats_in_use:
 		seat.actor.animator.advance(delta)
@@ -984,6 +990,7 @@ func step_practice(delta: float) -> void:
 				cue_until=clock+1.05
 				plan_cpu_timing()
 				change_feed_phase("pass")
+				if held>=0: start_set_meter()
 		"pass":
 			ball.rotation+=toss_spin*delta
 			if cpu_setting and not jump.active: move_to_camp_toss(delta)
@@ -1003,7 +1010,7 @@ func step_practice(delta: float) -> void:
 				jump.air_time=jump.flight_duration(height,true)
 				if not automatic_setter(): jump.carry_velocity=player_jump_carry()
 				elif cpu_setting and rep%4==3:
-					var air_remaining := maxf(.08,contact_time+cpu_release_delay-elapsed-jump.load_duration())
+					var air_remaining := maxf(.08,contact_time+cpu_release_delay-RELEASE_ADVANCE-elapsed-jump.load_duration())
 					var aim := set_heading(setter,called())
 					var stance := receive_stance(aim)
 					jump.carry_velocity=((stance-setter.position).slide(Vector3.UP)/air_remaining).limit_length(camp_velocity.length()+.4)
@@ -1020,7 +1027,7 @@ func step_practice(delta: float) -> void:
 			var flight_t := minf(elapsed,forehead_arrival) if cpu_setting else elapsed
 			ball.position = toss_at(flight_t)
 			if cpu_setting:
-				var release_time := contact_time+cpu_release_delay
+				var release_time := contact_time+cpu_release_delay-RELEASE_ADVANCE
 				var receive := extended_receive_point()
 				var settle := smoothstep(release_time-.16,release_time,elapsed)
 				var correction := receive-ball.position
@@ -1038,14 +1045,15 @@ func step_practice(delta: float) -> void:
 			var turn_gap := angle_difference(setter.rotation.y,set_heading(setter,called()))
 			var turn_lead := Hands.preparation_lead(turn_gap,called()==2 and not cpu_setting)
 			if cpu_setting: turn_lead=maxf(turn_lead,.48)
-			if automatic_setter() and held<0 and elapsed>=.07 and (contact_time+cpu_release_delay-elapsed<=turn_lead or (incoming.y<0 and ball.position.distance_to(catch_point)<=2.10)):
+			if automatic_setter() and held<0 and elapsed>=.07 and (contact_time+cpu_release_delay-RELEASE_ADVANCE-elapsed<=turn_lead or (incoming.y<0 and ball.position.distance_to(catch_point)<=2.10)):
 				held = called()
 				pressed_at = clock
+				start_set_meter()
 			if not cpu_setting: track_feed_or_target(delta)
 			elif jump.active: focus_headings[setter]=set_heading(setter,called())
 			if cpu_setting:
-				if held>=0: shape_catch_hands(receive_hand_lift(contact_time+cpu_release_delay))
-				if elapsed>=contact_time+cpu_release_delay: release(called())
+				if held>=0: shape_catch_hands(receive_hand_lift(contact_time+cpu_release_delay-RELEASE_ADVANCE))
+				if elapsed>=contact_time+cpu_release_delay-RELEASE_ADVANCE: release(called())
 				return
 			if held>=0:
 				meter.value = set_fill()*100
@@ -1091,7 +1099,7 @@ func step_practice(delta: float) -> void:
 				return
 			if held>=0 and clock-last_contact<.11:
 				Hands.apply(setter,ball.position-Vector3.UP*cushion,1.0,Vector3.ZERO,cushion)
-			if automatic_setter() and elapsed>=contact_time+cpu_release_delay: release(called())
+			if automatic_setter() and elapsed>=contact_time+cpu_release_delay-RELEASE_ADVANCE: release(called())
 			elif elapsed>forehead_arrival+0.25: miss("The toss dropped. Hold the target, then release at contact.")
 		"set_contact":
 			var pocket := catch_pocket()
@@ -1102,15 +1110,15 @@ func step_practice(delta: float) -> void:
 				var pads := (Contact.palm(setter,"l")+Contact.palm(setter,"r"))*.5
 				ball.position=ball.position.lerp(pads+Vector3.UP*.060,smoothstep(0.,.035,elapsed))
 			else:
-				var extension := smoothstep(0.,SET_PUSH_TIME,elapsed-SET_RECEIVE_TIME)
+				var extension := smoothstep(0.,push_time,elapsed-SET_RECEIVE_TIME)
 				Hands.apply(setter,pocket,1.,push_axis*.23*extension,0.,0.,false,Vector3.ZERO,extension,endpoint-pocket,0.,true,-1.,null,Vector3.ZERO,true)
 				# Carry the ball on the finger pads until elbow extension is complete.
 				Contact.track_hands(setter,pocket,true,1.-extension)
 				var fingers := (Contact.palm(setter,"l")+Contact.palm(setter,"r"))*.5
 				ball.position=fingers+Vector3.UP*.060
-				if elapsed>=SET_RECEIVE_TIME+SET_PUSH_TIME:
+				if elapsed>=SET_RECEIVE_TIME+push_time:
 					source=ball.position
-					var flight_age := elapsed-SET_RECEIVE_TIME-SET_PUSH_TIME
+					var flight_age := elapsed-SET_RECEIVE_TIME-push_time
 					begin("set")
 					elapsed=maxf(0.,flight_age)
 		"forehead_catch":
@@ -1278,24 +1286,27 @@ func timing_window() -> float:
 
 # Predict arrival in flight, then anchor the cue to the hands cushioning the ball.
 func release_offset() -> float:
-	if first_contact>=0: return clock-first_contact-.055
-	return elapsed-contact_time
+	if first_contact>=0: return clock-first_contact-.055+RELEASE_ADVANCE
+	return elapsed-contact_time+RELEASE_ADVANCE
+
+func start_set_meter() -> void:
+	meter_start=clock
+	# Reserve space after the ideal release, even for a very late press.
+	meter_rate=.70/maxf(.18,-release_offset())
 
 func set_fill() -> float:
-	var age := maxf(0.,clock-pressed_at)
-	var ready := .30*(1.-exp(-age*5.))
-	if phase!="pass": return ready
-	var offset := release_offset()
-	var window := ON_TIME
-	if offset < -window:
-		var remaining := -offset-window
-		return lerpf(ready,.55,age/(age+remaining))
-	return clampf(.70+.15*offset/window,0.,1.)
+	if phase!="pass": return 0.
+	return clampf((clock-meter_start)*meter_rate,0.,1.)
+
+func timing_band() -> Vector2:
+	var ideal := (clock-meter_start-release_offset())*meter_rate
+	return Vector2(clampf(ideal-ON_TIME*meter_rate,0.,1.),clampf(ideal+ON_TIME*meter_rate,0.,1.))
 
 func release(index: int) -> void:
 	if phase!="pass" or held!=index: return
 	if not pending_release:
 		graded_fill=set_fill()
+		grade_band=timing_band()
 		var raw_offset := release_offset()
 		set_error = raw_offset
 		input_hold=clock-pressed_at
@@ -1321,6 +1332,8 @@ func release(index: int) -> void:
 		if set_error < -(timing_window()+0.065) or set_error > timing_window():
 			miss("Missed contact. Hold the target and release above your forehead.")
 			return
+	var release_error := cpu_release_delay if cpu_setting else set_error
+	push_time=PERFECT_PUSH_TIME if absf(release_error)<.001 else SET_PUSH_TIME
 	target = index
 	tempo = chosen_tempo() if solo_setting or not automatic_setter() else 1
 	source = ball.position
@@ -1594,6 +1607,7 @@ func _input(event: InputEvent) -> void:
 		pending_release = false
 		held = index
 		pressed_at = clock
+		if phase=="pass": start_set_meter()
 		message.text = "Preparing   /   "+TARGETS[index]
 		trace("prepare",{"target":TARGETS[index]})
 	elif held==index:

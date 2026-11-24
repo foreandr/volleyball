@@ -124,7 +124,8 @@ func draw_player(actor: Node3D,human: bool) -> void:
 		var result: bool=game.clock<game.set_grade_until
 		if actor==game.setter and (pressing or result):
 			var fill: float=game.set_fill() if pressing else game.graded_fill
-			timing_arc(at,outer,PI,fill,.55,.85)
+			var band: Vector2=game.timing_band() if pressing and game.phase=="pass" else game.grade_band
+			timing_arc(at,outer,PI,fill,band.x,band.y)
 	var label: String=actor.display_name.strip_edges().get_slice(" ",actor.display_name.strip_edges().count(" ")).to_upper()
 	var origin := at+Vector2(-80,radius.y+19)
 	draw_string_outline(ThemeDB.fallback_font,origin,label,HORIZONTAL_ALIGNMENT_CENTER,160,14,4,Color("10191f"))
