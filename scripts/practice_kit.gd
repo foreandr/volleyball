@@ -435,8 +435,12 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		vec3 dx=dFdx(VERTEX), dy=dFdy(VERTEX);
 		vec3 u=cross(dy,NORMAL),v=cross(NORMAL,dx);
 		float determinant=dot(dx,u);
-		vec3 slope=dFdx(relief)*u+dFdy(relief)*v;
-		if(abs(determinant)>1e-10) NORMAL=normalize(NORMAL-(1.-gear)*slope/determinant);
+		// Give each foam lobe a crown and depress the stitched hinge as the knee bends.
+		float foam_profile=.0045*face*(1.-smoothstep(.15,.98,radius))
+			-.0026*channel-.0008*seam;
+		float surface_height=relief*(1.-gear)+pad_mask*foam_profile;
+		vec3 slope=dFdx(surface_height)*u+dFdy(surface_height)*v;
+		if(abs(determinant)>1e-10) NORMAL=normalize(NORMAL-clamp(slope/determinant,vec3(-.8),vec3(.8)));
 		NORMAL_MAP_DEPTH=mix(.93,.08,gear);
 		SSS_STRENGTH=.18*(1.-gear);
 		SPECULAR=mix(.36,.22,gear);
