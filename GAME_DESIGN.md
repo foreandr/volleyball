@@ -91,3 +91,7 @@ Solo Set to Target starts with the CPU demonstrating on the active athlete. Xbox
 Keep Xbox prompt textures resident across redraws so CPU and player prompts render the same mapped button.
 
 CPU setters choose a takeoff lead and release offset per toss. In solo camp a centered release aims at the target center, while early and late releases change set depth.
+
+Solo setting camp samples tosses across a one-metre disk around the setting spot. The player moves with the left stick and the CPU shuffles under the feed. Lateral placement is independent of toss height.
+
+CPU setters delay squaring to the target until the closing part of the toss. Both front and back sets use a slower turn, continuing into the practice follow-through.

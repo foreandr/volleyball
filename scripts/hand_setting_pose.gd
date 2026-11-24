@@ -1,5 +1,11 @@
 extends RefCounted
 
+const CPU_SQUARE_RATE := 2.05
+const CPU_FOLLOW_TIME := .22
+
+static func square_lead(yaw_gap: float) -> float:
+	return clampf(absf(yaw_gap)/CPU_SQUARE_RATE-.10,.12,.72)
+
 const CONTACT_HEIGHT := 1.83
 const CONTACT_FORWARD := 0.23
 const SET_CONTACT_FORWARD := 0.05

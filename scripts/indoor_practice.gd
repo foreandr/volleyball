@@ -16,6 +16,8 @@ const BASE := Vector3(-1.5,0.04,1.35)
 const ORDER := [0,2,1]
 const SET_LOAD := .26
 var forehead_arrival := 1.0
+var camp_receive_spot := BASE
+var camp_velocity := Vector3.ZERO
 var forehead_target := Vector3.ZERO
 var contact_time := 1.0
 const DURATION := [1.25,1.62]
@@ -404,6 +406,10 @@ func called() -> int:
 	return ORDER[demo_index if demonstration else rotation_drill.attempts]
 
 func reset_feed() -> void:
+	if solo_setting:
+		var angle := rotation_drill.random.randf()*TAU
+		camp_receive_spot=BASE+Vector3(cos(angle),0,sin(angle))*sqrt(rotation_drill.random.randf())
+		camp_velocity=Vector3.ZERO
 	refresh_scores()
 	pending_release = false
 	measured_release = false
@@ -508,6 +514,9 @@ func move_setter(delta: float,actor: Node3D=setter,off_ball := false) -> bool:
 	motion += Vector2(int(Input.is_key_pressed(KEY_D))-int(Input.is_key_pressed(KEY_A)),int(Input.is_key_pressed(KEY_S))-int(Input.is_key_pressed(KEY_W)))
 	if motion.length()<0.16: motion = Vector2.ZERO
 	var direction := Vector3(-motion.x,0,-motion.y).limit_length(1) if off_ball else Vector3.ZERO
+	if solo_setting and not off_ball:
+		var right := camera.global_basis.x.slide(Vector3.UP).normalized()
+		direction=(right*motion.x+right.cross(Vector3.UP)*motion.y).limit_length(1)
 	var focus := axis(Xbox.trigger(true))>0.25 or Input.is_key_pressed(KEY_CTRL)
 	var sprint := axis(Xbox.trigger(false))>0.25 or Input.is_key_pressed(KEY_SHIFT)
 	if not off_ball and focus!=focused:
@@ -645,6 +654,7 @@ func _process(delta: float) -> void:
 		var heading: float=focus_headings.get(actor,actor.rotation.y)
 		var change := angle_difference(old,heading)
 		var limit := 3.33 if focus_headings.has(actor) or (actor==setter and focused) else 4.5
+		if actor==setter and automatic_setter() and focus_headings.has(actor): limit=Hands.CPU_SQUARE_RATE
 		if focus_headings.has(actor): limit=minf(limit,sqrt(2.*20.*absf(change)))
 		var desired := clampf(change/maxf(.0001,dt),-limit,limit)
 		var velocity := move_toward(float(angular_speed.get(actor,0.)),desired,dt*20.)
@@ -653,6 +663,22 @@ func _process(delta: float) -> void:
 			velocity=0.
 		else: actor.rotation.y=old+velocity*dt
 		angular_speed[actor]=velocity
+
+func move_to_camp_toss(delta: float) -> void:
+	var offset := (camp_receive_spot-setter.position).slide(Vector3.UP)
+	var pace := minf(3.5,sqrt(2.*7.*offset.length()))
+	camp_velocity=camp_velocity.move_toward(offset.normalized()*pace,7.*delta)
+	var before := setter.position
+	setter.position=rotation_drill.move_actor(setter,(camp_velocity*delta).limit_length(offset.length()))
+	var moved := setter.position-before
+	if moved.length()<.003:
+		setter.play_action("idle")
+		return
+	if not lateral_steps.has(setter): lateral_steps[setter]=preload("res://scripts/right_side_steps.gd").new(setter)
+	var local := setter.basis.orthonormalized().inverse()*moved.normalized()
+	var steps: RefCounted=lateral_steps[setter]
+	steps.advance(Vector2(-local.x,local.z),delta)
+	steps.apply_pose(1.)
 
 func step_practice(delta: float) -> void:
 	setter.animator.advance(delta)
@@ -681,11 +707,11 @@ func step_practice(delta: float) -> void:
 	squat.update(setter,delta)
 	squat.ring.hide()
 	if jump.active: jump.step(setter,delta,Vector2.ZERO)
-	elif not automatic_setter() and not squat.charging and phase!="cart": move_setter(delta)
+	elif not automatic_setter() and not squat.charging and (solo_setting or phase!="cart"): move_setter(delta)
 	if (jump.active or squat.charging or phase=="cart") and held>=0 and not automatic_setter() and axis(Xbox.trigger(true))>.25: face_set(setter,held,delta)
 	match phase:
 		"cart":
-			var incoming_ready := not jump.active and not squat.charging and rotation_drill.walk(setter,BASE,delta,5.2)
+			var incoming_ready := not jump.active and not squat.charging and (solo_setting or rotation_drill.walk(setter,BASE,delta,5.2))
 			if held>=0: Hands.apply(setter,catch_point,.55)
 			var coach_ready := rotation_drill.station_ready(delta)
 			coach_goal = rotation_drill.basket.position+rotation_drill.FEED_SPOT
@@ -706,13 +732,16 @@ func step_practice(delta: float) -> void:
 				change_feed_phase("feed")
 		"feed":
 			setter.animator.advance(0.0)
-			if automatic_setter(): face_set(setter,called(),delta)
+			if cpu_setting: move_to_camp_toss(delta)
 			if held>=0: Hands.apply(setter,catch_point,.55)
 			ball.position = coach_motion.toss(coach,clampf((clock-maxf(clock-elapsed,next_release-.30))/.30,0,1))
 			# Measure the athlete who actually arrived, including their rig scale.
 			var head := Contact.joint(setter,"Head")
 			forehead_target=head+Vector3.UP*.17+setter.global_basis.z*.048
 			forehead_target.y-=maxf(0,setter.position.y-BASE.y)
+			if solo_setting:
+				forehead_target.x=camp_receive_spot.x
+				forehead_target.z=camp_receive_spot.z
 			catch_point=forehead_target+Vector3.UP*(.09+(.52 if jump_rep() else 0.))
 			if elapsed>=.30 and clock>=next_release and rotation_drill.floor_clear():
 				last_toss = clock
@@ -730,7 +759,8 @@ func step_practice(delta: float) -> void:
 				change_feed_phase("pass")
 		"pass":
 			ball.rotation+=toss_spin*delta
-			if automatic_setter():
+			if cpu_setting and not jump.active: move_to_camp_toss(delta)
+			if automatic_setter() and contact_time-elapsed<=Hands.square_lead(angle_difference(setter.rotation.y,set_heading(setter,called()))):
 				face_set(setter,called(),delta)
 			if automatic_setter() and jump_rep() and not cpu_jump_started and not jump.active and elapsed>=contact_time-cpu_jump_lead and elapsed<contact_time:
 				cpu_jump_started=true
@@ -810,6 +840,7 @@ func step_practice(delta: float) -> void:
 			if automatic_setter() and elapsed>=contact_time+cpu_release_delay: release(called())
 			elif elapsed>forehead_arrival+0.25: miss("The toss dropped. Hold the target, then release at contact.")
 		"set":
+			if automatic_setter() and elapsed<=Hands.CPU_FOLLOW_TIME: face_set(setter,target,delta)
 			ball.rotate_x(delta*4.0)
 			var t := clampf(elapsed/flight_time,0,1)
 			var desired := arc(source,endpoint,t,APEX[tempo])
