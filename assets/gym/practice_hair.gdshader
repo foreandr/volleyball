@@ -23,6 +23,8 @@ void fragment(){
 	RIM=.23*UV.y;
 	RIM_TINT=.6;
 	ALBEDO=tone.rgb*(.53+.11*fiber+.36*UV.y)*(.68+.32*COLOR.r);
-	ROUGHNESS=.52+.18*UV.y;
+	ANISOTROPY=.68;
+	ANISOTROPY_FLOW=vec2(1.,0.);
+	ROUGHNESS=.48+.16*UV.y+.06*(1.-COLOR.r);
 	SPECULAR=.45;
 }

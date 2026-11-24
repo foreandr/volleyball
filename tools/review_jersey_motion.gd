@@ -61,5 +61,10 @@ func review() -> void:
 			gym.camera.position=Vector3(-1.75,1.96,-3.65)
 			gym.camera.look_at(gym.rotation_drill.HUDDLE_CENTER+Vector3.UP*1.23)
 		if frame in [125,140]: await capture("huddle"+str(frame))
+		if frame in [128,134,144]:
+			var head: Vector3=athlete.skeleton.to_global(athlete.skeleton.get_bone_global_pose(athlete.skeleton.find_bone("Head")).origin)
+			gym.camera.position=head+athlete.global_basis.orthonormalized()*Vector3(.56,.27,.67)
+			gym.camera.look_at(head+Vector3.UP*.09)
+			await capture("hair"+str(frame))
 	print("Completed running, overhead setting and huddle captures")
 	quit()

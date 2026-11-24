@@ -415,7 +415,18 @@ static func haircut(scalp: Node3D,color: Color,variant: int,actor: Node3D) -> vo
 					var twist := t*TAU*(1.4 if style==2 else 1.9)
 					curl=length*(.48*t+.14*(1.-cos(twist)))
 					lateral=length*.18*sin(twist)
-				tool.set_normal(normal)
+				# Orient the material tangent along the curved lock so reflected
+				# gym lights follow its length, including the turn of a coil.
+				var tangent := sweep
+				if coiled:
+					var turns := TAU*(1.4 if style==2 else 1.9)
+					tangent+=normal*(.48+.14*turns*sin(t*turns))+across*.18*turns*cos(t*turns)
+				else: tangent+=normal*.28*PI*cos(t*PI)
+				tangent=tangent.normalized()
+				var surface_normal := across.cross(tangent).normalized()
+				if surface_normal.dot(normal)<0.: surface_normal=-surface_normal
+				tool.set_normal(surface_normal)
+				tool.set_tangent(Plane(tangent,1.))
 				tool.set_uv(Vector2(uv.x,t))
 				tool.set_uv2(Vector2(normal.x,normal.z)*.5+Vector2.ONE*.5)
 				tool.set_color(Color(pigment,0,0))
