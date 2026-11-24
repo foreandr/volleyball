@@ -9,7 +9,7 @@ var busy := false
 
 func request(values: Dictionary, variant := 0, color := Color("e97937")) -> Texture2D:
 	var profile := Profile.clean(values)
-	var key := (JSON.stringify(profile) + str(variant) + color.to_html()).sha256_text()
+	var key := (JSON.stringify(profile) + str(variant) + color.to_html() + ("-captain" if variant==Kit.SCHOOL_CAPTAIN_VARIANT else "")).sha256_text()
 	if textures.has(key): return textures[key]
 	var path := DIRECTORY.path_join(key + ".png")
 	var texture := ImageTexture.new()

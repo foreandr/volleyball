@@ -37,6 +37,8 @@ func complete() -> void:
 		message.text="Setter tryout complete"
 		return
 	var order := rankings()
+	finish.disabled = order[2].id == 0
+	if finish.disabled: Xbox.prompts(controls_row,[[JOY_BUTTON_A,"Restart tryout"]])
 	for place in order.size():
 		var row: Dictionary = order[place]
 		score_labels[row.id].text = "%s\n%d/9 made" % [["Starting setter","Backup setter","Cut"][place],row.made]
@@ -65,5 +67,6 @@ func reset_drill() -> void:
 
 func leave() -> void:
 	if phase=="complete" and scorecard.size()==27:
+		if rankings()[2].id==0: return
 		if not CareerSession.checkpoint("after_tryout",rep): return
 	super.leave()

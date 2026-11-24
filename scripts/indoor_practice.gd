@@ -178,6 +178,9 @@ func _ready() -> void:
 	build_hud()
 	build_score_strip()
 	build_settings()
+	var commands := preload("res://scripts/tryout_command_overlay.gd").new()
+	commands.game = self
+	add_child(commands)
 	start_drill()
 
 func finish_intro() -> bool:

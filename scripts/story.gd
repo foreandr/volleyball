@@ -86,6 +86,9 @@ func resume() -> void:
 		_: MenuPresentation.load_scene(CareerSession.CHAPTER)
 
 func after_tryout() -> void:
+	if CareerSession.data.get_value(CareerSession.key(),"tryout_place",-1)==2:
+		MenuPresentation.load_scene(CareerSession.CHAPTER)
+		return
 	clear_menu("AFTER TRYOUTS")
 	var place := clampi(CareerSession.data.get_value(CareerSession.key(),"tryout_place",2),0,2)
 	var coach := Label.new()

@@ -11,6 +11,7 @@ var enter_origin := false
 var prompt := AcceptDialog.new()
 var command := LineEdit.new()
 var paused_before := false
+var show_commands := false
 
 func _ready() -> void:
 	data.load(store_path)
@@ -33,7 +34,7 @@ func _ready() -> void:
 	var fields := VBoxContainer.new()
 	prompt.add_child(fields)
 	var syntax := Label.new()
-	syntax.text = "quest intro   /   quest tutorial   /   quest rep 1–32   /   quest complete"
+	syntax.text = "quest intro   /   quest tutorial   /   quest rep 1–32   /   quest complete   /   vison   /   visoff"
 	fields.add_child(syntax)
 	fields.add_child(command)
 	command.placeholder_text = "quest tutorial"
@@ -55,6 +56,13 @@ func _input(event: InputEvent) -> void:
 
 func run_command() -> void:
 	var parts := command.text.strip_edges().to_lower().split(" ",false)
+	match "".join(parts):
+		"vison","vizon":
+			show_commands = true
+			return
+		"visoff","vizoff":
+			show_commands = false
+			return
 	if parts.size() < 2 or parts[0] != "quest": return
 	var stage := str(parts[1])
 	var rep := 0

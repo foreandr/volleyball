@@ -1,5 +1,6 @@
 extends RefCounted
 
+const SCHOOL_CAPTAIN_VARIANT := 8
 const FABRIC := preload("res://assets/gym/practice_kit.gdshader")
 
 # Skinning transforms VERTEX before the material runs. Store bind-pose garment
@@ -58,6 +59,7 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 			rig.set_bone_pose_scale(arm,Vector3(.9+.23*build,1,.9+.23*build))
 		var spine := rig.find_bone("spine_01")
 		rig.set_bone_pose_scale(spine,Vector3(1,1.045-.09*build,1))
+	if not coach: actor.set_meta("school_jersey_number",502+variant)
 	var print_texture: Texture2D=preload("res://assets/gym/practice_502.svg") if variant==0 else number_texture(502+variant)
 	for side in ["l","r"]: court_shoe(rig,side,coach,variant)
 	for node: MeshInstance3D in rig.find_children("*","MeshInstance3D",true,false):
@@ -76,6 +78,7 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 			kit.set_shader_parameter("fabric",Color("223d3c") if coach else Color("ac4029"))
 			kit.set_shader_parameter("trim",Color("cad4bf") if coach else Color("55302c"))
 			kit.set_shader_parameter("lettering",print_texture)
+			kit.set_shader_parameter("captain",not coach and variant==SCHOOL_CAPTAIN_VARIANT)
 			kit.set_shader_parameter("team_crest",preload("res://assets/gym/falcon.svg"))
 			kit.set_shader_parameter("jacket",coach)
 			var original := preload("res://assets/characters/base/Superhero_Male_FullBody.gltf").instantiate()

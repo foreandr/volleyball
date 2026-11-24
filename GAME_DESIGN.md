@@ -67,3 +67,9 @@ Indoor practice counts descending rim rebounds that enter the called basket. Ear
 Setters should be able to tip-set to a teammate with either hand, or send the second ball over the net with a left- or right-handed dump. A jumping setter can choose a soft tip dump or a hard, spike-like attack dump. A full spike approach should also support either a set to a teammate or a hit over the net.
 
 The movement system needs to distinguish a straight-up jump from an approach jump while preserving the choice of what to do with the ball in the air. How players signal the jump type, hand and contact is an open control-design question.
+
+Two designated collectors retrieve loose balls after the coach finishes the tryout throws. The active setter can tap a loose ball away from their feet. In the developer console, vison and visoff show and hide current commands over the team. A cut career athlete must restart the tryout. The school captain wears a bar below the number on both jersey panels.
+
+## Future referee challenges
+
+Occasionally a referee should make an incorrect call. Teams should be able to challenge the call and have the decision upheld or overturned after review. Challenge limits, eligible calls and controls are open design decisions.

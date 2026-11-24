@@ -63,7 +63,9 @@ func configure(host: Node, layer: Node = null) -> void:
 				game.panel.visible = panel_was_visible
 				game.prompt_phase = ""
 				game.update_prompts(game.phase)
-				if game.phase == "complete": game.finish.grab_focus())
+				if game.phase == "complete":
+					if game.finish.disabled: game.retry.grab_focus()
+					else: game.finish.grab_focus())
 
 func bar(parent: Container, caption: String, action: Callable) -> Button:
 	var button := Button.new()

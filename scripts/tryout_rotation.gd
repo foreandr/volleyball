@@ -426,12 +426,68 @@ func tick(dt: float) -> void:
 		var drag := -.006*v.length()*v
 		var magnus := .0018*body.angular_velocity.cross(v)
 		body.apply_central_force(drag+magnus.limit_length(.35))
-	for worker in workers:
-		if exchange<0 or worker.actor!=runner: collect(worker,dt)
-	service_carts(dt)
+	# The 30-ball cart covers all 27 throws. Wait until scoring is over
+	# before sending the two designated collectors onto the floor.
+	for w in workers:
+		w.actor.animator.advance(dt)
+		w.actor.play_action("base/Idle")
+		w.command = "Watch the setter"
+	tap_loose_ball(dt)
 	if not net_hit.is_empty():
 		game.gym.get_node("DynamicNet").sample(net_hit,game.clock)
 		if game.clock-net_hit.time>1.5: net_hit.clear()
+
+var tap_remaining := 0.0
+var tap_side := "l"
+var tap_actor: Node3D
+var tap_ball: RigidBody3D
+var tap_direction := Vector3.ZERO
+var tap_cooldown := 0.0
+
+func tap_loose_ball(dt: float) -> void:
+	tap_cooldown = maxf(0,tap_cooldown-dt)
+	if game.phase not in ["cart","between","ground"] or game.jump.active or game.squat.charging:
+		tap_remaining = 0
+		return
+	if tap_remaining <= 0:
+		if tap_cooldown > 0: return
+		tap_actor = game.setter
+		var best := 0.42
+		tap_ball = null
+		for body in loose:
+			if body.freeze or body.position.y > 0.23 or body.linear_velocity.length() > 1.5: continue
+			for side in ["l","r"]:
+				var foot := Contact.joint(tap_actor,"foot_"+side)
+				var gap := foot.distance_to(body.position)
+				if gap < best:
+					best = gap
+					tap_side = side
+					tap_ball = body
+		if not tap_ball: return
+		tap_direction = (tap_ball.position-tap_actor.position).slide(Vector3.UP).normalized()
+		if tap_direction.is_zero_approx(): tap_direction = Vector3.RIGHT
+		tap_remaining = 0.32
+		tap_cooldown = 1.0
+	if tap_actor != game.setter or tap_ball.freeze or not loose.has(tap_ball):
+		tap_remaining = 0
+		return
+	var before := tap_remaining
+	tap_remaining = maxf(0,tap_remaining-dt)
+	var rig: Skeleton3D = tap_actor.skeleton
+	var foot := Contact.joint(tap_actor,"foot_"+tap_side)
+	var pose := []
+	for j in rig.get_bone_count(): pose.append(rig.get_bone_pose(j))
+	var author: RefCounted = tap_actor.get_pose_author()
+	var reach := (tap_ball.position-foot).limit_length(0.32)
+	var weight := sin(PI*(1.0-tap_remaining/0.32))
+	author.limb(pose,"thigh_"+tap_side,"calf_"+tap_side,"foot_"+tap_side,rig.to_local(foot+reach*weight),Vector3.BACK)
+	for bone in ["thigh_","calf_"]:
+		var idx := rig.find_bone(bone+tap_side)
+		rig.set_bone_pose_rotation(idx,pose[idx].basis.orthonormalized().get_rotation_quaternion())
+	if before > 0.16 and tap_remaining <= 0.16:
+		tap_ball.sleeping = false
+		tap_ball.apply_central_impulse((tap_direction*2.8+Vector3.UP*0.28)*tap_ball.mass)
+		game.trace("setter_foot_tap",{"ball":tap_ball.name})
 
 func under_stands(point: Vector3) -> bool:
 	for bench in game.gym.benches:
@@ -476,6 +532,7 @@ func collect(w: Dictionary,dt: float) -> void:
 	actor.animator.advance(dt)
 	var cargo: Array=w.cargo
 	if unloading.has(actor):
+		w.command = "Put ball in cart"
 		place_in_cart(actor,cargo,dt)
 		return
 	if game.phase in ["cart","feed"] and in_feed_lane(actor.position) and (not stock.is_empty() or waiting_ball or issued) and not w.lifting:
@@ -508,7 +565,7 @@ func collect(w: Dictionary,dt: float) -> void:
 			w.goal=null
 			w.stuck=0.
 			w.erase("destination")
-	if not w.goal and cargo.size()<2 and (cargo.is_empty() or not stock.is_empty()):
+	if not w.goal and huddle_elapsed < 8.0 and cargo.size()<2 and (cargo.is_empty() or not stock.is_empty()):
 		w.mark=actor.position
 		w.stuck=0.
 		w.goal=nearest(actor.position,w,2.7 if not cargo.is_empty() else INF)
@@ -519,8 +576,10 @@ func collect(w: Dictionary,dt: float) -> void:
 			var lead := body.linear_velocity.slide(Vector3.UP)*clampf(delta.length()/5.7,0.,.42)
 			var pickup := body.position+lead.limit_length(.85)
 			if under_stands(pickup): pickup=body.position
-			perimeter_walk(w,pickup-delta.normalized()*.48,dt)
+			w.command = "Fetch " + str(body.name)
+			walk(actor,pickup-delta.normalized()*.48,dt,3.4)
 		else:
+			w.command = "Pick up " + str(body.name)
 			actor.rotation.y=rotate_toward(actor.rotation.y,atan2(delta.x,delta.z),2.25*dt)
 			actor.play_action("idle")
 			var side := "l" if cargo.is_empty() else "r"
@@ -562,9 +621,10 @@ func collect(w: Dictionary,dt: float) -> void:
 			perimeter_walk(w,drop,dt)
 			for i in cargo.size(): cargo[i].position=Contact.palm(actor,"l" if i==0 else "r")
 			return
-		var index := workers.find(w)%3
+		w.command = "Return balls to cart"
+		var index := closest_bin(actor.position)
 		if index==exchange: index=closest_bin(actor.position)
-		if index>=0 and (actor.position.distance_to(bins[index].position)<1.05 or perimeter_walk(w,bins[index].position+Vector3(.1,.04,-.65),dt)):
+		if index>=0 and (actor.position.distance_to(bins[index].position)<1.05 or walk(actor,bins[index].position+Vector3(.1,.04,-.83),dt,3.4)):
 			begin_unload(actor,index,cargo)
 			place_in_cart(actor,cargo,dt)
 			return
@@ -945,9 +1005,9 @@ func huddle(dt: float) -> void:
 	for i in circle.size():
 		var actor: Node3D=circle[i]
 		var work := workers.find_custom(func(w): return w.actor==actor)
-		if work>=0:
+		if work in [0,1] and not actor.has_meta("huddle_joining"):
 			var w := workers[work]
-			if not w.cargo.is_empty() or w.lifting > 0 or (huddle_elapsed < 8.0 and (w.goal or nearest(actor.position,w,INF))):
+			if not w.cargo.is_empty() or w.lifting > 0 or w.goal or (huddle_elapsed < 8.0 and nearest(actor.position,w,INF)):
 				collect(w,dt)
 				continue
 		if actor==roster[0] and not human_cargo.is_empty():
@@ -957,6 +1017,7 @@ func huddle(dt: float) -> void:
 				if not unloading.has(actor): begin_unload(actor,bin,human_cargo)
 				place_in_cart(actor,human_cargo,dt)
 			continue
+		actor.set_meta("huddle_joining",true)
 		actor.animator.advance(dt)
 		var angle: float = huddle_slots[actor]
 		var radial := Vector3(sin(angle),0,cos(angle))

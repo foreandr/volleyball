@@ -2,6 +2,7 @@ shader_type spatial;
 render_mode cull_disabled;
 uniform vec4 fabric : source_color;
 uniform vec4 trim : source_color;
+uniform bool captain = false;
 uniform sampler2D lettering : source_color,filter_linear_mipmap_anisotropic;
 uniform sampler2D team_crest : source_color,filter_linear_mipmap_anisotropic;
 uniform vec3 hem_particles[12];
@@ -258,6 +259,10 @@ void fragment(){
 		}
 		float rear=1.-step(0.,rest.z);
 		vec2 uv=vec2(.5+mix(rest.x,-rest.x,rear)/mix(.205,.262,rear),(1.425-y)/mix(.115,.144,rear));
+		if(captain && abs(rest.z)>.035 && abs(uv.x-.5)<.39 && uv.y>1.03 && uv.y<1.10){
+			base=vec3(.95,.90,.77);
+			print_coverage=1.;
+		}
 		if(x<.136 && abs(rest.z)>.035 && all(greaterThanEqual(uv,vec2(0.))) && all(lessThanEqual(uv,vec2(1.)))){
 			vec4 ink=texture(lettering,uv);
 			// A narrow backing print holds the number outline over bright folds.
