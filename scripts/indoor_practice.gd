@@ -27,6 +27,10 @@ var floor_speed := 0.0
 var phase := ""
 var elapsed := 0.0
 var clock := 0.0
+var spectator_prompt := PanelContainer.new()
+var spectator_text := Label.new()
+var spectator_progress := ProgressBar.new()
+var keyboard_prompt := true
 var skip_time := 0.0
 var camera_lead := Vector3.ZERO
 var camera := Camera3D.new()
@@ -259,6 +263,23 @@ func build_hud() -> void:
 	skip.offset_right = -32
 	skip.offset_bottom = -34
 	add_child(skip)
+	keyboard_prompt = pad() < 0
+	add_child(spectator_prompt)
+	spectator_prompt.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	spectator_prompt.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+	spectator_prompt.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	spectator_prompt.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	spectator_prompt.offset_bottom = -24
+	spectator_prompt.add_theme_stylebox_override("panel",MenuPresentation.box(Color("112534f5"),Color("6de4d1"),3))
+	var skip_column := VBoxContainer.new()
+	spectator_prompt.add_child(skip_column)
+	spectator_text.add_theme_font_size_override("font_size",20)
+	skip_column.add_child(spectator_text)
+	spectator_progress.custom_minimum_size.y = 5
+	spectator_progress.show_percentage = false
+	spectator_progress.max_value = 1
+	skip_column.add_child(spectator_progress)
+	spectator_prompt.hide()
 	skip.hide()
 
 func begin(next: String) -> void:
@@ -333,11 +354,7 @@ func reset_feed() -> void:
 			if attempt.setter==rotation_drill.turn and attempt.made: made+=1
 		title.text="ZONE %d   /   %s   /   %d/9 MADE" % [[1,6,5][rotation_drill.round_index],TARGETS[called()],made]
 		if called()==2: message.text = "72   /   Back set"
-	panel.visible=demonstration or rotation_drill.turn in [0,1]
-	if not demonstration and rotation_drill.turn == 1:
-		title.text = "First setter"
-		message.text = "Hold A to skip to your turn"
-		Xbox.prompts(controls_row,[[JOY_BUTTON_A,"Hold to skip"]])
+	panel.visible=demonstration or rotation_drill.turn==0
 	hint.text = ""
 	hint.hide()
 	meter.value = 0
@@ -488,6 +505,7 @@ func change_setter(skipping: bool) -> void:
 	changing_turn = false
 
 func _process(delta: float) -> void:
+	spectator_prompt.visible = rotation_drill.turn == 1 and phase not in ["intro","net_guide","complete"] and not demonstration and not settings.visible and not changing_turn
 	if changing_turn: return
 	update_speech(delta)
 	score_strip.visible=phase not in ["intro","net_guide"] and not settings.visible and (not demonstration or phase=="complete")
@@ -499,8 +517,8 @@ func _process(delta: float) -> void:
 	if rotation_drill.turn == 1 and phase != "intro" and not demonstration:
 		var holding := Input.is_key_pressed(KEY_SPACE) or (pad() >= 0 and Input.is_joy_button_pressed(pad(),Xbox.physical(JOY_BUTTON_A)))
 		skip_time = minf(1,skip_time + delta) if holding else 0.0
-		skip.visible = holding
-		skip.value = skip_time * 100
+		spectator_text.text = "Hold %s to start your turn" % ("Space" if keyboard_prompt or pad() < 0 else Xbox.NAMES[Xbox.physical(JOY_BUTTON_A)])
+		spectator_progress.value = skip_time
 		if skip_time >= 1:
 			change_setter(true)
 			return
@@ -997,7 +1015,10 @@ func _input(event: InputEvent) -> void:
 			settings.hide()
 			get_viewport().set_input_as_handled()
 		return
-	if event is InputEventJoypadButton: active_pad = event.device
+	if event is InputEventKey and event.pressed: keyboard_prompt = true
+	if event is InputEventJoypadButton and event.pressed:
+		keyboard_prompt = false
+		active_pad = event.device
 	if (event is InputEventKey and event.keycode==KEY_ESCAPE or event is InputEventJoypadButton and event.button_index==Xbox.physical(JOY_BUTTON_START)) and event.is_pressed():
 		trace("pause",{})
 		squat.cancel()

@@ -165,10 +165,36 @@ func build_theme() -> void:
 	skin.set_stylebox("panel","PopupMenu",box(Color("142c3d"),Color("59d7c4"),2))
 	skin.set_stylebox("normal","LineEdit",box(Color("102331"),Color("43727a"),2))
 
+# Historical sources: FIVB's indoor and beach volleyball histories.
+const FACTS := [
+	"William Morgan invented volleyball in 1895 at a YMCA in Holyoke, Massachusetts.",
+	"Before it was called volleyball, the game was called Mintonette.",
+	"Canada was the first country outside the United States to take up volleyball.",
+	"Japan won the first Olympic women's volleyball gold on home soil in Tokyo in 1964.",
+	"Karch Kiraly was the first player to win Olympic gold both indoors and on the beach.",
+	"Jackie Silva and Sandra Pires won the first Olympic women's beach volleyball title in 1996.",
+	"At the London Olympics, beach volleyball was played on Horse Guards Parade.",
+	"At the Paris 2024 Olympics, beach volleyball players competed beside the Eiffel Tower."
+]
+var fact_order := []
+var last_fact := ""
+
+func next_fact() -> String:
+	if fact_order.is_empty():
+		fact_order = FACTS.duplicate()
+		fact_order.shuffle()
+		if fact_order.back() == last_fact: fact_order.reverse()
+	last_fact = fact_order.pop_back()
+	return last_fact
+
 var loading_screen: ColorRect
 var loading_detail: Label
+var fact_started_ms := 0
+var dismiss_fact := false
 
 func show_loading(destination: String) -> void:
+	fact_started_ms = Time.get_ticks_msec()
+	dismiss_fact = false
 	loading_screen = ColorRect.new()
 	loading_screen.modulate.a = 0.
 	loading_screen.color = Color("112433")
@@ -189,9 +215,18 @@ func show_loading(destination: String) -> void:
 	loading_detail.text = "Loading…"
 	loading_detail.add_theme_color_override("font_color",Color("73e1d2"))
 	column.add_child(loading_detail)
+	var fact := Label.new()
+	fact.text = next_fact()
+	fact.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	fact.add_theme_font_size_override("font_size",21)
+	column.add_child(fact)
+	var fit := func(): fact.custom_minimum_size.x = clampf(center.size.x - 56,120,580)
+	center.resized.connect(fit)
+	fit.call()
 
-func _input(_event: InputEvent) -> void:
+func _input(event: InputEvent) -> void:
 	if is_instance_valid(loading_screen):
+		if event.is_action_pressed("ui_accept"): dismiss_fact = true
 		get_viewport().set_input_as_handled()
 
 func painted() -> void:
@@ -205,6 +240,8 @@ func fade_loading(alpha: float, seconds: float) -> void:
 	await fade.finished
 
 func close_loading() -> void:
+	while not dismiss_fact and Time.get_ticks_msec() - fact_started_ms < 2600:
+		await get_tree().process_frame
 	await fade_loading(0.,.38)
 	loading_screen.hide()
 	loading_screen.queue_free()

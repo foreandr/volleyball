@@ -22,7 +22,7 @@ func _draw() -> void:
 	var human: Node3D=game.rotation_drill.roster[0]
 	draw_player(human,true)
 	if game.preview_enabled: draw_set_path(human)
-	if game.clock<game.cue_until and game.phase in ["feed","pass"]:
+	if game.setter == human and game.clock<game.cue_until and game.phase in ["feed","pass"]:
 		var called: int=game.called()
 		var anchor: Vector3=game.targets[called].global_position+Vector3.UP*.43
 		if not game.camera.is_position_behind(anchor):
@@ -33,7 +33,10 @@ func _draw() -> void:
 			draw_rect(Rect2(point-Vector2(width*.5,18),Vector2(width,32)),Color("14242eee"))
 			var left := point+Vector2(-width*.5+6,5)
 			draw_string(font,left,"Hold",HORIZONTAL_ALIGNMENT_LEFT,-1,16)
-			draw_texture_rect(icon,Rect2(left+Vector2(33,-19),Vector2(27,24)),false)
+			if game.keyboard_prompt or game.pad() < 0:
+				draw_string(font,left+Vector2(33,0),"[" + OS.get_keycode_string(game.KEYS[called]) + "]",HORIZONTAL_ALIGNMENT_CENTER,27,16)
+			else:
+				draw_texture_rect(icon,Rect2(left+Vector2(33,-19),Vector2(27,24)),false)
 			draw_string(font,left+Vector2(62,0),game.TARGETS[called],HORIZONTAL_ALIGNMENT_LEFT,-1,16)
 	if game.setter!=human: draw_player(game.setter,false)
 
