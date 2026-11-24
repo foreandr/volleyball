@@ -110,3 +110,4 @@ In Setting Camp the CPU runs toward higher backcourt tosses and finishes each ap
 The setter pivots on the ball of the right foot as the hips square up. The left foot lands to give a stance slightly wider than the athlete's neutral ready stance.
 Setting Camp targets position four on every rep, alternating standing and jump sets. The coach can feed both sidelines and deep zone six, within sprint range on clear floor.
 Camp jump reps alternate vertical and moving takeoffs. Moving jump sets carry the approach velocity to the projected contact; sprinting is optional.
+On a set the ball stays in the hands through a short yield to the forehead and a full arm extension. Flight starts at the fingertips.

@@ -111,7 +111,7 @@ var last_toss := -INF
 var contact_index := -1
 
 func record_setter(delta: float) -> void:
-	if not game.solo_setting or game.phase not in ["pass","forehead_catch","set"]: return
+	if not game.solo_setting or game.phase not in ["pass","forehead_catch","set_contact","set"]: return
 	if last_toss!=game.last_toss:
 		last_toss=game.last_toss
 		setter_frames.clear()
@@ -125,7 +125,7 @@ func record_setter(delta: float) -> void:
 	for i in actor.skeleton.get_bone_count(): pose.append(actor.skeleton.get_bone_pose(i))
 	for modifier in actor.skeleton.get_children():
 		if "editor_bones" in modifier: modifier.editor_bones=pose
-	if game.phase in ["forehead_catch","set"] and contact_index<0: contact_index=setter_frames.size()
+	if game.phase in ["forehead_catch","set_contact","set"] and contact_index<0: contact_index=setter_frames.size()
 	while setter_frames.size()<frame_count:
 		setter_frames.append({"time":setter_frames.size()/60.,"ball":game.ball.global_transform,
 			"actors":[{"root":actor.transform,"bones":pose}]})

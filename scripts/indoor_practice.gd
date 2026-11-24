@@ -17,6 +17,10 @@ const ORDER := [0,2,1]
 var forehead_arrival := 1.0
 var catch_start_local := Vector3.ZERO
 const CATCH_GIVE := .115
+const SET_RECEIVE_TIME := .105
+const SET_PUSH_TIME := .135
+var receive_local := Vector3.ZERO
+var push_axis := Vector3.UP
 var camp_receive_spot := BASE
 var camp_velocity := Vector3.ZERO
 var plant_time := -1.0
@@ -387,7 +391,7 @@ func switch_camp_control() -> void:
 	held=-1
 	pending_release=false
 	prompt_phase=""
-	if phase in ["feed","pass","forehead_catch"]:
+	if phase in ["feed","pass","set_contact","forehead_catch"]:
 		rotation_drill.free_ball(Vector3.ZERO)
 		reset_feed()
 	else:
@@ -893,7 +897,7 @@ func step_practice(delta: float) -> void:
 			ball.position = source.lerp(forehead_target,flight_t/forehead_arrival)+Vector3.UP*(4.905*flight_t*(forehead_arrival-flight_t))
 			if cpu_setting:
 				var release_time := contact_time+cpu_release_delay
-				var receive := catch_pocket()+Vector3.UP*.055
+				var receive := catch_pocket()+Vector3.UP*CATCH_GIVE
 				var settle := smoothstep(release_time-.16,release_time,elapsed)
 				var correction := receive-ball.position
 				var lateral := correction.slide(Vector3.UP).limit_length(.22)
@@ -963,6 +967,22 @@ func step_practice(delta: float) -> void:
 				Hands.apply(setter,ball.position-Vector3.UP*cushion,1.0,Vector3.ZERO,cushion)
 			if automatic_setter() and elapsed>=contact_time+cpu_release_delay: release(called())
 			elif elapsed>forehead_arrival+0.25: miss("The toss dropped. Hold the target, then release at contact.")
+		"set_contact":
+			var pocket := catch_pocket()
+			if elapsed<=SET_RECEIVE_TIME:
+				var t := clampf(elapsed/SET_RECEIVE_TIME,0.,1.)
+				ball.position=setter.to_global(receive_local).lerp(pocket,1.-pow(1.-t,2.))
+				shape_catch_hands()
+			else:
+				var extension := smoothstep(0.,SET_PUSH_TIME,elapsed-SET_RECEIVE_TIME)
+				Hands.apply(setter,pocket,1.,push_axis*.23*extension,0.,0.,false,Vector3.ZERO,extension,endpoint-pocket,0.,true,-1.,null,Vector3.ZERO,true)
+				# Carry the ball on the finger pads until elbow extension is complete.
+				var fingers := (Contact.palm(setter,"l")+Contact.palm(setter,"r"))*.5
+				ball.position=pocket.lerp(fingers+Vector3.UP*.060,extension)
+				Contact.track_hands(setter,ball.position,true,1.-extension)
+				if elapsed>=SET_RECEIVE_TIME+SET_PUSH_TIME:
+					source=ball.position
+					begin("set")
 		"forehead_catch":
 			var give := 1.-pow(1.-clampf(elapsed/.19,0.,1.),3.)
 			ball.position=setter.to_global(catch_start_local).lerp(catch_pocket(),give)
@@ -991,7 +1011,7 @@ func step_practice(delta: float) -> void:
 				miss("Ball deflected off the gym equipment.")
 				drop_velocity = rebound
 				return
-			if elapsed<0.22: Hands.apply(setter,source,1.0-elapsed/0.22,(endpoint-source).normalized()*0.22,0.0,0.3,false,Vector3.ZERO,1.0,endpoint-source,0.5,true)
+			if elapsed<0.22: Hands.apply(setter,source,1.0-elapsed/0.22,push_axis*0.22,0.0,0.3,false,Vector3.ZERO,1.0,endpoint-source,0.5,true)
 			if t>=1:
 				if endpoint.distance_to(PINS[target])<targets[target].mouth_radius-0.10: targets[target].impact(ball.position,motion/maxf(delta,.001))
 				finish_set()
@@ -1197,8 +1217,10 @@ func release(index: int) -> void:
 	if not technique_feedback.is_empty(): feedback=technique_feedback
 	if set_error < -timing_window(): show_timing(set_error)
 	trace("set",{"technique":technique_feedback,"requested":TARGETS[called()],"actual":TARGETS[target],"made":success,"error_m":error})
-	Hands.apply(setter,source,1.0,(endpoint-source).normalized()*.22,0,.3,false,Vector3.ZERO,1.,endpoint-source,.6,true)
-	begin("set")
+	receive_local=setter.to_local(ball.position)
+	push_axis=((endpoint-source).slide(Vector3.UP).normalized()*.53+Vector3.UP*.85).normalized()
+	shape_catch_hands()
+	begin("set_contact")
 
 var bubble := PanelContainer.new()
 var words := Label.new()
