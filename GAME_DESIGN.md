@@ -58,3 +58,4 @@ When a request begins with “game notes,” record the idea here for future con
 - **Unlockable block reactions.** A stuff block (“pack”) could trigger an exaggerated, optional reaction from the blocked attacker, such as snapping their head back in surprise. Special reaction animations could be earned through play.
 - **Learn from opponents.** Face a specialist and see their signature skill in a match. Beating them could unlock a chance to train with them afterward and learn the skill they used.
 - **Linked beach and indoor careers.** Carry learned skills between both campaigns. Beach opponents could teach pokeys, dolphins, and cutties, while indoor specialists teach their own exclusive skills. A player could bring a beach technique back indoors or return to the beach with something learned in the gym.
+  The progression goal is one athlete with a growing repertoire. Each form of volleyball should offer that athlete a reason to play it.
