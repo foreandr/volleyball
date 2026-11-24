@@ -89,6 +89,8 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 			shell.material_override=kit
 			outer_shirt=shell
 			face_hair(rig,node,skin_surface,coach,variant)
+			if not coach and variant%4==1 and variant%5!=4:
+				palm_tape(rig,node,skin_surface,"l" if variant%2==0 else "r")
 		if shirt:
 			# The skinned print replaces only the jersey. Keep shoes and trousers.
 			var invisible := StandardMaterial3D.new()
@@ -146,7 +148,7 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 		var hair := Color.from_hsv(.065+.004*variant,.42,.13+.065*(variant%6))
 		haircut(scalp,hair,variant,actor)
 		if variant%5!=4:
-			tape_hand(rig,"l" if variant%2==0 else "r",1+variant%3,variant%4==1)
+			tape_hand(rig,"l" if variant%2==0 else "r",1+variant%3)
 		if variant%3==2: compression(rig,"lowerarm_r","hand_r",.061,.042,Color("252e35"))
 
 	reshape_build(rig,coach,variant)
@@ -397,7 +399,7 @@ static func number_texture(number: int) -> Texture2D:
 	return ImageTexture.create_from_image(img)
 
 # Separate wraps follow their own finger bones, leaving the joints free.
-static func tape_hand(rig: Skeleton3D,side: String,count: int,palm_wrap: bool) -> void:
+static func tape_hand(rig: Skeleton3D,side: String,count: int) -> void:
 	var cloth := ShaderMaterial.new()
 	cloth.shader=preload("res://assets/gym/athletic_tape.gdshader")
 	for i in count:
@@ -406,12 +408,22 @@ static func tape_hand(rig: Skeleton3D,side: String,count: int,palm_wrap: bool) -
 		var joint := rig.get_bone_rest(rig.find_bone(digit+"_02_"+side)).origin
 		var radius := clampf(joint.length()*.37,.0115,.0165)
 		tape_band(rig,bone,joint*.52,joint.normalized(),radius,radius,joint.length()*.60,cloth)
-	if palm_wrap:
-		var frame := rig.get_bone_global_rest(rig.find_bone("hand_"+side)).affine_inverse()
-		var index: Vector3=frame*rig.get_bone_global_rest(rig.find_bone("index_01_"+side)).origin
-		var pinky: Vector3=frame*rig.get_bone_global_rest(rig.find_bone("pinky_01_"+side)).origin
-		var axis := (index+pinky).normalized()
-		tape_band(rig,"hand_"+side,(index+pinky)*.33,axis,index.distance_to(pinky)*.79,.031,.026,cloth,(index-pinky).slide(axis).normalized())
+
+static func palm_tape(rig: Skeleton3D,body: MeshInstance3D,skin_surface: ArrayMesh,side: String) -> void:
+	var wrist := rig.get_bone_global_rest(rig.find_bone("hand_"+side)).origin
+	var index := rig.get_bone_global_rest(rig.find_bone("index_01_"+side)).origin
+	var pinky := rig.get_bone_global_rest(rig.find_bone("pinky_01_"+side)).origin
+	var knuckles := (index+pinky)*.5
+	var material := ShaderMaterial.new()
+	material.shader=preload("res://assets/gym/palm_tape.gdshader")
+	material.set_shader_parameter("center",wrist.lerp(knuckles,.59))
+	material.set_shader_parameter("axis",(knuckles-wrist).normalized())
+	var wrap := MeshInstance3D.new()
+	wrap.mesh=skin_surface
+	wrap.skin=body.skin
+	wrap.material_override=material
+	rig.add_child(wrap)
+	wrap.skeleton=wrap.get_path_to(rig)
 
 static func tape_band(rig: Skeleton3D,bone: String,center: Vector3,axis: Vector3,width: float,depth: float,height: float,cloth: Material,across := Vector3.ZERO) -> void:
 	var mount := BoneAttachment3D.new()
