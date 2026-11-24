@@ -52,3 +52,9 @@ The four practice carts each have four rolling casters. Balls are stored in cart
 When a request begins with “game notes,” record the idea here for future consideration. Implementation waits for a separate request.
 
 - **Uneven matchups.** Let each side choose its own team size. Examples include 2v3, 2v4, and 1v6. One possible variation has one side playing one-contact volleys while the other plays regular volleyball.
+
+- **Conditioning after a poor performance.** A future shuttle-run drill could use timed button presses to race teammates. One possible consequence for finishing last is reduced playing time.
+
+- **Unlockable block reactions.** A stuff block (“pack”) could trigger an exaggerated, optional reaction from the blocked attacker, such as snapping their head back in surprise. Special reaction animations could be earned through play.
+- **Learn from opponents.** Face a specialist and see their signature skill in a match. Beating them could unlock a chance to train with them afterward and learn the skill they used.
+- **Linked beach and indoor careers.** Carry learned skills between both campaigns. Beach opponents could teach pokeys, dolphins, and cutties, while indoor specialists teach their own exclusive skills. A player could bring a beach technique back indoors or return to the beach with something learned in the gym.
