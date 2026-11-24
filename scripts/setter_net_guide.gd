@@ -24,7 +24,7 @@ func _ready() -> void:
 	column.add_child(diagram)
 	diagram.draw.connect(func(): draw_diagram(diagram))
 	var tip := Label.new()
-	tip.text="Start at neutral tempo. Move RS up for high, down for fast, or sideways for neutral."
+	tip.text="Start with a high ball. Move RS down or sideways for medium, or up for high."
 	column.add_child(tip)
 	var actions := HBoxContainer.new()
 	column.add_child(actions)
@@ -55,12 +55,12 @@ func draw_diagram(view: Control) -> void:
 			var call := {0:"10",2:"32",6:"72"}
 			view.draw_string(font,Vector2(x,110),call[i],HORIZONTAL_ALIGNMENT_CENTER,91,21,teal)
 	view.draw_line(Vector2(8,39),Vector2(651,39),Color.WHITE,3.)
-	for i in 3:
-		var x := 10.+i*217.
+	for i in 2:
+		var x := 75.+i*282.
 		var pts := PackedVector2Array()
 		for tick in 33:
 			var t := tick/32.
-			pts.append(Vector2(x+t*194.,208.-[27.,54.,84.][i]*4.*t*(1.-t)))
+			pts.append(Vector2(x+t*194.,208.-[54.,84.][i]*4.*t*(1.-t)))
 		view.draw_polyline(pts,teal if i==1 else Color("9bb3bf"),2.5,true)
 		view.draw_circle(pts[-1],3.5,Color.WHITE)
-		view.draw_string(font,Vector2(x,237),["Fast","Neutral","High"][i],HORIZONTAL_ALIGNMENT_CENTER,194,17,Color.WHITE)
+		view.draw_string(font,Vector2(x,237),["Medium","High"][i],HORIZONTAL_ALIGNMENT_CENTER,194,17,Color.WHITE)

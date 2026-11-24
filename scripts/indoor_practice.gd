@@ -4,7 +4,7 @@ const Court = preload("res://scripts/preview_court.gd")
 const Player = preload("res://scripts/volleyball_player.gd")
 const Hands = preload("res://scripts/hand_setting_pose.gd")
 const TARGETS := ["10","32","72"]
-const TEMPOS := ["Normal","High","Fast"]
+const TEMPOS := ["Medium","High"]
 const Xbox = preload("res://scripts/xbox_controls.gd")
 const BUTTONS := [JOY_BUTTON_X,JOY_BUTTON_Y,JOY_BUTTON_B]
 const KEYS := [KEY_J,KEY_I,KEY_L]
@@ -14,8 +14,8 @@ const BASE := Vector3(-1.5,0.04,1.35)
 const ORDER := [0,2,1]
 const SET_LOAD := .26
 var contact_time := 1.0
-const DURATION := [0.65,1.52,0.48]
-const APEX := [1.1,2.5,0.32]
+const DURATION := [1.25,1.62]
+const APEX := [1.92,3.22]
 const LINES := ["Welcome to the team, %s. I’m Coach Ellis.","You’re trying out at setter. Watch the three targets. I’ll toss the first ones right to you.","Three calls from each coach station. Keep your spot. I’ll toss above your forehead, including on the jump sets."]
 var coach_motion := preload("res://scripts/tryout_coach.gd").new()
 var last_toss := -10.0
@@ -73,7 +73,9 @@ var scorecard: Array=[]
 var placement_error := 10.
 var rep := 0
 var held := -1
-var selected_tempo := 0
+var selected_tempo := 1
+var previous_time_scale := 1.0
+var slow_motion := false
 var stick_latched := false
 var preview_until := 0.0
 var source := Vector3.ZERO
@@ -311,7 +313,7 @@ func reset_feed() -> void:
 			if attempt.setter==rotation_drill.turn and attempt.made: made+=1
 		title.text="%s   /   ZONE %d   /   %s   /   %d/9 MADE" % [setter.display_name,[1,6,5][rotation_drill.round_index],TARGETS[called()],made]
 		if called()==2: message.text = "72   /   Back set"
-	if not demonstration and rotation_drill.turn!=0: message.text = "Shag loose balls   /   Return to a cart"
+	panel.visible=demonstration or rotation_drill.turn==0
 	hint.text = ""
 	hint.hide()
 	meter.value = 0
@@ -364,7 +366,7 @@ func select_height(stick: Vector2) -> void:
 		stick_latched=false
 		return
 	if maxf(absf(stick.x),absf(stick.y))<.55: return
-	var choice := 0 if absf(stick.x)>absf(stick.y) else (1 if stick.y<0 else 2)
+	var choice := 1 if stick.y < -absf(stick.x) else 0
 	if not stick_latched or choice!=selected_tempo:
 		selected_tempo=choice
 		preview_until=clock+2.
@@ -414,7 +416,11 @@ var focus_headings := {}
 
 func _process(delta: float) -> void:
 	score_strip.visible=phase not in ["intro","complete","net_guide"] and not settings.visible and not demonstration
-	if settings.visible or phase in ["net_guide","complete"]: return
+	if settings.visible or phase=="net_guide": return
+	if phase=="complete":
+		clock+=delta
+		rotation_drill.huddle(delta)
+		return
 	var before := {}
 	for actor in rotation_drill.roster+[coach]+rotation_drill.workers.map(func(w): return w.actor):
 		before[actor]=actor.rotation.y
@@ -693,7 +699,7 @@ func release(index: int) -> void:
 			return
 	energy[setter].spend(2)
 	target = index
-	tempo = chosen_tempo() if not demonstration and rotation_drill.turn==0 else 0
+	tempo = chosen_tempo() if not demonstration and rotation_drill.turn==0 else 1
 	source = ball.position
 	flight_time = DURATION[tempo]
 	var error := 0.0 if demonstration else set_error*(3.6-skill)+gap*0.22
@@ -783,7 +789,8 @@ func complete() -> void:
 	camera.position = Vector3(0,6,-9)
 	camera.look_at(Vector3(0,1.4,2))
 	ball.hide()
-	coach.hide()
+	coach.show()
+	panel.show()
 	title.text = "INDOOR PRACTICE"
 	message.text = "Practice complete"
 	hint.hide()
@@ -802,6 +809,7 @@ func change_feed_phase(next: String) -> void:
 	held = prepared
 
 func _exit_tree() -> void:
+	if slow_motion: Engine.time_scale=previous_time_scale
 	coach_motion.dispose()
 
 func _input(event: InputEvent) -> void:
@@ -818,6 +826,12 @@ func _input(event: InputEvent) -> void:
 		trace("pause",{})
 		squat.cancel()
 		settings.show()
+		get_viewport().set_input_as_handled()
+		return
+	if event is InputEventJoypadButton and event.button_index==JOY_BUTTON_DPAD_UP and event.pressed and phase!="intro":
+		if not slow_motion: previous_time_scale=Engine.time_scale
+		slow_motion=not slow_motion
+		Engine.time_scale=previous_time_scale*(.35 if slow_motion else 1.)
 		get_viewport().set_input_as_handled()
 		return
 	if phase in ["intro","complete"]: return

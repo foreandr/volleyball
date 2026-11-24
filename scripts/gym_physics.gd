@@ -22,9 +22,10 @@ static func solid(node: Node3D,shape: Shape3D,layer: int) -> void:
 	collider.shape = shape
 	body.add_child(collider)
 
-func sweep(world: Node3D,shape: Shape3D,start: Vector3,motion: Vector3,mask: int) -> Dictionary:
+func sweep(world: Node3D,shape: Shape3D,start: Vector3,motion: Vector3,mask: int, excluded: Array[RID]=[]) -> Dictionary:
 	if motion.length_squared()<.0000001: return {}
 	var query := PhysicsShapeQueryParameters3D.new()
+	query.exclude = excluded
 	query.shape = shape
 	query.transform.origin = start
 	query.collision_mask = mask
@@ -38,12 +39,12 @@ func sweep(world: Node3D,shape: Shape3D,start: Vector3,motion: Vector3,mask: int
 	var surface := space.get_rest_info(query)
 	return {"fraction":fractions[0],"normal":surface.get("normal",-motion.normalized())}
 
-func travel(world: Node3D,start: Vector3,motion: Vector3,height: float) -> Vector3:
+func travel(world: Node3D,start: Vector3,motion: Vector3,height: float, excluded: Array[RID]=[]) -> Vector3:
 	capsule.height = maxf(.65,height)
 	var pos := start
 	var remaining := motion
 	for i in 3:
-		var hit := sweep(world,capsule,pos+Vector3.UP*(capsule.height*.5+.025),remaining,GYM|EQUIPMENT|64)
+		var hit := sweep(world,capsule,pos+Vector3.UP*(capsule.height*.5+.025),remaining,GYM|EQUIPMENT|64|256,excluded)
 		if hit.is_empty(): return pos+remaining
 		pos += remaining*maxf(0,float(hit.fraction)-.001)
 		remaining = (remaining*(1.-float(hit.fraction))).slide(hit.normal)

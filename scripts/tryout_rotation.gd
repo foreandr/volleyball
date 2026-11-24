@@ -82,6 +82,14 @@ func configure(host: Control) -> void:
 		game.world.add_child(bin)
 		bin.position=post
 		bins.append(bin)
+	for cart in bins+[basket]:
+		var hull := BoxShape3D.new()
+		hull.size=Vector3(1.12,.94,.74)
+		var mount := Node3D.new()
+		mount.name="CartHull"
+		cart.add_child(mount)
+		mount.position.y=.5
+		Contact.solid(mount,hull,256)
 	for i in 30: store_ball(new_ball())
 	var net := Node3D.new()
 	game.world.add_child(net)
@@ -295,8 +303,8 @@ func walk(actor: Node3D,goal: Vector3,dt: float,speed: float) -> bool:
 		var occupied: Array=[]
 		for other in roster+workers.map(func(w): return w.actor)+[game.coach]:
 			if other!=actor: occupied.append(other.position)
-		for cart in bins:
-			if cart and not (actor==runner and cart_route.get("pushing",false)): occupied.append(cart.position)
+		for cart in bins+[basket]:
+			if cart!=pushed_cart(actor): occupied.append(cart.position)
 		routes.detour(actor,goal,occupied)
 		# A pin aisle can be too narrow for two bodies. Step clear of the
 		# nearest person before following the new path around the cart.
@@ -395,7 +403,7 @@ func nearest(at: Vector3,worker: Dictionary,limit: float) -> RigidBody3D:
 			if other.actor!=worker.actor and other.goal==body: occupied=true
 		if occupied: continue
 		var worker_index := workers.find(worker)
-		if worker_index>=0 and worker_index<3 and body.position.distance_to(POSTS[worker_index])>2.8: continue
+		if game.phase!="complete" and worker_index>=0 and worker_index<3 and body.position.distance_to(POSTS[worker_index])>2.8: continue
 		var d := body.position.distance_to(at)
 		if d<limit:
 			limit=d
@@ -716,6 +724,11 @@ func perimeter_walk(w: Dictionary,target: Vector3,dt: float) -> bool:
 		return false
 	return walk(actor,target,dt,2.15 if actor==runner and cart_route.get("pushing",false) else 5.7)
 
+func pushed_cart(actor: Node3D) -> Node3D:
+	if actor==game.coach and coach_pushing: return basket
+	if actor==runner and exchange>=0 and cart_route.get("pushing",false): return bins[exchange]
+	return null
+
 func move_actor(actor: Node3D,step: Vector3) -> Vector3:
 	var here := actor.position
 	var depth := 0.0
@@ -751,7 +764,10 @@ func move_actor(actor: Node3D,step: Vector3) -> Vector3:
 		var away := -across.normalized() if across.length()>.12 else ahead.cross(Vector3.UP)
 		steer+=away*(1.-across.length()/.72)*(1.-along/1.5)
 	if not steer.is_zero_approx(): step=(ahead+steer*2.4).normalized()*step.length()
-	var next: Vector3=game.contacts.travel(game.world,here,step*(1.-.45*depth),actor.height_cm*.01*(1.-.39*depth))
+	var excluded: Array[RID]=[]
+	var pushed := pushed_cart(actor)
+	if pushed: excluded.append(pushed.get_node("CartHull").get_child(0).get_rid())
+	var next: Vector3=game.contacts.travel(game.world,here,step*(1.-.45*depth),actor.height_cm*.01*(1.-.39*depth),excluded)
 	for other in roster+workers.map(func(w): return w.actor)+[game.coach]:
 		if other==actor or not other: continue
 		if actor==runner and other==game.coach and returning: continue
@@ -759,5 +775,65 @@ func move_actor(actor: Node3D,step: Vector3) -> Vector3:
 		if gap.length()<.53 and gap.length()>0 and gap.dot(step)<0:
 			var tangent := Vector3(-gap.z,0,gap.x).normalized()
 			if tangent.dot(step)<0: tangent=-tangent
-			return game.contacts.travel(game.world,here,tangent*step.length(),actor.height_cm*.01*(1.-.39*depth))
+			return game.contacts.travel(game.world,here,tangent*step.length(),actor.height_cm*.01*(1.-.39*depth),excluded)
 	return next
+
+const HUDDLE_CENTER := Vector3(0,.04,.35)
+var circle: Array = []
+var debrief_started := false
+
+func huddle(dt: float) -> void:
+	if circle.is_empty():
+		circle=roster+workers.map(func(w): return w.actor)+[game.coach]
+		circle.sort_custom(func(a,b): return huddle_angle(a)<huddle_angle(b))
+	var present := 0
+	for i in circle.size():
+		var actor: Node3D=circle[i]
+		var work := workers.find_custom(func(w): return w.actor==actor)
+		if work>=0:
+			var w := workers[work]
+			if not w.cargo.is_empty() or w.goal or nearest(actor.position,w,INF):
+				collect(w,dt)
+				continue
+		if actor==roster[0] and not human_cargo.is_empty():
+			actor.animator.advance(dt)
+			var bin := closest_bin(actor.position)
+			if bin>=0 and (unloading.has(actor) or walk(actor,bins[bin].position+Vector3(0,.04,-.82),dt,3.2)):
+				if not unloading.has(actor): begin_unload(actor,bin,human_cargo)
+				place_in_cart(actor,human_cargo,dt)
+			continue
+		actor.animator.advance(dt)
+		var angle := TAU*i/circle.size()-PI
+		var spot := HUDDLE_CENTER+Vector3(sin(angle),0,cos(angle))*1.22
+		if actor.position.distance_to(spot)>.22:
+			walk(actor,spot,dt,3.1)
+			continue
+		present+=1
+		actor.play_action("base/Idle")
+		var inward := HUDDLE_CENTER-actor.position
+		actor.rotation.y=rotate_toward(actor.rotation.y,atan2(inward.x,inward.z),dt*2.)
+		var author: RefCounted=actor.get_pose_author()
+		var rig: Skeleton3D=actor.skeleton
+		var pose: Array=[]
+		for j in rig.get_bone_count(): pose.append(rig.get_bone_pose(j))
+		for side in ["l","r"]:
+			var sign_: float=1. if side=="l" else -1.
+			var arm := "upperarm_"+str(side)
+			var adjacent: Node3D=circle[posmod(i+(1 if side=="r" else -1),circle.size())]
+			var weight := smoothstep(1.05,.76,actor.position.distance_to(adjacent.position))
+			var aim := Contact.joint(adjacent,"spine_03")+Vector3.UP*(.06 if i%2==0 else -.12)
+			if actor==game.coach:
+				weight=.85
+				aim=actor.to_global(Vector3(sign_*.32,1.15+.09*sin(game.clock*2.+sign_),.37))
+			author.limb(pose,arm,"lowerarm_"+str(side),"hand_"+str(side),rig.to_local(aim),Vector3(sign_*.7,-.65,-.15),weight)
+			for bone in [arm,"lowerarm_"+str(side)]:
+				var j := rig.find_bone(bone)
+				rig.set_bone_pose_rotation(j,pose[j].basis.orthonormalized().get_rotation_quaternion())
+
+	if present==circle.size() and not debrief_started:
+		debrief_started=true
+		game.message.text="Coach Ellis: Good work. Give your hitters time to approach. Bring it in."
+
+func huddle_angle(actor: Node3D) -> float:
+	var offset := actor.position-HUDDLE_CENTER
+	return atan2(offset.x,offset.z)

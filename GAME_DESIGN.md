@@ -36,3 +36,5 @@ Crowds split allegiance, hush before serves, chant, jump, wave, celebrate, argue
 
 ## Wardrobe
 Support forward, backward and sideways strapback, snapback and fitted caps; sunglasses in multiple shapes; hoodies up/down, tees, tanks, shirtless, long sleeves and compression layers; varied shorts lengths, patterns and colors; pants, compression bottoms, bikinis, sand socks, shoes, leg/arm/calf sleeves, sock lengths, gloves, headbands, masks and haircuts. Layer masks, hoods and headbands. Generate coordinated CPU looks, including optional capes, armor and exotic effects.
+
+The setter tryout starts with high sets. RS down or sideways selects medium, and RS up selects high. D-pad up toggles 35% speed. During a teammate’s turn the score strip stays visible. Carts block player movement, including while being pushed. After scoring, the crew collects reachable balls and joins the setters and coach for a center-court huddle.
