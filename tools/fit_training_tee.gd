@@ -14,6 +14,12 @@ func fit(p: Vector3) -> Vector3:
 	fitted.y=lerpf(fitted.y,1.48,taper*.22)
 	fitted.z=lerpf(fitted.z,-.035,taper*.19)
 	fitted.x-=signf(x)*.023*smoothstep(.23,.38,absf(x))
+	# Keep the top of the cap close to the deltoid and leave ease below
+	# the arm. A circular, equally loose cuff reads like a rigid tube.
+	var cuff := smoothstep(.205,.345,absf(fitted.x))
+	var relative_y := fitted.y-1.48
+	fitted.y-=cuff*(.010+.16*maxf(relative_y,0.))
+	fitted.z=lerpf(fitted.z,-.035,cuff*.12)
 	return fitted
 
 func _initialize() -> void:
@@ -69,7 +75,7 @@ func _initialize() -> void:
 					var idx := nearest[k]*4+influence
 					var bone: int=ref[Mesh.ARRAY_BONES][idx]
 					blend[bone]=blend.get(bone,0.)+float(ref[Mesh.ARRAY_WEIGHTS][idx])/maxf(gaps[k],.00001)
-			var sleeve_weight := smoothstep(.17,.335,absf(p.x))*smoothstep(1.32,1.39,p.y)
+			var sleeve_weight := smoothstep(.165,.31,absf(p.x))*smoothstep(1.23,1.34,p.y)
 			var sum := 0.
 			for id in blend: sum+=float(blend[id])
 			for id in blend: blend[id]*=1.-sleeve_weight
