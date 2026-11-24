@@ -791,11 +791,19 @@ func move_actor(actor: Node3D,step: Vector3) -> Vector3:
 const HUDDLE_CENTER := Vector3(0,.04,.35)
 var circle: Array = []
 var debrief_started := false
+var shoulder_trim := {}
 
 func huddle(dt: float) -> void:
 	if circle.is_empty():
 		circle=roster+workers.map(func(w): return w.actor)+[game.coach]
 		circle.sort_custom(func(a,b): return huddle_angle(a)<huddle_angle(b))
+	# Read the previous displayed pose before the idle clips are advanced.
+	for actor: Node3D in shoulder_trim:
+		var entry: Dictionary=shoulder_trim[actor]
+		var palm := Contact.palm(actor,entry.side)
+		var surface: Vector3=game.coach.dressed_surface.contact(palm,Vector3.UP)
+		if not surface.is_equal_approx(palm):
+			entry.trim=clampf(entry.trim+(surface.y-.012-palm.y)*minf(1.,dt*5.),-.06,.06)
 	var present := 0
 	for i in circle.size():
 		var actor: Node3D=circle[i]
@@ -890,6 +898,20 @@ func huddle(dt: float) -> void:
 			if blend>0.:
 				var solved: Transform3D=author.world_pose(pose,rig.find_bone(wrist))
 				author.set_world_basis(pose,wrist,solved.basis.orthonormalized().slerp(orientation,blend))
+			if adjacent==game.coach and upper and blend>.95:
+				# Close the remaining gap after IK has limited reach and turned
+				# the wrist. Sample the jacket underneath the solved palm.
+				if not shoulder_trim.has(actor): shoulder_trim[actor]={"side":side,"trim":0.}
+				var wrist_goal: Vector3=rig.to_local(aim)-palm_offset
+				for iteration in 4:
+					var palm: Vector3=rig.to_global(author.point(pose,wrist).lerp(author.point(pose,"middle_01_"+str(side)),.8))
+					var surface: Vector3=adjacent.dressed_surface.contact(palm,Vector3.UP)
+					if surface.is_equal_approx(palm): break
+					var correction := surface.y-.012+float(shoulder_trim[actor].trim)-palm.y
+					if absf(correction)<.0015: break
+					wrist_goal+=rig.global_basis.inverse()*(Vector3.UP*clampf(correction,-.08,.08))
+					author.limb(pose,arm,"lowerarm_"+str(side),wrist,wrist_goal,pole,1.)
+					author.set_world_basis(pose,wrist,orientation)
 			for bone in [arm,"lowerarm_"+str(side),wrist]:
 				var j := rig.find_bone(bone)
 				rig.set_bone_pose_rotation(j,pose[j].basis.orthonormalized().get_rotation_quaternion())
