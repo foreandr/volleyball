@@ -65,7 +65,11 @@ var cushion := 0.0
 var drop_velocity := Vector3.ZERO
 var old_palms := {}
 var jump := preload("res://scripts/setter_jump.gd").new()
+var cpu_setting := false
 var demonstration := false
+
+func automatic_setter() -> bool:
+	return cpu_setting or demonstration or rotation_drill.turn!=0
 var demo_index := 0
 var pressed_at := 0.0
 var endpoint := Vector3.ZERO
@@ -342,12 +346,33 @@ func update_prompts(next: String) -> void:
 		_:
 			for i in BUTTONS.size(): entries.append([BUTTONS[i],TARGETS[i]])
 			entries.append_array([["RS","Set height"],[JOY_BUTTON_LEFT_STICK,"Show / hide arc"],[JOY_BUTTON_A,"Hold / release jump"],["LT","Focus"],["RT","Sprint"],[JOY_BUTTON_START,"Settings"]])
+	if solo_setting:
+		if cpu_setting: entries=[[JOY_BUTTON_START,"Settings"]]
+		entries.push_front(["View","Take control" if cpu_setting else "Watch CPU set"])
 	Xbox.prompts(controls_row,entries)
+
+func camp_title() -> String:
+	return "SET TO TARGET   /   CPU SETTER" if cpu_setting else "SET TO TARGET   /   PLAYER SETTER"
+
+func switch_camp_control() -> void:
+	cpu_setting = not cpu_setting
+	squat.cancel()
+	focused=false
+	held=-1
+	pending_release=false
+	prompt_phase=""
+	if phase in ["feed","pass"]:
+		rotation_drill.free_ball(Vector3.ZERO)
+		reset_feed()
+	else:
+		update_prompts(phase)
+	title.text=camp_title()
 
 func leave() -> void:
 	MenuPresentation.load_scene("res://scenes/drills.tscn" if solo_setting else "res://scenes/story.tscn")
 
 func start_practice() -> void:
+	cpu_setting = solo_setting
 	coach_motion.whistle_cue.signal_drill(coach)
 	if not solo_setting: rotation_drill.advance_turn()
 	rotation_drill.stage_start()
@@ -398,7 +423,7 @@ func reset_feed() -> void:
 			if attempt.setter==rotation_drill.turn and attempt.made: made+=1
 		title.text="ZONE %d   /   %s   /   %d/9 MADE" % [[1,6,5][rotation_drill.round_index],TARGETS[called()],made]
 		if called()==2: message.text = "72   /   Back set"
-	if solo_setting: title.text="TRAINING CAMP   /   SET TO TARGET"
+	if solo_setting: title.text=camp_title()
 	panel.visible=demonstration or rotation_drill.turn==0
 	hint.text = ""
 	hint.hide()
@@ -642,8 +667,8 @@ func step_practice(delta: float) -> void:
 	squat.update(setter,delta)
 	squat.ring.hide()
 	if jump.active: jump.step(setter,delta,Vector2.ZERO)
-	elif not demonstration and rotation_drill.turn==0 and not squat.charging and phase!="cart": move_setter(delta)
-	if (jump.active or squat.charging or phase=="cart") and held>=0 and rotation_drill.turn==0 and axis(Xbox.trigger(true))>.25: face_set(setter,held,delta)
+	elif not automatic_setter() and not squat.charging and phase!="cart": move_setter(delta)
+	if (jump.active or squat.charging or phase=="cart") and held>=0 and not automatic_setter() and axis(Xbox.trigger(true))>.25: face_set(setter,held,delta)
 	match phase:
 		"cart":
 			var incoming_ready := not jump.active and not squat.charging and rotation_drill.walk(setter,BASE,delta,5.2)
@@ -667,7 +692,7 @@ func step_practice(delta: float) -> void:
 				change_feed_phase("feed")
 		"feed":
 			setter.animator.advance(0.0)
-			if demonstration or rotation_drill.turn!=0: face_set(setter,called(),delta)
+			if automatic_setter(): face_set(setter,called(),delta)
 			if held>=0: Hands.apply(setter,catch_point,.55)
 			ball.position = coach_motion.toss(coach,clampf((clock-maxf(clock-elapsed,next_release-.30))/.30,0,1))
 			# Measure the athlete who actually arrived, including their rig scale.
@@ -690,15 +715,15 @@ func step_practice(delta: float) -> void:
 				change_feed_phase("pass")
 		"pass":
 			ball.rotation+=toss_spin*delta
-			if demonstration or rotation_drill.turn!=0:
+			if automatic_setter():
 				face_set(setter,called(),delta)
-			if (demonstration or rotation_drill.turn!=0) and jump_rep() and not jump.active and elapsed>=contact_time-.40 and elapsed<contact_time-.22:
+			if automatic_setter() and jump_rep() and not jump.active and elapsed>=contact_time-.40 and elapsed<contact_time-.22:
 				energy[setter].spend(5)
 				jump.begin_set_jump(setter,.07,.52)
 				jump.height=.52
 				jump.air_time=jump.flight_duration(.52,true)
 				jump.release()
-			if held>=0 and first_contact>=0 and not demonstration and rotation_drill.turn==0:
+			if held>=0 and first_contact>=0 and not automatic_setter():
 				if clock-first_contact <= HAND_CUSHION:
 					ball.position=setter.to_global(contact_local)-Vector3.UP*cushion*smoothstep(0,HAND_CUSHION,clock-first_contact)
 					Hands.apply(setter,ball.position,1.0)
@@ -717,17 +742,17 @@ func step_practice(delta: float) -> void:
 				return
 			if elapsed<0.16: coach_motion.toss(coach,1.0)
 			ball.position.y = maxf(0.15,ball.position.y)
-			if (demonstration or rotation_drill.turn!=0) and held<0 and elapsed>=contact_time-SET_LOAD:
+			if automatic_setter() and held<0 and elapsed>=contact_time-SET_LOAD:
 				held = called()
 				pressed_at = clock
 			if held>=0:
-				if held==2 and called()==2 and not demonstration and rotation_drill.turn==0 and not focused:
+				if held==2 and called()==2 and not automatic_setter() and not focused:
 					var opposite := (setter.position-PINS[2]).slide(Vector3.UP)
 					setter.rotation.y=lerp_angle(setter.rotation.y,atan2(opposite.x,opposite.z),minf(1,delta*9))
 				meter.value = set_fill()*100
 				Hands.apply(setter,ball.position,0.35+0.65*smoothstep(contact_time-.55,contact_time-.10,elapsed))
 				if Vector3(0,ball.position.y-setter.position.y,0).length()<setter.height_cm*.013: Contact.track_hands(setter,ball.position)
-			if held<0 and not demonstration and rotation_drill.turn==0:
+			if held<0 and not automatic_setter():
 				var head := Contact.joint(setter,"Head")+Vector3.UP*.10+setter.global_basis.z*.048
 				var closest := Geometry3D.get_closest_point_to_segment(head,previous,ball.position)
 				if head.distance_to(closest)<.205 and incoming.y<0:
@@ -743,7 +768,7 @@ func step_practice(delta: float) -> void:
 					var hand := Contact.joint(setter,bone)
 					if Contact.touched(previous,ball.position,old_palms.get(bone,hand),hand): collided = true
 					old_palms[bone] = hand
-			if held>=0 and not demonstration and rotation_drill.turn==0 and incoming.y<0:
+			if held>=0 and not automatic_setter() and incoming.y<0:
 				# Cover the space between the palms as well as individual fingers.
 				var pocket := Contact.joint(setter,"Head")+setter.global_basis.z*.095+Vector3.UP*.24
 				var closest := Geometry3D.get_closest_point_to_segment(pocket,previous,ball.position)
@@ -766,7 +791,7 @@ func step_practice(delta: float) -> void:
 				return
 			if held>=0 and clock-last_contact<.11:
 				Hands.apply(setter,ball.position-Vector3.UP*cushion,1.0,Vector3.ZERO,cushion)
-			if (demonstration or rotation_drill.turn!=0) and elapsed>=contact_time: release(called())
+			if automatic_setter() and elapsed>=contact_time: release(called())
 			elif elapsed>forehead_arrival+0.25: miss("The toss dropped. Hold the target, then release at contact.")
 		"set":
 			ball.rotate_x(delta*4.0)
@@ -910,7 +935,7 @@ func miss(reason: String) -> void:
 	message.text = reason
 
 func show_timing(offset: float) -> void:
-	if demonstration or rotation_drill.turn != 0: return
+	if automatic_setter(): return
 	var percent := roundi(100.0 * absf(offset) / timing_window())
 	timing_note.text = "%d%% too %s" % [percent,"early" if offset < 0 else "late"] if percent > 0 else "On time"
 	timing_note.reset_size()
@@ -942,10 +967,10 @@ func release(index: int) -> void:
 		var raw_offset := release_offset()
 		set_error = raw_offset
 		input_hold=clock-pressed_at
-		if rotation_drill.turn==0 and not demonstration:
+		if not automatic_setter():
 			set_error = signf(raw_offset)*maxf(0.,absf(raw_offset)-ON_TIME)
 			trace("set_button_up",{"raw_offset_s":raw_offset,"held_s":input_hold,"ball":str(ball.position),"head":str(Contact.joint(setter,"Head"))})
-		if first_contact < 0 and not demonstration and rotation_drill.turn == 0 and raw_offset <= ON_TIME and raw_offset >= -(timing_window()+0.065):
+		if first_contact < 0 and not automatic_setter() and raw_offset <= ON_TIME and raw_offset >= -(timing_window()+0.065):
 			pending_release = true
 			measured_release = true
 			return
@@ -958,7 +983,7 @@ func release(index: int) -> void:
 	var gap := Vector2(setter.position.x-catch_point.x,setter.position.z-catch_point.z).length()
 	var airborne := setter.position.y-BASE.y
 	var technique_feedback := ""
-	if not demonstration and rotation_drill.turn==0:
+	if not automatic_setter():
 		if jump_rep() and airborne<.20: technique_feedback="Jump set requested. Jump before contact."
 		elif not jump_rep() and airborne>.12: technique_feedback="Standing set requested. Stay planted."
 		if first_contact<0 or clock-last_contact>HAND_CUSHION:
@@ -969,7 +994,7 @@ func release(index: int) -> void:
 			return
 	energy[setter].spend(2)
 	target = index
-	tempo = chosen_tempo() if not demonstration and rotation_drill.turn==0 else 1
+	tempo = chosen_tempo() if not automatic_setter() else 1
 	source = ball.position
 	flight_time = DURATION[tempo]
 	var error := 0.0 if demonstration else set_error*(3.6-skill)+gap*0.22
@@ -1191,6 +1216,11 @@ func _input(event: InputEvent) -> void:
 		preview_enabled=not preview_enabled
 		get_viewport().set_input_as_handled()
 		return
+	if solo_setting and ((event is InputEventJoypadButton and event.button_index==JOY_BUTTON_BACK) or (event is InputEventKey and event.physical_keycode==KEY_TAB)):
+		if event.is_pressed(): switch_camp_control()
+		get_viewport().set_input_as_handled()
+		return
+	if cpu_setting: return
 	if rotation_drill.turn!=0 and not demonstration:
 		if rotation_drill.turn == 1 and ((event is InputEventJoypadButton and event.button_index == Xbox.physical(JOY_BUTTON_A)) or (event is InputEventKey and event.keycode == KEY_SPACE)): return
 		free_input(event)

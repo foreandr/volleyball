@@ -25,7 +25,15 @@ static func trigger(left: bool) -> JoyAxis:
 	var swapped := bool(StorySession.game_options.get_value("xbox","swap_triggers",false))
 	return JOY_AXIS_TRIGGER_LEFT if left!=swapped else JOY_AXIS_TRIGGER_RIGHT
 
+static var view_icon: Texture2D
+
 static func glyph(control: Variant) -> Texture2D:
+	if control is String and control=="View":
+		if not view_icon:
+			var icon := Image.new()
+			icon.load_svg_from_string('<svg xmlns="http://www.w3.org/2000/svg" width="42" height="32" viewBox="0 0 42 32"><rect x="3" y="3" width="36" height="26" rx="12" fill="#303b44" stroke="#dfe9eb"/><path d="M14 17h-3V9h12v3" fill="none" stroke="white" stroke-width="2"/><rect x="17" y="14" width="12" height="9" fill="none" stroke="white" stroke-width="2"/></svg>')
+			view_icon=ImageTexture.create_from_image(icon)
+		return view_icon
 	var key: String
 	if control is int: key = NAMES[physical(control)]
 	elif control in ["LT","RT"]: key = "LT" if trigger(control=="LT")==JOY_AXIS_TRIGGER_LEFT else "RT"

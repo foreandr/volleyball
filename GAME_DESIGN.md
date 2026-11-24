@@ -85,3 +85,5 @@ Indoor hand sets preserve the physical button-release time while a prepared sett
 Training Camp / Setting / Set to Target runs on the same indoor practice controller as the career tryout. Solo practice recycles issued balls after each result and repeats standing and jump sets without roster rotation. Play and Training Camp use the indoor gym and shared athlete kit for match-based drills.
 
 Gameplay prompts default to mapped Xbox glyphs regardless of connected devices or recent key presses. Keyboard prompt text requires an explicit opt-in in Controls.
+
+Solo Set to Target starts with the CPU demonstrating on the active athlete. Xbox View switches to player control and back. When ownership changes during a toss, the coach feeds a fresh ball for that setter.
