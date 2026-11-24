@@ -625,7 +625,8 @@ static func haircut(scalp: Node3D,color: Color,variant: int,actor: Node3D) -> vo
 	var rng := RandomNumberGenerator.new()
 	rng.seed=217+variant
 	actor.hair_length=.022+.009*style
-	var lock_count := 3600 if style==1 else 1080
+	var waved_crop := style==0 and variant>=7
+	var lock_count := 3600 if style==1 or waved_crop else 1080
 	for i in lock_count:
 		var y := rng.randf()
 		var a := rng.randf()*TAU
@@ -636,7 +637,12 @@ static func haircut(scalp: Node3D,color: Color,variant: int,actor: Node3D) -> vo
 		var length_factor := 1.
 		var crown := smoothstep(.22,.86,y)
 		match style:
-			0: length_factor=.48+.54*crown
+			0:
+				length_factor=.48+.54*crown
+				if waved_crop:
+					# Lay short locks outward from a slightly off-centre crown.
+					var pole := Vector3(parting,.94,-.24).normalized()
+					comb=(normal-pole).slide(normal)+.26*pole.cross(normal)
 			1:
 				# Sweep the longer forelock across the crown above cropped sides.
 				var fringe := smoothstep(-.45,.42,normal.z)*smoothstep(.16,.68,y)
@@ -679,8 +685,16 @@ static func haircut(scalp: Node3D,color: Color,variant: int,actor: Node3D) -> vo
 		# Cropped sides track the scalp while long tips lag behind a head turn.
 		var compliance := clampf(length/actor.hair_length,.12,1.6)/1.6
 		if style==5: compliance*=.45
+		var wave_ridge := 0.
+		if waved_crop:
+			var pole := Vector3(parting,.94,-.24).normalized()
+			var arc := acos(clampf(normal.dot(pole),-1.,1.))
+			wave_ridge=.5+.5*cos(arc*32.+.65*sin(a*2.))
+			length*=.65+.40*wave_ridge
+			pigment*=.74+.26*wave_ridge
 		var coiled := style in [2,6]
 		var lift := .10 if style==5 else .28
+		if waved_crop: lift=.10+.42*wave_ridge
 		if style==1: lift+=.27*smoothstep(-.45,.42,normal.z)*crown
 		# Neighboring ringlets share a direction, while the pitch changes across the crown.
 		var patch := sin(normal.x*9.+normal.z*6.+variant)
