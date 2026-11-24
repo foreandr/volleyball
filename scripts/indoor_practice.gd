@@ -66,6 +66,20 @@ var drop_velocity := Vector3.ZERO
 var old_palms := {}
 var jump := preload("res://scripts/setter_jump.gd").new()
 var cpu_setting := false
+var cpu_jump_lead := .40
+var cpu_release_delay := 0.
+var cpu_jump_started := false
+
+func plan_cpu_timing() -> void:
+	cpu_jump_started=false
+	cpu_jump_lead=.40
+	cpu_release_delay=0.
+	if not automatic_setter() or demonstration: return
+	var rng=rotation_drill.random
+	cpu_jump_lead=rng.randf_range(.31,.46)
+	if rng.randf()>.32:
+		cpu_release_delay=rng.randf_range(.012,.055)*(-1. if rng.randf()<.5 else 1.)
+
 var demonstration := false
 
 func automatic_setter() -> bool:
@@ -712,12 +726,14 @@ func step_practice(delta: float) -> void:
 				toss_spin=Vector3([-8.0,1.4,7.5][rotation_drill.tosses%3],rotation_drill.random.randf_range(-3,3),rotation_drill.random.randf_range(-2,2))
 				trace("coach_release",{"from":str(source),"to":str(catch_point),"arc":toss_curve,"spin":str(toss_spin)})
 				cue_until=clock+1.05
+				plan_cpu_timing()
 				change_feed_phase("pass")
 		"pass":
 			ball.rotation+=toss_spin*delta
 			if automatic_setter():
 				face_set(setter,called(),delta)
-			if automatic_setter() and jump_rep() and not jump.active and elapsed>=contact_time-.40 and elapsed<contact_time-.22:
+			if automatic_setter() and jump_rep() and not cpu_jump_started and not jump.active and elapsed>=contact_time-cpu_jump_lead and elapsed<contact_time:
+				cpu_jump_started=true
 				energy[setter].spend(5)
 				jump.begin_set_jump(setter,.07,.52)
 				jump.height=.52
@@ -791,7 +807,7 @@ func step_practice(delta: float) -> void:
 				return
 			if held>=0 and clock-last_contact<.11:
 				Hands.apply(setter,ball.position-Vector3.UP*cushion,1.0,Vector3.ZERO,cushion)
-			if automatic_setter() and elapsed>=contact_time: release(called())
+			if automatic_setter() and elapsed>=contact_time+cpu_release_delay: release(called())
 			elif elapsed>forehead_arrival+0.25: miss("The toss dropped. Hold the target, then release at contact.")
 		"set":
 			ball.rotate_x(delta*4.0)
@@ -1001,7 +1017,11 @@ func release(index: int) -> void:
 	endpoint = PINS[target]+Vector3(error,0,error*0.4)
 	if not demonstration:
 		endpoint+=facing_scatter(setter,target)
-	if rotation_drill.turn!=0 and not demonstration:
+	if cpu_setting:
+		# Timing the push early or late displaces the set along its intended line.
+		var aim: Vector3=(PINS[target]-setter.position).slide(Vector3.UP).normalized()
+		endpoint=PINS[target]+aim*(cpu_release_delay*12.)
+	elif rotation_drill.turn!=0 and not demonstration:
 		var angle := rotation_drill.random.randf()*TAU
 		var distance := rotation_drill.random.randf_range(.03,.15) if cpu_aims_inside(rotation_drill.turn) else rotation_drill.random.randf_range(.82,1.55)
 		endpoint = PINS[target]+Vector3(cos(angle),0,sin(angle))*distance

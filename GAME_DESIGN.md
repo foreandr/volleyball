@@ -87,3 +87,7 @@ Training Camp / Setting / Set to Target runs on the same indoor practice control
 Gameplay prompts default to mapped Xbox glyphs regardless of connected devices or recent key presses. Keyboard prompt text requires an explicit opt-in in Controls.
 
 Solo Set to Target starts with the CPU demonstrating on the active athlete. Xbox View switches to player control and back. When ownership changes during a toss, the coach feeds a fresh ball for that setter.
+
+Keep Xbox prompt textures resident across redraws so CPU and player prompts render the same mapped button.
+
+CPU setters choose a takeoff lead and release offset per toss. In solo camp a centered release aims at the target center, while early and late releases change set depth.

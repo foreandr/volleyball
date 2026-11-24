@@ -1,5 +1,21 @@
 extends RefCounted
 
+const GLYPHS := {
+	"A":preload("res://assets/input/xbox/A.png"),
+	"Aim":preload("res://assets/input/xbox/Aim.png"),
+	"B":preload("res://assets/input/xbox/B.png"),
+	"LB":preload("res://assets/input/xbox/LB.png"),
+	"LS":preload("res://assets/input/xbox/LS.png"),
+	"LT":preload("res://assets/input/xbox/LT.png"),
+	"Menu":preload("res://assets/input/xbox/Menu.png"),
+	"Move":preload("res://assets/input/xbox/Move.png"),
+	"RB":preload("res://assets/input/xbox/RB.png"),
+	"RS":preload("res://assets/input/xbox/RS.png"),
+	"RT":preload("res://assets/input/xbox/RT.png"),
+	"X":preload("res://assets/input/xbox/X.png"),
+	"Y":preload("res://assets/input/xbox/Y.png"),
+}
+
 const FACE := [JOY_BUTTON_A,JOY_BUTTON_X,JOY_BUTTON_Y,JOY_BUTTON_B]
 const AUX := [JOY_BUTTON_LEFT_SHOULDER,JOY_BUTTON_RIGHT_SHOULDER,JOY_BUTTON_RIGHT_STICK,JOY_BUTTON_START,JOY_BUTTON_LEFT_STICK]
 const NAMES := {JOY_BUTTON_A:"A",JOY_BUTTON_B:"B",JOY_BUTTON_X:"X",JOY_BUTTON_Y:"Y",JOY_BUTTON_LEFT_SHOULDER:"LB",JOY_BUTTON_RIGHT_SHOULDER:"RB",JOY_BUTTON_RIGHT_STICK:"RS",JOY_BUTTON_START:"Menu",JOY_BUTTON_LEFT_STICK:"LS"}
@@ -38,7 +54,7 @@ static func glyph(control: Variant) -> Texture2D:
 	if control is int: key = NAMES[physical(control)]
 	elif control in ["LT","RT"]: key = "LT" if trigger(control=="LT")==JOY_AXIS_TRIGGER_LEFT else "RT"
 	else: key = control
-	return load("res://assets/input/xbox/%s.png" % key)
+	return GLYPHS[key]
 
 static func prompts(parent: Container,entries: Array) -> void:
 	for node in parent.get_children():
@@ -77,7 +93,7 @@ static func settings(parent: Container,refresh: Callable) -> void:
 		option.add_theme_constant_override("icon_max_width",36)
 		option.get_popup().add_theme_constant_override("icon_max_width",36)
 		for button in choices:
-			option.add_icon_item(load("res://assets/input/xbox/%s.png" % NAMES[button]),CONTROLS[i],button)
+			option.add_icon_item(GLYPHS[NAMES[button]],CONTROLS[i],button)
 		option.select(choices.find(physical(choices[slot])))
 		parent.add_child(option)
 		option.item_selected.connect(func(index: int):
