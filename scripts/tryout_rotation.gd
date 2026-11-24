@@ -239,11 +239,31 @@ func advance_turn() -> void:
 			human_cargo.clear()
 	game.setter=roster[turn]
 
+var walking_progress := {}
+
 func walk(actor: Node3D,goal: Vector3,dt: float,speed: float) -> bool:
 	var dir := (goal-actor.position).slide(Vector3.UP)
 	if dir.length()<.12:
+		walking_progress.erase(actor)
 		actor.play_action("base/Idle")
 		return true
+	var track: Dictionary=walking_progress.get(actor,{})
+	if track.is_empty() or goal.distance_to(track.goal)>.65 or game.clock-float(track.last)>.25:
+		track={"goal":goal,"best":dir.length(),"since":game.clock,"last":game.clock}
+		walking_progress[actor]=track
+	track.last=game.clock
+	if dir.length()<float(track.best)-.18:
+		track.best=dir.length()
+		track.since=game.clock
+	elif game.clock-float(track.since)>=1.:
+		var occupied: Array=[]
+		for other in roster+workers.map(func(w): return w.actor)+[game.coach]:
+			if other!=actor: occupied.append(other.position)
+		for cart in bins:
+			if cart and not (actor==runner and cart_route.get("pushing",false)): occupied.append(cart.position)
+		routes.detour(actor,goal,occupied)
+		track.since=game.clock
+		track.best=dir.length()
 	var waypoint := routes.waypoint(actor,goal,dt)
 	dir = (waypoint-actor.position).slide(Vector3.UP)
 	actor.rotation.y=lerp_angle(actor.rotation.y,atan2(dir.x,dir.z),minf(1,dt*9))
@@ -256,7 +276,7 @@ func walk(actor: Node3D,goal: Vector3,dt: float,speed: float) -> bool:
 	if along<step.length()*.65: routes.reroute(actor,goal)
 	next.y=actor.position.y
 	actor.position=next
-	actor.play_action("base/Walk" if speed<2.4 else "run")
+	actor.play_action(("base/Walk" if speed<2.4 else "run") if along>step.length()*.18 else "base/Idle")
 	return false
 
 func tick(dt: float) -> void:
@@ -342,7 +362,7 @@ func collect(w: Dictionary,dt: float) -> void:
 			stuck=0.
 		else: stuck+=dt
 		w.stuck=stuck
-		if under_stands(w.goal.position) or stuck>2.2:
+		if under_stands(w.goal.position) or stuck>=1.0:
 			if not w.has("skip"): w.skip={}
 			w.skip[w.goal]=game.clock+6.0
 			w.goal=null
@@ -396,7 +416,12 @@ func collect(w: Dictionary,dt: float) -> void:
 			begin_unload(actor,index,cargo)
 			place_in_cart(actor,cargo,dt)
 			return
-	else: perimeter_walk(w,HOME[workers.find(w)],dt)
+	else:
+		var home: Vector3=HOME[workers.find(w)]
+		if actor.position.distance_to(home)<.95:
+			actor.play_action("base/Idle")
+			w.erase("destination")
+		else: perimeter_walk(w,home,dt)
 	for i in cargo.size():
 		cargo[i].position=Contact.palm(actor,"l" if i==0 else "r")+Vector3.UP*.055
 
@@ -602,13 +627,16 @@ func perimeter_walk(w: Dictionary,target: Vector3,dt: float) -> bool:
 		w.path=[exit_point]
 		for key in keys: w.path.append(stops[key])
 		w.path.append(entry)
-	if game.phase in ["feed","pass"] and in_feed_lane(target) and w.path.is_empty(): return false
+	if game.phase in ["feed","pass"] and in_feed_lane(target) and w.path.is_empty():
+		actor.play_action("base/Idle")
+		return false
 	if not w.path.is_empty():
 		if actor.position.distance_to(w.path[0])<.58 or walk(actor,w.path[0],dt,2.15 if actor==runner and cart_route.get("pushing",false) else 5.7): w.path.pop_front()
 		return false
 	if absf(target.x)<3.3 and target.z>-5 and target.z<13 and workers.has(w) and not on_drill_floor(actor.position):
 		for other in workers:
 			if other.actor!=actor and absf(other.actor.position.x)<3.4 and other.actor.position.z>-5 and other.actor.position.z<13:
+				actor.play_action("base/Idle")
 				return false
 	return walk(actor,target,dt,2.15 if actor==runner and cart_route.get("pushing",false) else 5.7)
 

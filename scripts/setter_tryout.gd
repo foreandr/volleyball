@@ -79,7 +79,8 @@ var free_target := -1
 var free_press := 0.0
 var lateral_steps := {}
 var cue_until := 0.0
-var graded_hold := 0.0
+var graded_fill := 0.0
+var first_contact := -100.0
 var set_grade_until := 0.0
 var set_error := 0.0
 var energy := {}
@@ -274,6 +275,7 @@ func reset_feed() -> void:
 	set_grade_until=0.0
 	for i in targets.size(): targets[i].beacon.visible=i==called()
 	last_contact = -100
+	first_contact = -100
 	cushion = 0
 	old_palms.clear()
 	begin("cart" if not demonstration else "walk")
@@ -394,6 +396,7 @@ func _process(delta: float) -> void:
 	match phase:
 		"cart":
 			var incoming_ready := not jump.active and not squat.charging and rotation_drill.walk(setter,BASE,delta,5.2)
+			if held>=0: Hands.apply(setter,catch_point,.55)
 			var coach_ready := rotation_drill.station_ready(delta)
 			coach_goal = rotation_drill.basket.position+rotation_drill.FEED_SPOT
 			if coach_ready and incoming_ready and rotation_drill.floor_clear() and rotation_drill.take_ball():
@@ -413,6 +416,7 @@ func _process(delta: float) -> void:
 				change_feed_phase("feed")
 		"feed":
 			setter.animator.advance(0.0)
+			if held>=0: Hands.apply(setter,catch_point,.55)
 			ball.position = coach_motion.toss(coach,clampf((clock-maxf(clock-elapsed,next_release-.30))/.30,0,1))
 			if elapsed>=.30 and clock>=next_release:
 				last_toss = clock
@@ -452,7 +456,7 @@ func _process(delta: float) -> void:
 				if held==3 and called()==3:
 					var opposite := (setter.position-PINS[3]).slide(Vector3.UP)
 					setter.rotation.y=lerp_angle(setter.rotation.y,atan2(opposite.x,opposite.z),minf(1,delta*9))
-				meter.value = clampf((clock-pressed_at)/0.65,0,1)*100
+				meter.value = set_fill()*100
 				Hands.apply(setter,ball.position,0.35+0.65*smoothstep(contact_time-.55,contact_time-.10,elapsed))
 				if Vector3(0,ball.position.y-setter.position.y,0).length()<setter.height_cm*.013: Contact.track_hands(setter,ball.position)
 			if held<0 and not demonstration and rotation_drill.turn==0:
@@ -472,6 +476,7 @@ func _process(delta: float) -> void:
 					if Contact.touched(previous,ball.position,old_palms.get(bone,hand),hand): collided = true
 					old_palms[bone] = hand
 			if collided and last_contact<0:
+				first_contact = clock
 				last_contact = clock
 				cushion = clampf(previous.distance_to(ball.position)/maxf(delta,.001)*.012,.02,.10)
 				trace("palm_contact",{"held":held,"give_m":cushion})
@@ -566,12 +571,28 @@ func miss(reason: String) -> void:
 func timing_window() -> float:
 	return .085+.135*clampf(float(setter.attributes.get("Hand setting",40))/100.,0,1)
 
+# Predict arrival in flight, then anchor the cue to the hands cushioning the ball.
+func release_offset() -> float:
+	if first_contact>=0: return clock-first_contact-.045
+	return elapsed-contact_time
+
+func set_fill() -> float:
+	var age := maxf(0.,clock-pressed_at)
+	var ready := .30*(1.-exp(-age*5.))
+	if phase!="pass": return ready
+	var offset := release_offset()
+	var window := timing_window()
+	if offset < -window:
+		var remaining := -offset-window
+		return lerpf(ready,.55,age/(age+remaining))
+	return clampf(.70+.15*offset/window,0.,1.)
+
 func release(index: int) -> void:
 	if phase!="pass" or held!=index: return
-	graded_hold=clock-pressed_at
-	set_error=elapsed-contact_time
+	graded_fill=set_fill()
+	set_error=release_offset()
 	set_grade_until=clock+.65
-	trace("release",{"target":TARGETS[index],"held_s":clock-pressed_at,"timing_error":elapsed-contact_time,"air_m":setter.position.y-BASE.y})
+	trace("release",{"target":TARGETS[index],"held_s":clock-pressed_at,"timing_error":set_error,"air_m":setter.position.y-BASE.y})
 	held = -1
 	var skill := float(CareerSession.profile().get("Hand setting",40))/100
 	var gap := Vector2(setter.position.x-catch_point.x,setter.position.z-catch_point.z).length()
@@ -583,10 +604,10 @@ func release(index: int) -> void:
 		if not jump_rep() and airborne>0.12:
 			miss("Stay planted for this set.")
 			return
-		if clock-last_contact>minf(.17,timing_window()):
+		if first_contact<0 or clock-last_contact>minf(.17,timing_window()):
 			miss("No hand contact. Get under the ball before release.")
 			return
-		if absf((clock-pressed_at)-SET_LOAD)>timing_window() or absf(elapsed-contact_time)>timing_window() or gap>0.72+0.36*skill:
+		if absf(set_error)>timing_window() or gap>0.72+0.36*skill:
 			miss("Missed contact. Hold the target and release above your forehead.")
 			return
 	energy[setter].spend(2)
@@ -594,14 +615,14 @@ func release(index: int) -> void:
 	tempo = 1 if demonstration or rep<8 else (last_flick if clock-flick_at<0.35 else 0)
 	source = ball.position
 	flight_time = DURATION[tempo]
-	var error := 0.0 if demonstration else (elapsed-contact_time)*(3.6-skill)+gap*0.22
+	var error := 0.0 if demonstration else set_error*(3.6-skill)+gap*0.22
 	endpoint = PINS[target]+Vector3(error,0,error*0.4)
 	if rotation_drill.turn!=0 and not demonstration:
 		var scatter := .22 if rotation_drill.random.randf()<.60 else 1.65
 		endpoint += Vector3(rotation_drill.random.randf_range(-scatter,scatter),0,rotation_drill.random.randf_range(-scatter,scatter))
 	elif not demonstration:
 		# Poor releases can carry past the pin into the tape or court.
-		var late := clampf((absf(elapsed-contact_time)-.065)/.135,0,1)
+		var late := clampf((absf(set_error)-.065)/.135,0,1)
 		endpoint.z += 1.5*late
 	success = target==called() and endpoint.distance_to(PINS[target])<targets[target].mouth_radius-0.10
 	feedback = TARGETS[target]+"   /   Target made" if success else "Missed the called target. Try it again."
@@ -683,7 +704,7 @@ func _input(event: InputEvent) -> void:
 			if event.button_index==Xbox.physical(BUTTONS[i]): index = i
 	elif event is InputEventKey: index = KEYS.find(event.keycode)
 	if index<0: return
-	if phase not in ["walk","feed","pass"]:
+	if phase not in ["cart","walk","feed","pass"]:
 		trace("target_unavailable",{"target":TARGETS[index],"down":event.is_pressed()})
 		if phase=="ground": message.text = "Call the next toss"
 	elif event.is_pressed():

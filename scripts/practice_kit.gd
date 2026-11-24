@@ -163,6 +163,10 @@ static func coach_jacket(rig: Skeleton3D) -> void:
 		for col in 48:
 			for corner: Vector2i in [Vector2i(0,0),Vector2i(1,0),Vector2i(0,1),Vector2i(0,1),Vector2i(1,0),Vector2i(1,1)]:
 				var ring: Vector4=sections[row+corner.y]
+				var waist := 1.-smoothstep(1.18,1.48,ring.x)
+				ring.y*=1.-.09*waist
+				ring.z*=1.-.12*waist
+				ring.w*=1.-.16*waist
 				var a := (col+corner.x)*TAU/48.
 				var blend := clampf((ring.x-.99)/.16,0.,2.999)
 				var joint := int(blend)

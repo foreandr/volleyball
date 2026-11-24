@@ -55,14 +55,11 @@ func draw_player(actor: Node3D,human: bool) -> void:
 		if charge>0: timing_arc(at,outer,0,charge,squat.GREEN_START,squat.GREEN_END)
 		if actor!=game.setter and game.free_target>=0:
 			timing_arc(at,outer,PI,clampf((game.clock-game.free_press)/.43,0,1),.47,.76)
-		var pressing: bool=game.held>=0 and game.phase in ["walk","feed","pass"]
+		var pressing: bool=game.held>=0 and game.phase in ["cart","walk","feed","pass"]
 		var result: bool=game.clock<game.set_grade_until
 		if actor==game.setter and (pressing or result):
-			var age: float=game.clock-game.pressed_at if pressing else game.graded_hold
-			var ideal: float=game.SET_LOAD
-			var duration := ideal+.17
-			var window: float=game.timing_window()*.6
-			timing_arc(at,outer,PI,clampf(age/duration,0,1),(ideal-window)/duration,(ideal+window)/duration)
+			var fill: float=game.set_fill() if pressing else game.graded_fill
+			timing_arc(at,outer,PI,fill,.55,.85)
 	var label: String=actor.display_name.strip_edges().get_slice(" ",actor.display_name.strip_edges().count(" ")).to_upper()
 	var origin := at+Vector2(-80,radius.y+19)
 	draw_string_outline(ThemeDB.fallback_font,origin,label,HORIZONTAL_ALIGNMENT_CENTER,160,14,4,Color("10191f"))
