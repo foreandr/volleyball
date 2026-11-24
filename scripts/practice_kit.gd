@@ -555,7 +555,11 @@ static func haircut(scalp: Node3D,color: Color,variant: int,actor: Node3D) -> vo
 		var crown := smoothstep(.22,.86,y)
 		match style:
 			0: length_factor=.48+.54*crown
-			1: comb=Vector3(.92,-.18,parting)
+			1:
+				# Sweep the longer forelock across the crown above cropped sides.
+				var fringe := smoothstep(-.45,.42,normal.z)*smoothstep(.16,.68,y)
+				length_factor=.42+.65*crown+1.05*fringe
+				comb=Vector3(.9,.08,-.52)
 			2: length_factor=.38+1.35*crown
 			3: comb=Vector3(signf(normal.x-parting),-.6,.42)
 			4:
@@ -579,11 +583,13 @@ static func haircut(scalp: Node3D,color: Color,variant: int,actor: Node3D) -> vo
 		var width := rng.randf_range(.005,.011)
 		var pigment := rng.randf_range(.65,1.)
 		var coiled := style in [2,6]
+		var lift := .28
+		if style==1: lift+=.27*smoothstep(-.45,.42,normal.z)*crown
 		var rows := 9 if coiled else 4
 		for row in rows:
 			for uv: Vector2 in [Vector2(0,0),Vector2(1,0),Vector2(0,1),Vector2(1,0),Vector2(1,1),Vector2(0,1)]:
 				var t := (row+uv.y)/float(rows)
-				var curl := sin(t*PI)*length*.28
+				var curl := sin(t*PI)*length*lift
 				var lateral := 0.
 				if coiled:
 					var twist := t*TAU*(1.4 if style==2 else 1.9)
@@ -595,7 +601,7 @@ static func haircut(scalp: Node3D,color: Color,variant: int,actor: Node3D) -> vo
 				if coiled:
 					var turns := TAU*(1.4 if style==2 else 1.9)
 					tangent+=normal*(.48+.14*turns*sin(t*turns))+across*.18*turns*cos(t*turns)
-				else: tangent+=normal*.28*PI*cos(t*PI)
+				else: tangent+=normal*lift*PI*cos(t*PI)
 				tangent=tangent.normalized()
 				var surface_normal := across.cross(tangent).normalized()
 				if surface_normal.dot(normal)<0.: surface_normal=-surface_normal
