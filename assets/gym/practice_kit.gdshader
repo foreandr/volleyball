@@ -52,10 +52,14 @@ void vertex(){
 		float pleat=sin(angle*8.+rest.y*8.+phase);
 		float wave=sin(angle*4.+rest.y*12.-TIME*10.+phase);
 		float ripple=sin(angle*7.-TIME*15.+phase*.7);
+		// A doubled hem hangs under its own weight. Keep the broader fold
+		// above it and damp the small ripples at the stitched edge.
+		float facing=max(1.-smoothstep(.16,.89,COLOR.a),1.-smoothstep(1.05,1.14,rest.y))*(1.-arm);
 		float drape=mix(.016,.012,arm)+.014*pleat+motion*(.023+.044*wave+.013*ripple);
+		drape=mix(drape,.003+.006*pleat+motion*(.008+.019*wave),facing);
 		VERTEX+=NORMAL*(free_edge*drape*(1.-arm)+.0035*tension_fold(rest)+sleeve_crease(rest))+sleeve_motion(rest)*arm;
 		{
-			VERTEX.y+=(1.-arm)*free_edge*(-.018+motion*(.023*wave+.012*ripple));
+			VERTEX.y+=(1.-arm)*free_edge*(-.018-.014*facing+motion*(.023*wave+.012*ripple)*(1.-.48*facing));
 		}
 	}
 	{
