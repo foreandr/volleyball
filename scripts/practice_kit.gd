@@ -109,7 +109,7 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 			invisible.albedo_color = Color.TRANSPARENT
 			node.set_surface_override_material(0,invisible)
 			node.set_surface_override_material(2,invisible)
-			if not coach: shorts(rig,node,variant,actor)
+			if not coach: shorts(rig,node,variant,actor,print_texture)
 			else:
 				var pants := MeshInstance3D.new()
 				var source=preload("res://assets/characters/base/Superhero_Male_FullBody.gltf").instantiate()
@@ -221,12 +221,13 @@ static func reshape_build(rig: Skeleton3D,coach: bool,variant: int) -> void:
 			shaped.surface_set_material(i,original.surface_get_material(i))
 		part.mesh=shaped
 
-static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: Node3D) -> void:
+static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: Node3D,number: Texture2D) -> void:
 	var material := ShaderMaterial.new()
 	var shader := Shader.new()
 	shader.code = """shader_type spatial;
 	render_mode cull_disabled;
 	uniform vec3 inertia; uniform float motion; uniform float hem_y; uniform vec2 stride; uniform vec4 accent:source_color; varying float depth; uniform vec4 cloth:source_color; uniform sampler2D knit_surface:repeat_enable,filter_linear_mipmap_anisotropic; varying vec2 rest;
+	uniform sampler2D leg_number:source_color,filter_linear_mipmap_anisotropic;
 	varying float fold_height;
 	void vertex(){rest=UV2; depth=COLOR.r*.6-.3;
 		// Length is tailored in bind space so the cuff rotates with the thigh.
@@ -273,6 +274,12 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		vec2 grain=(yarn.rg-.5)*.32;
 		NORMAL_MAP=normalize(vec3(grain+vec2(folds*.12,.035*hem),1.))*.5+.5;
 		ALBEDO*=.97+.06*yarn.b;
+		// A smaller transfer on the left leg matches the player's jersey number.
+		vec2 number_uv=vec2((rest.x-.105)/.072+.5,(hem_y+.085-rest.y)/.041);
+		if(FRONT_FACING && depth>.041 && all(greaterThanEqual(number_uv,vec2(0.))) && all(lessThanEqual(number_uv,vec2(1.)))){
+			float ink=texture(leg_number,number_uv).a;
+			ALBEDO=mix(ALBEDO,vec3(.86,.82,.72),ink*.94);
+		}
 		// The folded cuff exposes the reverse of the fabric during a raised stride.
 		if(!FRONT_FACING){
 			ALBEDO=mix(cloth.rgb*.61,cloth.rgb*.89,hem)*(.92+.16*yarn.b);
@@ -310,6 +317,7 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 	var tailored := ArrayMesh.new()
 	tailored.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES,arrays,[],{},template.surface_get_format(0))
 	part.mesh=tailored
+	material.set_shader_parameter("leg_number",number)
 	actor.shorts_fabric=material
 	part.skin = outfit.skin
 	rig.add_child(part)
