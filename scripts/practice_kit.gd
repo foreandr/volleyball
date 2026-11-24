@@ -291,6 +291,7 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 	uniform vec2 padded;
 	uniform float knee_height;
 	uniform float knee_center;
+	uniform float knee_depth;
 	uniform float open_back;
 	float rear_opening(float lateral,float height,float depth){
 		float radius=length(vec2(lateral/.046,height/.031));
@@ -315,6 +316,7 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 	}
 	varying float enabled_side;
 	varying float pad;
+	varying float knee_facing;
 	varying float foam;
 	varying float sock;
 	void vertex(){
@@ -325,8 +327,10 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		enabled_side=enabled;
 		pad=enabled*(1.-smoothstep(.087,.094,abs(k)));
 		float lateral=abs(UV2.x)-knee_center;
-		pad*=1.-rear_opening(lateral,k,COLOR.r);
-		foam=pad*smoothstep(.49,.62,COLOR.r)*pad_face(lateral,k);
+		float depth=.5+(COLOR.r*.6-.3-knee_depth)/.20;
+		pad*=1.-rear_opening(lateral,k,depth);
+		foam=pad*smoothstep(.49,.62,depth)*pad_face(lateral,k);
+		knee_facing=depth;
 		foam*=1.-.38*flex_channel(lateral,k);
 		sock=1.-smoothstep(sock_top,sock_top+.004,y);
 		// Compress the sock inside the heel cup and release it above the collar.
@@ -339,7 +343,7 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		float yarn=.5+.5*cos(y*1250.)*(1.-smoothstep(.0007,.003,fwidth(y)));
 		float sock_mask=1.-smoothstep(sock_top,sock_top+.003,y);
 		float pad_mask=enabled_side*(1.-smoothstep(.087,.091,abs(y-knee_height)));
-		float back_hole=rear_opening(anatomy.x-knee_center,y-knee_height,anatomy.z);
+		float back_hole=rear_opening(anatomy.x-knee_center,y-knee_height,knee_facing);
 		pad_mask*=1.-back_hole;
 		float below_cuff=sock_top-y;
 		float stripe_dist=min(abs(below_cuff-.014),abs(below_cuff-.025));
@@ -351,18 +355,18 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		ALBEDO=mix(ALBEDO,knit_color*(.91+.09*yarn-.08*cuff+.095*cuff*rib),sock_mask);
 		float height=y-knee_height;
 		float lateral=anatomy.x-knee_center;
-		float face=pad_face(lateral,height)*smoothstep(.49,.62,anatomy.z);
+		float face=pad_face(lateral,height)*smoothstep(.49,.62,knee_facing);
 		float channel=flex_channel(lateral,height)*face;
 		float binding=smoothstep(.075,.081,abs(height));
 		float edging=1.-smoothstep(.001,.0035,abs(abs(height)-.076));
 		float opening_edge=1.-smoothstep(.03,.14,abs(length(vec2(lateral/.046,height/.031))-1.));
-		float edging_back=open_back*opening_edge*(1.-smoothstep(.37,.49,anatomy.z));
+		float edging_back=open_back*opening_edge*(1.-smoothstep(.37,.49,knee_facing));
 		float cover=.74-.19*edging_back+.12*yarn+.14*face-.25*channel-.16*binding+.11*edging;
 		// Perimeter stitching joins the abrasion-resistant face to the stretch sleeve.
 		vec2 face_uv=vec2(lateral/.069,height/.070);
 		float radius=length(face_uv);
 		float rim_dist=abs(radius-.91);
-		float seam=(1.-smoothstep(.016,.041+fwidth(radius),rim_dist))*smoothstep(.49,.62,anatomy.z);
+		float seam=(1.-smoothstep(.016,.041+fwidth(radius),rim_dist))*smoothstep(.49,.62,knee_facing);
 		float stitch_phase=atan(face_uv.y,face_uv.x)*52.;
 		float stitch=.5+.5*cos(stitch_phase)*(1.-smoothstep(.55,2.6,fwidth(stitch_phase)));
 		vec2 vent_grid=vec2(angle*5.73,height*105.);
@@ -395,6 +399,7 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 	skin.set_shader_parameter("sock_trim",[Color("5c674f"),Color("844238"),Color("384c62")][variant%3])
 	skin.set_shader_parameter("sock_top",.155+.027*(variant%4))
 	var knee := rig.get_bone_global_rest(rig.find_bone("calf_l")).origin
+	skin.set_shader_parameter("knee_depth",knee.z)
 	skin.set_shader_parameter("knee_height",knee.y)
 	skin.set_shader_parameter("knee_center",absf(knee.x))
 	skin.set_shader_parameter("open_back",float(variant%3!=2))
