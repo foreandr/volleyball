@@ -96,9 +96,10 @@ func _initialize() -> void:
 			# triangles together when the upper arm rotates overhead.
 			var x := absf(p.x)
 			var upper := 8 if p.x>0. else 32
-			var cap := smoothstep(.12,.215,x)*smoothstep(1.275,1.405,p.y)
+			var cap := smoothstep(.085,.182,x)*smoothstep(1.245,1.36,p.y)
 			var collar_share := 1.-smoothstep(.145,.280,x)
-			var arm_share := smoothstep(.145,.27,x)
+			var armpit := 1.-smoothstep(1.34,1.49,p.y)
+			var arm_share := smoothstep(.135+.028*armpit,.305+.018*armpit,x)
 			var sum := 0.
 			for id in blend: sum+=float(blend[id])
 			for id in blend: blend[id]*=1.-cap
