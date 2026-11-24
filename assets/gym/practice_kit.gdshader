@@ -26,6 +26,16 @@ float tension_fold(vec3 bind){
 	float panel=smoothstep(.035,.12,x)*(1.-smoothstep(.22,.31,x));
 	return tension*panel*exp(-diagonal*diagonal/.011)*sin(diagonal*86.);
 }
+// Short compression folds form on the underside of a raised sleeve.
+float sleeve_crease(vec3 bind){
+	float x=abs(bind.x);
+	float lift=bind.x>0.?arm_lift.x:arm_lift.y;
+	float underside=1.-smoothstep(1.46,1.53,bind.y);
+	float envelope=smoothstep(.195,.235,x)*(1.-smoothstep(.305,.354,x));
+	float line=x+.32*(bind.y-1.46)+.25*bind.z;
+	float fold=sin((line-.23)*132.);
+	return .0038*lift*smoothstep(1.37,1.42,bind.y)*underside*envelope*fold;
+}
 uniform float motion=0.;
 uniform float dampness;
 uniform float phase=0.;
@@ -43,7 +53,7 @@ void vertex(){
 		float wave=sin(angle*4.+rest.y*12.-TIME*10.+phase);
 		float ripple=sin(angle*7.-TIME*15.+phase*.7);
 		float drape=mix(.016,.012,arm)+.014*pleat+motion*(.023+.044*wave+.013*ripple);
-		VERTEX+=NORMAL*(free_edge*drape*(1.-arm)+.0035*tension_fold(rest))+sleeve_motion(rest)*arm;
+		VERTEX+=NORMAL*(free_edge*drape*(1.-arm)+.0035*tension_fold(rest)+sleeve_crease(rest))+sleeve_motion(rest)*arm;
 		{
 			VERTEX.y+=(1.-arm)*free_edge*(-.018+motion*(.023*wave+.012*ripple));
 		}
@@ -117,6 +127,7 @@ void fragment(){
 	float lift=rest.x>0.?arm_lift.x:arm_lift.y;
 	float ridge=sin(diagonal*91.+rest.z*12.);
 	float crease=flank*lift*exp(-diagonal*diagonal/.009)*ridge*.0028;
+	if(!jacket) crease+=sleeve_crease(rest);
 	float loose=(1.-smoothstep(1.04,1.32,y))*flank;
 	crease+=loose*.0032*sin(y*58.+x*35.+rest.z*18.+inertia.x*32.);
 	vec3 dx=dFdx(VERTEX),dy=dFdy(VERTEX);
