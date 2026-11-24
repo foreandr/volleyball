@@ -906,8 +906,10 @@ func huddle(dt: float) -> void:
 				var right := Contact.joint(adjacent,"upperarm_r")
 				var near_shoulder := left if left.distance_squared_to(actor.position)<right.distance_squared_to(actor.position) else right
 				aim=near_shoulder+(Vector3.UP*.10+back*.020+lateral*.035)*size
+			var shoulder_normal := Vector3.UP
 			if actor!=game.coach:
 				aim=adjacent.dressed_surface.contact(aim,Vector3.UP if upper else back)
+				if upper: shoulder_normal=Vector3.UP.slerp(adjacent.dressed_surface.hit_normal,.68)
 			var pole := Vector3(sign_*.75,.18 if upper else -.65,-.85)
 
 			if actor==game.coach:
@@ -920,8 +922,14 @@ func huddle(dt: float) -> void:
 			if blend>0.:
 				var frame := rig.global_basis.orthonormalized().inverse()
 				var direction := (-lateral*.35-back*.94).normalized() if upper else -lateral
+				if upper:
+					var elbow_world := rig.to_global(author.point(pose,"lowerarm_"+str(side)))
+					var approach := (aim-elbow_world).slide(shoulder_normal)
+					direction=direction.slide(shoulder_normal).normalized()
+					if approach.length_squared()>.001 && approach.dot(direction)>0.:
+						direction=direction.slerp(approach.normalized(),.55)
 				var along := (frame*direction).normalized()
-				var normal := (frame*(Vector3.DOWN if upper else -back)).slide(along).normalized()
+				var normal := (frame*(-shoulder_normal if upper else -back)).slide(along).normalized()
 				var across := normal.cross(along)*sign_
 				var base: Transform3D=author.world_pose(pose,rig.find_bone(wrist))
 				var fingers: Vector3=author.point(pose,"middle_01_"+str(side))-base.origin

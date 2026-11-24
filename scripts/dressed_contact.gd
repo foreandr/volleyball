@@ -8,6 +8,7 @@ var vertices: PackedVector3Array
 var bones: PackedInt32Array
 var weights: PackedFloat32Array
 var faces := PackedInt32Array()
+var contact_vertices := PackedInt32Array()
 var bind_bones := PackedInt32Array()
 var stride := 4
 var frame := -1
@@ -24,9 +25,13 @@ func configure(part: MeshInstance3D, rig: Skeleton3D) -> void:
 	var uv: PackedVector2Array=arrays[Mesh.ARRAY_TEX_UV2]
 	var jacket: bool=part.material_override.get_shader_parameter("jacket")
 	for i in vertices.size():
-		var arm := smoothstep(.16,.27,absf(uv[i].x))
-		var free_edge := lerpf(1.-smoothstep(1.02,1.54,uv[i].y),.56*smoothstep(.19,.39,absf(uv[i].x)),arm)
-		var ease := .021 if jacket else .012+free_edge*lerpf(.025,.018,arm)
+		var x:=absf(uv[i].x)
+		var y:=uv[i].y
+		var shoulder:=smoothstep(1.455,1.55,y)*(1.-smoothstep(.18,.22,x))
+		var ease:=.021 if jacket else lerpf(.022,.004,shoulder)
+		if not jacket:
+			var armhole:=minf(x-(.165-.026*smoothstep(1.39,1.54,y)+.17*absf(vertices[i].z)),y-1.342+.22*(x-.16))
+			if armhole>0.: ease=.0014
 		vertices[i]+=normals[i]*ease
 	bones=arrays[Mesh.ARRAY_BONES]
 	weights=arrays[Mesh.ARRAY_WEIGHTS]
@@ -37,6 +42,7 @@ func configure(part: MeshInstance3D, rig: Skeleton3D) -> void:
 		if bone<0: bone=rig.find_bone(part.skin.get_bind_name(i))
 		bind_bones.append(bone)
 	var indices: PackedInt32Array=arrays[Mesh.ARRAY_INDEX]
+	var used: Dictionary={}
 	for i in range(0,indices.size(),3):
 		var center := (vertices[indices[i]]+vertices[indices[i+1]]+vertices[indices[i+2]])/3.
 		var bind_uv := (uv[indices[i]]+uv[indices[i+1]]+uv[indices[i+2]])/3.
@@ -45,6 +51,8 @@ func configure(part: MeshInstance3D, rig: Skeleton3D) -> void:
 			faces.append(indices[i])
 			faces.append(indices[i+1])
 			faces.append(indices[i+2])
+			for j in 3: used[indices[i+j]]=true
+	contact_vertices=PackedInt32Array(used.keys())
 
 func update() -> void:
 	var current := Engine.get_process_frames()
@@ -54,16 +62,19 @@ func update() -> void:
 	for i in bind_bones.size():
 		var bone := bind_bones[i]
 		transforms.append(skeleton.get_bone_global_pose(bone)*garment.skin.get_bind_pose(i) if bone>=0 else Transform3D.IDENTITY)
-	for i in vertices.size():
+	for i in contact_vertices:
 		var p := Vector3.ZERO
 		for j in stride:
 			var k := i*stride+j
 			if weights[k]>0.: p+=(transforms[bones[k]]*vertices[i])*weights[k]
 		deformed[i]=skeleton.to_global(p)
 
+var hit_normal := Vector3.UP
+
 func contact(landmark: Vector3, outward: Vector3) -> Vector3:
 	update()
 	var normal := outward.normalized()
+	hit_normal=normal
 	var origin := landmark+normal*.32
 	var end := landmark-normal*.18
 	var nearest := INF
@@ -75,5 +86,8 @@ func contact(landmark: Vector3, outward: Vector3) -> Vector3:
 			if distance<nearest:
 				nearest=distance
 				result=hit
+				var a:=deformed[faces[i]]
+				var face_normal:=(deformed[faces[i+1]]-a).cross(deformed[faces[i+2]]-a).normalized()
+				hit_normal=face_normal if face_normal.dot(normal)>0. else -face_normal
 	# Allow for the rendered textile thickness and soft tissue of the palm.
 	return result+normal*.018 if nearest<INF else landmark
