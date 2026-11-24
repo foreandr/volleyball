@@ -178,13 +178,14 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 	var material := ShaderMaterial.new()
 	var shader := Shader.new()
 	shader.code = """shader_type spatial;
-	uniform vec3 inertia; uniform float motion; uniform float hem_y; uniform vec4 cloth:source_color; uniform sampler2D knit_surface:repeat_enable,filter_linear_mipmap_anisotropic; varying vec2 rest;
+	uniform vec3 inertia; uniform float motion; uniform float hem_y; uniform vec2 stride; uniform vec4 cloth:source_color; uniform sampler2D knit_surface:repeat_enable,filter_linear_mipmap_anisotropic; varying vec2 rest;
 	void vertex(){rest=UV2;
-		float tailoring=(hem_y-.69)*(1.-smoothstep(.69,.96,rest.y));
-		VERTEX.y+=tailoring; rest.y+=tailoring;
+		// Length is tailored in bind space so the cuff rotates with the thigh.
+		float raised=rest.x>0.?stride.x:stride.y;
 		float hem=1.-smoothstep(hem_y,hem_y+.22,rest.y);
 		float ripple=sin(rest.x*47.+rest.y*25.-TIME*14.);
-		VERTEX+=NORMAL*(.004+hem*(.017+motion*(.018+.025*ripple)));
+		float pleat=sin(abs(rest.x)*99.+rest.y*31.);
+		VERTEX+=NORMAL*(.004+hem*(.013+.009*pleat+raised*.010*pleat+motion*(.012+.014*ripple)));
 		VERTEX+=hem*inertia*.65;
 		VERTEX.y+=hem*motion*.009*ripple;}
 	void fragment(){
@@ -209,7 +210,20 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 	material.set_shader_parameter("hem_y",hem)
 	material.set_shader_parameter("cloth",Color.from_hsv(fmod(.55+.147*variant,1.),.32,.24+.045*(variant%4)))
 	var part := MeshInstance3D.new()
-	part.mesh = preload("res://assets/characters/volleyball/practice_shorts.res")
+	var template := preload("res://assets/characters/volleyball/practice_shorts.res")
+	var arrays := template.surface_get_arrays(0)
+	var positions: PackedVector3Array=arrays[Mesh.ARRAY_VERTEX]
+	var pattern: PackedVector2Array=arrays[Mesh.ARRAY_TEX_UV2]
+	for i in positions.size():
+		var shortening := (hem-.69)*(1.-smoothstep(.69,.96,pattern[i].y))
+		positions[i].y+=shortening
+		pattern[i].y+=shortening
+	arrays[Mesh.ARRAY_VERTEX]=positions
+	arrays[Mesh.ARRAY_TEX_UV2]=pattern
+	var tailored := ArrayMesh.new()
+	tailored.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES,arrays,[],{},template.surface_get_format(0))
+	part.mesh=tailored
+	actor.shorts_fabric=material
 	part.skin = outfit.skin
 	rig.add_child(part)
 	part.skeleton = part.get_path_to(rig)
