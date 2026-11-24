@@ -99,6 +99,14 @@ func update(rig: Skeleton3D,material: ShaderMaterial,delta: float,air: Vector3) 
 			for i in particles.size():
 				if i%PER_ARM<AROUND: continue
 				var side := i/PER_ARM
+				# A raised cuff can settle toward the shoulder, but cannot fold
+				# back through its neighboring ring along the upper arm.
+				var arm := elbows[side]-shoulders[side]
+				var direction := arm.normalized()
+				var lift := smoothstep(.12,.82,direction.y)
+				var travel := lerpf(.030,.010,lift)*arm.length()/.30
+				var slip := (targets[i]-particles[i]).dot(direction)
+				if slip>travel: particles[i]+=direction*((slip-travel)*lift)
 				var axis := Geometry3D.get_closest_point_to_segment(particles[i],shoulders[side],elbows[side])
 				var radial := particles[i]-axis
 				if radial.length()<.062: particles[i]=axis+radial.normalized()*.062
