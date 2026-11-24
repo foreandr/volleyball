@@ -61,7 +61,10 @@ void vertex(){
 	{
 		float folds=.0018*sin(rest.x*115.0+rest.z*38.0);
 		float ease=jacket ? (1.-smoothstep(1.19,1.49,rest.y))*(1.-smoothstep(.2,.32,abs(rest.x))) : 0.;
-		float shell_clearance=jacket ? .009 : mix(.0015,.009,smoothstep(.12,.95,COLOR.g));
+		// Gather the loose shell into the narrower elastic at the wrist.
+		float cuff=smoothstep(.625,.65,abs(rest.x));
+		float gather=sin(rest.x*168.+rest.z*51.)*exp(-pow(abs(abs(rest.x)-.616)/.031,2.));
+		float shell_clearance=jacket ? (.009-.012*cuff+.0045*gather) : mix(.0015,.009,smoothstep(.12,.95,COLOR.g));
 		VERTEX+=NORMAL*(shell_clearance+folds+.022*ease+(jacket ? motion*(.006+.012*ease)*sin(rest.x*24.+rest.y*15.-TIME*12.) : 0.));
 	}
 }
@@ -83,6 +86,10 @@ void fragment(){
 		float hem=1.-smoothstep(1.025,1.04,y);
 		base=mix(vec3(.052,.099,.080),vec3(.070,.128,.101),smoothstep(seam_y-.003,seam_y+.003,y));
 		base*=1.-.24*seam-.28*hem;
+		float wrist=smoothstep(.637,.641,x);
+		float cuff_join=1.-smoothstep(.001,.0035,abs(x-.639));
+		float ribs=cos(y*1020.+rest.z*610.)*(1.-smoothstep(.0008,.003,fwidth(y)+fwidth(rest.z)));
+		base*=1.-wrist*(.34-.10*ribs)-.25*cuff_join;
 		float zipper=(1.-smoothstep(.0015,.003,abs(rest.x)))*step(.065,rest.z);
 		float front=smoothstep(.015,.075,rest.z);
 		float tape=(1.-smoothstep(.005,.008,abs(rest.x)))*front;
