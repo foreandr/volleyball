@@ -20,6 +20,13 @@ static func tailored_surface(source: ArrayMesh,surface: int,quad_shape := false,
 			var front := smoothstep(-.012,.064,p.z)
 			var lift := front*(.012*exp(-medial.length_squared())+.015*exp(-lateral.length_squared()))
 			vertices[i]+=Vector3(arrays[Mesh.ARRAY_NORMAL][i])*lift
+		if jacket:
+			# A rounded lower abdomen and fuller flanks continue into the trouser waist.
+			var belly := exp(-pow((p.y-1.075)/.205,2.))*smoothstep(.31,.18,absf(p.x))
+			var flank := exp(-pow((p.y-1.05)/.23,2.))
+			vertices[i].x+=p.x*.53*flank*smoothstep(.32,.19,absf(p.x))
+			vertices[i].z+=belly*(.155*smoothstep(-.095,.085,p.z)-.032*(1.-smoothstep(-.13,0.,p.z)))
+			vertices[i].y-=.035*belly*smoothstep(.01,.10,p.z)
 		if jacket and p.y>.99 and p.y<1.57:
 			var ease := smoothstep(.99,1.10,p.y)*(1.-smoothstep(1.48,1.57,p.y))
 			vertices[i]+=Vector3(arrays[Mesh.ARRAY_NORMAL][i])*(.01+.021*ease)
@@ -37,7 +44,7 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 	var rig: Skeleton3D = actor.skeleton
 	if coach:
 		actor.set_height_cm(174)
-		actor.scale*=Vector3(1.23,1,1.32)
+		actor.scale*=Vector3(1.06,1,1.07)
 	elif variant>0:
 		if variant<20: actor.set_height_cm(166+(variant*13)%36)
 		actor.scale*=Vector3(.88+.036*(variant%7),1,.90+.045*((variant*3)%6))
@@ -69,6 +76,7 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 		rig.add_child(shell)
 		shell.skeleton = shell.get_path_to(rig)
 		shell.material_override = kit
+		if coach and shirt: shell.hide()
 		if sleeves: face_hair(rig,node,shell.mesh,coach,variant)
 		if shirt:
 			# The skinned print replaces only the jersey. Keep shoes and trousers.
@@ -79,6 +87,13 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 			node.set_surface_override_material(2,invisible)
 			if not coach: shorts(rig,node,variant)
 			else:
+				var pants := MeshInstance3D.new()
+				pants.mesh=tailored_surface(node.mesh,1,false,true)
+				pants.skin=node.skin
+				rig.add_child(pants)
+				pants.skeleton=pants.get_path_to(rig)
+				pants.material_override=node.get_surface_override_material(1)
+				node.set_surface_override_material(1,invisible)
 				for side in ["l","r"]: compression(rig,"calf_"+side,"foot_"+side,.068,.047,Color("253239"))
 	if not coach:
 		var head := rig.find_bone("Head")
@@ -96,6 +111,87 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 			if variant%3==1: compression(rig,"calf_"+side,"foot_"+side,.067,.044,Color("e3ded2"))
 		if variant%4==1: compression(rig,"hand_l","middle_01_l",.042,.041,Color("d6cdc0"))
 		if variant%3==2: compression(rig,"lowerarm_r","hand_r",.061,.042,Color("252e35"))
+
+	reshape_build(rig,coach,variant)
+	if coach: coach_jacket(rig)
+
+# Taper upper arms in bind space, before joints pose them, so bare skin and
+# fabric follow the same silhouette. Leave wrists, ankles and face registered.
+static func reshape_build(rig: Skeleton3D,coach: bool,variant: int) -> void:
+	var factor := [.77,.64,.91,.69,.82,.73][variant%6] as float
+	if coach: factor=.72
+	for part: MeshInstance3D in rig.get_children().filter(func(n): return n is MeshInstance3D):
+		if not part.skin or not part.mesh is ArrayMesh: continue
+		var original := part.mesh
+		var shaped := ArrayMesh.new()
+		for i in original.get_surface_count():
+			var arrays := original.surface_get_arrays(i)
+			var verts: PackedVector3Array=arrays[Mesh.ARRAY_VERTEX]
+			for j in verts.size():
+				var v := verts[j]
+				var arm := smoothstep(.17,.30,absf(v.x))*(1.-smoothstep(.51,.73,absf(v.x)))*smoothstep(1.18,1.35,v.y)
+				var thickness := lerpf(1.,factor,arm)
+				v.y=1.48+(v.y-1.48)*thickness
+				v.z=-.035+(v.z+.035)*thickness
+				if not coach:
+					var torso := (1.-smoothstep(.15,.27,absf(v.x)))*exp(-pow((v.y-1.35)/.15,2.))
+					v.z*=lerpf(1.,factor,torso)
+					v.x*=1.+(.035+.065*(variant%4))*exp(-pow((v.y-1.06)/.14,2.))
+				verts[j]=v
+			arrays[Mesh.ARRAY_VERTEX]=verts
+			shaped.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES,arrays,[],{},original.surface_get_format(i))
+			shaped.surface_set_material(i,original.surface_get_material(i))
+		part.mesh=shaped
+
+static func coach_jacket(rig: Skeleton3D) -> void:
+	# Jacket sections measured from waistband to collar. The forward waist and
+	# lower belly are wider than the chest. Skin the panels across the spine.
+	var sections := [
+		Vector4(.935,.249,.197,.057),Vector4(.955,.282,.227,.067),
+		Vector4(1.01,.310,.260,.080),Vector4(1.09,.325,.274,.086),
+		Vector4(1.18,.316,.259,.078),Vector4(1.27,.288,.228,.058),
+		Vector4(1.37,.260,.199,.038),Vector4(1.445,.244,.176,.016),
+		Vector4(1.50,.218,.150,-.003),Vector4(1.54,.146,.108,-.010),
+		Vector4(1.56,.083,.083,-.012)]
+	var skin := Skin.new()
+	for bone in ["pelvis","spine_01","spine_02","spine_03"]:
+		var id := rig.find_bone(bone)
+		skin.add_bind(id,rig.get_bone_global_rest(id).affine_inverse())
+	var tool := SurfaceTool.new()
+	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for row in range(sections.size()-1):
+		for col in 48:
+			for corner: Vector2i in [Vector2i(0,0),Vector2i(1,0),Vector2i(0,1),Vector2i(0,1),Vector2i(1,0),Vector2i(1,1)]:
+				var ring: Vector4=sections[row+corner.y]
+				var a := (col+corner.x)*TAU/48.
+				var blend := clampf((ring.x-.99)/.16,0.,2.999)
+				var joint := int(blend)
+				var t := blend-joint
+				tool.set_bones(PackedInt32Array([joint,joint+1,0,0]))
+				tool.set_weights(PackedFloat32Array([1.-t,t,0,0]))
+				tool.set_normal(Vector3(sin(a),-.23 if ring.x<1.09 else .29,cos(a)).normalized())
+				tool.set_uv(Vector2((col+corner.x)/48.,ring.x))
+				tool.add_vertex(Vector3(ring.y*sin(a),ring.x,ring.w+ring.z*cos(a)))
+	var coat := MeshInstance3D.new()
+	coat.mesh=tool.commit()
+	rig.add_child(coat)
+	coat.skin=skin
+	coat.skeleton=coat.get_path_to(rig)
+	var textile := Shader.new()
+	textile.code="""shader_type spatial;
+	render_mode cull_disabled;
+	void fragment(){
+		float zipper=1.-smoothstep(.001,.0025,min(UV.x,1.-UV.x));
+		float hem=1.-smoothstep(.955,.967,UV.y);
+		float rib=.5+.5*sin(UV.x*1500.);
+		float weave=sin(UV.x*2400.)*sin(UV.y*2100.);
+		vec3 fabric=mix(vec3(.056,.107,.085),vec3(.03,.055,.047),hem);
+		ALBEDO=mix(fabric*(1.+.025*weave+.06*hem*rib),vec3(.28,.31,.30),zipper);
+		ROUGHNESS=.87;
+	}"""
+	var material := ShaderMaterial.new()
+	material.shader=textile
+	coat.material_override=material
 
 static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int) -> void:
 	var material := ShaderMaterial.new()
@@ -132,7 +228,7 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int) -> void:
 	var cut := Shader.new()
 	cut.code = """shader_type spatial;
 	uniform sampler2D muscles:hint_normal; uniform sampler2D roughness_map; uniform float hem_y; uniform sampler2D skin_map:source_color; varying float y;
-	void vertex(){y=UV2.y;} void fragment(){if(y>hem_y+.02 || y<.095)discard; ALBEDO=texture(skin_map,UV).rgb; NORMAL_MAP=texture(muscles,UV).rgb; NORMAL_MAP_DEPTH=1.15; ROUGHNESS=mix(.42,.86,texture(roughness_map,UV).r);}"""
+	void vertex(){y=UV2.y;} void fragment(){if(y>hem_y+.02 || y<.095)discard; ALBEDO=texture(skin_map,UV).rgb; NORMAL_MAP=texture(muscles,UV).rgb; NORMAL_MAP_DEPTH=.30; ROUGHNESS=mix(.42,.86,texture(roughness_map,UV).r);}"""
 	skin.shader = cut
 	skin.set_shader_parameter("muscles",preload("res://assets/characters/base/T_Superhero_Male_Normal.png"))
 	skin.set_shader_parameter("roughness_map",preload("res://assets/characters/base/T_Superhero_Male_Roughness.png"))

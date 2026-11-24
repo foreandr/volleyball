@@ -46,6 +46,7 @@ func development() -> void:
 	var info := Label.new()
 	var badges: Array = CareerSession.data.get_value("badges",id,[])
 	info.text = "%d upgrade points   ·   %s" % [points,"No badges yet" if badges.is_empty() else ", ".join(badges)]
+	info.text+="    /    Team Chemistry %d"%CareerSession.team_chemistry()
 	column.add_child(info)
 	for rating in CareerSession.Profile.RATINGS:
 		var athlete := CareerSession.profile()

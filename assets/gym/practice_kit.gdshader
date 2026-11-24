@@ -18,14 +18,14 @@ void fragment(){
 	float x=abs(rest.x), y=rest.y;
 	if(sleeves){
 		if(jacket){
-			if(x>.69 || y<.98 || y>1.565 || (x<.069 && y>1.52)) discard;
+			if((x<.185 && y<1.50) || x>.69 || y<.98 || y>1.565 || (x<.069 && y>1.52)) discard;
 		}else if(x>.333 || y<1.15 || y>1.565 || (x<.14 && y<1.48)) discard;
 	}
 	float side=smoothstep(.142,.154,x);
 	vec3 base=mix(fabric.rgb,trim.rgb,side*.54);
 	if(jacket){
 		float shoulder=smoothstep(1.41,1.42,y);
-		base=mix(base,trim.rgb,shoulder*.7);
+		base=mix(vec3(.056,.107,.085),vec3(.064,.117,.094),shoulder);
 		float zipper=(1.-smoothstep(.0015,.003,abs(rest.x)))*step(.065,rest.z);
 		base=mix(base,vec3(.50,.53,.50),zipper);
 	}else{

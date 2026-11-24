@@ -6,7 +6,7 @@ const WAIT := [Vector3(0,.04,1.35),Vector3(-1.35,.04,4.9),Vector3(1.65,.04,4.9)]
 const STATIONS := [CART,Vector3(0,0,-1.7),Vector3(3.05,0,-1.7)]
 const FEED_SPOT := Vector3(.85,.04,-.40)
 const HANDLE := Vector3(.10,.04,-.68)
-var runner_steps: RefCounted
+var wheel_stride := 0.0
 var coach_steps: RefCounted
 var tosses := 0
 var station := 0
@@ -25,7 +25,7 @@ var turn := 0
 var attempts := 0
 var round_index := 0
 const POSTS := [Vector3(5.4,0,2),Vector3(-5.4,0,2),Vector3(1.75,0,2.8)]
-const HOME := [Vector3(5.3,.04,3),Vector3(-5.3,.04,3),Vector3(2.7,.04,-6.65),Vector3(5.4,.04,-2),Vector3(-5.4,.04,-2),Vector3(-2.7,.04,-6.65),Vector3(5.6,.04,6.4),Vector3(-5.6,.04,6.4)]
+const HOME := [Vector3(5.3,.04,3),Vector3(-5.3,.04,3),Vector3(2.7,.04,-6.65),Vector3(5.4,.04,-2),Vector3(-5.4,.04,-2),Vector3(-2.7,.04,-6.65)]
 var manual_wait := false
 var bins: Array[Node3D] = []
 var loads := [[],[],[]]
@@ -52,9 +52,7 @@ func configure(host: Control) -> void:
 		var actor: Node3D = game.athlete(HOME[i],"395b48")
 		preload("res://scripts/practice_kit.gd").apply(actor,false,i+3)
 		workers.append({"actor":actor,"cargo":[],"goal":null,"lifting":0.0,"start":Vector3.ZERO})
-	runner=game.athlete(CART+Vector3.RIGHT*1.5,"395b48")
-	preload("res://scripts/practice_kit.gd").apply(runner,false,11)
-	runner_steps=preload("res://scripts/right_side_steps.gd").new(runner)
+	runner=workers[5].actor
 	basket = Node3D.new()
 	game.world.add_child(basket)
 	basket.position = CART
@@ -279,7 +277,8 @@ func tick(dt: float) -> void:
 					w.erase("destination")
 			loose.remove_at(i)
 			game.trace("ball_left_under_stands",{"id":body.name})
-	for worker in workers: collect(worker,dt)
+	for worker in workers:
+		if exchange<0 or worker.actor!=runner: collect(worker,dt)
 	service_carts(dt)
 	if not net_hit.is_empty():
 		game.gym.get_node("DynamicNet").sample(net_hit,game.clock)
@@ -304,7 +303,7 @@ func in_feed_lane(at: Vector3) -> bool:
 func floor_clear() -> bool:
 	for w in workers:
 		if in_feed_lane(w.actor.position): return false
-	return not in_feed_lane(runner.position)
+	return true
 
 func nearest(at: Vector3,worker: Dictionary,limit: float) -> RigidBody3D:
 	var best: RigidBody3D
@@ -391,7 +390,8 @@ func collect(w: Dictionary,dt: float) -> void:
 				w.goal=null
 				w.lifting=0.
 	elif not cargo.is_empty():
-		var index := closest_bin(actor.position)
+		var index := workers.find(w)%3
+		if index==exchange: index=closest_bin(actor.position)
 		if index>=0 and (actor.position.distance_to(bins[index].position)<1.05 or perimeter_walk(w,bins[index].position+Vector3(.1,.04,-.65),dt)):
 			begin_unload(actor,index,cargo)
 			place_in_cart(actor,cargo,dt)
@@ -464,6 +464,8 @@ func place_in_cart(actor: Node3D,cargo: Array,dt: float) -> void:
 	if age>=.70:
 		deposit(index,body)
 		cargo.pop_back()
+		if actor==roster[0] and CareerSession.credit_team_return():
+			game.trace("team_chemistry",{"value":CareerSession.team_chemistry()})
 		unloading.erase(actor)
 		game.trace("cart_return",{"id":body.name,"bin":index})
 		if not cargo.is_empty(): begin_unload(actor,index,cargo)
@@ -504,41 +506,56 @@ func shag_player(dt: float) -> void:
 	for i in human_cargo.size(): human_cargo[i].position=Contact.palm(actor,"l" if i==0 else "r")
 
 func service_carts(dt: float) -> void:
-	runner.animator.advance(dt)
 	if exchange<0:
+		if not stock.is_empty() or waiting_ball: return
 		for i in bins.size():
+			var partner := workers[i+3]
+			if not partner.cargo.is_empty() or partner.lifting>0 or unloading.has(partner.actor): continue
 			if unloading.values().any(func(place): return place.bin==i): continue
-			if loads[i].size()>=4 or (stock.size()<=3 and not loads[i].is_empty()):
-				exchange=i
-				break
-		if exchange<0:
-			if cart_route.is_empty(): cart_route={"actor":runner}
-			perimeter_walk(cart_route,Vector3(3.9,.04,-6.5),dt)
-			return
+			if not loads[i].is_empty() and (exchange<0 or loads[i].size()>loads[exchange].size()): exchange=i
+		if exchange<0: return
+		var partner := workers[exchange+3]
+		runner=partner.actor
+		partner.goal=null
+		partner.erase("destination")
 		cart_route={"actor":runner}
+		game.trace("empty_cart_exchange",{"station":station,"source":exchange,"balls":loads[exchange].size()})
+	runner.animator.advance(dt)
 	var cart := bins[exchange]
 	var handle := Vector3(0,.04,-.75)
 	if not cart_route.get("pushing",false):
-		if runner.position.distance_to(cart.position+handle)<.42 or perimeter_walk(cart_route,cart.position+handle,dt):
+		var grip := cart.to_global(handle)
+		for other in roster+workers.map(func(w): return w.actor):
+			if other!=runner and grip.distance_to(other.position)<.55:
+				var local: Vector3=cart.to_local(other.position)
+				grip+=cart.basis.x*(.51 if local.x<=0 else -.51)
+				break
+		if runner.position.distance_to(grip)<.32 or perimeter_walk(cart_route,grip,dt):
 			cart_route.pushing=true
-			cart_route.offset=runner.position-cart.position
+			wheel_stride=0.0
 		return
 	var goal: Vector3=POSTS[exchange] if returning else STATIONS[station]+Vector3(1.45 if basket.position.x<STATIONS[station].x+.72 else 0.0,0,0)
 	var before := runner.position
-	var arrived := perimeter_walk(cart_route,goal+Vector3(cart_route.offset),dt)
+	var hand_offset := handle
+	var arrived := perimeter_walk(cart_route,goal+hand_offset,dt)
 	var step := runner.position-before
-	cart.position+=step
-	runner.rotation.y=cart.rotation.y
-	var local := cart.basis.inverse()*step
-	if step.length_squared()<.000001:
-		runner.play_action("base/Idle")
-	elif absf(local.x)>absf(local.z)*.68:
-		runner_steps.advance(Vector2(-local.x,local.z).normalized(),dt)
-		runner_steps.apply_pose()
-	else:
-		runner.play_action("base/Push")
+	var previous := cart.position
+	if step.length_squared()>.000001:
+		var heading := atan2(step.x,step.z)
+		# Pull back for a short reversal, turn the trolley for longer changes of direction.
+		var backwards := absf(angle_difference(cart.rotation.y,heading))>2.5 and cart.position.distance_to(goal)<1.25
+		if cart.position.distance_to(goal)<1.1: cart.rotation.y=lerp_angle(cart.rotation.y,0.,minf(1.,dt*7.))
+		elif not backwards: cart.rotation.y=lerp_angle(cart.rotation.y,heading,minf(1.,dt*5.))
+		runner.rotation.y=cart.rotation.y
+		cart.position=runner.position-cart.basis*handle
+		cart.position.y=0
+		var clip: Animation=runner.animator.get_animation("base/Walk")
+		wheel_stride=fposmod(wheel_stride+step.length()*clip.length/1.30*(-1 if backwards else 1),clip.length)
+		runner.play_action("base/Walk",0.)
+		runner.animator.seek(wheel_stride,true)
+	else: runner.play_action("base/Idle")
 	grip_handle(runner,cart)
-	for body in loads[exchange]: body.position+=step
+	for body in loads[exchange]: body.position+=cart.position-previous
 	if not arrived: return
 	if returning:
 		exchange=-1
@@ -619,7 +636,7 @@ func move_actor(actor: Node3D,step: Vector3) -> Vector3:
 	# during a head-on pass, including when the other walker holds position.
 	var steer := Vector3.ZERO
 	var ahead := step.normalized()
-	for other in roster+workers.map(func(w): return w.actor)+[game.coach,runner]:
+	for other in roster+workers.map(func(w): return w.actor)+[game.coach]:
 		if other==actor or not other: continue
 		if actor==runner and other==game.coach and returning: continue
 		var offset := ((other as Node3D).position-here).slide(Vector3.UP)
@@ -631,7 +648,7 @@ func move_actor(actor: Node3D,step: Vector3) -> Vector3:
 		steer+=away*(1.-across.length()/.72)*(1.-along/1.5)
 	if not steer.is_zero_approx(): step=(ahead+steer*2.4).normalized()*step.length()
 	var next: Vector3=game.contacts.travel(game.world,here,step*(1.-.45*depth),actor.height_cm*.01*(1.-.39*depth))
-	for other in roster+workers.map(func(w): return w.actor)+[game.coach,runner]:
+	for other in roster+workers.map(func(w): return w.actor)+[game.coach]:
 		if other==actor or not other: continue
 		if actor==runner and other==game.coach and returning: continue
 		var gap := (next-(other as Node3D).position).slide(Vector3.UP)

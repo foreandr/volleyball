@@ -118,3 +118,14 @@ func credit(rep: int) -> bool:
 	data.set_value("badges",athlete_id,badges)
 	return checkpoint("complete" if rep == 31 else "tutorial",rep+1)
 
+
+func team_chemistry() -> int:
+	return data.get_value("team_chemistry",athlete_id,0)
+
+func credit_team_return() -> bool:
+	if athlete_id.is_empty(): return false
+	var previous := team_chemistry()
+	data.set_value("team_chemistry",athlete_id,previous+1)
+	if persist(): return true
+	data.set_value("team_chemistry",athlete_id,previous)
+	return false
