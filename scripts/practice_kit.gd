@@ -594,7 +594,11 @@ static func haircut(scalp: Node3D,color: Color,variant: int,actor: Node3D) -> vo
 			4:
 				length_factor=.25+1.24*(1.-smoothstep(.22,.68,absf(normal.x-parting*.4)))
 				comb=Vector3(parting,.70,-.85)
-			5: comb=Vector3(parting,-.65,.92)
+			5:
+				# Draw the side hair up and back into the knot at the occiput.
+				var tie := Vector3(parting*.025,.196+.005*(variant%3),-.092)
+				comb=(tie-root).normalized()
+				length_factor=.38+.34*smoothstep(-.8,.65,normal.z)
 			6: length_factor=.62+.68*crown
 		# Let the crown grow out of a whorl before it joins the combed sides.
 		var crown_axis := Vector3(parting*.62,.95,-.28).normalized()
@@ -602,7 +606,7 @@ static func haircut(scalp: Node3D,color: Color,variant: int,actor: Node3D) -> vo
 		var swirl := crown_axis.cross(normal)
 		var handed := 1. if variant%2==0 else -1.
 		var whorl := (outward*.78+swirl*handed).normalized()
-		var influence := smoothstep(.68,.97,normal.dot(crown_axis))
+		var influence := 0. if style==5 else smoothstep(.68,.97,normal.dot(crown_axis))
 		var sweep := comb.slide(normal).normalized().lerp(whorl,influence*.92).normalized()
 		if style in [1,3]:
 			var part_line := absf(normal.x-parting-.16*normal.z)
@@ -619,7 +623,7 @@ static func haircut(scalp: Node3D,color: Color,variant: int,actor: Node3D) -> vo
 			width*=lerpf(1.05,.42,layer)
 			pigment*=lerpf(.72,1.,layer)
 		var coiled := style in [2,6]
-		var lift := .28
+		var lift := .10 if style==5 else .28
 		if style==1: lift+=.27*smoothstep(-.45,.42,normal.z)*crown
 		var rows := 9 if coiled else (8 if style==1 else 4)
 		for row in rows:
