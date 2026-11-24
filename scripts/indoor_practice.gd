@@ -337,10 +337,22 @@ func axis(which: JoyAxis) -> float:
 	var id := pad()
 	return Input.get_joy_axis(id,which) if id >= 0 else 0.0
 
-func face_set(actor: Node3D,choice: int,dt: float) -> void:
+func set_heading(actor: Node3D,choice: int) -> float:
 	var aim: Vector3=(PINS[choice]-actor.position).slide(Vector3.UP).normalized()
 	if choice==3: aim=(-aim+Vector3.BACK*.85).normalized()
-	var heading := atan2(aim.x,aim.z)
+	return atan2(aim.x,aim.z)
+
+func set_alignment(actor: Node3D,choice: int) -> float:
+	var angle := absf(angle_difference(actor.rotation.y,set_heading(actor,choice)))
+	return 1.-smoothstep(deg_to_rad(18. if choice==3 else 8.),deg_to_rad(140.),angle)
+
+func facing_scatter(actor: Node3D,choice: int) -> Vector3:
+	var radius := (.035 if choice==3 else 0.)+.32*(1.-set_alignment(actor,choice))
+	var angle := rotation_drill.random.randf()*TAU
+	return Vector3(cos(angle),0,sin(angle))*radius*sqrt(rotation_drill.random.randf())
+
+func face_set(actor: Node3D,choice: int,dt: float) -> void:
+	var heading := set_heading(actor,choice)
 	var clockwise := fposmod(actor.rotation.y-heading,TAU)
 	if absf(angle_difference(actor.rotation.y,heading))<.035: actor.rotation.y=heading
 	else: actor.rotation.y-=minf(clockwise,dt*10.)
@@ -460,6 +472,23 @@ func _process(delta: float) -> void:
 				change_feed_phase("pass")
 		"pass":
 			ball.rotation+=toss_spin*delta
+			if demonstration or rotation_drill.turn!=0:
+				var spot := Vector3(catch_point.x,BASE.y,catch_point.z)
+				var travel := (spot-setter.position).slide(Vector3.UP).length()
+				var remaining := maxf(0.,contact_time-elapsed)
+				if travel>.16 and not jump.active:
+					var hurried := travel>2.35*maxf(0.,remaining-.28)
+					var previous_heading := setter.rotation.y
+					rotation_drill.walk(setter,spot,delta,6.2 if hurried else 2.35)
+					if not hurried:
+						setter.rotation.y=previous_heading
+						face_set(setter,called(),delta)
+						var local := setter.basis.orthonormalized().inverse()*(spot-setter.position).slide(Vector3.UP).normalized()
+						if absf(local.x)>.3:
+							if not lateral_steps.has(setter): lateral_steps[setter]=preload("res://scripts/right_side_steps.gd").new(setter)
+							lateral_steps[setter].advance(Vector2(-local.x,local.z),delta)
+							lateral_steps[setter].apply_pose(1.)
+				else: face_set(setter,called(),delta)
 			if (demonstration or rotation_drill.turn!=0) and jump_rep() and not jump.active and elapsed>=contact_time-.40 and elapsed<contact_time-.22:
 				energy[setter].spend(5)
 				jump.begin_set_jump(setter,.07,.52)
@@ -481,7 +510,7 @@ func _process(delta: float) -> void:
 				held = called()
 				pressed_at = clock
 			if held>=0:
-				if held==3 and called()==3 and (demonstration or rotation_drill.turn!=0 or not focused):
+				if held==3 and called()==3 and not demonstration and rotation_drill.turn==0 and not focused:
 					var opposite := (setter.position-PINS[3]).slide(Vector3.UP)
 					setter.rotation.y=lerp_angle(setter.rotation.y,atan2(opposite.x,opposite.z),minf(1,delta*9))
 				meter.value = set_fill()*100
@@ -620,9 +649,9 @@ func release(index: int) -> void:
 	graded_fill=set_fill()
 	set_error=release_offset()
 	set_grade_until=clock+.65
-	trace("release",{"target":TARGETS[index],"held_s":clock-pressed_at,"timing_error":set_error,"air_m":setter.position.y-BASE.y})
+	trace("release",{"target":TARGETS[index],"held_s":clock-pressed_at,"alignment":set_alignment(setter,index),"timing_error":set_error,"air_m":setter.position.y-BASE.y})
 	held = -1
-	var skill := float(CareerSession.profile().get("Hand setting",40))/100
+	var skill := float(setter.attributes.get("Hand setting",40))/100
 	var gap := Vector2(setter.position.x-catch_point.x,setter.position.z-catch_point.z).length()
 	var airborne := setter.position.y-BASE.y
 	if not demonstration and rotation_drill.turn==0:
@@ -645,6 +674,8 @@ func release(index: int) -> void:
 	flight_time = DURATION[tempo]
 	var error := 0.0 if demonstration else set_error*(3.6-skill)+gap*0.22
 	endpoint = PINS[target]+Vector3(error,0,error*0.4)
+	if not demonstration:
+		endpoint+=facing_scatter(setter,target)
 	if rotation_drill.turn!=0 and not demonstration:
 		var scatter := .22 if rotation_drill.random.randf()<.60 else 1.65
 		endpoint += Vector3(rotation_drill.random.randf_range(-scatter,scatter),0,rotation_drill.random.randf_range(-scatter,scatter))
@@ -800,7 +831,7 @@ func free_input(event: InputEvent) -> void:
 				body.collision_layer=128
 				body.sleeping=false
 				var duration: float=DURATION[chosen_tempo()]
-				body.linear_velocity=(PINS[i]-body.position)/duration+Vector3.UP*4.905*duration
+				body.linear_velocity=(PINS[i]+facing_scatter(actor,i)-body.position)/duration+Vector3.UP*4.905*duration
 				energy[actor].spend(2)
 			trace("off_turn_set",{"target":TARGETS[i],"contact":body!=null})
 		get_viewport().set_input_as_handled()
