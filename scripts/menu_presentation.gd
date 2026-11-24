@@ -40,7 +40,13 @@ func bind_menu_button(action: StringName, button: JoyButton) -> void:
 		InputMap.action_add_event(action,event)
 
 func scene_entered() -> void:
-	var scene := get_tree().current_scene as Control
+	var current := get_tree().current_scene
+	if current and current.is_in_group("gameplay_pause"):
+		var pause_layer := CanvasLayer.new()
+		pause_layer.layer = 15
+		current.add_child(pause_layer)
+		preload("res://scripts/tryout_pause.gd").new().configure(current,pause_layer)
+	var scene := current as Control
 	if scene:
 		scene.theme = skin
 		reveal(scene)
@@ -176,6 +182,7 @@ const FACTS := [
 	"At the London Olympics, beach volleyball was played on Horse Guards Parade.",
 	"At the Paris 2024 Olympics, beach volleyball players competed beside the Eiffel Tower."
 ]
+const FACT_ART := {FACTS[7]:"res://assets/menu/paris_beach_court.svg"}
 var fact_order := []
 var last_fact := ""
 
@@ -217,6 +224,13 @@ func show_loading(destination: String) -> void:
 	column.add_child(loading_detail)
 	var fact := Label.new()
 	fact.text = next_fact()
+	if FACT_ART.has(fact.text):
+		var illustration := TextureRect.new()
+		illustration.texture = load(FACT_ART[fact.text])
+		illustration.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		illustration.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		illustration.custom_minimum_size.y = clampf(center.size.y*0.24,70,190)
+		column.add_child(illustration)
 	fact.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	fact.add_theme_font_size_override("font_size",21)
 	column.add_child(fact)

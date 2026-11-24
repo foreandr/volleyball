@@ -43,6 +43,10 @@ var random := RandomNumberGenerator.new()
 
 func configure(host: Control) -> void:
 	game = host
+	for net in game.targets:
+		var center := Vector2(net.position.x,net.position.z)
+		var half := Vector2(net.mouth_radius+0.40,0.91)
+		routes.equipment_clearance.append(Rect2(center-half,half*2))
 	random.randomize()
 	roster.append(game.setter)
 	for i in [1,2]: roster.append(game.athlete(WAIT[i],["","377f95","93543a"][i]))
@@ -74,6 +78,7 @@ func configure(host: Control) -> void:
 		game.world.add_child(bin)
 		bin.position=post
 		bins.append(bin)
+	routes.carts = bins+[basket]
 	for cart in bins+[basket]:
 		for x in [-.54,.54]:
 			for z in [-.34,.34]:
@@ -312,9 +317,11 @@ func advance_turn() -> void:
 var walking_progress := {}
 
 func walk(actor: Node3D,goal: Vector3,dt: float,speed: float) -> bool:
+	routes.ignored_cart[actor] = pushed_cart(actor)
 	var dir := (goal-actor.position).slide(Vector3.UP)
 	if dir.length()<.12:
 		walking_progress.erase(actor)
+		routes.velocities.erase(actor)
 		actor.play_action("base/Idle")
 		return true
 	var track: Dictionary=walking_progress.get(actor,{})
@@ -332,31 +339,30 @@ func walk(actor: Node3D,goal: Vector3,dt: float,speed: float) -> bool:
 		for cart in bins+[basket]:
 			if cart!=pushed_cart(actor): occupied.append(cart.position)
 		routes.detour(actor,goal,occupied)
-		# A pin aisle can be too narrow for two bodies. Step clear of the
-		# nearest person before following the new path around the cart.
-		var nearest_gap := Vector3.ZERO
-		var clearance := .85
-		for point: Vector3 in occupied:
-			var gap := (actor.position-point).slide(Vector3.UP)
-			if gap.length()>.01 and gap.length()<clearance:
-				nearest_gap=gap.normalized()
-				clearance=gap.length()
-		if not nearest_gap.is_zero_approx():
-			track.escape=actor.position+nearest_gap*.9
-			track.until=game.clock+.45
+		track.wait_until = game.clock + 0.25
+		routes.velocities.erase(actor)
 		track.since=game.clock
 		track.best=dir.length()
 	var waypoint := routes.waypoint(actor,goal,dt)
-	if game.clock<float(track.get("until",0.)): waypoint=track.escape
+	if game.clock<float(track.get("wait_until",0.)):
+		actor.play_action("base/Idle",0.24)
+		return false
 	dir = (waypoint-actor.position).slide(Vector3.UP)
-	actor.rotation.y=lerp_angle(actor.rotation.y,atan2(dir.x,dir.z),minf(1,dt*9))
-	var step := dir.limit_length(speed*dt)
+	var step := routes.stride(actor,dir,minf(speed,sqrt(8.0*actor.position.distance_to(goal))),dt)
 	var next := move_actor(actor,step)
 	if game.phase in ["feed","pass"] and actor!=game.setter and actor!=game.coach and not in_feed_lane(actor.position) and in_feed_lane(next):
 		actor.play_action("base/Idle")
 		return false
 	var along := (next-actor.position).dot(dir.normalized())
 	if along<step.length()*.65: routes.reroute(actor,goal)
+	# If collision steering would send the player sideways, yield and
+	# commit to the reroute instead of sliding left and right each frame.
+	if step.length_squared()>0.000001 and (next-actor.position).normalized().dot(step.normalized())<0.65:
+		routes.reroute(actor,goal)
+		routes.velocities.erase(actor)
+		track.wait_until = game.clock + 0.22
+		actor.play_action("base/Idle",0.24)
+		return false
 	next.y=actor.position.y
 	actor.position=next
 	actor.play_action(("base/Walk" if speed<2.4 else "run") if along>step.length()*.18 else "base/Idle")
@@ -489,7 +495,7 @@ func collect(w: Dictionary,dt: float) -> void:
 			stuck=0.
 		else: stuck+=dt
 		w.stuck=stuck
-		if under_stands(w.goal.position) or stuck>=1.0:
+		if under_stands(w.goal.position) or stuck>=3.0:
 			if not w.has("skip"): w.skip={}
 			w.skip[w.goal]=game.clock+6.0
 			w.goal=null
@@ -508,7 +514,7 @@ func collect(w: Dictionary,dt: float) -> void:
 			if under_stands(pickup): pickup=body.position
 			perimeter_walk(w,pickup-delta.normalized()*.48,dt)
 		else:
-			actor.rotation.y=atan2(delta.x,delta.z)
+			actor.rotation.y=rotate_toward(actor.rotation.y,atan2(delta.x,delta.z),2.25*dt)
 			actor.play_action("idle")
 			var side := "l" if cargo.is_empty() else "r"
 			var bend := sin(PI*clampf(float(w.lifting)/.42,0,1))
@@ -748,7 +754,8 @@ func lane_coordinate(p: Vector3) -> float:
 
 func perimeter_walk(w: Dictionary,target: Vector3,dt: float) -> bool:
 	var actor: Node3D=w.actor
-	if not w.has("destination") or target.distance_to(w.destination)>.8:
+	if not w.has("destination") or (target.distance_to(w.destination)>1.6 and game.clock >= float(w.get("route_after",0.0))):
+		w.route_after = game.clock + 1.2
 		w.destination=target
 		var exit_point := gate(actor.position)
 		var entry := gate(target)
@@ -839,11 +846,15 @@ var pointing_poses: Array[Dictionary]=[]
 var look_angles: Array[float]=[]
 var shoulder_trim := {}
 var elbow_adjustments := {}
+var huddle_elapsed := 0.0
+var huddle_slots := {}
+var huddle_marks := {}
 var approach_reached := {}
 var settled_positions := {}
 var huddle_velocity := {}
 
 func huddle_walk(actor: Node3D, goal: Vector3, dt: float) -> void:
+	routes.ignored_cart.erase(actor)
 	var dir := (goal - actor.position).slide(Vector3.UP)
 	if dir.length() < 0.05: return
 	var occupied := []
@@ -855,23 +866,23 @@ func huddle_walk(actor: Node3D, goal: Vector3, dt: float) -> void:
 		var ahead := offset.dot(dir.normalized())
 		if ahead > 0 and ahead < minf(1.6,dir.length()) and (offset - dir.normalized()*ahead).length() < 0.8: blocked = true
 	for cart in bins + [basket]: occupied.append(cart.position)
-	if not routes.paths.has(actor):
-		if blocked: routes.detour(actor,goal,occupied)
-		else: routes.reroute(actor,goal)
-	var waypoint := routes.waypoint(actor,goal,dt)
+	var waypoint := goal
+	var capsule: CapsuleShape3D = game.contacts.capsule
+	capsule.height = maxf(0.68,actor.height_cm*0.01)
+	var origin := actor.position + Vector3.UP*(capsule.height*0.5+0.025)
+	var obstacle: Dictionary = game.contacts.sweep(game.world,capsule,origin,dir.limit_length(2.0),Contact.GYM|Contact.EQUIPMENT|CART_WALL)
+	if routes.paths.has(actor) or blocked or not obstacle.is_empty():
+		if not routes.paths.has(actor): routes.detour(actor,goal,occupied)
+		waypoint = routes.waypoint(actor,goal,dt)
+	else: routes.paths.erase(actor)
 	var toward := (waypoint - actor.position).slide(Vector3.UP)
-	var heading := atan2(toward.x,toward.z)
-	actor.rotation.y = rotate_toward(actor.rotation.y,heading,2.25*dt)
-	var speed := minf(2.35,dir.length()*2.8) * maxf(0.0,cos(angle_difference(actor.rotation.y,heading)))
-	var velocity: Vector3 = huddle_velocity.get(actor,Vector3.ZERO)
-	velocity = velocity.move_toward(Vector3(sin(actor.rotation.y),0,cos(actor.rotation.y))*speed,3.8*dt)
+	var speed := minf(2.35,dir.length()*2.8)
+	var step := routes.stride(actor,toward,speed,dt)
 	var start := actor.position
-	var next := move_actor(actor,velocity*dt)
-	var allowed := velocity.move_toward((next-start)/maxf(dt,0.001),4.0*dt)
-	if (next-start).dot(allowed) > 0:
-		actor.position += allowed.limit_length((next-start).length()/maxf(dt,0.001))*dt
+	var next := move_actor(actor,step)
+	if (next-start).dot(step)>0 and (next-start).normalized().dot(step.normalized())>0.55:
+		actor.position = next
 	huddle_velocity[actor] = (actor.position-start)/maxf(dt,0.001)
-	if speed > 0.4 and actor.position.distance_to(start)<dt*0.25: routes.paths.erase(actor)
 	actor.play_action("base/Walk" if huddle_velocity[actor].length()>0.15 else "base/Idle")
 
 
@@ -880,6 +891,7 @@ func huddle(dt: float) -> void:
 		settle_time+=dt
 		coach_address(settle_time-.75)
 		return
+	huddle_elapsed += dt
 	if circle.is_empty():
 		circle=roster+workers.map(func(w): return w.actor)+[game.coach]
 		circle.sort_custom(func(a,b): return huddle_angle(a)<huddle_angle(b))
@@ -893,6 +905,27 @@ func huddle(dt: float) -> void:
 			if cost < best:
 				best = cost
 				for j in circle.size(): circle[j] = ordered[(j+offset)%circle.size()]
+		for j in circle.size():
+			huddle_slots[circle[j]] = TAU*j/circle.size()-PI
+	# Open a gap where the arriving player actually is. Let their neighbors
+	# move to the new slots before attempting shoulder contact again.
+	for actor: Node3D in circle:
+		if settled_positions.has(actor): continue
+		var mark: Dictionary = huddle_marks.get(actor,{"at":actor.position,"time":huddle_elapsed})
+		if actor.position.distance_to(mark.at)>0.32:
+			mark = {"at":actor.position,"time":huddle_elapsed}
+		huddle_marks[actor] = mark
+		if huddle_elapsed-mark.time < 2.5 or actor.position.distance_to(HUDDLE_CENTER)>3.2: continue
+		circle.sort_custom(func(a,b): return huddle_angle(a)<huddle_angle(b))
+		var base := huddle_angle(actor)-TAU*circle.find(actor)/circle.size()
+		for j in circle.size():
+			var member: Node3D = circle[j]
+			huddle_slots[member] = base+TAU*j/circle.size()
+			approach_reached[member] = true
+			huddle_marks[member] = {"at":member.position,"time":huddle_elapsed+1.5}
+			routes.paths.erase(member)
+		settled_positions.clear()
+		break
 	# Read the previous displayed pose before the idle clips are advanced.
 	for actor: Node3D in shoulder_trim:
 		var entry: Dictionary=shoulder_trim[actor]
@@ -907,7 +940,7 @@ func huddle(dt: float) -> void:
 		var work := workers.find_custom(func(w): return w.actor==actor)
 		if work>=0:
 			var w := workers[work]
-			if not w.cargo.is_empty() or w.goal or nearest(actor.position,w,INF):
+			if not w.cargo.is_empty() or w.lifting > 0 or (huddle_elapsed < 8.0 and (w.goal or nearest(actor.position,w,INF))):
 				collect(w,dt)
 				continue
 		if actor==roster[0] and not human_cargo.is_empty():
@@ -918,9 +951,9 @@ func huddle(dt: float) -> void:
 				place_in_cart(actor,human_cargo,dt)
 			continue
 		actor.animator.advance(dt)
-		var angle := TAU*i/circle.size()-PI
+		var angle: float = huddle_slots[actor]
 		var radial := Vector3(sin(angle),0,cos(angle))
-		var spot := HUDDLE_CENTER + radial*1.17
+		var spot := HUDDLE_CENTER + radial*1.28
 		var outer := HUDDLE_CENTER + radial*1.95
 		if not approach_reached.has(actor):
 			if actor.position.distance_to(outer) > 0.35 and actor.position.distance_to(spot) > 0.55:
@@ -929,7 +962,7 @@ func huddle(dt: float) -> void:
 			approach_reached[actor] = true
 			routes.paths.erase(actor)
 		if not settled_positions.has(actor):
-			if actor.position.distance_to(spot) > 0.22:
+			if actor.position.distance_to(spot) > 0.30:
 				huddle_walk(actor,spot,dt)
 				continue
 			settled_positions[actor] = actor.position

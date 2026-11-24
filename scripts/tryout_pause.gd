@@ -1,112 +1,141 @@
 extends ColorRect
 
 const Xbox = preload("res://scripts/xbox_controls.gd")
-var game: Control
+var game
 var body := VBoxContainer.new()
 var categories := HBoxContainer.new()
+var home := VBoxContainer.new()
+var options := VBoxContainer.new()
+var primary: Button
+var options_button: Button
+var practice := false
 var section := "Camera"
-var primary := Button.new()
-var dock := PanelContainer.new()
+var panel_was_visible := false
 
-func configure(host: Control) -> void:
+func configure(host: Node, layer: Node = null) -> void:
 	game = host
-	host.add_child(self)
+	practice = host.has_method("reset_drill")
+	(layer if layer else host).add_child(self)
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	color = Color("04101946")
-	dock.anchor_bottom = 1
-	dock.offset_right = 450
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color("102431f6")
-	style.border_color = Color("66d8bc")
-	style.border_width_right = 2
-	style.content_margin_left = 32
-	style.content_margin_right = 30
-	style.content_margin_top = 30
-	style.content_margin_bottom = 24
-	dock.add_theme_stylebox_override("panel",style)
-	add_child(dock)
-	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation",14)
-	dock.add_child(column)
-	var sport := Label.new()
-	sport.text = "MY CAREER    /    SETTER TRYOUT"
-	sport.add_theme_font_size_override("font_size",14)
-	sport.modulate = Color("80dfc9")
-	column.add_child(sport)
-	var title := Label.new()
-	title.text = "Practice paused"
-	title.add_theme_font_size_override("font_size",38)
-	column.add_child(title)
-	column.add_child(categories)
+	z_index = 110
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	color = Color("06121bc8")
+	var center := CenterContainer.new()
+	add_child(center)
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var dock := PanelContainer.new()
+	dock.add_theme_stylebox_override("panel",MenuPresentation.box(Color("102431f7"),Color("66d8bc"),3))
+	center.add_child(dock)
+	dock.add_child(home)
+	dock.add_child(options)
+	home.custom_minimum_size.x = 310
+	home.add_theme_constant_override("separation",8)
+	primary = bar(home,"Resume",hide)
+	options_button = bar(home,"Options",open_options)
+	bar(home,"Restart",restart)
+	bar(home,"Quit",quit_gameplay)
+	options.custom_minimum_size.x = 400
+	options.add_child(categories)
 	for caption in ["Camera","Audio","Controls"]:
-		var tab := Button.new()
-		tab.text = caption
+		var tab := bar(categories,caption,show_section.bind(caption))
 		tab.toggle_mode = true
-		tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		categories.add_child(tab)
-		tab.pressed.connect(show_section.bind(caption))
 	var scroll := ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.follow_focus = true
+	scroll.custom_minimum_size.y = 240
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	column.add_child(scroll)
+	options.add_child(scroll)
 	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	body.add_theme_constant_override("separation",12)
 	scroll.add_child(body)
-	primary.text = "Resume practice"
-	primary.custom_minimum_size.y = 46
-	primary.pressed.connect(hide)
-	column.add_child(primary)
-	var restart := Button.new()
-	restart.text="Reset drill"
-	restart.pressed.connect(game.reset_drill)
-	column.add_child(restart)
-	var actions := HBoxContainer.new()
-	column.add_child(actions)
-	for caption in ["Watch demo","Recordings","My Career"]:
-		var item := Button.new()
-		item.text = caption
-		item.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		actions.add_child(item)
-		item.pressed.connect(func():
-			if caption=="Recordings":
-				OS.shell_open(ProjectSettings.globalize_path("user://recordings"))
-				return
-			hide()
-			if caption == "My Career": game.leave()
-			else:
-				game.skip.hide()
-				game.finish.hide()
-				game.demonstration = true
-				game.demo_index = 0
-				game.reset_feed())
-	for field in fields():
-		apply_field(field[0],saved(field),false)
+	bar(options,"Back",show_home)
+	if practice:
+		for field in fields(): apply_field(field[0],saved(field),false)
 	hide()
 	visibility_changed.connect(func():
-		game.panel.visible = not visible
 		if visible:
-			show_section(section)
-			primary.grab_focus()
+			if practice:
+				panel_was_visible = game.panel.visible
+				game.panel.hide()
+			get_tree().paused = true
+			show_home()
 		else:
-			game.prompt_phase = ""
-			game.update_prompts(game.phase)
-			if game.phase=="complete": game.finish.grab_focus())
+			get_tree().paused = false
+			if practice:
+				game.panel.visible = panel_was_visible
+				game.prompt_phase = ""
+				game.update_prompts(game.phase)
+				if game.phase == "complete": game.finish.grab_focus())
+
+func bar(parent: Container, caption: String, action: Callable) -> Button:
+	var button := Button.new()
+	button.text = caption
+	button.custom_minimum_size.y = 44
+	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	parent.add_child(button)
+	button.pressed.connect(action)
+	return button
+
+func show_home() -> void:
+	options.hide()
+	home.show()
+	primary.grab_focus()
+
+func open_options() -> void:
+	home.hide()
+	options.show()
+	show_section("Camera")
+	categories.get_child(0).grab_focus()
+
+func restart() -> void:
+	hide()
+	if practice: game.reset_drill()
+	elif game.has_method("open_setting_stage") and is_instance_valid(game.setting_stage):
+		var drill_name: String = game.heading.text
+		game.go_back()
+		game.open_setting_stage(drill_name)
+	elif game.has_method("restart_activity"): game.restart_activity()
+	else: MenuPresentation.load_scene(game.scene_file_path)
+
+func quit_gameplay() -> void:
+	hide()
+	MenuPresentation.load_scene("res://scenes/main.tscn")
+
+func _input(event: InputEvent) -> void:
+	if event is InputEventKey and event.echo: return
+	var menu: bool = event is InputEventJoypadButton and event.button_index == Xbox.physical(JOY_BUTTON_START) and event.pressed
+	var escape: bool = event is InputEventKey and event.keycode == KEY_ESCAPE and event.pressed
+	if visible:
+		if menu or event.is_action_pressed("ui_cancel"):
+			if options.visible and not menu: show_home()
+			else: hide()
+			get_viewport().set_input_as_handled()
+	elif not practice and not get_tree().paused and (menu or escape):
+		if game.has_method("open_setting_stage") and not is_instance_valid(game.setting_stage): return
+		show()
+		get_viewport().set_input_as_handled()
+
+func active_camera() -> Camera3D:
+	for key in ["setting_camera","preview_camera","camera"]:
+		if key in game and is_instance_valid(game.get(key)): return game.get(key)
+	return get_viewport().get_camera_3d()
 
 func fields() -> Array:
+	if not practice: return [["Field of view",35,85,50,"°"],["Master volume",0,100,80,"%"]]
 	return [["Camera orbit",-145,145,12,"°"],["Elevation",-12,82,18,"°"],["Distance",2,26,10," m"],["Master volume",0,100,80,"%"]]
 
 func saved(field: Array) -> float:
+	if field[0]=="Field of view" and active_camera(): return active_camera().fov
 	if field[0]=="Master volume": return db_to_linear(AudioServer.get_bus_volume_db(0))*100
 	return StorySession.game_options.get_value("tryout_camera",field[0],field[3])
 
 func apply_field(key: String,value: float,save: bool) -> void:
 	match key:
+		"Field of view":
+			if active_camera(): active_camera().fov = value
 		"Camera orbit": game.yaw = deg_to_rad(value)
 		"Elevation": game.elevation = value
 		"Distance": game.distance = value
 		"Master volume": AudioServer.set_bus_volume_db(0,linear_to_db(value/100))
-	game.apply_camera()
+	if practice: game.apply_camera()
 	if save:
 		StorySession.game_options.set_value("tryout_camera",key,value)
 		StorySession.save_options()

@@ -382,7 +382,8 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		float width=mix(.0035,.0075,bend);
 		return max(1.-smoothstep(.0015,width,line),.72*(1.-smoothstep(.001,width*.8,lower_line)));
 	}
-	uniform int ankle_support; uniform int knee_support; uniform float sock_top; uniform vec4 sock_trim:source_color; uniform float striped;
+	uniform int ankle_support; uniform int knee_support; uniform bool leggings = false;
+	uniform float sock_top; uniform vec4 sock_trim:source_color; uniform float striped;
 	uniform vec4 pad_color:source_color;
 	varying vec3 anatomy;
 	varying vec2 loads;
@@ -420,6 +421,7 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 	}
 	void fragment(){if(y>hem_y+.055 || y<.070)discard; ALBEDO=texture(skin_map,UV).rgb; NORMAL_MAP=texture(muscles,UV).rgb; NORMAL_MAP_DEPTH=.68; ROUGHNESS=mix(.42,.86,texture(roughness_map,UV).r);
 		float yarn=.5+.5*cos(y*1250.)*(1.-smoothstep(.0007,.003,fwidth(y)));
+		if(leggings){ ALBEDO=vec3(.032,.040,.052)*(.96+.04*yarn); NORMAL_MAP_DEPTH=.12; ROUGHNESS=.87; }
 		float sock_mask=1.-smoothstep(sock_top,sock_top+.003,y);
 		float pad_mask=enabled_side*(1.-smoothstep(.087,.091,abs(y-knee_height)));
 		float back_hole=rear_opening(anatomy.x-knee_center,y-knee_height,knee_facing);
@@ -517,6 +519,7 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 	skin.set_shader_parameter("pad_color",Color("dfdfd7") if variant%3==1 else Color("343d44"))
 	skin.set_shader_parameter("striped",float(variant%3!=0))
 	skin.set_shader_parameter("sock_trim",[Color("5c674f"),Color("844238"),Color("384c62")][variant%3])
+	skin.set_shader_parameter("leggings",variant > 0 and variant % 4 == 2)
 	skin.set_shader_parameter("sock_top",.155+.027*(variant%4))
 	var knee := rig.get_bone_global_rest(rig.find_bone("calf_l")).origin
 	skin.set_shader_parameter("knee_depth",knee.z)

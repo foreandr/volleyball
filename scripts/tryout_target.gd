@@ -1,5 +1,12 @@
 extends Node3D
 
+var rim_bodies: Array[RID] = []
+
+func crossed_mouth(start: Vector3, finish: Vector3) -> bool:
+	if start.y < position.y or finish.y >= position.y: return false
+	var crossing := start.lerp(finish,(start.y-position.y)/(start.y-finish.y))
+	return crossing.distance_to(position) < mouth_radius - 0.022
+
 var beacon := MeshInstance3D.new()
 var is_net := false
 var mouth_radius := 0.42
@@ -74,6 +81,7 @@ func _ready() -> void:
 		shape.radius = .022
 		shape.height = start.distance_to(end)+.044
 		preload("res://scripts/gym_physics.gd").solid(segment,shape,32)
+		rim_bodies.append(segment.get_child(0).get_rid())
 	if is_net:
 		for side in [-1,1]:
 			var foot := Vector3(side*mouth_radius,-position.y+0.1,0)

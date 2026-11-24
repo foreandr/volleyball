@@ -29,6 +29,11 @@ var elapsed := 0.0
 var clock := 0.0
 var spectator_prompt := PanelContainer.new()
 var spectator_text := Label.new()
+var spectator_icon := TextureRect.new()
+var timing_note := Label.new()
+var timing_until := 0.0
+var buffered_early := false
+var measured_release := false
 var spectator_progress := ProgressBar.new()
 var keyboard_prompt := true
 var skip_time := 0.0
@@ -274,7 +279,24 @@ func build_hud() -> void:
 	var skip_column := VBoxContainer.new()
 	spectator_prompt.add_child(skip_column)
 	spectator_text.add_theme_font_size_override("font_size",20)
-	skip_column.add_child(spectator_text)
+	var row := HBoxContainer.new()
+	skip_column.add_child(row)
+	var hold := Label.new()
+	hold.text = "Hold"
+	hold.add_theme_font_size_override("font_size",20)
+	row.add_child(hold)
+	spectator_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	spectator_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	spectator_icon.custom_minimum_size = Vector2(42,34)
+	row.add_child(spectator_icon)
+	row.add_child(spectator_text)
+	add_child(timing_note)
+	timing_note.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+	timing_note.offset_top = 160
+	timing_note.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	timing_note.add_theme_font_size_override("font_size",22)
+	timing_note.add_theme_constant_override("outline_size",5)
+	timing_note.hide()
 	spectator_progress.custom_minimum_size.y = 5
 	spectator_progress.show_percentage = false
 	spectator_progress.max_value = 1
@@ -324,6 +346,8 @@ func called() -> int:
 
 func reset_feed() -> void:
 	refresh_scores()
+	buffered_early = false
+	measured_release = false
 	placement_error=10.
 	success=false
 	set_grade_until=0.0
@@ -508,6 +532,7 @@ func _process(delta: float) -> void:
 	spectator_prompt.visible = rotation_drill.turn == 1 and phase not in ["intro","net_guide","complete"] and not demonstration and not settings.visible and not changing_turn
 	if changing_turn: return
 	update_speech(delta)
+	timing_note.visible = clock < timing_until and phase != "complete" and not settings.visible
 	score_strip.visible=phase not in ["intro","net_guide"] and not settings.visible and (not demonstration or phase=="complete")
 	if settings.visible or phase=="net_guide": return
 	if phase=="complete":
@@ -517,7 +542,9 @@ func _process(delta: float) -> void:
 	if rotation_drill.turn == 1 and phase != "intro" and not demonstration:
 		var holding := Input.is_key_pressed(KEY_SPACE) or (pad() >= 0 and Input.is_joy_button_pressed(pad(),Xbox.physical(JOY_BUTTON_A)))
 		skip_time = minf(1,skip_time + delta) if holding else 0.0
-		spectator_text.text = "Hold %s to start your turn" % ("Space" if keyboard_prompt or pad() < 0 else Xbox.NAMES[Xbox.physical(JOY_BUTTON_A)])
+		spectator_icon.visible = not keyboard_prompt and pad() >= 0
+		if spectator_icon.visible: spectator_icon.texture = Xbox.glyph(JOY_BUTTON_A)
+		spectator_text.text = "to start your turn" if spectator_icon.visible else "[Space] to start your turn"
 		spectator_progress.value = skip_time
 		if skip_time >= 1:
 			change_setter(true)
@@ -673,6 +700,9 @@ func step_practice(delta: float) -> void:
 					drop_velocity += setter.basis.z*.85
 					return
 			if collided: last_contact = clock
+			if buffered_early and collided:
+				release(held)
+				return
 			if held>=0 and clock-last_contact<.11:
 				Hands.apply(setter,ball.position-Vector3.UP*cushion,1.0,Vector3.ZERO,cushion)
 			if (demonstration or rotation_drill.turn!=0) and elapsed>=contact_time: release(called())
@@ -688,20 +718,46 @@ func step_practice(delta: float) -> void:
 				for net in targets:
 					if ball.position.distance_to(net.position)<net.mouth_radius+.14: net.impact(ball.position,motion/maxf(delta,.001))
 				if absf(ball.position.z-4)<.18: rotation_drill.net_reaction(ball.position,motion/maxf(delta,.001))
+				var rebound := (motion/maxf(delta,.001)).bounce(hit.normal)*.45
+				if targets[target].rim_bodies.has(hit.get("rid")):
+					drop_velocity = rebound
+					ball.position += Vector3(hit.normal)*0.004
+					begin("rim")
+					return
 				miss("Ball deflected off the gym equipment.")
-				drop_velocity = (motion/maxf(delta,.001)).bounce(hit.normal)*.45
+				drop_velocity = rebound
 				return
 			if elapsed<0.22: Hands.apply(setter,source,1.0-elapsed/0.22,(endpoint-source).normalized()*0.22,0.0,0.3,false,Vector3.ZERO,1.0,endpoint-source,0.5,true)
 			if t>=1:
 				if endpoint.distance_to(PINS[target])<targets[target].mouth_radius-0.10: targets[target].impact(ball.position,motion/maxf(delta,.001))
-				if success and not demonstration:
-					if rotation_drill.turn==0:
-						gym.update_board(rep+1)
-					for i in seats_in_use.size():
-						seats_in_use[i].celebrate(i,rep%8==0)
-					trace("bleacher_applause",{"completed":rep})
-				begin("result")
-				message.text = feedback
+				finish_set()
+		"rim":
+			var remaining := minf(delta,0.1)
+			while remaining > 0.0001:
+				var dt := minf(remaining,1.0/120)
+				remaining -= dt
+				var start := ball.position
+				drop_velocity.y -= 9.81*dt
+				var motion := drop_velocity*dt
+				var hit := contacts.sweep(world,contacts.ball_shape,start,motion,Contact.GYM|Contact.EQUIPMENT|64|rotation_drill.CART_WALL)
+				ball.position += motion*float(hit.get("fraction",1.0))
+				var net: Node3D = targets[target]
+				if net.crossed_mouth(start,ball.position):
+					endpoint = ball.position
+					placement_error = endpoint.distance_to(net.position)
+					success = target == called()
+					feedback = "Rim and in" if success else "Wrong target"
+					net.impact(ball.position,drop_velocity)
+					finish_set()
+					return
+				if not hit.is_empty():
+					drop_velocity = drop_velocity.bounce(hit.normal)*0.45
+					ball.position += Vector3(hit.normal)*0.004
+				if ball.position.y < net.position.y-0.15 or elapsed > 1.6:
+					var velocity := drop_velocity
+					miss("Rim and out")
+					drop_velocity = velocity
+					return
 		"drop":
 			if not demonstration:
 				rotation_drill.free_ball(drop_velocity)
@@ -766,13 +822,32 @@ func play_intro(delta: float) -> void:
 			skip.hide()
 			start_practice()
 
+func finish_set() -> void:
+	if success and not demonstration:
+		if rotation_drill.turn==0:
+			gym.update_board(rep+1)
+		for i in seats_in_use.size():
+			seats_in_use[i].celebrate(i,rep%8==0)
+		trace("bleacher_applause",{"completed":rep})
+	begin("result")
+	message.text = feedback
+	if not success and measured_release: show_timing(set_error)
+
 func miss(reason: String) -> void:
 	success = false
+	if measured_release: show_timing(set_error)
 	trace("miss",{"reason":reason})
 	drop_velocity = (catch_point-source)/contact_time+Vector3.UP*9.81*(contact_time/2.0-elapsed)
 	feedback = reason
 	begin("drop")
 	message.text = reason
+
+func show_timing(offset: float) -> void:
+	if demonstration or rotation_drill.turn != 0: return
+	var percent := roundi(100.0 * absf(offset) / timing_window())
+	timing_note.text = "%d%% too %s" % [percent,"early" if offset < 0 else "late"] if percent > 0 else "On time"
+	timing_note.reset_size()
+	timing_until = clock + 2.2
 
 func timing_window() -> float:
 	return .085+.135*clampf(float(setter.attributes.get("Hand setting",40))/100.,0,1)
@@ -796,7 +871,14 @@ func set_fill() -> float:
 func release(index: int) -> void:
 	if phase!="pass" or held!=index: return
 	graded_fill=set_fill()
-	set_error=release_offset()
+	if not buffered_early:
+		set_error = release_offset()
+		if first_contact < 0 and not demonstration and rotation_drill.turn == 0 and set_error < 0 and set_error >= -(timing_window()+0.065):
+			buffered_early = true
+			measured_release = true
+			return
+	buffered_early = false
+	measured_release = true
 	set_grade_until=clock+.65
 	trace("release",{"target":TARGETS[index],"held_s":clock-pressed_at,"alignment":set_alignment(setter,index),"timing_error":set_error,"air_m":setter.position.y-BASE.y})
 	held = -1
@@ -810,7 +892,7 @@ func release(index: int) -> void:
 		if first_contact<0 or clock-last_contact>minf(.17,timing_window()):
 			miss("No hand contact. Get under the ball before release.")
 			return
-		if absf(set_error)>timing_window() or gap>0.72+0.36*skill:
+		if set_error < -(timing_window()+0.065) or set_error > timing_window() or gap>0.72+0.36*skill:
 			miss("Missed contact. Hold the target and release above your forehead.")
 			return
 	energy[setter].spend(2)
@@ -833,6 +915,7 @@ func release(index: int) -> void:
 	success = technique_feedback.is_empty() and target==called() and endpoint.distance_to(PINS[target])<targets[target].mouth_radius-0.10
 	feedback = TARGETS[target]+"   /   Target made" if success else "Missed the called target. Try it again."
 	if not technique_feedback.is_empty(): feedback=technique_feedback
+	if set_error < -timing_window(): show_timing(set_error)
 	trace("set",{"technique":technique_feedback,"requested":TARGETS[called()],"actual":TARGETS[target],"made":success,"error_m":error})
 	Hands.apply(setter,source,1.0,(endpoint-source).normalized()*.22,0,.3,false,Vector3.ZERO,1.,endpoint-source,.6,true)
 	begin("set")

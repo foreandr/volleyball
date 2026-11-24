@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" path="res://scripts/story_animations.gd" id="1"]
 
-[node name="StoryAnimations" type="Control"]
+[node name="StoryAnimations" type="Control" groups=["gameplay_pause"]]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0

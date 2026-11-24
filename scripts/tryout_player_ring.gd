@@ -22,7 +22,7 @@ func _draw() -> void:
 	var human: Node3D=game.rotation_drill.roster[0]
 	draw_player(human,true)
 	if game.preview_enabled: draw_set_path(human)
-	if game.setter == human and game.clock<game.cue_until and game.phase in ["feed","pass"]:
+	if game.phase in ["feed","pass"]:
 		var called: int=game.called()
 		var anchor: Vector3=game.targets[called].global_position+Vector3.UP*.43
 		if not game.camera.is_position_behind(anchor):

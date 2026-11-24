@@ -15,3 +15,5 @@
 - Keep `user://preview_setup.cfg` intact during iterations. It restores placement, camera and ball settings. Relaunch through `work/launch_preview.gd` when available; do not use old QA launchers that overwrite the user's setup. Checks that save preview settings must redirect `StorySession.preview_path` into `work/`.
 
 - Push each project update to GitHub and report its verified commit SHA to the user.
+
+- Reuse the shared practice kit, Xbox glyph bindings, gameplay pause menu, indoor court equipment and tryout movement helpers in new gameplay chapters. Use the gameplay_pause scene group for additional standalone gameplay scenes. Carry forward cart pickup, rim-entry scoring, movement limits and space-making huddles when those interactions recur.

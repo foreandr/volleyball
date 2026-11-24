@@ -88,6 +88,7 @@ var setter_animation_process: int
 var setter_animator_active: bool
 
 var match_from_home := false
+var match_config := []
 var passing_drill: RefCounted
 var match_from_lab_replay := false
 
@@ -241,6 +242,7 @@ func start_passing_drill() -> void:
 	start_demo_match(2,false,true,true,true)
 
 func start_demo_match(team_size := 2, learn_from_demo := true, cpu_only := true, mirror_blue_right := true, passing := false) -> void:
+	match_config = [team_size,learn_from_demo,cpu_only,mirror_blue_right,passing]
 	MenuPresentation.set_music(false)
 	stop_blocking_practice()
 	stop_serving_session()
@@ -2050,6 +2052,15 @@ func cycle_type(direction: int) -> void:
 	if is_instance_valid(demo_match) or is_instance_valid(blocking_practice) or is_instance_valid(setting_drill) or selected_category.is_empty() or selected_category in ["Setting","Attacking"]: return
 	type_indices[selected_category] = posmod(int(type_indices.get(selected_category,0))+direction,MOVE_TYPES[selected_category].size())
 	refresh_type()
+
+func restart_activity() -> void:
+	if is_instance_valid(demo_match):
+		var config := match_config.duplicate()
+		stop_demo_match()
+		start_demo_match.callv(config)
+	elif is_instance_valid(blocking_practice): open_blocking_mode(defense_active)
+	elif not selected_category.is_empty(): select_category(selected_category)
+	else: MenuPresentation.load_scene(scene_file_path)
 
 func open_menu() -> void:
 	if passing_drill != null:

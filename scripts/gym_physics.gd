@@ -37,7 +37,7 @@ func sweep(world: Node3D,shape: Shape3D,start: Vector3,motion: Vector3,mask: int
 	query.transform.origin = start+motion*fractions[1]
 	query.motion = Vector3.ZERO
 	var surface := space.get_rest_info(query)
-	return {"fraction":fractions[0],"normal":surface.get("normal",-motion.normalized())}
+	return {"rid":surface.get("rid",RID()),"fraction":fractions[0],"normal":surface.get("normal",-motion.normalized())}
 
 func travel(world: Node3D,start: Vector3,motion: Vector3,height: float, excluded: Array[RID]=[]) -> Vector3:
 	capsule.height = maxf(.65,height)

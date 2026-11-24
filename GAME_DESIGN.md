@@ -59,3 +59,5 @@ When a request begins with “game notes,” record the idea here for future con
 - **Learn from opponents.** Face a specialist and see their signature skill in a match. Beating them could unlock a chance to train with them afterward and learn the skill they used.
 - **Linked beach and indoor careers.** Carry learned skills between both campaigns. Beach opponents could teach pokeys, dolphins, and cutties, while indoor specialists teach their own exclusive skills. A player could bring a beach technique back indoors or return to the beach with something learned in the gym.
   The progression goal is one athlete with a growing repertoire. Each form of volleyball should offer that athlete a reason to play it.
+
+Indoor practice counts descending rim rebounds that enter the called basket. Early release has 65 ms of additional grace while the ball reaches the hands. Timing percentages are measured against the setter's timing window. Collectors turn and accelerate into new paths, and huddle neighbors can reopen a gap for a late arrival. Gameplay pause opens on Resume, with Options, Restart and Quit below.
