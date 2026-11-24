@@ -61,7 +61,8 @@ void vertex(){
 	{
 		float folds=.0018*sin(rest.x*115.0+rest.z*38.0);
 		float ease=jacket ? (1.-smoothstep(1.19,1.49,rest.y))*(1.-smoothstep(.2,.32,abs(rest.x))) : 0.;
-		VERTEX+=NORMAL*(.009+folds+.022*ease+(jacket ? motion*(.006+.012*ease)*sin(rest.x*24.+rest.y*15.-TIME*12.) : 0.));
+		float shell_clearance=jacket ? .009 : mix(.0015,.009,smoothstep(.12,.95,COLOR.g));
+		VERTEX+=NORMAL*(shell_clearance+folds+.022*ease+(jacket ? motion*(.006+.012*ease)*sin(rest.x*24.+rest.y*15.-TIME*12.) : 0.));
 	}
 }
 void fragment(){
@@ -96,6 +97,19 @@ void fragment(){
 		base*=1.-.26*join+.095*stitch_line*loops;
 		float shoulder_panel=smoothstep(seam_x-aa,seam_x+aa,x)*span;
 		base*=1.-.065*shoulder_panel;
+		// The breathable side insert follows the torso depth on either side.
+		float insert_width=mix(.048,.084,smoothstep(1.04,1.38,y));
+		float border=abs(rest.z+.023)-insert_width;
+		float insert=smoothstep(.115,.17,x)*(1.-smoothstep(1.36,1.42,y));
+		float panel=insert*(1.-smoothstep(-.002,.002,border));
+		vec2 knit_cell=vec2(rest.z/.0034,y/.004);
+		float resolved=1.-smoothstep(.2,.7,max(fwidth(knit_cell.x),fwidth(knit_cell.y)));
+		knit_cell.x+=.5*mod(floor(knit_cell.y),2.);
+		float eyelet=1.-smoothstep(.12,.31,length(fract(knit_cell)-.5));
+		base=mix(base,base*.74, panel);
+		base*=1.-panel*(.035+.20*(eyelet-.15)*resolved);
+		float binding=1.-smoothstep(.001,.003+fwidth(border),abs(border));
+		base*=1.-.18*insert*binding;
 		float cuff=1.-smoothstep(.18,.40,COLOR.g);
 		base*=1.-.12*cuff;
 		float collar=1.563-.055*(1.-smoothstep(.045,.109,x))*smoothstep(-.075,.075,rest.z);

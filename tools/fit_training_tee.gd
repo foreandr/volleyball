@@ -20,6 +20,12 @@ func fit(p: Vector3) -> Vector3:
 	var relative_y := fitted.y-1.48
 	fitted.y-=cuff*(.010+.16*maxf(relative_y,0.))
 	fitted.z=lerpf(fitted.z,-.035,cuff*.12)
+	var radial := Vector2(fitted.y-1.48,fitted.z+.035)
+	# Take up excess fabric at the opening without flattening the folded hem.
+	var excess := maxf(radial.length()-.072,0.)
+	radial-=radial.normalized()*excess*.82*cuff
+	fitted.y=1.48+radial.x
+	fitted.z=-.035+radial.y
 	return fitted
 
 func _initialize() -> void:
