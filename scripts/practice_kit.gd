@@ -687,7 +687,13 @@ static func haircut(scalp: Node3D,color: Color,variant: int,actor: Node3D) -> vo
 				length_factor=.42+.65*crown+1.05*fringe
 				comb=Vector3(.9,.08,-.52)
 			2: length_factor=.38+1.35*crown
-			3: comb=Vector3(signf(normal.x-parting),-.6,.42)
+			3:
+				# Parted curtains sweep out at the brow and tuck back over each ear.
+				var fringe := smoothstep(-.24,.66,normal.z)*smoothstep(.10,.66,y)
+				var temple := smoothstep(.38,.86,absf(normal.x))
+				var side := 1. if normal.x>parting else -1.
+				comb=Vector3(side*(.58+.35*fringe),-.48-.45*temple,.48*fringe-.72*temple)
+				length_factor=.55+.62*crown+.48*fringe
 			4:
 				length_factor=.25+1.24*(1.-smoothstep(.22,.68,absf(normal.x-parting*.4)))
 				comb=Vector3(parting,.70,-.85)
@@ -732,6 +738,7 @@ static func haircut(scalp: Node3D,color: Color,variant: int,actor: Node3D) -> vo
 			pigment*=.74+.26*wave_ridge
 		var coiled := style in [2,6]
 		var lift := .10 if style==5 else .28
+		if style==3: lift+=.22*crown*smoothstep(-.24,.66,normal.z)
 		if waved_crop: lift=.10+.42*wave_ridge
 		if style==1: lift+=.27*smoothstep(-.45,.42,normal.z)*crown
 		# Neighboring ringlets share a direction, while the pitch changes across the crown.
