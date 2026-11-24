@@ -1,0 +1,1 @@
+RunningShoes by punkduck, distributed in the MakeHuman Community Shoes 02 pack under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). The model was separated into left and right shoes, resized, and fitted to the volleyball ankle rig. The original diffuse texture is included. [Source pack](https://static.makehumancommunity.org/assets/assetpacks/shoes02.html)

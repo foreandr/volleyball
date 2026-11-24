@@ -792,6 +792,7 @@ const HUDDLE_CENTER := Vector3(0,.04,.35)
 var circle: Array = []
 var debrief_started := false
 var shoulder_trim := {}
+var elbow_adjustments := {}
 
 func huddle(dt: float) -> void:
 	if circle.is_empty():
@@ -834,6 +835,26 @@ func huddle(dt: float) -> void:
 		var rig: Skeleton3D=actor.skeleton
 		var pose: Array=[]
 		for j in rig.get_bone_count(): pose.append(rig.get_bone_pose(j))
+		# Idle feet can settle below the floor. Correct the ankle through
+		# the leg chain so the shoe and the sock stay joined.
+		for leg in ["l","r"]:
+			if not rig.has_meta("sole_"+leg): continue
+			var mount: Node3D=rig.get_meta("sole_"+leg)
+			var ankle := "foot_"+str(leg)
+			var id := rig.find_bone(ankle)
+			var ankle_pose: Transform3D=author.world_pose(pose,id)
+			var shoe_frame: Transform3D=rig.global_transform*ankle_pose*mount.transform
+			var lowest := INF
+			for z: float in [-.13,.0,.15]:
+				for x: float in [-.045,.045]:
+					lowest=minf(lowest,(shoe_frame*Vector3(x,.009,z)).y)
+			if lowest>=.041: continue
+			var shift := rig.global_basis.inverse()*(Vector3.UP*(.041-lowest))
+			author.limb(pose,"thigh_"+leg,"calf_"+leg,ankle,ankle_pose.origin+shift,Vector3.BACK)
+			author.set_world_basis(pose,ankle,ankle_pose.basis.orthonormalized())
+			for bone in ["thigh_"+leg,"calf_"+leg,ankle]:
+				var joint := rig.find_bone(bone)
+				rig.set_bone_pose_rotation(joint,pose[joint].basis.orthonormalized().get_rotation_quaternion())
 		for side in ["l","r"]:
 			var sign_: float=1. if side=="l" else -1.
 			var arm := "upperarm_"+str(side)
@@ -858,6 +879,7 @@ func huddle(dt: float) -> void:
 			if actor!=game.coach:
 				aim=adjacent.dressed_surface.contact(aim,Vector3.UP if upper else back)
 			var pole := Vector3(sign_*.75,.18 if upper else -.65,-.85)
+
 			if actor==game.coach:
 				weight=.85
 				aim=actor.to_global(Vector3(sign_*.32,1.15+.09*sin(game.clock*2.+sign_),.37))
@@ -895,6 +917,19 @@ func huddle(dt: float) -> void:
 					clearance=maxf(clearance,(surface-finger).dot(outward))
 				aim+=outward*clearance
 			author.limb(pose,arm,"lowerarm_"+str(side),wrist,rig.to_local(aim)-palm_offset,pole,weight)
+			if upper and actor!=game.coach:
+				var key := str(actor.get_instance_id())+str(side)
+				var adjust: float=elbow_adjustments.get(key,0.)
+				var elbow := rig.to_global(author.point(pose,"lowerarm_"+str(side)))
+				var own_shoulder := rig.to_global(author.point(pose,arm))
+				var awkward := elbow.y>own_shoulder.y+.035 or elbow.distance_to(Contact.joint(actor,"Head"))<.19
+				# Hold the correction until the elbow clears the shoulder.
+				if awkward: adjust=move_toward(adjust,1.,dt*3.)
+				elif elbow.y<own_shoulder.y-.10: adjust=move_toward(adjust,0.,dt*.55)
+				elbow_adjustments[key]=adjust
+				pole=pole.lerp(Vector3(sign_*.55,-1.,-.20),adjust)
+				if adjust>0.:
+					author.limb(pose,arm,"lowerarm_"+str(side),wrist,rig.to_local(aim)-palm_offset,pole,weight)
 			if blend>0.:
 				var solved: Transform3D=author.world_pose(pose,rig.find_bone(wrist))
 				author.set_world_basis(pose,wrist,solved.basis.orthonormalized().slerp(orientation,blend))

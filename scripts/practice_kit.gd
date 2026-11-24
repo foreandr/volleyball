@@ -134,9 +134,6 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 		scalp.transform=rest.affine_inverse()*Transform3D(Basis.IDENTITY,rest.origin)
 		var hair := Color.from_hsv(.065+.004*variant,.42,.13+.065*(variant%6))
 		haircut(scalp,hair,variant,actor)
-		for side in ["l","r"]:
-			if variant>=20 or variant==0 or variant%4==1 or (variant%4==2 and side=="l") or (variant%4==3 and side=="r"): knee_pad(rig,side,variant%3==1)
-			if variant%3==1: compression(rig,"calf_"+side,"foot_"+side,.067,.044,Color("e3ded2"))
 		if variant%4==1: compression(rig,"hand_l","middle_01_l",.042,.041,Color("d6cdc0"))
 		if variant%3==2: compression(rig,"lowerarm_r","hand_r",.061,.042,Color("252e35"))
 
@@ -221,15 +218,42 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 	cut.code = """shader_type spatial;
 	uniform sampler2D muscles:hint_normal; uniform sampler2D roughness_map; uniform float hem_y; uniform sampler2D skin_map:source_color; varying float y;
 	uniform vec2 knee_flex;
+	uniform vec2 padded;
+	uniform float knee_height;
+	uniform float sock_top;
+	uniform vec4 pad_color:source_color;
+	varying float enabled_side;
+	varying float pad;
+	varying float foam;
+	varying float sock;
 	void vertex(){
 		y=UV2.y;
 		float flex=UV2.x>0.?knee_flex.x:knee_flex.y;
+		float k=y-knee_height;
+		float enabled=UV2.x>0.?padded.x:padded.y;
+		enabled_side=enabled;
+		pad=enabled*(1.-smoothstep(.087,.094,abs(k)));
+		foam=pad*smoothstep(.50,.64,COLOR.r)*(1.-smoothstep(.050,.079,abs(k)));
+		sock=1.-smoothstep(sock_top,sock_top+.004,y);
+		VERTEX+=NORMAL*(pad*.005+foam*.018+sock*.002);
 		vec2 q=(vec2(abs(UV2.x),y)-vec2(.115,.63))/vec2(.095,.12);
 		float front=smoothstep(.46,.65,COLOR.r);
 		VERTEX+=NORMAL*.012*flex*front*exp(-dot(q,q));
 	}
-	void fragment(){if(y>hem_y+.02 || y<.095)discard; ALBEDO=texture(skin_map,UV).rgb; NORMAL_MAP=texture(muscles,UV).rgb; NORMAL_MAP_DEPTH=.30; ROUGHNESS=mix(.42,.86,texture(roughness_map,UV).r);}"""
+	void fragment(){if(y>hem_y+.02 || y<.045)discard; ALBEDO=texture(skin_map,UV).rgb; NORMAL_MAP=texture(muscles,UV).rgb; NORMAL_MAP_DEPTH=.30; ROUGHNESS=mix(.42,.86,texture(roughness_map,UV).r);
+		float yarn=.5+.5*cos(y*1250.)*(1.-smoothstep(.0007,.003,fwidth(y)));
+		float sock_mask=1.-smoothstep(sock_top,sock_top+.003,y);
+		float pad_mask=enabled_side*(1.-smoothstep(.087,.091,abs(y-knee_height)));
+		ALBEDO=mix(ALBEDO,vec3(.68,.69,.66)*(.88+.12*yarn),sock_mask);
+		float panel=.5+.5*cos((y-knee_height)*120.);
+		ALBEDO=mix(ALBEDO,pad_color.rgb*(.74+.12*yarn+.14*panel*foam),pad_mask);
+		ROUGHNESS=mix(ROUGHNESS,.88,max(pad,sock));}"""
 	skin.shader = cut
+	var both := variant>=20 or variant==0 or variant%4==1
+	skin.set_shader_parameter("padded",Vector2(float(both or variant%4==2),float(both or variant%4==3)))
+	skin.set_shader_parameter("pad_color",Color("dfdfd7") if variant%3==1 else Color("343d44"))
+	skin.set_shader_parameter("sock_top",.155+.027*(variant%4))
+	skin.set_shader_parameter("knee_height",rig.get_bone_global_rest(rig.find_bone("calf_l")).origin.y)
 	skin.set_shader_parameter("muscles",preload("res://assets/characters/base/T_Superhero_Male_Normal.png"))
 	skin.set_shader_parameter("roughness_map",preload("res://assets/characters/base/T_Superhero_Male_Roughness.png"))
 	skin.set_shader_parameter("hem_y",hem)
@@ -265,39 +289,6 @@ static func compression(rig: Skeleton3D,bone: String,child: String,upper: float,
 	part.material_override = mat
 	socket.add_child(part)
 
-static func knee_pad(rig: Skeleton3D,side: String,white: bool) -> void:
-	var name_ := "calf_"+side
-	var rest := rig.get_bone_global_rest(rig.find_bone(name_))
-	var socket := BoneAttachment3D.new()
-	socket.bone_name = name_
-	rig.add_child(socket)
-	var pad := Node3D.new()
-	socket.add_child(pad)
-	pad.transform = rest.affine_inverse()*Transform3D(Basis.IDENTITY,rest.origin)
-	# Continuous elastic sleeve spans the kneecap, with a thicker anterior pad.
-	for i in 3:
-		var cuff := CylinderMesh.new()
-		cuff.radial_segments=36
-		cuff.height=[.026,.15,.026][i]
-		cuff.top_radius=[.088,.086,.078][i]
-		cuff.bottom_radius=[.086,.078,.077][i]
-		var band := MeshInstance3D.new()
-		band.mesh=cuff
-		band.position.y=.075-i*.086
-		band.scale.z=1.06
-		var knit := StandardMaterial3D.new()
-		knit.albedo_color=Color("313840") if i!=1 else Color("232b31")
-		if white: knit.albedo_color=Color("e3e2d9") if i==1 else Color("c6c8c0")
-		knit.roughness=.96
-		band.material_override=knit
-		pad.add_child(band)
-	shoe_part(pad,Vector3(0,-.003,.070),Vector3(.145,.142,.050),Color("d9d9d0") if white else Color("343e47"))
-	for y in [-.039,.0,.039]:
-		shoe_part(pad,Vector3(0,y,.088),Vector3(.109,.031,.019),Color("d5d7d0") if white else Color("38414a"))
-	for x in [-.045,.045]:
-		shoe_part(pad,Vector3(x,.002,.086),Vector3(.008,.085,.008),Color("b6b8ae") if white else Color("485058"))
-
-
 # Build the shoe in rig rest space, then inherit the ankle's animated transform.
 static func court_shoe(rig: Skeleton3D,side: String,coach: bool,variant: int) -> void:
 	var name_ := "foot_"+side
@@ -312,6 +303,16 @@ static func court_shoe(rig: Skeleton3D,side: String,coach: bool,variant: int) ->
 	var center := rest.origin.lerp(toe,0.54)
 	center.y = 0.0
 	last.transform = rest.affine_inverse()*Transform3D(Basis.looking_at(forward,Vector3.UP,true),center)
+	if not coach and (variant%2==1 or variant==2):
+		var trainer := MeshInstance3D.new()
+		trainer.mesh=preload("res://assets/characters/footwear/running_l.obj") if side=="l" else preload("res://assets/characters/footwear/running_r.obj")
+		var textile := StandardMaterial3D.new()
+		textile.albedo_texture=preload("res://assets/characters/footwear/running_shoes.png")
+		textile.roughness=.78
+		trainer.material_override=textile
+		last.add_child(trainer)
+		rig.set_meta("sole_"+side,last)
+		return
 	var upper: Color = Color("324341") if coach else [Color("ede9df"),Color("23528c"),Color("df7638"),Color("252e38"),Color("b6cc7d")][variant%5]
 	# Loft heel, waist, forefoot and toe sections separately for each layer.
 	var profile := [Vector2(-.14,.044),Vector2(-.115,.062),Vector2(-.064,.065),Vector2(.005,.052),Vector2(.08,.071),Vector2(.133,.065),Vector2(.168,.046),Vector2(.183,.015)]
