@@ -12,11 +12,16 @@ void vertex(){
 	// Capture the undistorted garment coordinates from UV2 for animated tailoring.
 	rest=vec3(UV2, COLOR.r*0.6-0.3);
 	if(!jacket){
-		float free_edge=sleeves ? smoothstep(.22,.33,abs(rest.x)) : 1.-smoothstep(1.02,1.46,rest.y);
-		float folds=sin(rest.x*45.+rest.y*17.+rest.z*19.+phase);
-		float wave=sin(rest.y*26.+rest.x*32.-TIME*13.+phase);
-		VERTEX+=NORMAL*free_edge*(.026+.008*folds+motion*(.020+.031*wave));
-		VERTEX.y+=free_edge*motion*.016*wave;
+		float free_edge=sleeves ? smoothstep(.19,.39,abs(rest.x)) : 1.-smoothstep(1.02,1.54,rest.y);
+		float angle=atan(rest.x,rest.z+.02);
+		float pleat=sin(angle*8.+rest.y*8.+phase);
+		float wave=sin(angle*4.+rest.y*12.-TIME*10.+phase);
+		float ripple=sin(angle*7.-TIME*15.+phase*.7);
+		float drape=.062+.014*pleat+motion*(.023+.044*wave+.013*ripple);
+		VERTEX+=NORMAL*free_edge*drape;
+		if(!sleeves){
+			VERTEX.y+=free_edge*(-.095+motion*(.023*wave+.012*ripple));
+		}
 	}
 	if(sleeves){
 		float folds=.0018*sin(rest.x*115.0+rest.z*38.0);
@@ -29,7 +34,7 @@ void fragment(){
 	if(sleeves){
 		if(jacket){
 			if(x>.69 || y<1.012 || y>1.57 || (x<.072 && y>1.538)) discard;
-		}else if(x>.333 || y<1.15 || y>1.565 || (x<.14 && y<1.48)) discard;
+		}else if(x>.394 || y<1.15 || y>1.565 || (x<.14 && y<1.48)) discard;
 	}
 	if(!sleeves && !jacket && y<1.045)discard;
 	float side=smoothstep(.142,.154,x);
