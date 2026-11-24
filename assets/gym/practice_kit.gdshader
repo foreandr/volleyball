@@ -36,14 +36,14 @@ void vertex(){
 	float freedom=1.-smoothstep(1.04,1.48,rest.y);
 	VERTEX+=freedom*(inertia*.38+NORMAL*max(0.,dot(inertia,NORMAL))*.85)*(jacket?.65:1.);
 	if(!jacket){
-		float arm=smoothstep(.16,.27,abs(rest.x));
+		float arm=smoothstep(.16,.27,abs(rest.x))*smoothstep(1.27,1.38,rest.y);
 		float free_edge=mix(1.-smoothstep(1.02,1.54,rest.y),.56*smoothstep(.19,.39,abs(rest.x)),arm);
 		float angle=atan(rest.x,rest.z+.02);
 		float pleat=sin(angle*8.+rest.y*8.+phase);
 		float wave=sin(angle*4.+rest.y*12.-TIME*10.+phase);
 		float ripple=sin(angle*7.-TIME*15.+phase*.7);
 		float drape=mix(.016,.012,arm)+.014*pleat+motion*(.023+.044*wave+.013*ripple);
-		VERTEX+=NORMAL*(free_edge*drape*(1.-arm)+.0035*tension_fold(rest))+sleeve_motion(rest);
+		VERTEX+=NORMAL*(free_edge*drape*(1.-arm)+.0035*tension_fold(rest))+sleeve_motion(rest)*arm;
 		{
 			VERTEX.y+=(1.-arm)*free_edge*(-.018+motion*(.023*wave+.012*ripple));
 		}
@@ -74,6 +74,18 @@ void fragment(){
 		float zipper=(1.-smoothstep(.0015,.003,abs(rest.x)))*step(.065,rest.z);
 		base=mix(base,vec3(.50,.53,.50),zipper);
 	}else{
+		// Across the back the raglan seam runs from neckline to underarm.
+		// Use bind coordinates so the seam bends with the panel and printing.
+		float seam_x=.071+.61*(1.55-y)+.7*(1.55-y)*(1.55-y);
+		float span=smoothstep(1.32,1.36,y)*(1.-smoothstep(1.542,1.56,y));
+		float dist=abs(x-seam_x);
+		float aa=max(.00065,fwidth(dist));
+		float join=(1.-smoothstep(.0007,.0007+aa,dist))*span;
+		float stitch_line=(1.-smoothstep(.00055,.00055+aa,abs(dist-.0026)))*span;
+		float loops=.70+.30*cos(y*1150.)*(1.-smoothstep(.001,.004,fwidth(y)));
+		base*=1.-.26*join+.095*stitch_line*loops;
+		float shoulder_panel=smoothstep(seam_x-aa,seam_x+aa,x)*span;
+		base*=1.-.065*shoulder_panel;
 		float cuff=1.-smoothstep(.18,.40,COLOR.g);
 		base*=1.-.12*cuff;
 		float collar=1.563-.055*(1.-smoothstep(.045,.109,x))*smoothstep(-.075,.075,rest.z);
