@@ -98,6 +98,7 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 				lining.shader=preload("res://assets/gym/underarm_gusset.gdshader")
 				gusset.material_override=lining
 				actor.underarm_fabric=lining
+			if not coach and variant%3==2: compression(rig,node,skin_surface)
 			face_hair(rig,node,skin_surface,coach,variant)
 			if not coach and variant%4==1 and variant%5!=4:
 				palm_tape(rig,node,skin_surface,"l" if variant%2==0 else "r")
@@ -180,7 +181,6 @@ static func apply(actor: Node3D,coach: bool,variant := 0) -> void:
 		haircut(scalp,hair,variant,actor)
 		if variant%5!=4:
 			tape_hand(rig,"l" if variant%2==0 else "r",1+variant%3)
-		if variant%3==2: compression(rig,"lowerarm_r","hand_r",.061,.042,Color("252e35"))
 
 	reshape_build(rig,coach,variant)
 	if outer_shirt: actor.dressed_surface.configure(outer_shirt,rig)
@@ -520,23 +520,19 @@ static func tape_band(rig: Skeleton3D,bone: String,center: Vector3,axis: Vector3
 	var basis_ := Basis(Quaternion(Vector3.UP,axis)) if across.is_zero_approx() else Basis(across,axis,across.cross(axis))
 	part.transform=Transform3D(basis_*Basis.from_scale(Vector3(width,height,depth)),center)
 
-static func compression(rig: Skeleton3D,bone: String,child: String,upper: float,lower: float,color: Color) -> void:
-	var socket := BoneAttachment3D.new()
-	socket.bone_name = bone
-	rig.add_child(socket)
-	var axis := rig.get_bone_rest(rig.find_bone(child)).origin
+static func compression(rig: Skeleton3D,body: MeshInstance3D,surface: ArrayMesh) -> void:
+	var elbow := rig.get_bone_global_rest(rig.find_bone("lowerarm_r")).origin
+	var wrist := rig.get_bone_global_rest(rig.find_bone("hand_r")).origin
+	var fabric := ShaderMaterial.new()
+	fabric.shader=preload("res://assets/gym/compression_sleeve.gdshader")
+	fabric.set_shader_parameter("elbow",elbow)
+	fabric.set_shader_parameter("forearm",wrist-elbow)
 	var part := MeshInstance3D.new()
-	var sleeve := CylinderMesh.new()
-	sleeve.bottom_radius = upper
-	sleeve.top_radius = lower
-	sleeve.height = axis.length()*.79
-	part.mesh = sleeve
-	part.position = axis*.56
-	part.quaternion = Quaternion(Vector3.UP,axis.normalized())
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = color
-	part.material_override = mat
-	socket.add_child(part)
+	part.mesh=surface
+	part.skin=body.skin
+	part.material_override=fabric
+	rig.add_child(part)
+	part.skeleton=part.get_path_to(rig)
 
 # Build the shoe in rig rest space, then inherit the ankle's animated transform.
 static func court_shoe(rig: Skeleton3D,side: String,coach: bool,variant: int) -> void:
