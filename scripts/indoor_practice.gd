@@ -22,6 +22,7 @@ const SET_PUSH_TIME := .025
 const FOREHEAD_REACH := .15
 var receive_local := Vector3.ZERO
 var push_axis := Vector3.UP
+var last_camp_toss := Vector3.INF
 var camp_call := 0
 var coach_windup := 0.0
 var camp_receive_spot := BASE
@@ -437,9 +438,13 @@ func middle_available() -> bool:
 func choose_camp_toss() -> Vector3:
 	var rng = rotation_drill.random
 	var start := Vector3(setter.position.x,BASE.y,setter.position.z)
-	for attempt in 64:
+	for attempt in 64+23*18:
 		var spread := 1.35 if rng.randf()<.8 else 3.1
 		var spot := BASE+Vector3(rng.randfn(0.,spread),0.,rng.randfn(0.,spread))
+		if attempt>=64:
+			var cell := attempt-64
+			spot=Vector3(-5.5+(cell%23)*.5,BASE.y,-5.5+floorf(cell/23.)*.5)
+		if absf(spot.x-last_camp_toss.x)<1. or absf(spot.z-last_camp_toss.z)<1.: continue
 		if absf(spot.x)>5.85 or spot.z< -5.85 or spot.z>3.4: continue
 		var distance := start.distance_to(spot)
 		if distance<.05 or distance>4.65*minf(1.,camp_speed_scale()): continue
@@ -450,11 +455,14 @@ func choose_camp_toss() -> Vector3:
 				clear=false
 				break
 		if clear: return spot
-	return start
+	return Vector3.INF
 
 func reset_feed() -> void:
 	if solo_setting:
 		camp_receive_spot=choose_camp_toss()
+		if not camp_receive_spot.is_finite():
+			begin("waiting_for_space")
+			return
 		camp_call=1 if middle_available() and rotation_drill.random.randf()<.5 else 0
 		prompt_phase=""
 		plant_time=-1.
@@ -585,7 +593,7 @@ func move_setter(delta: float,actor: Node3D=setter,off_ball := false) -> bool:
 		trace("focus",{"active":focus})
 		message.text = ("Focused on ball   /   " if focus else "")+TARGETS[called()]
 	sprint=sprint and energy[actor].can_sprint()
-	if sprint and not direction.is_zero_approx(): energy[actor].spend(delta*25)
+	if sprint and not direction.is_zero_approx(): energy[actor].spend(delta*25,"Sprint")
 	var speed := (4.1 if sprint else 2.35) if focus else (6.2 if sprint else 4.3)
 	var previous_position := actor.position
 	if solo_setting and actor==setter: speed*=camp_speed_scale()
@@ -820,7 +828,7 @@ func move_to_camp_toss(delta: float) -> void:
 		camp_velocity=camp_velocity.move_toward(offset.normalized()*pace,14.*delta)
 		setter.position=rotation_drill.move_actor(setter,(camp_velocity*delta).limit_length(offset.length()))
 		setter.play_ground_gait(camp_velocity.length())
-		if camp_velocity.length()>4.75: setter.stamina.spend(delta*25.)
+		if camp_velocity.length()>4.75: setter.stamina.spend(delta*25.,"Sprint")
 		focus_headings[setter]=target_yaw if remaining<.95 else atan2(offset.x,offset.z)
 		return
 	if plant_time<0. and offset.length()>.16:
@@ -830,7 +838,7 @@ func move_to_camp_toss(delta: float) -> void:
 		camp_velocity=camp_velocity.move_toward(offset.normalized()*pace,14.*delta)
 		setter.position=rotation_drill.move_actor(setter,(camp_velocity*delta).limit_length(offset.length()))
 		setter.play_ground_gait(camp_velocity.length())
-		if camp_velocity.length()>4.75: setter.stamina.spend(delta*25.)
+		if camp_velocity.length()>4.75: setter.stamina.spend(delta*25.,"Sprint")
 		focus_headings[setter]=atan2(offset.x,offset.z)
 		return
 	if plant_time<0.:
@@ -914,6 +922,8 @@ func step_practice(delta: float) -> void:
 	elif not automatic_setter() and not squat.charging and (solo_setting or phase!="cart"): move_setter(delta)
 	if (jump.active or squat.charging or phase=="cart") and held>=0 and not automatic_setter() and axis(Xbox.trigger(true))>.25: face_set(setter,held,delta)
 	match phase:
+		"waiting_for_space":
+			if elapsed>=.25: reset_feed()
 		"cart":
 			var incoming_ready := not jump.active and not squat.charging and (solo_setting or rotation_drill.walk(setter,BASE,delta,5.2))
 			if held>=0 and not solo_setting: Hands.apply(setter,catch_point,.18*smoothstep(0.,.5,clock-pressed_at))
@@ -949,6 +959,7 @@ func step_practice(delta: float) -> void:
 				forehead_target.z=camp_receive_spot.z
 			catch_point=forehead_target+Vector3.UP*(.09+((camp_jump_height if solo_setting else .52) if jump_rep() else 0.))
 			if elapsed>=.30 and clock>=next_release and rotation_drill.floor_clear():
+				if solo_setting: last_camp_toss=camp_receive_spot
 				last_toss = clock
 				next_release = clock+2.0
 				if not demonstration: rotation_drill.tosses+=1
@@ -972,7 +983,7 @@ func step_practice(delta: float) -> void:
 			if cpu_setting and not jump.active: move_to_camp_toss(delta)
 			if automatic_setter() and jump_rep() and not cpu_jump_started and not jump.active and elapsed>=contact_time-cpu_jump_lead and elapsed<contact_time:
 				cpu_jump_started=true
-				energy[setter].spend(5)
+				energy[setter].spend(5,"Jump")
 				var height := camp_jump_height if solo_setting else .52
 				jump.begin_set_jump(setter,.07,height)
 				jump.height=height
@@ -1561,9 +1572,9 @@ func _input(event: InputEvent) -> void:
 			var allowed := not jump.active and not squat.charging
 			trace("squat_press",{"accepted":allowed})
 			if allowed:
-				energy[setter].spend(5)
+				energy[setter].spend(5,"Jump")
 				squat.begin(setter)
-				message.text = "Release in green to jump"
+				message.text = "Release to jump"
 		elif squat.charging:
 			message.text = squat.release(setter,jump,camp_jump_height if solo_setting else -1.,camp_jump_ability if solo_setting else 65.)
 			if solo_setting: jump.carry_velocity=player_jump_carry()
@@ -1619,7 +1630,7 @@ func free_input(event: InputEvent) -> void:
 	if rotation_drill.unloading.has(actor): return
 	if (event is InputEventJoypadButton and event.button_index==Xbox.physical(JOY_BUTTON_A)) or (event is InputEventKey and event.keycode==KEY_SPACE):
 		if event.is_pressed() and not free_squat.charging and not free_jump.active:
-			energy[actor].spend(5)
+			energy[actor].spend(5,"Jump")
 			free_squat.begin(actor)
 		elif not event.is_pressed() and free_squat.charging: free_squat.release(actor,free_jump)
 		rotation_drill.manual_wait=true

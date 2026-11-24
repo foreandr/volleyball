@@ -24,7 +24,7 @@ func configure(world: Node3D) -> void:
 		vec2 p=UV-.5;
 		float r=length(p), a=fract(atan(p.x,-p.y)/6.283185+1.);
 		float band=smoothstep(.355,.371,r)*(1.-smoothstep(.458,.473,r));
-		vec3 c=a<sweet.x?vec3(.19,.55,.70):(a<sweet.y?vec3(.15,.94,.45):vec3(1.,.19,.08));
+		vec3 c=a<progress?vec3(.32,.80,.92):vec3(.09,.12,.14);
 		float tick=1.-smoothstep(.005,.014,abs(a-clamp(progress,.008,.99)));
 		ALBEDO=mix(c*(a<progress?1.:.62),vec3(1.),tick);
 		ALPHA=band*.98;

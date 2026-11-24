@@ -125,3 +125,4 @@ RB cycles set heights. The incoming toss shows its projected flight and floor la
 On descending tosses an active setter can lean and reach to either side. Contact follows the swept ball and the actual palm pocket, including on off-center releases.
 
 Setting camp feeds cluster around the home between zones 2 and 3. Inside the attack line the setter can also call middle. The coach prepares the next toss during flight. Planted sets load the knees according to distance and available strength. Airborne contact has 77% of planted horizontal range.
+Consecutive setting-camp tosses differ by at least one meter on each court axis. The practice HUD separates player identity, stamina, action expenditure, vertical jump charge and sport timing.

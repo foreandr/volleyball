@@ -71,7 +71,7 @@ func draw_set_path(actor: Node3D) -> void:
 	var b: Vector3=game.PINS[target]
 	var tempo: int=game.chosen_tempo()
 	if game.solo_setting and active:
-		var aim := (b-a).slide(Vector3.UP).limit_length(game.camp_range(tempo))
+		var aim := (b-a).slide(Vector3.UP).limit_length(game.camp_range(tempo,actor.position.y-game.BASE.y>.12))
 		b=Vector3(a.x+aim.x,b.y,a.z+aim.z)
 	if game.clock<game.preview_until and not game.camera.is_position_behind(b):
 		draw_string(ThemeDB.fallback_font,game.camera.unproject_position(b)+Vector2(8,-14),game.TEMPOS[tempo],HORIZONTAL_ALIGNMENT_LEFT,-1,16)
@@ -89,18 +89,33 @@ func draw_player(actor: Node3D,human: bool) -> void:
 	var at: Vector2=game.camera.unproject_position(foot)
 	var radius := Vector2(clampf(at.distance_to(game.camera.unproject_position(foot+game.camera.global_basis.x*.67)),25,77),0)
 	radius.y=radius.x*.35
-	var color := Color("70e3dc") if human else Color("ffbb7c")
-	arc_band(at,radius,0,TAU,Color("15242b"),6)
-	arc_band(at,radius,PI,TAU,color,2)
-	arc_band(at,radius,0,PI*game.energy[actor].value/100.,color,4)
+	var ink := Color("10171d")
+	arc_band(at,radius,0,TAU,ink,6)
+	arc_band(at,radius,0,TAU,Color.WHITE,2)
 	if actor==game.setter or human:
-		draw_string(ThemeDB.fallback_font,at+Vector2(-75,radius.y+18),"Stamina / skills %d%%" % roundi(actor.stamina.value),HORIZONTAL_ALIGNMENT_CENTER,150,14)
+		var energy: RefCounted=actor.stamina
+		var origin := at+Vector2(-52,radius.y+25)
+		draw_rect(Rect2(origin-Vector2.ONE,Vector2(106,9)),Color.WHITE)
+		draw_rect(Rect2(origin,Vector2(104,7)),ink)
+		var available := clampf(energy.value,0.,100.)*1.04
+		draw_rect(Rect2(origin,Vector2(available,7)),Color.WHITE)
+		var spent := minf(104.-available,energy.action_cost*1.04)
+		if spent>0.: draw_rect(Rect2(origin+Vector2(available,0),Vector2(spent,7)),Color("51cbe9"))
+		var caption := "Stamina %d/100" % roundi(energy.value)
+		if energy.action!="": caption+="   %s -%d" % [energy.action,ceili(energy.action_cost)]
+		var text_pos := origin+Vector2(-48,22)
+		draw_string_outline(ThemeDB.fallback_font,text_pos,caption,HORIZONTAL_ALIGNMENT_CENTER,200,13,4,ink)
+		draw_string(ThemeDB.fallback_font,text_pos,caption,HORIZONTAL_ALIGNMENT_CENTER,200,13)
 		var squat: RefCounted=game.squat if actor==game.setter else game.free_squat
 		var jump: RefCounted=game.jump if actor==game.setter else game.free_jump
 		var outer := radius+Vector2(4,4)
-		var charge: float=clampf(squat.seconds/squat.FULL_LOAD,0,1) if squat.charging else 0.
-		if jump.active: charge=clampf(squat.seconds/squat.FULL_LOAD,0,1) if squat.seconds>0 else .67
-		if charge>0: timing_arc(at,outer,0,charge,squat.GREEN_START,squat.GREEN_END)
+		if squat.charging or jump.active:
+			var fill := clampf(squat.seconds/squat.FULL_LOAD,0.,1.)
+			if jump.active and game.automatic_setter() and actor==game.setter: fill=clampf(jump.height/game.camp_jump_height,0.,1.)
+			var base := at+Vector2(radius.x+10,2)
+			draw_rect(Rect2(base-Vector2(2,34),Vector2(14,36)),Color.WHITE)
+			draw_rect(Rect2(base-Vector2(0,32),Vector2(10,32)),ink)
+			draw_rect(Rect2(base-Vector2(0,32*fill),Vector2(10,32*fill)),Color("51cbe9"))
 		if actor!=game.setter and game.free_target>=0:
 			timing_arc(at,outer,PI,clampf((game.clock-game.free_press)/.43,0,1),.47,.76)
 		var pressing: bool=game.held>=0 and game.phase in ["cart","walk","feed","pass"]
