@@ -162,3 +162,4 @@ While watching the CPU in Setting Camp, left-stick click cycles release timing a
 During forearm preparation the platform aims at the anticipated intercept. A high descending toss does not pull the arms up and back down before the strike.
 Player-controlled bump sets allow up to 23 cm of collision-checked assistance toward a nearby ball. A buffered release uses the last verified descending forearm overlap so a fast ball cannot invalidate good contact before the input is processed.
 Missed sets land and roll for half a second before the next attempt. Switching target buttons during preparation starts a fresh meter, with a brief allowance for the thumb to move between buttons.
+Players can change between any available set targets during preparation. Near contact, the reach check also accounts for the ball and head moving past each other within torso-lean range.

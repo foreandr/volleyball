@@ -1652,7 +1652,14 @@ func toss_in_reach() -> bool:
 	var arrival := toss_at(contact_time)
 	var head := Contact.joint(setter,"Head")
 	if jump.active: head+=jump.horizontal_velocity()*clampf(contact_time-elapsed,0.,.24)
-	return (arrival-head).slide(Vector3.UP).length()<=.76
+	# Use the same outer reach as the torso lean. Check the swept approach as well:
+	# a jump can carry the head past an otherwise reachable descending ball.
+	var current := (ball.position-Contact.joint(setter,"Head")).slide(Vector3.UP)
+	var future := (arrival-head).slide(Vector3.UP)
+	var nearest := future
+	if absf(contact_time-elapsed)<=.20 and not current.is_equal_approx(future):
+		nearest=Geometry3D.get_closest_point_to_segment(Vector3.ZERO,current,future)
+	return nearest.length()<1.02
 
 func contact_band() -> Vector2:
 	if not bump_aim.is_zero_approx(): return Vector2(bump_meter_position(-(timing_window()+.065)),bump_meter_position(late_contact_limit()))
@@ -1674,7 +1681,7 @@ func release(index: int) -> void:
 			trace("set_button_up",{"raw_offset_s":raw_offset,"held_s":input_hold,"ball":str(ball.position),"head":str(Contact.joint(setter,"Head"))})
 		if not automatic_setter() and raw_offset < -(timing_window()+.065):
 			# Allow the thumb to cross between face buttons before committing an early miss.
-			early_switch_until=clock+.14
+			early_switch_until=clock+maxf(.18,-raw_offset-timing_window()-.065)
 			held=-1
 			return
 		if not automatic_setter() and (raw_offset>late_contact_limit() or not toss_in_reach()):
@@ -1975,6 +1982,8 @@ func _input(event: InputEvent) -> void:
 		if phase=="ground": message.text = "Call the next toss"
 	elif event.is_pressed():
 		early_switch_until=-1.
+		measured_release=false
+		set_grade_until=-INF
 		if solo_setting:
 			bump_aim=Vector3.ZERO
 			bump_released=false
