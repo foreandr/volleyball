@@ -513,11 +513,11 @@ func move_player(direction: Vector2, delta: float, track_ball := true, setting_t
 	if drill or setting:
 		var facing := actor.basis.z.normalized()
 		step_direction = Vector2(travel.dot(facing.cross(Vector3.UP)),travel.dot(facing))
-	var quick_pace := sprint_requested and direction.length()>0.1 and stamina.can_sprint()
+	var quick_pace: bool= sprint_requested and direction.length()>0.1 and stamina.can_sprint()
 	var toward_ball := (setting_target-actor.global_position).slide(Vector3.UP).normalized() if setting else Vector3.ZERO
 	var ball_sprint := run_after_pass and setting and travel.normalized().dot(toward_ball) > 0.76 and step_direction.normalized().y > 0.76
 	sprinting = quick_pace and ((not setting and step_direction.y>0.3) or ball_sprint)
-	var quick_step := quick_pace if not run_after_pass else sprinting
+	var quick_step: bool= quick_pace if not run_after_pass else sprinting
 	var step_rate := QUICK_STEP_RATE if quick_step else 1.0
 	if setting:
 		setter_step_rate = move_toward(setter_step_rate,QUICK_STEP_RATE*step_rate,delta*7.0)

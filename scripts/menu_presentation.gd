@@ -113,7 +113,8 @@ func heading(column: VBoxContainer, route: String, title: String) -> void:
 	column.add_child(overline)
 	var label := Label.new()
 	label.text = title
-	label.add_theme_font_size_override("font_size",48)
+	label.add_theme_font_size_override("font_size",34 if route=="Home" else 48)
+	label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(label)
 	reveal(column)
 	sweep()

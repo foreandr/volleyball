@@ -1,7 +1,9 @@
 config_version=5
 
 [application]
-config/name="Volleyball"
+config/name="Andre Foreman's Volleyball"
+config/use_custom_user_dir=true
+config/custom_user_dir_name="Godot/app_userdata/Volleyball"
 config/version="0.1.1"
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.6", "Forward Plus")

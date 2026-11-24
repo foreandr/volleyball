@@ -2,7 +2,13 @@ extends RefCounted
 const PATH := "user://player.cfg"
 const DEFAULTS := {"name":"Player","height_cm":195.58,"handedness":"Right"}
 
-const KIT_CHOICES := {"Facial hair":["Clean-shaven","Stubble","Moustache","Goatee","Short beard"],"Jersey length":["Standard","Short","Long"],"Jersey fit":["Untucked","Tucked"],"Ankle support":["None","Tape","Brace"],"Knee support":["None","Tape","Brace"]}
+const KIT_CHOICES := {"Facial hair":["Clean-shaven","Stubble","Moustache","Goatee","Short beard"],"Jersey length":["Standard","Short","Long"],"Jersey fit":["Untucked","Tucked"],"Ankle support":["None","Tape","Brace"],"Knee support":["None","Tape","Brace"],
+	"Shoe cut":["Team","Low","Mid","High"],"Shoe design":["Team","Stripe","Twin stripe","Wave","Split"],
+	"Shoe color":["Team","White","Black","Navy","Red","Gold","Teal"],"Sock height":["Team","Ankle","Below calf","Calf","Knee"],
+	"Sock color":["Team","White","Black","Navy","Red","Gold","Teal"],"Leg sleeves":["Team","None","Three-quarter","Full"],
+	"Underlayer":["Team","None","T-shirt","Long compression shirt"],"Headwear":["None","Headband","Cap"],
+	"Sunglasses":["None","Sport"],"Finger tape":["Team","None","Left","Right","Both"],
+	"Shorts design":["Team","Solid","Side panels","Double stripe","Diagonal trim"]}
 
 const RATINGS := ["Forearm reception", "Forearm setting", "Forearm defense", "Hand setting", "Hand reception", "Hand defense", "Blocking", "Strength", "Speed", "Stamina", "Endurance", "Willpower", "Underhand serve", "Standing float", "Jump float", "Spin serve", "Hybrid spin to float", "Hybrid float to spin", "Sky ball"]
 

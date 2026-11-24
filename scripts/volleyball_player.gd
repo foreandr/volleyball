@@ -148,6 +148,7 @@ func apply_profile(profile: Dictionary) -> void:
 	handedness = values.handedness
 
 func refresh_kit() -> void:
+	if has_meta("kit_scalp"): preload("res://scripts/player_kit_choices.gd").apply(self)
 	if beard_material:
 		beard_material.set_shader_parameter("beard_style",Profile.KIT_CHOICES["Facial hair"].find(attributes["Facial hair"]))
 	if shirt_fabric:

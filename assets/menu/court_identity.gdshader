@@ -15,7 +15,7 @@ void fragment(){
 	if(hero && r<.32){
 		vec2 xy=p/.32;
 		vec3 n=vec3(xy.x,-xy.y,sqrt(max(0.,1.-dot(xy,xy))));
-		float a=.60+.025*sin(TIME*.28);
+		float a=.60+TIME*.60;
 		vec3 q=n;
 		q.xz=mat2(vec2(cos(a),sin(a)),vec2(-sin(a),cos(a)))*q.xz;
 		q.xy=mat2(vec2(.906,.423),vec2(-.423,.906))*q.xy;

@@ -53,6 +53,7 @@ When a request begins with “game notes,” record the idea here for future con
 
 - **Uneven matchups.** Let each side choose its own team size. Examples include 2v3, 2v4, and 1v6. One possible variation has one side playing one-contact volleys while the other plays regular volleyball.
 
+- **Licensed teams and athletes.** Explore partnerships with leagues, universities and schools for participating teams and athlete likenesses, rosters, statistics, ratings and rankings. Track which teams, athletes and seasons each agreement covers.
 - **Conditioning after a poor performance.** A future shuttle-run drill could use timed button presses to race teammates. One possible consequence for finishing last is reduced playing time.
 
 - **Unlockable block reactions.** A stuff block (“pack”) could trigger an exaggerated, optional reaction from the blocked attacker, such as snapping their head back in surprise. Special reaction animations could be earned through play.
@@ -144,3 +145,4 @@ Accepted manual set releases carry the descending toss into the moving palm pock
 Airborne setters transfer 22 percent of horizontal takeoff/carry velocity at contact to the set. Hand setting compensates for drift within available arm strength. Moving away from the target reduces maximum reach even for experts.
 All three timing bands appear on target press, including before the toss and while moving into range. Physical reach is evaluated separately at release.
 In player-controlled Setting Camp, hold the right stick to aim along the net between the two pins, then return it to center to time a bump set against the visible release meter. The authored forearm reception platform clip supplies preparation, contact and follow-through. RB selects height. Face buttons supersede the bump selection.
+Andre Foreman's Volleyball uses a rotating home ball and keeps its original save directory. The animation menu opens the shared Setting Camp. Bump sets use directional reception reaches and low-save animations. Player equipment and shorts designs are selected in the creator and preserved in the profile.

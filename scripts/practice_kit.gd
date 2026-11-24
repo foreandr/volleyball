@@ -43,6 +43,7 @@ static func tailored_surface(source: ArrayMesh,surface: int,jacket := false) -> 
 
 static func apply(actor: Node3D,coach: bool,variant := 0,vary_build := true) -> void:
 	var rig: Skeleton3D = actor.skeleton
+	actor.set_meta("kit_variant",variant)
 	var outer_shirt: MeshInstance3D
 	if coach:
 		actor.set_height_cm(174)
@@ -104,6 +105,7 @@ static func apply(actor: Node3D,coach: bool,variant := 0,vary_build := true) -> 
 				layer.set_shader_parameter("skin_normal",preload("res://assets/characters/base/T_Superhero_Male_Normal.png"))
 				layer.set_shader_parameter("sleeve_end",[0.,.42,.66,0.,0.][variant%5])
 				arms.material_override=layer
+				actor.set_meta("underlayer_material",layer)
 			if not coach and variant%3==2: compression(rig,node,skin_surface)
 			var grooming := face_hair(rig,node,skin_surface,coach,variant)
 			if coach: actor.set_meta("coach_face",grooming)
@@ -194,8 +196,10 @@ static func apply(actor: Node3D,coach: bool,variant := 0,vary_build := true) -> 
 		scalp.transform=rest.affine_inverse()*Transform3D(Basis.IDENTITY,rest.origin)
 		var hair := Color.from_hsv(.065+.004*variant,.42,.13+.065*(variant%6))
 		haircut(scalp,hair,variant,actor)
-		if variant%5!=4:
-			tape_hand(rig,"l" if variant%2==0 else "r",1+variant%3)
+		for side in ["l","r"]:
+			tape_hand(rig,side,1+variant%3)
+		actor.set_meta("kit_scalp",scalp)
+		preload("res://scripts/player_kit_choices.gd").apply(actor)
 
 	reshape_build(rig,coach,variant)
 	if outer_shirt: actor.dressed_surface.configure(outer_shirt,rig)
@@ -241,7 +245,7 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 	var shader := Shader.new()
 	shader.code = """shader_type spatial;
 	render_mode cull_disabled;
-	uniform vec3 inertia; uniform float motion; uniform float hem_y; uniform vec2 stride; uniform vec4 accent:source_color; varying float depth; uniform vec4 cloth:source_color; uniform sampler2D knit_surface:repeat_enable,filter_linear_mipmap_anisotropic; varying vec2 rest;
+	uniform int print_style; uniform vec3 inertia; uniform float motion; uniform float hem_y; uniform vec2 stride; uniform vec4 accent:source_color; varying float depth; uniform vec4 cloth:source_color; uniform sampler2D knit_surface:repeat_enable,filter_linear_mipmap_anisotropic; varying vec2 rest;
 	uniform sampler2D leg_number:source_color,filter_linear_mipmap_anisotropic;
 	float pleat_height(vec2 pattern,float hem,float ripple){
 		float raised=pattern.x>0.?stride.x:stride.y;
@@ -277,6 +281,9 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		cell.x+=.5*mod(floor(cell.y),2.);
 		float eyelet=1.-smoothstep(.12,.36,length(fract(cell)-.5));
 		vec3 insert=accent.rgb*(1.12-.49*detail*eyelet*(1.-hem));
+		if(print_style==1){panel=0.;}
+		if(print_style==3){panel=outer*(1.-smoothstep(.002,.005,abs(abs(seam)-.014)));}
+		if(print_style==4){panel=1.-smoothstep(.004,.009,abs(edge_height-.045-.22*abs(rest.x)));}
 		ALBEDO=mix(cloth.rgb,insert,panel);
 		float waistband=smoothstep(.984,.992,rest.y);
 		ALBEDO*=1.-waistband*(.19+.055*cos(rest.y*1130.));
@@ -586,6 +593,7 @@ static func tape_band(rig: Skeleton3D,bone: String,center: Vector3,axis: Vector3
 	var mount := BoneAttachment3D.new()
 	mount.bone_name=bone
 	rig.add_child(mount)
+	mount.add_to_group("finger_tape_"+bone.right(1))
 	var band := CylinderMesh.new()
 	band.top_radius=1.
 	band.bottom_radius=1.04

@@ -39,7 +39,7 @@ func go(scene: String) -> void:
 	MenuPresentation.load_scene("res://scenes/%s.tscn" % scene)
 
 func show_home() -> void:
-	page("VOLLEYBALL","Home")
+	page("Andre Foreman's Volleyball","Home")
 	add_menu_button(column,"Career","My Career",func(): go("story"))
 	add_menu_button(column,"Play","Play",MenuPresentation.load_stage.bind("Play",show_play)).grab_focus()
 	add_menu_button(column,"Create","Create player",func(): go("create"))

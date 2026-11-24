@@ -21,7 +21,7 @@ const MOVE_TYPES := {
 	"Setting":["Hand setting","Bump setting"],
 	"Chasing":["Forward","Back","Left","Right"]
 }
-const CATEGORIES := ["Forearm reception","Setting","Attacking","Serving","Blocking","Chasing"]
+const CATEGORIES := ["Forearm reception","Setting","Attacking","Serving","Blocking"]
 var content: VBoxContainer
 var category_buttons: Dictionary = {}
 var selected_category := ""
@@ -98,7 +98,7 @@ func _ready() -> void:
 	process_priority = 10
 	build_label = current_build_label()
 	if DisplayServer.get_name() != "headless":
-		DisplayServer.window_set_title("Volleyball | "+build_label)
+		DisplayServer.window_set_title(str(ProjectSettings.get_setting("application/config/name"))+" | "+build_label)
 	super._ready()
 	preview_player.set_height_cm(preview_player.Profile.DEFAULTS.height_cm)
 	preview_overlay = Control.new()
@@ -157,8 +157,8 @@ func build_preview_stage(world: Node3D) -> void:
 	orbit_pitch = 0.26
 	max_view_distance = 60.0
 	pan_limits = Vector3(12,15,48)
-	view_distance = 16.0
-	view_focus = Vector3(0,2.0,4.0)
+	view_distance = 8.0
+	view_focus = Vector3(0,1.35,.8)
 
 func has_ball_controls() -> bool:
 	return true
@@ -494,6 +494,9 @@ func stop_demo_match() -> void:
 	attack_position_panel = null
 
 func select_category(category: String) -> void:
+	if category=="Setting":
+		MenuPresentation.load_scene("res://scenes/setting_camp.tscn")
+		return
 	category = Catalog.category_name(category)
 	if not MOVE_TYPES.has(category): return
 	stop_demo_match()
@@ -866,7 +869,7 @@ func start_setting_drill(attack := false) -> void:
 	player_controls.side_steps.active = false
 	player_controls.indicator.text = "Attacker" if attack else "Setter"
 	setting_camera_focus = SETTING_CAMERA_FOCUS
-	preview_camera.position = Vector3(0,7.5,-11.2)
+	preview_camera.position = Vector3(0,4.7,-8.0)
 	preview_camera.look_at(setting_camera_focus)
 	setting_drill = preload("res://scripts/attack_drill.gd").new() if attack else preload("res://scripts/setting_drill.gd").new()
 	if attack:
