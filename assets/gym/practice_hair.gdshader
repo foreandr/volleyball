@@ -24,11 +24,12 @@ void fragment(){
 	float fiber=sin(strand)*(1.-smoothstep(.55,2.8,fwidth(strand)));
 	float edge=min(UV.x,1.-UV.x);
 	// Split the outer portion of each lock into staggered, tapered wisps.
-	float lane=UV.x*5.;
-	float seed=fract(sin(floor(lane)*19.13+phase+UV2.x*63.)*314.17);
-	float taper=smoothstep(.52+.18*seed,1.,UV.y);
-	float separation=abs(fract(lane+.09*sin(5.*UV.y+phase))-.5);
-	if(edge<.04+.18*taper || separation>.5-taper*(.26+.18*seed)) discard;
+	float lane=UV.x*5.+.09*sin(5.*UV.y+phase);
+	float seed=fract(sin(floor(lane)*19.13+phase)*314.17);
+	float tip_end=.82+.18*seed;
+	float taper=smoothstep(.48+.15*seed,tip_end,UV.y);
+	float separation=abs(fract(lane)-.5);
+	if(edge<.035+.08*taper || separation>.5*(1.-taper)) discard;
 	RIM=.23*UV.y;
 	RIM_TINT=.6;
 	ALBEDO=tone.rgb*(.53+.11*fiber+.36*UV.y)*(.68+.32*COLOR.r);
