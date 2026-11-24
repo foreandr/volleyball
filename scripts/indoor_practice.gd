@@ -984,7 +984,16 @@ func play_bump(previous: Vector3, incoming: Vector3, dt: float) -> void:
 	var distance := offset.slide(Vector3.UP).length()
 	if not bump_touched and remaining<.5 and sampler.reach.is_empty() and not sampler.low_save.active:
 		var lateral := absf((setter.basis.inverse()*offset).x)
-		if distance<=1.32:
+		if distance<=.31:
+			# A toss already inside the platform still gets a small weight-transfer step.
+			if remaining<=.36:
+				var toward := (predicted-setter.position).slide(Vector3.UP)
+				var step := toward.limit_length(.14)
+				var left := Contact.joint(setter,"foot_l").distance_squared_to(predicted)
+				var right := Contact.joint(setter,"foot_r").distance_squared_to(predicted)
+				sampler.reach={"tier":1,"lead":"l" if left<right else "r","side_lunge":false}
+				sampler.reach_step=step
+		elif distance<=1.32:
 			sampler.plan_reach(offset,lateral>.8 and lateral>distance*.76)
 		if sampler.reach.is_empty() and distance>.65:
 			if sampler.low_save.plan(setter,toss_at,elapsed,forehead_arrival+.65,sampler.clip,true,false,false,camp_velocity,true):
@@ -1002,7 +1011,7 @@ func play_bump(previous: Vector3, incoming: Vector3, dt: float) -> void:
 		setter.position=rotation_drill.move_actor(setter,move)
 	elif not sampler.reach.is_empty():
 		var prev: float=sampler.reach_progress
-		sampler.reach_progress=minf(1.,prev+dt/.26)
+		sampler.reach_progress=minf(1.,prev+dt/maxf(dt,remaining-.08)*(1.-prev))
 		var travel: Vector3=(sampler.reach_step+sampler.rear_setup)*(smoothstep(0.,1.,sampler.reach_progress)-smoothstep(0.,1.,prev))
 		var before := setter.position
 		setter.position=rotation_drill.move_actor(setter,travel)

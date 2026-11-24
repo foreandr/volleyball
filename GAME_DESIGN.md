@@ -151,3 +151,4 @@ Forearm sets preserve the approach shuffle, use reception footwork and low saves
 Grounded forearm reception uses authored forward and lateral plant presets. Target steering affects the spine and arms. The frame editor preserves recorded body motion by default.
 In Setting Camp, clicking the right stick while watching the CPU switches between overhead and forearm sets. View returns control to the player.
 Back bump sets open the hips toward the hitting pin and carry the joined forearms upward through release. The planted feet anchor the turn.
+On close bump sets, the setter steps into the incoming ball, plants before contact, and lets the elbows bend through the swing, especially on back bumps.

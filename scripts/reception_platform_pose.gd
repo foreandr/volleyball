@@ -3,7 +3,7 @@ extends RefCounted
 const HAND_GAP := 0.065
 const ELBOW_ANGLE := 168.0
 
-static func connect_arms(pose: Array, author: RefCounted, desired: Vector3, weight: float, shoulder_advance := 0.022, lateral := Vector3.RIGHT, dive := false, compact := false) -> void:
+static func connect_arms(pose: Array, author: RefCounted, desired: Vector3, weight: float, shoulder_advance := 0.022, lateral := Vector3.RIGHT, dive := false, compact := false, extension_angle := ELBOW_ANGLE) -> void:
 	if weight <= 0.001: return
 	var rig: Skeleton3D = author.rig
 	var original := pose.duplicate()
@@ -22,7 +22,7 @@ static func connect_arms(pose: Array, author: RefCounted, desired: Vector3, weig
 	var span := a.distance_to(b)
 	if span <= 0.001: return
 	var axis := (b-a)/span
-	var elbow_angle := 178.0 if compact else ELBOW_ANGLE
+	var elbow_angle := 178.0 if compact else extension_angle
 	var left_range := arm_range(pose,author,"l",elbow_angle)
 	var right_range := arm_range(pose,author,"r",elbow_angle)
 	var along := (left_range*left_range-right_range*right_range+span*span)/(2.0*span)

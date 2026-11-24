@@ -17,8 +17,8 @@ static func apply(rig: Skeleton3D, author: RefCounted, outgoing: Vector3, power:
 	var arms := swing if swing >= 0.0 else smoothstep(0.0,0.65,power)
 	var torso := smoothstep(0.22,0.85,power)
 	var load := clampf(-pose_offset/0.14,0.0,1.0) if not struck else 0.0
-	var drive := smoothstep(0.0,0.15,pose_offset)*(1.0-smoothstep(0.20,0.32,pose_offset)) if struck else 0.0
-	var steer := smoothstep(0.0,0.095,pose_offset)*(1.0-smoothstep(0.19,0.32,pose_offset)) if struck else 0.0
+	var drive := smoothstep(0.0,0.15,pose_offset)*(1.0-smoothstep(0.18,0.39,pose_offset)) if struck else 0.0
+	var steer := smoothstep(0.0,0.095,pose_offset)*(1.0-smoothstep(0.17,0.39,pose_offset)) if struck else 0.0
 	if (load+drive)*power+steer <= 0.001: return
 	var pose: Array = []
 	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
@@ -58,7 +58,8 @@ static func apply(rig: Skeleton3D, author: RefCounted, outgoing: Vector3, power:
 	var target := hand_center+sweep*arms*drive
 	target.y = minf(target.y,chest.y+lerpf(0.32,0.55,rear))
 	var lateral := Vector3.RIGHT.rotated(Vector3.UP,hip_turn+yaw*steer*0.5)
-	PlatformPose.connect_arms(pose,author,target,clampf((load+drive)*1.7*arms+steer*0.65,0.0,1.0),0.0,lateral)
+	var elbow_angle := PlatformPose.ELBOW_ANGLE-lerpf(8.,20.,rear)*drive
+	PlatformPose.connect_arms(pose,author,target,clampf((load+drive)*1.7*arms+steer*0.65,0.0,1.0),0.0,lateral,false,false,elbow_angle)
 	for name_ in ["pelvis","thigh_l","calf_l","foot_l","thigh_r","calf_r","foot_r","spine_02","spine_03","upperarm_l","upperarm_r","lowerarm_l","lowerarm_r","hand_l","hand_r"]:
 		var bone := rig.find_bone(name_)
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
