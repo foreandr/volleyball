@@ -459,7 +459,11 @@ func choose_camp_toss() -> Vector3:
 		var clear := true
 		for obstacle in [coach,rotation_drill.basket]:
 			var center := Vector3(obstacle.position.x,BASE.y,obstacle.position.z)
-			if Geometry3D.get_closest_point_to_segment(center,start,spot).distance_to(center)<1.35:
+			# A setter can finish the previous rep inside the clearance margin.
+			# Accept an outward route that exits it without cutting closer.
+			var clearance := minf(1.35,start.distance_to(center))
+			var nearest := Geometry3D.get_closest_point_to_segment(center,start,spot)
+			if spot.distance_to(center)<1.35 or nearest.distance_to(center)+.001<clearance:
 				clear=false
 				break
 		if clear: return spot
