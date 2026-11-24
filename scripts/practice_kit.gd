@@ -405,7 +405,14 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		float cuff=1.-smoothstep(.030,.036,below_cuff);
 		float angle=atan((anatomy.z-.5)*.6,anatomy.x-knee_center);
 		float rib=cos(angle*56.)*(1.-smoothstep(.015,.055,fwidth(angle)));
-		vec3 knit_color=mix(vec3(.68,.69,.66),sock_trim.rgb,stripe);
+		// Denser knitting wraps the ankle below the striped cuff.
+		float course=y-.122-.018*cos(angle);
+		float ankle_band=(1.-smoothstep(.012,.015,abs(course)))*(1.-cuff);
+		float knit_phase=angle*45.+course*970.;
+		float diagonal=cos(knit_phase)*(1.-smoothstep(.65,2.9,fwidth(knit_phase)));
+		float selvage=1.-smoothstep(.0006,.0019+fwidth(course),abs(abs(course)-.010));
+		vec3 sock_base=mix(vec3(.68,.69,.66),mix(vec3(.53,.55,.52),sock_trim.rgb,.13),ankle_band);
+		vec3 knit_color=mix(sock_base*(1.+ankle_band*(.075*diagonal-.13*selvage)),sock_trim.rgb,stripe);
 		ALBEDO=mix(ALBEDO,knit_color*(.91+.09*yarn-.08*cuff+.095*cuff*rib),sock_mask);
 		float height=y-knee_height;
 		float lateral=anatomy.x-knee_center;
