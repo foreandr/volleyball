@@ -26,9 +26,16 @@ void fragment(){
 		*(1.-smoothstep(-.024,.012,shoe.z));
 	float edge=1.-smoothstep(.0006,.002+fwidth(height),abs(height-lip+.003));
 	ALBEDO=mix(ALBEDO,counter_color.rgb*(.88+.12*edge),counter*.87);
+	// Low-profile abrasion overlay wraps around the toe and rises at the sides.
+	float toe=smoothstep(.074,.146,shoe.z);
+	float guard_height=.028+toe*.015+smoothstep(.021,.049,abs(shoe.x))*.007;
+	float guard=toe*smoothstep(.024,.029,height)*(1.-smoothstep(guard_height-.001,guard_height+.001,height));
+	float weld=1.-smoothstep(.0005,.0016+fwidth(height),abs(height-guard_height+.002));
+	ALBEDO=mix(ALBEDO,mix(upper*.68,counter_color.rgb,.40)*(.91+.15*weld),guard);
 	float bead=1.-smoothstep(.0004,.0014+fwidth(height),abs(height-.022));
 	ALBEDO*=1.-foam*.15*bead;
 	ROUGHNESS=mix(mix(.74,.88,foam),.84,rubber);
 	ROUGHNESS=mix(ROUGHNESS,.44,counter);
+	ROUGHNESS=mix(ROUGHNESS,.49,guard);
 	SPECULAR=mix(mix(.26,.34,rubber),.46,counter);
 }
