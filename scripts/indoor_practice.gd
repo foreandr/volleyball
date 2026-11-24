@@ -151,6 +151,7 @@ var lateral_steps := {}
 var cue_until := 0.0
 var meter_start := 0.
 var meter_rate := 1.
+var grade_contact := Vector2.ZERO
 var grade_band := Vector2(.55,.85)
 var push_time := SET_PUSH_TIME
 var graded_fill := 0.0
@@ -392,11 +393,12 @@ func update_prompts(next: String) -> void:
 			if solo_setting:
 				entries.append([BUTTONS[0],"Hold to set to 4"])
 				if middle_available(): entries.append([BUTTONS[1],"Hold to set middle"])
+				entries.append([BUTTONS[2],"Hold to back set"])
 			else:
 				for i in BUTTONS.size(): entries.append([BUTTONS[i],TARGETS[i]])
 			entries.append_array([[JOY_BUTTON_RIGHT_SHOULDER,"Set height"],[JOY_BUTTON_LEFT_STICK,"Show / hide arc"],[JOY_BUTTON_LEFT_SHOULDER,"Hold with target to jump set"],["LT","Focus"],["RT","Sprint"],[JOY_BUTTON_START,"Settings"]])
 	if solo_setting:
-		if cpu_setting: entries=[[BUTTONS[called()],"CPU set middle" if called()==1 else "CPU set to 4"],[JOY_BUTTON_RIGHT_SHOULDER,"Set height"],[JOY_BUTTON_START,"Settings"]]
+		if cpu_setting: entries=[[BUTTONS[called()],["CPU set to 4","CPU set middle","CPU back set"][called()]],[JOY_BUTTON_RIGHT_SHOULDER,"Set height"],[JOY_BUTTON_START,"Settings"]]
 		entries.push_front(["View","Take control" if cpu_setting else "Watch CPU set"])
 	Xbox.prompts(controls_row,entries)
 
@@ -475,7 +477,9 @@ func reset_feed() -> void:
 		if not camp_receive_spot.is_finite():
 			begin("waiting_for_space")
 			return
-		camp_call=1 if middle_available() and rotation_drill.random.randf()<.5 else 0
+		var choices := [0,2]
+		if middle_available(): choices.append(1)
+		camp_call=choices[rotation_drill.random.randi_range(0,choices.size()-1)]
 		prompt_phase=""
 		plant_time=-1.
 		setter.skeleton.get_node("GroundTurnSteps").set_sequence(-1.,cpu_setting)
@@ -506,7 +510,7 @@ func reset_feed() -> void:
 	ball.visible = demonstration or rotation_drill.issued!=null
 	apply_camera()
 	if demonstration: title.text="COACH DEMO   /   %d OF 3" % (demo_index+1)
-	message.text = (("Middle" if called()==1 else "Position 4") if solo_setting else TARGETS[called()])+"    /    "+(("Jump set" if jump_rep() else "Standing set") if automatic_setter() else "Choose your set")
+	message.text = (["Position 4","Middle","Back set"][called()] if solo_setting else TARGETS[called()])+"    /    "+(("Jump set" if jump_rep() else "Standing set") if automatic_setter() else "Choose your set")
 	if not demonstration:
 		var made := 0
 		for attempt in scorecard:
@@ -1087,6 +1091,18 @@ func step_practice(delta: float) -> void:
 				if closest.distance_to(pocket)<.22:
 					collided=true
 					ball.position=closest
+			# Complete a buffered, reachable set as the toss crosses forehead height.
+			if pending_release and not collided and incoming.y<0.:
+				var receive := extended_receive_point()
+				var catch_y := receive.y-.10
+				if previous.y>=catch_y and ball.position.y<=catch_y:
+					var cross_point := previous.lerp(ball.position,(previous.y-catch_y)/maxf(.001,-incoming.y))
+					if (cross_point-Contact.joint(setter,"Head")).slide(Vector3.UP).length()<=.76:
+						Contact.track_hands(setter,cross_point,true,1.,159.,.68)
+						var palms := (Contact.palm(setter,"l")+Contact.palm(setter,"r"))*.5
+						if palms.distance_to(cross_point)<=.30:
+							collided=true
+							ball.position=palms+Vector3.UP*.06
 			if collided and last_contact<0:
 				contact_local=setter.to_local(ball.position)
 				first_contact = clock
@@ -1296,7 +1312,7 @@ func release_offset() -> float:
 func start_set_meter() -> void:
 	meter_start=clock
 	# Reserve space after the ideal release, even for a very late press.
-	meter_rate=.70/maxf(.18,-release_offset())
+	meter_rate=minf(.70/maxf(.18,-release_offset()),.96/maxf(.18,-release_offset()+late_contact_limit()))
 
 func set_fill() -> float:
 	if phase!="pass": return 0.
@@ -1306,18 +1322,36 @@ func timing_band() -> Vector2:
 	var ideal := (clock-meter_start-release_offset())*meter_rate
 	return Vector2(clampf(ideal-ON_TIME*meter_rate,0.,1.),clampf(ideal+ON_TIME*meter_rate,0.,1.))
 
+func late_contact_limit() -> float:
+	return minf(timing_window(),HAND_CUSHION-.055+RELEASE_ADVANCE)
+
+func contact_band() -> Vector2:
+	if phase!="pass": return Vector2.ZERO
+	if first_contact<0 and not automatic_setter():
+		if elapsed>contact_time and ball.position.y<extended_receive_point().y-.10: return Vector2.ZERO
+		var arrival := toss_at(contact_time)
+		if (arrival-Contact.joint(setter,"Head")).slide(Vector3.UP).length()>.76: return Vector2.ZERO
+	var ideal := (clock-meter_start-release_offset())*meter_rate
+	return Vector2(clampf(ideal-(timing_window()+.065)*meter_rate,0.,1.),clampf(ideal+late_contact_limit()*meter_rate,0.,1.))
+
 func release(index: int) -> void:
 	if phase!="pass" or held!=index: return
 	if not pending_release:
 		graded_fill=set_fill()
 		grade_band=timing_band()
+		grade_contact=contact_band()
 		var raw_offset := release_offset()
 		set_error = raw_offset
 		input_hold=clock-pressed_at
 		if not automatic_setter():
 			set_error = signf(raw_offset)*maxf(0.,absf(raw_offset)-ON_TIME)
 			trace("set_button_up",{"raw_offset_s":raw_offset,"held_s":input_hold,"ball":str(ball.position),"head":str(Contact.joint(setter,"Head"))})
-		if first_contact < 0 and not automatic_setter() and raw_offset <= ON_TIME and raw_offset >= -(timing_window()+0.065):
+		if not automatic_setter() and (raw_offset < -(timing_window()+.065) or raw_offset>late_contact_limit() or grade_contact==Vector2.ZERO):
+			measured_release=true
+			set_grade_until=clock+.65
+			miss("Out of reach." if grade_contact==Vector2.ZERO else ("Too early for contact." if raw_offset<0. else "Too late for contact."))
+			return
+		if first_contact < 0 and not automatic_setter():
 			pending_release = true
 			measured_release = true
 			return
@@ -1333,9 +1367,7 @@ func release(index: int) -> void:
 		if first_contact<0 or clock-last_contact>HAND_CUSHION:
 			miss("No hand contact. Get under the ball before release.")
 			return
-		if set_error < -(timing_window()+0.065) or set_error > timing_window():
-			miss("Missed contact. Hold the target and release above your forehead.")
-			return
+		
 	var release_error := cpu_release_delay if cpu_setting else set_error
 	push_time=PERFECT_PUSH_TIME if absf(release_error)<.001 else SET_PUSH_TIME
 	target = index
@@ -1366,7 +1398,7 @@ func release(index: int) -> void:
 	placement_error=endpoint.distance_to(PINS[target])
 	success = target==called() and endpoint.distance_to(PINS[target])<targets[target].mouth_radius-0.10
 	feedback = TARGETS[target]+"   /   Target made" if success else "Missed the called target. Try it again."
-	if set_error < -timing_window(): show_timing(set_error)
+	if not automatic_setter(): show_timing(set_error)
 	trace("set",{"requested":TARGETS[called()],"actual":TARGETS[target],"made":success,"error_m":error})
 	receive_local=setter.to_local(ball.position)
 	push_axis=((endpoint-source).slide(Vector3.UP).normalized()*.60+Vector3.UP*.80).normalized()
@@ -1600,7 +1632,7 @@ func _input(event: InputEvent) -> void:
 			if event.button_index==Xbox.physical(BUTTONS[i]): index = i
 	elif event is InputEventKey: index = KEYS.find(event.keycode)
 	if index<0: return
-	if solo_setting and index!=0 and (index!=1 or not middle_available()): return
+	if solo_setting and index==1 and not middle_available(): return
 	if phase not in ["cart","walk","feed","pass"]:
 		trace("target_unavailable",{"target":TARGETS[index],"down":event.is_pressed()})
 		if phase=="ground": message.text = "Call the next toss"

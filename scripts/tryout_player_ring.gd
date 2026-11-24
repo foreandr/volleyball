@@ -120,21 +120,22 @@ func draw_player(actor: Node3D,human: bool) -> void:
 			draw_rect(Rect2(base-Vector2(0,32*readout.x),Vector2(10,32*readout.x)),Color(Color("51cbe9"),opacity))
 		if actor!=game.setter and game.free_target>=0:
 			timing_arc(at,outer,PI,clampf((game.clock-game.free_press)/.43,0,1),.47,.76)
-		var pressing: bool=game.held>=0 and game.phase in ["cart","walk","feed","pass"]
-		var result: bool=game.clock<game.set_grade_until
+		var pressing: bool=game.held>=0 and game.phase=="pass" and not game.pending_release
+		var result: bool=game.clock<game.set_grade_until or game.pending_release
 		if actor==game.setter and (pressing or result):
 			var fill: float=game.set_fill() if pressing else game.graded_fill
 			var band: Vector2=game.timing_band() if pressing and game.phase=="pass" else game.grade_band
-			timing_arc(at,outer,PI,fill,band.x,band.y)
+			var contact: Vector2=game.contact_band() if pressing else game.grade_contact
+			timing_arc(at,outer,PI,fill,band.x,band.y,contact)
 	var label: String=actor.display_name.strip_edges().get_slice(" ",actor.display_name.strip_edges().count(" ")).to_upper()
 	var origin := at+Vector2(-80,radius.y+19)
 	draw_string_outline(ThemeDB.fallback_font,origin,label,HORIZONTAL_ALIGNMENT_CENTER,160,14,4,Color("10191f"))
 	draw_string(ThemeDB.fallback_font,origin,label,HORIZONTAL_ALIGNMENT_CENTER,160,14,Color("ffce75") if actor==game.setter else Color.WHITE)
 
-func timing_arc(at: Vector2,radius: Vector2,start: float,value: float,low: float,high: float) -> void:
-	var cuts := [0.,low,high,1.]
-	var colors := [Color("f7bd46"),Color("61ed88"),Color("f45550")]
-	for i in 3:
+func timing_arc(at: Vector2,radius: Vector2,start: float,value: float,low: float,high: float,contact := Vector2(0,1)) -> void:
+	var cuts := [0.,contact.x,clampf(low,contact.x,contact.y),clampf(high,contact.x,contact.y),contact.y,1.]
+	var colors := [Color("778088"),Color("f7bd46"),Color("61ed88"),Color("f45550"),Color("778088")]
+	for i in colors.size():
 		var begin: float=cuts[i]
 		var end: float=cuts[i+1]
 		arc_band(at,radius,start+begin*PI,start+end*PI,colors[i].darkened(.43),7)

@@ -132,3 +132,4 @@ Hold LB with a setting target to time an automatic jump to the descending toss. 
 For a playable off-center toss, the setter leans through the spine and extends both arms as the ball descends. Hand contact still determines the set.
 The set cursor travels at one speed from the in-flight press through release. The green timing band reflects the contact tolerance at that speed. Perfect sets have a shorter outward push.
 A setter already inside the coach or cart clearance margin can receive a toss along a route that exits the margin without moving closer.
+Setting camp supports B back sets in addition to outside and eligible middle sets. Gray falls outside playable contact, orange is early, green is on time, and red is late. Playable early or late releases reduce placement accuracy.
