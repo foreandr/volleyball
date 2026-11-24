@@ -75,6 +75,7 @@ void fragment(){
 
 	float side=smoothstep(.18,.24,x)*(1.-smoothstep(1.29,1.43,y));
 	vec3 base=mix(fabric.rgb,trim.rgb,side*.23);
+	float print_coverage=0.;
 	if(jacket){
 
 		float seam_y=1.404+.022*smoothstep(.05,.24,x);
@@ -129,7 +130,13 @@ void fragment(){
 		vec2 uv=vec2(.5+mix(rest.x,-rest.x,rear)/mix(.205,.262,rear),(1.425-y)/mix(.115,.144,rear));
 		if(all(greaterThanEqual(uv,vec2(0.))) && all(lessThanEqual(uv,vec2(1.)))){
 			vec4 ink=texture(lettering,uv);
+			// A narrow backing print holds the number outline over bright folds.
+			vec2 inset=vec2(.009,.014);
+			float border=max(max(texture(lettering,uv+vec2(inset.x,0.)).a,texture(lettering,uv-vec2(inset.x,0.)).a),
+				max(texture(lettering,uv+vec2(0.,inset.y)).a,texture(lettering,uv-vec2(0.,inset.y)).a));
+			base=mix(base,trim.rgb*.58,border);
 			base=mix(base,vec3(.95,.90,.77),ink.a);
+			print_coverage=max(ink.a,border);
 		}
 	}
 	float weave=sin(rest.x*2100.)*sin(y*2500.);
@@ -182,6 +189,9 @@ void fragment(){
 		NORMAL_MAP.xy+=(yarn.rg-.5)*.28;
 		ROUGHNESS=clamp(ROUGHNESS+.08*(yarn.b-.5)-.025*cuff,0.,1.);
 	}
+	// Transfer film bridges the yarn valleys while retaining broad folds.
+	NORMAL_MAP.xy=mix(NORMAL_MAP.xy,vec2(.5),.39*print_coverage);
+	ROUGHNESS=mix(ROUGHNESS,.53,print_coverage);
 	RIM=.16;
 	RIM_TINT=.32;
 	SPECULAR=.28;
