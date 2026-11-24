@@ -26,14 +26,14 @@ static func contact_center(actor: Node3D) -> Vector3:
 		center += rig.get_bone_global_pose(rig.find_bone("thumb_03_"+side)).origin
 	return rig.to_global(center*0.25+Vector3(0,0.075,0.07))
 
-static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.ZERO, cushion := 0.0, torso_follow := 0.0, face_save := false, ball_direction := Vector3.ZERO, set_extension := -1.0, set_offset := Vector3.INF, arch_progress := 0.0, overhead_set := false, wrist_turn := -1.0, wrist_finish: Variant = null, receive_facing := Vector3.ZERO) -> void:
+static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.ZERO, cushion := 0.0, torso_follow := 0.0, face_save := false, ball_direction := Vector3.ZERO, set_extension := -1.0, set_offset := Vector3.INF, arch_progress := 0.0, overhead_set := false, wrist_turn := -1.0, wrist_finish: Variant = null, receive_facing := Vector3.ZERO, steady_torso := false) -> void:
 	if blend <= 0.0: return
 	var rig: Skeleton3D = actor.skeleton
 	var author: RefCounted = actor.get_pose_author()
 	var pose: Array = []
 	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
 	var original := pose.duplicate()
-	var lean_weight := 0.0 if face_save else blend
+	var lean_weight := 0.0 if face_save or steady_torso else blend
 	author.rotate_world(pose,"spine_01",Vector3.RIGHT,-0.18*lean_weight)
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,-0.075*lean_weight)
 	var target_local := rig.to_local(target)

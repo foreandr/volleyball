@@ -15,6 +15,8 @@ const PINS := [Vector3(4.75,2.65,3.0),Vector3(1.05,2.65,3.3),Vector3(-4.75,2.65,
 const BASE := Vector3(-1.5,0.04,1.35)
 const ORDER := [0,2,1]
 var forehead_arrival := 1.0
+var catch_start_local := Vector3.ZERO
+const CATCH_GIVE := .115
 var camp_receive_spot := BASE
 var camp_velocity := Vector3.ZERO
 var forehead_target := Vector3.ZERO
@@ -379,7 +381,7 @@ func switch_camp_control() -> void:
 	held=-1
 	pending_release=false
 	prompt_phase=""
-	if phase in ["feed","pass"]:
+	if phase in ["feed","pass","forehead_catch"]:
 		rotation_drill.free_ball(Vector3.ZERO)
 		reset_feed()
 	else:
@@ -401,7 +403,7 @@ func start_practice() -> void:
 	if rotation_drill.turn == 1: say(coach, "%s, you're up first." % setter.display_name,4.0)
 
 func jump_rep() -> bool:
-	if solo_setting: return (rep/3)%2==1
+	if solo_setting: return not cpu_setting and (rep/3)%2==1
 	return demo_index%2==1 if demonstration else rotation_drill.round_index==1
 
 func called() -> int:
@@ -679,8 +681,20 @@ func _process(delta: float) -> void:
 		else: actor.rotation.y=old+velocity*dt
 		angular_speed[actor]=velocity
 
+func catch_pocket() -> Vector3:
+	return Contact.joint(setter,"Head")+Vector3.UP*.18+setter.global_basis.z*.10
+
+func shape_catch_hands() -> void:
+	Hands.apply(setter,ball.position,1.,Vector3.ZERO,0.,0.,false,Vector3.ZERO,0.,Vector3.INF,0.,true,-1.,null,Vector3.ZERO,true)
+	Contact.track_hands(setter,ball.position,true)
+
 func move_to_camp_toss(delta: float) -> void:
-	var offset := (camp_receive_spot-setter.position).slide(Vector3.UP)
+	var offset := (camp_receive_spot-catch_pocket()).slide(Vector3.UP)
+	# Approach behind the ball along the intended stance; finish under it.
+	var yaw := set_heading(setter,called())
+	var behind := -Vector3(sin(yaw),0,cos(yaw))
+	if phase=="feed" or (phase=="pass" and elapsed<contact_time*.4):
+		offset+=behind*.22*smoothstep(.25,.9,offset.length())
 	var pace := minf(3.5,sqrt(2.*7.*offset.length()))
 	camp_velocity=camp_velocity.move_toward(offset.normalized()*pace,7.*delta)
 	var before := setter.position
@@ -759,7 +773,7 @@ func step_practice(delta: float) -> void:
 				forehead_target.x=camp_receive_spot.x
 				forehead_target.z=camp_receive_spot.z
 			catch_point=forehead_target+Vector3.UP*(.09+(.52 if jump_rep() else 0.))
-			if elapsed>=.30 and clock>=next_release and rotation_drill.floor_clear():
+			if elapsed>=.30 and clock>=next_release and rotation_drill.floor_clear() and (not cpu_setting or (camp_receive_spot-catch_pocket()).slide(Vector3.UP).length()<.65):
 				last_toss = clock
 				next_release = clock+2.0
 				if not demonstration: rotation_drill.tosses+=1
@@ -792,7 +806,14 @@ func step_practice(delta: float) -> void:
 				miss("Held through contact. Release as the ball reaches your hands.")
 				return
 			var previous := ball.position
-			ball.position = source.lerp(forehead_target,elapsed/forehead_arrival)+Vector3.UP*(4.905*elapsed*(forehead_arrival-elapsed))
+			var flight_t := minf(elapsed,forehead_arrival) if cpu_setting else elapsed
+			ball.position = source.lerp(forehead_target,flight_t/forehead_arrival)+Vector3.UP*(4.905*flight_t*(forehead_arrival-flight_t))
+			if cpu_setting:
+				# In catch practice the final handoff follows the animated forehead;
+				# retain the horizontal approach and avoid a one-frame attachment snap.
+				var receive := catch_pocket()+Vector3.UP*CATCH_GIVE
+				var settle := smoothstep(forehead_arrival-.23,forehead_arrival,flight_t)
+				ball.position+=(receive-forehead_target)*settle
 			var incoming := ball.position-previous
 			var obstacle := contacts.sweep(world,contacts.ball_shape,previous,incoming,Contact.GYM|Contact.EQUIPMENT|64|rotation_drill.CART_WALL)
 			if not obstacle.is_empty():
@@ -803,11 +824,18 @@ func step_practice(delta: float) -> void:
 			if elapsed<0.16: coach_motion.toss(coach,1.0)
 			ball.position.y = maxf(0.15,ball.position.y)
 			var turn_gap := angle_difference(setter.rotation.y,set_heading(setter,called()))
-			var turn_lead := Hands.preparation_lead(turn_gap,called()==2)
+			var turn_lead := Hands.preparation_lead(turn_gap,called()==2 and not cpu_setting)
 			if automatic_setter() and held<0 and elapsed>=.07 and (contact_time+cpu_release_delay-elapsed<=turn_lead or (incoming.y<0 and ball.position.distance_to(catch_point)<=2.10)):
 				held = called()
 				pressed_at = clock
 			track_feed_or_target(delta)
+			if cpu_setting:
+				if held>=0: shape_catch_hands()
+				if elapsed>=forehead_arrival:
+					catch_start_local=setter.to_local(ball.position)
+					begin("forehead_catch")
+					message.text="Forehead catch   /   "+TARGETS[called()]
+				return
 			if held>=0:
 				meter.value = set_fill()*100
 				Hands.apply(setter,ball.position,0.35+0.65*smoothstep(contact_time-.55,contact_time-.10,elapsed))
@@ -853,6 +881,13 @@ func step_practice(delta: float) -> void:
 				Hands.apply(setter,ball.position-Vector3.UP*cushion,1.0,Vector3.ZERO,cushion)
 			if automatic_setter() and elapsed>=contact_time+cpu_release_delay: release(called())
 			elif elapsed>forehead_arrival+0.25: miss("The toss dropped. Hold the target, then release at contact.")
+		"forehead_catch":
+			var give := 1.-pow(1.-clampf(elapsed/.19,0.,1.),3.)
+			ball.position=setter.to_global(catch_start_local).lerp(catch_pocket(),give)
+			shape_catch_hands()
+			if elapsed>=1.5:
+				rotation_drill.free_ball(Vector3.ZERO)
+				begin("between")
 		"set":
 			if automatic_setter() and elapsed<=Hands.CPU_FOLLOW_TIME: face_set(setter,target,delta)
 			ball.rotate_x(delta*4.0)

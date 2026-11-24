@@ -57,7 +57,7 @@ static func joint(actor: Node3D,bone: String) -> Vector3:
 static func palm(actor: Node3D,side: String) -> Vector3:
 	return joint(actor,"hand_"+side).lerp(joint(actor,"middle_01_"+side),.80)
 
-static func track_hands(actor: Node3D,ball: Vector3) -> void:
+static func track_hands(actor: Node3D,ball: Vector3,catching := false) -> void:
 	var rig: Skeleton3D = actor.skeleton
 	var author: RefCounted = actor.get_pose_author()
 	var pose: Array = []
