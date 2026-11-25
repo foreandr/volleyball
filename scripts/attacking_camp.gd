@@ -183,7 +183,8 @@ func aim_radius() -> float:
 
 func initial_attack_aim(origin: Vector3) -> Vector2:
 	var side := -1. if origin.x<0. else 1.
-	return [Vector2(side*3.75,11.55),Vector2(0.,11.4),Vector2(-side*3.65,8.45)][manual_shot]
+	var lane_x: float=[side*3.75,0.,-side*3.65][manual_shot]
+	return Vector2(lane_x,BallNet.NET_Z+4.5)
 
 func steer_attack_aim(delta: float) -> void:
 	if aim_center==Vector2.INF: aim_center=initial_attack_aim(endpoint)
