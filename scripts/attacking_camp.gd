@@ -182,7 +182,12 @@ func pose_swing() -> void:
 	# Drive the hips through takeoff and let the heels trail until the strike.
 	var tuck_age := maxf(0.,air_age-.015)
 	var since_hit := swing_time-contact_swing_time if phase=="spike" else 0.
-	var extension := smoothstep(0.,.042,since_hit)
+	# Ease out of the tuck during the forward stroke, finishing two ticks after contact.
+	var extension_phase := clampf((swing_time-.065)/.11,0.,.70)
+	if phase=="spike":
+		var at_contact := clampf((contact_swing_time-.065)/.11,0.,.70)
+		extension_phase = lerpf(at_contact,1.,clampf(since_hit/.030,0.,1.))
+	var extension := smoothstep(0.,1.,extension_phase)
 	var landing_blend := 1.-smoothstep(.19,.33,since_hit)
 	var leg_weight := smoothstep(0.,.055,tuck_age)*landing_blend if attack_jump.active else 0.
 	var knee_load := leg_weight*(1.-extension)
@@ -222,10 +227,11 @@ func pose_swing() -> void:
 		author.aim_joint(pose,foot,toes,ankle+toe_axis.slerp(hanging_toes,knee_load))
 	# Apply pelvic rotation after solving the tuck so both legs inherit it.
 	author.rotate_world(pose,"pelvis",Vector3.UP,hip_turn)
-	var draw := smoothstep(.065,.21,attack_jump.elapsed-attack_jump.load_duration()) if attack_jump.active else 0.
+	var draw_end := attack_jump.flight_duration(JUMP_HEIGHT,true)*.48-.095
+	var draw := smoothstep(.035,draw_end,air_age) if attack_jump.active else 0.
 	var origin := strike_point if phase=="spike" else ball.position
 	var shot_axis := hitter.basis.inverse()*origin.direction_to(shot_landing(origin)).slide(Vector3.UP).normalized()
-	Swing.apply(pose,hitter.get_pose_author(),rig.to_local(strike_point if phase=="spike" else ball.position),maxf(draw,smoothstep(0.,.065,swing_time)),reach,follow,1.,0.,1. if cross_court else 0.,Swing.DEFAULT_ELBOW_CLEARANCE,0.,INF,shot_axis,0.,.10,false,true)
+	Swing.apply(pose,hitter.get_pose_author(),rig.to_local(strike_point if phase=="spike" else ball.position),maxf(draw,smoothstep(0.,.065,swing_time)),reach,follow,maxf(draw,reach),0.,1. if cross_court else 0.,Swing.DEFAULT_ELBOW_CLEARANCE,0.,INF,shot_axis,0.,.10,false,true)
 	var guide_target := rig.to_local(strike_point if phase=="spike" else ball.global_position)
 	var shoulder: Vector3 = author.point(pose,"upperarm_l")
 	var guide_drop := maxf(reach,follow)
