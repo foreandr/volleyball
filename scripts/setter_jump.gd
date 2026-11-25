@@ -25,6 +25,7 @@ var max_height := FULL_HEIGHT
 var height := FULL_HEIGHT
 var air_time := FULL_AIR_TIME
 var start: Vector3
+var lead_heading: Vector3
 var heading: Vector3
 var stride := 0.0
 var carry_velocity := Vector3.ZERO
@@ -77,6 +78,7 @@ func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time
 	var travel := Vector3(-input.x,0,input.y)
 	stride = 0.17+0.31*travel.length()
 	heading = travel.normalized() if not travel.is_zero_approx() else actor.basis.z.normalized()
+	lead_heading = heading
 	approach_lunge = Vector3.ZERO
 	approach_plant = ball_target.is_finite()
 	setting_jump = for_setting
@@ -244,6 +246,8 @@ func step(actor: Node3D, delta: float, input: Vector2) -> void:
 		plant_distance += incoming_plant_speed*load_time*progress*(1.0-progress)**2
 		distance = plant_distance+stride*AIR_TRAVEL_FRACTION*flight
 	var base := start+heading*distance+Vector3.UP*(4.0*height*flight*(1.0-flight)+transfer_hop)
+	if lead_time>0.:
+		base += (lead_heading-heading)*lead_distance*lead_progress*(1.-smoothstep(lead_time,load_time,elapsed))
 	var lunge := approach_lunge*smoothstep(0.0,air_glide_duration,elapsed-load_time)
 	# Carry part of the approach stride through the air and ease it out after the strike.
 	var air_age := maxf(0.0,elapsed-load_time)
@@ -288,7 +292,8 @@ func attack_plant_foot(side: String) -> Vector3:
 		var early_end := lead_time*0.86 if left else entry_time*0.88
 		if left and attack_arm_lift and entry_time==0.: early_end=lead_time*.48
 		var early := smoothstep(early_start,early_end,elapsed)
-		var step_end := from+heading*(entry_distance+lead_distance if left else entry_distance)
+		var step_end := from+heading*entry_distance
+		if left: step_end += lead_heading*lead_distance
 		step_end.y = plant_ground
 		from = from.lerp(step_end,early)+Vector3.UP*(0.09*pow(sin(PI*early),2.0))
 	var step := smoothstep(start_step,end_step,elapsed)

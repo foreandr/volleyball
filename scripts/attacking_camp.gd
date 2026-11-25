@@ -109,6 +109,8 @@ func start_approach() -> void:
 	var heading := (contact_stance-hitter.position).slide(Vector3.UP).normalized()
 	hitter.rotation.y=atan2(heading.x,heading.z)
 	attack_jump.begin(hitter,Vector2(-heading.x,heading.z),contact_stance,PLANT_TIME,JUMP_HEIGHT,3,false,1.,false,.22)
+	var to_ball := (endpoint-hitter.position).slide(Vector3.UP)
+	if not to_ball.is_zero_approx(): attack_jump.lead_heading=to_ball.normalized()
 	attack_jump.release()
 
 func handle_attack_contact(previous: Vector3,delta: float) -> bool:
