@@ -118,6 +118,9 @@ func smooth_wrists(delta: float) -> void:
 		rig.set_bone_pose_rotation(id,q)
 		wrist_history[side]=q
 
+var prep_velocity := Vector3.ZERO
+var bounce_line := false
+
 func step_attack(delta: float) -> void:
 	if attack_jump.active:
 		attack_jump.step(hitter,delta,Vector2.ZERO)
@@ -130,12 +133,21 @@ func step_attack(delta: float) -> void:
 				entry.y=START.y
 			elif phase=="pass":
 				entry.z+=.35*smoothstep(0.,1.,elapsed)
-			var travel := (entry-hitter.position).limit_length((5.8 if phase=="set" else 1.65)*delta)
+			var desired := ((entry-hitter.position)*4.).limit_length(5.8 if phase=="set" else 1.85)
+			prep_velocity=prep_velocity.move_toward(desired,8.*delta)
+			var travel := prep_velocity*delta
 			hitter.position=rotation_drill.move_actor(hitter,travel)
 			var watch := (ball.position-hitter.position).slide(Vector3.UP)
 			if watch.length_squared()>.01:
 				hitter.rotation.y=rotate_toward(hitter.rotation.y,atan2(watch.x,watch.z),3.5*delta)
-			hitter.play_ground_gait(travel.length()/maxf(delta,.001))
+			var local := hitter.basis.inverse()*prep_velocity
+			if local.z<-.18 and -local.z>absf(local.x)*.75:
+				hitter.animator.play("base/Walk",.20,-clampf(prep_velocity.length()/1.45,.28,1.35),true)
+			elif absf(local.x)>.25 and absf(local.x)>absf(local.z):
+				hitter.play_action("idle",.20)
+				if not shuffle_steps.has(hitter): shuffle_steps[hitter]=preload("res://scripts/directional_footwork.gd").new(hitter)
+				shuffle_steps[hitter].step((local/2.).limit_length(1.),delta,clampf(local.length()/2.,.55,1.35),true,true)
+			else: hitter.play_ground_gait(prep_velocity.length())
 		if not cpu_hitter and not approach_started:
 			var stick := Vector2(axis(JOY_AXIS_LEFT_X),axis(JOY_AXIS_LEFT_Y)).limit_length(1.)
 			var right := camera.global_basis.x.slide(Vector3.UP).normalized()
@@ -146,7 +158,7 @@ func step_attack(delta: float) -> void:
 		elapsed+=delta
 		swing_time+=delta
 		pose_swing()
-		advance_spike(delta,false)
+		advance_spike(delta,bounce_line)
 		if roll_time>=.5:
 			rotation_drill.free_ball(drop_velocity)
 			begin("between")
