@@ -119,7 +119,7 @@ func setup_choice(title: String, choices: Array, selected: int, change: Callable
 	body.add_child(choice)
 
 func attack_setup_controls() -> void:
-	setup_choice("Hitter · next feed",["Left side","Middle","Right side"],game.attack_lane,func(i): game.attack_lane=i)
+	setup_choice("Hitter Â· next feed",["Left side","Middle","Right side"],game.attack_lane,func(i): game.attack_lane=i)
 	for role in ["Coach","Setter"]:
 		var coach_side: bool = role=="Coach"
 		var spot: Vector3=game.coach_station if coach_side else game.setter_station
@@ -257,8 +257,8 @@ func active_camera() -> Camera3D:
 	return get_viewport().get_camera_3d()
 
 func fields() -> Array:
-	if not practice: return [["Field of view",35,85,50,"°"],["Master volume",0,100,80,"%"]]
-	return [["Camera orbit",-145,145,12,"°"],["Elevation",-12,82,18,"°"],["Distance",2,26,10," m"],["Master volume",0,100,80,"%"]]
+	if not practice: return [["Field of view",35,85,50,"Â°"],["Master volume",0,100,80,"%"]]
+	return [["Camera orbit",-145,145,12,"Â°"],["Elevation",-12,82,18,"Â°"],["Distance",2,26,10," m"],["Master volume",0,100,80,"%"]]
 
 func saved(field: Array) -> float:
 	if field[0]=="Field of view" and active_camera(): return active_camera().fov
@@ -290,6 +290,8 @@ func show_section(caption: String) -> void:
 	if caption=="Sliders":
 		tuning_controls()
 		return
+	if caption=="Audio" and game.has_method("play_test_chime"):
+		bar(body,"Play test chime",game.play_test_chime)
 	if caption=="Controls":
 		Xbox.settings(body,show_section.bind(caption))
 		return

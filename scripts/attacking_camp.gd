@@ -134,12 +134,32 @@ func start_drill() -> void:
 	attack_jump.attack_arm_lift=true
 	super.start_drill()
 	if has_meta("live_sampler"): return
+	play_test_chime()
 	var review := "--review-swings" in OS.get_cmdline_user_args()
 	var arm_swing := review or "--edit-arm-swing" in OS.get_cmdline_user_args()
 	var arm_lift := arm_swing or "--edit-arm-lift" in OS.get_cmdline_user_args()
 	if (arm_lift or "--edit-approach" in OS.get_cmdline_user_args()) and not Engine.has_meta("approach_editor_opened"):
 		Engine.set_meta("approach_editor_opened",true)
 		edit_approach_frames.call_deferred(arm_lift,arm_swing,false,review,true)
+
+func play_test_chime() -> void:
+	var voice := AudioStreamPlayer.new()
+	var sound := AudioStreamWAV.new()
+	sound.mix_rate=24000
+	sound.format=AudioStreamWAV.FORMAT_16_BITS
+	var samples := PackedByteArray()
+	samples.resize(28800)
+	for i in 14400:
+		var t := float(i%7200)/24000.
+		var pitch := 523.25 if i<7200 else 783.99
+		var envelope := minf(1.,t/.012)*exp(-5.*t)*(1.-smoothstep(.25,.30,t))
+		samples.encode_s16(i*2,roundi(14000.*envelope*sin(TAU*pitch*t)))
+	sound.data=samples
+	voice.stream=sound
+	voice.process_mode=Node.PROCESS_MODE_ALWAYS
+	add_child(voice)
+	voice.finished.connect(voice.queue_free)
+	voice.play()
 
 func camp_title() -> String:
 	return "ATTACKING   /   APPROACH AND SPIKE"
