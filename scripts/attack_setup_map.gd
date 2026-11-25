@@ -1,7 +1,7 @@
 extends Control
 
-const ROLES := ["Coach","Setter","Set"]
-const COLORS := [Color("ffd477"),Color("6bded3"),Color("efa6ed")]
+const ROLES := ["Coach","Setter","Set","Hitter"]
+const COLORS := [Color("ffd477"),Color("6bded3"),Color("efa6ed"),Color("91d9ff")]
 var game
 var dragging := -1
 var preview := Vector2.ZERO
@@ -20,7 +20,7 @@ func screen_point(point: Vector2) -> Vector2:
 
 func marker(i: int) -> Vector2:
 	if dragging==i: return screen_point(preview)
-	var spot: Vector3=[game.coach_station,game.setter_station,game.next_set][i]
+	var spot: Vector3=[game.coach_station,game.setter_station,game.next_set,game.hitter_start][i]
 	return screen_point(Vector2(spot.x,spot.z))
 
 func _draw() -> void:
@@ -32,14 +32,14 @@ func _draw() -> void:
 	draw_line(left,Vector2(right.x,left.y),Color.WHITE,3.)
 	draw_line(screen_point(Vector2(4.5,1.)),screen_point(Vector2(-4.5,1.)),Color.WHITE)
 	for i in ROLES.size():
-		var x := i*size.x/3.+8.
+		var x := i*size.x/ROLES.size()+8.
 		draw_circle(marker(i),8.,COLORS[i])
 		draw_circle(Vector2(x,size.y-13.),5.,COLORS[i])
 		draw_string(get_theme_default_font(),Vector2(x+10.,size.y-7.),ROLES[i],HORIZONTAL_ALIGNMENT_LEFT,-1,16,COLORS[i])
 
 func place(cursor: Vector2) -> void:
 	var delta := (cursor+offset-screen_point(Vector2.ZERO))/court_scale()
-	var max_z := [1.,3.,3.65]
+	var max_z := [1.,3.,3.65,3.65]
 	preview=Vector2(clampf(-delta.x,-4.5,4.5),clampf(-delta.y,-4.,max_z[dragging]))
 	queue_redraw()
 
@@ -52,7 +52,7 @@ func _gui_input(event: InputEvent) -> void:
 			var chosen := -1
 			offset=Vector2.ZERO
 			if event.position.y>size.y-27.:
-				chosen=clampi(int(event.position.x*3./size.x),0,2)
+				chosen=clampi(int(event.position.x*ROLES.size()/size.x),0,ROLES.size()-1)
 			else:
 				var nearest := 15.
 				for i in ROLES.size():

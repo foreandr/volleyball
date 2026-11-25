@@ -14,6 +14,7 @@ var setter_station := BASE
 var coach_station := Vector3(-3.05,0,-1.7)
 var active_lane := 0
 
+var hitter_start := START
 var next_set := Vector3(3.65,2.65,3.)
 var active_set := next_set
 
@@ -21,10 +22,11 @@ func move_setup_spot(role: String, point: Vector2) -> void:
 	match role:
 		"Coach": coach_station=Vector3(point.x,coach_station.y,minf(point.y,1.))
 		"Setter": setter_station=Vector3(point.x,setter_station.y,minf(point.y,3.))
+		"Hitter": hitter_start=Vector3(point.x,START.y,point.y)
 		"Set":
 			next_set=Vector3(point.x,2.65,point.y)
 			attack_lane=0 if point.x>1.5 else (2 if point.x < -1.5 else 1)
-	StorySession.save_drill_setup("attack_positions",{"coach":coach_station,"setter":setter_station,"target":next_set})
+	StorySession.save_drill_setup("attack_positions",{"coach":coach_station,"setter":setter_station,"target":next_set,"hitter_start":hitter_start})
 
 func choose_camp_toss() -> Vector3:
 	return setter_station
@@ -326,6 +328,7 @@ func start_drill() -> void:
 	setter_station=positions.get("setter",setter_station)
 	next_set=positions.get("target",next_set)
 	attack_lane=0 if next_set.x>1.5 else (2 if next_set.x < -1.5 else 1)
+	hitter_start=positions.get("hitter_start",Vector3(START.x*[1.,0.,-1.][attack_lane],START.y,START.z))
 	hand_impact.stream=preload("res://assets/audio/hand_impacts.tres")
 	hand_impact.max_polyphony=2
 	hand_impact.bus=StorySession.IMPACT_BUS
@@ -374,7 +377,7 @@ func camp_title() -> String:
 
 func update_prompts(_next: String) -> void:
 	var entries := [["View","Take control" if cpu_hitter else "Watch CPU attack"]]
-	if not cpu_hitter: entries.append_array([["LS","Move"],["LT","Lock on / shuffle"],["RT","Sprint"],[JOY_BUTTON_X,"Hold line"],[JOY_BUTTON_Y,"Hold six"],[JOY_BUTTON_B,"Hold cross"],[JOY_BUTTON_LEFT_SHOULDER,"Roll"],[JOY_BUTTON_RIGHT_SHOULDER,"Tip"]])
+	if not cpu_hitter: entries.append_array([["LS","Move"],["LT","Lock on / shuffle"],["RT","Sprint"],[JOY_BUTTON_X,"Hold left"],[JOY_BUTTON_Y,"Hold middle"],[JOY_BUTTON_B,"Hold right"],[JOY_BUTTON_LEFT_SHOULDER,"Roll"],[JOY_BUTTON_RIGHT_SHOULDER,"Tip"]])
 	entries.append(["D-pad Up/Down","Set height: %d" % height_preset()])
 	entries.append([JOY_BUTTON_START,"Settings"])
 	Xbox.prompts(controls_row,entries)
@@ -391,6 +394,7 @@ func play_attack_setup() -> void:
 		practice_blockers[i].position=Vector3((1-i)*2.15,START.y,BallNet.NET_Z+.38)
 		practice_blockers[i].play_action("idle")
 	setter.position=setter_station
+	feed_started=false
 	reset_feed()
 
 func reset_feed() -> void:
@@ -411,7 +415,7 @@ func reset_feed() -> void:
 	swing_time=-1.
 	message.text="Coach toss"
 	if not cpu_hitter or not feed_started:
-		hitter.position=Vector3(START.x*lane_offset(),START.y,START.z)
+		hitter.position=hitter_start if scene_file_path=="res://scenes/attacking_camp.tscn" else Vector3(START.x*lane_offset(),START.y,START.z)
 		hitter.rotation.y=0.
 	else:
 		hitter.position.y=START.y
@@ -532,17 +536,16 @@ func placement_skill() -> float:
 func aim_radius() -> float:
 	return lerpf(1.35,.20,placement_skill())
 
-func initial_attack_aim(origin: Vector3) -> Vector2:
-	var side := -1. if origin.x<0. else 1.
-	var lane_x: float=[side*3.75,0.,-side*3.65][manual_shot]
+func initial_attack_aim() -> Vector2:
+	var lane_x: float=[3.75,0.,-3.75][manual_shot]
 	return Vector2(lane_x,BallNet.NET_Z+4.5)
 
 func steer_attack_aim(delta: float) -> void:
-	if aim_center==Vector2.INF: aim_center=initial_attack_aim(endpoint)
+	if aim_center==Vector2.INF: aim_center=initial_attack_aim()
 	var depth := -axis(JOY_AXIS_LEFT_Y)
 	var strength := signf(depth)*maxf(0.,(absf(depth)-.16)/.84)
 	var lateral := -axis(JOY_AXIS_LEFT_X)
-	var lane := initial_attack_aim(endpoint).x
+	var lane := initial_attack_aim().x
 	var lateral_input := signf(lateral)*maxf(0.,(absf(lateral)-.16)/.84)
 	aim_center.x=clampf(aim_center.x+lateral_input*lerpf(1.5,3.,placement_skill())*delta,lane-2.5,lane+2.5)
 	aim_center.y=clampf(aim_center.y+strength*lerpf(6.,13.,placement_skill())*delta,4.65,BallNet.NET_Z+9.+3.048)
@@ -573,6 +576,7 @@ func step_attack(delta: float) -> void:
 		if not team_controls_approach() and (recovering or (tracking and not approach_started and phase in ["cart","feed","pass","set_contact","set"])):
 			var entry := GroundControls.attack_staging(active_set)
 			entry.x+=1.18*lane_offset()
+			if scene_file_path=="res://scenes/attacking_camp.tscn": entry=hitter_start
 			entry.y=START.y
 			if phase in ["set_contact","set"]:
 				entry=endpoint+Vector3(1.18*lane_offset(),0.,-2.65)
@@ -925,7 +929,7 @@ func predicted_shot_color(origin: Vector3, landing: Vector3) -> Color:
 
 func shot_landing(origin: Vector3) -> Vector3:
 	if not cpu_hitter and manual_shot>=0:
-		var aim := initial_attack_aim(origin) if aim_center==Vector2.INF else aim_center
+		var aim := initial_attack_aim() if aim_center==Vector2.INF else aim_center
 		if roll_shot or tip_shot:
 			aim+=placement_offset*.5
 			return Vector3(aim.x,Contact.BALL_RADIUS,maxf(BallNet.NET_Z+.65,aim.y+depth_error*.08))
