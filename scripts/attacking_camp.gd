@@ -34,6 +34,7 @@ var approach_started := false
 const JUMP_HEIGHT := 33.*.0254
 const ATTACK_SET_LIFT := .10
 const PLANT_TIME := .30
+const MANUAL_JUMP_ADVANCE := 1.0 / 3.0
 const SPIKE_STAMINA_COST := 4.0
 const ROLL_STAMINA_COST := 1.5
 const SHOT_BUTTONS := [JOY_BUTTON_X,JOY_BUTTON_Y,JOY_BUTTON_B]
@@ -344,7 +345,7 @@ func step_attack(delta: float) -> void:
 			begin("between")
 		return
 	if not approach_started and (cpu_hitter or manual_shot>=0):
-		if phase=="pass" and set_arc_percent<60.:
+		if phase=="pass" and (set_arc_percent<60. or not cpu_hitter):
 			var predicted_pin: Vector3=PINS[called()]+Vector3(-1.1*lane_offset() if active_lane!=1 else -1.05,ATTACK_SET_LIFT,0.)
 			var set_time := float(DURATION[chosen_tempo()])*sqrt(set_arc_percent*.01)
 			plan_attack_plant(maxf(0.,contact_time-elapsed)+SET_RECEIVE_TIME+SET_PUSH_TIME+set_time,predicted_pin,delta)
@@ -365,7 +366,9 @@ func plan_attack_plant(remaining: float,destination: Vector3,delta: float) -> vo
 		elif distance>2.25: steps=4
 	cadence=lerpf(1. if cpu_hitter else .94,.76,attack_jump.approach_recovery(hitter,distance))
 	var load_time := cadence*((steps-2)*attack_jump.LEAD_STEP_TIME+PLANT_TIME)
-	if distance<=3.35 and (cpu_hitter or manual_shot>=0) and remaining<=load_time+rise+.025:
+	var plant_start := load_time+rise+.025
+	var jump_advance := 0.0 if cpu_hitter else MANUAL_JUMP_ADVANCE
+	if distance<=3.35 and (cpu_hitter or manual_shot>=0) and remaining<=plant_start+jump_advance:
 		if not approach_started:
 			approach_delay=maxf(0.,load_time+rise+.025-remaining-delta)
 			start_approach(steps,cadence,destination)
