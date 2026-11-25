@@ -8,6 +8,10 @@ var attackers: Array[Node3D]=[]
 const ROUTE_NAMES := ["left","51","pipe","right"]
 var random_heights := bool(StorySession.game_options.get_value("blocking","random_heights",false))
 var drawn_height := -1
+var route_tempos := [2,1,1,2]
+var read_delay := .08
+var read_x := 0.
+var read_lead := 1
 
 func height_preset() -> int:
 	return drawn_height if drawn_height>=0 else super.height_preset()
@@ -134,7 +138,10 @@ func reset_feed() -> void:
 	if route<0: attackers.push_front(hitter)
 	var former := hitter
 	route=rotation_drill.random.randi_range(0,attackers.size()-1)
-	drawn_height=rotation_drill.random.randi_range(0,SET_HEIGHTS.size()-1) if random_heights else -1
+	for lane in ROUTES.size():
+		route_tempos[lane]=rotation_drill.random.randi_range(0,3) if random_heights else (1 if lane in [1,2] else super.height_preset())
+	drawn_height=route_tempos[route] if random_heights else -1
+	read_delay=rotation_drill.random.randf_range(.055,.13)
 	hitter=attackers[route]
 	former.play_action("idle")
 	for overlay in get_children():
@@ -218,7 +225,7 @@ func begin_block(slot: int,loaded := 0.) -> void:
 	jump.age=Block.START*loaded
 	jumps[slot]=jump
 	attempted[slot]=true
-	if slot==int([2,1,1,0][route]) and slot!=1 and closing[1] and jumps[1]==null:
+	if read_set and slot==read_lead and slot!=1 and closing[1] and jumps[1]==null:
 		begin_block(1,loaded)
 
 var route_velocity := [Vector3.ZERO,Vector3.ZERO,Vector3.ZERO,Vector3.ZERO]
@@ -234,10 +241,11 @@ func ready_spot(i: int) -> Vector3:
 func step_hitting_line(i: int,delta: float) -> void:
 	var actor := attackers[i]
 	var target := ready_spot(i)
-	var attacking := (phase=="set" and i==route) or phase=="set_contact" or (phase=="pass" and contact_time-elapsed<.9)
+	var approach_window := 1.12-.14*float(route_tempos[i])
+	var attacking := (phase=="set" and i==route) or phase=="set_contact" or (phase=="pass" and contact_time-elapsed<approach_window)
 	if attacking:
 		var pin: Vector3=ROUTES[i]
-		var progress := 1. if phase in ["set","set_contact"] else clampf(1.-(contact_time-elapsed)/.9,0.,1.)
+		var progress := 1. if phase in ["set","set_contact"] else clampf(1.-(contact_time-elapsed)/approach_window,0.,1.)
 		target=target.lerp(Vector3(pin.x,START.y,pin.z-1.65),progress)
 	elif phase in ["set","spike"]:
 		if i==route: return
@@ -312,17 +320,21 @@ func step_blocker(slot: int,delta: float) -> void:
 				return
 	var goal: float=HOMES[slot]
 	var depth_goal := BallNet.NET_Z+.38
-	if phase=="set" and not read_set:
+	if phase=="set" and not read_set and elapsed>=read_delay:
+		var seen_velocity := (ball.position-source)/maxf(elapsed,.001)
+		var time_estimate := maxf(0.,flight_time-elapsed)*rotation_drill.random.randf_range(.93,1.07)
+		read_x=clampf(ball.position.x+seen_velocity.x*time_estimate,-4.5,4.5)
+		read_lead=2 if read_x>1.85 else (0 if read_x< -1.85 else 1)
 		var available := maxf(0.,flight_time-elapsed-Block.START-Block.AIR*.5)
 		for i in blockers.size():
-			var seam := endpoint.x+.61*(i-int([2,1,1,0][route]))
+			var seam := read_x+.61*(i-read_lead)
 			var travel := Vector2(seam-blockers[i].position.x,depth_goal-blockers[i].position.z).length()
-			closing[i]=maxf(0.,travel-.75)/GroundControls.speed(true,false)<=available or i==int([2,1,1,0][route])
+			closing[i]=maxf(0.,travel-.75)/GroundControls.speed(true,false)<=available or i==read_lead
 		read_set=true
-		trace("block_set_read",{"set_route":ROUTE_NAMES[route],"set_height_percent":rep_set_percent(),"set_endpoint":str(endpoint),"far_closes":closing[0],"middle_closes":closing[1],"available_s":available})
-	if phase=="set":
-		if route==0 and slot==1 and closing[slot]: goal=blockers[MANUAL_SLOT].position.x-.61
-		elif closing[slot]: goal=endpoint.x+.61*(slot-int([2,1,1,0][route]))
+		trace("block_set_read",{"set_route":ROUTE_NAMES[route],"route_tempos":route_tempos.duplicate(),"read_x":read_x,"set_height_percent":rep_set_percent(),"set_endpoint":str(endpoint),"far_closes":closing[0],"middle_closes":closing[1],"available_s":available})
+	if phase=="set" and read_set:
+		if read_lead==2 and slot==1 and closing[slot]: goal=blockers[MANUAL_SLOT].position.x-.61
+		elif closing[slot]: goal=read_x+.61*(slot-read_lead)
 		else: depth_goal+=2.7
 	elif phase=="spike" and not closing[slot]:
 		depth_goal+=2.7
@@ -344,7 +356,7 @@ func step_blocker(slot: int,delta: float) -> void:
 		block_load.update(actor,delta)
 		block_load.ring.hide()
 	GroundControls.shuffle(actor,shuffle_steps[actor],Vector3((actor.position.x-previous)/maxf(delta,.0001),0.,motion.y/maxf(delta,.0001)),true,delta)
-	if (slot!=1 or route in [1,2]) and cpu and closing[slot] and not attempted[slot] and phase=="set" and absf(actor.position.x-endpoint.x)<1.65 and flight_time-elapsed<=Block.START+Block.AIR*.5:
+	if read_set and (slot!=1 or read_lead==1) and cpu and closing[slot] and not attempted[slot] and phase=="set" and absf(actor.position.x-read_x)<1.65 and flight_time-elapsed<=Block.START+Block.AIR*.5:
 		begin_block(slot)
 
 func advance_spike(delta: float) -> void:
