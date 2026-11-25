@@ -187,7 +187,19 @@ func shot_landing(origin: Vector3) -> Vector3:
 	return Vector3(-3.4 if cross_court else clampf(origin.x,-3.8,3.8),Contact.BALL_RADIUS,11.)
 
 func pose_swing() -> void:
-	if swing_time>.65: return
+	if swing_time>.65:
+		if last_shoulder_time>=0.:
+			var rig: Skeleton3D=hitter.skeleton
+			var id := rig.find_bone("upperarm_r")
+			var rest_target := rig.get_bone_pose_rotation(id)
+			var gap := last_shoulder.angle_to(rest_target)
+			var budget := deg_to_rad(660.)*(swing_time-last_shoulder_time)
+			if gap>budget:
+				last_shoulder=last_shoulder.slerp(rest_target,budget/gap)
+				rig.set_bone_pose_rotation(id,last_shoulder)
+				last_shoulder_time=swing_time
+			else: last_shoulder_time=-1.
+		return
 	var recovery := smoothstep(.36,.65,swing_time)
 	var rig: Skeleton3D=hitter.skeleton
 	var pose: Array=[]
