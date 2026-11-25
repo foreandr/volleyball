@@ -216,7 +216,8 @@ func build_settings() -> void:
 
 var block_hud_label: Label
 var block_hud_slider: HSlider
-var last_shot_slope := 0.
+var shot_read := preload("res://scripts/block_shot_read.gd").new()
+var disguise_read := false
 
 func sync_block_vertical_hud() -> void:
 	if is_instance_valid(block_hud_slider):
@@ -230,7 +231,7 @@ func set_practice_vertical(slot: int,value: float) -> void:
 	sync_block_vertical_hud()
 
 func learned_block_offset() -> float:
-	return clampf(last_shot_slope*clampf(BallNet.NET_Z-endpoint.z,.45,2.),-1.55,1.55)
+	return clampf(shot_read.prediction*clampf(BallNet.NET_Z-endpoint.z,.45,2.),-1.55,1.55)
 
 const PracticeBlock = preload("res://scripts/match_block.gd")
 var attack_blocker_count := 1
@@ -264,6 +265,12 @@ func step_practice_blockers(delta: float) -> void:
 			if phase=="spike" and launched_attack and drop_velocity.z>.1:
 				lane=ball.position.x+drop_velocity.x*clampf((BallNet.NET_Z-ball.position.z)/drop_velocity.z,0.,.20)
 			var offset := lane-actor.position.x
+			if jump.age>=PracticeBlock.START and jump.age<PracticeBlock.START+PracticeBlock.AIR*.68:
+				var next_x := move_toward(jump.base.x,lane,delta*.85)
+				if attack_blocker_count==2:
+					var partner_x := practice_blockers[1-i].position.x
+					next_x=maxf(next_x,partner_x+.60) if i==0 else minf(next_x,partner_x-.60)
+				jump.base.x=clampf(move_toward(jump.base.x,next_x,delta*.85),-4.45,4.45)
 			if jump.shoulders.size()==2:
 				var amount := smoothstep(.22,.78,absf(offset))
 				var left: bool=(jump.shoulders[0].x-jump.shoulders[1].x)*offset>0.
@@ -272,10 +279,14 @@ func step_practice_blockers(delta: float) -> void:
 			if not jump.step(delta,ball.global_position): practice_jumps[i]=null
 			continue
 		var home_x := 2.15 if i==0 else 0.
-		var goal := home_x+clampf(last_shot_slope,-1.,1.)*.75
+		var goal := home_x+clampf(shot_read.prediction,-1.,1.)*(-.35 if disguise_read else .75)
 		if phase=="set" or phase=="spike":
 			var seam_offset := (.5-i)*.68 if attack_blocker_count==2 else 0.
-			goal=clampf(endpoint.x+learned_block_offset()+seam_offset,-4.4,4.4)
+			var shade := learned_block_offset()
+			if disguise_read and phase=="set":
+				var close_in := smoothstep(.0,.27,elapsed-flight_time+PracticeBlock.START+PracticeBlock.AIR*.5+.23)
+				shade=lerpf(-shade*.45,shade,close_in)
+			goal=clampf(endpoint.x+shade+seam_offset,-4.4,4.4)
 		var old_x := actor.position.x
 		actor.position.x=move_toward(old_x,goal,GroundControls.speed(true,true)*delta)
 		actor.animator.advance(delta)
@@ -362,6 +373,7 @@ func begin(next: String) -> void:
 func reset_feed() -> void:
 	practice_attempted=[false,false]
 	practice_touch=false
+	disguise_read=shot_read.confidence>.54 and rotation_drill.random.randf()<.58
 	clear_attack_input()
 	active_lane=attack_lane
 	active_set=next_set
@@ -813,7 +825,7 @@ func advance_spike(delta: float) -> void:
 	if not launched_attack:
 		launched_attack=true
 		if drop_velocity.z>.1:
-			last_shot_slope=lerpf(last_shot_slope,clampf(drop_velocity.x/drop_velocity.z,-2.,2.),.82)
+			shot_read.observe(drop_velocity.x/drop_velocity.z)
 		trace("spike_launch",{"origin":str(ball.position),"velocity":str(drop_velocity),"aim":str(aim_center)})
 	var incoming_basis := ball.basis
 	var in_flight := roll_time<0.

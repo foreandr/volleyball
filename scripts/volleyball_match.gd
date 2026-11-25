@@ -122,6 +122,7 @@ var cpu_second_spike := false
 var cpu_fake_dump := false
 var second_ball_options := 0
 var block_calls := [0,0]
+const ShotPattern = preload("res://scripts/block_shot_read.gd")
 var block_crossing_reads: Array[Dictionary] = [{},{}]
 var jump_set_started := [false,false,false,false]
 var recoveries := {}
@@ -944,8 +945,8 @@ func observe_opponent_shot(side: int, point: Vector3, motion: Vector3, spin_rate
 		var crossing := contact.x+local_motion.x*cross_time
 		if height >= Net.NET_TOP and absf(crossing) < Net.NET_HALF_WIDTH:
 			var offset := crossing-contact.x
-			var old: Vector2 = block_crossing_reads[side].get(zone,Vector2(offset,0.0))
-			block_crossing_reads[side][zone] = Vector2(lerpf(old.x,offset,0.82),minf(10.0,old.y+1.0))
+			if not block_crossing_reads[side].has(zone): block_crossing_reads[side][zone]=ShotPattern.new()
+			block_crossing_reads[side][zone].observe(offset)
 	var reads := opponent_shot_reads[side]
 	var count := int(reads.get(zone,Vector2.ZERO).y)
 	var previous := float(reads.get(zone,Vector2(landing.x,0.0)).x)
@@ -2513,9 +2514,9 @@ func position_defense(delta: float) -> void:
 			take_line = absf(players[near].position.x-line_x) <= absf(players[near].position.x-cross_x)
 		x = line_x if take_line else cross_x
 		if not is_human(near):
-			var read: Vector2 = block_crossing_reads[defense_side].get(shot_read_zone(attack.x),Vector2.ZERO)
-			var learned_x := attack.x+read.x
-			x += clampf(learned_x-x,-1.55,1.55)*minf(1.0,read.y*.82)
+			var pattern: RefCounted=block_crossing_reads[defense_side].get(shot_read_zone(attack.x))
+			if pattern!=null:
+				x+=clampf(attack.x+pattern.prediction-x,-1.55,1.55)*lerpf(.70,1.,pattern.confidence)
 		cover = cross_goal.x if take_line else line_goal.x
 		if not is_human(deep):
 			cover = learned_cover(defense_side,attack.x,cover)
