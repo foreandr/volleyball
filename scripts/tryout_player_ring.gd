@@ -5,8 +5,38 @@ var game: Control
 var participants: Array = []
 var extra_jumps := {}
 var setting_cues := true
+var floor_rings := {}
+var ring_mesh := ImmediateMesh.new()
+
+func make_ring_mesh() -> void:
+	var material := StandardMaterial3D.new()
+	material.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.vertex_color_use_as_albedo=true
+	material.cull_mode=BaseMaterial3D.CULL_DISABLED
+	for band in [[.625,.646,Color("10171d")],[.646,.671,Color.WHITE],[.671,.693,Color("10171d")]]:
+		ring_mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLE_STRIP,material)
+		ring_mesh.surface_set_color(band[2])
+		for i in 65:
+			var direction := Vector3(cos(TAU*i/64.),0.,sin(TAU*i/64.))
+			ring_mesh.surface_add_vertex(direction*float(band[0]))
+			ring_mesh.surface_add_vertex(direction*float(band[1]))
+		ring_mesh.surface_end()
+
+func position_floor_ring(actor: Node3D) -> void:
+	if not floor_rings.has(actor):
+		var ring := MeshInstance3D.new()
+		ring.mesh=ring_mesh
+		ring.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		actor.add_child(ring)
+		ring.top_level=true
+		floor_rings[actor]=ring
+	var ring: MeshInstance3D=floor_rings[actor]
+	ring.global_transform=Transform3D(Basis.IDENTITY,Vector3(actor.global_position.x,.055,actor.global_position.z))
+	ring.show()
+
 
 func _ready() -> void:
+	make_ring_mesh()
 	mouse_filter=Control.MOUSE_FILTER_IGNORE
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	z_index=2
@@ -23,6 +53,8 @@ func arc_band(center: Vector2,radius: Vector2,start: float,end: float,color: Col
 	draw_polyline(points,color,width,true)
 
 func _draw() -> void:
+	for ring in floor_rings.values():
+		if is_instance_valid(ring): ring.hide()
 	if game==null:
 		for actor in participants:
 			if is_instance_valid(actor) and actor.is_visible_in_tree(): draw_player(actor,true)
@@ -119,8 +151,7 @@ func draw_player(actor: Node3D,human: bool) -> void:
 	var radius := Vector2(clampf(at.distance_to(camera.unproject_position(foot+camera.global_basis.x*.67)),25,77),0)
 	radius.y=radius.x*.35
 	var ink := Color("10171d")
-	arc_band(at,radius,0,TAU,ink,6)
-	arc_band(at,radius,0,TAU,Color.WHITE,2)
+	position_floor_ring(actor)
 	if (is_setter or human) and not (is_setter and game!=null and "automatic_block" in game):
 		var energy: RefCounted=actor.stamina
 		var origin := at+Vector2(-52,radius.y+25)
@@ -148,7 +179,7 @@ func draw_player(actor: Node3D,human: bool) -> void:
 				var contact: Vector2=game.contact_band() if pressing else game.grade_contact
 				timing_arc(at,outer,PI,timing_fill,band.x,band.y,contact)
 	var label: String=actor.display_name.strip_edges().get_slice(" ",actor.display_name.strip_edges().count(" ")).to_upper()
-	if "automatic_block" in game and not game.automatic_block and actor==game.blockers[game.MANUAL_SLOT]:
+	if game!=null and "automatic_block" in game and not game.automatic_block and actor==game.blockers[game.MANUAL_SLOT]:
 		label="509   YOU"
 		if game.block_held or game.clock<game.meter_until:
 			timing_arc(at,radius+Vector2(7,7),PI,game.block_meter(),.38,.62,Vector2(.10,.90),Color("14191d"),not game.block_held)

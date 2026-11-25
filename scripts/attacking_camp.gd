@@ -172,6 +172,7 @@ var net_clear_time := -1.
 const PALM_CONTACT := 2./60.
 
 var spike_sound_count := 0
+var set_impact := AudioStreamPlayer.new()
 var hand_impact := AudioStreamPlayer.new()
 
 func build_settings() -> void:
@@ -316,6 +317,10 @@ func start_drill() -> void:
 	hand_impact.max_polyphony=2
 	hand_impact.bus=StorySession.IMPACT_BUS
 	add_child(hand_impact)
+	set_impact.stream=preload("res://assets/audio/set_touch.wav")
+	set_impact.bus=StorySession.IMPACT_BUS
+	set_impact.volume_db=-7.
+	add_child(set_impact)
 	hitter=athlete(START,"e97937")
 	hitter.apply_profile(setter.attributes.duplicate())
 	hitter.set_height_cm(193.04)
@@ -366,6 +371,8 @@ func update_prompts(_next: String) -> void:
 	Xbox.prompts(controls_row,entries)
 
 func begin(next: String) -> void:
+	if next=="set_contact" and set_impact.is_inside_tree() and not has_meta("live_sampler"): set_impact.play()
+	if next=="drop" and not has_meta("live_sampler"): attack_floor_pending=true
 	if next=="set_contact" and is_instance_valid(hitter) and height_preset()==0:
 		trace("zero_set_arrival",{"air_height_m":hitter.position.y-START.y,"air_age_s":attack_jump.elapsed-attack_jump.load_duration() if attack_jump.active else -1.})
 	super.begin(next)
