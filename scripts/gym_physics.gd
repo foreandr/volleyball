@@ -1,5 +1,7 @@
 extends RefCounted
 
+const HARD_SPIKE_SPEED := 16.0
+
 const GYM := 16
 const EQUIPMENT := 32
 const BALL_RADIUS := .105

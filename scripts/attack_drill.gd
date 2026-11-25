@@ -195,8 +195,8 @@ func set_ball_audio_muted(muted: bool) -> void:
 		floor_audio.stop()
 		net_audio.stop()
 
-func play_floor_sound() -> void:
-	if not ball_audio_muted: floor_audio.play()
+func play_floor_sound(speed: float) -> void:
+	if not ball_audio_muted and speed>=preload("res://scripts/gym_physics.gd").HARD_SPIKE_SPEED: floor_audio.play()
 
 func _exit_tree() -> void:
 	show_attack_net({},0.0)
@@ -415,7 +415,7 @@ func can_aim_set() -> bool:
 	return stage == Stage.SERVE and not is_finite(bump.touch_time)
 
 func set_pass_aim(point: Vector3) -> void:
-	# The landing marker is beyond the setterÃ¢â‚¬â„¢s overhead interception point.
+	# The landing marker is beyond the setterÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢s overhead interception point.
 	bump.destination = Vector2(clampf(point.x,-3.0,3.0),clampf(point.z,0.0,4.5))
 
 func queue_hand_receive() -> void:
@@ -776,7 +776,6 @@ func play_serve(time: float, previous: float, delta: float) -> void:
 		trace.write("player_pass",clock,{"point":pass_origin,"velocity":pass_motion,"cpu_contact":cpu_contact_point,
 			"grade":bump.grade,"reach":bump.reach,"contact":bump.contact_check},true)
 	elif time >= end:
-		play_floor_sound()
 		miss("Serve missed")
 
 func follow_receive(time: float) -> void:
@@ -802,7 +801,6 @@ func play_shank(time: float, previous: float) -> void:
 		ball.position = Net.after_hit(hit,minf(time,end))
 	else:
 		ball.position = flight_point(pass_origin,pass_motion,minf(time,end))
-	if previous < end and time >= end: play_floor_sound()
 	if previous >= end: reset_feed()
 
 func face_receiver(direction: Vector3, max_turn: float) -> void:
@@ -1004,7 +1002,6 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 				return
 		previous_palm = palm
 	if time >= flight_end:
-		play_floor_sound()
 		var result := "Spike missed"
 		if uses_assisted_approach() and not is_finite(approach_pressed_at):
 			result = "Set went untouched"
@@ -1053,7 +1050,6 @@ func hit_spike(charge: float, point: Vector3, palm_gap := 0.0) -> void:
 		finish_hand_edge = strike_hand_edge(rig,finish_hand_axis)
 		finish_hand_turn = INF
 	spike_bounce_speed = 0.0
-	if not ball_audio_muted: spike_audio.play()
 	swing_contact = point
 	ball.position = point
 	swing_power = charge
@@ -1071,6 +1067,7 @@ func hit_spike(charge: float, point: Vector3, palm_gap := 0.0) -> void:
 		speed *= lerpf(0.56,1.0,charge)*lerpf(0.65,1.0,completion)
 	var duration := target.slide(Vector3.UP).length()/(speed*spike_speed_multiplier()*jump.spike_power_factor())
 	pass_motion = target/duration+Vector3.UP*Flight.spike_gravity(spike_topspin_rps)*duration*0.5
+	if not ball_audio_muted and pass_motion.length()>=preload("res://scripts/gym_physics.gd").HARD_SPIKE_SPEED: spike_audio.play()
 	flight_end = duration
 	swing_net_hit = Net.first_hit(spike_flight_point,0.0,duration)
 	stage = Stage.HIT
@@ -1102,12 +1099,11 @@ func play_spike(time: float, delta: float) -> void:
 		var gravity := Flight.GRAVITY if hit_net else Flight.spike_gravity(spike_topspin_rps)
 		landing_velocity += Vector3.DOWN*gravity*fall_time
 		if spike_bounce_speed == 0.0:
-			play_floor_sound()
+			if pass_motion.length()>=preload("res://scripts/gym_physics.gd").HARD_SPIKE_SPEED: play_floor_sound(landing_velocity.length())
 			spike_bounce_speed = clampf(-landing_velocity.y*0.58,3.8,6.5)*sqrt(ball_bounciness)
 		var bounce_velocity := landing_velocity.slide(Vector3.UP)*0.25+Vector3.UP*spike_bounce_speed
 		var bounce_time := Flight.landing_time(ground,bounce_velocity)
 		bounce_end += bounce_time
-		if time-delta < bounce_end and time >= bounce_end: play_floor_sound()
 		ball.position = flight_point(ground,bounce_velocity,minf(time-landing_time,bounce_time))
 	if time < SWING_FOLLOW_TIME:
 		var follow := 1.0-pow(1.0-clampf(time/0.19,0.0,1.0),2.0)

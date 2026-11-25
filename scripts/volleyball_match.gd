@@ -872,7 +872,7 @@ func set_cpu_swing_power(hitter: int) -> void:
 func on_spike(actor: Node3D, point: Vector3, motion: Vector3, spin_rate: float) -> void:
 	var index := players.find(actor)
 	if index < 0 or not can_touch(index): return
-	play_touch(true)
+	play_touch(motion.length()>=preload("res://scripts/gym_physics.gd").HARD_SPIKE_SPEED)
 	if drill_spike_target.is_finite():
 		stroke = "Spike"
 		launch(point,motion,"spike",index,spin_rate)
@@ -2244,7 +2244,7 @@ func hit_overpass(index: int, point: Vector3) -> bool:
 	stroke = "Overpass attack"
 	var world_motion := frame.global_basis*motion
 	trace.write("overpass_attack",match_clock,{"player":index,"point":point,"target":shot,"blocker":defender},true)
-	play_touch(true)
+	play_touch(world_motion.length()>=preload("res://scripts/gym_physics.gd").HARD_SPIKE_SPEED)
 	observe_opponent_shot(1-side,point,world_motion,spin_rate)
 	launch(point,world_motion,"spike",index,spin_rate)
 	return true
@@ -2656,16 +2656,17 @@ func begin_ball_bounce() -> void:
 	bounce_origin.y = Flight.FLOOR
 	var before_impact := path_point(maxf(0.0,flight_end()-0.015))
 	var impact_velocity := (bounce_origin-before_impact)/0.015
-	play_floor_impact(absf(impact_velocity.y))
+	if flight_kind=="spike" and velocity.length()>=preload("res://scripts/gym_physics.gd").HARD_SPIKE_SPEED:
+		play_floor_impact(impact_velocity.length())
 	bounce_velocity = impact_velocity.slide(Vector3.UP)*0.37
 	bounce_velocity.y = maxf(absf(impact_velocity.y)*0.64,2.10)*sqrt(1.25)
 	bounce_end = Flight.landing_time(bounce_origin,bounce_velocity)
 
 func play_floor_impact(speed: float, rebound := false) -> void:
-	if StorySession.attack_ball_audio_muted: return
+	if rebound or speed<preload("res://scripts/gym_physics.gd").HARD_SPIKE_SPEED or StorySession.attack_ball_audio_muted: return
 	var strength := smoothstep(2.0,11.0,speed)
 	floor_audio.volume_db = lerpf(-10.0,1.5,strength)-(6.0 if rebound else 0.0)
-	floor_audio.pitch_scale = lerpf(1.04,0.96,strength)
+	floor_audio.pitch_scale = 1.0
 	floor_audio.play()
 
 func check_floor(previous: float) -> void:

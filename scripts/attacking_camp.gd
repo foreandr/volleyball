@@ -468,8 +468,9 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 					depth_error=(-1. if error>0. else 1.)*severity*rotation_drill.random.randf_range(0.,12. if error>0. else 8.)
 			if not cpu_hitter and (manual_shot<0 or not is_finite(release_at)):
 				return false
-			if not tip_shot and not has_meta("live_sampler"):
-				hand_impact.volume_db=-11. if roll_shot else -2.
+			hard_spike_floor_pending=not tip_shot and not roll_shot and attack_speed()*power_scale*attack_jump.spike_power_factor()>=Contact.HARD_SPIKE_SPEED
+			if hard_spike_floor_pending and not has_meta("live_sampler"):
+				hand_impact.volume_db=-2.
 				hand_impact.play()
 			contact_swing_time=swing_time
 			strike_point=ball.position

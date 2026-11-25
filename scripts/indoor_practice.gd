@@ -225,6 +225,7 @@ func athlete(at: Vector3,color: String) -> Node3D:
 var original_render_scale := 1.0
 var original_msaa := Viewport.MSAA_DISABLED
 
+var hard_spike_floor_pending := false
 var floor_impact := AudioStreamPlayer.new()
 
 func _ready() -> void:
@@ -531,6 +532,7 @@ func choose_camp_toss() -> Vector3:
 	return Vector3.INF
 
 func reset_feed() -> void:
+	hard_spike_floor_pending=false
 	bump_aim=Vector3.ZERO
 	bump_released=false
 	bump_touched=false
@@ -1610,7 +1612,9 @@ func advance_missed_ball(delta: float, rebound_floor := false) -> void:
 		var hit := contacts.sweep(world,contacts.ball_shape,ball.position,motion,Contact.GYM|Contact.EQUIPMENT|rotation_drill.CART_WALL)
 		ball.position+=motion*float(hit.get("fraction",1.))
 		if roll_time<0. and ((not hit.is_empty() and hit.normal.y>.8 and ball.position.y<.25) or ball.position.y<=Contact.BALL_RADIUS+.004):
-			if drop_velocity.y < -1. and not has_meta("live_sampler"):
+			var hard_landing := hard_spike_floor_pending and drop_velocity.length()>=Contact.HARD_SPIKE_SPEED
+			hard_spike_floor_pending=false
+			if hard_landing and not has_meta("live_sampler"):
 				floor_impact.volume_db=linear_to_db(clampf(-drop_velocity.y/12.,.06,.88))
 				floor_impact.play()
 			if rebound_floor and drop_velocity.y < -1.5:
