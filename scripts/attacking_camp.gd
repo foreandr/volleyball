@@ -124,9 +124,11 @@ func attack_reference_time() -> float:
 	return flight_time
 
 func button_timing_error() -> float:
-	if phase!="set": return METER_START-GRADE_ADVANCE
+	if phase not in ["set_contact","set"]: return METER_START-GRADE_ADVANCE
 	if not approach_started or endpoint.y>attack_contact_height()+ATTACK_CONTACT_RADIUS:
 		return METER_START-GRADE_ADVANCE
+	if phase=="set_contact":
+		return elapsed-SET_RECEIVE_TIME-push_time-attack_set_duration(tempo)+RELEASE_LEAD
 	return elapsed-attack_reference_time()+RELEASE_LEAD
 
 func show_attack_timing(error: float, cleared := false) -> void:
@@ -315,7 +317,7 @@ func drive_cpu_attack() -> void:
 	if phase=="pass" and manual_shot<0:
 		var lane := 0 if bounce_line or not cross_court else (1 if spikes%4==1 else 2)
 		cpu_pad_button(lane,true)
-	elif phase=="set" and manual_shot>=0 and not is_finite(release_at):
+	elif phase in ["set_contact","set"] and manual_shot>=0 and not is_finite(release_at):
 		if button_timing_error()+GRADE_ADVANCE>=0.:
 			cpu_pad_button(manual_shot,false)
 
