@@ -139,6 +139,8 @@ func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time
 			var center := start+heading*(entry_distance+lead_distance+stride)
 			var width := heading.cross(Vector3.UP)*plant_width
 			right_plant = center-heading*0.19+width
+			if attack_arm_lift and approach_steps==3:
+				right_plant += heading*0.22
 			left_plant = center+heading*0.20-width
 			right_plant.y = plant_ground
 			left_plant.y = plant_ground
