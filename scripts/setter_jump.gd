@@ -54,6 +54,7 @@ var plant_legs := {}
 var plant_ground := 0.0
 var entry_leg_rotations := {}
 var entry_body_pose := {}
+var attack_entry_speed := 0.0
 var incoming_plant_speed := 0.0
 var attack_glide := 0.0
 
@@ -96,6 +97,7 @@ func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time
 	plant_legs.clear()
 	entry_leg_rotations.clear()
 	entry_body_pose.clear()
+	attack_entry_speed = 0.0
 	incoming_plant_speed = 0.0
 	attack_glide = 0.0
 	if approach_plant and not setting_jump:
@@ -188,6 +190,14 @@ func begin_set_jump(actor: Node3D, load: float, jump_height := 0.56) -> void:
 
 func release() -> void:
 	held = false
+
+func spike_power_factor() -> float:
+	# Use the run into the plant and the ground distance covered by the approach.
+	var ground_distance := entry_distance+lead_distance+stride*(1.-AIR_TRAVEL_FRACTION)
+	var approach_speed := maxf(attack_entry_speed,ground_distance/maxf(.01,load_duration()))
+	var drive := smoothstep(.8,3.5,approach_speed)
+	var lift := clampf(sqrt(maxf(0.,height)/1.27),0.,1.)
+	return (.60+.40*drive)*(.82+.18*lift)
 
 func horizontal_velocity() -> Vector3:
 	return carry_velocity+air_velocity+heading*(stride*AIR_TRAVEL_FRACTION/air_time+attack_glide*glide_speed())

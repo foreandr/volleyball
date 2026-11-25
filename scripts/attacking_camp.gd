@@ -282,6 +282,7 @@ func start_approach(steps := 3, cadence := 1.) -> void:
 	var heading := (contact_stance-hitter.position).slide(Vector3.UP).normalized()
 	hitter.rotation.y=atan2(heading.x,heading.z)
 	attack_jump.begin(hitter,Vector2(-heading.x,heading.z),contact_stance,PLANT_TIME*cadence,jump_height,steps,false,cadence,false,.22)
+	attack_jump.attack_entry_speed=maxf(0.,prep_velocity.dot(heading))
 	var to_ball := (endpoint-hitter.position).slide(Vector3.UP)
 	if not to_ball.is_zero_approx(): attack_jump.lead_heading=to_ball.normalized()
 	attack_jump.release()
@@ -303,7 +304,7 @@ func attack_speed() -> float:
 	return sqrt(14.*effort)*arm_speed_factor()*(1.+(strength-65.)*.005)
 
 func attack_flight_time(distance: float) -> float:
-	return maxf(.05,distance/(attack_speed()*power_scale))
+	return maxf(.05,distance/(attack_speed()*power_scale*attack_jump.spike_power_factor()))
 
 func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 	message.text="Approach and spike"
@@ -404,7 +405,7 @@ func advance_spike(delta: float, bounce: bool) -> void:
 	var descent := drop_velocity.y
 	if in_flight: drop_velocity+=spin_acceleration*delta
 	advance_missed_ball(delta,bounce)
-	if roll_time>=0. or (descent<0. and drop_velocity.y>0.): spin_acceleration=Vector3.ZERO
+	if not drop_net_hit.is_empty() or roll_time>=0. or (descent<0. and drop_velocity.y>0.): spin_acceleration=Vector3.ZERO
 	if in_flight and roll_time<0. and not forward.is_zero_approx():
 		var spin := int(review_setup.get("spin",0))
 		var axis := attack_spin_axis(forward,spin)

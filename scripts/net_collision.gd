@@ -85,6 +85,7 @@ static func impact(time: float, point: Vector3, incoming: Vector3, side: float) 
 		rebound = Vector3(incoming.x*0.25,minf(0,incoming.y*0.15),side*absf(incoming.z)*0.12)
 		release = point
 		release.z = NET_Z+side*(RADIUS+0.014)
+	if kind!="under": rebound=rebound.normalized()*incoming.length()*.20
 	release.y = maxf(Flight.FLOOR,release.y)
 	var airborne := Flight.landing_time(release,rebound)
 	return {"time":time,"point":point,"incoming":incoming,"side":side,"kind":kind,"rollover":rollover,"softness":softness,"stretch":stretch,"contact_duration":duration,"release_time":time+duration,"release_point":release,"velocity":rebound,"drop_time":airborne,"end_time":time+duration+airborne}

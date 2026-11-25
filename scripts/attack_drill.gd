@@ -1070,7 +1070,7 @@ func hit_spike(charge: float, point: Vector3, palm_gap := 0.0) -> void:
 	elif not swing_practice:
 		var completion := smoothstep(0.22,0.93,swing_contact_extension)
 		speed *= lerpf(0.56,1.0,charge)*lerpf(0.65,1.0,completion)
-	var duration := target.slide(Vector3.UP).length()/(speed*spike_speed_multiplier())
+	var duration := target.slide(Vector3.UP).length()/(speed*spike_speed_multiplier()*jump.spike_power_factor())
 	pass_motion = target/duration+Vector3.UP*Flight.spike_gravity(spike_topspin_rps)*duration*0.5
 	flight_end = duration
 	swing_net_hit = Net.first_hit(spike_flight_point,0.0,duration)
