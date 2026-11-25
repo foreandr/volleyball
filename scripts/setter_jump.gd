@@ -379,6 +379,12 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 			var sweep_back := smoothstep(0.0,0.12,pose_time)
 			front_swing = 0.20*smoothstep(0.0,lead_step_duration*0.72,lead_age)*(1.0-sweep_back)
 			arm_load *= sweep_back
+			if attack_arm_lift and approach_plant:
+				# Start both hands back with the long right step, then drive
+				# them forward as the closing left foot accepts weight.
+				var plant_phase := (elapsed-lead_time)/(load_duration()-lead_time)
+				var sweep := smoothstep(lead_time*.44,lead_time+(load_duration()-lead_time)*.53,elapsed)
+				arm_load = sweep*(1.-smoothstep(.66,1.10,plant_phase))
 		var jump_drive := arm_drive if not approach_plant or attack_arm_lift else 0.0
 		author.rotate_world(pose,upper_arm,Vector3.RIGHT,(1.52+load_arm_extra)*arm_load-front_swing)
 		author.rotate_world(pose,forearm,Vector3.RIGHT,-0.25*jump_drive)

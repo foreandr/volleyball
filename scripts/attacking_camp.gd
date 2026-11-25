@@ -26,6 +26,9 @@ func start_drill() -> void:
 	attack_jump.front_limit=3.65
 	attack_jump.attack_arm_lift=true
 	super.start_drill()
+	if "--edit-approach" in OS.get_cmdline_user_args() and not Engine.has_meta("approach_editor_opened"):
+		Engine.set_meta("approach_editor_opened",true)
+		edit_approach_frames.call_deferred()
 
 func camp_title() -> String:
 	return "ATTACKING   /   APPROACH AND SPIKE"
@@ -174,3 +177,31 @@ func pose_swing() -> void:
 
 func frame_editor_attacker() -> Node3D:
 	return hitter
+
+func edit_approach_frames() -> void:
+	# Sample the same planted approach used on court, ending exactly at liftoff.
+	hitter.position=START
+	hitter.rotation.y=0.
+	hitter.play_action("idle",0.)
+	hitter.animator.advance(0.)
+	endpoint=START+Vector3(-.18,0.,2.20)
+	approach_started=false
+	start_approach()
+	var recording := preload("res://scripts/match_replay.gd").new()
+	var duration := attack_jump.load_duration()
+	var count := ceili(duration*60.)
+	for i in range(count+1):
+		var time := minf(i/60.,duration)
+		if i>0: attack_jump.step(hitter,time-(i-1)/60.,Vector2.ZERO)
+		var bones: Array[Transform3D]=[]
+		for id in hitter.skeleton.get_bone_count():
+			bones.append(hitter.skeleton.get_bone_pose(id))
+		recording.frames.append({"time":time,"actors":[{"root":hitter.transform,"bones":bones}]})
+	var title := "Three-step approach and backswing"
+	recording.index=0
+	StorySession.edit_animation=recording.bake_recorded_actor(hitter,0,title,count,false)
+	StorySession.edit_animation.set_meta("editor_height_cm",hitter.height_cm)
+	StorySession.edit_entry={"id":"camp_spike_approach","name":title,"category":"Attacking","type":"Approach"}
+	StorySession.animation_draft.clear()
+	settings.leave_for_frame_editor()
+	MenuPresentation.load_scene("res://scenes/animation_editor.tscn")
