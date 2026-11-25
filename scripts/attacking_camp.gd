@@ -20,6 +20,7 @@ const SHOT_BUTTONS := [JOY_BUTTON_X,JOY_BUTTON_Y,JOY_BUTTON_B]
 var manual_shot := -1
 var release_at := INF
 var release_grade := INF
+var approach_delay := 0.
 var first_palm_at := INF
 var aim_center := Vector2.INF
 var placement_offset := Vector2.ZERO
@@ -39,9 +40,16 @@ func attack_meter_position(error: float) -> float:
 	return clampf(inverse_lerp(METER_START,METER_END,error),0.,1.)
 
 func attack_meter_error() -> float:
-	if is_finite(release_grade): return release_grade
+	var error := release_grade if is_finite(release_grade) else button_timing_error()
+	return combined_attack_error(error)
+
+func button_timing_error() -> float:
 	if phase!="set": return METER_START
-	return minf(release_at,clock)-clock+elapsed-flight_time+.08
+	return elapsed-flight_time+.08
+
+func combined_attack_error(button_error: float) -> float:
+	if button_error<EARLY_LIMIT or approach_delay<=CLEAN_LATE: return button_error
+	return maxf(button_error,minf(approach_delay,LATE_LIMIT))
 
 func show_attack_timing(error: float) -> void:
 	var clean := error>=-CLEAN_EARLY and error<=CLEAN_LATE
@@ -54,6 +62,7 @@ func clear_attack_input() -> void:
 	manual_shot=-1
 	release_at=INF
 	release_grade=INF
+	approach_delay=0.
 	first_palm_at=INF
 	aim_center=Vector2.INF
 	placement_offset=Vector2.ZERO
@@ -142,10 +151,10 @@ func _input(event: InputEvent) -> void:
 					release_at=INF
 					release_grade=INF
 				elif manual_shot==index:
-					release_grade=attack_meter_error()
+					release_grade=button_timing_error()
 					release_at=clock
-					show_attack_timing(release_grade)
-					trace("attack_release",{"shot":index,"meter_error_ms":roundi(release_grade*1000.),"approach":approach_started})
+					show_attack_timing(combined_attack_error(release_grade))
+					trace("attack_release",{"shot":index,"meter_error_ms":roundi(attack_meter_error()*1000.),"button_ms":roundi(release_grade*1000.),"approach_delay_ms":roundi(approach_delay*1000.),"approach":approach_started})
 					if not approach_started: manual_shot=-1
 				get_viewport().set_input_as_handled()
 				return
@@ -325,6 +334,7 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 		cadence=.94
 	var load_time := cadence*((steps-2)*attack_jump.LEAD_STEP_TIME+PLANT_TIME)
 	if (cpu_hitter or (manual_shot>=0 and distance<=3.35)) and remaining<=load_time+rise+.025:
+		if not approach_started: approach_delay=maxf(0.,load_time+rise+.025-remaining-delta)
 		start_approach(steps,cadence)
 	if approach_started and swing_time<0. and remaining<=.16/arm_speed_factor()+(.095 if not has_meta("sampling_attack") else 0.): swing_time=0.
 	if swing_time<0. and attack_jump.active and attack_jump.elapsed>attack_jump.load_duration():
@@ -338,7 +348,12 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 			closest_spike_gap=minf(closest_spike_gap,nearest.distance_to(palm))
 		if swing_time>=.055 and swing_time<=.30 and nearest.distance_to(palm)<=ATTACK_CONTACT_RADIUS:
 			if not cpu_hitter:
-				if not is_finite(first_palm_at): first_palm_at=clock
+				if not is_finite(first_palm_at):
+					first_palm_at=clock
+					var before := combined_attack_error(release_grade)
+					approach_delay=maxf(approach_delay,button_timing_error())
+					if is_finite(release_grade) and before<=CLEAN_LATE and combined_attack_error(release_grade)>CLEAN_LATE:
+						show_attack_timing(combined_attack_error(release_grade))
 				if manual_shot<0 or not is_finite(release_at):
 					if elapsed<flight_time: return false
 				else:
@@ -347,6 +362,7 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 						manual_shot=-1
 						return false
 					placement_offset=Vector2.from_angle(rotation_drill.random.randf()*TAU)*sqrt(rotation_drill.random.randf())*aim_radius()
+					error=combined_attack_error(error)
 					var severity := smoothstep(CLEAN_LATE if error>0. else CLEAN_EARLY,LATE_LIMIT if error>0. else -EARLY_LIMIT,absf(error))
 					power_scale=lerpf(1.,.63,severity)
 					depth_error=(-1. if error>0. else 1.)*severity*rotation_drill.random.randf_range(0.,12. if error>0. else 8.)
@@ -367,7 +383,7 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 			var shot_time := attack_flight_time(landing.distance_to(ball.position))
 			drop_velocity=(landing-ball.position)/shot_time+Vector3.UP*(4.905*shot_time)
 			roll_time=-1.
-			trace("spike",{"from":str(ball.position),"palm_gap":nearest.distance_to(palm)})
+			trace("spike",{"from":str(ball.position),"palm_gap":nearest.distance_to(palm),"approach_delay_ms":roundi(approach_delay*1000.),"button_ms":roundi(release_grade*1000.) if is_finite(release_grade) else null})
 			begin("spike")
 			return true
 	if elapsed>=flight_time:

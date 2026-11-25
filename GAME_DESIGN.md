@@ -199,3 +199,5 @@ The attack landing marker previews the aimed ball flight: green in, yellow tape-
 Short attack plants use the authored front arm-lift curve. The attack release meter grades releases from 85 ms early through 20 ms late as Perfect; release labels are Early, Perfect and Late.
 
 Shared cloth and tape rebounds retain 20% of incoming speed at release. Spike launch pace depends on forward approach momentum and fatigue-adjusted jump height, including short plants at the net.
+
+Attack timing also considers approach arrival. A playable button release can grade Late when the plant starts behind schedule or the palm first reaches the descending set late. Net contact alone does not determine the timing grade.
