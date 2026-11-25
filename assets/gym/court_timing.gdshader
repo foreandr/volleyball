@@ -9,7 +9,7 @@ void fragment() {
 	vec2 p = UV * 2.0 - 1.0;
 	float t = atan(-p.y, p.x) / PI;
 	float r = length(p);
-	if (t < 0.0 || r < 0.77 || r > 0.99) discard;
+	if (t < 0.0 || r < 0.70 || r > 0.99) discard;
 	float progress = 1.0 - t;
 	vec3 tint = miss.rgb;
 	float start = 0.0;
@@ -18,8 +18,8 @@ void fragment() {
 	if (progress > perfect.y) { tint=vec3(.94,.12,.10); start=perfect.y; }
 	if (progress > contact.y) { tint=miss.rgb; start=contact.y; }
 	ALBEDO=tint*((progress<=cursor || (highlight && start<=cursor)) ? 1.0 : .68);
-	if (r < .795 || r > .965) ALBEDO=vec3(.025);
+	if (r < .722 || r > .965) ALBEDO=vec3(.025);
 	float cursor_distance=abs(progress-cursor);
-	if (cursor_distance < .019) ALBEDO=vec3(.025);
-	if (cursor_distance < .012) ALBEDO=vec3(1.0);
+	if (cursor_distance < .040) ALBEDO=vec3(.025);
+	if (cursor_distance < .029) ALBEDO=vec3(1.0);
 }

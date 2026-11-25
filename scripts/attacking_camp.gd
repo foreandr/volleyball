@@ -1260,12 +1260,16 @@ func resolve_block_contact(previous: Vector3,block_jumps: Array) -> bool:
 				if gap <= Contact.BALL_RADIUS+PracticeBlock.ARM_RADII[segment]:
 					touched=true
 					hit_position=closest[0]
-					stuff=segment==2 and gap<.13 and closest[1].y>BallNet.NET_TOP+.10 and closest[1].z<BallNet.NET_Z-.04
+					var surface: Vector3=closest[1]
+					var distal_forearm: bool = segment==1 and surface.distance_to(block.wrists[i])<.14 and block.wrists[i].z<block.elbows[i].z
+					var square_hit := gap<Contact.BALL_RADIUS+.055 and drop_velocity.z>0.
+					stuff=(segment==2 or distal_forearm) and square_hit and surface.y>BallNet.NET_TOP+.10 and surface.z<BallNet.NET_Z-.04
 					break
 			if not touched: continue
 			ball.global_position=hit_position
 			if stuff:
-				drop_velocity=hit_position.direction_to(block.court_aim)*drop_velocity.length()*.55
+				var floor_target := Vector3(clampf(hit_position.x*.85,-4.2,4.2),Contact.BALL_RADIUS,BallNet.NET_Z-1.65)
+				drop_velocity=hit_position.direction_to(floor_target)*drop_velocity.length()*.78
 			else:
 				var side := signf(hit_position.z-BallNet.NET_Z)
 				if is_zero_approx(side): side=signf(drop_velocity.z)

@@ -109,8 +109,10 @@ func step(delta: float, world_ball: Vector3) -> bool:
 		var press := smoothstep(0.32,0.70,lift) if aggressive_press else smoothstep(0.45,0.95,lift)
 		var below_tape := 1.0-smoothstep(2.50,2.80,rig.to_global(shoulder).y+0.62)
 		var depth := lerpf(lerpf(0.20,0.55,press),0.17,below_tape)
+		var forward_press := press*(1.-below_tape) if aggressive_press and court_aim.is_finite() else 0.
+		depth+=.21*forward_press
 		var lateral_limit := 0.24 if aggressive_press else 0.18
-		var target := shoulder+Vector3(clampf(aim.x-shoulder.x,-lateral_limit,lateral_limit)-outward*0.06,0.62,depth)/scale_
+		var target := shoulder+Vector3(clampf(aim.x-shoulder.x,-lateral_limit,lateral_limit)-outward*0.06,0.62-.09*forward_press,depth)/scale_
 		var spread := (reach.x if side=="l" else reach.y)*air_weight
 		var opposite := (reach.y if side=="l" else reach.x)*air_weight
 		var shoulder_offset := rig.to_global(shoulder).x-rig.to_global(author.point(pose,"spine_03")).x
