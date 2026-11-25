@@ -132,7 +132,7 @@ func _ready() -> void:
 		review_votes.load(REVIEW_PATH)
 		show_swing(int(review_votes.get_value("review","current",1)))
 func show_swing(number: int) -> void:
-	review_number=clampi(number,1,50)
+	review_number=wrapi(number-1,0,50)+1
 	session.replace_source(preload("res://scripts/numbered_swings.gd").make(review_source,review_number))
 	undo_history.clear()
 	redo_history.clear()
@@ -141,7 +141,7 @@ func show_swing(number: int) -> void:
 	review_status.text="%02d / 50   %s" % [review_number,review_votes.get_value("votes",str(review_number),"")]
 	review_votes.set_value("review","current",review_number)
 	if review_votes.save(REVIEW_PATH)!=OK: review_status.text+="   Save failed"
-	set_frame(10)
+	set_frame(int(session.source.get_meta("editor_loop_start",0)))
 	set_playing(true)
 
 func add_shot_slider(box: VBoxContainer, caption: String, key: String, low: float, high: float, step_size: float, fallback: float, unit: String) -> HSlider:
@@ -291,7 +291,7 @@ func build_controls(controls: VBoxContainer) -> void:
 				queue_live_shot()
 				court.accept_event())
 		var hint := Label.new()
-		hint.text="Drag the floor ball to move the set."
+		hint.text="Drag the floor ball anywhere on the attacking side."
 		settings_box.add_child(hint)
 		var spin := OptionButton.new()
 		for label in ["Topspin","Left spin","Right spin","No spin"]: spin.add_item(label)
@@ -667,8 +667,8 @@ func handle_preview_input(event: InputEvent) -> void:
 		if dragging_floor_ball and event is InputEventMouseMotion:
 			var hit: Variant=Plane(Vector3.UP,SET_MARKER_ORIGIN.y).intersects_ray(preview_camera.project_ray_origin(event.position),preview_camera.project_ray_normal(event.position))
 			if hit is Vector3:
-				shot_setup.set_x=clampf(hit.x-SET_MARKER_ORIGIN.x,-.65,.65)
-				shot_setup.set_z=clampf(hit.z-SET_MARKER_ORIGIN.z,-.45,.45)
+				shot_setup.set_x=clampf(hit.x,-4.5,4.5)-SET_MARKER_ORIGIN.x
+				shot_setup.set_z=clampf(hit.z,-5.,3.9)-SET_MARKER_ORIGIN.z
 				floor_ball.position=SET_MARKER_ORIGIN+Vector3(shot_setup.set_x,0.,shot_setup.set_z)
 				queue_live_shot()
 			preview.accept_event()

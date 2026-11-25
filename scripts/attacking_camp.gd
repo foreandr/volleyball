@@ -150,12 +150,23 @@ func start_approach() -> void:
 	if not to_ball.is_zero_approx(): attack_jump.lead_heading=to_ball.normalized()
 	attack_jump.release()
 
+func arm_speed_factor() -> float:
+	var effort := float(review_setup.get("power",14.))
+	var rating := float(hitter.attributes.get("Arm swing",65))
+	return pow(effort/14.,.48)*(1.+(rating-65.)*.004)
+
+func attack_flight_time(distance: float) -> float:
+	var strength := float(hitter.attributes.get("Strength",65))
+	var effort := float(review_setup.get("power",14.))
+	var speed := sqrt(14.*effort)*arm_speed_factor()*(1.+(strength-65.)*.005)
+	return maxf(.05,distance/speed)
+
 func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 	message.text="Approach and spike"
 	var remaining := flight_time-elapsed
 	var rise := attack_jump.flight_duration(jump_height,true)*.48
 	if cpu_hitter and remaining<=attack_jump.LEAD_STEP_TIME+PLANT_TIME+rise+.025: start_approach()
-	if cpu_hitter and approach_started and swing_time<0. and remaining<=.16: swing_time=0.
+	if cpu_hitter and approach_started and swing_time<0. and remaining<=.16/arm_speed_factor(): swing_time=0.
 	if swing_time<0. and attack_jump.active and attack_jump.elapsed>attack_jump.load_duration():
 		pose_swing()
 	if swing_time>=0.:
@@ -174,8 +185,7 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 			contact_offset=(ball.position-palm).normalized()*Contact.BALL_RADIUS
 			net_clear_time=-1.
 			var landing := shot_landing(ball.position)
-			var shot_time := .68
-			if not review_setup.is_empty(): shot_time=landing.distance_to(ball.position)/float(review_setup.get("power",14.))
+			var shot_time := attack_flight_time(landing.distance_to(ball.position))
 			drop_velocity=(landing-ball.position)/shot_time+Vector3.UP*(4.905*shot_time)
 			roll_time=-1.
 			trace("spike",{"from":str(ball.position),"palm_gap":nearest.distance_to(palm)})
@@ -195,11 +205,11 @@ func advance_spike(delta: float, bounce: bool) -> void:
 	if age<=PALM_CONTACT+.00001:
 		ball.position=Contact.palm(hitter,"r")+contact_offset
 		var landing := shot_landing(strike_point)
-		var flight := .68 if review_setup.is_empty() else ball.position.distance_to(landing)/float(review_setup.get("power",14.))
+		var flight := attack_flight_time(ball.position.distance_to(landing))
 		var direction := ball.position.direction_to(landing).slide(Vector3.UP).normalized()
 		var speed := landing.distance_to(ball.position)/flight
 		var spin := int(review_setup.get("spin",0))
-		var force_axis: Vector3=[Vector3.DOWN,Vector3.UP.cross(direction),direction.cross(Vector3.UP),Vector3.ZERO][spin]
+		var force_axis: Vector3=[Vector3.DOWN,direction.cross(Vector3.UP),Vector3.UP.cross(direction),Vector3.ZERO][spin]
 		spin_acceleration=force_axis*minf(22.,speed*.78)
 		# Compensate at launch to keep the selected landing point on the curved path.
 		drop_velocity=(landing-ball.position)/flight+(Vector3.UP*9.81-spin_acceleration)*(.5*flight)
@@ -243,44 +253,51 @@ func pose_swing() -> void:
 	var rig: Skeleton3D=hitter.skeleton
 	var pose: Array=[]
 	for id in rig.get_bone_count(): pose.append(rig.get_bone_pose(id))
-	var reach := smoothstep(.025,.13,swing_time)
-	var follow := smoothstep(.16,.46,swing_time)
+	var reach := smoothstep(.025,.13,swing_time*arm_speed_factor())
+	var follow := 0.0
+	if phase=="spike":
+		var progress := clampf((swing_time-contact_swing_time)*arm_speed_factor()/.32,0.,1.)
+		follow=progress*(1.5-.5*progress)
 	var author = hitter.get_pose_author()
 	var airborne := smoothstep(0.,.12,attack_jump.elapsed-attack_jump.load_duration()) if attack_jump.active else 0.
-	var load_weight := airborne*(1.-smoothstep(.025,.23,swing_time))
+	var air_age := attack_jump.elapsed-attack_jump.load_duration()
+	var apex_offset := air_age-attack_jump.flight_duration(jump_height,true)*.48
+	var load_weight := airborne*(1.-smoothstep(-.14,.14,apex_offset))
 	var toward_feed := (source-hitter.position).slide(Vector3.UP).normalized()
-	var open_axis := hitter.basis.inverse()*(toward_feed+Vector3.BACK*1.1)
-	var twist := clampf(atan2(open_axis.x,open_axis.z),-.85,.85)*load_weight
-	var hip_turn := twist*.50
 	var feed_local := hitter.basis.inverse()*toward_feed
-	twist = clampf(atan2(feed_local.x,feed_local.z),-1.48,1.48)*load_weight-hip_turn
-	var shot_origin := strike_point if phase=="spike" else ball.position
+	# A right-handed hitter draws the striking shoulder back on either pin.
+	var opening := -deg_to_rad(lerpf(78.,34.,smoothstep(-.8,.8,feed_local.x)))*load_weight
+	var hip_turn := opening*.28
+	var twist := opening-hip_turn
+	var shot_origin := strike_point if phase=="spike" else endpoint
 	var shot_local := hitter.basis.inverse()*shot_origin.direction_to(shot_landing(shot_origin))
-	var aim_turn := clampf(atan2(shot_local.x,shot_local.z),-1.15,1.15)*smoothstep(.005,.12,swing_time)
-	twist+=aim_turn*.76
-	hip_turn+=aim_turn*(.24+.17*airborne)
-	twist+=aim_turn*.09*airborne
+	var heading := clampf(atan2(shot_local.x,shot_local.z),-1.35,1.35)
+	var hip_share := lerpf(.46,.72,smoothstep(.15,.95,absf(heading)))
+	hip_turn+=heading*hip_share*smoothstep(-.20,.055,apex_offset)
+	twist+=heading*(1.-hip_share)*smoothstep(-.15,.085,apex_offset)
 	author.rotate_world(pose,"spine_01",Vector3.RIGHT,deg_to_rad(-9.)*load_weight)
 	author.rotate_world(pose,"spine_01",Vector3.UP,twist*.45)
 	author.rotate_world(pose,"spine_02",Vector3.UP,twist*.55)
 	# Raise the striking shoulder in the chest's own lateral plane as the arm reaches.
 	var across: Vector3=author.point(pose,"upperarm_l")-author.point(pose,"upperarm_r")
 	var bend_axis := Vector3.UP.cross(across).normalized()
-	var contact_bend := deg_to_rad(28.)*smoothstep(.025,.115,swing_time)*(1.-smoothstep(.18,.32,swing_time))
+	var contact_bend := deg_to_rad(28.)*smoothstep(-.19,-.025,apex_offset)*(1.-smoothstep(.055,.28,apex_offset))
 	author.rotate_world(pose,"spine_01",bend_axis,contact_bend*.45)
 	author.rotate_world(pose,"spine_02",bend_axis,contact_bend*.55)
-	var air_age := attack_jump.elapsed-attack_jump.load_duration()
-	# Drive the hips through takeoff and let the heels trail until the strike.
 	var tuck_age := maxf(0.,air_age-.015)
 	var since_hit := swing_time-contact_swing_time if phase=="spike" else 0.
-	# Ease out of the tuck during the forward stroke, finishing two ticks after contact.
-	var extension_phase := clampf((swing_time-.065)/.11,0.,.70)
-	if phase=="spike":
-		var at_contact := clampf((contact_swing_time-.065)/.11,0.,.70)
-		extension_phase = lerpf(at_contact,1.,clampf(since_hit/.030,0.,1.))
-	var extension := smoothstep(0.,1.,extension_phase)
+	var extension := smoothstep(-.085,.14,apex_offset)
 	var landing_blend := 1.-smoothstep(.19,.33,since_hit)
 	var leg_weight := smoothstep(0.,.055,tuck_age)*landing_blend if attack_jump.active else 0.
+	var athleticism := clampf(float(hitter.attributes.get("Athleticism",65))/100.,0.,1.)
+	var clearance := maxf(0.,4.-hitter.global_position.z-.23)
+	var reach_length := float(hitter.height_cm)*.006
+	var net_angle := asin(clampf(clearance/reach_length,0.,1.))
+	var pike := smoothstep(.015,.19,since_hit)*(1.-smoothstep(.19,.38,since_hit))
+	var chest_fold := minf(deg_to_rad(lerpf(26.,60.,athleticism)),net_angle)*pike
+	author.rotate_world(pose,"spine_01",Vector3.RIGHT,chest_fold*.65)
+	author.rotate_world(pose,"spine_02",Vector3.RIGHT,chest_fold*.35)
+	var leg_angle := minf(deg_to_rad(lerpf(24.,53.,athleticism)),net_angle)
 	var knee_load := leg_weight*(1.-extension)
 	var lift_pose := knee_load
 	var pelvis := rig.find_bone("pelvis")
@@ -299,14 +316,14 @@ func pose_swing() -> void:
 		var thigh_axis := Vector3(.33,-.74,.58) if side=="l" else Vector3(-.13,-.80,.59)
 		var trailing_thigh := Vector3(.17,-.89,-.43) if side=="l" else Vector3(-.14,-.84,-.53)
 		thigh_axis = thigh_axis.normalized().slerp(trailing_thigh.normalized(),lift_pose)
-		author.aim_joint(pose,thigh,calf,hip+leg.slerp(thigh_axis.slerp(Vector3(outward,-.87,.49).normalized(),extension),leg_weight))
+		author.aim_joint(pose,thigh,calf,hip+leg.slerp(thigh_axis.slerp(Vector3(outward,-cos(leg_angle),sin(leg_angle)).normalized(),extension),leg_weight))
 		var knee: Vector3 = author.point(pose,calf)
 		var shin: Vector3 = (author.point(pose,foot)-knee).normalized()
 		# In the edited hang the ankles rise above the knees while the toes hang down.
 		var seat := hip+Vector3(outward*.45,-.065,-.17)/rig.global_basis.y.length()
 		var full_tuck := (seat-knee).normalized()
 		var previous_tuck := Vector3(outward,.83,-.55).normalized()
-		var heel := previous_tuck.slerp(full_tuck,.63)
+		var heel := previous_tuck.slerp(full_tuck,lerpf(.28,.84,athleticism))
 		var extended := (knee-hip).normalized()
 		var blend := maxf(knee_load,airborne)*landing_blend
 		# Unfold in the forward/back plane; a 3D arc can swing an ankle sideways mid-stroke.
@@ -433,7 +450,7 @@ func sample_attack_clip(arm_lift: bool,arm_swing: bool,cross: bool,review: bool,
 	jump_height=float(setup.get("jump",33.))*.0254
 	cross_court=float(setup.get("x",3.4 if cross else -3.4))>0.
 	# Warm up from the first step so the editor inherits the live plant pose.
-	hitter.position=START
+	hitter.position=START+Vector3(setup.get("set_x",0.),0.,setup.get("set_z",0.))
 	hitter.rotation.y=0.
 	hitter.play_action("idle",0.)
 	hitter.animator.advance(0.)
@@ -448,6 +465,7 @@ func sample_attack_clip(arm_lift: bool,arm_swing: bool,cross: bool,review: bool,
 	var duration := takeoff+.25 if arm_lift else takeoff
 	if arm_swing:
 		duration=(first_frame+107)/60.
+		first_frame=0
 		cpu_hitter=true
 		flight_time=DURATION[1]
 	swing_time=-1.
@@ -498,9 +516,10 @@ func sample_attack_clip(arm_lift: bool,arm_swing: bool,cross: bool,review: bool,
 		edit_entry={"id":"camp_right_arm_swing","name":title,"category":"Attacking","type":"Spike"}
 		edit_entry["aim_x"]=review_setup.get("x",-3.4)
 		clip.set_meta("editor_group","Right Arm")
-		clip.set_meta("editor_initial_frame",10)
-		clip.set_meta("editor_loop_start",10)
-	if review:
+		clip.set_meta("swing_frame_offset",floori((takeoff-.15)*60.))
+		clip.set_meta("editor_initial_frame",0)
+		clip.set_meta("editor_loop_start",0)
+	if arm_swing:
 		edit_entry["swing_review"]=true
 		clip.set_meta("swing_hit_frame",hit_frame)
 	return {"entry":edit_entry,"clip":clip}

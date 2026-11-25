@@ -6,7 +6,8 @@ static func make(source: Animation, number: int) -> Animation:
 	var rng := RandomNumberGenerator.new()
 	rng.seed=524287*number
 	var hit := int(source.get_meta("swing_hit_frame"))
-	var peak := rng.randf_range(19.,28.)
+	var offset_frames := int(source.get_meta("swing_frame_offset",0))
+	var peak := offset_frames+rng.randf_range(19.,28.)
 	var release := rng.randf_range(3.,7.)
 	for joint in ["upperarm_r","lowerarm_r","hand_r"]:
 		var path := NodePath("Armature/Skeleton3D:"+str(joint))
@@ -16,16 +17,15 @@ static func make(source: Animation, number: int) -> Animation:
 		if joint=="hand_r": width=Vector3.ZERO # The hand inherits the spin-specific, constrained wrist track.
 		var draw := rotation(rng,width)
 		var drive := rotation(rng,width*.58)
-		var finish := rotation(rng,width*1.12)
+		rotation(rng,width*1.12) # Preserve the seeded draw and drive for the next joint.
 		clip.remove_track(clip.find_track(path,Animation.TYPE_ROTATION_3D))
 		var out := clip.add_track(Animation.TYPE_ROTATION_3D)
 		clip.track_set_path(out,path)
 		for frame in range(ceili(source.length*60.)+1):
 			var time := minf(frame/60.,source.length)
-			var gather := smoothstep(10.,peak,frame)*(1.-smoothstep(peak,hit-release,frame))
+			var gather := smoothstep(offset_frames+10.,peak,frame)*(1.-smoothstep(peak,hit-release,frame))
 			var whip := smoothstep(peak-2.,hit-release,frame)*(1.-smoothstep(hit-release,hit-1.,frame))
-			var follow := smoothstep(hit+1.,hit+10.,frame)
-			var offset := Quaternion.IDENTITY.slerp(draw,gather)*Quaternion.IDENTITY.slerp(drive,whip)*Quaternion.IDENTITY.slerp(finish,follow)
+			var offset := Quaternion.IDENTITY.slerp(draw,gather)*Quaternion.IDENTITY.slerp(drive,whip)
 			clip.rotation_track_insert_key(out,time,source.rotation_track_interpolate(track,time)*offset)
 	return clip
 
