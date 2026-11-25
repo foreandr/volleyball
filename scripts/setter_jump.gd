@@ -208,17 +208,9 @@ func glide_speed() -> float:
 func load_duration() -> float:
 	return assisted_load_time+lead_time if approach_plant else standing_load_time
 
-# A lower apex arrives sooner, and the descending set reaches that lower height later.
-func late_attack_drop(height_m: float, late_s: float, descent_speed: float, apex_fraction: float) -> float:
-	if height_m<=0. or late_s<=.012 or descent_speed<=0.: return 0.
-	var low := 0.
-	var high := minf(.24,height_m*.24)
-	for i in 10:
-		var drop := (low+high)*.5
-		var saved := (flight_duration(height_m,true)-flight_duration(height_m-drop,true))*apex_fraction
-		if saved+drop/descent_speed<late_s: low=drop
-		else: high=drop
-	return high
+static func approach_recovery(actor: Node3D, distance: float) -> float:
+	var speed := clampf(float(actor.effective_rating("Speed"))*.01,0.,1.)
+	return smoothstep(1.85,3.35,distance)*lerpf(.20,1.,speed)
 
 func flight_duration(jump_height: float, assisted: bool) -> float:
 	return FULL_AIR_TIME*sqrt(jump_height/FULL_HEIGHT)*(1.09 if assisted else 1.0)

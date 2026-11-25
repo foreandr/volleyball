@@ -20,7 +20,6 @@ const SHOT_BUTTONS := [JOY_BUTTON_X,JOY_BUTTON_Y,JOY_BUTTON_B]
 var manual_shot := -1
 var release_at := INF
 var release_grade := INF
-var contact_shift := 0.0
 var approach_delay := 0.
 var first_palm_at := INF
 var aim_center := Vector2.INF
@@ -35,7 +34,7 @@ const EARLY_LIMIT := -.18
 const LATE_LIMIT := .085
 const ATTACK_CONTACT_RADIUS := .30
 var reach_assist := Vector3.ZERO
-const GRADE_ADVANCE := .035
+const GRADE_ADVANCE := .055
 const CLEAN_EARLY := .085
 const CLEAN_LATE := .020
 const METER_START := -.32
@@ -51,7 +50,7 @@ func attack_meter_error() -> float:
 
 func button_timing_error() -> float:
 	if phase!="set": return METER_START
-	return elapsed-flight_time+.08-contact_shift
+	return elapsed-flight_time+.08
 
 func combined_attack_error(button_error: float) -> float:
 	if button_error<EARLY_LIMIT or approach_delay<=CLEAN_LATE: return button_error
@@ -69,7 +68,6 @@ func clear_attack_input() -> void:
 	manual_shot=-1
 	release_at=INF
 	release_grade=INF
-	contact_shift=0.
 	approach_delay=0.
 	first_palm_at=INF
 	aim_center=Vector2.INF
@@ -247,8 +245,10 @@ func step_attack(delta: float) -> void:
 					entry=hitter.position+manual_route*maxf(0.,to_set.dot(manual_route)-1.50)
 			elif phase=="pass":
 				entry.z+=.35*smoothstep(0.,1.,elapsed)
-			var desired := ((entry-hitter.position)*(6. if not cpu_hitter else 4.)).limit_length((5.8 if cpu_hitter else 4.3) if phase=="set" else 1.85)
-			prep_velocity=prep_velocity.move_toward(desired,(13. if not cpu_hitter else 8.)*delta)
+			var far := float(attack_jump.approach_recovery(hitter,(endpoint-hitter.position).slide(Vector3.UP).length())) if phase=="set" else 0.
+			var pace := lerpf(5.8 if cpu_hitter else 4.3,6.2,far) if phase=="set" else 1.85
+			var desired := ((entry-hitter.position)*(6. if not cpu_hitter else 4.)).limit_length(pace)
+			prep_velocity=prep_velocity.move_toward(desired,lerpf(8. if cpu_hitter else 13.,20.,far)*delta)
 			var travel := prep_velocity*delta
 			hitter.position=rotation_drill.move_actor(hitter,travel)
 			var watch := (ball.position-hitter.position).slide(Vector3.UP)
@@ -295,7 +295,7 @@ func step_attack(delta: float) -> void:
 	if phase=="pass": message.text="Coach toss to setter"
 	if phase=="set_contact": message.text="Setter contact"
 
-func start_approach(steps := 3, cadence := 1., height_scale := 1.) -> void:
+func start_approach(steps := 3, cadence := 1.) -> void:
 	if approach_started: return
 	last_shoulder_time=-1.
 	reach_assist=Vector3.ZERO
@@ -307,7 +307,7 @@ func start_approach(steps := 3, cadence := 1., height_scale := 1.) -> void:
 		contact_stance=Vector3(endpoint.x,START.y,endpoint.z)-manual_route*.09
 	var heading := (contact_stance-hitter.position).slide(Vector3.UP).normalized()
 	hitter.rotation.y=atan2(heading.x,heading.z)
-	attack_jump.begin(hitter,Vector2(-heading.x,heading.z),contact_stance,PLANT_TIME*cadence,jump_height*height_scale,steps,false,cadence,false,.22)
+	attack_jump.begin(hitter,Vector2(-heading.x,heading.z),contact_stance,PLANT_TIME*cadence,jump_height,steps,false,cadence,false,.22)
 	attack_jump.attack_entry_speed=maxf(0.,prep_velocity.dot(heading))
 	var to_ball := (endpoint-hitter.position).slide(Vector3.UP)
 	if not to_ball.is_zero_approx(): attack_jump.lead_heading=to_ball.normalized()
@@ -342,20 +342,13 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 	if not cpu_hitter:
 		if distance<1.25: steps=2
 		elif distance>2.25: steps=4
-		cadence=.94
+	cadence=lerpf(1. if cpu_hitter else .94,.76,attack_jump.approach_recovery(hitter,distance))
 	var load_time := cadence*((steps-2)*attack_jump.LEAD_STEP_TIME+PLANT_TIME)
-	if (cpu_hitter or (manual_shot>=0 and distance<=3.35)) and remaining<=load_time+rise+.025:
+	if distance<=3.35 and (cpu_hitter or manual_shot>=0) and remaining<=load_time+rise+.025:
 		if not approach_started:
 			approach_delay=maxf(0.,load_time+rise+.025-remaining-delta)
-			var h := effective_attack_height()
-			var u := clampf(1.-.08/flight_time,0.,1.)
-			var descent := (source.y-endpoint.y+4.*set_arc_height*(2.*u-1.))/flight_time
-			var drop := attack_jump.late_attack_drop(h,approach_delay,descent,.48)
-			contact_shift=minf(.075,drop/maxf(.01,descent))
-			var saved_rise := rise-attack_jump.flight_duration(maxf(0.,h-drop),true)*.48
-			approach_delay=maxf(0.,approach_delay-saved_rise-contact_shift)
-			start_approach(steps,cadence,1.-drop/maxf(.001,h))
-	if approach_started and swing_time<0. and remaining+contact_shift<=.16/arm_speed_factor()+(.095 if not has_meta("sampling_attack") else 0.): swing_time=0.
+			start_approach(steps,cadence)
+	if approach_started and swing_time<0. and remaining<=.16/arm_speed_factor()+(.095 if not has_meta("sampling_attack") else 0.): swing_time=0.
 	if swing_time<0. and attack_jump.active and attack_jump.elapsed>attack_jump.load_duration():
 		pose_swing()
 	if swing_time>=0.:
@@ -376,7 +369,7 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 				if manual_shot<0 or not is_finite(release_at):
 					if elapsed<flight_time: return false
 				else:
-					var error := release_grade
+					var error := release_grade+GRADE_ADVANCE
 					if error<EARLY_LIMIT or error>LATE_LIMIT:
 						manual_shot=-1
 						return false
@@ -416,7 +409,7 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 		trace("spike_miss",{"closest_palm_gap_m":closest_spike_gap if is_finite(closest_spike_gap) else -1.,"ball":str(ball.position),"palm":str(Contact.palm(hitter,"r"))})
 		feedback="Missed spike"
 		if not cpu_hitter:
-			if is_finite(release_grade) and (release_grade<EARLY_LIMIT or release_grade>LATE_LIMIT):
+			if is_finite(release_grade) and (release_grade+GRADE_ADVANCE<EARLY_LIMIT or release_grade+GRADE_ADVANCE>LATE_LIMIT):
 				feedback+="   /   Released too early" if release_grade<0. else "   /   Released too late"
 			elif is_finite(release_grade) and closest_spike_gap>ATTACK_CONTACT_RADIUS: feedback+="   /   Out of reach"
 			elif not is_finite(release_grade): feedback+="   /   No release"
@@ -494,7 +487,7 @@ func predicted_attack_origin() -> Vector3:
 	var elbow := Contact.joint(hitter,"lowerarm_r")
 	var wrist := Contact.joint(hitter,"hand_r")
 	var reach := shoulder.y-hitter.global_position.y+shoulder.distance_to(elbow)+elbow.distance_to(wrist)+wrist.distance_to(Contact.palm(hitter,"r"))
-	var contact_age := maxf(elapsed,flight_time-.08+contact_shift)
+	var contact_age := maxf(elapsed,flight_time-.08)
 	# Follow the descending set to the first height reachable during this jump.
 	for i in 25:
 		var t := lerpf(contact_age,flight_time,i/24.)

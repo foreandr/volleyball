@@ -202,6 +202,12 @@ Shared cloth and tape rebounds retain 20% of incoming speed at release. Spike la
 
 Attack timing also considers approach arrival. A playable button release can grade Late when the plant starts behind schedule or the palm first reaches the descending set late. Net contact alone does not determine the timing grade.
 
-A late attack plant can trade up to 24 cm or 24% of effective jump height, whichever is smaller, for a reachable descending contact. The adjusted jump feeds swing timing, approach grading, power and net prediction.
+Attackers use their full stamina-adjusted vertical. Farther sets speed up the run-up and plant in proportion to effective Speed. The hitter must cover the ground before starting the plant.
 
-Spike feedback centers its timing bands 35 ms earlier, checks release against palm arrival and plant timing, and confirms Perfect only after clean net clearance. Grading never redirects the launch. All spikes can rebound from the floor.
+Spike feedback centers its timing bands 55 ms earlier, checks release against palm arrival and plant timing, and confirms Perfect only after clean net clearance. Grading never redirects the launch. All spikes can rebound from the floor.
+
+## Future court and multiball modes
+
+- Nine-man volleyball with its own rules and court dimensions.
+- Larger configurable courts, including 10 m and 15 m size options. Exact layouts are open.
+- Multiple live balls at once. In Swedish two-ball, one player on each side serves simultaneously across the net to start two rallies. Scoring and restart rules are open.

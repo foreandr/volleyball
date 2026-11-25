@@ -588,10 +588,9 @@ func time_approach_plant(delta: float) -> void:
 	if not ball_target.is_finite(): return
 	var toward := (ball_target-setter.position).slide(Vector3.UP)
 	var distance_weight := smoothstep(0.15,APPROACH_RADII[0],toward.length())
-	var set_apex := pass_origin.y+pass_motion.y*pass_motion.y/(2.0*Flight.GRAVITY)
-	var height_weight := smoothstep(4.2,5.0,set_apex)
-	var jump_height := jump.max_height*lerpf(0.94,1.0,maxf(distance_weight,height_weight))-0.2032
-	var plant_time := lerpf(0.30,jump.APPROACH_LOAD_TIME,distance_weight)+0.15
+	var jump_height := jump.max_height-0.2032
+	var far_cadence := lerpf(1.,.81,jump.approach_recovery(setter,toward.length()))
+	var plant_time := (lerpf(0.30,jump.APPROACH_LOAD_TIME,distance_weight)+0.15)*far_cadence
 	var minimum_plant := APPROACH_MIN_PLANT_TIME
 	var lead_time := jump.LEAD_STEP_TIME*(approach_steps-2)
 	var air_fraction := 0.54
@@ -603,11 +602,6 @@ func time_approach_plant(delta: float) -> void:
 		var nominal_rise := jump.flight_duration(jump_height,true)*air_fraction
 		var ground_budget := remaining-nominal_rise
 		var rush := 1.0-smoothstep(minimum_plant+lead_time*0.55,plant_time+lead_time,ground_budget)
-		var lower_jump := clampf((ball_target.y-approach_hand_height())/0.91+0.04,minf(0.78,jump_height),jump_height)
-		var fatigue: float=setter.stamina.effectiveness()
-		var descent := maxf(0.,Flight.GRAVITY*contact_at-pass_motion.y)
-		var drop := jump.late_attack_drop(jump_height*fatigue,plant_time+lead_time-ground_budget,descent,air_fraction)
-		jump_height = minf(lerpf(jump_height,lower_jump,rush),jump_height-drop/maxf(.001,fatigue))
 		air_fraction = lerpf(0.54,0.43,rush)
 		contact_height = minf(ball_target.y,approach_hand_height()+jump_height*0.91)
 		contact_at = descending_time(pass_origin,pass_motion,contact_height)
