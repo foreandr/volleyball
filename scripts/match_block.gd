@@ -58,15 +58,25 @@ func step(delta: float, world_ball: Vector3) -> bool:
 			author.limb(pose,thigh,knee,foot,ankle.origin+drop,bend)
 			author.set_world_basis(pose,foot,ankle.basis)
 	if court_aim.is_finite() and phase>0. and phase<1.:
-		var pike := smoothstep(.28,.50,phase)*(1.-smoothstep(.50,.74,phase))*smoothstep(.30,.80,lift)
+		var pike := smoothstep(.19,.50,phase)*(1.-smoothstep(.52,.85,phase))*smoothstep(.30,.80,lift)
+		var forward := actor.global_basis.z.normalized()
+		actor.position-=forward*.19*pike
+		author.rotate_world(pose,"spine_01",Vector3.RIGHT,.24*pike)
+		author.rotate_world(pose,"spine_02",Vector3.RIGHT,.13*pike)
 		for side in ["l","r"]:
+			var thigh: String="thigh_"+side
+			var calf: String="calf_"+side
 			var foot: String="foot_"+side
-			var ankle: Vector3=rig.to_global(author.point(pose,foot))
-			var forward := actor.global_basis.z.normalized()
-			var travel := minf(.20*pike,maxf(0.,ankle.z-preload("res://scripts/net_collision.gd").NET_Z-.19))
-			var target := rig.to_local(ankle+forward*travel+Vector3.UP*.035*pike)
-			var pole: Vector3=author.point(pose,"calf_"+side)-author.point(pose,"thigh_"+side)
-			if pike>.001: author.limb(pose,"thigh_"+side,"calf_"+side,foot,target,pole,pike,173.)
+			var hip: Vector3=author.point(pose,thigh)
+			var leg_length := rig.to_global(hip).distance_to(rig.to_global(author.point(pose,calf)))+rig.to_global(author.point(pose,calf)).distance_to(rig.to_global(author.point(pose,foot)))
+			var clearance := maxf(0.,rig.to_global(hip).z-preload("res://scripts/net_collision.gd").NET_Z-.19)
+			var angle := minf(deg_to_rad(47.),asin(clampf(clearance/maxf(.01,leg_length),0.,1.)))
+			var direction := Vector3(.10 if side=="l" else -.10,-cos(angle),sin(angle)).normalized()
+			var leg: Vector3=(author.point(pose,calf)-hip).normalized()
+			author.aim_joint(pose,thigh,calf,hip+leg.slerp(direction,pike))
+			var knee: Vector3=author.point(pose,calf)
+			var shin: Vector3=(author.point(pose,foot)-knee).normalized()
+			author.aim_joint(pose,calf,foot,knee+shin.slerp(direction,pike*.96))
 	previous_hands = hands.duplicate()
 	previous_wrists = wrists.duplicate()
 	hands.clear()

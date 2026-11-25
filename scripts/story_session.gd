@@ -146,6 +146,10 @@ const PREVIEW_FIELDS := ["pass_start","pass_distance","pass_output_angle","incom
 const IMPACT_BUS := "Ball impacts"
 
 func _ready() -> void:
+	var master_gain := AudioEffectAmplify.new()
+	master_gain.volume_db=6.
+	AudioServer.add_bus_effect(0,master_gain)
+	AudioServer.add_bus_effect(0,AudioEffectHardLimiter.new())
 	AudioServer.add_bus()
 	var impact_bus := AudioServer.bus_count-1
 	AudioServer.set_bus_name(impact_bus,IMPACT_BUS)
