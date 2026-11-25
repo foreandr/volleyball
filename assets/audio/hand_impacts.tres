@@ -4,5 +4,6 @@
 
 [resource]
 playback_mode = 2
+random_pitch = 1.025
 streams_count = 1
 stream_0/stream = ExtResource("1")
