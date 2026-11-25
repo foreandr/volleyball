@@ -102,3 +102,4 @@ Both arms use the same forward lift arc on short and full spike approaches. The 
 Full spike approaches reserve up to 0.90 m of forward carry into the contact stance, putting takeoff roughly one metre behind the ball. Runway and available airtime limit carry. CPU read blocks start loading 35 ms earlier.
 Near the net, attack and drill block poses check both arm chains and the upper body against the tape before accepting forward travel.
 In practice replay, right-stick click toggles normal playback and the last selected slow speed (initially half speed). Left-stick click toggles block hitboxes wherever they are available.
+Training Camp serving locks the toss on first press. A selects topspin and B selects jump float. Switching A/B before release changes the strike and flight. X selects standing float and Y underhand. Release near contact to serve toward three receivers.

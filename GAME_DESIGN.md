@@ -259,3 +259,4 @@ After the dead-ball reset, the ready whistle gives 509 full lateral and depth co
 
 The attack aim selector offers random court placement, targeting the block and avoiding the block. Near the tape, LT squares the blocker to the net. Holding A prepares a swing block and the body completes the turn through takeoff while lateral lean and individual arm reaches remain available.
 Attacking and blocking practice report which blocker and limb touched a spike. The middle can anticipate the quick after repeated scores or through a tactical order.
+Training Camp Serving includes Serve and Receive, a baseline timing drill with three passers and reversible spin/float hybrid selection.
