@@ -7,7 +7,7 @@ var attack_jump := preload("res://scripts/setter_jump.gd").new()
 var swing_time := -1.
 var cpu_hitter := true
 var approach_started := false
-const JUMP_HEIGHT := .92
+const JUMP_HEIGHT := 1.08
 const PLANT_TIME := .30
 var spikes := 0
 var strike_point := Vector3.ZERO
@@ -75,6 +75,11 @@ func step_practice(delta: float) -> void:
 		attack_jump.step(hitter,delta,Vector2.ZERO)
 	else:
 		hitter.animator.advance(delta)
+		if cpu_hitter and not approach_started and phase in ["set_contact","set"]:
+			var entry := Vector3(endpoint.x+.18,START.y,endpoint.z-2.20)
+			var travel := (entry-hitter.position).limit_length(5.8*delta)
+			hitter.position=rotation_drill.move_actor(hitter,travel)
+			hitter.play_ground_gait(travel.length()/maxf(delta,.001))
 		if not cpu_hitter and not approach_started:
 			var stick := Vector2(axis(JOY_AXIS_LEFT_X),axis(JOY_AXIS_LEFT_Y)).limit_length(1.)
 			var right := camera.global_basis.x.slide(Vector3.UP).normalized()
@@ -109,6 +114,8 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 	var rise := attack_jump.flight_duration(JUMP_HEIGHT,true)*.48
 	if cpu_hitter and remaining<=attack_jump.LEAD_STEP_TIME+PLANT_TIME+rise+.025: start_approach()
 	if cpu_hitter and approach_started and swing_time<0. and remaining<=.16: swing_time=0.
+	if swing_time<0. and attack_jump.active and attack_jump.elapsed>attack_jump.load_duration():
+		pose_swing()
 	if swing_time>=0.:
 		swing_time+=delta
 		pose_swing()
