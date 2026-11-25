@@ -469,6 +469,8 @@ func sample_attack_clip(arm_lift: bool,arm_swing: bool,cross: bool,review: bool,
 		phase="set"
 		source=setter.position+Vector3.UP*(setter.height_cm*.01+.12)
 		endpoint.y=2.65+ATTACK_SET_LIFT+jump_height-JUMP_HEIGHT
+	var editor_impacts: Array[Dictionary]=[]
+	var last_impact := {}
 	var hit_frame := -1
 	wrist_history.clear()
 	var count := ceili(duration*60.)
@@ -494,6 +496,13 @@ func sample_attack_clip(arm_lift: bool,arm_swing: bool,cross: bool,review: bool,
 					if phase=="spike": hit_frame=i-first_frame
 				elif time>takeoff: pose_swing()
 		smooth_wrists(1./60.)
+		if phase=="spike" and not drop_net_hit.is_empty() and drop_net_hit!=last_impact:
+			last_impact=drop_net_hit
+			var event := drop_net_hit.duplicate()
+			var offset := time-first_frame/60.-drop_net_time
+			event.time+=offset
+			event.release_time+=offset
+			editor_impacts.append(event)
 		if i<first_frame: continue
 		var bones: Array[Transform3D]=[]
 		for id in hitter.skeleton.get_bone_count():
@@ -508,6 +517,7 @@ func sample_attack_clip(arm_lift: bool,arm_swing: bool,cross: bool,review: bool,
 	clip.set_meta("editor_height_cm",hitter.height_cm)
 	var edit_entry :={"id":"camp_attack_arm_lift" if arm_lift else "camp_spike_approach","name":title,"category":"Attacking","type":"Approach"}
 	if arm_swing:
+		clip.set_meta("editor_net_impacts",editor_impacts)
 		clip.set_meta("swing_hit_frame",hit_frame)
 		edit_entry={"id":"camp_right_arm_swing","name":title,"category":"Attacking","type":"Spike"}
 		edit_entry["aim_x"]=review_setup.get("x",-3.4)
@@ -517,5 +527,6 @@ func sample_attack_clip(arm_lift: bool,arm_swing: bool,cross: bool,review: bool,
 		clip.set_meta("editor_loop_start",0)
 	if arm_swing:
 		edit_entry["swing_review"]=true
+		clip.set_meta("editor_net_impacts",editor_impacts)
 		clip.set_meta("swing_hit_frame",hit_frame)
 	return {"entry":edit_entry,"clip":clip}

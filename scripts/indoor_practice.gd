@@ -49,6 +49,9 @@ var active_pad := -1
 var floor_speed := 0.0
 var phase := ""
 var elapsed := 0.0
+const BallNet = preload("res://scripts/net_collision.gd")
+var drop_net_hit := {}
+var drop_net_time := 0.
 var clock := 0.0
 var spectator_prompt := PanelContainer.new()
 var spectator_text := Label.new()
@@ -408,6 +411,10 @@ func build_hud() -> void:
 
 func begin(next: String) -> void:
 	early_switch_until=-1.
+	if next in ["drop","spike"]:
+		if not drop_net_hit.is_empty() and not has_meta("live_sampler"): gym.get_node("DynamicNet").sample({},0.)
+		drop_net_hit={}
+		drop_net_time=0.
 	if next=="drop": roll_time=-1.
 	trace("phase",{"next":next})
 	update_prompts(next)
@@ -1434,6 +1441,15 @@ func step_practice(delta: float) -> void:
 			var t := clampf(elapsed/flight_time,0,1)
 			var desired := arc(source,endpoint,t,APEX[tempo])
 			var motion := desired-ball.position
+			var start_point := ball.position
+			var cloth := BallNet.first_hit(func(u): return start_point+motion*u/delta,0.,delta) if delta>0. and absf(start_point.z-4.)<absf(motion.z)+.13 else {}
+			if not cloth.is_empty() and cloth.kind!="under":
+				miss("Set into the net.")
+				drop_net_hit=cloth
+				drop_net_time=delta
+				ball.position=BallNet.after_hit(cloth,delta)
+				drop_velocity=cloth.velocity
+				return
 			var hit := contacts.sweep(world,contacts.ball_shape,ball.position,motion,Contact.GYM|Contact.EQUIPMENT|64|rotation_drill.CART_WALL)
 			ball.position += motion*float(hit.get("fraction",1.0))
 			if not hit.is_empty():
@@ -1571,7 +1587,17 @@ func advance_missed_ball(delta: float, rebound_floor := false) -> void:
 			roll_time+=dt
 			drop_velocity=drop_velocity.move_toward(Vector3.ZERO,1.5*dt)
 		var motion := drop_velocity*dt
-		var hit := contacts.sweep(world,contacts.ball_shape,ball.position,motion,Contact.GYM|Contact.EQUIPMENT|64|rotation_drill.CART_WALL)
+		var start := ball.position
+		var now := drop_net_time
+		drop_net_time+=dt
+		if (drop_net_hit.is_empty() or now>=float(drop_net_hit.release_time)) and absf(start.z-BallNet.NET_Z)<=absf(motion.z)+BallNet.RADIUS+.02 and (BallNet.NET_Z-start.z)*motion.z>0.:
+			var impact := BallNet.first_hit(func(t): return start+motion*(t-now)/dt,now,drop_net_time)
+			if not impact.is_empty() and impact.kind!="under": drop_net_hit=impact
+		if not drop_net_hit.is_empty() and now<float(drop_net_hit.release_time):
+			ball.position=BallNet.after_hit(drop_net_hit,drop_net_time)
+			drop_velocity=drop_net_hit.velocity
+			continue
+		var hit := contacts.sweep(world,contacts.ball_shape,ball.position,motion,Contact.GYM|Contact.EQUIPMENT|rotation_drill.CART_WALL)
 		ball.position+=motion*float(hit.get("fraction",1.))
 		if roll_time<0. and ((not hit.is_empty() and hit.normal.y>.8 and ball.position.y<.25) or ball.position.y<=Contact.BALL_RADIUS+.004):
 			if rebound_floor and drop_velocity.y < -1.5:
@@ -1588,6 +1614,8 @@ func advance_missed_ball(delta: float, rebound_floor := false) -> void:
 		var flat := drop_velocity.slide(Vector3.UP)
 		if flat.length_squared()>.0001:
 			ball.rotate(Vector3.UP.cross(flat).normalized(),flat.length()*dt/Contact.BALL_RADIUS)
+
+	if not drop_net_hit.is_empty() and not has_meta("live_sampler"): gym.get_node("DynamicNet").sample(drop_net_hit,drop_net_time)
 
 func finish_set() -> void:
 	if success and not demonstration:

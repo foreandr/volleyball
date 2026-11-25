@@ -139,6 +139,7 @@ var elapsed := 0.0
 var origin := Vector3.ZERO
 var velocity := Vector3.ZERO
 var duration := 0.0
+var net_ripple := {}
 var net_hit := {}
 var spin := 0.0
 var ball_spin := Vector3.ZERO
@@ -2770,6 +2771,10 @@ func report_review_evidence(evidence: Dictionary) -> void:
 
 func step_match(delta: float, controls: RefCounted) -> void:
 	match_clock += delta
+	if not net_ripple.is_empty():
+		var mesh := get_parent().get_node_or_null("VolleyballCourt/DynamicNet")
+		if mesh: mesh.sample(net_ripple,match_clock)
+		if match_clock>float(net_ripple.release_time)+1.1: net_ripple.clear()
 	for athlete in players: athlete.stamina.recover(delta)
 	if not players.is_empty() and roundi(players[0].stamina.value)!=displayed_stamina: update_score()
 	if trace.file != null and match_clock >= trace.next_sample: trace.sample(match_clock,trace_snapshot())
@@ -2825,6 +2830,10 @@ func step_match(delta: float, controls: RefCounted) -> void:
 		if net_hit.kind == "under":
 			award(1-team(last_player),"Under the net")
 			return
+		net_ripple=net_hit.duplicate()
+		var ripple_offset := match_clock-elapsed
+		net_ripple.time+=ripple_offset
+		net_ripple.release_time+=ripple_offset
 		if not StorySession.attack_ball_audio_muted: net_audio.play()
 		var release: Vector3 = net_hit.release_point
 		var side_after_tape := 0 if release.z < Net.NET_Z else 1

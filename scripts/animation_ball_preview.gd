@@ -688,6 +688,11 @@ func update_guide() -> void:
 
 func tick(time: float, audible: bool) -> void:
 	if clip != null and clip.has_meta("editor_ball_frames"):
+		if is_instance_valid(dynamic_net):
+			var impact := {}
+			for event in clip.get_meta("editor_net_impacts",[]):
+				if time>=event.time: impact=event
+			dynamic_net.sample(impact,time)
 		var samples: Array = clip.get_meta("editor_ball_frames")
 		var sample := clampf(time*60.0,0.0,samples.size()-1)
 		var first := floori(sample)
