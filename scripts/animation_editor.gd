@@ -504,6 +504,7 @@ func _process(delta: float) -> void:
 
 	super._process(delta)
 	if session == null: return
+	if is_instance_valid(overlay): overlay.queue_redraw()
 	if not session.sample_times.is_empty():
 		if playing:
 			var time := fposmod(session.time_at(playhead)+delta*playback_speed,session.source.length)
@@ -528,7 +529,7 @@ func _process(delta: float) -> void:
 		ball_preview.tick((playhead if playing else float(frame))/session.frame_rate,playing)
 		refresh_contact_frame()
 	if is_instance_valid(angle_control) and angle_control.visible: angle_control.set_actual(ball_preview.output_angle(),Flight.distance(ball_preview.impact_point,ball_preview.outgoing))
-	if is_instance_valid(overlay): overlay.queue_redraw()
+
 
 func select_group(group: String) -> void:
 	if not group in Groups.NAMES: group = "Both Arms"
