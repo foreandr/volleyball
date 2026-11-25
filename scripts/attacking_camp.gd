@@ -169,10 +169,14 @@ func pose_swing() -> void:
 	author.rotate_world(pose,"spine_01",Vector3.UP,twist*.45)
 	author.rotate_world(pose,"spine_02",Vector3.UP,twist*.55)
 	var air_age := attack_jump.elapsed-attack_jump.load_duration()
-	# Delay the tuck and spread it over the rise. Hold its final pitch until the strike.
-	var tuck_age := maxf(0.,(air_age-.035)/1.20)
+	# Drive the hips through takeoff and let the heels trail until the strike.
+	var tuck_age := maxf(0.,air_age-.015)
 	var knee_load := smoothstep(0.,.055,tuck_age)*(1.-reach)*(1.-follow) if attack_jump.active else 0.
 	var lift_pose := knee_load
+	var pelvis := rig.find_bone("pelvis")
+	var parent_pose: Transform3D = author.world_pose(pose,rig.get_bone_parent(pelvis))
+	pose[pelvis].origin += parent_pose.basis.inverse()*Vector3.BACK*.045*lift_pose/rig.global_basis.z.length()
+	rig.set_bone_pose_position(pelvis,pose[pelvis].origin)
 	author.rotate_world(pose,"pelvis",Vector3.RIGHT,deg_to_rad(-15.1)*lift_pose)
 	author.rotate_world(pose,"pelvis",Vector3.BACK,deg_to_rad(-2.7)*lift_pose)
 	for side in ["r","l"]:
@@ -182,7 +186,7 @@ func pose_swing() -> void:
 		var hip: Vector3 = author.point(pose,thigh)
 		var leg: Vector3 = (author.point(pose,calf)-hip).normalized()
 		var thigh_axis := Vector3(.33,-.74,.58) if side=="l" else Vector3(-.13,-.80,.59)
-		var trailing_thigh := Vector3(.17,-.98,-.15) if side=="l" else Vector3(-.14,-.95,-.29)
+		var trailing_thigh := Vector3(.17,-.89,-.43) if side=="l" else Vector3(-.14,-.84,-.53)
 		thigh_axis = thigh_axis.normalized().slerp(trailing_thigh.normalized(),lift_pose)
 		author.aim_joint(pose,thigh,calf,hip+leg.slerp(thigh_axis,knee_load))
 		var knee: Vector3 = author.point(pose,calf)
@@ -240,7 +244,7 @@ func edit_approach_frames(arm_lift := false) -> void:
 	recording.index=0
 	StorySession.edit_animation=recording.bake_recorded_actor(hitter,0,title,recording.frames.size()-1,arm_lift)
 	StorySession.edit_animation.remove_meta("contact_time")
-	if arm_lift: StorySession.edit_animation.set_meta("editor_initial_frame",19)
+	if arm_lift: StorySession.edit_animation.set_meta("editor_initial_frame",15)
 	StorySession.edit_animation.set_meta("editor_height_cm",hitter.height_cm)
 	StorySession.edit_entry={"id":"camp_attack_arm_lift" if arm_lift else "camp_spike_approach","name":title,"category":"Attacking","type":"Approach"}
 	StorySession.animation_draft.clear()
