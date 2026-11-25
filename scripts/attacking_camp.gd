@@ -95,7 +95,7 @@ func step_practice(delta: float) -> void:
 	else:
 		hitter.animator.advance(delta)
 		if cpu_hitter and not approach_started and phase in ["set_contact","set"]:
-			var entry := Vector3(endpoint.x+.18,START.y,endpoint.z-2.20)
+			var entry := Vector3(endpoint.x+.09,START.y,endpoint.z-2.20)
 			var travel := (entry-hitter.position).limit_length(5.8*delta)
 			hitter.position=rotation_drill.move_actor(hitter,travel)
 			hitter.play_ground_gait(travel.length()/maxf(delta,.001))
@@ -122,7 +122,7 @@ func start_approach() -> void:
 	if approach_started: return
 	last_shoulder_time=-1.
 	approach_started=true
-	var contact_stance := Vector3(endpoint.x+.18,.04,endpoint.z-.30)
+	var contact_stance := Vector3(endpoint.x+.09,.04,endpoint.z-.09)
 	var heading := (contact_stance-hitter.position).slide(Vector3.UP).normalized()
 	hitter.rotation.y=atan2(heading.x,heading.z)
 	attack_jump.begin(hitter,Vector2(-heading.x,heading.z),contact_stance,PLANT_TIME,jump_height,3,false,1.,false,.22)
@@ -234,6 +234,12 @@ func pose_swing() -> void:
 	author.rotate_world(pose,"spine_01",Vector3.RIGHT,deg_to_rad(-9.)*load_weight)
 	author.rotate_world(pose,"spine_01",Vector3.UP,twist*.45)
 	author.rotate_world(pose,"spine_02",Vector3.UP,twist*.55)
+	# Raise the striking shoulder in the chest's own lateral plane as the arm reaches.
+	var across: Vector3=author.point(pose,"upperarm_l")-author.point(pose,"upperarm_r")
+	var bend_axis := Vector3.UP.cross(across).normalized()
+	var contact_bend := deg_to_rad(19.)*smoothstep(.025,.115,swing_time)*(1.-smoothstep(.18,.32,swing_time))
+	author.rotate_world(pose,"spine_01",bend_axis,contact_bend*.45)
+	author.rotate_world(pose,"spine_02",bend_axis,contact_bend*.55)
 	var air_age := attack_jump.elapsed-attack_jump.load_duration()
 	# Drive the hips through takeoff and let the heels trail until the strike.
 	var tuck_age := maxf(0.,air_age-.015)
@@ -299,7 +305,7 @@ func pose_swing() -> void:
 	var spin_choice := int(review_setup.get("spin",0))
 	var wrap := smoothstep(.055,.14,swing_time)*(1.-smoothstep(.34,.54,swing_time))
 	if wrap>0.:
-		var wrap_axis := Vector3.UP.cross(shot_axis) if spin_choice==0 else Vector3.UP
+		var wrap_axis := Vector3.UP.cross(shot_axis).normalized() if spin_choice==0 else Vector3.UP
 		var wrap_degrees := [24.,-33.,33.,0.]
 		author.rotate_world(pose,"hand_r",wrap_axis,deg_to_rad(float(wrap_degrees[spin_choice]))*wrap)
 	var guide_target := rig.to_local(strike_point if phase=="spike" else ball.global_position)
