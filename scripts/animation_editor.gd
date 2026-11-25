@@ -11,6 +11,11 @@ var angle_control: VBoxContainer
 var trajectory_base: Animation
 var trajectory_solver: RefCounted
 var trajectory_revision := -1
+var review_source: Animation
+var review_number := 1
+var review_status := Label.new()
+var review_votes := ConfigFile.new()
+const REVIEW_PATH := "user://spike_swing_votes.cfg"
 var session: RefCounted
 var entry: Dictionary
 var origin_scene := ""
@@ -109,6 +114,27 @@ func _ready() -> void:
 	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	preview.add_child(overlay)
 	refresh_history()
+	if entry.get("swing_review",false):
+		review_source=session.source
+		review_votes.load(REVIEW_PATH)
+		show_swing(int(review_votes.get_value("review","current",1)))
+
+func show_swing(number: int) -> void:
+	review_number=clampi(number,1,50)
+	session.replace_source(preload("res://scripts/numbered_swings.gd").make(review_source,review_number))
+	undo_history.clear()
+	redo_history.clear()
+	refresh_history()
+	copy_name.text="Swing %02d" % review_number
+	review_status.text="%02d / 50   %s" % [review_number,review_votes.get_value("votes",str(review_number),"")]
+	review_votes.set_value("review","current",review_number)
+	if review_votes.save(REVIEW_PATH)!=OK: review_status.text+="   Save failed"
+	set_frame(10)
+	set_playing(true)
+
+func vote_swing(choice: String) -> void:
+	review_votes.set_value("votes",str(review_number),choice)
+	show_swing(review_number+1)
 
 func light_preview_stage(world: Node3D) -> void:
 	preload("res://scripts/tryout_gym.gd").light_gym(world)
@@ -144,6 +170,14 @@ func build_controls(controls: VBoxContainer) -> void:
 	copy_name.max_length = 64
 	copy_name.custom_minimum_size.y = 38
 	copy_name.text_changed.connect(func(value): copy_button.disabled = value.strip_edges().is_empty())
+	if entry.get("swing_review",false):
+		controls.add_child(review_status)
+		var row := HBoxContainer.new()
+		controls.add_child(row)
+		row.add_child(button("<",func(): show_swing(review_number-1)))
+		row.add_child(button("Yes",vote_swing.bind("Yes")))
+		row.add_child(button("No",vote_swing.bind("No")))
+		row.add_child(button(">",func(): show_swing(review_number+1)))
 	controls.add_child(copy_name)
 	var frames := HBoxContainer.new()
 	controls.add_child(frames)

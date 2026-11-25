@@ -30,11 +30,12 @@ func start_drill() -> void:
 	attack_jump.front_limit=3.65
 	attack_jump.attack_arm_lift=true
 	super.start_drill()
-	var arm_swing := "--edit-arm-swing" in OS.get_cmdline_user_args()
+	var review := "--review-swings" in OS.get_cmdline_user_args()
+	var arm_swing := review or "--edit-arm-swing" in OS.get_cmdline_user_args()
 	var arm_lift := arm_swing or "--edit-arm-lift" in OS.get_cmdline_user_args()
 	if (arm_lift or "--edit-approach" in OS.get_cmdline_user_args()) and not Engine.has_meta("approach_editor_opened"):
 		Engine.set_meta("approach_editor_opened",true)
-		edit_approach_frames.call_deferred(arm_lift,arm_swing)
+		edit_approach_frames.call_deferred(arm_lift,arm_swing,false,review)
 
 func camp_title() -> String:
 	return "ATTACKING   /   APPROACH AND SPIKE"
@@ -254,7 +255,7 @@ func pose_swing() -> void:
 func frame_editor_attacker() -> Node3D:
 	return hitter
 
-func edit_approach_frames(arm_lift := false, arm_swing := false, cross := false) -> void:
+func edit_approach_frames(arm_lift := false, arm_swing := false, cross := false, review := false) -> void:
 	cross_court=cross
 	# Warm up from the first step so the editor inherits the live plant pose.
 	hitter.position=START
@@ -277,6 +278,7 @@ func edit_approach_frames(arm_lift := false, arm_swing := false, cross := false)
 		phase="set"
 		source=setter.position+Vector3.UP*(setter.height_cm*.01+.12)
 		endpoint.y=2.65+ATTACK_SET_LIFT
+	var hit_frame := -1
 	var count := ceili(duration*60.)
 	for i in range(count+1):
 		var time := minf(i/60.,duration)
@@ -293,6 +295,7 @@ func edit_approach_frames(arm_lift := false, arm_swing := false, cross := false)
 				if arm_swing:
 					elapsed=flight_time-remaining
 					handle_attack_contact(previous,1./60.)
+					if phase=="spike": hit_frame=i-first_frame
 				elif time>takeoff: pose_swing()
 		if i<first_frame: continue
 		var bones: Array[Transform3D]=[]
@@ -312,6 +315,9 @@ func edit_approach_frames(arm_lift := false, arm_swing := false, cross := false)
 		StorySession.edit_animation.set_meta("editor_group","Right Arm")
 		StorySession.edit_animation.set_meta("editor_initial_frame",10)
 		StorySession.edit_animation.set_meta("editor_loop_start",10)
+	if review:
+		StorySession.edit_entry["swing_review"]=true
+		StorySession.edit_animation.set_meta("swing_hit_frame",hit_frame)
 	StorySession.animation_draft.clear()
 	settings.leave_for_frame_editor()
 	MenuPresentation.load_scene("res://scenes/animation_editor.tscn")
