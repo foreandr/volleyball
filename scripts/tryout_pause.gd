@@ -34,7 +34,9 @@ func configure(host: Node, layer: Node = null) -> void:
 	options_button = bar(home,"Options",open_options)
 	if practice and "solo_setting" in game and game.solo_setting:
 		bar(home,"Sliders",open_sliders)
-		if game.has_method("edit_approach_frames"): bar(home,"Edit approach frames",game.edit_approach_frames)
+		if game.has_method("edit_approach_frames"):
+			bar(home,"Edit approach frames",game.edit_approach_frames)
+			bar(home,"Edit takeoff and arm lift",game.edit_approach_frames.bind(true))
 		bar(home,"Edit attacker frames" if game.has_method("frame_editor_attacker") else "Edit set frames",open_frame_editor)
 	bar(home,"Restart",restart)
 	bar(home,"Quit",quit_gameplay)

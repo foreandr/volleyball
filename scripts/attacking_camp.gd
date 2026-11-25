@@ -26,9 +26,10 @@ func start_drill() -> void:
 	attack_jump.front_limit=3.65
 	attack_jump.attack_arm_lift=true
 	super.start_drill()
-	if "--edit-approach" in OS.get_cmdline_user_args() and not Engine.has_meta("approach_editor_opened"):
+	var arm_lift := "--edit-arm-lift" in OS.get_cmdline_user_args()
+	if (arm_lift or "--edit-approach" in OS.get_cmdline_user_args()) and not Engine.has_meta("approach_editor_opened"):
 		Engine.set_meta("approach_editor_opened",true)
-		edit_approach_frames.call_deferred()
+		edit_approach_frames.call_deferred(arm_lift)
 
 func camp_title() -> String:
 	return "ATTACKING   /   APPROACH AND SPIKE"
@@ -172,7 +173,8 @@ func pose_swing() -> void:
 		var extended := Vector3(outward,-1.,-.14).normalized()
 		var blend := airborne*(1.-follow)
 		author.aim_joint(pose,calf,foot,knee+shin.slerp(heel.slerp(extended,reach),blend))
-	Swing.apply(pose,hitter.get_pose_author(),rig.to_local(strike_point if phase=="spike" else ball.position),maxf(airborne,smoothstep(0.,.065,swing_time)),reach,follow,1.,0.,0.,Swing.DEFAULT_ELBOW_CLEARANCE,0.,INF,Vector3.BACK,0.,.10,false,true)
+	var draw := smoothstep(.065,.21,attack_jump.elapsed-attack_jump.load_duration()) if attack_jump.active else 0.
+	Swing.apply(pose,hitter.get_pose_author(),rig.to_local(strike_point if phase=="spike" else ball.position),maxf(draw,smoothstep(0.,.065,swing_time)),reach,follow,1.,0.,0.,Swing.DEFAULT_ELBOW_CLEARANCE,0.,INF,Vector3.BACK,0.,.10,false,true)
 	for joint in ["spine_01","spine_02","calf_r","calf_l","clavicle_r","upperarm_r","lowerarm_r","hand_r","clavicle_l","upperarm_l","lowerarm_l","hand_l"]:
 		var id := rig.find_bone(joint)
 		rig.set_bone_pose_rotation(id,pose[id].basis.get_rotation_quaternion())
@@ -180,8 +182,8 @@ func pose_swing() -> void:
 func frame_editor_attacker() -> Node3D:
 	return hitter
 
-func edit_approach_frames() -> void:
-	# Sample the same planted approach used on court, ending exactly at liftoff.
+func edit_approach_frames(arm_lift := false) -> void:
+	# Warm up from the first step so the editor inherits the live plant pose.
 	hitter.position=START
 	hitter.rotation.y=0.
 	hitter.play_action("idle",0.)
@@ -190,21 +192,29 @@ func edit_approach_frames() -> void:
 	approach_started=false
 	start_approach()
 	var recording := preload("res://scripts/match_replay.gd").new()
-	var duration := attack_jump.load_duration()
+	var takeoff := attack_jump.load_duration()
+	var first_frame := floori((takeoff-.15)*60.) if arm_lift else 0
+	var duration := takeoff+.21 if arm_lift else takeoff
+	swing_time=-1.
+	if arm_lift:
+		phase="set"
+		ball.position=Vector3(endpoint.x,2.85,endpoint.z)
 	var count := ceili(duration*60.)
 	for i in range(count+1):
 		var time := minf(i/60.,duration)
 		if i>0: attack_jump.step(hitter,time-(i-1)/60.,Vector2.ZERO)
+		if arm_lift and time>takeoff: pose_swing()
+		if i<first_frame: continue
 		var bones: Array[Transform3D]=[]
 		for id in hitter.skeleton.get_bone_count():
 			bones.append(hitter.skeleton.get_bone_pose(id))
-		recording.frames.append({"time":time,"actors":[{"root":hitter.transform,"bones":bones}]})
-	var title := "Three-step approach and backswing"
+		recording.frames.append({"time":time-first_frame/60.,"actors":[{"root":hitter.transform,"bones":bones}]})
+	var title := "Takeoff and arm lift" if arm_lift else "Three-step approach and backswing"
 	recording.index=0
-	StorySession.edit_animation=recording.bake_recorded_actor(hitter,0,title,count,false)
+	StorySession.edit_animation=recording.bake_recorded_actor(hitter,0,title,recording.frames.size()-1,false)
 	StorySession.edit_animation.remove_meta("contact_time")
 	StorySession.edit_animation.set_meta("editor_height_cm",hitter.height_cm)
-	StorySession.edit_entry={"id":"camp_spike_approach","name":title,"category":"Attacking","type":"Approach"}
+	StorySession.edit_entry={"id":"camp_attack_arm_lift" if arm_lift else "camp_spike_approach","name":title,"category":"Attacking","type":"Approach"}
 	StorySession.animation_draft.clear()
 	settings.leave_for_frame_editor()
 	MenuPresentation.load_scene("res://scenes/animation_editor.tscn")
