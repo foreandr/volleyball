@@ -16,6 +16,20 @@ var approach_started := false
 const JUMP_HEIGHT := 33.*.0254
 const ATTACK_SET_LIFT := .10
 const PLANT_TIME := .30
+const SHOT_BUTTONS := [JOY_BUTTON_X,JOY_BUTTON_Y,JOY_BUTTON_B]
+var manual_shot := -1
+var release_at := INF
+var first_palm_at := INF
+var depth_error := 0.
+var power_scale := 1.
+
+func clear_attack_input() -> void:
+	manual_shot=-1
+	release_at=INF
+	first_palm_at=INF
+	depth_error=0.
+	power_scale=1.
+
 var spikes := 0
 var strike_shoulder_offset := Vector3.ZERO
 var strike_point := Vector3.ZERO
@@ -60,11 +74,12 @@ func camp_title() -> String:
 
 func update_prompts(_next: String) -> void:
 	var entries := [["View","Take control" if cpu_hitter else "Watch CPU attack"]]
-	if not cpu_hitter: entries.append_array([["LS","Move"],[JOY_BUTTON_LEFT_SHOULDER,"Approach jump"],[JOY_BUTTON_X,"Spike"]])
+	if not cpu_hitter: entries.append_array([["LS","Move"],[JOY_BUTTON_X,"Hold cross"],[JOY_BUTTON_Y,"Hold line"],[JOY_BUTTON_B,"Hold six"]])
 	entries.append([JOY_BUTTON_START,"Settings"])
 	Xbox.prompts(controls_row,entries)
 
 func reset_feed() -> void:
+	clear_attack_input()
 	super.reset_feed()
 	camp_call=0
 	approach_started=false
@@ -81,19 +96,24 @@ func set_destination(origin: Vector3, aim: Vector3, height_index: int) -> Vector
 func _input(event: InputEvent) -> void:
 	if not settings.visible and not get_tree().paused:
 		if (event is InputEventJoypadButton and event.button_index==JOY_BUTTON_BACK or event is InputEventKey and event.physical_keycode==KEY_TAB) and event.is_pressed() and not event.is_echo():
+			clear_attack_input()
 			cpu_hitter=not cpu_hitter
 			update_prompts(phase)
 			get_viewport().set_input_as_handled()
 			return
-		if not cpu_hitter and phase=="set" and event is InputEventJoypadButton and event.button_index==Xbox.physical(JOY_BUTTON_LEFT_SHOULDER) and event.pressed:
-			start_approach()
-			get_viewport().set_input_as_handled()
-			return
-		if event is InputEventJoypadButton and event.button_index==Xbox.physical(JOY_BUTTON_X) or event is InputEventKey and event.physical_keycode==KEY_SPACE:
-			if not cpu_hitter and event.is_pressed() and not event.is_echo() and phase=="set" and swing_time<0.:
-				swing_time=0.
-			get_viewport().set_input_as_handled()
-			return
+		if not cpu_hitter and phase in ["cart","feed","pass","set_contact","set"] and not event.is_echo():
+			for index in SHOT_BUTTONS.size():
+				var button: bool=event is InputEventJoypadButton and event.button_index==Xbox.physical(SHOT_BUTTONS[index])
+				var key: bool=event is InputEventKey and event.physical_keycode==[KEY_SPACE,KEY_Y,KEY_B][index]
+				if not (button or key): continue
+				if event.is_pressed():
+					manual_shot=index
+					release_at=INF
+				elif manual_shot==index:
+					release_at=clock
+					if not approach_started: manual_shot=-1
+				get_viewport().set_input_as_handled()
+				return
 		if event is InputEventJoypadButton and event.button_index!=Xbox.physical(JOY_BUTTON_START): return
 		if event is InputEventKey and event.physical_keycode!=KEY_ESCAPE: return
 	super._input(event)
@@ -130,7 +150,8 @@ func step_attack(delta: float) -> void:
 		attack_jump.step(hitter,delta,Vector2.ZERO)
 	else:
 		hitter.animator.advance(delta)
-		if cpu_hitter and not approach_started and phase in ["cart","feed","pass","set_contact","set"]:
+		var tracking := cpu_hitter or (manual_shot>=0 and phase=="set")
+		if tracking and not approach_started and phase in ["cart","feed","pass","set_contact","set"]:
 			var entry := Vector3(4.95,START.y,.65)
 			if phase in ["set_contact","set"]:
 				entry=endpoint+Vector3(1.18,0.,-1.82)
@@ -149,7 +170,7 @@ func step_attack(delta: float) -> void:
 			if not shuffle_steps.has(hitter):
 				shuffle_steps[hitter]=preload("res://scripts/directional_footwork.gd").new(hitter)
 			shuffle_steps[hitter].step((local/2.).limit_length(1.),delta,clampf(local.length()/2.,.55,1.35),true,true)
-		if not cpu_hitter and not approach_started:
+		if not tracking and not approach_started:
 			var stick := Vector2(axis(JOY_AXIS_LEFT_X),axis(JOY_AXIS_LEFT_Y)).limit_length(1.)
 			var right := camera.global_basis.x.slide(Vector3.UP).normalized()
 			var travel := (right*stick.x+right.cross(Vector3.UP)*stick.y)*3.8 if stick.length()>.16 else Vector3.ZERO
@@ -159,7 +180,7 @@ func step_attack(delta: float) -> void:
 		elapsed+=delta
 		swing_time+=delta
 		pose_swing()
-		advance_spike(delta,bounce_line)
+		advance_spike(delta,cpu_hitter and bounce_line)
 		if roll_time>=.5:
 			rotation_drill.free_ball(drop_velocity)
 			begin("between")
@@ -199,14 +220,15 @@ func attack_speed() -> float:
 	return sqrt(14.*effort)*arm_speed_factor()*(1.+(strength-65.)*.005)
 
 func attack_flight_time(distance: float) -> float:
-	return maxf(.05,distance/attack_speed())
+	return maxf(.05,distance/(attack_speed()*power_scale))
 
 func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 	message.text="Approach and spike"
 	var remaining := flight_time-elapsed
 	var rise := attack_jump.flight_duration(effective_attack_height(),true)*.48
-	if cpu_hitter and remaining<=attack_jump.LEAD_STEP_TIME+PLANT_TIME+rise+.025: start_approach()
-	if cpu_hitter and approach_started and swing_time<0. and remaining<=.16/arm_speed_factor()+(.095 if not has_meta("sampling_attack") else 0.): swing_time=0.
+	var in_range := (endpoint-hitter.position).slide(Vector3.UP).length()<=3.15
+	if (cpu_hitter or (manual_shot>=0 and in_range)) and remaining<=attack_jump.LEAD_STEP_TIME+PLANT_TIME+rise+.025: start_approach()
+	if approach_started and swing_time<0. and remaining<=.16/arm_speed_factor()+(.095 if not has_meta("sampling_attack") else 0.): swing_time=0.
 	if swing_time<0. and attack_jump.active and attack_jump.elapsed>attack_jump.load_duration():
 		pose_swing()
 	if swing_time>=0.:
@@ -217,6 +239,17 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 		if swing_time>=.055 and swing_time<=.30:
 			closest_spike_gap=minf(closest_spike_gap,nearest.distance_to(palm))
 		if swing_time>=.055 and swing_time<=.30 and nearest.distance_to(palm)<=Contact.BALL_RADIUS+.065:
+			if not cpu_hitter:
+				if not is_finite(first_palm_at): first_palm_at=clock
+				if manual_shot<0 or not is_finite(release_at):
+					if elapsed<flight_time: return false
+				else:
+					var error := release_at-first_palm_at
+					var severity := smoothstep(.018,.065 if error>0. else .16,absf(error))
+					power_scale=lerpf(1.,.63,severity)
+					depth_error=(-1. if error>0. else 1.)*severity*rotation_drill.random.randf_range(0.,12. if error>0. else 8.)
+			if not cpu_hitter and (manual_shot<0 or not is_finite(release_at)):
+				return false
 			contact_swing_time=swing_time
 			strike_point=ball.position
 			strike_shoulder_offset=hitter.skeleton.to_local(strike_point)-hitter.skeleton.get_bone_global_pose(hitter.skeleton.find_bone("upperarm_r")).origin
@@ -286,6 +319,10 @@ func advance_spike(delta: float, bounce: bool) -> void:
 		net_clear_time=swing_time
 
 func shot_landing(origin: Vector3) -> Vector3:
+	if not cpu_hitter and manual_shot>=0:
+		var side := -1. if origin.x<0. else 1.
+		var aim: Vector2=[Vector2(-side*3.65,8.45),Vector2(side*3.75,11.55),Vector2(0.,11.4)][manual_shot]
+		return Vector3(aim.x,Contact.BALL_RADIUS,maxf(origin.z+.45,aim.y+depth_error))
 	if not review_setup.is_empty():
 		return Vector3(-float(review_setup.get("x",-3.4)),Contact.BALL_RADIUS,review_setup.get("z",11.))
 	return Vector3(-3.4 if cross_court else clampf(origin.x,-3.8,3.8),Contact.BALL_RADIUS,11.)

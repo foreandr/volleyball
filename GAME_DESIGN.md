@@ -185,3 +185,5 @@ The attacking demo refreshes its feed setter's stamina each rep and the hitter s
 Every playable drill carries the active athletes' stamina and jump indicators, including CPU demonstrations. New drills inherit these readouts alongside shared practice mechanics.
 
 Shared approach and setting jumps scale vertical reach with stamina at the start of the jump. Attack practice exposes the feed set's arc in Sliders.
+
+In attacker control, hold X for cross, Y for line, or B for six. The hitter tracks the set and leads toward its intercept with the left foot. Release at contact for power. Early timing biases depth long and late timing drives the shot down.
