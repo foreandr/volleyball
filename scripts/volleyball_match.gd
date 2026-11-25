@@ -325,7 +325,6 @@ func configure(actor: Node3D, board: Label, status: Label, build := "", players_
 	trajectory_style.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	trajectory_style.albedo_color = Color("62d9f0")
 	add_child(trajectory_node)
-	route_ball_sound()
 	touch_audio = make_ball_audio(CONTACT_SOUND,3.0)
 	set_audio = make_ball_audio(preload("res://assets/audio/set_touch.wav"),3.5)
 	spike_audio = make_ball_audio(SPIKE_SOUND,2.0)
@@ -506,7 +505,7 @@ func prepare_serve(style: int) -> void:
 	serve.aim_ring.visible = is_human(index)
 	serve.path_preview.visible = is_human(index)
 	serve_pending = false
-	info.text = ("Blue serving" if side == 0 else "Orange serving") if spectator else ["Your serve Â· Space","Teammate serving","Opponents serving"][0 if index == 0 else (1 if side == 0 else 2)]
+	info.text = ("Blue serving" if side == 0 else "Orange serving") if spectator else ["Your serve Ã‚Â· Space","Teammate serving","Opponents serving"][0 if index == 0 else (1 if side == 0 else 2)]
 
 func set_attack_vertical(inches: float) -> void:
 	attack_vertical = inches
@@ -598,7 +597,7 @@ func start_serve() -> void:
 	serve.serve()
 
 func update_score() -> void:
-	score_label.text = ("BLUE  %d  â€“  %d  ORANGE" if spectator else "YOU  %d  â€“  %d  CPU") % [score[0],score[1]]
+	score_label.text = ("BLUE  %d  Ã¢â‚¬â€œ  %d  ORANGE" if spectator else "YOU  %d  Ã¢â‚¬â€œ  %d  CPU") % [score[0],score[1]]
 	if not players.is_empty():
 		displayed_stamina=roundi(players[0].stamina.value)
 		score_label.text+="   |   Stamina %d/%d" % [displayed_stamina,roundi(players[0].stamina.capacity())]
@@ -634,7 +633,7 @@ func award(side: int, reason: String) -> void:
 	else:
 		phase = Phase.DEAD
 		var winner := ("Blue point" if side == 0 else "Orange point") if spectator else ("Your point" if side == 0 else "CPU point")
-		info.text = winner+" Â· "+reason
+		info.text = winner+" Ã‚Â· "+reason
 
 func reset_receives() -> void:
 	receive_animation_labels.clear()
@@ -985,16 +984,6 @@ func remember_opponent_reads() -> void:
 			if samples > 0:
 				carried_shot_reads[side][zone] = Vector2(read.x,samples)
 
-func route_ball_sound() -> void:
-	if OS.get_name() != "Windows": return
-	var outputs := AudioServer.get_output_device_list()
-	for output in outputs:
-		var name_ := output.to_lower()
-		if name_.begins_with("speakers (") and not name_.contains("streaming") and not name_.contains("virtual"):
-			AudioServer.output_device = output
-			return
-	AudioServer.output_device = "Default"
-
 func make_ball_audio(stream: AudioStream, gain: float) -> AudioStreamPlayer:
 	var player := AudioStreamPlayer.new()
 	player.stream = stream
@@ -1007,7 +996,6 @@ func set_ball_sound(enabled: bool) -> void:
 	StorySession.attack_ball_audio_muted = not enabled
 	AudioServer.set_bus_mute(AudioServer.get_bus_index("Master"),not enabled)
 	if enabled:
-		route_ball_sound()
 		play_touch(true)
 	else:
 		for player in [touch_audio,set_audio,spike_audio,floor_audio,net_audio]: player.stop()
