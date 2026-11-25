@@ -145,6 +145,10 @@ func draw_player(actor: Node3D,human: bool) -> void:
 			draw_rect(Rect2(base-Vector2(2,34),Vector2(14,36)),Color(Color.WHITE,opacity))
 			draw_rect(Rect2(base-Vector2(0,32),Vector2(10,32)),Color(ink,opacity))
 			draw_rect(Rect2(base-Vector2(0,32*readout.x),Vector2(10,32*readout.x)),Color(Color("51cbe9"),opacity))
+		if extra_jumps.has(actor) and not game.cpu_hitter and game.manual_shot>=0 and (game.phase in ["cart","feed","pass","set_contact","set"] or (game.phase=="spike" and game.elapsed<.45)):
+			var cursor: float=game.attack_meter_position(game.attack_meter_error())
+			var contact_window:=Vector2(game.attack_meter_position(game.EARLY_LIMIT),game.attack_meter_position(game.LATE_LIMIT))
+			timing_arc(at,outer,PI,cursor,game.attack_meter_position(-game.CLEAN_WINDOW),game.attack_meter_position(game.CLEAN_WINDOW),contact_window,Color("14191d"))
 		if game!=null and setting_cues:
 			if actor!=game.setter and game.free_target>=0:
 				timing_arc(at,outer,PI,clampf((game.clock-game.free_press)/.43,0,1),.47,.76)
@@ -160,9 +164,9 @@ func draw_player(actor: Node3D,human: bool) -> void:
 	draw_string_outline(ThemeDB.fallback_font,origin,label,HORIZONTAL_ALIGNMENT_CENTER,160,14,4,Color("10191f"))
 	draw_string(ThemeDB.fallback_font,origin,label,HORIZONTAL_ALIGNMENT_CENTER,160,14,Color("ffce75") if is_setter else Color.WHITE)
 
-func timing_arc(at: Vector2,radius: Vector2,start: float,value: float,low: float,high: float,contact := Vector2(0,1)) -> void:
+func timing_arc(at: Vector2,radius: Vector2,start: float,value: float,low: float,high: float,contact := Vector2(0,1), miss_color := Color("778088")) -> void:
 	var cuts := [0.,contact.x,clampf(low,contact.x,contact.y),clampf(high,contact.x,contact.y),contact.y,1.]
-	var colors := [Color("778088"),Color("f7bd46"),Color("61ed88"),Color("f45550"),Color("778088")]
+	var colors := [miss_color,Color("f7bd46"),Color("61ed88"),Color("f45550"),miss_color]
 	for i in colors.size():
 		var begin: float=cuts[i]
 		var end: float=cuts[i+1]

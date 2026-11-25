@@ -23,6 +23,21 @@ var first_palm_at := INF
 var depth_error := 0.
 var power_scale := 1.
 
+const EARLY_LIMIT := -.16
+const LATE_LIMIT := .065
+const CLEAN_WINDOW := .018
+const METER_START := -.32
+const METER_END := .12
+
+func attack_meter_position(error: float) -> float:
+	return clampf(inverse_lerp(METER_START,METER_END,error),0.,1.)
+
+func attack_meter_error() -> float:
+	if is_finite(first_palm_at):
+		return minf(release_at,clock)-first_palm_at
+	if phase!="set": return METER_START
+	return minf(release_at,clock)-clock+elapsed-flight_time+.08
+
 func clear_attack_input() -> void:
 	manual_shot=-1
 	release_at=INF
@@ -74,7 +89,7 @@ func camp_title() -> String:
 
 func update_prompts(_next: String) -> void:
 	var entries := [["View","Take control" if cpu_hitter else "Watch CPU attack"]]
-	if not cpu_hitter: entries.append_array([["LS","Move"],[JOY_BUTTON_X,"Hold cross"],[JOY_BUTTON_Y,"Hold line"],[JOY_BUTTON_B,"Hold six"]])
+	if not cpu_hitter: entries.append_array([["LS","Move"],[JOY_BUTTON_X,"Hold line"],[JOY_BUTTON_Y,"Hold six"],[JOY_BUTTON_B,"Hold cross"]])
 	entries.append([JOY_BUTTON_START,"Settings"])
 	Xbox.prompts(controls_row,entries)
 
@@ -245,7 +260,10 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 					if elapsed<flight_time: return false
 				else:
 					var error := release_at-first_palm_at
-					var severity := smoothstep(.018,.065 if error>0. else .16,absf(error))
+					if error<EARLY_LIMIT or error>LATE_LIMIT:
+						manual_shot=-1
+						return false
+					var severity := smoothstep(CLEAN_WINDOW,LATE_LIMIT if error>0. else -EARLY_LIMIT,absf(error))
 					power_scale=lerpf(1.,.63,severity)
 					depth_error=(-1. if error>0. else 1.)*severity*rotation_drill.random.randf_range(0.,12. if error>0. else 8.)
 			if not cpu_hitter and (manual_shot<0 or not is_finite(release_at)):
@@ -321,7 +339,7 @@ func advance_spike(delta: float, bounce: bool) -> void:
 func shot_landing(origin: Vector3) -> Vector3:
 	if not cpu_hitter and manual_shot>=0:
 		var side := -1. if origin.x<0. else 1.
-		var aim: Vector2=[Vector2(-side*3.65,8.45),Vector2(side*3.75,11.55),Vector2(0.,11.4)][manual_shot]
+		var aim: Vector2=[Vector2(side*3.75,11.55),Vector2(0.,11.4),Vector2(-side*3.65,8.45)][manual_shot]
 		return Vector3(aim.x,Contact.BALL_RADIUS,maxf(origin.z+.45,aim.y+depth_error))
 	if not review_setup.is_empty():
 		return Vector3(-float(review_setup.get("x",-3.4)),Contact.BALL_RADIUS,review_setup.get("z",11.))
