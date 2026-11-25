@@ -304,7 +304,7 @@ func build_controls(controls: VBoxContainer) -> void:
 		hint.text="Drag the floor ball anywhere on the attacking side."
 		settings_box.add_child(hint)
 		var spin := OptionButton.new()
-		for label in ["Topspin","Left spin","Right spin","No spin"]: spin.add_item(label)
+		for label in ["Topspin","Left spin","Right spin","No spin","Backspin"]: spin.add_item(label)
 		spin.select(int(shot_setup.get("spin",0)))
 		spin.item_selected.connect(func(index: int):
 			shot_setup.spin=index

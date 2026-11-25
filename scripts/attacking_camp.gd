@@ -219,8 +219,8 @@ func advance_spike(delta: float, bounce: bool) -> void:
 		var direction := ball.position.direction_to(landing).slide(Vector3.UP).normalized()
 		var speed := landing.distance_to(ball.position)/flight
 		var spin := int(review_setup.get("spin",0))
-		var force_axis: Vector3=[Vector3.DOWN,direction.cross(Vector3.UP),Vector3.UP.cross(direction),Vector3.ZERO][spin]
-		spin_acceleration=force_axis*minf(22.,speed*.78)
+		var force_axis: Vector3=[Vector3.DOWN,direction.cross(Vector3.UP),Vector3.UP.cross(direction),Vector3.ZERO,Vector3.UP][spin]
+		spin_acceleration=force_axis*(minf(3.,speed*.20) if spin==4 else minf(22.,speed*.78))
 		# Compensate at launch to keep the selected landing point on the curved path.
 		drop_velocity=(landing-ball.position)/flight+(Vector3.UP*9.81-spin_acceleration)*(.5*flight)
 		return
@@ -233,8 +233,8 @@ func advance_spike(delta: float, bounce: bool) -> void:
 	if roll_time>=0. or (descent<0. and drop_velocity.y>0.): spin_acceleration=Vector3.ZERO
 	if in_flight and roll_time<0. and not forward.is_zero_approx():
 		var spin := int(review_setup.get("spin",0))
-		var axis := Vector3.UP.cross(forward) if spin==0 else Vector3.UP
-		var rate := [32.,-26.,26.,0.]
+		var axis := Vector3.UP.cross(forward) if spin in [0,4] else Vector3.UP
+		var rate := [32.,-26.,26.,0.,-18.]
 		ball.basis=Basis(axis,float(rate[spin])*delta)*incoming_basis
 	if net_clear_time<0. and ball.position.z>=4.+Contact.BALL_RADIUS and ball.position.y>2.43+Contact.BALL_RADIUS:
 		net_clear_time=swing_time
@@ -383,8 +383,8 @@ func pose_swing() -> void:
 	var spin_choice := int(review_setup.get("spin",0))
 	var wrap := smoothstep(.055,.14,swing_time)*(1.-smoothstep(.34,.54,swing_time))
 	if wrap>0.:
-		var wrap_axis := Vector3.UP.cross(shot_axis).normalized() if spin_choice==0 else Vector3.UP
-		var wrap_degrees := [24.,-33.,33.,0.]
+		var wrap_axis := Vector3.UP.cross(shot_axis).normalized() if spin_choice in [0,4] else Vector3.UP
+		var wrap_degrees := [24.,-33.,33.,0.,-16.]
 		author.rotate_world(pose,"hand_r",wrap_axis,deg_to_rad(float(wrap_degrees[spin_choice]))*wrap)
 	var guide_target := rig.to_local(strike_point if phase=="spike" else ball.global_position)
 	var shoulder: Vector3 = author.point(pose,"upperarm_l")
