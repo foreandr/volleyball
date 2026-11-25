@@ -9,6 +9,17 @@ var closest_spike_gap := INF
 var contact_swing_time := 0.
 var cross_court := false
 var review_setup := {}
+var attack_lane := 0
+var setter_station := BASE
+var coach_station := Vector3(-3.05,0,-1.7)
+var active_lane := 0
+
+func choose_camp_toss() -> Vector3:
+	return setter_station
+
+func lane_offset() -> float:
+	return [1.,0.,-1.][active_lane]
+
 var set_arc_percent := 100.0
 var jump_height := JUMP_HEIGHT
 var cpu_hitter := true
@@ -31,14 +42,14 @@ var depth_error := 0.
 var power_scale := 1.
 
 const EARLY_LIMIT := -.18
-const LATE_LIMIT := .085
-const ATTACK_CONTACT_RADIUS := .30
+const LATE_LIMIT := .40
+const ATTACK_CONTACT_RADIUS := .46
 var reach_assist := Vector3.ZERO
 const GRADE_ADVANCE := .305
 const CLEAN_EARLY := .085
-const CLEAN_LATE := .020
+const CLEAN_LATE := .15
 const METER_START := -.32
-const METER_END := .12
+const METER_END := .45
 
 func attack_meter_position(error: float) -> float:
 	return clampf(inverse_lerp(METER_START,METER_END,error),0.,1.)
@@ -128,18 +139,24 @@ func update_prompts(_next: String) -> void:
 
 func reset_feed() -> void:
 	clear_attack_input()
+	active_lane=attack_lane
+	var shift := coach_station-rotation_drill.basket.position
+	if not shift.is_zero_approx():
+		rotation_drill.basket.position+=shift
+		for stored in rotation_drill.stock: stored.position+=shift
+		coach.position=rotation_drill.basket.to_global(rotation_drill.HANDLE)
 	super.reset_feed()
-	camp_call=0
+	camp_call=active_lane
 	approach_started=false
 	swing_time=-1.
 	message.text="Coach toss"
-	hitter.position=START
+	hitter.position=Vector3(START.x*lane_offset(),START.y,START.z)
 	hitter.rotation.y=0.
 	hitter.play_action("idle")
 	attack_jump.active=false
 
 func set_destination(origin: Vector3, aim: Vector3, height_index: int) -> Vector3:
-	return super.set_destination(origin,aim+Vector3(-1.1,0.,0.),height_index)+Vector3.UP*ATTACK_SET_LIFT
+	return super.set_destination(origin,aim+Vector3(-1.1*lane_offset() if active_lane!=1 else -1.05,0.,0.),height_index)+Vector3.UP*ATTACK_SET_LIFT
 
 func _input(event: InputEvent) -> void:
 	if not settings.visible and not get_tree().paused:
@@ -232,9 +249,9 @@ func step_attack(delta: float) -> void:
 		var lock_on := not cpu_hitter and GroundControls.focus(axis)
 		var tracking := cpu_hitter or (manual_shot>=0 and phase=="set" and not steering)
 		if tracking and not approach_started and phase in ["cart","feed","pass","set_contact","set"]:
-			var entry := Vector3(4.95,START.y,.65)
+			var entry := Vector3(4.95*lane_offset(),START.y,.65)
 			if phase in ["set_contact","set"]:
-				entry=endpoint+Vector3(1.18,0.,-1.82)
+				entry=endpoint+Vector3(1.18*lane_offset(),0.,-1.82)
 				entry.y=START.y
 				if not cpu_hitter:
 					var to_set := (endpoint-hitter.position).slide(Vector3.UP)
@@ -378,7 +395,7 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 					var air_age := attack_jump.elapsed-attack_jump.load_duration()
 					var expected_air_age := attack_jump.flight_duration(effective_attack_height(),true)*.48-.055
 					var plant_lag := maxf(approach_delay,expected_air_age-air_age)
-					contact_grade=release_at-first_palm_at+GRADE_ADVANCE
+					contact_grade=error
 					if plant_lag>CLEAN_LATE: contact_grade=maxf(contact_grade,plant_lag)
 					show_attack_timing(contact_grade)
 					error=combined_attack_error(error)
@@ -690,8 +707,8 @@ func pose_swing() -> void:
 	var offset := ball.global_position-rig.to_global(palm_center)
 	var wanted := Vector3.ZERO
 	if phase=="set" and swing_time>0. and offset.length()>.001:
-		var proximity := 1.-smoothstep(ATTACK_CONTACT_RADIUS,.42,offset.length())
-		wanted=offset.normalized()*clampf(offset.length()-Contact.BALL_RADIUS,0.,.14)*proximity*reach
+		var proximity := 1.-smoothstep(ATTACK_CONTACT_RADIUS,.62,offset.length())
+		wanted=offset.normalized()*clampf(offset.length()-Contact.BALL_RADIUS,0.,.20)*proximity*reach
 	var assist_dt := clampf(swing_time-maxf(0.,last_shoulder_time),0.,.033)
 	reach_assist=reach_assist.move_toward(wanted,assist_dt*1.8)
 	var shift := rig.global_basis.inverse()*reach_assist
