@@ -100,6 +100,12 @@ func attack_contact_height() -> float:
 	# Match the open palm in the authored spike pose at jump apex.
 	return START.y+hitter.height_cm*.0118+effective_attack_height()
 
+func planned_attack_contact_height() -> float:
+	# A setter who underreads fatigue can leave a tired hitter reaching slightly high.
+	var lost_reach := maxf(0.,jump_height-effective_attack_height())
+	var read := clampf(setter.effective_rating("Hand setting")/100.,0.,1.)
+	return attack_contact_height()+minf(lost_reach,.30)*(1.-read)
+
 func attack_set_duration(height_index: int) -> float:
 	var ratio := set_arc_percent*.01
 	# Quick tempos spend less time travelling to the same hand-contact point.
@@ -241,7 +247,7 @@ func set_destination(origin: Vector3, aim: Vector3, height_index: int) -> Vector
 	var airborne := setter.position.y-BASE.y>.12
 	var carry: Vector3=jump.horizontal_velocity() if airborne and jump.active else Vector3.ZERO
 	var contact: Vector3=setter.reachable_set(origin,aim+active_set-PINS[active_lane],airborne,carry,attack_set_duration(height_index))
-	contact.y=attack_contact_height()
+	contact.y=planned_attack_contact_height()
 	return contact
 
 func select_attack_touch() -> void:
@@ -367,7 +373,7 @@ func step_attack(delta: float) -> void:
 			entry.x+=1.18*lane_offset()
 			entry.y=START.y
 			if phase in ["set_contact","set"]:
-				entry=endpoint+Vector3(1.18*lane_offset(),0.,-1.82)
+				entry=endpoint+Vector3(1.18*lane_offset(),0.,-2.65)
 				entry.y=START.y
 				if not cpu_hitter:
 					var to_set := (endpoint-hitter.position).slide(Vector3.UP)
@@ -375,14 +381,14 @@ func step_attack(delta: float) -> void:
 						manual_route=to_set.normalized()
 						prep_velocity=Vector3.ZERO
 					# Close excess distance along the approach line; reserve room for the plant.
-					entry=hitter.position+manual_route*maxf(0.,to_set.dot(manual_route)-1.50)
+					entry=hitter.position+manual_route*maxf(0.,to_set.dot(manual_route)-2.85)
 			elif phase=="pass" and height_preset()==0:
-				entry=active_set+Vector3(.6*lane_offset(),0.,-1.45)
+				entry=active_set+Vector3(.6*lane_offset(),0.,-2.65)
 				entry.y=START.y
 			elif phase=="pass" and not cpu_hitter:
 				var pin: Vector3=active_set
 				var offset := (pin-hitter.position).slide(Vector3.UP)
-				entry=hitter.position+offset.normalized()*maxf(0.,offset.length()-1.5)
+				entry=hitter.position+offset.normalized()*maxf(0.,offset.length()-2.85)
 			
 			var far := float(attack_jump.approach_recovery(hitter,(endpoint-hitter.position).slide(Vector3.UP).length())) if phase=="set" else 0.
 			var pace := lerpf(5.8 if cpu_hitter else 4.3,6.2,far) if phase=="set" or (phase=="pass" and height_preset()==0) else (3.8 if cpu_hitter else 1.85)
@@ -434,7 +440,7 @@ func step_attack(delta: float) -> void:
 	if not approach_started and (cpu_hitter or manual_shot>=0):
 		if phase=="pass" and (set_arc_percent<60. or not cpu_hitter):
 			var predicted_pin := active_set
-			predicted_pin.y=attack_contact_height()
+			predicted_pin.y=planned_attack_contact_height()
 			var set_time := attack_set_duration(chosen_tempo())
 			if height_preset()==0:
 				var rise := attack_jump.flight_duration(effective_attack_height(),true)*.48
@@ -477,7 +483,7 @@ func start_approach(steps := 3, cadence := 1.,destination := Vector3.INF) -> voi
 		contact_stance=Vector3(destination.x,START.y,destination.z)-manual_route*.09
 	var heading := (contact_stance-hitter.position).slide(Vector3.UP).normalized()
 	hitter.rotation.y=atan2(heading.x,heading.z)
-	attack_jump.begin(hitter,Vector2(-heading.x,heading.z),contact_stance,PLANT_TIME*cadence,jump_height,steps,false,cadence,false,.22)
+	attack_jump.begin(hitter,Vector2(-heading.x,heading.z),contact_stance,PLANT_TIME*cadence,jump_height,steps,false,cadence,false,.38)
 	planned_contact=destination
 	planned_lunge=attack_jump.approach_lunge
 	attack_jump.attack_entry_speed=maxf(0.,prep_velocity.dot(heading))

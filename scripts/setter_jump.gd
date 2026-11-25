@@ -50,6 +50,7 @@ var right_foot_start: Vector3
 var left_foot_start: Vector3
 var right_plant: Vector3
 var left_plant: Vector3
+var set_free_foot := ""
 var plant_legs := {}
 var plant_ground := 0.0
 var entry_leg_rotations := {}
@@ -85,6 +86,7 @@ func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time
 	approach_lunge = Vector3.ZERO
 	approach_plant = ball_target.is_finite()
 	setting_jump = for_setting
+	set_free_foot = ""
 	standing_load_time = LOAD_TIME
 	assisted_load_time = plant_time
 	assisted_height = jump_height
@@ -121,8 +123,10 @@ func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time
 	if approach_plant:
 		var ball_offset := (ball_target-start).slide(Vector3.UP)
 		if entry_time > 0.0: entry_distance = clampf(ball_offset.length()-1.85,0.45,1.15)
-		if lead_time > 0.0: lead_distance = clampf(ball_offset.length()-entry_distance-1.12,0.40,0.90)
+		if lead_time > 0.0: lead_distance = clampf(ball_offset.length()-entry_distance-1.12,0.40,0.90 if setting_jump else 1.35)
 		stride = minf(0.40,minf(stride,maxf(0.08,ball_offset.length()*0.60)))
+		if not setting_jump:
+			stride = minf(.72,ball_offset.length()*.30)
 		var rig: Skeleton3D = actor.skeleton
 		right_foot_start = actor.get_parent_node_3d().to_local(rig.to_global(rig.get_bone_global_pose(rig.find_bone("foot_r")).origin))
 		left_foot_start = actor.get_parent_node_3d().to_local(rig.to_global(rig.get_bone_global_pose(rig.find_bone("foot_l")).origin))
@@ -184,7 +188,13 @@ func carry_run_into_plant(velocity: Vector3) -> void:
 
 func begin_set_jump(actor: Node3D, load: float, jump_height := 0.56) -> void:
 	if active: return
+	# A staggered entry uses the leading foot for takeoff. A level stance loads both.
+	var rig: Skeleton3D = actor.skeleton
+	var left := rig.to_global(rig.get_bone_global_pose(rig.find_bone("foot_l")).origin)
+	var right := rig.to_global(rig.get_bone_global_pose(rig.find_bone("foot_r")).origin)
+	var stagger := (left-right).dot(actor.global_basis.z.normalized())
 	begin(actor,Vector2.ZERO,Vector3.INF,APPROACH_LOAD_TIME,jump_height,2,false,1.0,true)
+	if absf(stagger)>.16: set_free_foot = "r" if stagger>0. else "l"
 	standing_load_time = load
 	stride = 0.0
 
@@ -375,6 +385,9 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 		var foot_pose: Transform3D = author.world_pose(original,rig.find_bone(foot))
 		var lift := sin(PI*first) if left else sin(PI*second)
 		var target := foot_pose.origin+travel*stagger*(1.0 if left else -1.0)+Vector3.UP*(0.085*lift+0.07*tuck)
+		if side==set_free_foot:
+			var drive := smoothstep(0.,LOAD_TIME,pose_time)*(1.-smoothstep(.05,.32,flight))
+			target += Vector3(0.,.17,.09)*drive
 		if not plant_legs.is_empty() and pose_time < LOAD_TIME+0.14:
 			var takeoff := smoothstep(LOAD_TIME,LOAD_TIME+0.14,pose_time)
 			var planted := attack_plant_foot(side)
