@@ -400,7 +400,7 @@ func build_hud() -> void:
 	row.add_child(spectator_text)
 	add_child(timing_note)
 	timing_note.mouse_filter=Control.MOUSE_FILTER_IGNORE
-	timing_note.add_theme_font_size_override("font_size",22)
+	timing_note.add_theme_font_size_override("font_size",20)
 	timing_note.add_theme_constant_override("outline_size",5)
 	timing_note.hide()
 	spectator_progress.custom_minimum_size.y = 5
@@ -1651,7 +1651,8 @@ func show_timing(offset: float) -> void:
 	var percent := roundi(100.0 * absf(offset) / timing_window())
 	show_player_timing(setter,"%d%% too %s" % [percent,"early" if offset < 0 else "late"] if percent > 0 else "On time")
 
-func show_player_timing(actor: Node3D, caption: String) -> void:
+func show_player_timing(actor: Node3D, caption: String, tint := Color.WHITE) -> void:
+	timing_note.add_theme_color_override("font_color",tint)
 	timing_actor=actor
 	timing_note.text=caption
 	timing_note.reset_size()

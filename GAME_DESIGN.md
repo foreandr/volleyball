@@ -192,10 +192,10 @@ Attacks allow 30 cm from palm to ball center during the strike window. A small u
 
 Player-controlled ground movement uses shared LT lock-on and RT sprint bindings. LT keeps the athlete facing the ball as the stick steers a grounded shuffle. LT and RT together accelerate that shuffle and consume stamina.
 
-Once an automatic attack approach starts, the face button selects shot width and the left stick adjusts only depth on the opponent's court until release. Every manual shot starts 4.5 metres beyond the net. Effective Spike placement controls target speed and scatter radius. Release timing can push the shot beyond the indicated area.
+Once an automatic attack approach starts, the face button selects shot width and the left stick adjusts depth and trims width by up to one metre either side of the lane on the opponent's court until release. Every manual shot starts 4.5 metres beyond the net. Effective Spike placement controls target speed and scatter radius. Release timing can push the shot beyond the indicated area.
 
 The attack landing marker previews the aimed ball flight: green in, yellow tape-over, red net, orange out. Depth extends ten feet beyond the baseline.
 
-Short attack plants use the authored front arm-lift curve. The attack release meter grades releases within 48 ms of center as on time and reports early or late offsets in milliseconds.
+Short attack plants use the authored front arm-lift curve. The attack release meter grades releases from 48 ms early to 60 ms late as on time and reports early or late offsets in milliseconds.
 
 Shared cloth and tape rebounds retain 20% of incoming speed at release. Spike launch pace depends on forward approach momentum and fatigue-adjusted jump height, including short plants at the net.

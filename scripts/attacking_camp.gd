@@ -30,7 +30,8 @@ const EARLY_LIMIT := -.18
 const LATE_LIMIT := .085
 const ATTACK_CONTACT_RADIUS := .30
 var reach_assist := Vector3.ZERO
-const CLEAN_WINDOW := .048
+const CLEAN_EARLY := .048
+const CLEAN_LATE := .060
 const METER_START := -.32
 const METER_END := .12
 
@@ -45,7 +46,10 @@ func attack_meter_error() -> float:
 	return minf(release_at,clock)-clock+elapsed-flight_time+.08
 
 func show_attack_timing(error: float) -> void:
-	show_player_timing(hitter,"On time" if absf(error)<=CLEAN_WINDOW else "%d ms too %s" % [roundi(absf(error)*1000.),"early" if error<0. else "late"])
+	var clean := error>=-CLEAN_EARLY and error<=CLEAN_LATE
+	var color := Color("61ed88") if clean else (Color("f7bd46") if error<0. else Color("f45550"))
+	if error<EARLY_LIMIT or error>LATE_LIMIT: color=Color("778088")
+	show_player_timing(hitter,"On time" if clean else "%d ms too %s" % [roundi(absf(error)*1000.),"early" if error<0. else "late"],color)
 
 func clear_attack_input() -> void:
 	manual_route=Vector3.ZERO
@@ -194,6 +198,10 @@ func steer_attack_aim(delta: float) -> void:
 	if aim_center==Vector2.INF: aim_center=initial_attack_aim(endpoint)
 	var depth := -axis(JOY_AXIS_LEFT_Y)
 	var strength := signf(depth)*maxf(0.,(absf(depth)-.16)/.84)
+	var lateral := -axis(JOY_AXIS_LEFT_X)
+	var lane := initial_attack_aim(endpoint).x
+	var lateral_input := signf(lateral)*maxf(0.,(absf(lateral)-.16)/.84)
+	aim_center.x=clampf(aim_center.x+lateral_input*lerpf(1.5,3.,placement_skill())*delta,lane-1.,lane+1.)
 	aim_center.y=clampf(aim_center.y+strength*lerpf(6.,13.,placement_skill())*delta,4.65,BallNet.NET_Z+9.+3.048)
 
 func step_attack(delta: float) -> void:
@@ -341,7 +349,7 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 						manual_shot=-1
 						return false
 					placement_offset=Vector2.from_angle(rotation_drill.random.randf()*TAU)*sqrt(rotation_drill.random.randf())*aim_radius()
-					var severity := smoothstep(CLEAN_WINDOW,LATE_LIMIT if error>0. else -EARLY_LIMIT,absf(error))
+					var severity := smoothstep(CLEAN_LATE if error>0. else CLEAN_EARLY,LATE_LIMIT if error>0. else -EARLY_LIMIT,absf(error))
 					power_scale=lerpf(1.,.63,severity)
 					depth_error=(-1. if error>0. else 1.)*severity*rotation_drill.random.randf_range(0.,12. if error>0. else 8.)
 			if not cpu_hitter and (manual_shot<0 or not is_finite(release_at)):

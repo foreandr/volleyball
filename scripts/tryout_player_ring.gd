@@ -161,7 +161,7 @@ func draw_player(actor: Node3D,human: bool) -> void:
 		if extra_jumps.has(actor) and not game.cpu_hitter and game.manual_shot>=0 and (game.phase in ["cart","feed","pass","set_contact","set"] or (game.phase=="spike" and game.elapsed<.45)):
 			var cursor: float=game.attack_meter_position(game.attack_meter_error())
 			var contact_window:=Vector2(game.attack_meter_position(game.EARLY_LIMIT),game.attack_meter_position(game.LATE_LIMIT))
-			timing_arc(at,outer,PI,cursor,game.attack_meter_position(-game.CLEAN_WINDOW),game.attack_meter_position(game.CLEAN_WINDOW),contact_window,Color("14191d"))
+			timing_arc(at,outer,PI,cursor,game.attack_meter_position(-game.CLEAN_EARLY),game.attack_meter_position(game.CLEAN_LATE),contact_window,Color("14191d"))
 		if game!=null and setting_cues:
 			if actor!=game.setter and game.free_target>=0:
 				timing_arc(at,outer,PI,clampf((game.clock-game.free_press)/.43,0,1),.47,.76)
