@@ -2220,6 +2220,17 @@ func tick_blocks(delta: float, previous: float) -> void:
 				launch(point,rebound,"free" if over else "block",index)
 				return
 
+		if not block.overpass_swing:
+			var body: Dictionary=block.body_hit(before,after,Net.RADIUS)
+			if not body.is_empty() and can_touch(index,true):
+				var rebound := velocity*.22
+				rebound.y=maxf(3.2,absf(rebound.y))
+				stroke="Block touch / "+str(body.part)
+				trace.write("block_contact",match_clock,{"blocker":index,"part":body.part,"point":body.point,"rebound":rebound})
+				play_touch()
+				launch(body.point,rebound,"block",index)
+				return
+
 func hit_overpass(index: int, point: Vector3) -> bool:
 	var side := team(index)
 	var frame := frames[side]

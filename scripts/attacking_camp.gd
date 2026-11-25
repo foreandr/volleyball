@@ -1348,13 +1348,15 @@ func resolve_block_contact(previous: Vector3,block_jumps: Array) -> bool:
 	for slot in block_jumps.size():
 		var block: RefCounted=block_jumps[slot]
 		if block==null: continue
-		for i in block.hands.size():
-			var chain := [block.shoulders[i],block.elbows[i],block.wrists[i],block.hands[i]]
+		for i in block.hands.size()+1:
+			var arm: bool = i<block.hands.size()
+			var chain := [block.shoulders[i],block.elbows[i],block.wrists[i],block.hands[i]] if arm else []
+			var side_index: int = i
 			var touched := false
 			var stuff := false
 			var body_part := ""
 			var hit_position := Vector3.ZERO
-			for segment in [2,1,0]:
+			for segment in ([2,1,0] if arm else []):
 				var closest := Geometry3D.get_closest_points_between_segments(previous,ball.global_position,chain[segment],chain[segment+1])
 				var gap := closest[0].distance_to(closest[1])
 				if gap <= Contact.BALL_RADIUS+PracticeBlock.ARM_RADII[segment]:
@@ -1366,6 +1368,13 @@ func resolve_block_contact(previous: Vector3,block_jumps: Array) -> bool:
 					var square_hit := gap<Contact.BALL_RADIUS+.055 and drop_velocity.z>0.
 					stuff=(segment==2 or distal_forearm) and square_hit and surface.y>BallNet.NET_TOP+.10 and surface.z<BallNet.NET_Z-.04
 					break
+			if not arm:
+				var body: Dictionary=block.body_hit(previous,ball.global_position,Contact.BALL_RADIUS)
+				if body.is_empty(): continue
+				hit_position=body.point
+				body_part=body.part
+				side_index=body.side
+				touched=true
 			if not touched: continue
 			ball.global_position=hit_position
 			if stuff:
@@ -1381,8 +1390,8 @@ func resolve_block_contact(previous: Vector3,block_jumps: Array) -> bool:
 			hand_impact.play()
 			block_sound_count+=1
 			var role: String=["Right-side","Middle","Left-side"][slot] if block_jumps==practice_jumps else ["Left-side","Middle","Right-side"][slot]
-			var limb := "left" if i==0 else "right"
-			contact_report="%s blocker / %s %s" % [role,limb,body_part]
+			var limb := "" if side_index<0 else ("left" if side_index==0 else "right")
+			contact_report="%s blocker / %s" % [role,(limb+" "+body_part).strip_edges()]
 			message.text=contact_report
 			show_player_timing(block.actor,contact_report,Color.WHITE)
 			touched_by_middle=slot==1

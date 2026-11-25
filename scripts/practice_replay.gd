@@ -73,7 +73,7 @@ func _ready() -> void:
 	tools.add_child(rate)
 	if "practice_blockers" in game:
 		var toggle_boxes := CheckButton.new()
-		toggle_boxes.text="Arm hitboxes"
+		toggle_boxes.text="Block hitboxes"
 		toggle_boxes.toggled.connect(func(on): show_boxes=on; display_frame(slider.value))
 		tools.add_child(toggle_boxes)
 	panel.add_child(slider)
@@ -116,6 +116,11 @@ func capture(rendered := false) -> Dictionary:
 					for bone in ["upperarm","lowerarm","hand","middle_03"]:
 						points.append(preload("res://scripts/gym_physics.gd").joint(actors[slot],bone+side))
 					arms[key]=points
+			if jump!=null:
+				for side in jump.body_chains.size():
+					var key: int = -1-slot*2-side
+					arms[key]=jump.body_chains[side]
+					armed[key]=true
 	return {"armed":armed,"arms":arms,"floor_count":game.floor_sound_count,"floor_db":game.floor_impact.volume_db,"spike_count":game.spike_sound_count if "spike_sound_count" in game else 0,"block_sound_count":game.block_sound_count if "block_sound_count" in game else 0,"objects":objects,"poses":poses,"whistle_count":game.coach_motion.whistle_cue.play_count,"floor_stream":game.floor_impact.stream,"whistle_height":game.coach_motion.whistle_cue.raised}
 
 func apply(sample: Dictionary) -> void:
@@ -160,7 +165,7 @@ func display_frame(value: float) -> void:
 		var points: Array=a.arms[arm].duplicate()
 		if b.arms.has(arm):
 			for i in points.size(): points[i]=points[i].lerp(b.arms[arm][i],t)
-		for i in 3:
+		for i in points.size()-1:
 			var segment: Vector3=points[i+1]-points[i]
 			if segment.length_squared()<.000001: continue
 			if used==boxes.size():
@@ -178,7 +183,7 @@ func display_frame(value: float) -> void:
 			var capsule := boxes[used]
 			capsule.material_override.albedo_color=Color(.08,1.,.44,.65) if a.armed[arm] else Color(.25,.72,1.,.48)
 			used+=1
-			var radius: float=preload("res://scripts/match_block.gd").ARM_RADII[i]
+			var radius: float=preload("res://scripts/match_block.gd").ARM_RADII[i] if arm>=0 else preload("res://scripts/match_block.gd").BODY_RADII[i]
 			capsule.mesh.radius=radius
 			capsule.mesh.height=segment.length()+2.*radius
 			capsule.global_transform=Transform3D(Basis(Quaternion(Vector3.UP,segment.normalized())),(points[i]+points[i+1])*.5)

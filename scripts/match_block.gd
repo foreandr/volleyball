@@ -4,6 +4,27 @@ const HandPose = preload("res://scripts/hand_setting_pose.gd")
 const STUFF_SPEED_RETENTION := 0.60
 const START := 0.16
 const AIR := 0.74
+const BODY_RADII := [.105,.09,.115]
+const BODY_PARTS := ["shoulder","neck","head"]
+var body_chains := []
+
+static func body_geometry(left: Vector3,right: Vector3,neck: Vector3,head: Vector3) -> Array:
+	var up := neck.direction_to(head)
+	return [[left,neck,head,head+up*.11],[right,neck]]
+
+func body_hit(previous: Vector3,current: Vector3,ball_radius: float) -> Dictionary:
+	var best := {}
+	var nearest := INF
+	for side in body_chains.size():
+		var chain: Array=body_chains[side]
+		for segment in chain.size()-1:
+			var pair := Geometry3D.get_closest_points_between_segments(previous,current,chain[segment],chain[segment+1])
+			var travel := previous.distance_squared_to(pair[0])
+			if travel<nearest and pair[0].distance_to(pair[1])<=ball_radius+BODY_RADII[segment]:
+				nearest=travel
+				best={"point":pair[0],"part":BODY_PARTS[segment],"side":side if segment==0 else -1}
+	return best
+
 const ARM_RADII := [.085,.095,.12]
 const HEIGHT := 1.16
 var actor: Node3D
@@ -202,6 +223,7 @@ func step(delta: float, world_ball: Vector3) -> bool:
 		elbows.append(rig.to_global(author.point(pose,"lowerarm_"+side)))
 		hands.append(rig.to_global(tip))
 		wrists.append(rig.to_global(hand))
+	body_chains=body_geometry(shoulders[0],shoulders[1],rig.to_global(author.point(pose,"neck_01")),rig.to_global(author.point(pose,"Head")))
 	if previous_hands.is_empty():
 		previous_hands = hands.duplicate()
 		previous_wrists = wrists.duplicate()

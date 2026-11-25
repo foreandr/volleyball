@@ -95,3 +95,4 @@ All four attack setup markers allow one meter outside either sideline and 1.5 me
 A stuff block retains 60% of incoming ball speed at arm contact in drills and matches.
 In attacking and blocking practice, two untouched middle quicks landing in court trigger a CPU middle commit. Two untouched quick scores or successful middle touches among the last ten quicks sustain the commit. The drill HUD retains block contact and distinguishes block out from untouched out. Sliders can order a middle commit. A block contact identifies the blocker, arm and collision segment.
 On middle quicks, read and commit timing both support a disguised lane, late lateral correction, torso lean, a two-hand spread or a one-arm Kong into an open lane. Nearby teammates limit inward reach.
+Active blocks also collide across both shoulders, neck and head. These contacts use soft deflections and count toward block-out attribution in the drills. Replay shows the same body capsules.
