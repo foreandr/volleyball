@@ -39,7 +39,10 @@ func start_drill() -> void:
 		for collider in hoop.find_children("*","StaticBody3D",true,false):
 			collider.collision_layer=0
 	for overlay in get_children():
-		if overlay.get_script()==preload("res://scripts/tryout_player_ring.gd"): overlay.hide()
+		if overlay.get_script()==preload("res://scripts/tryout_player_ring.gd"):
+			overlay.extra_jumps[hitter]=attack_jump
+			overlay.setting_cues=false
+	energy[hitter]=hitter.stamina
 	attack_jump.front_limit=3.65
 	attack_jump.attack_arm_lift=true
 	super.start_drill()
@@ -169,6 +172,7 @@ func start_approach() -> void:
 	last_shoulder_time=-1.
 	closest_spike_gap=INF
 	approach_started=true
+	hitter.stamina.spend(5,"Jump")
 	var contact_stance := Vector3(endpoint.x+.09,.04,endpoint.z-.09)
 	var heading := (contact_stance-hitter.position).slide(Vector3.UP).normalized()
 	hitter.rotation.y=atan2(heading.x,heading.z)

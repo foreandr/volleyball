@@ -64,7 +64,7 @@ static func impact(time: float, point: Vector3, incoming: Vector3, side: float) 
 	var softness := (1.0-smoothstep(1.47,2.05,point.y))*(1.0-0.6*rigidity) if kind == "cloth" else 0.0
 	var duration := 0.12 if kind == "cloth" else 0.075
 	duration += 0.065*softness
-	var stretch := clampf(absf(incoming.z)*duration/PI,0.025,0.48+0.15*softness)*(1.15-rigidity*0.4)
+	var stretch := clampf(absf(incoming.z)*duration*1.18/PI,0.025,0.57+0.17*softness)*(1.15-rigidity*0.4)
 	var rebound := Vector3(incoming.x*0.55,incoming.y*0.5,side*absf(incoming.z)*(0.24+0.16*rigidity))
 	# The looser lower mesh holds the ball briefly and damps the downward slide.
 	rebound.z *= 1.0-0.25*softness

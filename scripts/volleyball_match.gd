@@ -335,6 +335,10 @@ func configure(actor: Node3D, board: Label, status: Label, build := "", players_
 	if learn_from_demo: reset_match()
 	else: begin_point()
 
+	var indicators := preload("res://scripts/tryout_player_ring.gd").new()
+	indicators.participants=players
+	add_child(indicators)
+
 func stop() -> void:
 	if replay.active: toggle_replay()
 	human.transform = saved_transform
