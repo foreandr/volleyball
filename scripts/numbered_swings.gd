@@ -38,7 +38,65 @@ static func make(source: Animation, number: int, rig: Skeleton3D=null) -> Animat
 				if weight>0.:
 					var rotation: Quaternion=clip.track_get_key_value(hand,key)
 					clip.track_set_key_value(hand,key,rotation*Quaternion(Vector3.BACK,deg_to_rad(75.)*weight))
+	if rig!=null and hit>=0 and clip.has_meta("editor_ball_frames"):
+		align_contact(clip,rig,hit)
 	return clip
+
+static func align_contact(clip: Animation, rig: Skeleton3D, hit: int) -> void:
+	var balls: Array=clip.get_meta("editor_ball_frames")
+	var session=preload("res://scripts/animation_edit_session.gd").new(clip,rig)
+	var hand := rig.find_bone("hand_r")
+	var parent := rig.get_bone_parent(hand)
+	var world: Transform3D=clip.get_meta("editor_rig_world",rig.global_transform)
+	var point := func(name_: String) -> Vector3: return rig.get_bone_global_pose(rig.find_bone(name_)).origin
+	for f in range(maxi(0,hit-1),mini(hit+10,balls.size())):
+		var weight := smoothstep(hit-2.,hit,f)*(1.-smoothstep(hit+2.,hit+9.,f))
+		session.sample(f)
+		preload("res://scripts/player_arm_clearance.gd").resolve(rig,"r")
+		for digit in ["index","middle","ring","pinky","thumb"]:
+			for segment in ["01","02","03"]:
+				var bone := rig.find_bone(digit+"_"+segment+"_r")
+				if bone<0: continue
+				var t: int=session.rotation_tracks[bone]
+				if t>=0:
+					var opened := rig.get_bone_pose_rotation(bone).slerp(rig.get_bone_rest(bone).basis.get_rotation_quaternion(),weight)
+					rig.set_bone_pose_rotation(bone,opened)
+					clip.rotation_track_insert_key(t,f/60.,opened)
+		var wrist: Vector3=point.call("hand_r")
+		var fingers: Vector3=point.call("middle_01_r")-wrist
+		var normal := fingers.cross(point.call("pinky_01_r")-point.call("index_01_r")).normalized()
+		var ball: Vector3=world.affine_inverse()*balls[f].origin
+		var radial := wrist.direction_to(ball)
+		var tangent := fingers.slide(radial).normalized()
+		if tangent.is_zero_approx(): continue
+		# Aim the palm surface at the ball center, accounting for its offset from the wrist.
+		var angle := asin(clampf(.8*fingers.length()/maxf(.001,wrist.distance_to(ball)),0.,.99))
+		var target := radial*cos(angle)-tangent*sin(angle)
+		var axis := rig.get_bone_global_pose(parent).basis.orthonormalized()
+		var turn := Quaternion((axis.inverse()*normal).normalized(),(axis.inverse()*target).normalized())
+		var q := rig.get_bone_pose_rotation(hand)
+		clip.rotation_track_insert_key(session.rotation_tracks[hand],f/60.,q.slerp(turn*q,weight).normalized())
+
+	# Place the recorded ball against the final posed palm during the contact interval.
+	var corrected := balls.duplicate()
+	var entry_shift := Vector3.ZERO
+	var exit_shift := Vector3.ZERO
+	for f in range(hit,mini(hit+3,balls.size())):
+		session.sample(f)
+		preload("res://scripts/player_arm_clearance.gd").resolve(rig,"r")
+		var wrist: Vector3=world*point.call("hand_r")
+		var knuckle: Vector3=world*point.call("middle_01_r")
+		var edge: Vector3=world.basis*(point.call("pinky_01_r")-point.call("index_01_r"))
+		var normal := (knuckle-wrist).cross(edge).normalized()
+		var touch := wrist.lerp(knuckle,.8)+normal*.105
+		exit_shift=touch-balls[f].origin
+		if f==hit: entry_shift=exit_shift
+		corrected[f].origin=touch
+	for f in range(maxi(0,hit-7),hit):
+		corrected[f].origin+=entry_shift*smoothstep(hit-7.,hit,f)
+	for f in range(hit+3,mini(hit+14,balls.size())):
+		corrected[f].origin+=exit_shift*(1.-smoothstep(hit+2.,hit+14.,f))
+	clip.set_meta("editor_ball_frames",corrected)
 
 static func align_draw_palm(clip: Animation, rig: Skeleton3D, start: int, hit: int) -> void:
 	var session=preload("res://scripts/animation_edit_session.gd").new(clip,rig)

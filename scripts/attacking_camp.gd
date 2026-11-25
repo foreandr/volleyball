@@ -182,7 +182,8 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 			feedback="Spike"
 			message.text=feedback
 			gym.update_board(spikes)
-			contact_offset=(ball.position-palm).normalized()*Contact.BALL_RADIUS
+			contact_offset=striking_palm_offset()
+			ball.position=palm+contact_offset
 			net_clear_time=-1.
 			var landing := shot_landing(ball.position)
 			var shot_time := attack_flight_time(landing.distance_to(ball.position))
@@ -200,10 +201,15 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 		return true
 	return false
 
+func striking_palm_offset() -> Vector3:
+	var fingers := Contact.joint(hitter,"middle_01_r")-Contact.joint(hitter,"hand_r")
+	var edge := Contact.joint(hitter,"pinky_01_r")-Contact.joint(hitter,"index_01_r")
+	return fingers.cross(edge).normalized()*Contact.BALL_RADIUS
+
 func advance_spike(delta: float, bounce: bool) -> void:
 	var age := swing_time-contact_swing_time
 	if age<=PALM_CONTACT+.00001:
-		ball.position=Contact.palm(hitter,"r")+contact_offset
+		ball.position=Contact.palm(hitter,"r")+striking_palm_offset()
 		var landing := shot_landing(strike_point)
 		var flight := attack_flight_time(ball.position.distance_to(landing))
 		var direction := ball.position.direction_to(landing).slide(Vector3.UP).normalized()

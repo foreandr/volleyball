@@ -200,6 +200,7 @@ func bake_recorded_actor(actor: Node3D, actor_index: int, title: String, contact
 	clip.set_meta("editor_initial_frame",index)
 	if include_ball:
 		var world_start: Transform3D = actor.get_parent().global_transform*start
+		clip.set_meta("editor_rig_world",world_start*rig_to_actor)
 		clip.set_meta("editor_yaw",world_start.basis.get_euler().y)
 		clip.set_meta("editor_height_cm",actor.height_cm)
 		var samples: Array[Transform3D] = []
