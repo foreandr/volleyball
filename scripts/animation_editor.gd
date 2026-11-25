@@ -17,6 +17,7 @@ var origin_scene := ""
 var frame := 0
 var playhead := 0.0
 var playing := false
+var playback_speed := 1.0
 var selected_bone := -1
 var group_picker: OptionButton
 var selected_group := "Both Arms"
@@ -171,6 +172,12 @@ func build_controls(controls: VBoxContainer) -> void:
 	controls.add_child(transport)
 	play_button = button("Play",func(): set_playing(not playing))
 	transport.add_child(play_button)
+	var slow := button("Slow ��",func(): pass)
+	slow.toggle_mode=true
+	slow.toggled.connect(func(enabled: bool):
+		playback_speed=.25 if enabled else 1.
+		if enabled and not playing: set_playing(true))
+	transport.add_child(slow)
 	undo_button = button("Undo",undo)
 	transport.add_child(undo_button)
 	redo_button = button("Redo",redo)
@@ -317,13 +324,13 @@ func _process(delta: float) -> void:
 	super._process(delta)
 	if session == null: return
 	if playing and not ball_preview.active:
-		playhead = fposmod(playhead+delta*session.frame_rate,session.last_frame+1.)
+		playhead = fposmod(playhead+delta*playback_speed*session.frame_rate,session.last_frame+1.)
 		set_frame(floori(playhead))
 		session.sample(minf(playhead,session.last_frame))
 	elif playing:
 		var first: float = minf(0,ball_preview.contact_time-ball_preview.feed_duration)*session.frame_rate
 		var last: float = ball_preview.cycle_end()*session.frame_rate
-		playhead = first+fposmod(playhead-first+delta*session.frame_rate,last-first)
+		playhead = first+fposmod(playhead-first+delta*playback_speed*session.frame_rate,last-first)
 		var playback_frame: float = ball_preview.animation_time(playhead/session.frame_rate)*session.frame_rate
 		set_frame(floori(playback_frame))
 		session.sample(playback_frame)

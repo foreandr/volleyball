@@ -7,7 +7,7 @@ var attack_jump := preload("res://scripts/setter_jump.gd").new()
 var swing_time := -1.
 var cpu_hitter := true
 var approach_started := false
-const JUMP_HEIGHT := 1.08
+const JUMP_HEIGHT := 30.*.0254
 const PLANT_TIME := .30
 var spikes := 0
 var strike_point := Vector3.ZERO
@@ -15,6 +15,7 @@ var strike_point := Vector3.ZERO
 func start_drill() -> void:
 	hitter=athlete(START,"e97937")
 	hitter.apply_profile(setter.attributes.duplicate())
+	hitter.set_height_cm(190.5)
 	register_student(setter,2)
 	preload("res://scripts/practice_kit.gd").apply(hitter,false)
 	for hoop in targets:
@@ -160,22 +161,35 @@ func pose_swing() -> void:
 	var author = hitter.get_pose_author()
 	var airborne := smoothstep(0.,.12,attack_jump.elapsed-attack_jump.load_duration()) if attack_jump.active else 0.
 	var load_weight := airborne*(1.-reach)
-	var twist := deg_to_rad(-38.)*load_weight
+	var toward_feed := (source-hitter.position).slide(Vector3.UP).normalized()
+	var open_axis := hitter.basis.inverse()*(toward_feed+Vector3.BACK*1.1)
+	var twist := clampf(atan2(open_axis.x,open_axis.z),-.85,.85)*load_weight
+	author.rotate_world(pose,"pelvis",Vector3.UP,twist*.30)
+	twist *= .70
 	author.rotate_world(pose,"spine_01",Vector3.UP,twist*.45)
 	author.rotate_world(pose,"spine_02",Vector3.UP,twist*.55)
 	for side in ["r","l"]:
 		var calf := "calf_"+str(side)
 		var foot := "foot_"+str(side)
+		var thigh := "thigh_"+str(side)
+		var hip: Vector3 = author.point(pose,thigh)
+		var leg: Vector3 = (author.point(pose,calf)-hip).normalized()
+		var air_age := attack_jump.elapsed-attack_jump.load_duration()
+		var knee_load := smoothstep(0.,.07,air_age)*(1.-reach)*(1.-follow) if attack_jump.active else 0.
+		var thigh_axis := Vector3(.33,-.74,.58) if side=="l" else Vector3(-.13,-.80,.59)
+		author.aim_joint(pose,thigh,calf,hip+leg.slerp(thigh_axis.normalized(),knee_load))
 		var knee: Vector3 = author.point(pose,calf)
 		var shin: Vector3 = (author.point(pose,foot)-knee).normalized()
 		var outward := -.12 if side=="r" else .12
 		var heel := Vector3(outward,.32 if side=="r" else .09,-1.).normalized()
+		var early_shin := Vector3(.25,-.58,-.77) if side=="l" else Vector3(-.06,-.39,-.92)
+		heel = early_shin.normalized().slerp(heel,smoothstep(.07,.16,air_age))
 		var extended := Vector3(outward,-1.,-.14).normalized()
-		var blend := airborne*(1.-follow)
+		var blend := maxf(knee_load,airborne)*(1.-follow)
 		author.aim_joint(pose,calf,foot,knee+shin.slerp(heel.slerp(extended,reach),blend))
 	var draw := smoothstep(.065,.21,attack_jump.elapsed-attack_jump.load_duration()) if attack_jump.active else 0.
 	Swing.apply(pose,hitter.get_pose_author(),rig.to_local(strike_point if phase=="spike" else ball.position),maxf(draw,smoothstep(0.,.065,swing_time)),reach,follow,1.,0.,0.,Swing.DEFAULT_ELBOW_CLEARANCE,0.,INF,Vector3.BACK,0.,.10,false,true)
-	for joint in ["spine_01","spine_02","calf_r","calf_l","clavicle_r","upperarm_r","lowerarm_r","hand_r","clavicle_l","upperarm_l","lowerarm_l","hand_l"]:
+	for joint in ["pelvis","spine_01","spine_02","thigh_r","thigh_l","calf_r","calf_l","clavicle_r","upperarm_r","lowerarm_r","hand_r","clavicle_l","upperarm_l","lowerarm_l","hand_l"]:
 		var id := rig.find_bone(joint)
 		rig.set_bone_pose_rotation(id,pose[id].basis.get_rotation_quaternion())
 
@@ -198,6 +212,7 @@ func edit_approach_frames(arm_lift := false) -> void:
 	swing_time=-1.
 	if arm_lift:
 		phase="set"
+		source=setter.position
 		ball.position=Vector3(endpoint.x,2.85,endpoint.z)
 	var count := ceili(duration*60.)
 	for i in range(count+1):
