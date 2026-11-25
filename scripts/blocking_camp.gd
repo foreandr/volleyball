@@ -36,6 +36,7 @@ func start_drill() -> void:
 		actor.rotation.y=PI
 		blockers.append(actor)
 	super.start_drill()
+	review_setup.power=attack_speed()
 
 func build_settings() -> void:
 	super.build_settings()
@@ -69,6 +70,9 @@ func update_prompts(_next: String) -> void:
 	entries.append(["D-pad Up/Down","Set height: %d" % height_preset()])
 	entries.append([JOY_BUTTON_START,"Settings"])
 	Xbox.prompts(controls_row,entries)
+
+func attack_speed() -> float:
+	return 30.
 
 func allow_cpu_soft_attack() -> bool:
 	return false
