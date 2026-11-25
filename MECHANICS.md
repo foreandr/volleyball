@@ -89,3 +89,5 @@ Above-tape penetration with a square palm or distal forearm contact drives a stu
 In attacking and blocking practice the four set arc presets use 15%, 40%, 70%, and 130%.
 
 Pause > Attack setup contains the Coach, Setter, Set and Hitter map. Play starts a fresh feed. With three blockers, the pin on the set side leads the close.
+
+All four attack setup markers allow one meter outside either sideline and 1.5 meters behind the baseline within the gym runoff.

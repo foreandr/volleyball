@@ -2,6 +2,11 @@ extends Control
 
 const ROLES := ["Coach","Setter","Set","Hitter"]
 const COLORS := [Color("ffd477"),Color("6bded3"),Color("efa6ed"),Color("91d9ff")]
+const SIDELINE := 4.5
+const NET := 4.0
+const BASELINE := NET-9.0
+const SIDE_LIMIT := SIDELINE+1.0
+const BACK_LIMIT := BASELINE-1.5
 var game
 var dragging := -1
 var preview := Vector2.ZERO
@@ -13,10 +18,10 @@ func _ready() -> void:
 	tooltip_text="Drag a marker or its label to position it for the next feed."
 
 func court_scale() -> float:
-	return minf((size.x-32.)/9.,(size.y-46.)/8.)
+	return minf((size.x-32.)/(2.*SIDE_LIMIT),(size.y-46.)/(NET-BACK_LIMIT))
 
 func screen_point(point: Vector2) -> Vector2:
-	return Vector2(size.x*.5,16.)+Vector2(-point.x,4.-point.y)*court_scale()
+	return Vector2(size.x*.5,16.)+Vector2(-point.x,NET-point.y)*court_scale()
 
 func marker(i: int) -> Vector2:
 	if dragging==i: return screen_point(preview)
@@ -24,9 +29,11 @@ func marker(i: int) -> Vector2:
 	return screen_point(Vector2(spot.x,spot.z))
 
 func _draw() -> void:
-	var left := screen_point(Vector2(4.5,4.))
-	var right := screen_point(Vector2(-4.5,-4.))
+	var left := screen_point(Vector2(SIDELINE,NET))
+	var right := screen_point(Vector2(-SIDELINE,BASELINE))
 	var bounds := Rect2(left,right-left)
+	var outer := screen_point(Vector2(SIDE_LIMIT,NET))
+	draw_rect(Rect2(outer,screen_point(Vector2(-SIDE_LIMIT,BACK_LIMIT))-outer),Color("334239"))
 	draw_rect(bounds,Color("23504e"))
 	draw_rect(bounds,Color.WHITE,false)
 	draw_line(left,Vector2(right.x,left.y),Color.WHITE,3.)
@@ -40,7 +47,7 @@ func _draw() -> void:
 func place(cursor: Vector2) -> void:
 	var delta := (cursor+offset-screen_point(Vector2.ZERO))/court_scale()
 	var max_z := [1.,3.,3.65,3.65]
-	preview=Vector2(clampf(-delta.x,-4.5,4.5),clampf(-delta.y,-4.,max_z[dragging]))
+	preview=Vector2(clampf(-delta.x,-SIDE_LIMIT,SIDE_LIMIT),clampf(-delta.y,BACK_LIMIT,max_z[dragging]))
 	queue_redraw()
 
 func _gui_input(event: InputEvent) -> void:
