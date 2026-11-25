@@ -13,6 +13,7 @@ var landing_recovery := 0.13
 var overpass_swing := false
 var net_heading := INF
 var aggressive_press := false
+var kong_direction := 0.
 var close_direction := 0.
 var lean_input := 0.
 var reach_input := Vector2.ZERO
@@ -115,7 +116,7 @@ func step(delta: float, world_ball: Vector3) -> bool:
 		var shoulder_offset := rig.to_global(shoulder).x-rig.to_global(author.point(pose,"spine_03")).x
 		var inside_arm := is_finite(min_hand_x) if shoulder_offset<0. else is_finite(max_hand_x)
 		if inside_arm: spread=0.
-		var balance := 0. if inside_arm else opposite*(1.-spread)
+		var balance := opposite*(1.-spread) if not inside_arm or kong_direction!=0. else 0.
 		var spine: Vector3=author.point(pose,"spine_03")
 		var side_sign := signf(shoulder.x-spine.x)
 		var diagonal := Vector3(side_sign*1.05,.19,.37)

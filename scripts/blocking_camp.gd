@@ -273,6 +273,22 @@ func begin_block(slot: int,loaded := 0.,manual := false) -> void:
 	var jump := Block.new()
 	var stamina=blockers[slot].stamina
 	if not manual and (stamina.exhausted or attempted[slot]): return
+	if not manual:
+		var actor := blockers[slot]
+		var aim_x: float=read_x if read_set else attackers[1].position.x
+		var offset := aim_x-actor.position.x
+		var carry := clampf(lateral_speed[slot]*.12,-.24,.24) if read_set and slot!=read_lead else 0.
+		var gap := absf(offset-carry)
+		if gap>1.10 or actor.position.z>BallNet.NET_Z+.95: return
+		if gap>.50:
+			var seam_covered := false
+			for other in blockers:
+				if other==actor or absf(other.position.z-actor.position.z)>.65: continue
+				var separation: float=(other.position.x-actor.position.x)*signf(offset)
+				if separation>0. and separation<1.4: seam_covered=true
+			if seam_covered:
+				if gap>.85: return
+			else: jump.kong_direction=signf(offset)
 	jump.jump_height=block_vertical*.0254*stamina.effectiveness()
 	if manual: jump.jump_height=maxf(.10,jump.jump_height)
 	stamina.spend(5,"Block jump")
@@ -405,11 +421,12 @@ func step_blocker(slot: int,delta: float) -> void:
 		if automatic_block or slot!=MANUAL_SLOT:
 			jump.reach_input=Vector2.ZERO
 			if jump.shoulders.size()==2 and phase in ["set","spike"]:
-				var crossing_x := ball.position.x
+				var crossing_x := read_x if phase=="set" and read_set else ball.position.x
 				if phase=="spike" and drop_velocity.z>.1:
 					var seconds := clampf((actor.position.z-ball.position.z)/drop_velocity.z,0.,.18)
 					crossing_x+=drop_velocity.x*seconds
 				var miss := crossing_x-actor.position.x
+				if jump.kong_direction!=0. and phase=="set": miss=jump.kong_direction*.85
 				var open_side: bool=not is_finite(jump.min_hand_x) if miss<0. else not is_finite(jump.max_hand_x)
 				if open_side and absf(miss)<1.45:
 					var amount := smoothstep(.28,.80,absf(miss))
