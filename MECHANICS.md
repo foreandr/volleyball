@@ -88,4 +88,4 @@ Player identification rings are depth-tested court geometry. The timing band sha
 Above-tape penetration with a square palm or distal forearm contact drives a stuff toward the floor just behind the opposing net. Glancing contact stays playable.
 In attacking and blocking practice the four set arc presets use 15%, 40%, 70%, and 130%.
 
-Pause > Attack setup contains the Coach, Setter and Set map. Play starts a fresh feed. With three blockers, the pin on the set side leads the close.
+Pause > Attack setup contains the Coach, Setter, Set and Hitter map. Play starts a fresh feed. With three blockers, the pin on the set side leads the close.

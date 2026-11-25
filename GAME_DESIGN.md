@@ -190,7 +190,7 @@ Every playable drill carries the active athletes' stamina and jump indicators, i
 
 Shared approach and setting jumps scale vertical reach with stamina at the start of the jump. Attack practice exposes the feed set's arc in Sliders.
 
-In attacker control, hold X for line, Y for six, or B for cross. The hitter tracks the set and leads toward its intercept with the left foot. Release at contact for power. Early timing biases depth long and late timing drives the shot down.
+In attacker control, hold X for court left, Y for middle, or B for court right from either pin. The hitter tracks the set and leads toward its intercept with the left foot. Release at contact for power. Early timing biases depth long and late timing drives the shot down.
 
 Attacks allow 30 cm from palm to ball center during the strike window. A small upper-body reach assists close swings and eases away through the follow-through.
 
