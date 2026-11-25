@@ -25,6 +25,8 @@ var power_scale := 1.
 
 const EARLY_LIMIT := -.16
 const LATE_LIMIT := .065
+const ATTACK_CONTACT_RADIUS := .30
+var reach_assist := Vector3.ZERO
 const CLEAN_WINDOW := .018
 const METER_START := -.32
 const METER_END := .12
@@ -207,6 +209,7 @@ func step_attack(delta: float) -> void:
 func start_approach() -> void:
 	if approach_started: return
 	last_shoulder_time=-1.
+	reach_assist=Vector3.ZERO
 	closest_spike_gap=INF
 	approach_started=true
 	hitter.stamina.spend(5,"Jump")
@@ -253,7 +256,7 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 		var nearest := Geometry3D.get_closest_point_to_segment(palm,previous,ball.position)
 		if swing_time>=.055 and swing_time<=.30:
 			closest_spike_gap=minf(closest_spike_gap,nearest.distance_to(palm))
-		if swing_time>=.055 and swing_time<=.30 and nearest.distance_to(palm)<=Contact.BALL_RADIUS+.065:
+		if swing_time>=.055 and swing_time<=.30 and nearest.distance_to(palm)<=ATTACK_CONTACT_RADIUS:
 			if not cpu_hitter:
 				if not is_finite(first_palm_at): first_palm_at=clock
 				if manual_shot<0 or not is_finite(release_at):
@@ -513,6 +516,23 @@ func pose_swing() -> void:
 	var guide_roll := deg_to_rad(-110.)*smoothstep(0.,.045,air_age)
 	author.rotate_world(pose,"lowerarm_l",forearm_axis,guide_roll*.8)
 	author.set_world_basis(pose,"hand_l",Basis(hand_axis,guide_roll)*hand_pose.basis)
+	# Nudge the authored pose toward the near surface of a reachable ball.
+	var palm_center: Vector3=author.point(pose,"hand_r").lerp(author.point(pose,"middle_01_r"),.8)
+	var offset := ball.global_position-rig.to_global(palm_center)
+	var wanted := Vector3.ZERO
+	if phase=="set" and swing_time>0. and offset.length()>.001:
+		var proximity := 1.-smoothstep(ATTACK_CONTACT_RADIUS,.42,offset.length())
+		wanted=offset.normalized()*clampf(offset.length()-Contact.BALL_RADIUS,0.,.14)*proximity*reach
+	var assist_dt := clampf(swing_time-maxf(0.,last_shoulder_time),0.,.033)
+	reach_assist=reach_assist.move_toward(wanted,assist_dt*1.8)
+	var shift := rig.global_basis.inverse()*reach_assist
+	for bone in ["spine_02","upperarm_r"]:
+		var pivot: Vector3=author.point(pose,bone)
+		var lever := palm_center-pivot
+		var target := lever+shift*(.45 if bone=="spine_02" else .55)
+		var axis := lever.cross(target)
+		if axis.length_squared()>.00000001:
+			author.rotate_world(pose,bone,axis.normalized(),minf(lever.angle_to(target),deg_to_rad(5. if bone=="spine_02" else 8.)))
 	var arm_dt := maxf(0.,swing_time-last_shoulder_time)
 	for joint in ["pelvis","spine_01","spine_02","thigh_r","thigh_l","calf_r","calf_l","foot_r","foot_l","clavicle_r","upperarm_r","lowerarm_r","hand_r","clavicle_l","upperarm_l","lowerarm_l","hand_l"]:
 		var id := rig.find_bone(joint)
