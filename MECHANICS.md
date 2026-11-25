@@ -80,3 +80,4 @@ CPU takeoff checks the ball read against lateral reach, closing momentum and dis
 Blocking HUD hit speed (9–40 m/s) controls spike power independently of set height. Attack vertical applies on the next feed. CPU closers recheck reach after the lead jumps.
 On wide quicks the middle reads the inside hitting lane, counts closing momentum, and can take a late loaded jump with a torso lean and one-hand reach. Once struck, the ball velocity informs the last reach check at the net.
 On pin sets each closer evaluates their own adjacent strip of net toward cross court. Reachable CPU blockers may take off independently at the last viable instant if the lead has not jumped.
+Approach and Spike exposes saved attacker vertical (inches) and nominal hard-hit speed (m/s) directly on the HUD. They feed the jump and swing calculations for human and CPU attacks.

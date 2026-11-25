@@ -48,6 +48,7 @@ func save_set_height(value: float) -> void:
 	StorySession.save_options()
 	update_prompts(phase)
 
+var drill_hit_speed := 14.
 var jump_height := JUMP_HEIGHT
 var feed_started := false
 var cpu_hitter := true
@@ -172,6 +173,35 @@ const PALM_CONTACT := 2./60.
 
 var spike_sound_count := 0
 var hand_impact := AudioStreamPlayer.new()
+
+func build_settings() -> void:
+	super.build_settings()
+	if scene_file_path!="res://scenes/attacking_camp.tscn": return
+	var row := HBoxContainer.new()
+	controls_row.get_parent().add_child(row)
+	for is_jump in [true,false]:
+		var key := "vertical_inches" if is_jump else "hit_speed_mps"
+		var slider := HSlider.new()
+		slider.min_value=0. if is_jump else 9.
+		slider.max_value=60. if is_jump else 40.
+		slider.step=1.
+		slider.custom_minimum_size=Vector2(140,30)
+		slider.focus_mode=Control.FOCUS_NONE
+		slider.value=StorySession.game_options.get_value("attack",key,33. if is_jump else 14.)
+		var caption := Label.new()
+		var format_text := "Attack vertical  %d in" if is_jump else "Hit speed  %d m/s"
+		row.add_child(caption)
+		row.add_child(slider)
+		var apply_value := func(value: float):
+			caption.text=format_text % value
+			if is_jump: jump_height=value*.0254
+			else: drill_hit_speed=value
+		apply_value.call(slider.value)
+		slider.value_changed.connect(func(value):
+			apply_value.call(value)
+			StorySession.game_options.set_value("attack",key,value)
+			StorySession.save_options()
+		)
 
 func start_drill() -> void:
 	set_arc_percent=float(StorySession.game_options.get_value("attack","set_height_percent",100.))
@@ -545,7 +575,7 @@ func arm_speed_factor() -> float:
 	if tip_shot: return .90
 	if roll_shot:
 		return lerpf(.84,1.08,roll_reach_fraction())
-	var effort := float(review_setup.get("power",14.))
+	var effort := float(review_setup.get("power",drill_hit_speed))
 	var rating := float(hitter.attributes.get("Arm swing",65))
 	return pow(effort/14.,.48)*(1.+(rating-65.)*.004)
 
@@ -557,7 +587,7 @@ func effective_attack_height() -> float:
 
 func attack_speed() -> float:
 	var strength := float(hitter.attributes.get("Strength",65))
-	var effort := float(review_setup.get("power",14.))
+	var effort := float(review_setup.get("power",drill_hit_speed))
 	return sqrt(14.*effort)*arm_speed_factor()*(1.+(strength-65.)*.005)
 
 func attack_flight_time(origin: Vector3, landing: Vector3) -> float:
