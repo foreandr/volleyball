@@ -7,7 +7,8 @@ var attack_jump := preload("res://scripts/setter_jump.gd").new()
 var swing_time := -1.
 var cpu_hitter := true
 var approach_started := false
-const JUMP_HEIGHT := 30.*.0254
+const JUMP_HEIGHT := 33.*.0254
+const ATTACK_SET_LIFT := .10
 const PLANT_TIME := .30
 var spikes := 0
 var strike_point := Vector3.ZERO
@@ -15,7 +16,7 @@ var strike_point := Vector3.ZERO
 func start_drill() -> void:
 	hitter=athlete(START,"e97937")
 	hitter.apply_profile(setter.attributes.duplicate())
-	hitter.set_height_cm(190.5)
+	hitter.set_height_cm(193.04)
 	register_student(setter,2)
 	preload("res://scripts/practice_kit.gd").apply(hitter,false)
 	for hoop in targets:
@@ -54,7 +55,7 @@ func reset_feed() -> void:
 	attack_jump.active=false
 
 func set_destination(origin: Vector3, aim: Vector3, height_index: int) -> Vector3:
-	return super.set_destination(origin,aim+Vector3(-1.1,0.,0.),height_index)
+	return super.set_destination(origin,aim+Vector3(-1.1,0.,0.),height_index)+Vector3.UP*ATTACK_SET_LIFT
 
 func _input(event: InputEvent) -> void:
 	if not settings.visible and not get_tree().paused:
@@ -249,7 +250,7 @@ func edit_approach_frames(arm_lift := false, arm_swing := false) -> void:
 	if arm_lift:
 		phase="set"
 		source=setter.position+Vector3.UP*(setter.height_cm*.01+.12)
-		endpoint.y=2.65
+		endpoint.y=2.65+ATTACK_SET_LIFT
 	var count := ceili(duration*60.)
 	for i in range(count+1):
 		var time := minf(i/60.,duration)
