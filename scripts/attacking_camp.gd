@@ -178,7 +178,15 @@ func advance_spike(delta: float, bounce: bool) -> void:
 		var flight := .68 if review_setup.is_empty() else ball.position.distance_to(landing)/float(review_setup.get("power",14.))
 		drop_velocity=(landing-ball.position)/flight+Vector3.UP*(4.905*flight)
 		return
+	var incoming_basis := ball.basis
+	var in_flight := roll_time<0.
+	var forward := drop_velocity.slide(Vector3.UP).normalized()
 	advance_missed_ball(delta,bounce)
+	if in_flight and roll_time<0. and not forward.is_zero_approx():
+		var spin := int(review_setup.get("spin",0))
+		var axis := Vector3.UP.cross(forward) if spin==0 else Vector3.UP
+		var rate := [32.,-26.,26.,0.]
+		ball.basis=Basis(axis,float(rate[spin])*delta)*incoming_basis
 	if net_clear_time<0. and ball.position.z>=4.+Contact.BALL_RADIUS and ball.position.y>2.43+Contact.BALL_RADIUS:
 		net_clear_time=swing_time
 
@@ -287,7 +295,13 @@ func pose_swing() -> void:
 	var draw := smoothstep(.035,draw_end,air_age) if attack_jump.active else 0.
 	var origin := strike_point if phase=="spike" else ball.position
 	var shot_axis := hitter.basis.inverse()*origin.direction_to(shot_landing(origin)).slide(Vector3.UP).normalized()
-	Swing.apply(pose,hitter.get_pose_author(),rig.to_local(strike_point if phase=="spike" else ball.position),maxf(draw,smoothstep(0.,.065,swing_time)),reach,follow,maxf(draw,reach),0.,0.,Swing.DEFAULT_ELBOW_CLEARANCE,0.,INF,shot_axis,0.,.10,false,true,false,smoothstep(0.,.12,swing_time-net_clear_time) if phase=="spike" and net_clear_time>=0. else 0.)
+	Swing.apply(pose,hitter.get_pose_author(),rig.to_local(strike_point if phase=="spike" else ball.position),maxf(draw,smoothstep(0.,.065,swing_time)),reach,follow,maxf(draw,reach),0.,0.,Swing.DEFAULT_ELBOW_CLEARANCE,0.,INF,shot_axis,0.,.10,false,true,false,smoothstep(0.,.12,swing_time-net_clear_time) if phase=="spike" and net_clear_time>=0. and int(review_setup.get("spin",0))!=3 else 0.)
+	var spin_choice := int(review_setup.get("spin",0))
+	var wrap := smoothstep(.055,.14,swing_time)*(1.-smoothstep(.34,.54,swing_time))
+	if wrap>0.:
+		var wrap_axis := Vector3.UP.cross(shot_axis) if spin_choice==0 else Vector3.UP
+		var wrap_degrees := [24.,-33.,33.,0.]
+		author.rotate_world(pose,"hand_r",wrap_axis,deg_to_rad(float(wrap_degrees[spin_choice]))*wrap)
 	var guide_target := rig.to_local(strike_point if phase=="spike" else ball.global_position)
 	var shoulder: Vector3 = author.point(pose,"upperarm_l")
 	var guide_drop := maxf(reach,follow)

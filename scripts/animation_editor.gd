@@ -14,6 +14,9 @@ var trajectory_revision := -1
 var review_source: Animation
 var follow_preview_ball := false
 var shot_setup := {}
+var floor_ball: MeshInstance3D
+var dragging_floor_ball := false
+const SET_MARKER_ORIGIN := Vector3(3.47,.105,2.96)
 var shot_sampler: Node
 var updating_shot := false
 var shot_revision := 0
@@ -90,6 +93,12 @@ func _ready() -> void:
 	ball_preview.review_feed = editor_feed
 	preview_player.get_parent().add_child(ball_preview)
 	ball_preview.configure(preview_player,session.source,session)
+	if entry.id=="camp_right_arm_swing":
+		floor_ball=MeshInstance3D.new()
+		floor_ball.mesh=ball_preview.ball.mesh
+		floor_ball.material_override=ball_preview.ball.material_override
+		preview_player.get_parent().add_child(floor_ball)
+		floor_ball.position=SET_MARKER_ORIGIN+Vector3(shot_setup.get("set_x",0.),0.,shot_setup.get("set_z",0.))
 	if is_instance_valid(reception_controls): reception_controls.show_result(session.source)
 	frame_field.max_value = session.last_frame
 	timeline.max_value = session.last_frame
@@ -251,10 +260,12 @@ func build_controls(controls: VBoxContainer) -> void:
 			shot_setup=shot_setup.duplicate()
 			shot_setup.x=entry.get("aim_x",-3.4)
 		var settings_box := VBoxContainer.new()
-		var toggle := button("Shot setup",func(): settings_box.visible=not settings_box.visible)
+		var toggle := button("Shot setup",func():
+			settings_box.visible=not settings_box.visible
+			if is_instance_valid(floor_ball): floor_ball.visible=settings_box.visible)
 		controls.add_child(toggle)
 		controls.add_child(settings_box)
-		settings_box.hide()
+		settings_box.show()
 		var follow_toggle := CheckButton.new()
 		follow_toggle.text="Follow ball"
 		follow_toggle.toggled.connect(func(enabled: bool): follow_preview_ball=enabled; update_camera())
@@ -264,8 +275,8 @@ func build_controls(controls: VBoxContainer) -> void:
 		court.mouse_filter=Control.MOUSE_FILTER_STOP
 		court.tooltip_text="Click or drag to aim. The net is at the bottom."
 		settings_box.add_child(court)
-		var lateral := add_shot_slider(settings_box,"Landing left / right","x",-4.4,4.4,.1,-3.4,"m")
-		var depth := add_shot_slider(settings_box,"Landing depth from net","depth",.5,8.9,.1,7.,"m")
+		shot_setup.x=shot_setup.get("x",-3.4)
+		shot_setup.depth=shot_setup.get("depth",7.)
 		court.draw.connect(func():
 			var area := Rect2(Vector2.ONE*4.,court.size-Vector2.ONE*8.)
 			court.draw_rect(area,Color("#a97548"))
@@ -273,19 +284,27 @@ func build_controls(controls: VBoxContainer) -> void:
 			var attack_y := area.end.y-area.size.y/3.
 			court.draw_line(Vector2(area.position.x,attack_y),Vector2(area.end.x,attack_y),Color.WHITE,1.)
 			court.draw_line(Vector2(area.position.x,area.end.y),area.end,Color.WHITE,4.)
-			var marker := area.position+area.size*Vector2((lateral.value+4.5)/9.,1.-depth.value/9.)
+			var marker := area.position+area.size*Vector2((float(shot_setup.x)+4.5)/9.,1.-float(shot_setup.depth)/9.)
 			court.draw_circle(marker,6.,Color.BLACK)
 			court.draw_circle(marker,4.,Color.WHITE))
 		court.gui_input.connect(func(event: InputEvent):
 			if event is InputEventMouseButton and event.button_index==MOUSE_BUTTON_LEFT and event.pressed or event is InputEventMouseMotion and event.button_mask&MOUSE_BUTTON_MASK_LEFT:
 				var point: Vector2=(event.position-Vector2.ONE*4.)/(court.size-Vector2.ONE*8.)
-				lateral.value=point.x*9.-4.5
-				depth.value=(1.-point.y)*9.
+				shot_setup.x=clampf(point.x*9.-4.5,-4.4,4.4)
+				shot_setup.depth=clampf((1.-point.y)*9.,.5,8.9)
+				court.queue_redraw()
+				queue_live_shot()
 				court.accept_event())
-		lateral.value_changed.connect(func(_v): court.queue_redraw())
-		depth.value_changed.connect(func(_v): court.queue_redraw())
-		add_shot_slider(settings_box,"Set left / right","set_x",-.65,.65,.05,0.,"m")
-		add_shot_slider(settings_box,"Set forward / back","set_z",-.45,.45,.05,0.,"m")
+		var hint := Label.new()
+		hint.text="Drag the floor ball to move the set."
+		settings_box.add_child(hint)
+		var spin := OptionButton.new()
+		for label in ["Topspin","Left spin","Right spin","No spin"]: spin.add_item(label)
+		spin.select(int(shot_setup.get("spin",0)))
+		spin.item_selected.connect(func(index: int):
+			shot_setup.spin=index
+			queue_live_shot())
+		settings_box.add_child(spin)
 		add_shot_slider(settings_box,"Hit power","power",9.,40.,1.,14.,"m/s")
 		add_shot_slider(settings_box,"Vertical jump","jump",24.,60.,1.,33.,"in")
 
@@ -652,6 +671,25 @@ func pick_handle(position: Vector2) -> int:
 	return selected
 
 func handle_preview_input(event: InputEvent) -> void:
+	if is_instance_valid(floor_ball) and floor_ball.visible:
+		if event is InputEventMouseButton and event.button_index==MOUSE_BUTTON_LEFT:
+			if event.pressed and preview_camera.unproject_position(floor_ball.global_position).distance_to(event.position)<18.:
+				dragging_floor_ball=true
+				preview.accept_event()
+				return
+			if not event.pressed and dragging_floor_ball:
+				dragging_floor_ball=false
+				preview.accept_event()
+				return
+		if dragging_floor_ball and event is InputEventMouseMotion:
+			var hit: Variant=Plane(Vector3.UP,SET_MARKER_ORIGIN.y).intersects_ray(preview_camera.project_ray_origin(event.position),preview_camera.project_ray_normal(event.position))
+			if hit is Vector3:
+				shot_setup.set_x=clampf(hit.x-SET_MARKER_ORIGIN.x,-.65,.65)
+				shot_setup.set_z=clampf(hit.z-SET_MARKER_ORIGIN.z,-.45,.45)
+				floor_ball.position=SET_MARKER_ORIGIN+Vector3(shot_setup.set_x,0.,shot_setup.set_z)
+				queue_live_shot()
+			preview.accept_event()
+			return
 	if session != null and event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if event.pressed:
 			var index := pick_handle(event.position)
