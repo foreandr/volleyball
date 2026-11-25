@@ -37,6 +37,7 @@ func configure(host: Node, layer: Node = null) -> void:
 		if game.has_method("edit_approach_frames"):
 			bar(home,"Edit approach frames",game.edit_approach_frames)
 			bar(home,"Edit takeoff and arm lift",game.edit_approach_frames.bind(true))
+			bar(home,"Edit right arm swing",game.edit_approach_frames.bind(true,true))
 		bar(home,"Edit attacker frames" if game.has_method("frame_editor_attacker") else "Edit set frames",open_frame_editor)
 	bar(home,"Restart",restart)
 	bar(home,"Quit",quit_gameplay)

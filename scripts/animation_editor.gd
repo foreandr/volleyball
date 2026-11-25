@@ -71,7 +71,7 @@ func _ready() -> void:
 		view_focus = preview_player.position+Vector3(0,1.85 if spike else 1.10,0)
 		view_distance = 5.8 if spike else 4.6
 		orbit_yaw = -2.1 if spike else 1.1
-		if entry.id=="camp_attack_arm_lift":
+		if entry.id in ["camp_attack_arm_lift","camp_right_arm_swing"]:
 			view_focus.y+=1.25
 			view_distance=7.2
 		if spike: preview_player.get_node("DirectionArrows").hide()
@@ -327,7 +327,8 @@ func _process(delta: float) -> void:
 	super._process(delta)
 	if session == null: return
 	if playing and not ball_preview.active:
-		playhead = fposmod(playhead+delta*playback_speed*session.frame_rate,session.last_frame+1.)
+		var first := float(session.source.get_meta("editor_loop_start",0))
+		playhead = first+fposmod(maxf(playhead,first)-first+delta*playback_speed*session.frame_rate,session.last_frame+1.-first)
 		set_frame(floori(playhead))
 		session.sample(minf(playhead,session.last_frame))
 	elif playing:

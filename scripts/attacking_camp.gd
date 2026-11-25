@@ -27,10 +27,11 @@ func start_drill() -> void:
 	attack_jump.front_limit=3.65
 	attack_jump.attack_arm_lift=true
 	super.start_drill()
-	var arm_lift := "--edit-arm-lift" in OS.get_cmdline_user_args()
+	var arm_swing := "--edit-arm-swing" in OS.get_cmdline_user_args()
+	var arm_lift := arm_swing or "--edit-arm-lift" in OS.get_cmdline_user_args()
 	if (arm_lift or "--edit-approach" in OS.get_cmdline_user_args()) and not Engine.has_meta("approach_editor_opened"):
 		Engine.set_meta("approach_editor_opened",true)
-		edit_approach_frames.call_deferred(arm_lift)
+		edit_approach_frames.call_deferred(arm_lift,arm_swing)
 
 func camp_title() -> String:
 	return "ATTACKING   /   APPROACH AND SPIKE"
@@ -227,7 +228,7 @@ func pose_swing() -> void:
 func frame_editor_attacker() -> Node3D:
 	return hitter
 
-func edit_approach_frames(arm_lift := false) -> void:
+func edit_approach_frames(arm_lift := false, arm_swing := false) -> void:
 	# Warm up from the first step so the editor inherits the live plant pose.
 	hitter.position=START
 	hitter.rotation.y=0.
@@ -240,6 +241,10 @@ func edit_approach_frames(arm_lift := false) -> void:
 	var takeoff := attack_jump.load_duration()
 	var first_frame := floori((takeoff-.15)*60.) if arm_lift else 0
 	var duration := takeoff+.25 if arm_lift else takeoff
+	if arm_swing:
+		duration=(first_frame+40)/60.
+		cpu_hitter=true
+		flight_time=DURATION[1]
 	swing_time=-1.
 	if arm_lift:
 		phase="set"
@@ -251,20 +256,35 @@ func edit_approach_frames(arm_lift := false) -> void:
 		if i>0: attack_jump.step(hitter,time-(i-1)/60.,Vector2.ZERO)
 		if arm_lift:
 			var remaining := takeoff+attack_jump.flight_duration(JUMP_HEIGHT,true)*.48+.025-time
-			ball.position=arc(source,endpoint,clampf(1.-remaining/DURATION[1],0.,1.),APEX[1])
-			if time>takeoff: pose_swing()
+			if arm_swing and phase in ["spike","drop"]:
+				swing_time+=1./60.
+				pose_swing()
+				advance_missed_ball(1./60.)
+			else:
+				var previous := ball.position
+				ball.position=arc(source,endpoint,clampf(1.-remaining/DURATION[1],0.,1.),APEX[1])
+				if arm_swing:
+					elapsed=flight_time-remaining
+					handle_attack_contact(previous,1./60.)
+				elif time>takeoff: pose_swing()
 		if i<first_frame: continue
 		var bones: Array[Transform3D]=[]
 		for id in hitter.skeleton.get_bone_count():
 			bones.append(hitter.skeleton.get_bone_pose(id))
 		recording.frames.append({"time":time-first_frame/60.,"ball":ball.global_transform,"actors":[{"root":hitter.transform,"bones":bones}]})
 	var title := "Takeoff and arm lift" if arm_lift else "Three-step approach and backswing"
+	if arm_swing: title="Right arm spike swing"
 	recording.index=0
 	StorySession.edit_animation=recording.bake_recorded_actor(hitter,0,title,recording.frames.size()-1,arm_lift)
 	StorySession.edit_animation.remove_meta("contact_time")
 	if arm_lift: StorySession.edit_animation.set_meta("editor_initial_frame",15)
 	StorySession.edit_animation.set_meta("editor_height_cm",hitter.height_cm)
 	StorySession.edit_entry={"id":"camp_attack_arm_lift" if arm_lift else "camp_spike_approach","name":title,"category":"Attacking","type":"Approach"}
+	if arm_swing:
+		StorySession.edit_entry={"id":"camp_right_arm_swing","name":title,"category":"Attacking","type":"Spike"}
+		StorySession.edit_animation.set_meta("editor_group","Right Arm")
+		StorySession.edit_animation.set_meta("editor_initial_frame",10)
+		StorySession.edit_animation.set_meta("editor_loop_start",10)
 	StorySession.animation_draft.clear()
 	settings.leave_for_frame_editor()
 	MenuPresentation.load_scene("res://scenes/animation_editor.tscn")
