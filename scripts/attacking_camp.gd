@@ -14,6 +14,18 @@ var setter_station := BASE
 var coach_station := Vector3(-3.05,0,-1.7)
 var active_lane := 0
 
+var next_set := Vector3(3.65,2.65,3.)
+var active_set := next_set
+
+func move_setup_spot(role: String, point: Vector2) -> void:
+	match role:
+		"Coach": coach_station=Vector3(point.x,coach_station.y,minf(point.y,1.))
+		"Setter": setter_station=Vector3(point.x,setter_station.y,minf(point.y,3.))
+		"Set":
+			next_set=Vector3(point.x,2.65,point.y)
+			attack_lane=0 if point.x>1.5 else (2 if point.x < -1.5 else 1)
+	StorySession.save_drill_setup("attack_positions",{"coach":coach_station,"setter":setter_station,"target":next_set})
+
 func choose_camp_toss() -> Vector3:
 	return setter_station
 
@@ -145,6 +157,11 @@ const PALM_CONTACT := 2./60.
 var hand_impact := AudioStreamPlayer.new()
 
 func start_drill() -> void:
+	var positions := StorySession.load_drill_setup("attack_positions")
+	coach_station=positions.get("coach",coach_station)
+	setter_station=positions.get("setter",setter_station)
+	next_set=positions.get("target",next_set)
+	attack_lane=0 if next_set.x>1.5 else (2 if next_set.x < -1.5 else 1)
 	hand_impact.stream=preload("res://assets/audio/hand_impacts.tres")
 	hand_impact.bus=StorySession.IMPACT_BUS
 	add_child(hand_impact)
@@ -186,6 +203,7 @@ func update_prompts(_next: String) -> void:
 func reset_feed() -> void:
 	clear_attack_input()
 	active_lane=attack_lane
+	active_set=next_set
 	var shift := coach_station-rotation_drill.basket.position
 	if not shift.is_zero_approx():
 		rotation_drill.basket.position+=shift
@@ -202,7 +220,7 @@ func reset_feed() -> void:
 	attack_jump.active=false
 
 func set_destination(origin: Vector3, aim: Vector3, height_index: int) -> Vector3:
-	return super.set_destination(origin,aim+Vector3(-1.1*lane_offset() if active_lane!=1 else -1.05,0.,0.),height_index)+Vector3.UP*ATTACK_SET_LIFT
+	return super.set_destination(origin,aim+active_set-PINS[active_lane],height_index)+Vector3.UP*ATTACK_SET_LIFT
 
 func select_attack_touch() -> void:
 	var bumper := -1 if held_bumpers.is_empty() else int(held_bumpers.back())
@@ -335,7 +353,7 @@ func step_attack(delta: float) -> void:
 					# Close excess distance along the approach line; reserve room for the plant.
 					entry=hitter.position+manual_route*maxf(0.,to_set.dot(manual_route)-1.50)
 			elif phase=="pass" and not cpu_hitter:
-				var pin: Vector3=PINS[called()]+Vector3(-1.1*lane_offset() if active_lane!=1 else -1.05,0.,0.)
+				var pin: Vector3=active_set
 				var offset := (pin-hitter.position).slide(Vector3.UP)
 				entry=hitter.position+offset.normalized()*maxf(0.,offset.length()-1.5)
 			elif phase=="pass":
@@ -388,7 +406,7 @@ func step_attack(delta: float) -> void:
 		return
 	if not approach_started and (cpu_hitter or manual_shot>=0):
 		if phase=="pass" and (set_arc_percent<60. or not cpu_hitter):
-			var predicted_pin: Vector3=PINS[called()]+Vector3(-1.1*lane_offset() if active_lane!=1 else -1.05,ATTACK_SET_LIFT,0.)
+			var predicted_pin: Vector3=active_set+Vector3.UP*ATTACK_SET_LIFT
 			var set_time := float(DURATION[chosen_tempo()])*sqrt(set_arc_percent*.01)
 			if set_arc_percent<60.:
 				var height := float(APEX[chosen_tempo()])*set_arc_percent*.01

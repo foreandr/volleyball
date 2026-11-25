@@ -39,7 +39,7 @@ func configure(host: Node, layer: Node = null) -> void:
 				home.hide()
 				options.show()
 				show_section("Attack setup")
-				body.get_child(1).grab_focus())
+				body.get_child(2).grab_focus())
 			bar(home,"Edit approach frames",game.edit_approach_frames)
 			bar(home,"Edit takeoff and arm lift",game.edit_approach_frames.bind(true))
 			bar(home,"Review 50 swings",game.edit_approach_frames.bind(true,true,false,true))
@@ -110,36 +110,10 @@ func open_sliders() -> void:
 			control.grab_focus()
 			break
 
-func setup_choice(title: String, choices: Array, selected: int, change: Callable) -> void:
-	var caption := Label.new()
-	caption.text=title
-	body.add_child(caption)
-	var choice := OptionButton.new()
-	for item in choices: choice.add_item(item)
-	choice.select(selected)
-	choice.item_selected.connect(change)
-	body.add_child(choice)
-
 func attack_setup_controls() -> void:
-	setup_choice("Hitter Ã‚Â· next feed",["Left side","Middle","Right side"],game.attack_lane,func(i): game.attack_lane=i)
-	for role in ["Coach","Setter"]:
-		var coach_side: bool = role=="Coach"
-		var spot: Vector3=game.coach_station if coach_side else game.setter_station
-		for axis in [0,2]:
-			var caption := Label.new()
-			body.add_child(caption)
-			var slider := HSlider.new()
-			slider.min_value=-4.5 if axis==0 else -4.
-			slider.max_value=4.5 if axis==0 else (1. if coach_side else 3.)
-			slider.step=.05
-			slider.value=spot[axis]
-			body.add_child(slider)
-			var update := func(v: float):
-				caption.text="%s %s   %.2f m" % [role,"across court" if axis==0 else "up court",v]
-				if coach_side: game.coach_station[axis]=v
-				else: game.setter_station[axis]=v
-			update.call(slider.value)
-			slider.value_changed.connect(update)
+	var map := preload("res://scripts/attack_setup_map.gd").new()
+	map.game=game
+	body.add_child(map)
 	var height := HSlider.new()
 	height.min_value=15
 	height.max_value=160
