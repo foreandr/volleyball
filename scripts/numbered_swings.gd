@@ -147,7 +147,7 @@ static func rotation(rng: RandomNumberGenerator,width: Vector3) -> Quaternion:
 static func buffer_fast_poses(clip: Animation, rig: Skeleton3D, hit: int) -> void:
 	var session=preload("res://scripts/animation_edit_session.gd").new(clip,rig)
 	var world: Transform3D=clip.get_meta("editor_rig_world",rig.global_transform)
-	var previous: Array[Transform3D]=[]
+	var previous := PackedVector3Array()
 	var mapping: Array[int]=[0]
 	var balls: Array=clip.get_meta("editor_ball_frames")
 	var retimed: Array[Transform3D]=[balls[0]]
@@ -157,18 +157,26 @@ static func buffer_fast_poses(clip: Animation, rig: Skeleton3D, hit: int) -> voi
 			if preload("res://scripts/player_arm_clearance.gd").resolve(rig,side):
 				var upper := rig.find_bone("upperarm_"+side)
 				clip.rotation_track_insert_key(session.rotation_tracks[upper],f/60.,rig.get_bone_pose_rotation(upper))
-		var steps := 1
-		for bone in rig.get_bone_count():
-			var pose := world*rig.get_bone_global_pose(bone)
-			if f==0:
-				previous.append(pose)
-				continue
-			var prior := previous[bone]
-			var distance := prior.origin.distance_to(pose.origin)
-			var angle := prior.basis.orthonormalized().get_rotation_quaternion().angle_to(pose.basis.orthonormalized().get_rotation_quaternion())
-			steps=maxi(steps,maxi(ceili(distance/.12),ceili(angle/deg_to_rad(18.))))
-			previous[bone]=pose
-		if f==0: continue
+		var current := joint_positions(rig,world)
+		if f==0:
+			previous=current
+			continue
+		var steps := maxi(1,ceili(farthest_step(previous,current)/.15))
+		while steps>1:
+			var prior := previous
+			var fits := true
+			for sub in range(1,steps+1):
+				var points := current
+				if sub<steps:
+					session.sample(f-1.+float(sub)/steps)
+					points=joint_positions(rig,world)
+				if farthest_step(prior,points)>.15001:
+					fits=false
+					break
+				prior=points
+			if fits: break
+			steps+=1
+		previous=current
 		mapping.append(mapping.back()+steps)
 		for step in range(1,steps+1):
 			retimed.append(balls[f-1].interpolate_with(balls[f],float(step)/steps))
@@ -181,3 +189,13 @@ static func buffer_fast_poses(clip: Animation, rig: Skeleton3D, hit: int) -> voi
 	clip.set_meta("editor_frame_count",retimed.size())
 	clip.set_meta("swing_hit_frame",mapping[hit])
 	clip.set_meta("source_frame_map",mapping)
+static func joint_positions(rig: Skeleton3D, world: Transform3D) -> PackedVector3Array:
+	var points := PackedVector3Array()
+	for bone in rig.get_bone_count():
+		points.append(world*rig.get_bone_global_pose(bone).origin)
+	return points
+
+static func farthest_step(a: PackedVector3Array,b: PackedVector3Array) -> float:
+	var squared := 0.
+	for i in a.size(): squared=maxf(squared,a[i].distance_squared_to(b[i]))
+	return sqrt(squared)
