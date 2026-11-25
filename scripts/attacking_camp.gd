@@ -165,7 +165,9 @@ func pose_swing() -> void:
 	var open_axis := hitter.basis.inverse()*(toward_feed+Vector3.BACK*1.1)
 	var twist := clampf(atan2(open_axis.x,open_axis.z),-.85,.85)*load_weight
 	var hip_turn := twist*.50
-	twist -= hip_turn
+	var feed_local := hitter.basis.inverse()*toward_feed
+	twist = clampf(atan2(feed_local.x,feed_local.z),-1.48,1.48)*load_weight-hip_turn
+	author.rotate_world(pose,"spine_01",Vector3.RIGHT,deg_to_rad(-9.)*load_weight)
 	author.rotate_world(pose,"spine_01",Vector3.UP,twist*.45)
 	author.rotate_world(pose,"spine_02",Vector3.UP,twist*.55)
 	var air_age := attack_jump.elapsed-attack_jump.load_duration()
@@ -196,7 +198,7 @@ func pose_swing() -> void:
 		var seat := hip+Vector3(outward*.45,-.065,-.17)/rig.global_basis.y.length()
 		var full_tuck := (seat-knee).normalized()
 		var previous_tuck := Vector3(outward,.83,-.55).normalized()
-		var heel := previous_tuck.slerp(full_tuck,.70)
+		var heel := previous_tuck.slerp(full_tuck,.63)
 		var extended := Vector3(outward,-1.,-.14).normalized()
 		var blend := maxf(knee_load,airborne)*(1.-follow)
 		author.aim_joint(pose,calf,foot,knee+shin.slerp(heel.slerp(extended,reach),blend))
@@ -210,6 +212,14 @@ func pose_swing() -> void:
 	author.rotate_world(pose,"pelvis",Vector3.UP,hip_turn)
 	var draw := smoothstep(.065,.21,attack_jump.elapsed-attack_jump.load_duration()) if attack_jump.active else 0.
 	Swing.apply(pose,hitter.get_pose_author(),rig.to_local(strike_point if phase=="spike" else ball.position),maxf(draw,smoothstep(0.,.065,swing_time)),reach,follow,1.,0.,0.,Swing.DEFAULT_ELBOW_CLEARANCE,0.,INF,Vector3.BACK,0.,.10,false,true)
+	var guide_target := rig.to_local(strike_point if phase=="spike" else ball.global_position)
+	var shoulder: Vector3 = author.point(pose,"upperarm_l")
+	var guide_drop := maxf(reach,follow)
+	Swing.apply_guide_arm(pose,author,guide_target-shoulder,Vector3(.8,.1,-.2),guide_drop,airborne,174.)
+	var wrist: Vector3 = author.point(pose,"hand_l")
+	var fingers: Vector3 = (author.point(pose,"middle_01_l")-wrist).normalized()
+	var point_axis := wrist.direction_to(guide_target)
+	author.aim_joint(pose,"hand_l","middle_01_l",wrist+fingers.slerp(point_axis,airborne*(1.-guide_drop)))
 	for joint in ["pelvis","spine_01","spine_02","thigh_r","thigh_l","calf_r","calf_l","foot_r","foot_l","clavicle_r","upperarm_r","lowerarm_r","hand_r","clavicle_l","upperarm_l","lowerarm_l","hand_l"]:
 		var id := rig.find_bone(joint)
 		rig.set_bone_pose_rotation(id,pose[id].basis.get_rotation_quaternion())
