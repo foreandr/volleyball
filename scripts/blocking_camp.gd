@@ -317,6 +317,12 @@ func block_read_target(slot: int) -> float:
 	if phase=="spike" and drop_velocity.z>.1:
 		var time_to_net := clampf((BallNet.NET_Z-ball.position.z)/drop_velocity.z,0.,.20)
 		return ball.position.x+drop_velocity.x*time_to_net
+	if read_set and read_lead!=1 and closing[slot]:
+		# At a pin each closer owns the next strip of net toward cross court.
+		# A third blocker covers two shoulder widths inside the line blocker.
+		var inside := signf(-target)
+		var cross_width := maxf(0.,BallNet.NET_Z-endpoint.z)*1.5
+		return target+inside*minf(.61*absi(slot-read_lead),cross_width)
 	if slot==1 and read_set:
 		# The middle covers the inside hitting lane alongside the pin blocker.
 		return move_toward(target,0.,minf(.50,absf(target)*.28))
@@ -572,7 +578,8 @@ func step_blocker(slot: int,delta: float) -> void:
 		actor.rotation.y=rotate_toward(actor.rotation.y,heading,delta*6.)
 	if sprinting and velocity.length()>.15: actor.stamina.spend(actor.stamina.SPRINT_DRAIN*delta,"Sprint")
 	GroundControls.shuffle(actor,shuffle_steps[actor],velocity,focused,delta)
-	if read_set and (slot==read_lead or attempted[read_lead]) and (automatic_block or slot!=MANUAL_SLOT) and cpu and closing[slot] and not attempted[slot] and ((phase=="set" and flight_time-elapsed<=Block.START+Block.AIR*.5) or late_window):
+	var last_chance := late_window or (phase=="set" and flight_time-elapsed<=Block.AIR*.5)
+	if read_set and (slot==read_lead or attempted[read_lead] or last_chance) and (automatic_block or slot!=MANUAL_SLOT) and cpu and closing[slot] and not attempted[slot] and ((phase=="set" and flight_time-elapsed<=Block.START+Block.AIR*.5) or late_window):
 		var preload_fraction := clampf(1.-(flight_time-elapsed-Block.AIR*.5)/Block.START,0.,1.) if phase=="set" else 1.
 		begin_block(slot,preload_fraction)
 
