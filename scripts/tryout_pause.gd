@@ -258,7 +258,7 @@ func active_camera() -> Camera3D:
 
 func fields() -> Array:
 	if not practice: return [["Field of view",35,85,50,"Â°"],["Master volume",0,100,80,"%"]]
-	return [["Camera orbit",-145,145,12,"Â°"],["Elevation",-12,82,18,"Â°"],["Distance",2,26,10," m"],["Master volume",0,100,80,"%"]]
+	return [["Camera orbit",-145,145,12,"\u00b0"],["Elevation",-12,82,18,"\u00b0"],["Distance",2,26,10," m"],["Master volume",0,100,80,"%"]]
 
 func saved(field: Array) -> float:
 	if field[0]=="Field of view" and active_camera(): return active_camera().fov
