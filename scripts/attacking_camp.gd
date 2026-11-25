@@ -172,7 +172,7 @@ func pose_swing() -> void:
 	# Delay the tuck and spread it over the rise. Hold its final pitch until the strike.
 	var tuck_age := maxf(0.,(air_age-.035)/1.20)
 	var knee_load := smoothstep(0.,.055,tuck_age)*(1.-reach)*(1.-follow) if attack_jump.active else 0.
-	var lift_pose := knee_load*(1.-smoothstep(.115,.22,minf(tuck_age,.144)))
+	var lift_pose := knee_load
 	author.rotate_world(pose,"pelvis",Vector3.RIGHT,deg_to_rad(-15.1)*lift_pose)
 	author.rotate_world(pose,"pelvis",Vector3.BACK,deg_to_rad(-2.7)*lift_pose)
 	for side in ["r","l"]:
