@@ -32,8 +32,15 @@ func choose_camp_toss() -> Vector3:
 func lane_offset() -> float:
 	return [1.,0.,-1.][active_lane]
 
-const SET_HEIGHTS := [15.,40.,100.,160.]
-var set_arc_percent := float(StorySession.game_options.get_value("attack","set_height_percent",100.))
+const SET_HEIGHTS := [15.,40.,70.,130.]
+
+func saved_set_percent() -> float:
+	var value := float(StorySession.game_options.get_value("attack","set_height_percent",SET_HEIGHTS[2]))
+	# Older saves stored the arc percentage rather than the selected preset.
+	if is_equal_approx(value,100.): return SET_HEIGHTS[2]
+	if is_equal_approx(value,160.): return SET_HEIGHTS[3]
+	return value
+var set_arc_percent := SET_HEIGHTS[2] as float
 
 func height_preset() -> int:
 	var closest := 0
@@ -312,7 +319,7 @@ func step_practice_blockers(delta: float) -> void:
 			practice_attempted[i]=true
 
 func start_drill() -> void:
-	set_arc_percent=float(StorySession.game_options.get_value("attack","set_height_percent",100.))
+	set_arc_percent=saved_set_percent()
 	var positions := StorySession.load_drill_setup("attack_positions")
 	coach_station=positions.get("coach",coach_station)
 	setter_station=positions.get("setter",setter_station)
