@@ -167,7 +167,8 @@ func shot_landing(origin: Vector3) -> Vector3:
 	return Vector3(-3.4 if cross_court else clampf(origin.x,-3.8,3.8),Contact.BALL_RADIUS,11.)
 
 func pose_swing() -> void:
-	if swing_time>.50: return
+	if swing_time>.65: return
+	var recovery := smoothstep(.36,.65,swing_time)
 	var rig: Skeleton3D=hitter.skeleton
 	var pose: Array=[]
 	for id in rig.get_bone_count(): pose.append(rig.get_bone_pose(id))
@@ -261,7 +262,7 @@ func pose_swing() -> void:
 	author.aim_joint(pose,"hand_l","middle_01_l",wrist+fingers.slerp(point_axis,airborne*(1.-guide_drop)))
 	for joint in ["pelvis","spine_01","spine_02","thigh_r","thigh_l","calf_r","calf_l","foot_r","foot_l","clavicle_r","upperarm_r","lowerarm_r","hand_r","clavicle_l","upperarm_l","lowerarm_l","hand_l"]:
 		var id := rig.find_bone(joint)
-		rig.set_bone_pose_rotation(id,pose[id].basis.get_rotation_quaternion())
+		rig.set_bone_pose_rotation(id,pose[id].basis.get_rotation_quaternion().slerp(rig.get_bone_pose_rotation(id),recovery))
 
 func frame_editor_attacker() -> Node3D:
 	return hitter
@@ -308,7 +309,9 @@ func sample_attack_clip(arm_lift: bool,arm_swing: bool,cross: bool,review: bool,
 	for i in range(count+1):
 		if has_meta("live_sampler") and i>0 and i%8==0: await get_tree().process_frame
 		var time := minf(i/60.,duration)
-		if i>0 and attack_jump.active: attack_jump.step(hitter,time-(i-1)/60.,Vector2.ZERO)
+		if i>0:
+			if attack_jump.active: attack_jump.step(hitter,time-(i-1)/60.,Vector2.ZERO)
+			else: hitter.animator.advance(1./60.)
 		if arm_lift:
 			var remaining := takeoff+attack_jump.flight_duration(jump_height,true)*.48+.025-time
 			if arm_swing and phase in ["spike","drop"]:

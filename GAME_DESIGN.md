@@ -26,7 +26,7 @@ Short court confines both teams to the three-meter zones and allows normal attac
 Future arcade spike challenges include two power shots:
 
 - Roof the ball. Spike the ball into the opposite court and bounce it high enough to hit the gym ceiling.
-- Bounce it back. Spike the ball into the opposite court so its bounce carries it back over the net to the hitter's side without another touch.
+- Bounce it back. Spike the ball into the opposite court, bounce it off the gym wall, and have the wall rebound carry it back over the net to the hitter's side without another touch.
 
 All players have individual forearm and hand ratings for each of reception, setting and defense. Dives and lunges use the relevant rating. Height spans 5–7 feet, vertical 10–60 inches. Include wingspan, block, speed, stamina and separate ratings for underhand, standing float, jump float, spin, spin-to-float hybrid, float-to-spin hybrid and sky ball. Hold to prepare, reducing mobility. Release at the contact hitbox. Mouse wheel and controller adjust angles. Timing, force, incoming pace, wetness and skill control the vertical and horizontal error cone, including backward errors. Absorb hard contact with elbow give. High arcs enable sky balls; powerful serves have narrower timing and fast descents.
 
