@@ -229,10 +229,10 @@ func step(actor: Node3D, delta: float, input: Vector2) -> void:
 	if not plant_legs.is_empty() and lead_time > 0.0:
 		if attack_arm_lift and entry_time==0.:
 			# Bound off the lead left foot and descend into the right plant.
-			var push_off := lead_step_duration*.54
+			var push_off := lead_foot_release()
 			var landing := lead_time+(load_time-lead_time)*.53
 			var progress := clampf((elapsed-push_off)/(landing-push_off),0.,1.)
-			transfer_hop = .10*pow(sin(PI*progress),2.)
+			transfer_hop = .045*pow(sin(PI*progress),2.)
 		else:
 			transfer_hop *= .30
 		# Carry momentum between the lead step and the final plant.
@@ -277,6 +277,9 @@ func run_entry_load(pose_time: float) -> float:
 	if incoming_plant_speed <= 0.0: return 0.0
 	return smoothstep(0.0,0.075,pose_time)*(1.0-smoothstep(0.095,0.17,pose_time))
 
+func lead_foot_release() -> float:
+	return lead_time+(load_duration()-lead_time)*.08
+
 func attack_plant_foot(side: String) -> Vector3:
 	var left := side == "l"
 	var from: Vector3 = plant_legs[side].origin
@@ -290,7 +293,9 @@ func attack_plant_foot(side: String) -> Vector3:
 	if (left and lead_time > 0.0) or (not left and entry_time > 0.0):
 		var early_start := entry_time*0.70 if left else 0.0
 		var early_end := lead_time*0.86 if left else entry_time*0.88
-		if left and attack_arm_lift and entry_time==0.: early_end=lead_time*.48
+		if left and attack_arm_lift and entry_time==0.:
+			early_end=lead_time*.48
+			start_step=lead_foot_release()
 		var early := smoothstep(early_start,early_end,elapsed)
 		var step_end := from+heading*entry_distance
 		if left: step_end += lead_heading*lead_distance
