@@ -139,6 +139,9 @@ func _ready() -> void:
 func show_swing(number: int) -> void:
 	review_number=wrapi(number-1,0,50)+1
 	session.replace_source(preload("res://scripts/numbered_swings.gd").make(review_source,review_number,session.rig))
+	frame_field.max_value=session.last_frame
+	timeline.max_value=session.last_frame
+	ball_preview.configure(preview_player,session.source,session)
 	undo_history.clear()
 	redo_history.clear()
 	refresh_history()
@@ -201,6 +204,8 @@ func update_live_shot() -> void:
 		var positions: Dictionary=session.position_edits.duplicate(true)
 		InteractionTrace.record("shot_preview",{"settings":shot_sampler.review_setup.duplicate(),"contact_frame":clip.get_meta("swing_hit_frame",-1),"frame":frame,"playing":playing})
 		session.replace_source(clip)
+		frame_field.max_value=session.last_frame
+		timeline.max_value=session.last_frame
 		session.edits=rotations
 		session.position_edits=positions
 		preview_player.position=clip.get_meta("editor_start")

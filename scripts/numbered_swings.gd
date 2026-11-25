@@ -40,6 +40,7 @@ static func make(source: Animation, number: int, rig: Skeleton3D=null) -> Animat
 					clip.track_set_key_value(hand,key,rotation*Quaternion(Vector3.BACK,deg_to_rad(75.)*weight))
 	if rig!=null and hit>=0 and clip.has_meta("editor_ball_frames"):
 		align_contact(clip,rig,hit)
+		buffer_fast_poses(clip,rig,hit)
 	return clip
 
 static func align_contact(clip: Animation, rig: Skeleton3D, hit: int) -> void:
@@ -141,3 +142,42 @@ static func align_draw_palm(clip: Animation, rig: Skeleton3D, start: int, hit: i
 static func rotation(rng: RandomNumberGenerator,width: Vector3) -> Quaternion:
 	var angles := Vector3(rng.randf_range(-1.,1.),rng.randf_range(-1.,1.),rng.randf_range(-1.,1.))*width
 	return Quaternion.from_euler(angles*PI/180.)
+
+# Stretch only the intervals whose posed joints exceed the preview motion budget.
+static func buffer_fast_poses(clip: Animation, rig: Skeleton3D, hit: int) -> void:
+	var session=preload("res://scripts/animation_edit_session.gd").new(clip,rig)
+	var world: Transform3D=clip.get_meta("editor_rig_world",rig.global_transform)
+	var previous: Array[Transform3D]=[]
+	var mapping: Array[int]=[0]
+	var balls: Array=clip.get_meta("editor_ball_frames")
+	var retimed: Array[Transform3D]=[balls[0]]
+	for f in balls.size():
+		session.sample(f)
+		for side in ["r","l"]:
+			if preload("res://scripts/player_arm_clearance.gd").resolve(rig,side):
+				var upper := rig.find_bone("upperarm_"+side)
+				clip.rotation_track_insert_key(session.rotation_tracks[upper],f/60.,rig.get_bone_pose_rotation(upper))
+		var steps := 1
+		for bone in rig.get_bone_count():
+			var pose := world*rig.get_bone_global_pose(bone)
+			if f==0:
+				previous.append(pose)
+				continue
+			var prior := previous[bone]
+			var distance := prior.origin.distance_to(pose.origin)
+			var angle := prior.basis.orthonormalized().get_rotation_quaternion().angle_to(pose.basis.orthonormalized().get_rotation_quaternion())
+			steps=maxi(steps,maxi(ceili(distance/.12),ceili(angle/deg_to_rad(18.))))
+			previous[bone]=pose
+		if f==0: continue
+		mapping.append(mapping.back()+steps)
+		for step in range(1,steps+1):
+			retimed.append(balls[f-1].interpolate_with(balls[f],float(step)/steps))
+	clip.length=(retimed.size()-1)/60.
+	for track in clip.get_track_count():
+		for key in range(clip.track_get_key_count(track)-1,-1,-1):
+			var old := clampi(roundi(clip.track_get_key_time(track,key)*60.),0,mapping.size()-1)
+			clip.track_set_key_time(track,key,mapping[old]/60.)
+	clip.set_meta("editor_ball_frames",retimed)
+	clip.set_meta("editor_frame_count",retimed.size())
+	clip.set_meta("swing_hit_frame",mapping[hit])
+	clip.set_meta("source_frame_map",mapping)
