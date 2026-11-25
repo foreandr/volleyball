@@ -38,7 +38,7 @@ func _ready() -> void:
 	panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	panel.offset_bottom = -18
 	var legend := Label.new()
-	legend.text = "Replay    |    Space play/pause    Drag to rewind    |    WASD move    Q/E down/up    |    Middle-drag look    Scroll zoom    |    Esc return"
+	legend.text = "Replay    |    Space play/pause    Drag to rewind    |    WASD move    Q/E down/up    |    Middle-drag look    Scroll zoom    |    Esc return\nLS move   RS look   LB/RB lower/raise   X/B zoom in/out   LT/RT rewind/advance   D-pad left/right frame   A play/pause   View exit"
 	legend.add_theme_constant_override("outline_size",5)
 	panel.add_child(legend)
 	panel.add_child(slider)
@@ -179,10 +179,16 @@ func edit_setter_frames() -> void:
 func _process(delta: float) -> void:
 	if active:
 		if CareerSession.prompt.visible: return
-		if playing:
-			playback_elapsed+=delta
-			var frames := floori(playback_elapsed/sample_interval)
-			if frames>0:
+		var pad_id: int=game.pad()
+		var scrub := 0.
+		if pad_id>=0:
+			scrub=Input.get_joy_axis(pad_id,JOY_AXIS_TRIGGER_RIGHT)-Input.get_joy_axis(pad_id,JOY_AXIS_TRIGGER_LEFT)
+		if absf(scrub)<.10: scrub=0.
+		if scrub!=0.: playing=false
+		if playing or scrub!=0.:
+			playback_elapsed+=delta*(scrub*4. if scrub!=0. else 1.)
+			var frames := int(playback_elapsed/sample_interval)
+			if frames!=0:
 				playback_elapsed=fmod(playback_elapsed,sample_interval)
 				var old_index := int(slider.value)
 				slider.value+=frames
@@ -198,7 +204,16 @@ func _process(delta: float) -> void:
 						replay_floor.play()
 				if slider.value>=slider.max_value: playing=false
 		var direction := Vector3(float(Input.is_physical_key_pressed(KEY_D))-float(Input.is_physical_key_pressed(KEY_A)),0,float(Input.is_physical_key_pressed(KEY_S))-float(Input.is_physical_key_pressed(KEY_W)))
+		if pad_id>=0:
+			var move := replay_stick(pad_id,JOY_AXIS_LEFT_X,JOY_AXIS_LEFT_Y)
+			var look := replay_stick(pad_id,JOY_AXIS_RIGHT_X,JOY_AXIS_RIGHT_Y)
+			direction+=Vector3(move.x,0.,move.y)
+			camera.rotation.y-=look.x*delta*2.
+			camera.rotation.x=clampf(camera.rotation.x-look.y*delta*2.,-1.54,1.54)
+			var zoom := float(Input.is_joy_button_pressed(pad_id,JOY_BUTTON_B))-float(Input.is_joy_button_pressed(pad_id,JOY_BUTTON_X))
+			camera.fov=clampf(camera.fov+zoom*delta*45.,12.,100.)
 		var rise := float(Input.is_physical_key_pressed(KEY_E))-float(Input.is_physical_key_pressed(KEY_Q))
+		if pad_id>=0: rise+=float(Input.is_joy_button_pressed(pad_id,JOY_BUTTON_RIGHT_SHOULDER))-float(Input.is_joy_button_pressed(pad_id,JOY_BUTTON_LEFT_SHOULDER))
 		camera.global_position += (camera.global_basis*direction+Vector3.UP*rise).limit_length(1)*delta*5.0
 	elif not get_tree().paused:
 		record_setter(delta)
@@ -208,8 +223,25 @@ func _process(delta: float) -> void:
 			history.append(capture(true))
 			if history.size()>sample_limit: history.pop_front()
 
+func replay_stick(id: int,x: JoyAxis,y: JoyAxis) -> Vector2:
+	var stick := Vector2(Input.get_joy_axis(id,x),Input.get_joy_axis(id,y)).limit_length(1.)
+	return stick.normalized()*maxf(0.,(stick.length()-.16)/.84)
+
 func _input(event: InputEvent) -> void:
 	if not active or CareerSession.prompt.visible: return
+	if event is InputEventJoypadButton and event.device==game.pad():
+		if event.pressed:
+			match event.button_index:
+				JOY_BUTTON_A:
+					if slider.value>=slider.max_value: slider.value=0
+					playing=not playing
+					playback_elapsed=0.
+				JOY_BUTTON_BACK: toggle()
+				JOY_BUTTON_DPAD_LEFT,JOY_BUTTON_DPAD_RIGHT:
+					playing=false
+					slider.value+=1 if event.button_index==JOY_BUTTON_DPAD_RIGHT else -1
+		get_viewport().set_input_as_handled()
+		return
 	if event is InputEventKey and event.pressed:
 		match event.physical_keycode:
 			KEY_SPACE:
