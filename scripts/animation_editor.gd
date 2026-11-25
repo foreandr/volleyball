@@ -132,6 +132,10 @@ func _ready() -> void:
 		review_source=session.source
 		review_votes.load(REVIEW_PATH)
 		show_swing(int(review_votes.get_value("review","current",1)))
+		for argument in OS.get_cmdline_user_args():
+			if argument.begins_with("--preview-frame="):
+				set_playing(false)
+				set_frame(argument.get_slice("=",1).to_int())
 func show_swing(number: int) -> void:
 	review_number=wrapi(number-1,0,50)+1
 	session.replace_source(preload("res://scripts/numbered_swings.gd").make(review_source,review_number))
@@ -437,15 +441,18 @@ func bone_label(name_: String) -> String:
 	var names := {"lowerarm":"forearm","upperarm":"upper arm","hand":"wrist","calf":"shin","thigh":"thigh","foot":"ankle","ball":"toes","clavicle":"shoulder","pelvis":"hips","spine_01":"lower spine","spine_02":"mid spine","spine_03":"chest","neck_01":"neck"}
 	return side+str(names.get(name_,name_.replace("_0"," ").replace("_"," "))).capitalize()
 
+func sample_editor_pose() -> void:
+	session.sample(frame)
+	var limited_right := preload("res://scripts/player_arm_clearance.gd").resolve(session.rig,"r")
+	var limited_left := preload("res://scripts/player_arm_clearance.gd").resolve(session.rig,"l")
+	clearance_notice.visible=limited_right or limited_left
+
 func set_frame(value: int) -> void:
 	if session == null: return
 	frame = clampi(value,0,session.last_frame)
 	frame_field.set_value_no_signal(frame)
 	timeline.set_value_no_signal(frame)
-	session.sample(frame)
-	var limited_right := preload("res://scripts/player_arm_clearance.gd").resolve(session.rig,"r")
-	var limited_left := preload("res://scripts/player_arm_clearance.gd").resolve(session.rig,"l")
-	clearance_notice.visible=limited_right or limited_left
+	sample_editor_pose()
 	if is_instance_valid(ball_preview) and not playing:
 		ball_preview.tick(session.time_at(frame),false)
 		refresh_contact_frame()
@@ -566,10 +573,7 @@ func rotation_changed(_value: float) -> void:
 	remember_undo()
 	var angles := Vector3(rotation_fields[0].value,rotation_fields[1].value,rotation_fields[2].value)*PI/180.0
 	apply_rotation_group(Quaternion.from_euler(angles))
-	session.sample(frame)
-	var limited_right := preload("res://scripts/player_arm_clearance.gd").resolve(session.rig,"r")
-	var limited_left := preload("res://scripts/player_arm_clearance.gd").resolve(session.rig,"l")
-	clearance_notice.visible=limited_right or limited_left
+	sample_editor_pose()
 	refresh_keys()
 
 func key_joint() -> void:
@@ -728,10 +732,7 @@ func drag_joint(target: Vector3) -> void:
 		var keys: Dictionary = session.position_edits.get(name_,{})
 		keys[frame] = shoulder_start_offset+parent_basis.inverse()*(forward*distance)
 		session.position_edits[name_] = keys
-		session.sample(frame)
-	var limited_right := preload("res://scripts/player_arm_clearance.gd").resolve(session.rig,"r")
-	var limited_left := preload("res://scripts/player_arm_clearance.gd").resolve(session.rig,"l")
-	clearance_notice.visible=limited_right or limited_left
+		sample_editor_pose()
 		refresh_keys()
 		return
 	var pivot := bone_world(selected_bone)
@@ -740,10 +741,7 @@ func drag_joint(target: Vector3) -> void:
 	if from.length_squared() < 0.00001 or to.length_squared() < 0.00001: return
 	var turn := Quaternion(from.normalized(),to.normalized())
 	apply_world_turn(turn)
-	session.sample(frame)
-	var limited_right := preload("res://scripts/player_arm_clearance.gd").resolve(session.rig,"r")
-	var limited_left := preload("res://scripts/player_arm_clearance.gd").resolve(session.rig,"l")
-	clearance_notice.visible=limited_right or limited_left
+	sample_editor_pose()
 	refresh_rotation()
 
 func apply_rotation_group(offset: Quaternion) -> void:
