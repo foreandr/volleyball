@@ -44,12 +44,8 @@ func configure(host: Node, layer: Node = null) -> void:
 				options.show()
 				show_section("Attack setup")
 				body.get_child(2).grab_focus())
-			bar(home,"Edit approach frames",game.edit_approach_frames)
-			bar(home,"Edit takeoff and arm lift",game.edit_approach_frames.bind(true))
-			bar(home,"Review 50 swings",game.edit_approach_frames.bind(true,true,false,true))
-			bar(home,"Down-the-line swing",game.edit_approach_frames.bind(true,true,false))
-			bar(home,"Cross-court swing",game.edit_approach_frames.bind(true,true,true))
-		bar(home,"Edit blocker frames" if game.has_method("frame_editor_blocker") else "Edit attacker frames" if game.has_method("frame_editor_attacker") else "Edit set frames",open_frame_editor)
+		if game.has_method("frame_editor_blocker") or not game.has_method("frame_editor_attacker"):
+			bar(home,"Edit blocker frames" if game.has_method("frame_editor_blocker") else "Edit set frames",open_frame_editor)
 	bar(home,"Restart",restart)
 	var quit_button := bar(home,"Quit",quit_gameplay)
 	primary.focus_neighbor_top=primary.get_path_to(quit_button)
@@ -129,6 +125,13 @@ func attack_setup_controls() -> void:
 	height.value_changed.connect(func(v: float):
 		game.save_set_height(game.SET_HEIGHTS[int(v)])
 		label.text="Set height   %d" % int(v))
+
+	if game.scene_file_path=="res://scenes/attacking_camp.tscn":
+		var count := OptionButton.new()
+		for text in ["No blockers","1 blocker","2 blockers"]: count.add_item(text)
+		count.select(game.attack_blocker_count)
+		count.item_selected.connect(game.set_attack_blocker_count)
+		body.add_child(count)
 
 func tuning_controls() -> void:
 	if "block_vertical" in game:

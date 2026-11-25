@@ -587,35 +587,6 @@ func advance_spike(delta: float) -> void:
 	var previous := ball.global_position
 	super.advance_spike(delta)
 	if deflected or not launched_attack or not drop_net_hit.is_empty(): return
-	for block: RefCounted in jumps:
-		if block==null: continue
-		for i in block.hands.size():
-			var chain := [block.shoulders[i],block.elbows[i],block.wrists[i],block.hands[i]]
-			var touched := false
-			var stuff := false
-			var hit_position := Vector3.ZERO
-			for segment in [2,1,0]:
-				var closest := Geometry3D.get_closest_points_between_segments(previous,ball.global_position,chain[segment],chain[segment+1])
-				var gap := closest[0].distance_to(closest[1])
-				if gap <= Contact.BALL_RADIUS+Block.ARM_RADII[segment]:
-					touched=true
-					hit_position=closest[0]
-					stuff=segment==2 and gap<.13 and closest[1].y>BallNet.NET_TOP+.10 and closest[1].z<BallNet.NET_Z-.04
-					break
-			if not touched: continue
-			ball.global_position=hit_position
-			if stuff:
-				drop_velocity=hit_position.direction_to(block.court_aim)*drop_velocity.length()*.55
-			else:
-				var side := signf(hit_position.z-BallNet.NET_Z)
-				if is_zero_approx(side): side=signf(drop_velocity.z)
-				drop_velocity=Vector3(clampf(drop_velocity.x*.20-hit_position.x*.28,-2.8,2.8),clampf(drop_velocity.length()*.23,3.2,5.8),side*clampf(absf(drop_velocity.z)*.19,1.9,4.4))
-			spin_acceleration = Vector3.ZERO
-			deflected = true
-			block_sound_count+=1
-			set_meta("blocked_attack",true)
-			hand_impact.volume_db=-2.
-			hand_impact.play()
-			trace("block_hand_contact",{"rep":rep,"stuff":stuff,"outgoing":str(drop_velocity)})
-			message.text = "Block touch"
-			return
+	if resolve_block_contact(previous,jumps):
+		deflected=true
+		block_sound_count+=1

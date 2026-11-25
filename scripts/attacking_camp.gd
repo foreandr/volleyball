@@ -203,6 +203,57 @@ func build_settings() -> void:
 			StorySession.save_options()
 		)
 
+const PracticeBlock = preload("res://scripts/match_block.gd")
+var attack_blocker_count := 1
+var practice_blockers: Array[Node3D]=[]
+var practice_jumps := [null,null]
+var practice_attempted := [false,false]
+var practice_footwork := []
+var practice_touch := false
+
+func set_attack_blocker_count(count: int) -> void:
+	attack_blocker_count=clampi(count,0,2)
+	StorySession.game_options.set_value("attack","blockers",attack_blocker_count)
+	StorySession.save_options()
+	refresh_practice_blockers()
+
+func refresh_practice_blockers() -> void:
+	for i in practice_blockers.size():
+		practice_blockers[i].visible=i<attack_blocker_count
+		if i>=attack_blocker_count:
+			practice_jumps[i]=null
+			practice_blockers[i].position.y=START.y
+			practice_blockers[i].play_action("idle")
+
+func step_practice_blockers(delta: float) -> void:
+	for i in mini(practice_blockers.size(),attack_blocker_count):
+		var actor := practice_blockers[i]
+		var jump: RefCounted=practice_jumps[i]
+		if jump!=null:
+			if not jump.step(delta,ball.global_position): practice_jumps[i]=null
+			continue
+		var home_x := -1. if i==0 else 1.
+		var goal := home_x
+		if phase=="set" or phase=="spike":
+			var seam_offset := (i-.5)*.68 if attack_blocker_count==2 else 0.
+			goal=clampf(endpoint.x+seam_offset,-4.4,4.4)
+		var old_x := actor.position.x
+		actor.position.x=move_toward(old_x,goal,GroundControls.speed(true,true)*delta)
+		actor.animator.advance(delta)
+		GroundControls.shuffle(actor,practice_footwork[i],Vector3((actor.position.x-old_x)/maxf(.0001,delta),0,0),true,delta)
+		if phase=="set" and not practice_attempted[i] and absf(goal-actor.position.x)<.85 and flight_time-elapsed<=PracticeBlock.START+PracticeBlock.AIR*.5:
+			jump=PracticeBlock.new()
+			jump.net_heading=PI
+			jump.aggressive_press=true
+			jump.court_aim=Vector3(0.,0.,BallNet.NET_Z-3.)
+			if attack_blocker_count==2:
+				var seam := (practice_blockers[0].position.x+practice_blockers[1].position.x)*.5
+				if i==0: jump.max_hand_x=seam-.06
+				else: jump.min_hand_x=seam+.06
+			jump.begin(actor)
+			practice_jumps[i]=jump
+			practice_attempted[i]=true
+
 func start_drill() -> void:
 	set_arc_percent=float(StorySession.game_options.get_value("attack","set_height_percent",100.))
 	var positions := StorySession.load_drill_setup("attack_positions")
@@ -231,6 +282,19 @@ func start_drill() -> void:
 	attack_jump.front_limit=3.65
 	attack_jump.attack_arm_lift=true
 	super.start_drill()
+	if scene_file_path=="res://scenes/attacking_camp.tscn" and not has_meta("live_sampler"):
+		attack_blocker_count=clampi(int(StorySession.game_options.get_value("attack","blockers",1)),0,2)
+		for i in 2:
+			var actor := athlete(Vector3(-1.+2.*i,START.y,BallNet.NET_Z+.38),"286881")
+			register_student(actor,5+i)
+			preload("res://scripts/practice_kit.gd").apply(actor,false,5+i)
+			actor.rotation.y=PI
+			practice_blockers.append(actor)
+			practice_footwork.append(preload("res://scripts/directional_footwork.gd").new(actor))
+		refresh_practice_blockers()
+		if "--control-attacker" in OS.get_cmdline_user_args():
+			cpu_hitter=false
+			update_prompts(phase)
 	if has_meta("live_sampler"): return
 	var review := "--review-swings" in OS.get_cmdline_user_args()
 	var arm_swing := review or "--edit-arm-swing" in OS.get_cmdline_user_args()
@@ -255,6 +319,8 @@ func begin(next: String) -> void:
 	super.begin(next)
 
 func reset_feed() -> void:
+	practice_attempted=[false,false]
+	practice_touch=false
 	clear_attack_input()
 	active_lane=attack_lane
 	active_set=next_set
@@ -409,6 +475,7 @@ func team_controls_approach() -> bool:
 	return false
 
 func step_attack(delta: float) -> void:
+	step_practice_blockers(delta)
 	if cpu_hitter and not has_meta("sampling_attack"): drive_cpu_attack()
 	if not cpu_hitter and approach_started and phase=="set" and manual_shot>=0 and not is_finite(release_at):
 		steer_attack_aim(delta)
@@ -709,8 +776,11 @@ func advance_spike(delta: float) -> void:
 	var forward := drop_velocity.slide(Vector3.UP).normalized()
 	var descent := drop_velocity.y
 	if in_flight: drop_velocity+=spin_acceleration*delta
+	var previous_ball_position := ball.global_position
 	var had_net_contact := not drop_net_hit.is_empty()
 	advance_missed_ball(delta,true)
+	if not practice_blockers.is_empty() and not practice_touch and drop_net_hit.is_empty():
+		practice_touch=resolve_block_contact(previous_ball_position,practice_jumps)
 	if rebound_age>=0.: rebound_age+=delta
 	elif descent<0. and drop_velocity.y>0. and ball.position.y<.45:
 		rebound_age=0.
@@ -1112,3 +1182,36 @@ func sample_attack_clip(arm_lift: bool,arm_swing: bool,cross: bool,review: bool,
 		clip.set_meta("swing_hit_frame",hit_frame)
 	remove_meta("sampling_attack")
 	return {"entry":edit_entry,"clip":clip}
+
+func resolve_block_contact(previous: Vector3,block_jumps: Array) -> bool:
+	for block: RefCounted in block_jumps:
+		if block==null: continue
+		for i in block.hands.size():
+			var chain := [block.shoulders[i],block.elbows[i],block.wrists[i],block.hands[i]]
+			var touched := false
+			var stuff := false
+			var hit_position := Vector3.ZERO
+			for segment in [2,1,0]:
+				var closest := Geometry3D.get_closest_points_between_segments(previous,ball.global_position,chain[segment],chain[segment+1])
+				var gap := closest[0].distance_to(closest[1])
+				if gap <= Contact.BALL_RADIUS+PracticeBlock.ARM_RADII[segment]:
+					touched=true
+					hit_position=closest[0]
+					stuff=segment==2 and gap<.13 and closest[1].y>BallNet.NET_TOP+.10 and closest[1].z<BallNet.NET_Z-.04
+					break
+			if not touched: continue
+			ball.global_position=hit_position
+			if stuff:
+				drop_velocity=hit_position.direction_to(block.court_aim)*drop_velocity.length()*.55
+			else:
+				var side := signf(hit_position.z-BallNet.NET_Z)
+				if is_zero_approx(side): side=signf(drop_velocity.z)
+				drop_velocity=Vector3(clampf(drop_velocity.x*.20-hit_position.x*.28,-2.8,2.8),clampf(drop_velocity.length()*.23,3.2,5.8),side*clampf(absf(drop_velocity.z)*.19,1.9,4.4))
+			spin_acceleration = Vector3.ZERO
+			set_meta("blocked_attack",true)
+			hand_impact.volume_db=-2.
+			hand_impact.play()
+			trace("block_hand_contact",{"rep":rep,"stuff":stuff,"outgoing":str(drop_velocity)})
+			message.text = "Block touch"
+			return true
+	return false
