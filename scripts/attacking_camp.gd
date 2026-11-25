@@ -16,6 +16,7 @@ const ATTACK_SET_LIFT := .10
 const PLANT_TIME := .30
 var spikes := 0
 var strike_point := Vector3.ZERO
+var last_elbow := Quaternion.IDENTITY
 var last_shoulder := Quaternion.IDENTITY
 var last_shoulder_time := -1.
 var contact_offset := Vector3.ZERO
@@ -199,6 +200,7 @@ func pose_swing() -> void:
 				rig.set_bone_pose_rotation(id,last_shoulder)
 				last_shoulder_time=swing_time
 			else: last_shoulder_time=-1.
+			protect_hitting_arm()
 		return
 	var recovery := smoothstep(.36,.65,swing_time)
 	var rig: Skeleton3D=hitter.skeleton
@@ -294,6 +296,7 @@ func pose_swing() -> void:
 	var fingers: Vector3 = (author.point(pose,"middle_01_l")-wrist).normalized()
 	var point_axis := wrist.direction_to(guide_target)
 	author.aim_joint(pose,"hand_l","middle_01_l",wrist+fingers.slerp(point_axis,airborne*(1.-guide_drop)))
+	var arm_dt := maxf(0.,swing_time-last_shoulder_time)
 	for joint in ["pelvis","spine_01","spine_02","thigh_r","thigh_l","calf_r","calf_l","foot_r","foot_l","clavicle_r","upperarm_r","lowerarm_r","hand_r","clavicle_l","upperarm_l","lowerarm_l","hand_l"]:
 		var id := rig.find_bone(joint)
 		var rotation: Quaternion=pose[id].basis.get_rotation_quaternion().slerp(rig.get_bone_pose_rotation(id),recovery)
@@ -305,7 +308,55 @@ func pose_swing() -> void:
 				if gap>budget: rotation=last_shoulder.slerp(rotation,budget/gap)
 			last_shoulder=rotation
 			last_shoulder_time=swing_time
+		if joint=="lowerarm_r":
+			if phase=="spike" and since_hit>PALM_CONTACT:
+				var gap := last_elbow.angle_to(rotation)
+				var budget := deg_to_rad(840.)*arm_dt
+				if gap>budget: rotation=last_elbow.slerp(rotation,budget/gap)
+			last_elbow=rotation
 		rig.set_bone_pose_rotation(id,rotation)
+	if phase=="spike" and since_hit>PALM_CONTACT: protect_hitting_arm()
+
+func protect_hitting_arm() -> void:
+	var rig: Skeleton3D=hitter.skeleton
+	var bone_point := func(name_: String) -> Vector3:
+		return rig.get_bone_global_pose(rig.find_bone(name_)).origin
+	var shoulder: Vector3=bone_point.call("upperarm_r")
+	var outside: Vector3=(shoulder-bone_point.call("upperarm_l")).normalized()
+	var width: float=shoulder.distance_to(bone_point.call("upperarm_l"))
+	var head: Vector3=bone_point.call("Head")
+	var up: Vector3=(head-bone_point.call("neck_01")).normalized()
+	var centers := [head+up*width*.18,bone_point.call("spine_03"),bone_point.call("spine_02"),bone_point.call("spine_01")]
+	var radii := [.45,.55,.54,.49]
+	var upper := rig.find_bone("upperarm_r")
+	for attempt in 8:
+		var elbow: Vector3=bone_point.call("lowerarm_r")
+		var wrist: Vector3=bone_point.call("hand_r")
+		var tip: Vector3=bone_point.call("middle_03_r")
+		var chain := [shoulder.lerp(elbow,.55),elbow,wrist,tip]
+		var depth := 0.
+		var axis := Vector3.ZERO
+		var turn := 0.
+		for j in centers.size():
+			for i in range(chain.size()-1):
+				var near := Geometry3D.get_closest_point_to_segment(centers[j],chain[i],chain[i+1])
+				var offset: Vector3=near-centers[j]
+				var overlap: float=width*radii[j]-offset.length()
+				if overlap<=depth: continue
+				var lever := near-shoulder
+				var push := offset.slide(lever.normalized())
+				if push.length()<.01: push=outside.slide(lever.normalized())
+				var normal := lever.cross(push)
+				if normal.length_squared()<.000001: continue
+				depth=overlap
+				axis=normal.normalized()
+				turn=minf(.18,(overlap+.002)/maxf(.04,lever.length()))
+		if depth<.001: break
+		var joint := rig.get_bone_global_pose(upper)
+		joint.basis=Basis(axis,turn)*joint.basis
+		var parent := rig.get_bone_global_pose(rig.get_bone_parent(upper))
+		rig.set_bone_pose_rotation(upper,(parent.basis.inverse()*joint.basis).orthonormalized().get_rotation_quaternion())
+	last_shoulder=rig.get_bone_pose_rotation(upper)
 
 func frame_editor_attacker() -> Node3D:
 	return hitter
