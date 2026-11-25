@@ -223,8 +223,14 @@ func step(actor: Node3D, delta: float, input: Vector2) -> void:
 	if lead_time > 0.0:
 		transfer_hop = 0.05*smoothstep(lead_step_duration*0.82,lead_step_duration,lead_age)*(1.0-smoothstep(0.0,0.135,pose_time))
 	if not plant_legs.is_empty() and lead_time > 0.0:
-		# Let the longer approach transfer weight without a separate hop between steps.
-		transfer_hop *= 0.30
+		if attack_arm_lift and entry_time==0.:
+			# Bound off the lead left foot and descend into the right plant.
+			var push_off := lead_step_duration*.54
+			var landing := lead_time+(load_time-lead_time)*.53
+			var progress := clampf((elapsed-push_off)/(landing-push_off),0.,1.)
+			transfer_hop = .10*pow(sin(PI*progress),2.)
+		else:
+			transfer_hop *= .30
 		# Carry momentum between the lead step and the final plant.
 		var ground_distance := entry_distance+lead_distance+stride
 		var stepped_distance := distance-stride*AIR_TRAVEL_FRACTION*flight
@@ -278,6 +284,7 @@ func attack_plant_foot(side: String) -> Vector3:
 	if (left and lead_time > 0.0) or (not left and entry_time > 0.0):
 		var early_start := entry_time*0.70 if left else 0.0
 		var early_end := lead_time*0.86 if left else entry_time*0.88
+		if left and attack_arm_lift and entry_time==0.: early_end=lead_time*.48
 		var early := smoothstep(early_start,early_end,elapsed)
 		var step_end := from+heading*(entry_distance+lead_distance if left else entry_distance)
 		step_end.y = plant_ground
@@ -342,6 +349,7 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 		if not plant_legs.is_empty() and pose_time < LOAD_TIME+0.14:
 			var takeoff := smoothstep(LOAD_TIME,LOAD_TIME+0.14,pose_time)
 			var planted := attack_plant_foot(side)
+			if attack_arm_lift and entry_time==0. and elapsed<load_duration(): planted.y+=transfer_hop
 			# Once airborne, carry the feet up with the body before folding the knees.
 			planted.y += maxf(0.0,actor.position.y-start.y)*smoothstep(LOAD_TIME-0.04,LOAD_TIME+0.035,pose_time)
 			target = rig.to_local(actor.get_parent_node_3d().to_global(planted)).lerp(target,takeoff)
