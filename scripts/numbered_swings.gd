@@ -29,6 +29,15 @@ static func make(source: Animation, number: int, rig: Skeleton3D=null) -> Animat
 			clip.rotation_track_insert_key(out,time,source.rotation_track_interpolate(track,time)*offset)
 	if rig!=null and hit>offset_frames+16:
 		align_draw_palm(clip,rig,offset_frames,hit)
+	if hit>=0:
+		var hand := clip.find_track(NodePath("Armature/Skeleton3D:hand_r"),Animation.TYPE_ROTATION_3D)
+		if hand>=0:
+			for key in clip.track_get_key_count(hand):
+				var relative_frame := clip.track_get_key_time(hand,key)*60.-hit
+				var weight := smoothstep(-9.,-2.,relative_frame)*(1.-smoothstep(0.,11.,relative_frame))
+				if weight>0.:
+					var rotation: Quaternion=clip.track_get_key_value(hand,key)
+					clip.track_set_key_value(hand,key,rotation*Quaternion(Vector3.BACK,deg_to_rad(75.)*weight))
 	return clip
 
 static func align_draw_palm(clip: Animation, rig: Skeleton3D, start: int, hit: int) -> void:

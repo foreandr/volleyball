@@ -42,6 +42,7 @@ var timeline: HSlider
 var contact_frame_button: Button
 var rotation_fields: Array[SpinBox] = []
 var held_rotation_field: SpinBox
+var rotation_hold_recorded := false
 var rotation_press_ms := 0
 var copy_name: LineEdit
 var play_button: Button
@@ -375,6 +376,7 @@ func build_controls(controls: VBoxContainer) -> void:
 		value.gui_input.connect(func(event: InputEvent):
 			if event is InputEventMouseButton and event.button_index==MOUSE_BUTTON_LEFT and event.pressed:
 				release_rotation_arrow()
+				rotation_hold_recorded=false
 				held_rotation_field=value
 				rotation_press_ms=Time.get_ticks_msec())
 		value.value_changed.connect(rotation_changed)
@@ -567,7 +569,9 @@ func refresh_keys() -> void:
 func rotation_changed(_value: float) -> void:
 	if updating or session == null or selected_bone < 0: return
 	set_playing(false)
-	remember_undo()
+	if not held_rotation_field or not rotation_hold_recorded:
+		remember_undo()
+		rotation_hold_recorded=held_rotation_field!=null
 	var angles := Vector3(rotation_fields[0].value,rotation_fields[1].value,rotation_fields[2].value)*PI/180.0
 	apply_rotation_group(Quaternion.from_euler(angles))
 	sample_editor_pose()
