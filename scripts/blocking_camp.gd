@@ -28,7 +28,14 @@ func update_prompts(_next: String) -> void:
 	entries.append([JOY_BUTTON_START,"Settings"])
 	Xbox.prompts(controls_row,entries)
 
+func allow_cpu_soft_attack() -> bool:
+	return false
+
 func reset_feed() -> void:
+	# Supply a full-strength attacker on each blocking rep.
+	hitter.stamina.rested_capacity=hitter.stamina.capacity()
+	hitter.stamina.value=hitter.stamina.rested_capacity
+	hitter.stamina.exhausted=false
 	attack_lane = 0
 	next_set = Vector3(3.65,2.65,3.)
 	deflected=false
