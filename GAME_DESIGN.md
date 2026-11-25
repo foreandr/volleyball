@@ -204,7 +204,7 @@ Attack timing also considers approach arrival. A playable button release can gra
 
 Attackers use their full stamina-adjusted vertical. Farther sets speed up the run-up and plant in proportion to effective Speed. The hitter must cover the ground before starting the plant.
 
-Spike feedback centers its timing bands 55 ms earlier, checks release against palm arrival and plant timing, and confirms Perfect only after clean net clearance. Grading never redirects the launch. All spikes can rebound from the floor.
+Spike feedback centers its timing bands 305 ms earlier, checks release against palm arrival and plant timing, and confirms Perfect only after clean net clearance. Grading never redirects the launch. All spikes can rebound from the floor.
 
 ## Future court and multiball modes
 

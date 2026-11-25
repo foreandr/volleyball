@@ -34,7 +34,7 @@ const EARLY_LIMIT := -.18
 const LATE_LIMIT := .085
 const ATTACK_CONTACT_RADIUS := .30
 var reach_assist := Vector3.ZERO
-const GRADE_ADVANCE := .055
+const GRADE_ADVANCE := .305
 const CLEAN_EARLY := .085
 const CLEAN_LATE := .020
 const METER_START := -.32
@@ -49,7 +49,7 @@ func attack_meter_error() -> float:
 	return combined_attack_error(error+GRADE_ADVANCE)
 
 func button_timing_error() -> float:
-	if phase!="set": return METER_START
+	if phase!="set": return METER_START-GRADE_ADVANCE
 	return elapsed-flight_time+.08
 
 func combined_attack_error(button_error: float) -> float:
@@ -164,7 +164,7 @@ func _input(event: InputEvent) -> void:
 					release_at=clock
 					show_attack_timing(attack_meter_error())
 					trace("attack_release",{"shot":index,"meter_error_ms":roundi(attack_meter_error()*1000.),"button_ms":roundi(release_grade*1000.),"approach_delay_ms":roundi(approach_delay*1000.),"approach":approach_started})
-					if not approach_started: manual_shot=-1
+					if not approach_started and (phase!="set" or attack_meter_error()<EARLY_LIMIT or attack_meter_error()>LATE_LIMIT): manual_shot=-1
 				get_viewport().set_input_as_handled()
 				return
 		if event is InputEventJoypadButton and event.button_index!=Xbox.physical(JOY_BUTTON_START): return
@@ -362,9 +362,9 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 			if not cpu_hitter:
 				if not is_finite(first_palm_at):
 					first_palm_at=clock
-					var before := combined_attack_error(release_grade)
+					var before := combined_attack_error(release_grade+GRADE_ADVANCE)
 					approach_delay=maxf(approach_delay,button_timing_error())
-					if is_finite(release_grade) and before<=CLEAN_LATE and combined_attack_error(release_grade)>CLEAN_LATE:
+					if is_finite(release_grade) and before<=CLEAN_LATE and combined_attack_error(release_grade+GRADE_ADVANCE)>CLEAN_LATE:
 						show_attack_timing(attack_meter_error())
 				if manual_shot<0 or not is_finite(release_at):
 					if elapsed<flight_time: return false
@@ -410,7 +410,7 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 		feedback="Missed spike"
 		if not cpu_hitter:
 			if is_finite(release_grade) and (release_grade+GRADE_ADVANCE<EARLY_LIMIT or release_grade+GRADE_ADVANCE>LATE_LIMIT):
-				feedback+="   /   Released too early" if release_grade<0. else "   /   Released too late"
+				feedback+="   /   Released too early" if release_grade+GRADE_ADVANCE<EARLY_LIMIT else "   /   Released too late"
 			elif is_finite(release_grade) and closest_spike_gap>ATTACK_CONTACT_RADIUS: feedback+="   /   Out of reach"
 			elif not is_finite(release_grade): feedback+="   /   No release"
 		message.text=feedback
