@@ -283,13 +283,14 @@ func sample_attack_clip(arm_lift: bool,arm_swing: bool,cross: bool,review: bool,
 	endpoint=START+Vector3(-.18,0.,2.20)
 	endpoint+=Vector3(review_setup.get("set_x",0.),0.,review_setup.get("set_z",0.))
 	approach_started=false
+	attack_jump.active=false
 	start_approach()
 	var recording := preload("res://scripts/match_replay.gd").new()
 	var takeoff := attack_jump.load_duration()
 	var first_frame := floori((takeoff-.15)*60.) if arm_lift else 0
 	var duration := takeoff+.25 if arm_lift else takeoff
 	if arm_swing:
-		duration=(first_frame+50)/60.
+		duration=(first_frame+192)/60.
 		cpu_hitter=true
 		flight_time=DURATION[1]
 	swing_time=-1.
@@ -302,13 +303,13 @@ func sample_attack_clip(arm_lift: bool,arm_swing: bool,cross: bool,review: bool,
 	for i in range(count+1):
 		if has_meta("live_sampler") and i>0 and i%8==0: await get_tree().process_frame
 		var time := minf(i/60.,duration)
-		if i>0: attack_jump.step(hitter,time-(i-1)/60.,Vector2.ZERO)
+		if i>0 and attack_jump.active: attack_jump.step(hitter,time-(i-1)/60.,Vector2.ZERO)
 		if arm_lift:
 			var remaining := takeoff+attack_jump.flight_duration(jump_height,true)*.48+.025-time
 			if arm_swing and phase in ["spike","drop"]:
 				swing_time+=1./60.
 				pose_swing()
-				advance_missed_ball(1./60.)
+				advance_missed_ball(1./60.,true)
 			else:
 				var previous := ball.position
 				ball.position=arc(source,endpoint,clampf(1.-remaining/DURATION[1],0.,1.),APEX[1])
@@ -331,6 +332,7 @@ func sample_attack_clip(arm_lift: bool,arm_swing: bool,cross: bool,review: bool,
 	clip.set_meta("editor_height_cm",hitter.height_cm)
 	var edit_entry :={"id":"camp_attack_arm_lift" if arm_lift else "camp_spike_approach","name":title,"category":"Attacking","type":"Approach"}
 	if arm_swing:
+		clip.set_meta("swing_hit_frame",hit_frame)
 		edit_entry={"id":"camp_right_arm_swing","name":title,"category":"Attacking","type":"Spike"}
 		edit_entry["aim_x"]=review_setup.get("x",3.4)
 		clip.set_meta("editor_group","Right Arm")

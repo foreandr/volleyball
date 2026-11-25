@@ -1560,7 +1560,7 @@ func play_intro(delta: float) -> void:
 func handle_attack_contact(_previous: Vector3,_delta: float) -> bool:
 	return false
 
-func advance_missed_ball(delta: float) -> void:
+func advance_missed_ball(delta: float, rebound_floor := false) -> void:
 	var remaining := delta
 	while remaining>.00001:
 		var dt := minf(remaining,1./120.)
@@ -1574,6 +1574,10 @@ func advance_missed_ball(delta: float) -> void:
 		var hit := contacts.sweep(world,contacts.ball_shape,ball.position,motion,Contact.GYM|Contact.EQUIPMENT|64|rotation_drill.CART_WALL)
 		ball.position+=motion*float(hit.get("fraction",1.))
 		if roll_time<0. and ((not hit.is_empty() and hit.normal.y>.8 and ball.position.y<.25) or ball.position.y<=Contact.BALL_RADIUS+.004):
+			if rebound_floor and drop_velocity.y < -1.5:
+				ball.position.y=maxf(ball.position.y,Contact.BALL_RADIUS+.006)
+				drop_velocity=drop_velocity.bounce(Vector3.UP)*.70
+				continue
 			roll_time=0.
 			ball.position.y=maxf(ball.position.y,Contact.BALL_RADIUS+.004)+.003
 			drop_velocity=drop_velocity.slide(Vector3.UP)*.72

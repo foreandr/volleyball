@@ -147,7 +147,9 @@ func add_shot_slider(box: VBoxContainer, caption: String, key: String, low: floa
 		label.text="%s   %s %s" % [caption,str(snappedf(value,step_size)),unit]
 	display.call(slider.value)
 	slider.value_changed.connect(display)
-	slider.value_changed.connect(func(_value): queue_live_shot())
+	slider.value_changed.connect(func(value):
+		InteractionTrace.record("shot_setting",{"control":key,"value":value,"frame":frame,"playing":playing})
+		queue_live_shot())
 	box.add_child(label)
 	box.add_child(slider)
 	return slider
@@ -167,20 +169,23 @@ func update_live_shot() -> void:
 		add_child(viewport)
 		shot_sampler=load("res://scenes/attacking_camp.tscn").instantiate()
 		shot_sampler.set_meta("live_sampler",true)
-		shot_sampler.process_mode=Node.PROCESS_MODE_DISABLED
 		viewport.add_child(shot_sampler)
+		for collider in shot_sampler.find_children("*","CollisionObject3D",true,false):
+			collider.disable_mode=CollisionObject3D.DISABLE_MODE_KEEP_ACTIVE
+		shot_sampler.process_mode=Node.PROCESS_MODE_DISABLED
+		await get_tree().physics_frame
 	while is_inside_tree():
 		var revision := shot_revision
 		shot_setup.z=4.+float(shot_setup.depth)
 		var review := bool(entry.get("swing_review",false))
 		var result: Dictionary=await shot_sampler.sample_attack_clip(true,true,float(shot_setup.x)<1.,review,shot_setup)
-		if revision!=shot_revision: continue
 		var clip: Animation=result.clip
 		if review:
 			review_source=clip
 			clip=preload("res://scripts/numbered_swings.gd").make(clip,review_number)
 		var rotations: Dictionary=session.edits.duplicate(true)
 		var positions: Dictionary=session.position_edits.duplicate(true)
+		InteractionTrace.record("shot_preview",{"settings":shot_sampler.review_setup.duplicate(),"contact_frame":clip.get_meta("swing_hit_frame",-1),"frame":frame,"playing":playing})
 		session.replace_source(clip)
 		session.edits=rotations
 		session.position_edits=positions
@@ -415,12 +420,24 @@ func set_frame(value: int) -> void:
 	frame_field.set_value_no_signal(frame)
 	timeline.set_value_no_signal(frame)
 	session.sample(frame)
+	if entry.id=="camp_right_arm_swing": update_camera()
 	if is_instance_valid(ball_preview) and not playing:
 		ball_preview.tick(session.time_at(frame),false)
 		refresh_contact_frame()
 	refresh_rotation()
 	if is_instance_valid(next_pose_button): next_pose_button.disabled = frame >= session.last_frame
 	if is_instance_valid(later_pose_button): later_pose_button.disabled = frame >= session.last_frame
+
+func update_camera() -> void:
+	super.update_camera()
+	if session==null or entry.get("id","")!="camp_right_arm_swing": return
+	var samples: Array=session.source.get_meta("editor_ball_frames",[])
+	if samples.is_empty(): return
+	var hit := int(session.source.get_meta("swing_hit_frame",36))
+	if hit<0: hit=36
+	var weight := smoothstep(hit,hit+16,frame)
+	var offset: Vector3=(samples[mini(frame,samples.size()-1)].origin-view_focus)*weight
+	preview_camera.position+=offset
 
 func contact_frame() -> int:
 	return clampi(roundi(ball_preview.contact_time*session.frame_rate),0,session.last_frame)
@@ -441,6 +458,7 @@ func step_frame(direction: int) -> void:
 	set_frame(frame+direction)
 
 func set_playing(value: bool) -> void:
+	if entry.id=="camp_right_arm_swing": InteractionTrace.record("shot_playback",{"playing":value,"frame":frame})
 	playing = value
 	playhead = float(frame)
 	if playing and frame == 0 and ball_preview.active: playhead = minf(0,ball_preview.contact_time-ball_preview.feed_duration)*session.frame_rate
