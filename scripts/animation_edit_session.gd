@@ -9,6 +9,7 @@ var position_edits: Dictionary = {}
 var rotation_tracks: Dictionary = {}
 var position_tracks: Dictionary = {}
 var last_frame := 0
+var sample_times := PackedFloat64Array()
 var frame_rate := FPS
 
 func _init(clip: Animation, skeleton: Skeleton3D) -> void:
@@ -22,6 +23,7 @@ func replace_source(clip: Animation) -> void:
 	position_edits.clear()
 	var frame_count := int(source.get_meta("editor_frame_count",0))
 	last_frame = frame_count-1 if frame_count >= 2 else ceili(source.length*FPS)
+	sample_times=source.get_meta("editor_sample_times",PackedFloat64Array())
 	frame_rate = last_frame/source.length if frame_count >= 2 else FPS
 	for bone in rig.get_bone_count():
 		var path := NodePath(PREFIX+rig.get_bone_name(bone))
@@ -29,7 +31,16 @@ func replace_source(clip: Animation) -> void:
 		position_tracks[bone] = source.find_track(path,Animation.TYPE_POSITION_3D)
 
 func time_at(frame: float) -> float:
+	if not sample_times.is_empty():
+		var index := clampf(frame,0,last_frame)
+		var lo := floori(index)
+		return lerpf(sample_times[lo],sample_times[mini(lo+1,last_frame)],index-lo)
 	return clampf(frame/frame_rate,0,source.length)
+
+func frame_at_time(time: float) -> float:
+	if sample_times.is_empty(): return time*frame_rate
+	var hi := clampi(sample_times.bsearch(time),1,last_frame)
+	return hi-1+clampf(inverse_lerp(sample_times[hi-1],sample_times[hi],time),0.,1.)
 
 func source_rotation(bone: int, frame: float) -> Quaternion:
 	var track: int = rotation_tracks[bone]
@@ -112,7 +123,7 @@ func bake() -> Animation:
 		copy.track_set_path(track,path)
 		for tick in range(ceili(copy.length*FPS)+1):
 			var time := minf(copy.length,tick/FPS)
-			var frame := time*frame_rate
+			var frame := frame_at_time(time)
 			copy.rotation_track_insert_key(track,time,(source_rotation(bone,frame)*offset_at(bone,frame)).normalized())
 	for name_ in position_edits:
 		var bone := rig.find_bone(name_)
@@ -123,6 +134,6 @@ func bake() -> Animation:
 		copy.track_set_path(track,path)
 		for tick in range(ceili(copy.length*FPS)+1):
 			var time := minf(copy.length,tick/FPS)
-			var frame := time*frame_rate
+			var frame := frame_at_time(time)
 			copy.position_track_insert_key(track,time,source_position(bone,frame)+position_offset_at(bone,frame))
 	return copy

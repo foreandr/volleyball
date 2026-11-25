@@ -150,7 +150,7 @@ static func buffer_fast_poses(clip: Animation, rig: Skeleton3D, hit: int) -> voi
 	var previous := PackedVector3Array()
 	var mapping: Array[int]=[0]
 	var balls: Array=clip.get_meta("editor_ball_frames")
-	var retimed: Array[Transform3D]=[balls[0]]
+	var times := PackedFloat64Array([0.])
 	var swing_start := int(clip.get_meta("swing_frame_offset",0))+10
 	var joints := PackedInt32Array()
 	for name_ in ["upperarm_r","lowerarm_r","hand_r","middle_03_r"]:
@@ -168,14 +168,9 @@ static func buffer_fast_poses(clip: Animation, rig: Skeleton3D, hit: int) -> voi
 		if f==0: continue
 		mapping.append(mapping.back()+steps)
 		for step in range(1,steps+1):
-			retimed.append(balls[f-1].interpolate_with(balls[f],float(step)/steps))
-	clip.length=(retimed.size()-1)/60.
-	for track in clip.get_track_count():
-		for key in range(clip.track_get_key_count(track)-1,-1,-1):
-			var old := clampi(roundi(clip.track_get_key_time(track,key)*60.),0,mapping.size()-1)
-			clip.track_set_key_time(track,key,mapping[old]/60.)
-	clip.set_meta("editor_ball_frames",retimed)
-	clip.set_meta("editor_frame_count",retimed.size())
+			times.append((f-1.+float(step)/steps)/60.)
+	clip.set_meta("editor_sample_times",times)
+	clip.set_meta("editor_frame_count",times.size())
 	clip.set_meta("swing_hit_frame",mapping[hit])
 	clip.set_meta("source_frame_map",mapping)
 static func farthest_step(a: PackedVector3Array,b: PackedVector3Array) -> float:

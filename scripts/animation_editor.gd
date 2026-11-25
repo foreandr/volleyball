@@ -435,7 +435,7 @@ func apply_output_angle(value: float) -> void:
 	StorySession.pass_output_angle = value
 	refresh_ball_angle()
 	set_frame(frame)
-	ball_preview.tick((playhead if playing else float(frame))/session.frame_rate,false)
+	ball_preview.tick(session.time_at(playhead if playing else float(frame)),false)
 
 func bone_label(name_: String) -> String:
 	var side := ""
@@ -465,7 +465,7 @@ func set_frame(value: int) -> void:
 	if is_instance_valid(later_pose_button): later_pose_button.disabled = frame >= session.last_frame
 
 func contact_frame() -> int:
-	return clampi(roundi(ball_preview.contact_time*session.frame_rate),0,session.last_frame)
+	return clampi(roundi(session.frame_at_time(ball_preview.contact_time)),0,session.last_frame)
 
 func jump_to_contact_frame() -> void:
 	set_playing(false)
@@ -504,6 +504,14 @@ func _process(delta: float) -> void:
 
 	super._process(delta)
 	if session == null: return
+	if not session.sample_times.is_empty():
+		if playing:
+			var time := fposmod(session.time_at(playhead)+delta*playback_speed,session.source.length)
+			playhead=session.frame_at_time(time)
+			set_frame(floori(playhead))
+			session.sample(playhead)
+		ball_preview.tick(session.time_at(playhead if playing else float(frame)),playing)
+		return
 	if playing and not ball_preview.active:
 		var first := float(session.source.get_meta("editor_loop_start",0))
 		playhead = first+fposmod(maxf(playhead,first)-first+delta*playback_speed*session.frame_rate,session.last_frame+1.-first)
