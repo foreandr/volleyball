@@ -19,12 +19,13 @@ const PLANT_TIME := .30
 const SHOT_BUTTONS := [JOY_BUTTON_X,JOY_BUTTON_Y,JOY_BUTTON_B]
 var manual_shot := -1
 var release_at := INF
+var release_grade := INF
 var first_palm_at := INF
 var depth_error := 0.
 var power_scale := 1.
 
-const EARLY_LIMIT := -.16
-const LATE_LIMIT := .065
+const EARLY_LIMIT := -.18
+const LATE_LIMIT := .085
 const ATTACK_CONTACT_RADIUS := .30
 var reach_assist := Vector3.ZERO
 const CLEAN_WINDOW := .018
@@ -35,6 +36,7 @@ func attack_meter_position(error: float) -> float:
 	return clampf(inverse_lerp(METER_START,METER_END,error),0.,1.)
 
 func attack_meter_error() -> float:
+	if is_finite(release_grade): return release_grade
 	if is_finite(first_palm_at):
 		return minf(release_at,clock)-first_palm_at
 	if phase!="set": return METER_START
@@ -44,6 +46,7 @@ func clear_attack_input() -> void:
 	manual_route=Vector3.ZERO
 	manual_shot=-1
 	release_at=INF
+	release_grade=INF
 	first_palm_at=INF
 	depth_error=0.
 	power_scale=1.
@@ -127,8 +130,11 @@ func _input(event: InputEvent) -> void:
 				if event.is_pressed():
 					manual_shot=index
 					release_at=INF
+					release_grade=INF
 				elif manual_shot==index:
+					release_grade=attack_meter_error()
 					release_at=clock
+					trace("attack_release",{"shot":index,"meter_error_ms":roundi(release_grade*1000.),"approach":approach_started})
 					if not approach_started: manual_shot=-1
 				get_viewport().set_input_as_handled()
 				return
@@ -295,7 +301,7 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 				if manual_shot<0 or not is_finite(release_at):
 					if elapsed<flight_time: return false
 				else:
-					var error := release_at-first_palm_at
+					var error := release_grade
 					if error<EARLY_LIMIT or error>LATE_LIMIT:
 						manual_shot=-1
 						return false
