@@ -196,7 +196,7 @@ Once an automatic attack approach starts, the face button selects shot width and
 
 The attack landing marker previews the aimed ball flight: green in, yellow tape-over, red net, orange out. Depth extends ten feet beyond the baseline.
 
-Short attack plants use the authored front arm-lift curve. The attack release meter grades releases from 85 ms early through 150 ms late as Perfect; release labels are Early, Perfect and Late.
+Short attack plants use the authored front arm-lift curve. The attack release meter grades releases from 85 ms early through 270 ms late as Perfect; release labels are Early, Perfect and Late.
 
 Shared cloth and tape rebounds retain 20% of incoming speed at release. Spike launch pace depends on forward approach momentum and fatigue-adjusted jump height, including short plants at the net.
 

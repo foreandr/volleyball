@@ -47,7 +47,7 @@ const ATTACK_CONTACT_RADIUS := .46
 var reach_assist := Vector3.ZERO
 const GRADE_ADVANCE := .305
 const CLEAN_EARLY := .085
-const CLEAN_LATE := .15
+const CLEAN_LATE := .27
 const METER_START := -.32
 const METER_END := .45
 
