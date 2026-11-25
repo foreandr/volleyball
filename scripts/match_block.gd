@@ -13,6 +13,7 @@ var landing_recovery := 0.13
 var overpass_swing := false
 var net_heading := INF
 var aggressive_press := false
+var close_direction := 0.
 var lean_input := 0.
 var reach_input := Vector2.ZERO
 var lean := 0.
@@ -91,6 +92,9 @@ func step(delta: float, world_ball: Vector3) -> bool:
 		var axis_local := (rig.global_basis.inverse()*Vector3.BACK).normalized()
 		author.rotate_world(pose,"spine_01",axis_local,-lean*.20*air_weight)
 		author.rotate_world(pose,"spine_02",axis_local,-lean*.15*air_weight)
+	if close_direction!=0. and air_weight>0.:
+		var yaw_axis := (rig.global_basis.inverse()*Vector3.UP).normalized()
+		author.rotate_world(pose,"spine_02",yaw_axis,-close_direction*.14*air_weight)
 	previous_hands = hands.duplicate()
 	previous_wrists = wrists.duplicate()
 	hands.clear()

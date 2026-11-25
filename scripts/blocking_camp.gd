@@ -283,8 +283,13 @@ func begin_block(slot: int,loaded := 0.,manual := false) -> void:
 	jump.age=Block.START*loaded
 	jumps[slot]=jump
 	attempted[slot]=true
-	if read_set and slot==read_lead and slot!=1 and closing[1] and jumps[1]==null:
-		begin_block(1,loaded)
+	if read_set and closing[slot] and slot!=read_lead and not manual:
+		var partner := slot+signi(read_lead-slot)
+		jump.close_direction=signf(blockers[partner].position.x-blockers[slot].position.x)
+	if read_set and slot==read_lead:
+		for i in blockers.size():
+			if i!=slot and closing[i] and jumps[i]==null and (automatic_block or i!=MANUAL_SLOT):
+				begin_block(i,loaded)
 
 var route_velocity := [Vector3.ZERO,Vector3.ZERO,Vector3.ZERO,Vector3.ZERO]
 
@@ -411,6 +416,12 @@ func step_blocker(slot: int,delta: float) -> void:
 					var left: bool = (jump.shoulders[0].x-jump.shoulders[1].x)*miss>0.
 					jump.reach_input=Vector2(amount,0.) if left else Vector2(0.,amount)
 		jump.court_aim=Vector3(0.,0.,BallNet.NET_Z-3.)
+		if jump.close_direction!=0. and slot!=read_lead:
+			var partner := slot+signi(read_lead-slot)
+			var room: float=(blockers[partner].position.x-jump.base.x)*jump.close_direction-.61
+			if jump.age>=Block.START and jump.age<Block.START+Block.AIR:
+				jump.base.x+=jump.close_direction*minf(maxf(0.,room),.64*delta)
+			jump.lean_input=jump.close_direction*.65
 		if not jump.step(delta,ball.global_position):
 			jumps[slot]=null
 			if slot==MANUAL_SLOT and not automatic_block:
@@ -489,7 +500,7 @@ func step_blocker(slot: int,delta: float) -> void:
 		actor.rotation.y=rotate_toward(actor.rotation.y,heading,delta*6.)
 	if sprinting and velocity.length()>.15: actor.stamina.spend(actor.stamina.SPRINT_DRAIN*delta,"Sprint")
 	GroundControls.shuffle(actor,shuffle_steps[actor],velocity,focused,delta)
-	if read_set and (slot!=1 or read_lead==1) and (automatic_block or slot!=MANUAL_SLOT) and cpu and closing[slot] and not attempted[slot] and phase=="set" and absf(actor.position.x-read_x)<1.65 and flight_time-elapsed<=Block.START+Block.AIR*.5:
+	if read_set and slot==read_lead and (automatic_block or slot!=MANUAL_SLOT) and cpu and closing[slot] and not attempted[slot] and phase=="set" and absf(actor.position.x-read_x)<1.65 and flight_time-elapsed<=Block.START+Block.AIR*.5:
 		begin_block(slot)
 
 func advance_spike(delta: float) -> void:

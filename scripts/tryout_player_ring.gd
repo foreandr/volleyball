@@ -29,10 +29,11 @@ func _draw() -> void:
 		return
 	if not game.is_node_ready() or game.settings.visible or game.phase in ["intro","net_guide","complete"]: return
 	var human: Node3D=game.rotation_drill.roster[0]
-	if "automatic_block" in game and not game.automatic_block and game.blockers.size()>game.MANUAL_SLOT:
-		draw_player(game.blockers[game.MANUAL_SLOT],true)
-	else:
-		for actor in extra_jumps: draw_player(actor,true)
+	if "automatic_block" in game:
+		if not game.automatic_block and game.blockers.size()>game.MANUAL_SLOT:
+			draw_player(game.blockers[game.MANUAL_SLOT],true)
+		return
+	for actor in extra_jumps: draw_player(actor,true)
 	draw_player(human,true)
 	if game.setter!=human: draw_player(game.setter,false)
 	if not setting_cues:
