@@ -45,9 +45,9 @@ static func align_draw_palm(clip: Animation, rig: Skeleton3D, start: int, hit: i
 		var edge: Vector3=point.call("pinky_01_r")-point.call("index_01_r")
 		var normal := fingers.cross(edge).normalized().slide(axis)
 		var down := Vector3.DOWN.slide(axis)
-		if minf(normal.length_squared(),down.length_squared())<.01: continue
+		var can_roll := minf(normal.length_squared(),down.length_squared())>.00001
 		var weight := smoothstep(start+8.,start+17.,f)*(1.-smoothstep(hit-9.,hit-2.,f))
-		var roll := normal.signed_angle_to(down,axis)*weight
+		var roll := normal.signed_angle_to(down,axis)*weight if can_roll else 0.
 		var local_axis := rig.get_bone_global_pose(forearm).basis.inverse()*axis
 		var rotation := rig.get_bone_pose_rotation(forearm)*Quaternion(local_axis.normalized(),roll)
 		clip.rotation_track_insert_key(track,f/60.,rotation.normalized())
