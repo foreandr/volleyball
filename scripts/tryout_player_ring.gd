@@ -120,7 +120,7 @@ func draw_player(actor: Node3D,human: bool) -> void:
 	var ink := Color("10171d")
 	arc_band(at,radius,0,TAU,ink,6)
 	arc_band(at,radius,0,TAU,Color.WHITE,2)
-	if is_setter or human:
+	if (is_setter or human) and not (is_setter and game!=null and "automatic_block" in game):
 		var energy: RefCounted=actor.stamina
 		var origin := at+Vector2(-52,radius.y+25)
 		draw_rect(Rect2(origin-Vector2.ONE,Vector2(106,9)),Color.WHITE)
