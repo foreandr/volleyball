@@ -179,7 +179,7 @@ func update_live_shot() -> void:
 		var revision := shot_revision
 		shot_setup.z=4.+float(shot_setup.depth)
 		var review := bool(entry.get("swing_review",false))
-		var result: Dictionary=await shot_sampler.sample_attack_clip(true,true,float(shot_setup.x)<1.,review,shot_setup)
+		var result: Dictionary=await shot_sampler.sample_attack_clip(true,true,float(shot_setup.x)>0.,review,shot_setup)
 		var clip: Animation=result.clip
 		if review:
 			review_source=clip
@@ -249,7 +249,7 @@ func build_controls(controls: VBoxContainer) -> void:
 		shot_setup=StorySession.load_drill_setup("swing_review")
 		if not entry.get("swing_review",false):
 			shot_setup=shot_setup.duplicate()
-			shot_setup.x=entry.get("aim_x",3.4)
+			shot_setup.x=entry.get("aim_x",-3.4)
 		var settings_box := VBoxContainer.new()
 		var toggle := button("Shot setup",func(): settings_box.visible=not settings_box.visible)
 		controls.add_child(toggle)
@@ -264,7 +264,7 @@ func build_controls(controls: VBoxContainer) -> void:
 		court.mouse_filter=Control.MOUSE_FILTER_STOP
 		court.tooltip_text="Click or drag to aim. The net is at the bottom."
 		settings_box.add_child(court)
-		var lateral := add_shot_slider(settings_box,"Landing left / right","x",-4.4,4.4,.1,3.4,"m")
+		var lateral := add_shot_slider(settings_box,"Landing left / right","x",-4.4,4.4,.1,-3.4,"m")
 		var depth := add_shot_slider(settings_box,"Landing depth from net","depth",.5,8.9,.1,7.,"m")
 		court.draw.connect(func():
 			var area := Rect2(Vector2.ONE*4.,court.size-Vector2.ONE*8.)

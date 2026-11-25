@@ -38,7 +38,7 @@ func start_drill() -> void:
 	var arm_lift := arm_swing or "--edit-arm-lift" in OS.get_cmdline_user_args()
 	if (arm_lift or "--edit-approach" in OS.get_cmdline_user_args()) and not Engine.has_meta("approach_editor_opened"):
 		Engine.set_meta("approach_editor_opened",true)
-		edit_approach_frames.call_deferred(arm_lift,arm_swing,false,review)
+		edit_approach_frames.call_deferred(arm_lift,arm_swing,false,review,true)
 
 func camp_title() -> String:
 	return "ATTACKING   /   APPROACH AND SPIKE"
@@ -163,7 +163,7 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 
 func shot_landing(origin: Vector3) -> Vector3:
 	if not review_setup.is_empty():
-		return Vector3(review_setup.get("x",3.4),Contact.BALL_RADIUS,review_setup.get("z",11.))
+		return Vector3(-float(review_setup.get("x",-3.4)),Contact.BALL_RADIUS,review_setup.get("z",11.))
 	return Vector3(-3.4 if cross_court else clampf(origin.x,-3.8,3.8),Contact.BALL_RADIUS,11.)
 
 func pose_swing() -> void:
@@ -182,6 +182,11 @@ func pose_swing() -> void:
 	var hip_turn := twist*.50
 	var feed_local := hitter.basis.inverse()*toward_feed
 	twist = clampf(atan2(feed_local.x,feed_local.z),-1.48,1.48)*load_weight-hip_turn
+	var shot_origin := strike_point if phase=="spike" else ball.position
+	var shot_local := hitter.basis.inverse()*shot_origin.direction_to(shot_landing(shot_origin))
+	var aim_turn := clampf(atan2(shot_local.x,shot_local.z),-1.15,1.15)*smoothstep(.035,.145,swing_time)
+	twist+=aim_turn*.76
+	hip_turn+=aim_turn*.24
 	author.rotate_world(pose,"spine_01",Vector3.RIGHT,deg_to_rad(-9.)*load_weight)
 	author.rotate_world(pose,"spine_01",Vector3.UP,twist*.45)
 	author.rotate_world(pose,"spine_02",Vector3.UP,twist*.55)
@@ -261,9 +266,9 @@ func pose_swing() -> void:
 func frame_editor_attacker() -> Node3D:
 	return hitter
 
-func edit_approach_frames(arm_lift := false, arm_swing := false, cross := false, review := false) -> void:
+func edit_approach_frames(arm_lift := false, arm_swing := false, cross := false, review := false, resume_target := false) -> void:
 	var setup := StorySession.load_drill_setup("swing_review") if arm_swing else {}
-	if arm_swing and not review: setup.x=-3.4 if cross else 3.4
+	if arm_swing and not review and not resume_target: setup.x=3.4 if cross else -3.4
 	var result: Dictionary=await sample_attack_clip(arm_lift,arm_swing,cross,review,setup)
 	StorySession.edit_entry=result.entry
 	StorySession.edit_animation=result.clip
@@ -274,7 +279,7 @@ func edit_approach_frames(arm_lift := false, arm_swing := false, cross := false,
 func sample_attack_clip(arm_lift: bool,arm_swing: bool,cross: bool,review: bool,setup: Dictionary) -> Dictionary:
 	review_setup=setup.duplicate()
 	jump_height=float(setup.get("jump",33.))*.0254
-	cross_court=float(setup.get("x",-3.4 if cross else 3.4))<1.
+	cross_court=float(setup.get("x",3.4 if cross else -3.4))>0.
 	# Warm up from the first step so the editor inherits the live plant pose.
 	hitter.position=START
 	hitter.rotation.y=0.
@@ -334,7 +339,7 @@ func sample_attack_clip(arm_lift: bool,arm_swing: bool,cross: bool,review: bool,
 	if arm_swing:
 		clip.set_meta("swing_hit_frame",hit_frame)
 		edit_entry={"id":"camp_right_arm_swing","name":title,"category":"Attacking","type":"Spike"}
-		edit_entry["aim_x"]=review_setup.get("x",3.4)
+		edit_entry["aim_x"]=review_setup.get("x",-3.4)
 		clip.set_meta("editor_group","Right Arm")
 		clip.set_meta("editor_initial_frame",10)
 		clip.set_meta("editor_loop_start",10)
