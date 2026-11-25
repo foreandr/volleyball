@@ -34,11 +34,11 @@ func configure(host: Node, layer: Node = null) -> void:
 	options_button = bar(home,"Options",open_options)
 	if practice and "solo_setting" in game and game.solo_setting:
 		bar(home,"Sliders",open_sliders)
-		if game.has_method("frame_editor_blocker"):
+		if game.has_method("frame_editor_attacker") or game.has_method("frame_editor_blocker"):
 			bar(home,"Replay",func():
 				hide()
 				game.replay_inspector.toggle())
-		elif game.has_method("edit_approach_frames"):
+		if game.has_method("edit_approach_frames") and not game.has_method("frame_editor_blocker"):
 			bar(home,"Attack setup",func():
 				home.hide()
 				options.show()

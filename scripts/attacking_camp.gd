@@ -171,8 +171,8 @@ var contact_offset := Vector3.ZERO
 var net_clear_time := -1.
 const PALM_CONTACT := 2./60.
 
+var block_sound_count := 0
 var spike_sound_count := 0
-var set_impact := AudioStreamPlayer.new()
 var hand_impact := AudioStreamPlayer.new()
 
 func build_settings() -> void:
@@ -266,7 +266,7 @@ func step_practice_blockers(delta: float) -> void:
 			if phase=="spike" and launched_attack and drop_velocity.z>.1:
 				lane=ball.position.x+drop_velocity.x*clampf((BallNet.NET_Z-ball.position.z)/drop_velocity.z,0.,.20)
 			var offset := lane-actor.position.x
-			if jump.age>=PracticeBlock.START and jump.age<PracticeBlock.START+PracticeBlock.AIR*.68:
+			if i==0 and jump.age>=PracticeBlock.START and jump.age<PracticeBlock.START+PracticeBlock.AIR*.68:
 				var next_x := move_toward(jump.base.x,lane,delta*.85)
 				if attack_blocker_count==2:
 					var partner_x := practice_blockers[1-i].position.x
@@ -274,9 +274,12 @@ func step_practice_blockers(delta: float) -> void:
 				jump.base.x=clampf(move_toward(jump.base.x,next_x,delta*.85),-4.45,4.45)
 			if jump.shoulders.size()==2:
 				var amount := smoothstep(.22,.78,absf(offset))
+				if i==1:
+					var away := signf(actor.position.x-practice_blockers[0].position.x)
+					amount=smoothstep(.48,.90,absf(offset)) if launched_attack and offset*away>0. and absf(offset)<1.25 else 0.
 				var left: bool=(jump.shoulders[0].x-jump.shoulders[1].x)*offset>0.
 				jump.reach_input=Vector2(amount,0.) if left else Vector2(0.,amount)
-				jump.lean_input=clampf(offset,-.8,.8)
+				jump.lean_input=clampf(offset,-.8,.8) if i==0 else signf(offset)*amount*.20
 			if not jump.step(delta,ball.global_position): practice_jumps[i]=null
 			continue
 		var home_x := 2.15 if i==0 else 0.
@@ -288,6 +291,8 @@ func step_practice_blockers(delta: float) -> void:
 				var close_in := smoothstep(.0,.27,elapsed-flight_time+PracticeBlock.START+PracticeBlock.AIR*.5+.23)
 				shade=lerpf(-shade*.45,shade,close_in)
 			goal=clampf(endpoint.x+shade+seam_offset,-4.4,4.4)
+		if i==1:
+			goal=0. if phase not in ["set","spike"] else clampf(practice_blockers[0].position.x-.68,-4.45,4.45)
 		var old_x := actor.position.x
 		actor.position.x=move_toward(old_x,goal,GroundControls.speed(true,true)*delta)
 		actor.animator.advance(delta)
@@ -317,10 +322,6 @@ func start_drill() -> void:
 	hand_impact.max_polyphony=2
 	hand_impact.bus=StorySession.IMPACT_BUS
 	add_child(hand_impact)
-	set_impact.stream=preload("res://assets/audio/set_touch.wav")
-	set_impact.bus=StorySession.IMPACT_BUS
-	set_impact.volume_db=-7.
-	add_child(set_impact)
 	hitter=athlete(START,"e97937")
 	hitter.apply_profile(setter.attributes.duplicate())
 	hitter.set_height_cm(193.04)
@@ -371,7 +372,6 @@ func update_prompts(_next: String) -> void:
 	Xbox.prompts(controls_row,entries)
 
 func begin(next: String) -> void:
-	if next=="set_contact" and set_impact.is_inside_tree() and not has_meta("live_sampler"): set_impact.play()
 	if next=="drop" and not has_meta("live_sampler"): attack_floor_pending=true
 	if next=="set_contact" and is_instance_valid(hitter) and height_preset()==0:
 		trace("zero_set_arrival",{"air_height_m":hitter.position.y-START.y,"air_age_s":attack_jump.elapsed-attack_jump.load_duration() if attack_jump.active else -1.})
@@ -1274,6 +1274,7 @@ func resolve_block_contact(previous: Vector3,block_jumps: Array) -> bool:
 			set_meta("blocked_attack",true)
 			hand_impact.volume_db=-2.
 			hand_impact.play()
+			block_sound_count+=1
 			trace("block_hand_contact",{"rep":rep,"stuff":stuff,"outgoing":str(drop_velocity)})
 			message.text = "Block touch"
 			return true

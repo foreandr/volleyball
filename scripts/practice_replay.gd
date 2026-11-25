@@ -18,6 +18,7 @@ var sample_interval := SAMPLE_INTERVAL
 var sample_limit := MAX_SAMPLES
 var active := false
 var replay_hand := AudioStreamPlayer.new()
+var replay_whistle := AudioStreamPlayer.new()
 var replay_floor := AudioStreamPlayer.new()
 var playing := false
 var playback_elapsed := 0.
@@ -29,11 +30,11 @@ func _ready() -> void:
 	process_priority = 100
 	replay_hand.stream=preload("res://assets/audio/hand_impacts.tres")
 	replay_floor.stream=preload("res://assets/audio/floor_impacts.tres")
-	for player in [replay_hand,replay_floor]:
+	for player in [replay_hand,replay_floor,replay_whistle]:
 		player.bus=StorySession.IMPACT_BUS
 		player.max_polyphony=3
 		add_child(player)
-	if "block_sound_count" in game:
+	if "practice_blockers" in game:
 		sample_interval=1./60.
 		sample_limit=900
 	layer = 90
@@ -70,7 +71,7 @@ func _ready() -> void:
 		playback_elapsed=0.
 	)
 	tools.add_child(rate)
-	if "blockers" in game:
+	if "practice_blockers" in game:
 		var toggle_boxes := CheckButton.new()
 		toggle_boxes.text="Arm hitboxes"
 		toggle_boxes.toggled.connect(func(on): show_boxes=on; display_frame(slider.value))
@@ -98,9 +99,12 @@ func capture(rendered := false) -> Dictionary:
 		objects[obj] = [obj.transform,obj.visible]
 	var arms := {}
 	var armed := {}
-	if "blockers" in game:
-		for slot in game.blockers.size():
-			var jump = game.jumps[slot]
+	if "practice_blockers" in game:
+		var actors: Array=game.blockers if "blockers" in game else game.practice_blockers
+		var jumps: Array=game.jumps if "blockers" in game else game.practice_jumps
+		for slot in actors.size():
+			if not actors[slot].visible: continue
+			var jump = jumps[slot]
 			for i in 2:
 				var key: int=slot*2+i
 				armed[key]=jump!=null and jump.hands.size()>i
@@ -110,9 +114,9 @@ func capture(rendered := false) -> Dictionary:
 					var points := []
 					var side := "_l" if i==0 else "_r"
 					for bone in ["upperarm","lowerarm","hand","middle_03"]:
-						points.append(preload("res://scripts/gym_physics.gd").joint(game.blockers[slot],bone+side))
+						points.append(preload("res://scripts/gym_physics.gd").joint(actors[slot],bone+side))
 					arms[key]=points
-	return {"armed":armed,"arms":arms,"floor_count":game.floor_sound_count,"floor_db":game.floor_impact.volume_db,"spike_count":game.spike_sound_count if "spike_sound_count" in game else 0,"block_sound_count":game.block_sound_count if "block_sound_count" in game else 0,"objects":objects,"poses":poses,"whistle_height":game.coach_motion.whistle_cue.raised}
+	return {"armed":armed,"arms":arms,"floor_count":game.floor_sound_count,"floor_db":game.floor_impact.volume_db,"spike_count":game.spike_sound_count if "spike_sound_count" in game else 0,"block_sound_count":game.block_sound_count if "block_sound_count" in game else 0,"objects":objects,"poses":poses,"whistle_count":game.coach_motion.whistle_cue.play_count,"floor_stream":game.floor_impact.stream,"whistle_height":game.coach_motion.whistle_cue.raised}
 
 func apply(sample: Dictionary) -> void:
 	game.coach_motion.whistle_cue.raised = sample.whistle_height
@@ -188,6 +192,7 @@ func toggle() -> void:
 		playing = false
 		replay_hand.stop()
 		replay_floor.stop()
+		replay_whistle.stop()
 		for modifier in modifiers: modifier.active = true
 		modifiers.clear()
 		game.camera.make_current()
@@ -303,7 +308,11 @@ func _process(delta: float) -> void:
 						if sample[hit]>prior[hit]:
 							replay_hand.volume_db=-2.
 							replay_hand.play()
+					if sample.whistle_count>prior.whistle_count:
+						replay_whistle.stream=game.coach_motion.whistle_cue.sound.stream
+						replay_whistle.play()
 					if sample.floor_count>prior.floor_count:
+						replay_floor.stream=sample.floor_stream
 						replay_floor.volume_db=sample.floor_db
 						replay_floor.play()
 				if slider.value>=slider.max_value: playing=false

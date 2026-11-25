@@ -32,7 +32,6 @@ var blockers: Array[Node3D] = []
 var jumps := [null,null,null]
 var lateral_speed := [0.,0.,0.]
 var attempted := [false,false,false]
-var block_sound_count := 0
 var deflected := false
 var pending_manual_jump := -1.
 var block_press_clock := 0.
@@ -358,10 +357,10 @@ func begin_block(slot: int,loaded := 0.,manual := false) -> void:
 	jump.aggressive_press=true
 	jump.begin(blockers[slot])
 	jump.age=Block.START*loaded
-	if not manual and jump.kong_direction!=0.: jump.lean_input=jump.kong_direction*.75
+	if not manual and slot!=1 and jump.kong_direction!=0.: jump.lean_input=jump.kong_direction*.75
 	jumps[slot]=jump
 	attempted[slot]=true
-	if read_set and closing[slot] and slot!=read_lead and not manual:
+	if read_set and closing[slot] and slot!=1 and slot!=read_lead and not manual:
 		var partner := slot+signi(read_lead-slot)
 		jump.close_direction=signf(blockers[partner].position.x-blockers[slot].position.x)
 	if read_set and slot==read_lead:
@@ -492,6 +491,7 @@ func step_blocker(slot: int,delta: float) -> void:
 				var open_side: bool=not is_finite(jump.min_hand_x) if miss<0. else not is_finite(jump.max_hand_x)
 				if open_side and absf(miss)<1.45:
 					var amount := smoothstep(.28,.80,absf(miss))
+					if slot==1 and phase!="spike" and jump.kong_direction==0.: amount=0.
 					var left: bool = (jump.shoulders[0].x-jump.shoulders[1].x)*miss>0.
 					jump.reach_input=Vector2(amount,0.) if left else Vector2(0.,amount)
 		jump.court_aim=Vector3(0.,0.,BallNet.NET_Z-3.)
@@ -591,4 +591,3 @@ func advance_spike(delta: float) -> void:
 	if deflected or not launched_attack or not drop_net_hit.is_empty(): return
 	if resolve_block_contact(previous,jumps):
 		deflected=true
-		block_sound_count+=1

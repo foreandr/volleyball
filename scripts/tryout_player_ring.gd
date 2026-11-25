@@ -33,6 +33,7 @@ func position_floor_ring(actor: Node3D) -> void:
 	var ring: MeshInstance3D=floor_rings[actor]
 	ring.global_transform=Transform3D(Basis.IDENTITY,Vector3(actor.global_position.x,.055,actor.global_position.z))
 	ring.show()
+	if ring.get_child_count()>0: ring.get_child(0).hide()
 
 
 func _ready() -> void:
@@ -44,13 +45,6 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	queue_redraw()
 
-func arc_band(center: Vector2,radius: Vector2,start: float,end: float,color: Color,width: float) -> void:
-	if end<=start: return
-	var points := PackedVector2Array()
-	for i in 49:
-		var a := lerpf(start,end,i/48.)
-		points.append(center+Vector2(cos(a),sin(a))*radius)
-	draw_polyline(points,color,width,true)
 
 func _draw() -> void:
 	for ring in floor_rings.values():
@@ -163,40 +157,49 @@ func draw_player(actor: Node3D,human: bool) -> void:
 		if spent>0.: draw_rect(Rect2(origin+Vector2(available,0),Vector2(spent,7)),Color("51cbe9"))
 		if energy.value<0.:
 			draw_rect(Rect2(origin,Vector2(104.*absf(energy.value)/maxf(1.,energy.willpower),7)),Color("d7a6ff"))
-		var outer := radius+Vector2(4,4)
 		if extra_jumps.has(actor) and not game.cpu_hitter and game.manual_shot>=0 and (game.phase in ["cart","feed","pass","set_contact","set"] or (game.phase=="spike" and game.elapsed<.45)):
 			var cursor: float=game.attack_meter_position(game.attack_meter_error())
 			var contact_window:=Vector2(game.attack_meter_position(game.EARLY_LIMIT),game.attack_meter_position(game.LATE_LIMIT))
-			timing_arc(at,outer,PI,cursor,game.attack_meter_position(-game.CLEAN_EARLY),game.attack_meter_position(game.CLEAN_LATE),contact_window,Color("14191d"),is_finite(game.release_grade))
+			timing_arc(actor,cursor,game.attack_meter_position(-game.CLEAN_EARLY),game.attack_meter_position(game.CLEAN_LATE),contact_window,Color("14191d"),is_finite(game.release_grade))
 		if game!=null and setting_cues:
 			if actor!=game.setter and game.free_target>=0:
-				timing_arc(at,outer,PI,clampf((game.clock-game.free_press)/.43,0,1),.47,.76)
+				timing_arc(actor,clampf((game.clock-game.free_press)/.43,0,1),.47,.76)
 			var pressing: bool=(game.held>=0 or (not game.bump_aim.is_zero_approx() and not game.bump_released)) and game.phase in ["cart","walk","feed","pass"] and not game.pending_release
 			var result: bool=game.clock<game.set_grade_until or game.pending_release
 			if is_setter and (pressing or result):
 				var timing_fill: float=game.set_fill() if pressing else game.graded_fill
 				var band: Vector2=game.timing_band() if pressing else game.grade_band
 				var contact: Vector2=game.contact_band() if pressing else game.grade_contact
-				timing_arc(at,outer,PI,timing_fill,band.x,band.y,contact)
+				timing_arc(actor,timing_fill,band.x,band.y,contact)
 	var label: String=actor.display_name.strip_edges().get_slice(" ",actor.display_name.strip_edges().count(" ")).to_upper()
 	if game!=null and "automatic_block" in game and not game.automatic_block and actor==game.blockers[game.MANUAL_SLOT]:
 		label="509   YOU"
 		if game.block_held or game.clock<game.meter_until:
-			timing_arc(at,radius+Vector2(7,7),PI,game.block_meter(),.38,.62,Vector2(.10,.90),Color("14191d"),not game.block_held)
+			timing_arc(actor,game.block_meter(),.38,.62,Vector2(.10,.90),Color("14191d"),not game.block_held)
 	var origin := at+Vector2(-80,radius.y+19)
 	draw_string_outline(ThemeDB.fallback_font,origin,label,HORIZONTAL_ALIGNMENT_CENTER,160,14,4,Color("10191f"))
 	draw_string(ThemeDB.fallback_font,origin,label,HORIZONTAL_ALIGNMENT_CENTER,160,14,Color("ffce75") if is_setter else Color.WHITE)
 
-func timing_arc(at: Vector2,radius: Vector2,start: float,value: float,low: float,high: float,contact := Vector2(0,1), miss_color := Color("778088"), highlight_release := false) -> void:
-	var cuts := [0.,contact.x,clampf(low,contact.x,contact.y),clampf(high,contact.x,contact.y),contact.y,1.]
-	var colors := [miss_color,Color("f7bd46"),Color("61ed88"),Color("f45550"),miss_color]
-	for i in colors.size():
-		var begin: float=cuts[i]
-		var end: float=cuts[i+1]
-		arc_band(at,radius,start+begin*PI,start+end*PI,colors[i].darkened(.12),7)
-		var lit_end := end if highlight_release and value>=begin and value<=end else clampf(value,begin,end)
-		arc_band(at,radius,start+begin*PI,start+lit_end*PI,colors[i],7)
-	var angle := start+value*PI
-	var cursor := at+Vector2(cos(angle),sin(angle))*radius
-	draw_circle(cursor,4.5,Color("182329"),true,-1,true)
-	draw_circle(cursor,3.,Color.WHITE,true,-1,true)
+func timing_arc(actor: Node3D,value: float,low: float,high: float,contact := Vector2(0,1),miss_color := Color("778088"),highlight_release := false) -> void:
+	var ring: MeshInstance3D=floor_rings[actor]
+	var band: MeshInstance3D
+	if ring.get_child_count()==0:
+		band=MeshInstance3D.new()
+		var plane := PlaneMesh.new()
+		plane.size=Vector2(1.60,1.60)
+		band.mesh=plane
+		var material := ShaderMaterial.new()
+		material.shader=preload("res://assets/gym/court_timing.gdshader")
+		band.material_override=material
+		band.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		ring.add_child(band)
+		band.position.y=.005
+	else: band=ring.get_child(0)
+	band.show()
+	band.rotation.y=actor.get_viewport().get_camera_3d().global_rotation.y
+	var material: ShaderMaterial=band.material_override
+	material.set_shader_parameter("cursor",value)
+	material.set_shader_parameter("perfect",Vector2(low,high))
+	material.set_shader_parameter("contact",contact)
+	material.set_shader_parameter("miss",miss_color)
+	material.set_shader_parameter("highlight",highlight_release)

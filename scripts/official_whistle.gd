@@ -4,6 +4,7 @@ var whistle := Node3D.new()
 var cord: Array[MeshInstance3D] = []
 var sound := AudioStreamPlayer3D.new()
 var signal_time := -1.0
+var play_count := 0
 var raised := 0.0
 
 func fit_whistle(rig: Skeleton3D) -> void:
@@ -97,6 +98,8 @@ func step_whistle(actor: Node3D,dt: float) -> bool:
 	for bone in ["upperarm_r","lowerarm_r"]:
 		var i := rig.find_bone(bone)
 		rig.set_bone_pose_rotation(i,rig.get_bone_pose_rotation(i).slerp(pose[i].basis.orthonormalized().get_rotation_quaternion(),grip))
-	if before < .74 and signal_time >= .74: sound.play()
+	if before < .74 and signal_time >= .74:
+		sound.play()
+		play_count+=1
 	if signal_time >= 1.76: signal_time = -1
 	return true
