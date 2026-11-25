@@ -27,6 +27,8 @@ var approach_started := false
 const JUMP_HEIGHT := 33.*.0254
 const ATTACK_SET_LIFT := .10
 const PLANT_TIME := .30
+const SPIKE_STAMINA_COST := 4.0
+const ROLL_STAMINA_COST := 1.5
 const SHOT_BUTTONS := [JOY_BUTTON_X,JOY_BUTTON_Y,JOY_BUTTON_B]
 var roll_shot := false
 var manual_shot := -1
@@ -443,6 +445,7 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 			drop_velocity=(landing-ball.position)/shot_time+Vector3.UP*(4.905*shot_time)
 			roll_time=-1.
 			trace("spike",{"roll_shot":roll_shot,"from":str(ball.position),"palm_gap":nearest.distance_to(palm),"contact_grade_ms":roundi(contact_grade*1000.) if is_finite(contact_grade) else null,"approach_delay_ms":roundi(approach_delay*1000.),"button_ms":roundi(release_grade*1000.) if is_finite(release_grade) else null})
+			spend_swing_stamina()
 			begin("spike")
 			return true
 	if elapsed>=flight_time:
@@ -456,9 +459,14 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 		message.text=feedback
 		success=false
 		drop_velocity=(endpoint-source-Vector3.UP*4.*set_arc_height)/flight_time
+		spend_swing_stamina()
 		begin("drop")
 		return true
 	return false
+
+func spend_swing_stamina() -> void:
+	if swing_time>=0.:
+		hitter.stamina.spend(ROLL_STAMINA_COST if roll_shot else SPIKE_STAMINA_COST,"Roll shot" if roll_shot else "Spike")
 
 func striking_palm_offset() -> Vector3:
 	var fingers := Contact.joint(hitter,"middle_01_r")-Contact.joint(hitter,"hand_r")
