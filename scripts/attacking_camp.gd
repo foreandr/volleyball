@@ -34,10 +34,11 @@ func start_drill() -> void:
 	super.start_drill()
 	var reload_review := Engine.has_meta("reload_swing_review")
 	if reload_review: Engine.remove_meta("reload_swing_review")
-	var review := reload_review or "--review-swings" in OS.get_cmdline_user_args()
-	var arm_swing := review or "--edit-arm-swing" in OS.get_cmdline_user_args()
+	var reload_frame := Engine.has_meta("reload_swing_frame")
+	var review := reload_review or (not reload_frame and "--review-swings" in OS.get_cmdline_user_args())
+	var arm_swing := reload_frame or review or "--edit-arm-swing" in OS.get_cmdline_user_args()
 	var arm_lift := arm_swing or "--edit-arm-lift" in OS.get_cmdline_user_args()
-	if (arm_lift or "--edit-approach" in OS.get_cmdline_user_args()) and (reload_review or not Engine.has_meta("approach_editor_opened")):
+	if (arm_lift or "--edit-approach" in OS.get_cmdline_user_args()) and (reload_frame or reload_review or not Engine.has_meta("approach_editor_opened")):
 		Engine.set_meta("approach_editor_opened",true)
 		edit_approach_frames.call_deferred(arm_lift,arm_swing,false,review)
 
@@ -264,8 +265,11 @@ func frame_editor_attacker() -> Node3D:
 
 func edit_approach_frames(arm_lift := false, arm_swing := false, cross := false, review := false) -> void:
 	cross_court=cross
-	if review:
+	if review or arm_swing:
 		review_setup=StorySession.load_drill_setup("swing_review")
+		if not review and not Engine.has_meta("reload_swing_frame"):
+			review_setup.x=-3.4 if cross else 3.4
+		if Engine.has_meta("reload_swing_frame"): Engine.remove_meta("reload_swing_frame")
 		jump_height=float(review_setup.get("jump",33.))*.0254
 		cross_court=float(review_setup.get("x",3.4))<1.
 	# Warm up from the first step so the editor inherits the live plant pose.
@@ -324,6 +328,7 @@ func edit_approach_frames(arm_lift := false, arm_swing := false, cross := false,
 	StorySession.edit_entry={"id":"camp_attack_arm_lift" if arm_lift else "camp_spike_approach","name":title,"category":"Attacking","type":"Approach"}
 	if arm_swing:
 		StorySession.edit_entry={"id":"camp_right_arm_swing","name":title,"category":"Attacking","type":"Spike"}
+		StorySession.edit_entry["aim_x"]=review_setup.get("x",3.4)
 		StorySession.edit_animation.set_meta("editor_group","Right Arm")
 		StorySession.edit_animation.set_meta("editor_initial_frame",10)
 		StorySession.edit_animation.set_meta("editor_loop_start",10)

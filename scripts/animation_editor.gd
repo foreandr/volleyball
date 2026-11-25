@@ -119,6 +119,20 @@ func _ready() -> void:
 		review_source=session.source
 		review_votes.load(REVIEW_PATH)
 		show_swing(int(review_votes.get_value("review","current",1)))
+	if Engine.has_meta("swing_frame_restore"):
+		var previous: Dictionary=Engine.get_meta("swing_frame_restore")
+		Engine.remove_meta("swing_frame_restore")
+		session.edits=previous.edits
+		session.position_edits=previous.positions
+		copy_name.text=previous.name
+		select_group(previous.group)
+		orbit_yaw=previous.yaw
+		orbit_pitch=previous.pitch
+		view_distance=previous.distance
+		view_focus=previous.focus
+		update_camera()
+		set_playing(false)
+		set_frame(previous.frame)
 
 func show_swing(number: int) -> void:
 	review_number=clampi(number,1,50)
@@ -152,7 +166,8 @@ func add_shot_slider(box: VBoxContainer, caption: String, key: String, low: floa
 func apply_review_shot() -> void:
 	shot_setup["z"]=4.+float(shot_setup.depth)
 	StorySession.save_drill_setup("swing_review",shot_setup)
-	Engine.set_meta("reload_swing_review",true)
+	Engine.set_meta("swing_frame_restore",{"frame":frame,"edits":session.edits.duplicate(true),"positions":session.position_edits.duplicate(true),"group":selected_group,"name":copy_name.text,"yaw":orbit_yaw,"pitch":orbit_pitch,"distance":view_distance,"focus":view_focus})
+	Engine.set_meta("reload_swing_review" if entry.get("swing_review",false) else "reload_swing_frame",true)
 	MenuPresentation.load_scene("res://scenes/attacking_camp.tscn")
 
 func vote_swing(choice: String) -> void:
@@ -201,7 +216,11 @@ func build_controls(controls: VBoxContainer) -> void:
 		row.add_child(button("Yes",vote_swing.bind("Yes")))
 		row.add_child(button("No",vote_swing.bind("No")))
 		row.add_child(button(">",func(): show_swing(review_number+1)))
+	if entry.id=="camp_right_arm_swing":
 		shot_setup=StorySession.load_drill_setup("swing_review")
+		if not entry.get("swing_review",false):
+			shot_setup=shot_setup.duplicate()
+			shot_setup.x=entry.get("aim_x",3.4)
 		var settings_box := VBoxContainer.new()
 		var toggle := button("Shot setup",func(): settings_box.visible=not settings_box.visible)
 		controls.add_child(toggle)
@@ -236,7 +255,7 @@ func build_controls(controls: VBoxContainer) -> void:
 		add_shot_slider(settings_box,"Set forward / back","set_z",-.45,.45,.05,0.,"m")
 		add_shot_slider(settings_box,"Hit power","power",9.,40.,1.,14.,"m/s")
 		add_shot_slider(settings_box,"Vertical jump","jump",24.,44.,1.,33.,"in")
-		settings_box.add_child(button("Apply and replay",apply_review_shot))
+		settings_box.add_child(button("Apply to frame",apply_review_shot))
 	controls.add_child(copy_name)
 	var frames := HBoxContainer.new()
 	controls.add_child(frames)
