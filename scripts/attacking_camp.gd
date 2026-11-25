@@ -182,7 +182,7 @@ func pose_swing() -> void:
 	# Drive the hips through takeoff and let the heels trail until the strike.
 	var tuck_age := maxf(0.,air_age-.015)
 	var since_hit := swing_time-contact_swing_time if phase=="spike" else 0.
-	var extension := smoothstep(0.,.115,since_hit)
+	var extension := smoothstep(0.,.075,since_hit)
 	var landing_blend := 1.-smoothstep(.19,.33,since_hit)
 	var leg_weight := smoothstep(0.,.055,tuck_age)*landing_blend if attack_jump.active else 0.
 	var knee_load := leg_weight*(1.-extension)
