@@ -443,10 +443,6 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 				var sweep := smoothstep(lead_time*.44,lead_time+(load_duration()-lead_time)*.53,elapsed)
 				arm_load = sweep*(1.-smoothstep(.66,1.10,plant_phase))
 		var jump_drive := arm_drive if not approach_plant or attack_arm_lift else 0.0
-		if attack_arm_lift and approach_plant:
-			var plant_progress := (elapsed-lead_time)/maxf(.001,load_duration()-lead_time)
-			var rise := smoothstep(.53,.98,plant_progress)
-			jump_drive=maxf(jump_drive,rise*(1.-smoothstep(.02,.18,elapsed-load_duration())))
 		author.rotate_world(pose,upper_arm,Vector3.RIGHT,(1.52+load_arm_extra)*arm_load-front_swing+deg_to_rad(15.)*backswing_peak)
 		author.rotate_world(pose,forearm,Vector3.RIGHT,-0.25*jump_drive)
 		var shoulder: Vector3 = author.point(pose,upper_arm)
@@ -480,10 +476,11 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 			var hand_orientation := HandPose.hand_basis(Vector3(-outward*0.24,0.85,0.34),Vector3(-outward*0.72,-0.24,-0.52))
 			var rotation := hand_orientation*HandPose.hand_basis(fingers,across).inverse()
 			author.set_world_basis(pose,hand,Basis(Quaternion.IDENTITY.slerp(rotation.get_rotation_quaternion(),jump_drive*0.75))*base.basis)
-		# A short plant still sweeps through the low point and forward before the draw.
-		if attack_arm_lift and approach_plant and lead_time==0.:
-			var plant := load_duration()
-			var front_phase := inverse_lerp(plant*.38,plant*.98,elapsed)
+		# Advance the original front arc without compressing its key intervals.
+		if attack_arm_lift and approach_plant:
+			var plant := load_duration()-lead_time
+			var advance := minf(.065,plant*.18)
+			var front_phase := inverse_lerp(plant*.38,plant+.065,elapsed-lead_time+advance)
 			var blend := smoothstep(0.,.17,front_phase)*(1.-smoothstep(1.,1.35,front_phase))
 			if blend>0.:
 				var pitch := preload("res://scripts/spike_arm_swing.gd").front_lift_pitch(front_phase*18.)
