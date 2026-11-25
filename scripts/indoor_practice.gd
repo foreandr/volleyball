@@ -121,7 +121,7 @@ func plan_cpu_timing() -> void:
 	cpu_jump_lead=rng.randf_range(.31,.46)
 	if solo_setting:
 		var jump_error: float = (1.-camp_jump_ability*setter.stamina.effectiveness()/100.)*.14
-		cpu_jump_lead=.07+jump.flight_duration(camp_jump_height,true)*.5+rng.randf_range(-jump_error,jump_error)
+		cpu_jump_lead=.07+jump.flight_duration(camp_jump_height*setter.stamina.effectiveness(),true)*.5+rng.randf_range(-jump_error,jump_error)
 	var clean_chance: float = setter.effective_rating("Forearm setting" if cpu_bump and cpu_setting else "Hand setting")/100. if solo_setting else .32
 	if rng.randf()>clean_chance:
 		cpu_release_delay=rng.randf_range(.012,.055)*(-1. if rng.randf()<.5 else 1.)
@@ -564,7 +564,7 @@ func reset_feed() -> void:
 	if not solo_setting or automatic_setter() or Vector3(ground_velocity.get(setter,Vector3.ZERO)).length()<.075:
 		setter.rotation.y = atan2(coach.position.x-BASE.x,coach.position.z-BASE.z)
 		setter.play_action("idle")
-	catch_point = BASE + Vector3.UP*(1.93*setter.height_cm/180.0 + ((camp_jump_height if solo_setting else .52) if jump_rep() else 0.0))
+	catch_point = BASE + Vector3.UP*(1.93*setter.height_cm/180.0 + ((camp_jump_height if solo_setting else .52)*setter.stamina.effectiveness() if jump_rep() else 0.0))
 	coach.show()
 	coach.rotation.y = atan2(catch_point.x-coach.position.x,catch_point.z-coach.position.z)
 	ball.visible = demonstration or rotation_drill.issued!=null
@@ -653,6 +653,15 @@ func set_destination(origin: Vector3, aim: Vector3, height_index: int) -> Vector
 	var motion: Vector3=jump.horizontal_velocity() if airborne and jump.active else Vector3.ZERO
 	var scale := .78 if solo_setting and height_index==1 else 1.
 	return setter.reachable_set(origin,aim,airborne,motion,DURATION[height_index],scale)
+
+var set_arc_height := 3.22
+
+func requested_set_arc() -> float:
+	return APEX[tempo]
+
+func start_set_flight() -> void:
+	set_arc_height=requested_set_arc()
+	flight_time=DURATION[tempo]*sqrt(set_arc_height/float(APEX[tempo]))
 
 func chosen_tempo() -> int:
 	return selected_tempo
@@ -1121,7 +1130,7 @@ func play_bump(previous: Vector3, incoming: Vector3, dt: float) -> void:
 	for i in PINS.size():
 		if desired.distance_squared_to(PINS[i])<desired.distance_squared_to(PINS[target]): target=i
 	tempo=chosen_tempo()
-	flight_time=DURATION[tempo]
+	start_set_flight()
 	var intended := desired
 	var error := signf(bump_offset)*maxf(0.,absf(bump_offset)-BUMP_ON_TIME)
 	desired+=(desired-source).slide(Vector3.UP).normalized()*error*lerpf(5.,2.,setter.effective_rating("Forearm setting")/100.)
@@ -1138,7 +1147,7 @@ func play_bump(previous: Vector3, incoming: Vector3, dt: float) -> void:
 	sampler.capture_bump_contact()
 	sampler.touch=source
 	sampler.touch_time=elapsed
-	sampler.outgoing=(endpoint-source+Vector3.UP*4.*APEX[tempo])/flight_time
+	sampler.outgoing=(endpoint-source+Vector3.UP*4.*set_arc_height)/flight_time
 	trace("bump_set",{"release_ms":roundi(bump_offset*1000.),"placement_m":placement_error,"reach":sampler.reach.get("tier",0),"dive":sampler.low_save.active,"aim":str(bump_aim),"from":str(source),"to":str(endpoint)})
 	begin("set")
 	message.text=feedback
@@ -1238,7 +1247,7 @@ func step_practice(delta: float) -> void:
 			if solo_setting:
 				forehead_target.x=camp_receive_spot.x
 				forehead_target.z=camp_receive_spot.z
-			catch_point=forehead_target+Vector3.UP*(.09+((camp_jump_height if solo_setting else .52) if jump_rep() else 0.))
+			catch_point=forehead_target+Vector3.UP*(.09+((camp_jump_height if solo_setting else .52)*setter.stamina.effectiveness() if jump_rep() else 0.))
 			if elapsed>=.30 and clock>=next_release and rotation_drill.floor_clear():
 				if solo_setting: last_camp_toss=camp_receive_spot
 				last_toss = clock
@@ -1273,17 +1282,17 @@ func step_practice(delta: float) -> void:
 			var height := camp_jump_height if solo_setting else .52
 			var takeoff_lead := cpu_jump_lead
 			if not automatic_setter():
-				var rise := height if jump_rep() else 0.
+				var rise: float=height*setter.stamina.effectiveness() if jump_rep() else 0.
 				catch_point.y=forehead_target.y+.09+rise
 				var velocity := (forehead_target.y-source.y)/forehead_arrival+4.905*forehead_arrival
 				contact_time=(velocity+sqrt(maxf(0.,velocity*velocity-19.62*(catch_point.y-source.y))))/9.81
-				takeoff_lead=.07+jump.flight_duration(height,true)*.5
+				takeoff_lead=.07+jump.flight_duration(rise,true)*.5
 			if jump_rep() and not cpu_jump_started and not jump.active and elapsed>=contact_time-takeoff_lead and elapsed<contact_time:
 				cpu_jump_started=true
 				energy[setter].spend(5,"Jump")
 				jump.begin_set_jump(setter,.07,height)
-				jump.height=height
-				jump.air_time=jump.flight_duration(height,true)
+				jump.height=height*jump.takeoff_effectiveness
+				jump.air_time=maxf(.001,jump.flight_duration(jump.height,true))
 				if not automatic_setter(): jump.carry_velocity=player_jump_carry()
 				elif cpu_setting and rep%4==3:
 					var air_remaining := maxf(.08,contact_time+cpu_release_delay-RELEASE_ADVANCE-elapsed-jump.load_duration())
@@ -1420,7 +1429,7 @@ func step_practice(delta: float) -> void:
 				ball.position=fingers+Vector3.UP*.060
 				if elapsed>=SET_RECEIVE_TIME+push_time:
 					source=ball.position
-					push_axis=(endpoint-source+Vector3.UP*4.*APEX[tempo]).normalized()
+					push_axis=(endpoint-source+Vector3.UP*4.*set_arc_height).normalized()
 					var flight_age := elapsed-SET_RECEIVE_TIME-push_time
 					begin("set")
 					elapsed=maxf(0.,flight_age)
@@ -1439,7 +1448,7 @@ func step_practice(delta: float) -> void:
 			if bump_aim.is_zero_approx() and automatic_setter() and elapsed<=Hands.CPU_FOLLOW_TIME: face_set(setter,target,delta)
 			ball.rotate_x(delta*4.0)
 			var t := clampf(elapsed/flight_time,0,1)
-			var desired := arc(source,endpoint,t,APEX[tempo])
+			var desired := arc(source,endpoint,t,set_arc_height)
 			var motion := desired-ball.position
 			var start_point := ball.position
 			var cloth := BallNet.first_hit(func(u): return start_point+motion*u/delta,0.,delta) if delta>0. and absf(start_point.z-4.)<absf(motion.z)+.13 else {}
@@ -1627,7 +1636,7 @@ func finish_set() -> void:
 	if success:
 		begin("result")
 	else:
-		if phase=="set": drop_velocity=(endpoint-source-Vector3.UP*4.*APEX[tempo])/flight_time
+		if phase=="set": drop_velocity=(endpoint-source-Vector3.UP*4.*set_arc_height)/flight_time
 		begin("drop")
 	message.text = feedback
 	if not success and measured_release: show_timing(set_error)
@@ -1751,7 +1760,7 @@ func release(index: int) -> void:
 	target = index
 	tempo = chosen_tempo() if solo_setting or not automatic_setter() else 1
 	source = ball.position
-	flight_time = DURATION[tempo]
+	start_set_flight()
 	var error := 0.0 if demonstration else set_error*(3.6-skill)+gap*0.22
 	endpoint = PINS[target]+Vector3(error,0,error*0.4)
 	if not demonstration and not cpu_setting:
@@ -1776,7 +1785,7 @@ func release(index: int) -> void:
 	if not automatic_setter(): show_timing(set_error)
 	trace("set",{"requested":TARGETS[called()],"actual":TARGETS[target],"made":success,"error_m":error})
 	receive_local=setter.to_local(ball.position)
-	push_axis=(endpoint-source+Vector3.UP*4.*APEX[tempo]).normalized()
+	push_axis=(endpoint-source+Vector3.UP*4.*set_arc_height).normalized()
 	shape_catch_hands()
 	begin("set_contact")
 

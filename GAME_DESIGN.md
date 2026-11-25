@@ -183,3 +183,5 @@ Training Camp > Attacking > Approach and Spike uses the Setting Camp coach feed 
 
 The attacking demo refreshes its feed setter's stamina each rep and the hitter shuffles into position. Shared net impacts compress the cloth and tape, then recoil around the impact point.
 Every playable drill carries the active athletes' stamina and jump indicators, including CPU demonstrations. New drills inherit these readouts alongside shared practice mechanics.
+
+Shared approach and setting jumps scale vertical reach with stamina at the start of the jump. Attack practice exposes the feed set's arc in Sliders.

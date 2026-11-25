@@ -42,6 +42,7 @@ var lead_distance := 0.0
 var approach_plant := false
 var setting_jump := false
 var assisted_load_time := APPROACH_LOAD_TIME
+var takeoff_effectiveness := 1.0
 var assisted_height := 0.0
 var standing_load_time := LOAD_TIME
 var approach_lunge := Vector3.ZERO
@@ -67,6 +68,7 @@ func load_lead_arm_clip() -> void:
 func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time := APPROACH_LOAD_TIME, jump_height := 0.0, approach_steps := 2, from_sprint := false, tempo := 1.0, for_setting := false, glide := 0.0) -> void:
 	if active: return
 	active = true
+	takeoff_effectiveness=actor.stamina.effectiveness()
 	held = true
 	hold_time = 0.0
 	height = TAP_HEIGHT
@@ -204,7 +206,8 @@ func step(actor: Node3D, delta: float, input: Vector2) -> void:
 	if elapsed < load_time:
 		if held: hold_time += minf(delta,load_time-elapsed)
 		height = assisted_height if assisted_height > 0.0 else lerpf(TAP_HEIGHT,max_height,clampf(hold_time/LOAD_TIME,0.0,1.0))
-		air_time = flight_duration(height,assisted_height > 0.0)
+		height*=takeoff_effectiveness
+		air_time = maxf(.001,flight_duration(height,assisted_height > 0.0))
 	var previous_flight := clampf(elapsed-load_time,0.0,air_time)
 	elapsed += delta
 	var air_delta := clampf(elapsed-load_time,0.0,air_time)-previous_flight

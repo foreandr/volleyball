@@ -9,6 +9,7 @@ var closest_spike_gap := INF
 var contact_swing_time := 0.
 var cross_court := false
 var review_setup := {}
+var set_arc_percent := 100.0
 var jump_height := JUMP_HEIGHT
 var cpu_hitter := true
 var approach_started := false
@@ -186,6 +187,12 @@ func arm_speed_factor() -> float:
 	var rating := float(hitter.attributes.get("Arm swing",65))
 	return pow(effort/14.,.48)*(1.+(rating-65.)*.004)
 
+func requested_set_arc() -> float:
+	return super.requested_set_arc()*set_arc_percent*.01
+
+func effective_attack_height() -> float:
+	return jump_height*(attack_jump.takeoff_effectiveness if attack_jump.active else hitter.stamina.effectiveness())
+
 func attack_speed() -> float:
 	var strength := float(hitter.attributes.get("Strength",65))
 	var effort := float(review_setup.get("power",14.))
@@ -197,7 +204,7 @@ func attack_flight_time(distance: float) -> float:
 func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 	message.text="Approach and spike"
 	var remaining := flight_time-elapsed
-	var rise := attack_jump.flight_duration(jump_height,true)*.48
+	var rise := attack_jump.flight_duration(effective_attack_height(),true)*.48
 	if cpu_hitter and remaining<=attack_jump.LEAD_STEP_TIME+PLANT_TIME+rise+.025: start_approach()
 	if cpu_hitter and approach_started and swing_time<0. and remaining<=.16/arm_speed_factor()+(.095 if not has_meta("sampling_attack") else 0.): swing_time=0.
 	if swing_time<0. and attack_jump.active and attack_jump.elapsed>attack_jump.load_duration():
@@ -233,7 +240,7 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 		feedback="Missed spike"
 		message.text=feedback
 		success=false
-		drop_velocity=(endpoint-source-Vector3.UP*4.*APEX[tempo])/flight_time
+		drop_velocity=(endpoint-source-Vector3.UP*4.*set_arc_height)/flight_time
 		begin("drop")
 		return true
 	return false
@@ -310,7 +317,7 @@ func pose_swing() -> void:
 	var author = hitter.get_pose_author()
 	var airborne := smoothstep(0.,.12,attack_jump.elapsed-attack_jump.load_duration()) if attack_jump.active else 0.
 	var air_age := attack_jump.elapsed-attack_jump.load_duration()
-	var apex_offset := air_age-attack_jump.flight_duration(jump_height,true)*.48
+	var apex_offset := air_age-attack_jump.flight_duration(effective_attack_height(),true)*.48
 	var load_weight := airborne*(1.-smoothstep(-.14,.14,apex_offset))
 	var toward_feed := (source-hitter.position).slide(Vector3.UP).normalized()
 	var feed_local := hitter.basis.inverse()*toward_feed
@@ -329,7 +336,7 @@ func pose_swing() -> void:
 		hip_turn+=heading*.30*carry
 		twist+=heading*.13*carry
 	# Load the chest through the draw, then release the arch into the strike.
-	var draw_load := smoothstep(.055,attack_jump.flight_duration(jump_height,true)*.48-.11,air_age)
+	var draw_load := smoothstep(.055,attack_jump.flight_duration(effective_attack_height(),true)*.48-.11,air_age)
 	draw_load *= 1.-smoothstep(-.11,.045,apex_offset)
 	var arch := deg_to_rad(9.)*load_weight+deg_to_rad(11.)*draw_load
 	twist-=deg_to_rad(18.)*draw_load
@@ -408,7 +415,7 @@ func pose_swing() -> void:
 		author.aim_joint(pose,foot,toes,ankle+toe_axis.slerp(hanging_toes,leg_weight))
 	# Apply pelvic rotation after solving the tuck so both legs inherit it.
 	author.rotate_world(pose,"pelvis",Vector3.UP,hip_turn)
-	var draw_end := attack_jump.flight_duration(jump_height,true)*.48-.095
+	var draw_end := attack_jump.flight_duration(effective_attack_height(),true)*.48-.095
 	var draw := smoothstep(.035,draw_end,air_age) if attack_jump.active else 0.
 	var origin := strike_point if phase=="spike" else ball.position
 	var shot_axis := hitter.basis.inverse()*origin.direction_to(shot_landing(origin)).slide(Vector3.UP).normalized()
@@ -538,7 +545,7 @@ func sample_attack_clip(arm_lift: bool,arm_swing: bool,cross: bool,review: bool,
 			if attack_jump.active: attack_jump.step(hitter,time-(i-1)/60.,Vector2.ZERO)
 			else: hitter.animator.advance(1./60.)
 		if arm_lift:
-			var remaining := takeoff+attack_jump.flight_duration(jump_height,true)*.48+.025-time
+			var remaining := takeoff+attack_jump.flight_duration(effective_attack_height(),true)*.48+.025-time
 			if arm_swing and phase in ["spike","drop"]:
 				swing_time+=1./60.
 				pose_swing()
