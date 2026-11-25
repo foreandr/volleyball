@@ -1237,16 +1237,26 @@ func sync_ball_results(value: float) -> void:
 	angle_control.sync_output(ball_preview)
 	angle_control.display_result(value,ball_preview.output_angle(),Flight.distance(ball_preview.impact_point,ball_preview.outgoing))
 
+var deciding_camera_offset := Vector3.ZERO
+var deciding_camera_blend := 0.
+
 func reception_drill_active() -> bool:
 	return is_instance_valid(ball_preview) and ball_preview.active and ball_preview.practice_mode
 
 func _process(delta: float) -> void:
 	pass_timing_cue.hide()
 	if is_instance_valid(demo_match):
+		preview_camera.position-=deciding_camera_offset
+		deciding_camera_offset=Vector3.ZERO
 		if passing_drill != null: passing_drill.tick(delta)
 		else:
 			if not demo_match.spectator and not demo_match.replay.active: update_match_pad_aim(delta)
-			demo_match.tick_match(delta,player_controls)
+			var deciding: bool=demo_match.player_game_point_attack()
+			deciding_camera_blend=move_toward(deciding_camera_blend,1. if deciding else 0.,delta*4.)
+			demo_match.tick_match(delta*lerpf(1.,.35,deciding_camera_blend),player_controls)
+			if demo_match.replay.active: deciding_camera_blend=0.
+			deciding_camera_offset=(demo_match.ball.global_position-setting_camera_focus)*deciding_camera_blend
+			preview_camera.position+=deciding_camera_offset
 		if passing_drill != null or demo_match.replay.active:
 			move_match_camera(delta)
 		if demo_match.replay.active or match_replay_panel.visible:

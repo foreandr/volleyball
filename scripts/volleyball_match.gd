@@ -1399,6 +1399,9 @@ func advance_attackers(delta: float) -> void:
 			begin_recovery(index)
 			animated[index] = true
 
+func player_game_point_attack() -> bool:
+	return phase==Phase.LIVE and not spectator and not replay.active and score[0]+1>=win_score and score[0]>=score[1]+1 and flight_kind in ["spike","dump"] and last_player>=0 and team(last_player)==0
+
 func settle_point(delta: float) -> void:
 	if not serve.moved_after_contact and serve.swing_time < serve.recovery_end(): serve.step(delta)
 	advance_set_jumps(delta)

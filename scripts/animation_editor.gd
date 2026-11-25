@@ -12,6 +12,7 @@ var trajectory_base: Animation
 var trajectory_solver: RefCounted
 var trajectory_revision := -1
 var review_source: Animation
+var follow_preview_ball := false
 var shot_setup := {}
 var shot_sampler: Node
 var updating_shot := false
@@ -254,6 +255,10 @@ func build_controls(controls: VBoxContainer) -> void:
 		controls.add_child(toggle)
 		controls.add_child(settings_box)
 		settings_box.hide()
+		var follow_toggle := CheckButton.new()
+		follow_toggle.text="Follow ball"
+		follow_toggle.toggled.connect(func(enabled: bool): follow_preview_ball=enabled; update_camera())
+		settings_box.add_child(follow_toggle)
 		var court := Control.new()
 		court.custom_minimum_size=Vector2(0,132)
 		court.mouse_filter=Control.MOUSE_FILTER_STOP
@@ -430,7 +435,7 @@ func set_frame(value: int) -> void:
 
 func update_camera() -> void:
 	super.update_camera()
-	if session==null or entry.get("id","")!="camp_right_arm_swing": return
+	if not follow_preview_ball or session==null or entry.get("id","")!="camp_right_arm_swing": return
 	var samples: Array=session.source.get_meta("editor_ball_frames",[])
 	if samples.is_empty(): return
 	var hit := int(session.source.get_meta("swing_hit_frame",36))
