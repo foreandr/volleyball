@@ -91,13 +91,22 @@ func capture(rendered := false) -> Dictionary:
 		elif obj != game.ball and obj is not RigidBody3D and obj not in game.targets and obj not in game.rotation_drill.bins and obj != game.rotation_drill.basket: continue
 		objects[obj] = [obj.transform,obj.visible]
 	var arms := {}
-	if "jumps" in game:
-		for slot in game.jumps.size():
+	var armed := {}
+	if "blockers" in game:
+		for slot in game.blockers.size():
 			var jump = game.jumps[slot]
-			if jump==null: continue
-			for i in jump.hands.size():
-				arms[slot*2+i]=[jump.shoulders[i],jump.elbows[i],jump.wrists[i],jump.hands[i]]
-	return {"arms":arms,"floor_count":game.floor_sound_count,"floor_db":game.floor_impact.volume_db,"spike_count":game.spike_sound_count if "spike_sound_count" in game else 0,"block_sound_count":game.block_sound_count if "block_sound_count" in game else 0,"objects":objects,"poses":poses,"whistle_height":game.coach_motion.whistle_cue.raised}
+			for i in 2:
+				var key: int=slot*2+i
+				armed[key]=jump!=null and jump.hands.size()>i
+				if armed[key]:
+					arms[key]=[jump.shoulders[i],jump.elbows[i],jump.wrists[i],jump.hands[i]]
+				else:
+					var points := []
+					var side := "_l" if i==0 else "_r"
+					for bone in ["upperarm","lowerarm","hand","middle_03"]:
+						points.append(preload("res://scripts/gym_physics.gd").joint(game.blockers[slot],bone+side))
+					arms[key]=points
+	return {"armed":armed,"arms":arms,"floor_count":game.floor_sound_count,"floor_db":game.floor_impact.volume_db,"spike_count":game.spike_sound_count if "spike_sound_count" in game else 0,"block_sound_count":game.block_sound_count if "block_sound_count" in game else 0,"objects":objects,"poses":poses,"whistle_height":game.coach_motion.whistle_cue.raised}
 
 func apply(sample: Dictionary) -> void:
 	game.coach_motion.whistle_cue.raised = sample.whistle_height
@@ -149,11 +158,15 @@ func display_frame(value: float) -> void:
 				mesh.mesh=CapsuleMesh.new()
 				var mat := StandardMaterial3D.new()
 				mat.transparency=BaseMaterial3D.TRANSPARENCY_ALPHA
-				mat.albedo_color=Color(.12,.95,.72,.42)
+				mat.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED
+				mat.no_depth_test=true
+				mat.render_priority=100
+				mesh.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 				mesh.material_override=mat
 				game.world.add_child(mesh)
 				boxes.append(mesh)
 			var capsule := boxes[used]
+			capsule.material_override.albedo_color=Color(.08,1.,.44,.65) if a.armed[arm] else Color(.25,.72,1.,.48)
 			used+=1
 			var radius: float=preload("res://scripts/match_block.gd").ARM_RADII[i]
 			capsule.mesh.radius=radius
