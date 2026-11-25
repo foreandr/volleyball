@@ -41,6 +41,7 @@ func attack_meter_error() -> float:
 	return minf(release_at,clock)-clock+elapsed-flight_time+.08
 
 func clear_attack_input() -> void:
+	manual_route=Vector3.ZERO
 	manual_shot=-1
 	release_at=INF
 	first_palm_at=INF
@@ -159,6 +160,7 @@ func smooth_wrists(delta: float) -> void:
 		rig.set_bone_pose_rotation(id,q)
 		wrist_history[side]=q
 
+var manual_route := Vector3.ZERO
 var prep_velocity := Vector3.ZERO
 var bounce_line := false
 
@@ -173,6 +175,13 @@ func step_attack(delta: float) -> void:
 			if phase in ["set_contact","set"]:
 				entry=endpoint+Vector3(1.18,0.,-1.82)
 				entry.y=START.y
+				if not cpu_hitter:
+					var to_set := (endpoint-hitter.position).slide(Vector3.UP)
+					if manual_route.is_zero_approx():
+						manual_route=to_set.normalized()
+						prep_velocity=Vector3.ZERO
+					# Close excess distance along the approach line; reserve room for the plant.
+					entry=hitter.position+manual_route*maxf(0.,to_set.dot(manual_route)-1.85)
 			elif phase=="pass":
 				entry.z+=.35*smoothstep(0.,1.,elapsed)
 			var desired := ((entry-hitter.position)*4.).limit_length(5.8 if phase=="set" else 1.85)
@@ -180,6 +189,7 @@ func step_attack(delta: float) -> void:
 			var travel := prep_velocity*delta
 			hitter.position=rotation_drill.move_actor(hitter,travel)
 			var watch := (ball.position-hitter.position).slide(Vector3.UP)
+			if not cpu_hitter: watch=manual_route
 			if watch.length_squared()>.01:
 				hitter.rotation.y=rotate_toward(hitter.rotation.y,atan2(watch.x,watch.z),3.5*delta)
 			var local := hitter.basis.inverse()*prep_velocity
@@ -214,6 +224,8 @@ func start_approach() -> void:
 	approach_started=true
 	hitter.stamina.spend(5,"Jump")
 	var contact_stance := Vector3(endpoint.x+.09,.04,endpoint.z-.09)
+	if not cpu_hitter and not manual_route.is_zero_approx():
+		contact_stance=Vector3(endpoint.x,START.y,endpoint.z)-manual_route*.09
 	var heading := (contact_stance-hitter.position).slide(Vector3.UP).normalized()
 	hitter.rotation.y=atan2(heading.x,heading.z)
 	attack_jump.begin(hitter,Vector2(-heading.x,heading.z),contact_stance,PLANT_TIME,jump_height,3,false,1.,false,.22)
