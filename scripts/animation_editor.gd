@@ -13,6 +13,9 @@ var trajectory_solver: RefCounted
 var trajectory_revision := -1
 var review_source: Animation
 var shot_setup := {}
+var shot_sampler: Node
+var updating_shot := false
+var shot_revision := 0
 var review_number := 1
 var review_status := Label.new()
 var review_votes := ConfigFile.new()
@@ -119,21 +122,6 @@ func _ready() -> void:
 		review_source=session.source
 		review_votes.load(REVIEW_PATH)
 		show_swing(int(review_votes.get_value("review","current",1)))
-	if Engine.has_meta("swing_frame_restore"):
-		var previous: Dictionary=Engine.get_meta("swing_frame_restore")
-		Engine.remove_meta("swing_frame_restore")
-		session.edits=previous.edits
-		session.position_edits=previous.positions
-		copy_name.text=previous.name
-		select_group(previous.group)
-		orbit_yaw=previous.yaw
-		orbit_pitch=previous.pitch
-		view_distance=previous.distance
-		view_focus=previous.focus
-		update_camera()
-		set_playing(false)
-		set_frame(previous.frame)
-
 func show_swing(number: int) -> void:
 	review_number=clampi(number,1,50)
 	session.replace_source(preload("res://scripts/numbered_swings.gd").make(review_source,review_number))
@@ -159,16 +147,51 @@ func add_shot_slider(box: VBoxContainer, caption: String, key: String, low: floa
 		label.text="%s   %s %s" % [caption,str(snappedf(value,step_size)),unit]
 	display.call(slider.value)
 	slider.value_changed.connect(display)
+	slider.value_changed.connect(func(_value): queue_live_shot())
 	box.add_child(label)
 	box.add_child(slider)
 	return slider
 
-func apply_review_shot() -> void:
-	shot_setup["z"]=4.+float(shot_setup.depth)
-	StorySession.save_drill_setup("swing_review",shot_setup)
-	Engine.set_meta("swing_frame_restore",{"frame":frame,"edits":session.edits.duplicate(true),"positions":session.position_edits.duplicate(true),"group":selected_group,"name":copy_name.text,"yaw":orbit_yaw,"pitch":orbit_pitch,"distance":view_distance,"focus":view_focus})
-	Engine.set_meta("reload_swing_review" if entry.get("swing_review",false) else "reload_swing_frame",true)
-	MenuPresentation.load_scene("res://scenes/attacking_camp.tscn")
+func queue_live_shot() -> void:
+	shot_revision+=1
+	if updating_shot: return
+	updating_shot=true
+	update_live_shot.call_deferred()
+
+func update_live_shot() -> void:
+	if not is_instance_valid(shot_sampler):
+		var viewport := SubViewport.new()
+		viewport.own_world_3d=true
+		viewport.render_target_update_mode=SubViewport.UPDATE_DISABLED
+		viewport.gui_disable_input=true
+		add_child(viewport)
+		shot_sampler=load("res://scenes/attacking_camp.tscn").instantiate()
+		shot_sampler.set_meta("live_sampler",true)
+		shot_sampler.process_mode=Node.PROCESS_MODE_DISABLED
+		viewport.add_child(shot_sampler)
+	while is_inside_tree():
+		var revision := shot_revision
+		shot_setup.z=4.+float(shot_setup.depth)
+		var review := bool(entry.get("swing_review",false))
+		var result: Dictionary=await shot_sampler.sample_attack_clip(true,true,float(shot_setup.x)<1.,review,shot_setup)
+		if revision!=shot_revision: continue
+		var clip: Animation=result.clip
+		if review:
+			review_source=clip
+			clip=preload("res://scripts/numbered_swings.gd").make(clip,review_number)
+		var rotations: Dictionary=session.edits.duplicate(true)
+		var positions: Dictionary=session.position_edits.duplicate(true)
+		session.replace_source(clip)
+		session.edits=rotations
+		session.position_edits=positions
+		preview_player.position=clip.get_meta("editor_start")
+		preview_player.rotation.y=clip.get_meta("editor_yaw")
+		ball_preview.configure(preview_player,clip,session)
+		set_frame(frame)
+		if revision!=shot_revision: continue
+		StorySession.save_drill_setup("swing_review",shot_setup)
+		break
+	updating_shot=false
 
 func vote_swing(choice: String) -> void:
 	review_votes.set_value("votes",str(review_number),choice)
@@ -255,7 +278,7 @@ func build_controls(controls: VBoxContainer) -> void:
 		add_shot_slider(settings_box,"Set forward / back","set_z",-.45,.45,.05,0.,"m")
 		add_shot_slider(settings_box,"Hit power","power",9.,40.,1.,14.,"m/s")
 		add_shot_slider(settings_box,"Vertical jump","jump",24.,44.,1.,33.,"in")
-		settings_box.add_child(button("Apply to frame",apply_review_shot))
+
 	controls.add_child(copy_name)
 	var frames := HBoxContainer.new()
 	controls.add_child(frames)
