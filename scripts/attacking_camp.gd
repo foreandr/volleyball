@@ -492,6 +492,15 @@ func start_approach(steps := 3, cadence := 1.,destination := Vector3.INF) -> voi
 	var to_ball := (destination-hitter.position).slide(Vector3.UP)
 	if not to_ball.is_zero_approx(): attack_jump.lead_heading=to_ball.normalized()
 	attack_jump.release()
+	if cpu_hitter and not tip_shot and not roll_shot:
+		var contact := destination
+		contact.y=minf(contact.y,attack_contact_height())
+		var landing := shot_landing(contact)
+		var net_hit := predicted_net_hit(contact,landing)
+		if not net_hit.is_empty() and not net_hit.rollover:
+			tip_shot=(landing-contact).slide(Vector3.UP).length()<4.
+			roll_shot=not tip_shot
+			trace("cpu_soft_attack",{"tip":tip_shot,"stamina":hitter.stamina.fraction(),"contact_height":contact.y})
 
 func roll_reach_fraction() -> float:
 	var origin := strike_point if phase=="spike" else endpoint
@@ -697,13 +706,16 @@ func predicted_attack_origin() -> Vector3:
 		if point.y<=top: return point
 	return Vector3(endpoint.x,minf(endpoint.y,START.y+reach+effective_attack_height()),endpoint.z)
 
-func predicted_shot_color(origin: Vector3, landing: Vector3) -> Color:
+func predicted_net_hit(origin: Vector3, landing: Vector3) -> Dictionary:
 	var flight := attack_flight_time(origin,landing)
 	var spin := shot_spin_force(origin,landing,flight)
 	var velocity := launch_velocity(origin,landing,flight,spin)
 	var acceleration := spin+Vector3.DOWN*9.81
 	var path := func(t: float) -> Vector3: return origin+velocity*t+acceleration*(.5*t*t)
-	var hit := BallNet.first_hit(path,0.,flight)
+	return BallNet.first_hit(path,0.,flight)
+
+func predicted_shot_color(origin: Vector3, landing: Vector3) -> Color:
+	var hit := predicted_net_hit(origin,landing)
 	if not hit.is_empty(): return Color("ffdc58") if hit.rollover else Color("f25454")
 	if absf(landing.x)>4.5 or landing.z>BallNet.NET_Z+9.: return Color("ff953d")
 	return Color("61ed88")
