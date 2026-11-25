@@ -287,7 +287,7 @@ func build_controls(controls: VBoxContainer) -> void:
 		add_shot_slider(settings_box,"Set left / right","set_x",-.65,.65,.05,0.,"m")
 		add_shot_slider(settings_box,"Set forward / back","set_z",-.45,.45,.05,0.,"m")
 		add_shot_slider(settings_box,"Hit power","power",9.,40.,1.,14.,"m/s")
-		add_shot_slider(settings_box,"Vertical jump","jump",24.,44.,1.,33.,"in")
+		add_shot_slider(settings_box,"Vertical jump","jump",24.,60.,1.,33.,"in")
 
 	controls.add_child(copy_name)
 	var frames := HBoxContainer.new()
