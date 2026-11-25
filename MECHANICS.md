@@ -40,3 +40,4 @@ Blocking uses the hitting camera in gym coordinates. Team-local gameplay runs wi
 Blocking practice uses 30 m/s nominal attack speed and swing power. Approach momentum still affects actual launch speed.
 Manual blocking starts on jersey 509. Holding A loads the squat while the timing cue compares predicted jump apex with attack arrival. Releasing A starts the jump with the loaded portion of takeoff accounted for. The controlled blocker shows a ring and stamina.
 On a double block the middle tracks the inside shoulder of the outside blocker and shares the outside jump cue and load timing, including manual releases.
+Manual blocker 509 can shuffle once the incoming ball is within one meter of the predicted setter contact point. CPU blockers read the released set.

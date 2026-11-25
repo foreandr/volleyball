@@ -9,6 +9,7 @@ var lateral_speed := [0.,0.,0.]
 var attempted := [false,false,false]
 var deflected := false
 var block_held := false
+var manual_shuffle_open := false
 var automatic_block := false
 var block_load := preload("res://scripts/tryout_squat.gd").new()
 var released_meter := 0.
@@ -94,6 +95,7 @@ func allow_cpu_soft_attack() -> bool:
 	return false
 
 func reset_feed() -> void:
+	manual_shuffle_open=false
 	# Supply a full-strength attacker on each blocking rep.
 	hitter.stamina.rested_capacity=hitter.stamina.capacity()
 	hitter.stamina.value=hitter.stamina.rested_capacity
@@ -168,6 +170,9 @@ func begin_block(slot: int,loaded := 0.) -> void:
 		begin_block(1,loaded)
 
 func step_attack(delta: float) -> void:
+	if phase=="pass" and not manual_shuffle_open and ball.position.distance_to(catch_point)<=1.:
+		manual_shuffle_open=true
+		trace("manual_block_shuffle_open",{"distance_m":ball.position.distance_to(catch_point)})
 	for i in blockers.size():
 		step_blocker(i,delta)
 	if block_held:
@@ -210,7 +215,8 @@ func step_blocker(slot: int,delta: float) -> void:
 	elif phase=="spike" and not closing[slot]:
 		depth_goal+=2.7
 	var previous := actor.position.x
-	var cpu := automatic_block or slot!=MANUAL_SLOT or phase!="set"
+	var manual_window := phase in ["set_contact","set"] or (phase=="pass" and manual_shuffle_open)
+	var cpu := automatic_block or slot!=MANUAL_SLOT or not manual_window
 	var pace := GroundControls.speed(true,false)
 	var desired := clampf((goal-previous)*4.,-pace,pace) if cpu else axis(JOY_AXIS_LEFT_X)*camera.global_basis.x.x*pace
 	lateral_speed[slot]=move_toward(lateral_speed[slot],desired,8.*delta)
