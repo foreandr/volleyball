@@ -92,7 +92,7 @@ func camp_title() -> String:
 
 func update_prompts(_next: String) -> void:
 	var entries := [["View","Take control" if cpu_hitter else "Watch CPU attack"]]
-	if not cpu_hitter: entries.append_array([["LS","Move"],[JOY_BUTTON_X,"Hold line"],[JOY_BUTTON_Y,"Hold six"],[JOY_BUTTON_B,"Hold cross"]])
+	if not cpu_hitter: entries.append_array([["LS","Move"],["RT","Sprint"],[JOY_BUTTON_X,"Hold line"],[JOY_BUTTON_Y,"Hold six"],[JOY_BUTTON_B,"Hold cross"]])
 	entries.append([JOY_BUTTON_START,"Settings"])
 	Xbox.prompts(controls_row,entries)
 
@@ -169,7 +169,9 @@ func step_attack(delta: float) -> void:
 		attack_jump.step(hitter,delta,Vector2.ZERO)
 	else:
 		hitter.animator.advance(delta)
-		var tracking := cpu_hitter or (manual_shot>=0 and phase=="set")
+		var stick := Vector2(axis(JOY_AXIS_LEFT_X),axis(JOY_AXIS_LEFT_Y)).limit_length(1.)
+		var steering := not cpu_hitter and stick.length()>.16
+		var tracking := cpu_hitter or (manual_shot>=0 and phase=="set" and not steering)
 		if tracking and not approach_started and phase in ["cart","feed","pass","set_contact","set"]:
 			var entry := Vector3(4.95,START.y,.65)
 			if phase in ["set_contact","set"]:
@@ -184,7 +186,7 @@ func step_attack(delta: float) -> void:
 					entry=hitter.position+manual_route*maxf(0.,to_set.dot(manual_route)-1.50)
 			elif phase=="pass":
 				entry.z+=.35*smoothstep(0.,1.,elapsed)
-			var desired := ((entry-hitter.position)*(6. if not cpu_hitter else 4.)).limit_length(5.8 if phase=="set" else 1.85)
+			var desired := ((entry-hitter.position)*(6. if not cpu_hitter else 4.)).limit_length((5.8 if cpu_hitter else 4.3) if phase=="set" else 1.85)
 			prep_velocity=prep_velocity.move_toward(desired,(13. if not cpu_hitter else 8.)*delta)
 			var travel := prep_velocity*delta
 			hitter.position=rotation_drill.move_actor(hitter,travel)
@@ -200,12 +202,20 @@ func step_attack(delta: float) -> void:
 			if not shuffle_steps.has(hitter):
 				shuffle_steps[hitter]=preload("res://scripts/directional_footwork.gd").new(hitter)
 			if cpu_hitter or local.length()<=2.35: shuffle_steps[hitter].step((local/2.).limit_length(1.),delta,clampf(local.length()/2.,.55,1.35),true,true)
-		if not tracking and not approach_started:
-			var stick := Vector2(axis(JOY_AXIS_LEFT_X),axis(JOY_AXIS_LEFT_Y)).limit_length(1.)
+		if not tracking and (not approach_started or phase!="set"):
+			var amount := clampf((stick.length()-.16)/.84,0.,1.)
 			var right := camera.global_basis.x.slide(Vector3.UP).normalized()
-			var travel := (right*stick.x+right.cross(Vector3.UP)*stick.y)*3.8 if stick.length()>.16 else Vector3.ZERO
-			hitter.position=rotation_drill.move_actor(hitter,travel*delta)
-			hitter.play_ground_gait(travel.length())
+			var direction := (right*stick.x+right.cross(Vector3.UP)*stick.y).normalized()
+			var sprinting: bool=steering and axis(Xbox.trigger(false))>.25 and hitter.stamina.can_sprint()
+			var desired := direction*amount*(6.2 if sprinting else 4.3)
+			prep_velocity=prep_velocity.move_toward(desired,18.*delta)
+			hitter.position=rotation_drill.move_actor(hitter,prep_velocity*delta)
+			if steering:
+				manual_route=Vector3.ZERO
+				hitter.rotation.y=rotate_toward(hitter.rotation.y,atan2(direction.x,direction.z),7.*delta)
+			if sprinting and prep_velocity.length()>4.3:
+				hitter.stamina.spend(hitter.stamina.SPRINT_DRAIN*delta,"Sprint")
+			hitter.play_ground_gait(prep_velocity.length())
 	if phase=="spike":
 		elapsed+=delta
 		swing_time+=delta
