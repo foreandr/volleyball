@@ -18,6 +18,15 @@ var height_control := HSlider.new()
 var height_label := Label.new()
 
 func start_drill() -> void:
+	# Gameplay trajectories use team-local coordinates. Swap court ends relative
+	# to the gym while keeping the net contact mesh in simulation coordinates.
+	var switch_ends := Transform3D(Basis(Vector3.UP,PI),Vector3(0.,0.,2.*BallNet.NET_Z))
+	var net := gym.get_node("DynamicNet") as Node3D
+	var net_pose := net.global_transform
+	gym.transform=switch_ends
+	net.global_transform=net_pose
+	for node in world.get_children():
+		if node is Light3D: node.transform=switch_ends*node.transform
 	for x: float in HOMES:
 		var actor := athlete(Vector3(x,START.y,BallNet.NET_Z+.38),"286881")
 		var variant := 5+blockers.size()
@@ -49,24 +58,6 @@ func set_block_vertical(value: float) -> void:
 	height_label.text="Block vertical    %d in" % roundi(value)
 	StorySession.game_options.set_value("blocking","vertical_inches",value)
 	StorySession.save_options()
-
-func apply_camera() -> void:
-	var pivot := Vector3(0.,1.0,BallNet.NET_Z+4.)
-	var pitch := deg_to_rad(clampf(45.+(elevation-18.)*.45,30.,60.))
-	var arm := Vector3(-sin(yaw)*cos(pitch),sin(pitch),cos(yaw)*cos(pitch))*distance
-	var eye := pivot+arm
-	eye=eye.clamp(Vector3(-10.8,.5,-10.5),Vector3(10.8,8.45,14.35))
-	var hit := contacts.sweep(world,contacts.camera_shape,pivot,eye-pivot,Contact.GYM)
-	camera.position=pivot+(eye-pivot)*float(hit.get("fraction",1.))
-	camera.look_at(pivot)
-	# Fit both near baseline corners with a margin at the actual viewport aspect.
-	var aspect := camera.get_viewport().get_visible_rect().size.aspect()
-	var tangent := tan(deg_to_rad(52.)*.5)
-	for x in [-4.5,4.5]:
-		var point := camera.to_local(Vector3(x,.05,BallNet.NET_Z+9.))
-		if point.z<-.05:
-			tangent=maxf(tangent,maxf(absf(point.y),absf(point.x)/aspect)/-point.z*1.12)
-	camera.fov=clampf(rad_to_deg(2.*atan(tangent)),52.,115.)
 
 func camp_title() -> String:
 	return "BLOCKING   /   BLOCK AT THE NET"
