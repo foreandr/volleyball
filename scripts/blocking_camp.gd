@@ -51,11 +51,22 @@ func set_block_vertical(value: float) -> void:
 	StorySession.save_options()
 
 func apply_camera() -> void:
-	super.apply_camera()
-	# Rotate the resolved attacking view around center court, including its pivot.
-	var center := Vector3(0.,0.,BallNet.NET_Z)
-	camera.position=center+(camera.position-center).rotated(Vector3.UP,PI)
-	camera.global_basis=Basis(Vector3.UP,PI)*camera.global_basis
+	var pivot := Vector3(0.,1.0,BallNet.NET_Z+4.)
+	var pitch := deg_to_rad(clampf(45.+(elevation-18.)*.45,30.,60.))
+	var arm := Vector3(-sin(yaw)*cos(pitch),sin(pitch),cos(yaw)*cos(pitch))*distance
+	var eye := pivot+arm
+	eye=eye.clamp(Vector3(-10.8,.5,-10.5),Vector3(10.8,8.45,14.35))
+	var hit := contacts.sweep(world,contacts.camera_shape,pivot,eye-pivot,Contact.GYM)
+	camera.position=pivot+(eye-pivot)*float(hit.get("fraction",1.))
+	camera.look_at(pivot)
+	# Fit both near baseline corners with a margin at the actual viewport aspect.
+	var aspect := camera.get_viewport().get_visible_rect().size.aspect()
+	var tangent := tan(deg_to_rad(52.)*.5)
+	for x in [-4.5,4.5]:
+		var point := camera.to_local(Vector3(x,.05,BallNet.NET_Z+9.))
+		if point.z<-.05:
+			tangent=maxf(tangent,maxf(absf(point.y),absf(point.x)/aspect)/-point.z*1.12)
+	camera.fov=clampf(rad_to_deg(2.*atan(tangent)),52.,115.)
 
 func camp_title() -> String:
 	return "BLOCKING   /   BLOCK AT THE NET"
