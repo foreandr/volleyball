@@ -390,7 +390,7 @@ func sample_attack_clip(arm_lift: bool,arm_swing: bool,cross: bool,review: bool,
 	var first_frame := floori((takeoff-.15)*60.) if arm_lift else 0
 	var duration := takeoff+.25 if arm_lift else takeoff
 	if arm_swing:
-		duration=(first_frame+192)/60.
+		duration=(first_frame+107)/60.
 		cpu_hitter=true
 		flight_time=DURATION[1]
 	swing_time=-1.
