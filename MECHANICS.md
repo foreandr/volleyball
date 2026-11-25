@@ -51,4 +51,8 @@ In blocking camp the airborne left stick leans the torso toward screen left or r
 
 Blocking camp independently draws the left pin, 51, pipe or right pin on each feed. All four hitters reset. A single held trigger reaches laterally over the tape with the other arm dropping for balance. Both triggers spread both arms. Replay can display the recorded arm capsules and interpolate four inspection positions per sample.
 
-In blocking practice, all four attackers run their own approach lanes as the pass reaches Bell. On set release, the three unselected hitters brake into two short cover positions and one deeper position, then recover for the next feed.
+In blocking practice, all four attackers run their own approach lanes as the pass reaches Bell. On set release, the three unselected hitters brake into position-specific cover, then recover for the next feed.
+
+The CPU middle can commit to a nearby quick runner accelerating toward Bell before release. This read uses the visible approach and can leave the middle airborne against a pipe or pin set. Each rep logs the released route and endpoint.
+
+The pipe covers deep in six, the far pin shades inward from its own lane, and nearby front-row hitters cover shorter. Random set height draws 0, 1, 2 or 3 independently of the hitter on each new feed.

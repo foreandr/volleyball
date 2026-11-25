@@ -5,8 +5,17 @@ const HOMES := [-2.15,0.,2.15]
 const MANUAL_SLOT := 2
 const ROUTES := [Vector3(3.65,2.65,2.7),Vector3(.4,2.65,3.25),Vector3(-.65,2.65,1.45),Vector3(-3.65,2.65,2.7)]
 var attackers: Array[Node3D]=[]
+const ROUTE_NAMES := ["left","51","pipe","right"]
+var random_heights := bool(StorySession.game_options.get_value("blocking","random_heights",false))
+var drawn_height := -1
+
+func height_preset() -> int:
+	return drawn_height if drawn_height>=0 else super.height_preset()
+
+var middle_read_attempted := false
 var route := -1
 func rep_set_percent() -> float:
+	if drawn_height>=0: return SET_HEIGHTS[drawn_height]
 	return SET_HEIGHTS[1] if route in [1,2] else super.rep_set_percent()
 
 var blockers: Array[Node3D] = []
@@ -73,6 +82,16 @@ func build_settings() -> void:
 	controls_row.get_parent().add_child(row)
 	row.add_child(height_label)
 	row.add_child(height_control)
+	var randomize_button := CheckButton.new()
+	randomize_button.text="Random set height"
+	randomize_button.tooltip_text="Draw a new height from 0 to 3 on each feed"
+	randomize_button.button_pressed=random_heights
+	row.add_child(randomize_button)
+	randomize_button.toggled.connect(func(enabled):
+		random_heights=enabled
+		StorySession.game_options.set_value("blocking","random_heights",enabled)
+		StorySession.save_options()
+	)
 	height_control.custom_minimum_size=Vector2(210,30)
 	height_control.min_value=0
 	height_control.max_value=60
@@ -111,9 +130,11 @@ func allow_cpu_soft_attack() -> bool:
 
 func reset_feed() -> void:
 	manual_shuffle_open=false
+	middle_read_attempted=false
 	if route<0: attackers.push_front(hitter)
 	var former := hitter
 	route=rotation_drill.random.randi_range(0,attackers.size()-1)
+	drawn_height=rotation_drill.random.randi_range(0,SET_HEIGHTS.size()-1) if random_heights else -1
 	hitter=attackers[route]
 	former.play_action("idle")
 	for overlay in get_children():
@@ -188,7 +209,7 @@ func _input(event: InputEvent) -> void:
 func begin_block(slot: int,loaded := 0.) -> void:
 	var jump := Block.new()
 	var stamina=blockers[slot].stamina
-	if stamina.exhausted: return
+	if stamina.exhausted or attempted[slot]: return
 	jump.jump_height=block_vertical*.0254*stamina.effectiveness()
 	stamina.spend(5,"Block jump")
 	trace("block_takeoff",{"slot":slot,"vertical_m":jump.jump_height,"stamina":stamina.value})
@@ -220,12 +241,14 @@ func step_hitting_line(i: int,delta: float) -> void:
 		target=target.lerp(Vector3(pin.x,START.y,pin.z-1.65),progress)
 	elif phase in ["set","spike"]:
 		if i==route: return
-		# Three distinct cover lanes relative to the hitter, ordered across the court.
-		var rank := 0
-		for j in attackers.size():
-			if j!=route and ROUTES[j].x<ROUTES[i].x: rank+=1
-		target.x=clampf(endpoint.x,-2.9,2.9)+(rank-1)*1.35
-		target.z=endpoint.z-(2.85 if rank==1 else 1.6)
+		# Back-row coverage stays deep in six. Opposite pins release inward
+		# from their own lane, while the nearby front-row hitter covers short.
+		if i==2:
+			target=Vector3(clampf(endpoint.x*.22,-1.,1.),START.y,BallNet.NET_Z-5.4)
+		else:
+			var gap := absf(ROUTES[i].x-endpoint.x)
+			target.x=lerpf(ROUTES[i].x,endpoint.x,.32)
+			target.z=BallNet.NET_Z-clampf(1.65+gap*.31,1.8,4.1)
 	var offset := (target-actor.position).slide(Vector3.UP)
 	var velocity: Vector3=route_velocity[i]
 	velocity=velocity.move_toward((offset*5.).limit_length(3.8),13.*delta)
@@ -277,6 +300,16 @@ func step_blocker(slot: int,delta: float) -> void:
 		jump.court_aim=Vector3(0.,0.,BallNet.NET_Z-3.)
 		if not jump.step(delta,ball.global_position): jumps[slot]=null
 		return
+	# Read the quick runner's approach once while the pass is still live.
+	if slot==1 and phase=="pass" and not middle_read_attempted and contact_time-elapsed<=.10:
+		middle_read_attempted=true
+		var runner := attackers[1]
+		var closing_speed: float=route_velocity[1].z
+		if closing_speed>1. and absf(actor.position.x-runner.position.x)<1. and rotation_drill.random.randf()<.35:
+			begin_block(1)
+			if jumps[1]!=null:
+				trace("middle_committed_to_quick",{"runner_speed":closing_speed})
+				return
 	var goal: float=HOMES[slot]
 	var depth_goal := BallNet.NET_Z+.38
 	if phase=="set" and not read_set:
@@ -286,7 +319,7 @@ func step_blocker(slot: int,delta: float) -> void:
 			var travel := Vector2(seam-blockers[i].position.x,depth_goal-blockers[i].position.z).length()
 			closing[i]=maxf(0.,travel-.75)/GroundControls.speed(true,false)<=available or i==int([2,1,1,0][route])
 		read_set=true
-		trace("block_set_read",{"far_closes":closing[0],"middle_closes":closing[1],"available_s":available})
+		trace("block_set_read",{"set_route":ROUTE_NAMES[route],"set_height_percent":rep_set_percent(),"set_endpoint":str(endpoint),"far_closes":closing[0],"middle_closes":closing[1],"available_s":available})
 	if phase=="set":
 		if route==0 and slot==1 and closing[slot]: goal=blockers[MANUAL_SLOT].position.x-.61
 		elif closing[slot]: goal=endpoint.x+.61*(slot-int([2,1,1,0][route]))
