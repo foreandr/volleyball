@@ -80,6 +80,7 @@ func start_drill() -> void:
 		var variant := 5+blockers.size()
 		register_student(actor,variant)
 		preload("res://scripts/practice_kit.gd").apply(actor,false,variant)
+		actor.set_height_cm(195.58)
 		energy[actor]=actor.stamina
 		actor.rotation.y=PI
 		blockers.append(actor)
@@ -317,6 +318,7 @@ func block_read_target(slot: int) -> float:
 	if phase=="spike" and drop_velocity.z>.1:
 		var time_to_net := clampf((BallNet.NET_Z-ball.position.z)/drop_velocity.z,0.,.20)
 		return ball.position.x+drop_velocity.x*time_to_net
+	if read_set: target+=learned_block_offset()
 	if read_set and read_lead!=1 and closing[slot]:
 		# At a pin each closer owns the next strip of net toward cross court.
 		# A third blocker covers two shoulder widths inside the line blocker.
@@ -536,7 +538,7 @@ func step_blocker(slot: int,delta: float) -> void:
 	if (phase=="set" or late_window) and read_set:
 		if closing[slot] and slot!=read_lead:
 			goal=blockers[read_lead].position.x+.61*(slot-read_lead)
-		elif closing[slot]: goal=read_x+.61*(slot-read_lead)
+		elif closing[slot]: goal=read_x+learned_block_offset()+.61*(slot-read_lead)
 		else: depth_goal+=2.7
 	elif phase=="spike" and not closing[slot]:
 		depth_goal+=2.7

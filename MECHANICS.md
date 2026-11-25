@@ -83,4 +83,4 @@ On pin sets each closer evaluates their own adjacent strip of net toward cross c
 Approach and Spike exposes saved attacker vertical (inches) and nominal hard-hit speed (m/s) directly on the HUD. They feed the jump and swing calculations for human and CPU attacks.
 Approach and Spike lets the hitter train against zero, one or two CPU blockers in Pause > Attack setup. Block touches use the same swept arm and hand contact, deflection and impact audio as blocking practice.
 Attack setup uses the right-side blocker for singles and adds the middle for doubles. Each has a saved block vertical. Ball speed controls display km/h while simulation and saved speed values remain in m/s.
-Attack placement allows 2.5 m to either side of the selected lane. The 6 ft 5 in practice blockers shade their read using the last five outgoing shot directions. The attack HUD block vertical controls the pin blocker.
+Attack placement allows 2.5 m to either side of the selected lane. The 6 ft 5 in practice blockers shade their read immediately toward each observed shot direction, giving the latest swing 82% weight. The attack HUD block vertical controls the pin blocker.

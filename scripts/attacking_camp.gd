@@ -216,7 +216,7 @@ func build_settings() -> void:
 
 var block_hud_label: Label
 var block_hud_slider: HSlider
-var recent_shot_slopes: Array[float]=[]
+var last_shot_slope := 0.
 
 func sync_block_vertical_hud() -> void:
 	if is_instance_valid(block_hud_slider):
@@ -230,12 +230,7 @@ func set_practice_vertical(slot: int,value: float) -> void:
 	sync_block_vertical_hud()
 
 func learned_block_offset() -> float:
-	var weighted := 0.
-	var total := 2.
-	for i in recent_shot_slopes.size():
-		weighted+=recent_shot_slopes[i]*(i+1)
-		total+=i+1
-	return clampf(weighted/total*clampf(BallNet.NET_Z-endpoint.z,.35,2.),-1.15,1.15)
+	return clampf(last_shot_slope*clampf(BallNet.NET_Z-endpoint.z,.45,2.),-1.55,1.55)
 
 const PracticeBlock = preload("res://scripts/match_block.gd")
 var attack_blocker_count := 1
@@ -277,7 +272,7 @@ func step_practice_blockers(delta: float) -> void:
 			if not jump.step(delta,ball.global_position): practice_jumps[i]=null
 			continue
 		var home_x := 2.15 if i==0 else 0.
-		var goal := home_x
+		var goal := home_x+clampf(last_shot_slope,-1.,1.)*.75
 		if phase=="set" or phase=="spike":
 			var seam_offset := (.5-i)*.68 if attack_blocker_count==2 else 0.
 			goal=clampf(endpoint.x+learned_block_offset()+seam_offset,-4.4,4.4)
@@ -332,8 +327,8 @@ func start_drill() -> void:
 		for i in 2:
 			var actor := athlete(Vector3(2.15 if i==0 else 0.,START.y,BallNet.NET_Z+.38),"286881")
 			register_student(actor,7-i)
-			actor.set_height_cm(195.58)
 			preload("res://scripts/practice_kit.gd").apply(actor,false,7-i)
+			actor.set_height_cm(195.58)
 			actor.rotation.y=PI
 			practice_blockers.append(actor)
 			practice_footwork.append(preload("res://scripts/directional_footwork.gd").new(actor))
@@ -817,9 +812,8 @@ func advance_spike(delta: float) -> void:
 		return
 	if not launched_attack:
 		launched_attack=true
-		if not practice_blockers.is_empty() and drop_velocity.z>.1:
-			recent_shot_slopes.append(clampf(drop_velocity.x/drop_velocity.z,-2.,2.))
-			if recent_shot_slopes.size()>5: recent_shot_slopes.pop_front()
+		if drop_velocity.z>.1:
+			last_shot_slope=lerpf(last_shot_slope,clampf(drop_velocity.x/drop_velocity.z,-2.,2.),.82)
 		trace("spike_launch",{"origin":str(ball.position),"velocity":str(drop_velocity),"aim":str(aim_center)})
 	var incoming_basis := ball.basis
 	var in_flight := roll_time<0.

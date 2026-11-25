@@ -945,7 +945,7 @@ func observe_opponent_shot(side: int, point: Vector3, motion: Vector3, spin_rate
 		if height >= Net.NET_TOP and absf(crossing) < Net.NET_HALF_WIDTH:
 			var offset := crossing-contact.x
 			var old: Vector2 = block_crossing_reads[side].get(zone,Vector2(offset,0.0))
-			block_crossing_reads[side][zone] = Vector2(lerpf(old.x,offset,0.34),minf(10.0,old.y+1.0))
+			block_crossing_reads[side][zone] = Vector2(lerpf(old.x,offset,0.82),minf(10.0,old.y+1.0))
 	var reads := opponent_shot_reads[side]
 	var count := int(reads.get(zone,Vector2.ZERO).y)
 	var previous := float(reads.get(zone,Vector2(landing.x,0.0)).x)
@@ -2515,7 +2515,7 @@ func position_defense(delta: float) -> void:
 		if not is_human(near):
 			var read: Vector2 = block_crossing_reads[defense_side].get(shot_read_zone(attack.x),Vector2.ZERO)
 			var learned_x := attack.x+read.x
-			x += clampf(learned_x-x,-0.80,0.80)*smoothstep(1.0,5.0,read.y)
+			x += clampf(learned_x-x,-1.55,1.55)*minf(1.0,read.y*.82)
 		cover = cross_goal.x if take_line else line_goal.x
 		if not is_human(deep):
 			cover = learned_cover(defense_side,attack.x,cover)
