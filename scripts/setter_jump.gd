@@ -442,6 +442,17 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 			var edited := lead_arm_clip.rotation_track_interpolate(track,clip_time)
 			var blend := smoothstep(0.0,0.035,lead_age)*(1.0-smoothstep(lead_time,lead_time+0.10,elapsed))
 			pose[bone].basis = Basis(pose[bone].basis.get_rotation_quaternion().slerp(edited,blend))
+	if attack_arm_lift and approach_plant and lead_time>0. and entry_time==0. and elapsed<lead_time:
+		var phase := elapsed/lead_time
+		var gather := smoothstep(0.,.50,phase)*(1.-smoothstep(.55,1.,phase))
+		var center: Vector3 = author.point(pose,"spine_02")
+		for side in ["l","r"]:
+			var hand := "hand_"+str(side)
+			var wrist: Vector3 = author.point(pose,hand)
+			var goal := wrist+Vector3(0.,.035,.095)/scale_
+			goal.x = lerpf(wrist.x,center.x,.32)
+			var elbow_axis: Vector3 = author.point(pose,"lowerarm_"+side)-author.point(pose,"upperarm_"+side)
+			author.limb(pose,"upperarm_"+side,"lowerarm_"+side,hand,goal,elbow_axis.normalized(),gather)
 	rig.set_bone_pose_position(pelvis,pose[pelvis].origin)
 	var entry := 1.0-smoothstep(0.0,0.085,elapsed)
 	for bone in rig.get_bone_count():
