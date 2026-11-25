@@ -160,11 +160,13 @@ func arm_speed_factor() -> float:
 	var rating := float(hitter.attributes.get("Arm swing",65))
 	return pow(effort/14.,.48)*(1.+(rating-65.)*.004)
 
-func attack_flight_time(distance: float) -> float:
+func attack_speed() -> float:
 	var strength := float(hitter.attributes.get("Strength",65))
 	var effort := float(review_setup.get("power",14.))
-	var speed := sqrt(14.*effort)*arm_speed_factor()*(1.+(strength-65.)*.005)
-	return maxf(.05,distance/speed)
+	return sqrt(14.*effort)*arm_speed_factor()*(1.+(strength-65.)*.005)
+
+func attack_flight_time(distance: float) -> float:
+	return maxf(.05,distance/attack_speed())
 
 func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 	message.text="Approach and spike"
@@ -315,11 +317,14 @@ func pose_swing() -> void:
 	var clearance := maxf(0.,4.-hitter.global_position.z-.23)
 	var reach_length := float(hitter.height_cm)*.006
 	var net_angle := asin(clampf(clearance/reach_length,0.,1.))
-	var pike := smoothstep(.015,.19,since_hit)*(1.-smoothstep(.19,.38,since_hit))
-	var chest_fold := minf(deg_to_rad(lerpf(26.,60.,athleticism)),net_angle)*pike
+	var drive := smoothstep(9.,40.,attack_speed())
+	var intensity := lerpf(.13,1.,drive)
+	var peak_time := lerpf(.235,.175,drive*(.55+.45*athleticism))
+	var pike := smoothstep(.015,peak_time,since_hit)*(1.-smoothstep(peak_time,.38,since_hit))
+	var chest_fold := minf(deg_to_rad(lerpf(26.,60.,athleticism)),net_angle)*pike*intensity
 	author.rotate_world(pose,"spine_01",Vector3.RIGHT,chest_fold*.65)
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,chest_fold*.35)
-	var leg_angle := minf(deg_to_rad(lerpf(24.,53.,athleticism)),net_angle)
+	var leg_angle := minf(deg_to_rad(lerpf(24.,53.,athleticism)),net_angle)*intensity
 	var heel_rise := smoothstep(2./60.,16./60.,air_age)
 	var knee_load := leg_weight*(1.-extension)
 	var lift_pose := knee_load
