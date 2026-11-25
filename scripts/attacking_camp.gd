@@ -285,6 +285,10 @@ func pose_swing() -> void:
 	var hip_share := lerpf(.46,.72,smoothstep(.15,.95,absf(heading)))
 	hip_turn+=heading*hip_share*smoothstep(-.20,.055,apex_offset)
 	twist+=heading*(1.-hip_share)*smoothstep(-.15,.085,apex_offset)
+	if phase=="spike":
+		var carry := smoothstep(PALM_CONTACT,.27,swing_time-contact_swing_time)
+		hip_turn+=heading*.30*carry
+		twist+=heading*.13*carry
 	# Load the chest through the draw, then release the arch into the strike.
 	var draw_load := smoothstep(.055,attack_jump.flight_duration(jump_height,true)*.48-.11,air_age)
 	draw_load *= 1.-smoothstep(-.11,.045,apex_offset)
@@ -366,7 +370,7 @@ func pose_swing() -> void:
 	var draw := smoothstep(.035,draw_end,air_age) if attack_jump.active else 0.
 	var origin := strike_point if phase=="spike" else ball.position
 	var shot_axis := hitter.basis.inverse()*origin.direction_to(shot_landing(origin)).slide(Vector3.UP).normalized()
-	Swing.apply(pose,hitter.get_pose_author(),rig.to_local(strike_point if phase=="spike" else ball.position),maxf(draw,smoothstep(0.,.065,swing_time)),reach,follow,maxf(draw,reach),0.,0.,Swing.DEFAULT_ELBOW_CLEARANCE,0.,INF,shot_axis,0.,.10,false,true,false,smoothstep(0.,.12,swing_time-net_clear_time) if phase=="spike" and net_clear_time>=0. and int(review_setup.get("spin",0))!=3 else 0.,(hip_turn+twist)*draw_load)
+	Swing.apply(pose,hitter.get_pose_author(),rig.to_local(strike_point if phase=="spike" else ball.position),maxf(draw,smoothstep(0.,.065,swing_time)),reach,follow,maxf(draw,reach),0.,1. if follow>0. and shot_axis.x>.12 else 0.,Swing.DEFAULT_ELBOW_CLEARANCE,0.,INF,shot_axis,0.,.10,false,true,false,smoothstep(0.,.12,swing_time-net_clear_time) if phase=="spike" and net_clear_time>=0. and int(review_setup.get("spin",0))!=3 else 0.,(hip_turn+twist)*draw_load)
 	# Pronate through the forearm while the striking hand is drawing back.
 	var palm_weight := smoothstep(.015,.11,air_age)*(1.-smoothstep(.10,.65,reach))
 	if palm_weight>0. and follow==0.:

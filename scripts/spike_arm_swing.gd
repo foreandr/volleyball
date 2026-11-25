@@ -27,6 +27,10 @@ static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float,
 	var same_side := line_weight < 0.5
 	var finish_point := hip_finish(pose,author,same_side)
 	var across: Vector3 = (author.point(pose,"upperarm_l")-shoulder).normalized()
+	if contact_palm and finish>0.:
+		var hip: Vector3=author.point(pose,"thigh_r" if same_side else "thigh_l")
+		var front := across.cross(Vector3.UP).normalized()
+		finish_point=hip+front*.085+across*(-.045 if same_side else .035)
 	var chest_center: Vector3 = shoulder.lerp(author.point(pose,"upperarm_l"),0.5)
 	var cross_body := (finish_point-chest_center).dot(across) > 0.0
 	target = follow_through_target(pose,author,shoulder,target,finish_point,finish,same_side,compact_finish,shot_direction if contact_palm else Vector3.ZERO)
@@ -163,7 +167,9 @@ static func follow_through_target(pose: Array, author: RefCounted, shoulder: Vec
 	var end := hip-shoulder
 	var sweep_direction := Vector3(-0.22,-0.32,0.87) if same_side else Vector3(-0.10,-0.12,1.0)
 	if not shot_axis.is_zero_approx():
-		sweep_direction=shot_axis.slide(Vector3.UP).normalized()+Vector3.UP*sweep_direction.y
+		var chest_side: Vector3=author.point(pose,"upperarm_l")-shoulder
+		var chest_front := chest_side.cross(Vector3.UP).normalized()
+		sweep_direction=shot_axis.slide(Vector3.UP).normalized().lerp(chest_front,smoothstep(.08,.58,progress))+Vector3.DOWN*.52
 	var forward := sweep_direction.lerp(Vector3(-0.07,-0.60,0.79),compact_finish).normalized()
 	# Carry the wrist around the shoulder instead of cutting across its reach.
 	var from := start.normalized().slerp(forward,progress)
