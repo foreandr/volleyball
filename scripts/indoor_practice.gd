@@ -1592,6 +1592,9 @@ func play_intro(delta: float) -> void:
 func handle_attack_contact(_previous: Vector3,_delta: float) -> bool:
 	return false
 
+func attack_surface_contact(_point: Vector3, _floor_hit: bool) -> void:
+	pass
+
 func advance_missed_ball(delta: float, rebound_floor := false) -> void:
 	var remaining := delta
 	while remaining>.00001:
@@ -1616,6 +1619,7 @@ func advance_missed_ball(delta: float, rebound_floor := false) -> void:
 		var hit := contacts.sweep(world,contacts.ball_shape,ball.position,motion,Contact.GYM|Contact.EQUIPMENT|rotation_drill.CART_WALL)
 		ball.position+=motion*float(hit.get("fraction",1.))
 		if roll_time<0. and ((not hit.is_empty() and hit.normal.y>.8 and ball.position.y<.25) or ball.position.y<=Contact.BALL_RADIUS+.004):
+			attack_surface_contact(ball.position,true)
 			var hard_landing: bool = hard_spike_floor_pending and (drop_velocity.length()>=Contact.HARD_SPIKE_SPEED or get_meta("blocked_attack",false))
 			set_meta("blocked_attack",false)
 			hard_spike_floor_pending=false
@@ -1633,6 +1637,7 @@ func advance_missed_ball(delta: float, rebound_floor := false) -> void:
 			ball.position.y=maxf(ball.position.y,Contact.BALL_RADIUS+.004)+.003
 			drop_velocity=drop_velocity.slide(Vector3.UP)*.72
 		elif not hit.is_empty():
+			attack_surface_contact(ball.position,false)
 			ball.position+=Vector3(hit.normal)*.004
 			drop_velocity=drop_velocity.bounce(hit.normal)*.45
 			if roll_time>=0.: drop_velocity.y=0.

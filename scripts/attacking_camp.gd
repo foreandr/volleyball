@@ -186,6 +186,8 @@ var hand_impact := AudioStreamPlayer.new()
 
 func build_settings() -> void:
 	super.build_settings()
+	controls_row.get_parent().add_child(last_block_result)
+	last_block_result.hide()
 	if scene_file_path!="res://scenes/attacking_camp.tscn": return
 	var row := HBoxContainer.new()
 	controls_row.get_parent().add_child(row)
@@ -251,7 +253,10 @@ var practice_jumps := [null,null,null]
 var practice_attempted := [false,false,false]
 var practice_footwork := []
 var practice_touch := false
-var quick_pressure := 0
+var quick_results: Array[int]=[]
+var last_block_result := Label.new()
+var attack_decided := false
+var touched_by_middle := false
 var middle_commit_order := bool(StorySession.game_options.get_value("attack","commit_middle",false))
 var contact_report := ""
 
@@ -261,7 +266,23 @@ func set_middle_commit_order(value: bool) -> void:
 	StorySession.save_options()
 
 func middle_commits() -> bool:
-	return middle_commit_order or quick_pressure>=2
+	return middle_commit_order or quick_results.count(1)>=2
+
+func attack_surface_contact(point: Vector3, floor_hit: bool) -> void:
+	if attack_decided or phase!="spike" or not launched_attack or has_meta("sampling_attack") or has_meta("live_sampler"): return
+	var outside := absf(point.x)>4.5 or absf(point.z-BallNet.NET_Z)>9.
+	if not floor_hit and not outside: return
+	attack_decided=true
+	last_block_result.show()
+	if outside:
+		last_block_result.text="Block out / "+contact_report if not contact_report.is_empty() else "Out / no block touch"
+	elif contact_report.is_empty():
+		last_block_result.text="In / no block touch"
+	if is_middle_quick():
+		var scored := contact_report.is_empty() and not outside and point.z>BallNet.NET_Z and drop_net_hit.is_empty()
+		var successful_touch := touched_by_middle and not outside
+		quick_results.append(1 if scored or successful_touch else 0)
+		if quick_results.size()>10: quick_results.pop_front()
 
 func is_middle_quick() -> bool:
 	return absf(active_set.x)<=2.1 and height_preset()<=1
@@ -424,6 +445,8 @@ func reset_feed() -> void:
 	practice_attempted=[false,false,false]
 	practice_touch=false
 	contact_report=""
+	attack_decided=false
+	touched_by_middle=false
 	disguise_read=shot_read.confidence>.54 and rotation_drill.random.randf()<.58
 	clear_attack_input()
 	active_lane=attack_lane
@@ -891,8 +914,6 @@ func advance_spike(delta: float) -> void:
 	if rebound_age>=0.: rebound_age+=delta
 	elif descent<0. and drop_velocity.y>0. and ball.position.y<.45:
 		rebound_age=0.
-		if not has_meta("sampling_attack") and is_middle_quick() and ball.position.z>BallNet.NET_Z and ball.position.z<=BallNet.NET_Z+9. and absf(ball.position.x)<=4.5 and contact_report.is_empty() and drop_net_hit.is_empty():
-			quick_pressure=mini(4,quick_pressure+1)
 		trace("spike_floor_rebound",{"up_mps":drop_velocity.y})
 	if not had_net_contact and not drop_net_hit.is_empty():
 		trace("spike_net_contact",{"point":str(drop_net_hit.point),"kind_of_hit":drop_net_hit.kind,"over":drop_net_hit.rollover})
@@ -1293,6 +1314,7 @@ func sample_attack_clip(arm_lift: bool,arm_swing: bool,cross: bool,review: bool,
 	return {"entry":edit_entry,"clip":clip}
 
 func resolve_block_contact(previous: Vector3,block_jumps: Array) -> bool:
+	if attack_decided: return false
 	for slot in block_jumps.size():
 		var block: RefCounted=block_jumps[slot]
 		if block==null: continue
@@ -1333,7 +1355,9 @@ func resolve_block_contact(previous: Vector3,block_jumps: Array) -> bool:
 			contact_report="%s blocker / %s %s" % [role,limb,body_part]
 			message.text=contact_report
 			show_player_timing(block.actor,contact_report,Color.WHITE)
-			if is_middle_quick(): quick_pressure=maxi(0,quick_pressure-1)
+			touched_by_middle=slot==1
+			last_block_result.text=("Stuff block / " if stuff else "Block touch / ")+contact_report
+			last_block_result.show()
 			trace("block_hand_contact",{"rep":rep,"blocker":role,"arm":limb,"segment":body_part,"stuff":stuff,"outgoing":str(drop_velocity)})
 			return true
 	return false

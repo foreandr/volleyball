@@ -93,4 +93,4 @@ Pause > Attack setup contains the Coach, Setter, Set and Hitter map. Play starts
 All four attack setup markers allow one meter outside either sideline and 1.5 meters behind the baseline within the gym runoff.
 
 A stuff block retains 60% of incoming ball speed at arm contact in drills and matches.
-In attacking and blocking practice, two untouched middle quicks landing in court trigger a CPU middle commit. Quick touches reduce that tendency. Sliders can order a middle commit. A block contact identifies the blocker, arm and collision segment.
+In attacking and blocking practice, two untouched middle quicks landing in court trigger a CPU middle commit. Two untouched quick scores or successful middle touches among the last ten quicks sustain the commit. The drill HUD retains block contact and distinguishes block out from untouched out. Sliders can order a middle commit. A block contact identifies the blocker, arm and collision segment.
