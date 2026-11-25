@@ -114,6 +114,7 @@ var hand_impact := AudioStreamPlayer.new()
 
 func start_drill() -> void:
 	hand_impact.stream=preload("res://assets/audio/hand_impacts.tres")
+	hand_impact.bus=StorySession.IMPACT_BUS
 	add_child(hand_impact)
 	hitter=athlete(START,"e97937")
 	hitter.apply_profile(setter.attributes.duplicate())

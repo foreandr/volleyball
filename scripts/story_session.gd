@@ -143,7 +143,16 @@ var demo_launch_consumed := false
 var iteration_run := preload("res://scripts/iteration_run.gd").new()
 const PREVIEW_FIELDS := ["pass_start","pass_distance","pass_output_angle","incoming_speed","incoming_angle","feed_spot","incoming_spin","spin_rate","float_strength","source_height","feed_fit","receive_direction","receive_distance_tier","ball_tab","pass_destination","pass_apex","destination_fit","preview_camera"]
 
+const IMPACT_BUS := "Ball impacts"
+
 func _ready() -> void:
+	AudioServer.add_bus()
+	var impact_bus := AudioServer.bus_count-1
+	AudioServer.set_bus_name(impact_bus,IMPACT_BUS)
+	var boost := AudioEffectAmplify.new()
+	boost.volume_db=20.
+	AudioServer.add_bus_effect(impact_bus,boost)
+	AudioServer.add_bus_effect(impact_bus,AudioEffectHardLimiter.new())
 	if game_options.load(OPTIONS) == OK:
 		pad_bindings = game_options.get_value("match","buttons",pad_bindings)
 		AudioServer.set_bus_volume_db(0,game_options.get_value("audio","volume_db",0.0))

@@ -39,7 +39,7 @@ var forehead_target := Vector3.ZERO
 var contact_time := 1.0
 const DURATION := [1.25,1.62]
 const APEX := [1.92,3.22]
-const LINES := ["Welcome to the team, %s. Iâ€™m Coach Ellis.","Youâ€™re trying out at setter. Watch the three targets. Iâ€™ll toss the first ones right to you.","Three calls from each coach station. Keep your spot. Iâ€™ll toss above your forehead, including on the jump sets."]
+const LINES := ["Welcome to the team, %s. IÃ¢â‚¬â„¢m Coach Ellis.","YouÃ¢â‚¬â„¢re trying out at setter. Watch the three targets. IÃ¢â‚¬â„¢ll toss the first ones right to you.","Three calls from each coach station. Keep your spot. IÃ¢â‚¬â„¢ll toss above your forehead, including on the jump sets."]
 var coach_motion := preload("res://scripts/tryout_coach.gd").new()
 var last_toss := -10.0
 var next_release := 0.0
@@ -229,6 +229,7 @@ var floor_impact := AudioStreamPlayer.new()
 
 func _ready() -> void:
 	floor_impact.stream=preload("res://assets/audio/floor_impacts.tres")
+	floor_impact.bus=StorySession.IMPACT_BUS
 	add_child(floor_impact)
 	original_render_scale=get_viewport().scaling_3d_scale
 	original_msaa=get_viewport().msaa_3d
@@ -1566,7 +1567,7 @@ func play_intro(delta: float) -> void:
 	camera.position = [Vector3(4.2,2.9,-3),Vector3(-0.3,1.85,3.8),Vector3(3.2,4.2,-4.5)][line]+Vector3.RIGHT*0.12*fmod(elapsed,4.2)
 	camera.look_at(coach.position+Vector3.UP*1.5 if line==1 else setter.position+Vector3.UP*1.4)
 	coach.rotation.y = atan2(setter.position.x-coach.position.x,setter.position.z-coach.position.z)
-	title.text = "INDOOR  /  DAY ONE     â€¢     COACH ELLIS"
+	title.text = "INDOOR  /  DAY ONE     Ã¢â‚¬Â¢     COACH ELLIS"
 	message.text = ""
 	if line != intro_line:
 		intro_line = line
