@@ -301,11 +301,31 @@ func refresh_practice_blockers() -> void:
 			practice_blockers[i].position.y=START.y
 			practice_blockers[i].play_action("idle")
 
+func middle_shade(seconds_to_hit: float) -> float:
+	var shade := learned_block_offset()
+	if not disguise_read: return shade
+	var reveal := 1.-smoothstep(.34,.68,seconds_to_hit)
+	return lerpf(-shade*.48,shade,reveal)
+
+func middle_reach(jump: RefCounted, lane: float) -> void:
+	if jump.shoulders.size()!=2: return
+	var offset: float=lane-jump.actor.position.x
+	var left_is_negative: bool=jump.shoulders[0].x<jump.shoulders[1].x
+	var negative_open := not is_finite(float(jump.min_hand_x))
+	var positive_open := not is_finite(float(jump.max_hand_x))
+	var spread := .53*(1.-smoothstep(.12,.45,absf(offset)))
+	var kong := smoothstep(.18,.82,absf(offset))
+	var negative := maxf(spread,kong if offset<0. else 0.) if negative_open else 0.
+	var positive := maxf(spread,kong if offset>0. else 0.) if positive_open else 0.
+	jump.reach_input=Vector2(negative,positive) if left_is_negative else Vector2(positive,negative)
+	jump.lean_input=clampf(offset,-.85 if negative_open else -.12,.85 if positive_open else .12)
+
 func step_practice_blockers(delta: float) -> void:
 	for i in mini(practice_blockers.size(),attack_blocker_count):
 		var actor := practice_blockers[i]
 		var reverse_close := attack_blocker_count==3 and active_set.x<0.
-		var lead_slot := 2 if reverse_close else 0
+		var middle_leads := attack_blocker_count>=2 and is_middle_quick()
+		var lead_slot := 1 if middle_leads else (2 if reverse_close else 0)
 		var jump: RefCounted=practice_jumps[i]
 		if jump!=null:
 			var lane := endpoint.x+learned_block_offset()
@@ -314,18 +334,28 @@ func step_practice_blockers(delta: float) -> void:
 			var offset := lane-actor.position.x
 			if i==lead_slot and jump.age>=PracticeBlock.START and jump.age<PracticeBlock.START+PracticeBlock.AIR*.68:
 				var next_x := move_toward(jump.base.x,lane,delta*.85)
-				if attack_blocker_count>=2:
+				if attack_blocker_count>=2 and not middle_leads:
 					var partner_x := practice_blockers[1].position.x
 					next_x=maxf(next_x,partner_x+.60) if lead_slot==0 else minf(next_x,partner_x-.60)
 				jump.base.x=clampf(move_toward(jump.base.x,next_x,delta*.85),-4.45,4.45)
 			if jump.shoulders.size()==2:
 				var amount := smoothstep(.22,.78,absf(offset))
-				if i==1:
+				if i==1 and not middle_leads:
 					var away := signf(actor.position.x-practice_blockers[lead_slot].position.x)
 					amount=smoothstep(.48,.90,absf(offset)) if launched_attack and offset*away>0. and absf(offset)<1.25 else 0.
 				var left: bool=(jump.shoulders[0].x-jump.shoulders[1].x)*offset>0.
 				jump.reach_input=Vector2(amount,0.) if left else Vector2(0.,amount)
 				jump.lean_input=clampf(offset,-.8,.8) if i==0 else signf(offset)*amount*.20
+			if middle_leads and i==1:
+				jump.min_hand_x=-INF
+				jump.max_hand_x=INF
+				for partner in practice_blockers:
+					if partner==actor or not partner.visible: continue
+					var gap := partner.position.x-actor.position.x
+					if absf(gap)>1.4: continue
+					if gap<0.: jump.min_hand_x=maxf(jump.min_hand_x,actor.position.x+gap*.5+.06)
+					else: jump.max_hand_x=minf(jump.max_hand_x,actor.position.x+gap*.5-.06)
+				middle_reach(jump,lane)
 			if not jump.step(delta,ball.global_position): practice_jumps[i]=null
 			continue
 		var home_x := (1-i)*2.15
@@ -342,12 +372,12 @@ func step_practice_blockers(delta: float) -> void:
 			goal=home_x if phase not in ["set","spike"] else clampf(practice_blockers[i+toward_lead].position.x+.68*toward_lead,-4.45,4.45)
 		var commit := i==1 and middle_commits() and is_middle_quick()
 		var until_hit := flight_time-elapsed
-		if commit and phase in ["pass","set_contact","set"]:
-			goal=clampf(active_set.x+learned_block_offset(),-4.4,4.4)
+		if middle_leads and i==1 and (phase=="set" or (commit and phase in ["pass","set_contact"])):
 			if phase=="pass":
 				until_hit=contact_time-elapsed+SET_RECEIVE_TIME+SET_PUSH_TIME+attack_set_duration(chosen_tempo())
 			elif phase=="set_contact":
 				until_hit=SET_RECEIVE_TIME+push_time-elapsed+attack_set_duration(tempo)
+			goal=clampf(active_set.x+middle_shade(until_hit),-4.4,4.4)
 		var old_x := actor.position.x
 		actor.position.x=move_toward(old_x,goal,GroundControls.speed(true,true)*delta)
 		actor.animator.advance(delta)

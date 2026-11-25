@@ -497,6 +497,12 @@ func step_blocker(slot: int,delta: float) -> void:
 					if slot==1 and phase!="spike" and jump.kong_direction==0.: amount=0.
 					var left: bool = (jump.shoulders[0].x-jump.shoulders[1].x)*miss>0.
 					jump.reach_input=Vector2(amount,0.) if left else Vector2(0.,amount)
+		if slot==1 and (not read_set or read_lead==1):
+			var lane: float=attackers[1].position.x+learned_block_offset()
+			if read_set: lane=read_x+learned_block_offset()
+			if phase=="spike" and drop_velocity.z>.1:
+				lane=ball.position.x+drop_velocity.x*clampf((actor.position.z-ball.position.z)/drop_velocity.z,0.,.18)
+			middle_reach(jump,lane)
 		jump.court_aim=Vector3(0.,0.,BallNet.NET_Z-3.)
 		if jump.close_direction!=0. and slot!=read_lead:
 			var partner := slot+signi(read_lead-slot)
@@ -525,7 +531,7 @@ func step_blocker(slot: int,delta: float) -> void:
 				return
 	var goal: float=HOMES[slot]
 	if slot==1 and middle_commits() and phase=="pass":
-		goal=attackers[1].position.x
+		goal=attackers[1].position.x+middle_shade(contact_time-elapsed+Block.AIR*.5)
 	var depth_goal := BallNet.NET_Z+.38
 	if phase=="set" and not read_set and elapsed>=read_delay:
 		var seen_velocity := (ball.position-source)/maxf(elapsed,.001)
@@ -547,6 +553,7 @@ func step_blocker(slot: int,delta: float) -> void:
 		else: depth_goal+=2.7
 	elif phase=="spike" and not closing[slot]:
 		depth_goal+=2.7
+	if slot==1 and read_set and read_lead==1 and phase=="set": goal=read_x+middle_shade(flight_time-elapsed)
 	var previous := actor.position.x
 	var manual_window := ready_whistled and phase!="between"
 	var cpu := automatic_block or slot!=MANUAL_SLOT or not manual_window
