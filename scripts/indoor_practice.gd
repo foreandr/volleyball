@@ -56,6 +56,8 @@ var clock := 0.0
 var spectator_prompt := PanelContainer.new()
 var spectator_text := Label.new()
 var spectator_icon := TextureRect.new()
+var timing_actor: Node3D
+const TIMING_LABEL_SECONDS := 1.45
 var timing_note := Label.new()
 var timing_until := 0.0
 const ON_TIME := .065
@@ -397,9 +399,7 @@ func build_hud() -> void:
 	row.add_child(spectator_icon)
 	row.add_child(spectator_text)
 	add_child(timing_note)
-	timing_note.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
-	timing_note.offset_top = 160
-	timing_note.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	timing_note.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	timing_note.add_theme_font_size_override("font_size",22)
 	timing_note.add_theme_constant_override("outline_size",5)
 	timing_note.hide()
@@ -792,7 +792,7 @@ func _process(delta: float) -> void:
 	spectator_prompt.visible = rotation_drill.turn == 1 and phase not in ["intro","net_guide","complete"] and not demonstration and not settings.visible and not changing_turn
 	if changing_turn: return
 	update_speech(delta)
-	timing_note.visible = clock < timing_until and phase != "complete" and not settings.visible
+	update_timing_note()
 	score_strip.visible=not solo_setting and phase not in ["intro","net_guide"] and not settings.visible and (not demonstration or phase=="complete")
 	if settings.visible or phase=="net_guide": return
 	if coach_motion.whistle_cue.step_whistle(coach,delta): return
@@ -1649,9 +1649,25 @@ func miss(reason: String) -> void:
 func show_timing(offset: float) -> void:
 	if automatic_setter(): return
 	var percent := roundi(100.0 * absf(offset) / timing_window())
-	timing_note.text = "%d%% too %s" % [percent,"early" if offset < 0 else "late"] if percent > 0 else "On time"
+	show_player_timing(setter,"%d%% too %s" % [percent,"early" if offset < 0 else "late"] if percent > 0 else "On time")
+
+func show_player_timing(actor: Node3D, caption: String) -> void:
+	timing_actor=actor
+	timing_note.text=caption
 	timing_note.reset_size()
-	timing_until = clock + 2.2
+	timing_until=clock+TIMING_LABEL_SECONDS
+	update_timing_note()
+
+func update_timing_note() -> void:
+	var remaining := timing_until-clock
+	timing_note.visible=remaining>0. and is_instance_valid(timing_actor) and phase!="complete" and not settings.visible
+	if not timing_note.visible: return
+	var above_head := Contact.joint(timing_actor,"Head")+Vector3.UP*.32
+	if camera.is_position_behind(above_head):
+		timing_note.hide()
+		return
+	timing_note.position=camera.unproject_position(above_head)-Vector2(timing_note.size.x*.5,timing_note.size.y)
+	timing_note.modulate.a=smoothstep(0.,.10,TIMING_LABEL_SECONDS-remaining)*smoothstep(0.,.40,remaining)
 
 func timing_window() -> float:
 	if not bump_aim.is_zero_approx(): return .085+.135*setter.effective_rating("Forearm setting")/100.

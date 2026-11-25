@@ -45,9 +45,7 @@ func attack_meter_error() -> float:
 	return minf(release_at,clock)-clock+elapsed-flight_time+.08
 
 func show_attack_timing(error: float) -> void:
-	timing_note.text="On time" if absf(error)<=CLEAN_WINDOW else "%d ms too %s" % [roundi(absf(error)*1000.),"early" if error<0. else "late"]
-	timing_note.reset_size()
-	timing_until=clock+2.2
+	show_player_timing(hitter,"On time" if absf(error)<=CLEAN_WINDOW else "%d ms too %s" % [roundi(absf(error)*1000.),"early" if error<0. else "late"])
 
 func clear_attack_input() -> void:
 	manual_route=Vector3.ZERO
