@@ -241,6 +241,14 @@ func step(delta: float, world_ball: Vector3) -> bool:
 		previous_wrists = wrists.duplicate()
 	for bone in rig.get_bone_count():
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.orthonormalized().get_rotation_quaternion())
+	if court_aim.is_finite():
+		var retreat := preload("res://scripts/net_collision.gd").pose_retreat(actor,1.)
+		if retreat>0.:
+			actor.position.z+=retreat
+			for points in [shoulders,elbows,wrists,hands]:
+				for i in points.size(): points[i].z+=retreat
+			for chain in body_chains:
+				for i in chain.size(): chain[i].z+=retreat
 	if age < START+AIR+0.02+landing_recovery: return true
 	actor.position = base
 	actor.animator.seek(0.0,true)

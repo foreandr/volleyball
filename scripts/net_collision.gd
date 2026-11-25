@@ -6,6 +6,31 @@ const NET_TOP := 2.505
 const NET_BOTTOM := 1.45
 const NET_HALF_WIDTH := 4.8
 
+# Clearance for a posed limb capsule below the tape, including the point
+# where a sloping forearm rises clear even if its fingertips are already over.
+static func limb_retreat(a: Vector3,b: Vector3,radius: float,side: float) -> float:
+	var ceiling := NET_TOP+radius
+	if minf(a.y,b.y)>ceiling: return 0.
+	if a.y>ceiling: a=a.lerp(b,(ceiling-a.y)/(b.y-a.y))
+	elif b.y>ceiling: b=b.lerp(a,(ceiling-b.y)/(a.y-b.y))
+	return maxf(0.,radius-minf(side*(a.z-NET_Z),side*(b.z-NET_Z)))
+
+static func pose_retreat(actor: Node3D,side: float) -> float:
+	if absf(actor.position.z-NET_Z)>1.65 or absf(actor.position.x)>NET_HALF_WIDTH+.7: return 0.
+	var joints=preload("res://scripts/gym_physics.gd")
+	var head: Vector3=joints.joint(actor,"Head")
+	var chest: Vector3=joints.joint(actor,"spine_03")
+	var retreat := limb_retreat(chest,head,.16,side)
+	for suffix in ["_l","_r"]:
+		var shoulder: Vector3=joints.joint(actor,"upperarm"+suffix)
+		var elbow: Vector3=joints.joint(actor,"lowerarm"+suffix)
+		var wrist: Vector3=joints.joint(actor,"hand"+suffix)
+		var tip: Vector3=joints.joint(actor,"middle_03"+suffix)
+		retreat=maxf(retreat,limb_retreat(shoulder,elbow,.075,side))
+		retreat=maxf(retreat,limb_retreat(elbow,wrist,.055,side))
+		retreat=maxf(retreat,limb_retreat(wrist,tip,.045,side))
+	return retreat
+
 static func contact_sound() -> AudioStreamPlayer:
 	var player := AudioStreamPlayer.new()
 	player.stream = AudioStreamWAV.load_from_file("res://assets/audio/pass_contact.wav")

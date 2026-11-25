@@ -644,6 +644,7 @@ func step_attack(delta: float) -> void:
 			var correction := (actual-planned_contact).slide(Vector3.UP).limit_length(.45)
 			attack_jump.approach_lunge=attack_jump.approach_lunge.move_toward(planned_lunge+correction,2.4*delta)
 		attack_jump.step(hitter,delta,Vector2.ZERO)
+		hitter.position.z-=BallNet.pose_retreat(hitter,-1.)
 	else:
 		hitter.animator.advance(delta)
 		var stick := Vector2(axis(JOY_AXIS_LEFT_X),axis(JOY_AXIS_LEFT_Y)).limit_length(1.)
@@ -1018,6 +1019,10 @@ func shot_landing(origin: Vector3) -> Vector3:
 	return Vector3(-3.4 if cross_court else clampf(origin.x,-3.8,3.8),Contact.BALL_RADIUS,11.)
 
 func pose_swing() -> void:
+	apply_attack_swing()
+	hitter.position.z-=BallNet.pose_retreat(hitter,-1.)
+
+func apply_attack_swing() -> void:
 	if swing_time>.65:
 		if last_shoulder_time>=0.:
 			var rig: Skeleton3D=hitter.skeleton
