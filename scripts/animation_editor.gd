@@ -136,8 +136,19 @@ func _ready() -> void:
 			if argument.begins_with("--preview-frame="):
 				set_playing(false)
 				set_frame(argument.get_slice("=",1).to_int())
-func show_swing(number: int) -> void:
+func show_swing(number: int, direction := 1) -> void:
 	review_number=wrapi(number-1,0,50)+1
+	var remaining := 0
+	for id in range(1,51):
+		if review_votes.get_value("votes",str(id),"")!="No": remaining+=1
+	if remaining==0:
+		review_number=0
+		set_playing(false)
+		preview.hide()
+		review_status.text="No swings remaining"
+		return
+	while review_votes.get_value("votes",str(review_number),"")=="No":
+		review_number=wrapi(review_number-1+direction,0,50)+1
 	session.replace_source(preload("res://scripts/numbered_swings.gd").make(review_source,review_number,session.rig))
 	frame_field.max_value=session.last_frame
 	timeline.max_value=session.last_frame
@@ -146,7 +157,7 @@ func show_swing(number: int) -> void:
 	redo_history.clear()
 	refresh_history()
 	copy_name.text="Swing %02d" % review_number
-	review_status.text="%02d / 50   %s" % [review_number,review_votes.get_value("votes",str(review_number),"")]
+	review_status.text="Swing %02d   ·   %d remaining   %s" % [review_number,remaining,review_votes.get_value("votes",str(review_number),"")]
 	review_votes.set_value("review","current",review_number)
 	if review_votes.save(REVIEW_PATH)!=OK: review_status.text+="   Save failed"
 	set_frame(int(session.source.get_meta("editor_loop_start",0)))
@@ -218,7 +229,11 @@ func update_live_shot() -> void:
 	updating_shot=false
 
 func vote_swing(choice: String) -> void:
+	if review_number==0: return
 	review_votes.set_value("votes",str(review_number),choice)
+	if review_votes.save(REVIEW_PATH)!=OK:
+		review_status.text="Vote could not be saved"
+		return
 	show_swing(review_number+1)
 
 func light_preview_stage(world: Node3D) -> void:
@@ -259,7 +274,7 @@ func build_controls(controls: VBoxContainer) -> void:
 		controls.add_child(review_status)
 		var row := HBoxContainer.new()
 		controls.add_child(row)
-		row.add_child(button("<",func(): show_swing(review_number-1)))
+		row.add_child(button("<",func(): show_swing(review_number-1,-1)))
 		row.add_child(button("Yes",vote_swing.bind("Yes")))
 		row.add_child(button("No",vote_swing.bind("No")))
 		row.add_child(button(">",func(): show_swing(review_number+1)))
