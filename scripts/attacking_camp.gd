@@ -161,7 +161,7 @@ func camp_title() -> String:
 func update_prompts(_next: String) -> void:
 	var entries := [["View","Take control" if cpu_hitter else "Watch CPU attack"]]
 	if not cpu_hitter: entries.append_array([["LS","Move"],["LT","Lock on / shuffle"],["RT","Sprint"],[JOY_BUTTON_X,"Hold line"],[JOY_BUTTON_Y,"Hold six"],[JOY_BUTTON_B,"Hold cross"],[JOY_BUTTON_LEFT_SHOULDER,"Roll"],[JOY_BUTTON_RIGHT_SHOULDER,"Tip"]])
-	entries.append(["Share","Set height: "+SET_HEIGHT_NAMES[height_preset()]])
+	entries.append(["Share","/ D-pad ↓   Set height: "+SET_HEIGHT_NAMES[height_preset()]])
 	entries.append([JOY_BUTTON_START,"Settings"])
 	Xbox.prompts(controls_row,entries)
 
@@ -192,8 +192,10 @@ func select_attack_touch() -> void:
 	tip_shot=bumper==JOY_BUTTON_RIGHT_SHOULDER
 
 func _input(event: InputEvent) -> void:
-	if event is InputEventJoypadButton and event.button_index==JOY_BUTTON_MISC1 and not settings.visible and not get_tree().paused:
-		if event.pressed: save_set_height(SET_HEIGHTS[(height_preset()+1)%SET_HEIGHTS.size()])
+	if event is InputEventJoypadButton and event.button_index in [JOY_BUTTON_MISC1,JOY_BUTTON_DPAD_DOWN] and not settings.visible and not get_tree().paused:
+		if event.pressed:
+			save_set_height(SET_HEIGHTS[(height_preset()+1)%SET_HEIGHTS.size()])
+			trace("set_height_change",{"button":event.button_index,"preset":SET_HEIGHT_NAMES[height_preset()]})
 		get_viewport().set_input_as_handled()
 		return
 	if event is InputEventJoypadButton:
