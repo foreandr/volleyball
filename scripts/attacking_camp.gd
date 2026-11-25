@@ -5,6 +5,7 @@ const START := Vector3(3.65,.04,.76)
 var hitter: Node3D
 var attack_jump := preload("res://scripts/setter_jump.gd").new()
 var swing_time := -1.
+var closest_spike_gap := INF
 var contact_swing_time := 0.
 var cross_court := false
 var review_setup := {}
@@ -94,8 +95,11 @@ func _input(event: InputEvent) -> void:
 	super._input(event)
 
 func step_practice(delta: float) -> void:
-	step_attack(delta)
-	smooth_wrists(delta)
+	var steps := maxi(1,ceili(delta*90.)) if phase=="set" else 1
+	var dt := delta/steps
+	for i in steps:
+		step_attack(dt)
+		smooth_wrists(dt)
 
 func smooth_wrists(delta: float) -> void:
 	var rig: Skeleton3D=hitter.skeleton
@@ -119,10 +123,18 @@ func step_attack(delta: float) -> void:
 		attack_jump.step(hitter,delta,Vector2.ZERO)
 	else:
 		hitter.animator.advance(delta)
-		if cpu_hitter and not approach_started and phase in ["set_contact","set"]:
-			var entry := Vector3(endpoint.x+.09,START.y,endpoint.z-2.20)
-			var travel := (entry-hitter.position).limit_length(5.8*delta)
+		if cpu_hitter and not approach_started and phase in ["cart","feed","pass","set_contact","set"]:
+			var entry := Vector3(4.95,START.y,.65)
+			if phase in ["set_contact","set"]:
+				entry=endpoint+Vector3(1.18,0.,-1.82)
+				entry.y=START.y
+			elif phase=="pass":
+				entry.z+=.35*smoothstep(0.,1.,elapsed)
+			var travel := (entry-hitter.position).limit_length((5.8 if phase=="set" else 1.65)*delta)
 			hitter.position=rotation_drill.move_actor(hitter,travel)
+			var watch := (ball.position-hitter.position).slide(Vector3.UP)
+			if watch.length_squared()>.01:
+				hitter.rotation.y=rotate_toward(hitter.rotation.y,atan2(watch.x,watch.z),3.5*delta)
 			hitter.play_ground_gait(travel.length()/maxf(delta,.001))
 		if not cpu_hitter and not approach_started:
 			var stick := Vector2(axis(JOY_AXIS_LEFT_X),axis(JOY_AXIS_LEFT_Y)).limit_length(1.)
@@ -146,6 +158,7 @@ func step_attack(delta: float) -> void:
 func start_approach() -> void:
 	if approach_started: return
 	last_shoulder_time=-1.
+	closest_spike_gap=INF
 	approach_started=true
 	var contact_stance := Vector3(endpoint.x+.09,.04,endpoint.z-.09)
 	var heading := (contact_stance-hitter.position).slide(Vector3.UP).normalized()
@@ -173,7 +186,7 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 	var remaining := flight_time-elapsed
 	var rise := attack_jump.flight_duration(jump_height,true)*.48
 	if cpu_hitter and remaining<=attack_jump.LEAD_STEP_TIME+PLANT_TIME+rise+.025: start_approach()
-	if cpu_hitter and approach_started and swing_time<0. and remaining<=.16/arm_speed_factor(): swing_time=0.
+	if cpu_hitter and approach_started and swing_time<0. and remaining<=.16/arm_speed_factor()+(.095 if not has_meta("sampling_attack") else 0.): swing_time=0.
 	if swing_time<0. and attack_jump.active and attack_jump.elapsed>attack_jump.load_duration():
 		pose_swing()
 	if swing_time>=0.:
@@ -181,6 +194,8 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 		pose_swing()
 		var palm := Contact.palm(hitter,"r")
 		var nearest := Geometry3D.get_closest_point_to_segment(palm,previous,ball.position)
+		if swing_time>=.055 and swing_time<=.30:
+			closest_spike_gap=minf(closest_spike_gap,nearest.distance_to(palm))
 		if swing_time>=.055 and swing_time<=.30 and nearest.distance_to(palm)<=Contact.BALL_RADIUS+.065:
 			contact_swing_time=swing_time
 			strike_point=ball.position
@@ -201,6 +216,7 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 			begin("spike")
 			return true
 	if elapsed>=flight_time:
+		trace("spike_miss",{"closest_palm_gap_m":closest_spike_gap if is_finite(closest_spike_gap) else -1.,"ball":str(ball.position),"palm":str(Contact.palm(hitter,"r"))})
 		feedback="Missed spike"
 		message.text=feedback
 		success=false
@@ -465,6 +481,7 @@ func edit_approach_frames(arm_lift := false, arm_swing := false, cross := false,
 	MenuPresentation.load_scene("res://scenes/animation_editor.tscn")
 
 func sample_attack_clip(arm_lift: bool,arm_swing: bool,cross: bool,review: bool,setup: Dictionary) -> Dictionary:
+	set_meta("sampling_attack",true)
 	review_setup=setup.duplicate()
 	jump_height=float(setup.get("jump",33.))*.0254
 	cross_court=float(setup.get("x",3.4 if cross else -3.4))>0.
@@ -556,4 +573,5 @@ func sample_attack_clip(arm_lift: bool,arm_swing: bool,cross: bool,review: bool,
 		edit_entry["swing_review"]=true
 		clip.set_meta("editor_net_impacts",editor_impacts)
 		clip.set_meta("swing_hit_frame",hit_frame)
+	remove_meta("sampling_attack")
 	return {"entry":edit_entry,"clip":clip}
