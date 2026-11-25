@@ -312,6 +312,9 @@ func _input(event: InputEvent) -> void:
 				return
 	super._input(event)
 
+func is_middle_quick() -> bool:
+	return route==1
+
 func block_read_target(slot: int) -> float:
 	var target := read_x if read_set else attackers[1].position.x
 	if phase=="spike" and drop_velocity.z>.1:
@@ -515,12 +518,14 @@ func step_blocker(slot: int,delta: float) -> void:
 		middle_read_attempted=true
 		var runner := attackers[1]
 		var closing_speed: float=route_velocity[1].z
-		if closing_speed>1. and absf(actor.position.x-runner.position.x)<1. and rotation_drill.random.randf()<.35:
+		if closing_speed>1. and absf(actor.position.x-runner.position.x)<1. and (middle_commits() or rotation_drill.random.randf()<.35):
 			begin_block(1)
 			if jumps[1]!=null:
 				trace("middle_committed_to_quick",{"runner_speed":closing_speed})
 				return
 	var goal: float=HOMES[slot]
+	if slot==1 and middle_commits() and phase=="pass":
+		goal=attackers[1].position.x
 	var depth_goal := BallNet.NET_Z+.38
 	if phase=="set" and not read_set and elapsed>=read_delay:
 		var seen_velocity := (ball.position-source)/maxf(elapsed,.001)

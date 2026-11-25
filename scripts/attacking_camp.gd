@@ -251,6 +251,20 @@ var practice_jumps := [null,null,null]
 var practice_attempted := [false,false,false]
 var practice_footwork := []
 var practice_touch := false
+var quick_pressure := 0
+var middle_commit_order := bool(StorySession.game_options.get_value("attack","commit_middle",false))
+var contact_report := ""
+
+func set_middle_commit_order(value: bool) -> void:
+	middle_commit_order=value
+	StorySession.game_options.set_value("attack","commit_middle",value)
+	StorySession.save_options()
+
+func middle_commits() -> bool:
+	return middle_commit_order or quick_pressure>=2
+
+func is_middle_quick() -> bool:
+	return absf(active_set.x)<=2.1 and height_preset()<=1
 
 func set_attack_blocker_count(count: int) -> void:
 	attack_blocker_count=clampi(count,0,3)
@@ -305,11 +319,20 @@ func step_practice_blockers(delta: float) -> void:
 		if i!=lead_slot:
 			var toward_lead := signi(lead_slot-i)
 			goal=home_x if phase not in ["set","spike"] else clampf(practice_blockers[i+toward_lead].position.x+.68*toward_lead,-4.45,4.45)
+		var commit := i==1 and middle_commits() and is_middle_quick()
+		var until_hit := flight_time-elapsed
+		if commit and phase in ["pass","set_contact","set"]:
+			goal=clampf(active_set.x+learned_block_offset(),-4.4,4.4)
+			if phase=="pass":
+				until_hit=contact_time-elapsed+SET_RECEIVE_TIME+SET_PUSH_TIME+attack_set_duration(chosen_tempo())
+			elif phase=="set_contact":
+				until_hit=SET_RECEIVE_TIME+push_time-elapsed+attack_set_duration(tempo)
 		var old_x := actor.position.x
 		actor.position.x=move_toward(old_x,goal,GroundControls.speed(true,true)*delta)
 		actor.animator.advance(delta)
 		GroundControls.shuffle(actor,practice_footwork[i],Vector3((actor.position.x-old_x)/maxf(.0001,delta),0,0),true,delta)
-		if phase=="set" and not practice_attempted[i] and absf(goal-actor.position.x)<.85 and flight_time-elapsed<=PracticeBlock.START+PracticeBlock.AIR*.5:
+		var may_jump := phase=="set" or (commit and phase in ["pass","set_contact"])
+		if may_jump and not practice_attempted[i] and absf(goal-actor.position.x)<.85 and until_hit<=PracticeBlock.START+PracticeBlock.AIR*.5:
 			jump=PracticeBlock.new()
 			jump.jump_height=float(practice_vertical[i])*.0254
 			jump.net_heading=PI
@@ -400,6 +423,7 @@ func play_attack_setup() -> void:
 func reset_feed() -> void:
 	practice_attempted=[false,false,false]
 	practice_touch=false
+	contact_report=""
 	disguise_read=shot_read.confidence>.54 and rotation_drill.random.randf()<.58
 	clear_attack_input()
 	active_lane=attack_lane
@@ -867,6 +891,8 @@ func advance_spike(delta: float) -> void:
 	if rebound_age>=0.: rebound_age+=delta
 	elif descent<0. and drop_velocity.y>0. and ball.position.y<.45:
 		rebound_age=0.
+		if not has_meta("sampling_attack") and is_middle_quick() and ball.position.z>BallNet.NET_Z and ball.position.z<=BallNet.NET_Z+9. and absf(ball.position.x)<=4.5 and contact_report.is_empty() and drop_net_hit.is_empty():
+			quick_pressure=mini(4,quick_pressure+1)
 		trace("spike_floor_rebound",{"up_mps":drop_velocity.y})
 	if not had_net_contact and not drop_net_hit.is_empty():
 		trace("spike_net_contact",{"point":str(drop_net_hit.point),"kind_of_hit":drop_net_hit.kind,"over":drop_net_hit.rollover})
@@ -1267,17 +1293,20 @@ func sample_attack_clip(arm_lift: bool,arm_swing: bool,cross: bool,review: bool,
 	return {"entry":edit_entry,"clip":clip}
 
 func resolve_block_contact(previous: Vector3,block_jumps: Array) -> bool:
-	for block: RefCounted in block_jumps:
+	for slot in block_jumps.size():
+		var block: RefCounted=block_jumps[slot]
 		if block==null: continue
 		for i in block.hands.size():
 			var chain := [block.shoulders[i],block.elbows[i],block.wrists[i],block.hands[i]]
 			var touched := false
 			var stuff := false
+			var body_part := ""
 			var hit_position := Vector3.ZERO
 			for segment in [2,1,0]:
 				var closest := Geometry3D.get_closest_points_between_segments(previous,ball.global_position,chain[segment],chain[segment+1])
 				var gap := closest[0].distance_to(closest[1])
 				if gap <= Contact.BALL_RADIUS+PracticeBlock.ARM_RADII[segment]:
+					body_part=["upper arm","forearm","hand"][segment]
 					touched=true
 					hit_position=closest[0]
 					var surface: Vector3=closest[1]
@@ -1299,7 +1328,12 @@ func resolve_block_contact(previous: Vector3,block_jumps: Array) -> bool:
 			hand_impact.volume_db=-2.
 			hand_impact.play()
 			block_sound_count+=1
-			trace("block_hand_contact",{"rep":rep,"stuff":stuff,"outgoing":str(drop_velocity)})
-			message.text = "Block touch"
+			var role: String=["Right-side","Middle","Left-side"][slot] if block_jumps==practice_jumps else ["Left-side","Middle","Right-side"][slot]
+			var limb := "left" if i==0 else "right"
+			contact_report="%s blocker / %s %s" % [role,limb,body_part]
+			message.text=contact_report
+			show_player_timing(block.actor,contact_report,Color.WHITE)
+			if is_middle_quick(): quick_pressure=maxi(0,quick_pressure-1)
+			trace("block_hand_contact",{"rep":rep,"blocker":role,"arm":limb,"segment":body_part,"stuff":stuff,"outgoing":str(drop_velocity)})
 			return true
 	return false

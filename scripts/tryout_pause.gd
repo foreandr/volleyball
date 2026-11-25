@@ -122,6 +122,12 @@ func open_sliders() -> void:
 			break
 
 func attack_blocker_controls() -> void:
+	if game.has_method("set_middle_commit_order"):
+		var order := CheckButton.new()
+		order.text="Middle commits to quick"
+		order.button_pressed=game.middle_commit_order
+		order.toggled.connect(game.set_middle_commit_order)
+		body.add_child(order)
 	if game.scene_file_path=="res://scenes/attacking_camp.tscn":
 		var count := OptionButton.new()
 		for text in ["No blockers","1 blocker (right side)","2 blockers (right side + middle)","3 blockers"]: count.add_item(text)
