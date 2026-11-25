@@ -211,3 +211,14 @@ Spike feedback centers its timing bands 55 ms earlier, checks release against pa
 - Nine-man volleyball with its own rules and court dimensions.
 - Larger configurable courts, including 10 m and 15 m size options. Exact layouts are open.
 - Multiple live balls at once. In Swedish two-ball, one player on each side serves simultaneously across the net to start two rallies. Scoring and restart rules are open.
+
+## Future training camp drills
+
+- Touch Ten
+- Butterfly defense
+- Drills off the box
+- Transition drills
+- Hitting lines
+- Bounce-offs
+
+Practice observation notes can capture each drill's starting positions, ball feeds, player rotations, and reset or scoring rules.
