@@ -354,6 +354,14 @@ func build_controls(controls: VBoxContainer) -> void:
 	transport.add_child(undo_button)
 	redo_button = button("Redo",redo)
 	transport.add_child(redo_button)
+	var markers := CheckButton.new()
+	markers.name="JointMarkers"
+	markers.text="Joint markers"
+	markers.button_pressed=true
+	markers.toggled.connect(func(enabled: bool):
+		if is_instance_valid(overlay): overlay.visible=enabled
+		if not enabled: gizmo_drag=false)
+	controls.add_child(markers)
 	reception_controls = preload("res://scripts/reception_controls.gd").new()
 	controls.add_child(reception_controls)
 	reception_controls.changed.connect(func(part): replace_body_layer = part=="body"; trajectory_base = null; apply_output_angle(angle_control.requested))
@@ -672,6 +680,7 @@ func handle_points() -> Array[Dictionary]:
 	return result
 
 func pick_handle(position: Vector2) -> int:
+	if not is_instance_valid(overlay) or not overlay.visible: return -1
 	var closest := 11.0
 	var selected := -1
 	for handle in handle_points():
