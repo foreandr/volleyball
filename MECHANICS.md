@@ -97,3 +97,4 @@ In attacking and blocking practice, two untouched middle quicks landing in court
 On middle quicks, read and commit timing both support a disguised lane, late lateral correction, torso lean, a two-hand spread or a one-arm Kong into an open lane. Nearby teammates limit inward reach.
 Active blocks also collide across both shoulders, neck and head. These contacts use soft deflections and count toward block-out attribution in the drills. Replay shows the same body capsules.
 Blocking capsule radii are 18 cm at the hand, 14.25 cm at the forearm, 15.75 cm at the shoulder and about 13.2 cm at the head.
+Spike approaches drive both hands overhead during the final plant. Airborne CPU drill blockers prioritize a reachable ball above the tape over their lane disguise or spread.

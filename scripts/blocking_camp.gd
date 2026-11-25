@@ -334,6 +334,7 @@ func block_read_target(slot: int) -> float:
 
 func begin_block(slot: int,loaded := 0.,manual := false) -> void:
 	var jump := Block.new()
+	jump.track_near_ball=not manual
 	var stamina=blockers[slot].stamina
 	if not manual and (stamina.exhausted or attempted[slot]): return
 	if not manual:

@@ -35,6 +35,7 @@ var landing_recovery := 0.13
 var overpass_swing := false
 var net_heading := INF
 var aggressive_press := false
+var track_near_ball := false
 var kong_direction := 0.
 var close_direction := 0.
 var lean_input := 0.
@@ -140,6 +141,12 @@ func step(delta: float, world_ball: Vector3) -> bool:
 		var shoulder_offset := rig.to_global(shoulder).x-rig.to_global(author.point(pose,"spine_03")).x
 		var inside_arm := is_finite(min_hand_x) if shoulder_offset<0. else is_finite(max_hand_x)
 		if inside_arm: spread=0.
+		var direct := 0.
+		if track_near_ball and not overpass_swing:
+			var distance := rig.to_global(shoulder).distance_to(world_ball)
+			direct=air_weight*(1.-smoothstep(.68,1.05,distance))*smoothstep(2.43,2.60,world_ball.y)
+			spread*=1.-direct
+			opposite*=1.-direct
 		var balance := opposite*(1.-spread) if not inside_arm or kong_direction!=0. else 0.
 		var spine: Vector3=author.point(pose,"spine_03")
 		var side_sign := signf(shoulder.x-spine.x)
@@ -154,6 +161,10 @@ func step(delta: float, world_ball: Vector3) -> bool:
 			world_target+=forward*.18*press*(1.-below_tape)
 			world_target.x=clampf(move_toward(world_target.x,world_ball.x,.12*press*(1.-maxf(spread,balance))),min_hand_x,max_hand_x)
 			target=rig.to_local(world_target)
+		if direct>0.:
+			var hand_goal := world_ball+world_ball.direction_to(rig.to_global(shoulder))*.09
+			hand_goal.x=clampf(hand_goal.x+shoulder_offset*.24,min_hand_x,max_hand_x)
+			target=target.lerp(rig.to_local(hand_goal),direct)
 		var pole := Vector3(outward*0.38,-0.55,0.30)
 		if overpass_swing and side == "r":
 			var draw := smoothstep(0.11,0.30,age)*(1.0-smoothstep(0.30,0.47,age))
