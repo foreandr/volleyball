@@ -275,7 +275,13 @@ func pose_swing() -> void:
 	var hip_share := lerpf(.46,.72,smoothstep(.15,.95,absf(heading)))
 	hip_turn+=heading*hip_share*smoothstep(-.20,.055,apex_offset)
 	twist+=heading*(1.-hip_share)*smoothstep(-.15,.085,apex_offset)
-	author.rotate_world(pose,"spine_01",Vector3.RIGHT,deg_to_rad(-9.)*load_weight)
+	# Load the chest through the draw, then release the arch into the strike.
+	var draw_load := smoothstep(.055,attack_jump.flight_duration(jump_height,true)*.48-.11,air_age)
+	draw_load *= 1.-smoothstep(-.11,.045,apex_offset)
+	var arch := deg_to_rad(9.)*load_weight+deg_to_rad(11.)*draw_load
+	twist-=deg_to_rad(7.)*draw_load
+	author.rotate_world(pose,"spine_01",Vector3.RIGHT,-arch*.45)
+	author.rotate_world(pose,"spine_02",Vector3.RIGHT,-arch*.55)
 	author.rotate_world(pose,"spine_01",Vector3.UP,twist*.45)
 	author.rotate_world(pose,"spine_02",Vector3.UP,twist*.55)
 	# Raise the striking shoulder in the chest's own lateral plane as the arm reaches.
