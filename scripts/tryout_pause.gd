@@ -127,6 +127,22 @@ func attack_setup_controls() -> void:
 		label.text="Set height   %d" % int(v))
 
 func tuning_controls() -> void:
+	if "block_vertical" in game:
+		var caption := Label.new()
+		var slider := HSlider.new()
+		slider.min_value=0
+		slider.max_value=60
+		slider.step=1
+		slider.value=game.block_vertical
+		caption.text="Block vertical    %d in" % roundi(slider.value)
+		body.add_child(caption)
+		body.add_child(slider)
+		slider.value_changed.connect(func(v):
+			game.block_vertical=v
+			caption.text="Block vertical    %d in" % roundi(v)
+			StorySession.game_options.set_value("blocking","vertical_inches",v)
+			StorySession.save_options())
+		return
 	var timing_label := Label.new()
 	timing_label.text="CPU release timing"
 	body.add_child(timing_label)

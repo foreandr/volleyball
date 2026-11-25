@@ -8,14 +8,27 @@ var jumps := [null,null,null]
 var lateral_speed := [0.,0.,0.]
 var attempted := [false,false,false]
 var deflected := false
+var block_held := false
 var automatic_block := true
+var block_vertical := float(StorySession.game_options.get_value("blocking","vertical_inches",roundf(Block.HEIGHT/.0254)))
+var aim_six := false
 
 func start_drill() -> void:
 	for x: float in HOMES:
 		var actor := athlete(Vector3(x,START.y,BallNet.NET_Z+.38),"286881")
+		var variant := 5+blockers.size()
+		register_student(actor,variant)
+		preload("res://scripts/practice_kit.gd").apply(actor,false,variant)
+		energy[actor]=actor.stamina
 		actor.rotation.y=PI
 		blockers.append(actor)
 	super.start_drill()
+
+func apply_camera() -> void:
+	var saved_yaw := yaw
+	if not automatic_block: yaw+=PI
+	super.apply_camera()
+	yaw=saved_yaw
 
 func camp_title() -> String:
 	return "BLOCKING   /   BLOCK AT THE NET"
@@ -23,7 +36,7 @@ func camp_title() -> String:
 func update_prompts(_next: String) -> void:
 	var entries := [["View", "Control blocker" if automatic_block else "Watch CPU block"]]
 	if not automatic_block:
-		entries.append_array([["LS","Shuffle"],[JOY_BUTTON_A,"Block"]])
+		entries.append_array([["LS","Shuffle"],[JOY_BUTTON_A,"Hold A / release to jump"]])
 	entries.append(["D-pad Up/Down","Set height: %d" % height_preset()])
 	entries.append([JOY_BUTTON_START,"Settings"])
 	Xbox.prompts(controls_row,entries)
@@ -39,6 +52,7 @@ func reset_feed() -> void:
 	attack_lane = 0
 	next_set = Vector3(3.65,2.65,3.)
 	deflected=false
+	block_held=false
 	for i in blockers.size():
 		lateral_speed[i]=0.
 		jumps[i]=null
@@ -49,11 +63,13 @@ func reset_feed() -> void:
 	var random := rotation_drill.random as RandomNumberGenerator
 	var depth := 4.5 if random.randf()<.8 else random.randf_range(4.,5.)
 	var target_x := 4.5-random.randf_range(0.,1.)
+	aim_six=not aim_six
+	if aim_six: target_x=random.randf_range(-.5,.5)
 	review_setup.x=-target_x
 	review_setup.z=BallNet.NET_Z+depth
 	cross_court=false
 	bounce_line=false
-	trace("block_drill_target",{"line_offset_m":4.5-target_x,"depth_m":depth})
+	trace("block_drill_target",{"lane":"six" if aim_six else "line","target_x":target_x,"depth_m":depth})
 
 func _input(event: InputEvent) -> void:
 	if not settings.visible and not get_tree().paused:
@@ -61,18 +77,30 @@ func _input(event: InputEvent) -> void:
 			var toggle: bool = event.button_index == JOY_BUTTON_BACK if event is InputEventJoypadButton else event.physical_keycode == KEY_TAB
 			var jump_pressed: bool = event.button_index == Xbox.physical(JOY_BUTTON_A) if event is InputEventJoypadButton else event.physical_keycode == KEY_SPACE
 			if toggle or jump_pressed:
-				if event.is_pressed() and not event.is_echo():
-					if toggle:
+				if not event.is_echo():
+					if toggle and event.is_pressed():
 						automatic_block = not automatic_block
+						block_held=false
+						apply_camera()
 						update_prompts(phase)
-					elif not automatic_block and jumps[MANUAL_SLOT] == null:
-						begin_block(MANUAL_SLOT)
+					elif jump_pressed and not automatic_block:
+						if event.is_pressed():
+							block_held=jumps[MANUAL_SLOT]==null
+						elif block_held:
+							block_held=false
+							if jumps[MANUAL_SLOT]==null: begin_block(MANUAL_SLOT)
 				get_viewport().set_input_as_handled()
 				return
 	super._input(event)
 
 func begin_block(slot: int) -> void:
 	var jump := Block.new()
+	var stamina=blockers[slot].stamina
+	if stamina.exhausted: return
+	jump.jump_height=block_vertical*.0254*stamina.effectiveness()
+	stamina.spend(5,"Block jump")
+	trace("block_takeoff",{"slot":slot,"vertical_m":jump.jump_height,"stamina":stamina.value})
+	jump.aggressive_press=true
 	jump.begin(blockers[slot])
 	jumps[slot]=jump
 	attempted[slot]=true
@@ -86,20 +114,23 @@ func step_blocker(slot: int,delta: float) -> void:
 	var actor := blockers[slot]
 	var jump: RefCounted = jumps[slot]
 	if jump!=null:
+		jump.min_hand_x=(blockers[slot-1].position.x+actor.position.x)*.5+.09 if slot>0 else -INF
+		jump.max_hand_x=(blockers[slot+1].position.x+actor.position.x)*.5-.09 if slot<2 else INF
 		if not jump.step(delta,ball.global_position): jumps[slot]=null
 		return
 	var goal: float=HOMES[slot]
-	if phase in ["set_contact","set","spike"]:
-		if slot==2: goal=clampf(endpoint.x,1.6,4.25)
-		elif slot==1: goal=clampf(endpoint.x-.90,-1.,3.35)
+	if phase in ["pass","set_contact","set","spike"]:
+		var pin := endpoint.x if phase in ["set","spike"] else active_set.x
+		if slot==2: goal=clampf(pin,1.6,4.25)
+		elif slot==1: goal=clampf(pin-.61,-1.,3.64)
 		else: goal=-2.
 	var previous := actor.position.x
 	var cpu := automatic_block or slot!=MANUAL_SLOT
 	var pace := GroundControls.speed(true,false)
 	var desired := clampf((goal-previous)*4.,-pace,pace) if cpu else axis(JOY_AXIS_LEFT_X)*camera.global_basis.x.x*pace
 	lateral_speed[slot]=move_toward(lateral_speed[slot],desired,8.*delta)
-	var low := -4.5 if slot==0 else blockers[slot-1].position.x+.72
-	var high := 4.5 if slot==2 else blockers[slot+1].position.x-.72
+	var low := -4.5 if slot==0 else blockers[slot-1].position.x+.61
+	var high := 4.5 if slot==2 else blockers[slot+1].position.x-.61
 	actor.position.x=clampf(previous+lateral_speed[slot]*delta,low,high)
 	actor.animator.advance(delta)
 	if not shuffle_steps.has(actor):

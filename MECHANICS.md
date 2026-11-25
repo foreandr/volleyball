@@ -32,3 +32,5 @@ CPU hitters conserve stamina at 30% or below. A line bounce requires more than 5
 Training Camp Blocking runs the crosscourt attack demo from the left pin. View switches between CPU and manual blocking. The attack set-height controls also apply. Three front-row blockers share coverage. The pin and middle can close together while the far blocker holds coverage. Their shuffle uses the focused hitter speed. A block touch plays the hitter hand-impact sound.
 Blocking practice aims down the line, zero to one meter inside the sideline. Eight in ten targets are 4.5 m deep. The rest vary from 4 to 5 m.
 Blocking practice supplies a rested hard-driven hitter each rep. This drill fixes the shot type for blocker repetitions.
+Blocking feeds alternate line and zone six. Block vertical in inches controls all three blockers. The middle starts closing on the pass, and adjacent blockers split their hand targets at the seam.
+Each block jump spends 5 stamina, and available stamina scales the selected vertical. Hold A and release to jump in manual blocking. View switches to the right-side blocker with the camera behind him.

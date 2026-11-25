@@ -11,6 +11,8 @@ var jump_height := HEIGHT
 var landing_recovery := 0.13
 var overpass_swing := false
 var aggressive_press := false
+var min_hand_x := -INF
+var max_hand_x := INF
 var base: Vector3
 var previous_hands: Array[Vector3] = []
 var hands: Array[Vector3] = []
@@ -65,6 +67,12 @@ func step(delta: float, world_ball: Vector3) -> bool:
 		var depth := lerpf(lerpf(0.20,0.55,press),0.17,below_tape)
 		var lateral_limit := 0.24 if aggressive_press else 0.18
 		var target := shoulder+Vector3(clampf(aim.x-shoulder.x,-lateral_limit,lateral_limit)-outward*0.06,0.62,depth)/scale_
+		if is_finite(min_hand_x) or is_finite(max_hand_x):
+			var world_target := rig.to_global(target)
+			var forward := actor.global_basis.z.normalized()
+			world_target+=forward*.18*press*(1.-below_tape)
+			world_target.x=clampf(move_toward(world_target.x,world_ball.x,.12*press),min_hand_x,max_hand_x)
+			target=rig.to_local(world_target)
 		var pole := Vector3(outward*0.38,-0.55,0.30)
 		if overpass_swing and side == "r":
 			var draw := smoothstep(0.11,0.30,age)*(1.0-smoothstep(0.30,0.47,age))
