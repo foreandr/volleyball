@@ -337,7 +337,14 @@ func start_approach(steps := 3, cadence := 1.) -> void:
 	if not to_ball.is_zero_approx(): attack_jump.lead_heading=to_ball.normalized()
 	attack_jump.release()
 
+func roll_reach_fraction() -> float:
+	var origin := strike_point if phase=="spike" else endpoint
+	var distance := (shot_landing(origin)-origin).slide(Vector3.UP).length()
+	return smoothstep(2.,10.,distance)
+
 func arm_speed_factor() -> float:
+	if roll_shot:
+		return lerpf(.84,1.08,roll_reach_fraction())
 	var effort := float(review_setup.get("power",14.))
 	var rating := float(hitter.attributes.get("Arm swing",65))
 	return pow(effort/14.,.48)*(1.+(rating-65.)*.004)
@@ -578,6 +585,7 @@ func pose_swing() -> void:
 	if phase=="spike":
 		var progress := clampf((swing_time-contact_swing_time)*arm_speed_factor()/.32,0.,1.)
 		follow=progress*(1.5-.5*progress)
+		if roll_shot: follow*=lerpf(.42,.70,roll_reach_fraction())
 	var author = hitter.get_pose_author()
 	var airborne := smoothstep(0.,.12,attack_jump.elapsed-attack_jump.load_duration()) if attack_jump.active else 0.
 	var air_age := attack_jump.elapsed-attack_jump.load_duration()
@@ -597,6 +605,7 @@ func pose_swing() -> void:
 	twist+=heading*(1.-hip_share)*smoothstep(-.15,.085,apex_offset)
 	if phase=="spike":
 		var carry := smoothstep(PALM_CONTACT,.27,swing_time-contact_swing_time)
+		if roll_shot: carry*=lerpf(.4,.65,roll_reach_fraction())
 		hip_turn+=heading*.30*carry
 		twist+=heading*.13*carry
 	# Load the chest through the draw, then release the arch into the strike.
