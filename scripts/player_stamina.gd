@@ -1,7 +1,7 @@
 extends RefCounted
 
 const DIVE_COST := 28.0
-const SPRINT_DRAIN := 25.0
+const SPRINT_DRAIN := 25.0 / 3.0
 const RECOVERY_DELAY := 0.7
 const DEBT_RECOVERY_SCALE := .5
 

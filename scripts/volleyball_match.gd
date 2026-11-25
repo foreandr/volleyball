@@ -1448,7 +1448,7 @@ func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_f
 	var pace := minf(speed,4.35)*CPU_SHUFFLE_SPEED_SCALE
 	if sprint:
 		pace = clampf(speed,0.65,CPU_SPRINT_SPEED) if paced_run else clampf(speed*1.24,5.85,CPU_SPRINT_SPEED)
-	if sprint: actor.stamina.spend(delta*25.,"Sprint")
+	if sprint: actor.stamina.spend(delta*actor.stamina.SPRINT_DRAIN,"Sprint")
 	var before := actor.position
 	var velocity: Vector3 = court_velocities.get(index,Vector3.ZERO)
 	if match_clock-float(movement_times.get(index,match_clock))>delta*2.: velocity=Vector3.ZERO

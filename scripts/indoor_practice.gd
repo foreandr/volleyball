@@ -936,7 +936,7 @@ func move_to_camp_toss(delta: float) -> void:
 		camp_velocity=camp_velocity.move_toward(offset.normalized()*pace,14.*delta)
 		setter.position=rotation_drill.move_actor(setter,(camp_velocity*delta).limit_length(offset.length()))
 		setter.play_ground_gait(camp_velocity.length())
-		if camp_velocity.length()>4.75: setter.stamina.spend(delta*25.,"Sprint")
+		if camp_velocity.length()>4.75: setter.stamina.spend(delta*setter.stamina.SPRINT_DRAIN,"Sprint")
 		focus_headings[setter]=target_yaw if remaining<.95 else atan2(offset.x,offset.z)
 		return
 	if plant_time<0. and offset.length()>.16:
@@ -946,7 +946,7 @@ func move_to_camp_toss(delta: float) -> void:
 		camp_velocity=camp_velocity.move_toward(offset.normalized()*pace,14.*delta)
 		setter.position=rotation_drill.move_actor(setter,(camp_velocity*delta).limit_length(offset.length()))
 		setter.play_ground_gait(camp_velocity.length())
-		if camp_velocity.length()>4.75: setter.stamina.spend(delta*25.,"Sprint")
+		if camp_velocity.length()>4.75: setter.stamina.spend(delta*setter.stamina.SPRINT_DRAIN,"Sprint")
 		focus_headings[setter]=atan2(offset.x,offset.z)
 		return
 	if plant_time<0.:
