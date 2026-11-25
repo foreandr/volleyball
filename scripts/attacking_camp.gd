@@ -110,7 +110,11 @@ var contact_offset := Vector3.ZERO
 var net_clear_time := -1.
 const PALM_CONTACT := 2./60.
 
+var hand_impact := AudioStreamPlayer.new()
+
 func start_drill() -> void:
+	hand_impact.stream=preload("res://assets/audio/hand_impacts.tres")
+	add_child(hand_impact)
 	hitter=athlete(START,"e97937")
 	hitter.apply_profile(setter.attributes.duplicate())
 	hitter.set_height_cm(193.04)
@@ -444,6 +448,9 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 					depth_error=(-1. if error>0. else 1.)*severity*rotation_drill.random.randf_range(0.,12. if error>0. else 8.)
 			if not cpu_hitter and (manual_shot<0 or not is_finite(release_at)):
 				return false
+			if not tip_shot and not has_meta("live_sampler"):
+				hand_impact.volume_db=-11. if roll_shot else -2.
+				hand_impact.play()
 			contact_swing_time=swing_time
 			strike_point=ball.position
 			strike_shoulder_offset=hitter.skeleton.to_local(strike_point)-hitter.skeleton.get_bone_global_pose(hitter.skeleton.find_bone("upperarm_r")).origin

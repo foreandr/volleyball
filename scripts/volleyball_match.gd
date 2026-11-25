@@ -23,7 +23,7 @@ var court_velocities := {}
 var movement_times := {}
 const Footwork = preload("res://scripts/directional_footwork.gd")
 const CONTACT_SOUND = preload("res://assets/audio/pass_contact.wav")
-const SPIKE_SOUND = preload("res://assets/audio/spike_smack.wav")
+const SPIKE_SOUND = preload("res://assets/audio/hand_impacts.tres")
 const SET_ZONES := [-3.75,-2.50,-1.25,0.0,1.25,2.50,3.75]
 const SERVES := [
 	preload("res://scripts/underhand_serve.gd"),
@@ -329,7 +329,7 @@ func configure(actor: Node3D, board: Label, status: Label, build := "", players_
 	touch_audio = make_ball_audio(CONTACT_SOUND,3.0)
 	set_audio = make_ball_audio(preload("res://assets/audio/set_touch.wav"),3.5)
 	spike_audio = make_ball_audio(SPIKE_SOUND,2.0)
-	floor_audio = make_ball_audio(preload("res://assets/audio/ball_floor.wav"),1.5)
+	floor_audio = make_ball_audio(preload("res://assets/audio/floor_impacts.tres"),1.5)
 	net_audio = Net.contact_sound()
 	add_child(net_audio)
 	if learn_from_demo: reset_match()
@@ -506,7 +506,7 @@ func prepare_serve(style: int) -> void:
 	serve.aim_ring.visible = is_human(index)
 	serve.path_preview.visible = is_human(index)
 	serve_pending = false
-	info.text = ("Blue serving" if side == 0 else "Orange serving") if spectator else ["Your serve · Space","Teammate serving","Opponents serving"][0 if index == 0 else (1 if side == 0 else 2)]
+	info.text = ("Blue serving" if side == 0 else "Orange serving") if spectator else ["Your serve Â· Space","Teammate serving","Opponents serving"][0 if index == 0 else (1 if side == 0 else 2)]
 
 func set_attack_vertical(inches: float) -> void:
 	attack_vertical = inches
@@ -598,7 +598,7 @@ func start_serve() -> void:
 	serve.serve()
 
 func update_score() -> void:
-	score_label.text = ("BLUE  %d  –  %d  ORANGE" if spectator else "YOU  %d  –  %d  CPU") % [score[0],score[1]]
+	score_label.text = ("BLUE  %d  â€“  %d  ORANGE" if spectator else "YOU  %d  â€“  %d  CPU") % [score[0],score[1]]
 	if not players.is_empty():
 		displayed_stamina=roundi(players[0].stamina.value)
 		score_label.text+="   |   Stamina %d/%d" % [displayed_stamina,roundi(players[0].stamina.capacity())]
@@ -634,7 +634,7 @@ func award(side: int, reason: String) -> void:
 	else:
 		phase = Phase.DEAD
 		var winner := ("Blue point" if side == 0 else "Orange point") if spectator else ("Your point" if side == 0 else "CPU point")
-		info.text = winner+" · "+reason
+		info.text = winner+" Â· "+reason
 
 func reset_receives() -> void:
 	receive_animation_labels.clear()

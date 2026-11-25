@@ -141,8 +141,8 @@ func _ready() -> void:
 	dynamic_net = get_parent().get_node_or_null("VolleyballCourt/DynamicNet")
 	net_audio = Net.contact_sound()
 	add_child(net_audio)
-	spike_audio = create_ball_sound(preload("res://assets/audio/spike_smack.wav"),-6.0)
-	floor_audio = create_ball_sound(preload("res://assets/audio/ball_floor.wav"),-9.0)
+	spike_audio = create_ball_sound(preload("res://assets/audio/hand_impacts.tres"),-6.0)
+	floor_audio = create_ball_sound(preload("res://assets/audio/floor_impacts.tres"),-9.0)
 	load_practice_target()
 	jump.load_lead_arm_clip()
 	build_approach_rings()
@@ -413,7 +413,7 @@ func can_aim_set() -> bool:
 	return stage == Stage.SERVE and not is_finite(bump.touch_time)
 
 func set_pass_aim(point: Vector3) -> void:
-	# The landing marker is beyond the setter’s overhead interception point.
+	# The landing marker is beyond the setterâ€™s overhead interception point.
 	bump.destination = Vector2(clampf(point.x,-3.0,3.0),clampf(point.z,0.0,4.5))
 
 func queue_hand_receive() -> void:
