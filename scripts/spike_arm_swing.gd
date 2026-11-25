@@ -58,7 +58,7 @@ static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float,
 	if finish > 0.0:
 		pose = base.duplicate()
 	var solve_weight := 1.0 if finish > 0.0 else weight
-	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",target,elbow_pole,solve_weight,elbow_limit)
+	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",target,elbow_pole,solve_weight,elbow_limit,contact_palm and finish>0.)
 	drop_low_bow_elbow(pose,author,weight*draw_progress*(1.0-arm_lift)*(1.0-smoothstep(0.0,0.48,extension)),elbow_clearance)
 	if contact_palm:
 		var turnover := smoothstep(0.31,0.88,extension)*(1.0-smoothstep(0.23,0.83,follow))
@@ -169,7 +169,9 @@ static func follow_through_target(pose: Array, author: RefCounted, shoulder: Vec
 	if not shot_axis.is_zero_approx():
 		var chest_side: Vector3=author.point(pose,"upperarm_l")-shoulder
 		var chest_front := chest_side.cross(Vector3.UP).normalized()
-		sweep_direction=shot_axis.slide(Vector3.UP).normalized().lerp(chest_front,smoothstep(.08,.58,progress))+Vector3.DOWN*.52
+		# Descend in front of the turning chest along one continuous arc to the hip.
+		var guide := shoulder+chest_front*start.length()*.82
+		return contact.lerp(guide,progress).lerp(guide.lerp(hip,progress),progress)
 	var forward := sweep_direction.lerp(Vector3(-0.07,-0.60,0.79),compact_finish).normalized()
 	# Carry the wrist around the shoulder instead of cutting across its reach.
 	var from := start.normalized().slerp(forward,progress)

@@ -15,6 +15,7 @@ const JUMP_HEIGHT := 33.*.0254
 const ATTACK_SET_LIFT := .10
 const PLANT_TIME := .30
 var spikes := 0
+var strike_shoulder_offset := Vector3.ZERO
 var strike_point := Vector3.ZERO
 var last_elbow := Quaternion.IDENTITY
 var last_shoulder := Quaternion.IDENTITY
@@ -181,6 +182,7 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 		if swing_time>=.055 and swing_time<=.30 and nearest.distance_to(palm)<=Contact.BALL_RADIUS+.065:
 			contact_swing_time=swing_time
 			strike_point=ball.position
+			strike_shoulder_offset=hitter.skeleton.to_local(strike_point)-hitter.skeleton.get_bone_global_pose(hitter.skeleton.find_bone("upperarm_r")).origin
 			spikes+=1
 			success=true
 			feedback="Spike"
@@ -370,7 +372,10 @@ func pose_swing() -> void:
 	var draw := smoothstep(.035,draw_end,air_age) if attack_jump.active else 0.
 	var origin := strike_point if phase=="spike" else ball.position
 	var shot_axis := hitter.basis.inverse()*origin.direction_to(shot_landing(origin)).slide(Vector3.UP).normalized()
-	Swing.apply(pose,hitter.get_pose_author(),rig.to_local(strike_point if phase=="spike" else ball.position),maxf(draw,smoothstep(0.,.065,swing_time)),reach,follow,maxf(draw,reach),0.,1. if follow>0. and shot_axis.x>.12 else 0.,Swing.DEFAULT_ELBOW_CLEARANCE,0.,INF,shot_axis,0.,.10,false,true,false,smoothstep(0.,.12,swing_time-net_clear_time) if phase=="spike" and net_clear_time>=0. and int(review_setup.get("spin",0))!=3 else 0.,(hip_turn+twist)*draw_load)
+	var arm_target := rig.to_local(ball.position)
+	if phase=="spike":
+		arm_target=author.point(pose,"upperarm_r")+strike_shoulder_offset
+	Swing.apply(pose,hitter.get_pose_author(),arm_target,maxf(draw,smoothstep(0.,.065,swing_time)),reach,follow,maxf(draw,reach),0.,1. if follow>0. and shot_axis.x>.12 else 0.,Swing.DEFAULT_ELBOW_CLEARANCE,0.,INF,shot_axis,0.,.10,false,true,false,smoothstep(0.,.12,swing_time-net_clear_time) if phase=="spike" and net_clear_time>=0. and int(review_setup.get("spin",0))!=3 else 0.,(hip_turn+twist)*draw_load)
 	# Pronate through the forearm while the striking hand is drawing back.
 	var palm_weight := smoothstep(.015,.11,air_age)*(1.-smoothstep(.10,.65,reach))
 	if palm_weight>0. and follow==0.:
@@ -409,7 +414,10 @@ func pose_swing() -> void:
 	var arm_dt := maxf(0.,swing_time-last_shoulder_time)
 	for joint in ["pelvis","spine_01","spine_02","thigh_r","thigh_l","calf_r","calf_l","foot_r","foot_l","clavicle_r","upperarm_r","lowerarm_r","hand_r","clavicle_l","upperarm_l","lowerarm_l","hand_l"]:
 		var id := rig.find_bone(joint)
-		var rotation: Quaternion=pose[id].basis.get_rotation_quaternion().slerp(rig.get_bone_pose_rotation(id),recovery)
+		var release_blend := recovery
+		if phase=="spike" and joint in ["upperarm_r","lowerarm_r","hand_r"]:
+			release_blend=smoothstep(contact_swing_time+.32/arm_speed_factor(),.65,swing_time)
+		var rotation: Quaternion=pose[id].basis.get_rotation_quaternion().slerp(rig.get_bone_pose_rotation(id),release_blend)
 		if joint=="upperarm_r":
 			# Near full extension the elbow solver can choose opposite shoulder twists on adjacent frames.
 			if phase=="spike" and since_hit>PALM_CONTACT and last_shoulder_time>=0.:
@@ -452,6 +460,10 @@ func sample_attack_clip(arm_lift: bool,arm_swing: bool,cross: bool,review: bool,
 	# Warm up from the first step so the editor inherits the live plant pose.
 	hitter.position=START+Vector3(setup.get("set_x",0.),0.,setup.get("set_z",0.))
 	hitter.rotation.y=0.
+	hitter.animator.stop()
+	hitter.skeleton.reset_bone_poses()
+	last_elbow=Quaternion.IDENTITY
+	last_shoulder=Quaternion.IDENTITY
 	hitter.play_action("idle",0.)
 	hitter.animator.advance(0.)
 	endpoint=START+Vector3(-.18,0.,2.20)
