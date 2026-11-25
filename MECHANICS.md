@@ -72,3 +72,6 @@ Random height defaults on for blocking. The controlled blocker can move from coa
 After the dead-ball reset, the ready whistle gives 509 full lateral and depth control until the rally ends. CPU close and peel assignments only steer computer-controlled blockers.
 
 The attack aim selector offers random court placement, targeting the block and avoiding the block. Near the tape, LT squares the blocker to the net. Holding A prepares a swing block and the body completes the turn through takeoff while lateral lean and individual arm reaches remain available.
+
+In the blocking drill adjacent blockers fast-shuffle toward the lead blocker. Nearby partners reserve their half of the seam and keep the inside arm up during a Kong reach. Block vertical restores from saved options when the drill starts.
+CPU blockers can Kong toward an uncovered edge using the approaching ball and its outgoing velocity.

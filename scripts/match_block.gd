@@ -108,7 +108,10 @@ func step(delta: float, world_ball: Vector3) -> bool:
 		var target := shoulder+Vector3(clampf(aim.x-shoulder.x,-lateral_limit,lateral_limit)-outward*0.06,0.62,depth)/scale_
 		var spread := (reach.x if side=="l" else reach.y)*air_weight
 		var opposite := (reach.y if side=="l" else reach.x)*air_weight
-		var balance := opposite*(1.-spread)
+		var shoulder_offset := rig.to_global(shoulder).x-rig.to_global(author.point(pose,"spine_03")).x
+		var inside_arm := is_finite(min_hand_x) if shoulder_offset<0. else is_finite(max_hand_x)
+		if inside_arm: spread=0.
+		var balance := 0. if inside_arm else opposite*(1.-spread)
 		var spine: Vector3=author.point(pose,"spine_03")
 		var side_sign := signf(shoulder.x-spine.x)
 		var diagonal := Vector3(side_sign*1.05,.19,.37)

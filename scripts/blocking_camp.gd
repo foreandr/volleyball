@@ -50,13 +50,14 @@ func block_meter() -> float:
 	var error := elapsed-flight_time+load_left+Block.AIR*.5
 	return clampf(.5+error/.6,0.,1.)
 
-var block_vertical := float(StorySession.game_options.get_value("blocking","vertical_inches",roundf(Block.HEIGHT/.0254)))
+var block_vertical := roundf(Block.HEIGHT/.0254)
 var read_set := false
 var closing := [false,false,true]
 var height_control := HSlider.new()
 var height_label := Label.new()
 
 func start_drill() -> void:
+	block_vertical=clampf(float(StorySession.game_options.get_value("blocking","vertical_inches",block_vertical)),0.,60.)
 	get_viewport().scaling_3d_scale=1.0
 	get_viewport().msaa_3d=Viewport.MSAA_2X
 	# Gameplay trajectories use team-local coordinates. Swap court ends relative
@@ -387,18 +388,28 @@ func step_blocker(slot: int,delta: float) -> void:
 		if slot==MANUAL_SLOT and not automatic_block:
 			jump.lean_input=axis(JOY_AXIS_LEFT_X)*camera.global_basis.x.normalized().x
 			jump.reach_input=Vector2(axis(Xbox.trigger(true)),axis(Xbox.trigger(false))).clamp(Vector2.ZERO,Vector2.ONE)
-		jump.min_hand_x=(blockers[slot-1].position.x+actor.position.x)*.5+.09 if slot>0 else -INF
-		jump.max_hand_x=(blockers[slot+1].position.x+actor.position.x)*.5-.09 if slot<2 else INF
-		if not automatic_block and ready_whistled:
-			if slot==MANUAL_SLOT:
-				jump.min_hand_x=-INF
-				jump.max_hand_x=INF
-				for other in blockers:
-					if other==actor or absf(other.position.z-actor.position.z)>.6: continue
-					var seam: float=(other.position.x+actor.position.x)*.5
-					if other.position.x<actor.position.x: jump.min_hand_x=maxf(jump.min_hand_x,seam+.05)
-					else: jump.max_hand_x=minf(jump.max_hand_x,seam-.05)
-			elif slot==1 and blockers[2].position.x<actor.position.x: jump.max_hand_x=INF
+		jump.min_hand_x=-INF
+		jump.max_hand_x=INF
+		for other in blockers:
+			if other==actor or absf(other.position.z-actor.position.z)>.65: continue
+			var offset: float=other.position.x-actor.position.x
+			if absf(offset)>1.4: continue
+			var seam: float=actor.position.x+offset*.5
+			if offset<0.: jump.min_hand_x=maxf(jump.min_hand_x,seam+.09)
+			else: jump.max_hand_x=minf(jump.max_hand_x,seam-.09)
+		if automatic_block or slot!=MANUAL_SLOT:
+			jump.reach_input=Vector2.ZERO
+			if jump.shoulders.size()==2 and phase in ["set","spike"]:
+				var crossing_x := ball.position.x
+				if phase=="spike" and drop_velocity.z>.1:
+					var seconds := clampf((actor.position.z-ball.position.z)/drop_velocity.z,0.,.18)
+					crossing_x+=drop_velocity.x*seconds
+				var miss := crossing_x-actor.position.x
+				var open_side: bool=not is_finite(jump.min_hand_x) if miss<0. else not is_finite(jump.max_hand_x)
+				if open_side and absf(miss)<1.45:
+					var amount := smoothstep(.28,.80,absf(miss))
+					var left: bool = (jump.shoulders[0].x-jump.shoulders[1].x)*miss>0.
+					jump.reach_input=Vector2(amount,0.) if left else Vector2(0.,amount)
 		jump.court_aim=Vector3(0.,0.,BallNet.NET_Z-3.)
 		if not jump.step(delta,ball.global_position):
 			jumps[slot]=null
@@ -430,11 +441,12 @@ func step_blocker(slot: int,delta: float) -> void:
 		for i in blockers.size():
 			var seam := read_x+.61*(i-read_lead)
 			var travel := Vector2(seam-blockers[i].position.x,depth_goal-blockers[i].position.z).length()
-			closing[i]=maxf(0.,travel-.75)/GroundControls.speed(true,false)<=available or i==read_lead
+			closing[i]=maxf(0.,travel-.75)/GroundControls.speed(true,true)<=available or absi(i-read_lead)<=1
 		read_set=true
 		trace("block_set_read",{"set_route":ROUTE_NAMES[route],"route_tempos":route_tempos.duplicate(),"read_x":read_x,"set_height_percent":rep_set_percent(),"set_endpoint":str(endpoint),"far_closes":closing[0],"middle_closes":closing[1],"available_s":available})
 	if phase=="set" and read_set:
-		if read_lead==2 and slot==1 and closing[slot]: goal=blockers[MANUAL_SLOT].position.x-.61
+		if closing[slot] and slot!=read_lead:
+			goal=blockers[read_lead].position.x+.61*(slot-read_lead)
 		elif closing[slot]: goal=read_x+.61*(slot-read_lead)
 		else: depth_goal+=2.7
 	elif phase=="spike" and not closing[slot]:
@@ -444,9 +456,10 @@ func step_blocker(slot: int,delta: float) -> void:
 	var cpu := automatic_block or slot!=MANUAL_SLOT or not manual_window
 	var focused := cpu or block_held or GroundControls.focus(axis)
 	var sprinting: bool=not cpu and GroundControls.sprint(axis) and actor.stamina.can_sprint()
-	var pace := GroundControls.speed(focused,sprinting)
+	var fast_close: bool = cpu and read_set and phase=="set" and closing[slot] and absf(goal-previous)>.65
+	var pace := GroundControls.speed(focused,sprinting or fast_close)
 	var desired := clampf((goal-previous)*4.,-pace,pace) if cpu else axis(JOY_AXIS_LEFT_X)*camera.global_basis.x.x*pace
-	lateral_speed[slot]=move_toward(lateral_speed[slot],desired,8.*delta)
+	lateral_speed[slot]=move_toward(lateral_speed[slot],desired,(14. if fast_close else 8.)*delta)
 	var low := -4.5 if slot==0 else blockers[slot-1].position.x+.61
 	var high := 4.5 if slot==2 else blockers[slot+1].position.x-.61
 	if not cpu:
