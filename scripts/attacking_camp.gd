@@ -200,6 +200,7 @@ func edit_approach_frames() -> void:
 	var title := "Three-step approach and backswing"
 	recording.index=0
 	StorySession.edit_animation=recording.bake_recorded_actor(hitter,0,title,count,false)
+	StorySession.edit_animation.remove_meta("contact_time")
 	StorySession.edit_animation.set_meta("editor_height_cm",hitter.height_cm)
 	StorySession.edit_entry={"id":"camp_spike_approach","name":title,"category":"Attacking","type":"Approach"}
 	StorySession.animation_draft.clear()

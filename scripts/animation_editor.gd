@@ -298,7 +298,7 @@ func step_frame(direction: int) -> void:
 func set_playing(value: bool) -> void:
 	playing = value
 	playhead = float(frame)
-	if playing and frame == 0: playhead = minf(0,ball_preview.contact_time-ball_preview.feed_duration)*session.frame_rate
+	if playing and frame == 0 and ball_preview.active: playhead = minf(0,ball_preview.contact_time-ball_preview.feed_duration)*session.frame_rate
 	if is_instance_valid(ball_preview): ball_preview.last_time = session.time_at(frame)
 	if is_instance_valid(play_button): play_button.text = "Pause" if playing else "Play"
 
@@ -316,7 +316,11 @@ func _process(delta: float) -> void:
 
 	super._process(delta)
 	if session == null: return
-	if playing:
+	if playing and not ball_preview.active:
+		playhead = fposmod(playhead+delta*session.frame_rate,session.last_frame+1.)
+		set_frame(floori(playhead))
+		session.sample(minf(playhead,session.last_frame))
+	elif playing:
 		var first: float = minf(0,ball_preview.contact_time-ball_preview.feed_duration)*session.frame_rate
 		var last: float = ball_preview.cycle_end()*session.frame_rate
 		playhead = first+fposmod(playhead-first+delta*session.frame_rate,last-first)
