@@ -1,10 +1,14 @@
 extends "res://scripts/indoor_practice.gd"
 
 const Swing = preload("res://scripts/spike_arm_swing.gd")
-const START := Vector3(3.55,.04,.05)
+const START := Vector3(3.65,.04,.76)
 var hitter: Node3D
 var attack_jump := preload("res://scripts/setter_jump.gd").new()
 var swing_time := -1.
+var cpu_hitter := true
+var approach_started := false
+const JUMP_HEIGHT := .92
+const PLANT_TIME := .30
 var spikes := 0
 var strike_point := Vector3.ZERO
 
@@ -20,17 +24,22 @@ func start_drill() -> void:
 	for overlay in get_children():
 		if overlay.get_script()==preload("res://scripts/tryout_player_ring.gd"): overlay.hide()
 	attack_jump.front_limit=3.65
+	attack_jump.attack_arm_lift=true
 	super.start_drill()
 
 func camp_title() -> String:
 	return "ATTACKING   /   APPROACH AND SPIKE"
 
 func update_prompts(_next: String) -> void:
-	Xbox.prompts(controls_row,[[JOY_BUTTON_X,"Spike"],[JOY_BUTTON_START,"Settings"]])
+	var entries := [["View","Take control" if cpu_hitter else "Watch CPU attack"]]
+	if not cpu_hitter: entries.append_array([["LS","Move"],[JOY_BUTTON_LEFT_SHOULDER,"Approach jump"],[JOY_BUTTON_X,"Spike"]])
+	entries.append([JOY_BUTTON_START,"Settings"])
+	Xbox.prompts(controls_row,entries)
 
 func reset_feed() -> void:
 	super.reset_feed()
 	camp_call=0
+	approach_started=false
 	swing_time=-1.
 	message.text="Coach toss"
 	hitter.position=START
@@ -43,8 +52,17 @@ func set_destination(origin: Vector3, aim: Vector3, height_index: int) -> Vector
 
 func _input(event: InputEvent) -> void:
 	if not settings.visible and not get_tree().paused:
+		if (event is InputEventJoypadButton and event.button_index==JOY_BUTTON_BACK or event is InputEventKey and event.physical_keycode==KEY_TAB) and event.is_pressed() and not event.is_echo():
+			cpu_hitter=not cpu_hitter
+			update_prompts(phase)
+			get_viewport().set_input_as_handled()
+			return
+		if not cpu_hitter and phase=="set" and event is InputEventJoypadButton and event.button_index==Xbox.physical(JOY_BUTTON_LEFT_SHOULDER) and event.pressed:
+			start_approach()
+			get_viewport().set_input_as_handled()
+			return
 		if event is InputEventJoypadButton and event.button_index==Xbox.physical(JOY_BUTTON_X) or event is InputEventKey and event.physical_keycode==KEY_SPACE:
-			if event.is_pressed() and not event.is_echo() and phase=="set" and swing_time<0.:
+			if not cpu_hitter and event.is_pressed() and not event.is_echo() and phase=="set" and swing_time<0.:
 				swing_time=0.
 			get_viewport().set_input_as_handled()
 			return
@@ -53,8 +71,16 @@ func _input(event: InputEvent) -> void:
 	super._input(event)
 
 func step_practice(delta: float) -> void:
-	hitter.animator.advance(delta)
-	if attack_jump.active: attack_jump.step(hitter,delta,Vector2.ZERO)
+	if attack_jump.active:
+		attack_jump.step(hitter,delta,Vector2.ZERO)
+	else:
+		hitter.animator.advance(delta)
+		if not cpu_hitter and not approach_started:
+			var stick := Vector2(axis(JOY_AXIS_LEFT_X),axis(JOY_AXIS_LEFT_Y)).limit_length(1.)
+			var right := camera.global_basis.x.slide(Vector3.UP).normalized()
+			var travel := (right*stick.x+right.cross(Vector3.UP)*stick.y)*3.8 if stick.length()>.16 else Vector3.ZERO
+			hitter.position=rotation_drill.move_actor(hitter,travel*delta)
+			hitter.play_ground_gait(travel.length())
 	if phase=="spike":
 		elapsed+=delta
 		swing_time+=delta
@@ -68,29 +94,36 @@ func step_practice(delta: float) -> void:
 	if phase=="pass": message.text="Coach toss to setter"
 	if phase=="set_contact": message.text="Setter contact"
 
+func start_approach() -> void:
+	if approach_started: return
+	approach_started=true
+	var contact_stance := Vector3(endpoint.x+.18,.04,endpoint.z-.30)
+	var heading := (contact_stance-hitter.position).slide(Vector3.UP).normalized()
+	hitter.rotation.y=atan2(heading.x,heading.z)
+	attack_jump.begin(hitter,Vector2(-heading.x,heading.z),contact_stance,PLANT_TIME,JUMP_HEIGHT,3,false,1.,false,.22)
+	attack_jump.release()
+
 func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 	message.text="Approach and spike"
-	var plant := Vector3(endpoint.x+.18,.04,endpoint.z-.40)
-	if not attack_jump.active:
-		var step := (plant-hitter.position).slide(Vector3.UP).limit_length(4.6*delta)
-		hitter.position=rotation_drill.move_actor(hitter,step)
-		hitter.play_ground_gait(step.length()/maxf(delta,.001))
-		if flight_time-elapsed<=.56:
-			attack_jump.begin(hitter,Vector2.UP,plant,.20,.88)
-			attack_jump.release()
+	var remaining := flight_time-elapsed
+	var rise := attack_jump.flight_duration(JUMP_HEIGHT,true)*.48
+	if cpu_hitter and remaining<=attack_jump.LEAD_STEP_TIME+PLANT_TIME+rise+.025: start_approach()
+	if cpu_hitter and approach_started and swing_time<0. and remaining<=.16: swing_time=0.
 	if swing_time>=0.:
 		swing_time+=delta
 		pose_swing()
 		var palm := Contact.palm(hitter,"r")
 		var nearest := Geometry3D.get_closest_point_to_segment(palm,previous,ball.position)
-		if swing_time>=.055 and swing_time<=.30 and nearest.distance_to(palm)<=.34:
+		if swing_time>=.055 and swing_time<=.30 and nearest.distance_to(palm)<=Contact.BALL_RADIUS+.065:
 			strike_point=ball.position
 			spikes+=1
 			success=true
 			feedback="Spike"
 			message.text=feedback
 			gym.update_board(spikes)
-			drop_velocity=(Vector3(clampf(ball.position.x,-3.8,3.8),.15,11.)-ball.position).normalized()*14.
+			var landing := Vector3(clampf(ball.position.x,-3.8,3.8),Contact.BALL_RADIUS,11.)
+			var shot_time := .68
+			drop_velocity=(landing-ball.position)/shot_time+Vector3.UP*(4.905*shot_time)
 			roll_time=-1.
 			trace("spike",{"from":str(ball.position),"palm_gap":nearest.distance_to(palm)})
 			begin("spike")
@@ -111,7 +144,7 @@ func pose_swing() -> void:
 	for id in rig.get_bone_count(): pose.append(rig.get_bone_pose(id))
 	var reach := smoothstep(.025,.13,swing_time)
 	var follow := smoothstep(.16,.46,swing_time)
-	Swing.apply(pose,hitter.get_pose_author(),rig.to_local(strike_point if phase=="spike" else ball.position),1.,reach,follow,1.,0.,0.,Swing.DEFAULT_ELBOW_CLEARANCE,0.,INF,Vector3.BACK,0.,.40,false,true)
+	Swing.apply(pose,hitter.get_pose_author(),rig.to_local(strike_point if phase=="spike" else ball.position),smoothstep(0.,.065,swing_time),reach,follow,1.,0.,0.,Swing.DEFAULT_ELBOW_CLEARANCE,0.,INF,Vector3.BACK,0.,.40,false,true)
 	for joint in ["clavicle_r","upperarm_r","lowerarm_r","hand_r","clavicle_l","upperarm_l","lowerarm_l","hand_l"]:
 		var id := rig.find_bone(joint)
 		rig.set_bone_pose_rotation(id,pose[id].basis.get_rotation_quaternion())

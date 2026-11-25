@@ -14,6 +14,7 @@ const AIR_STEER_SPEED := 1.00
 const AIR_STEER_ACCELERATION := 5.0
 var active := false
 var load_bend_extra := 0.0
+var attack_arm_lift := false
 var load_arm_extra := 0.0
 var front_limit := 2.5
 var back_limit := Court.RUNOFF_NEAR_BASELINE
@@ -378,7 +379,7 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 			var sweep_back := smoothstep(0.0,0.12,pose_time)
 			front_swing = 0.20*smoothstep(0.0,lead_step_duration*0.72,lead_age)*(1.0-sweep_back)
 			arm_load *= sweep_back
-		var jump_drive := 0.0 if approach_plant else arm_drive
+		var jump_drive := arm_drive if not approach_plant or attack_arm_lift else 0.0
 		author.rotate_world(pose,upper_arm,Vector3.RIGHT,(1.52+load_arm_extra)*arm_load-front_swing)
 		author.rotate_world(pose,forearm,Vector3.RIGHT,-0.25*jump_drive)
 		var shoulder: Vector3 = author.point(pose,upper_arm)
