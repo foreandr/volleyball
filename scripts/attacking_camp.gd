@@ -32,12 +32,14 @@ func choose_camp_toss() -> Vector3:
 func lane_offset() -> float:
 	return [1.,0.,-1.][active_lane]
 
-const SET_HEIGHTS := [40.,100.,160.]
-const SET_HEIGHT_NAMES := ["Low","Mid","High"]
+const SET_HEIGHTS := [15.,40.,100.,160.]
 var set_arc_percent := float(StorySession.game_options.get_value("attack","set_height_percent",100.))
 
 func height_preset() -> int:
-	return clampi(roundi((set_arc_percent-40.)/60.),0,2)
+	var closest := 0
+	for i in range(1,SET_HEIGHTS.size()):
+		if absf(set_arc_percent-SET_HEIGHTS[i])<absf(set_arc_percent-SET_HEIGHTS[closest]): closest=i
+	return closest
 
 func save_set_height(value: float) -> void:
 	if is_equal_approx(value,set_arc_percent): return
@@ -157,6 +159,7 @@ const PALM_CONTACT := 2./60.
 var hand_impact := AudioStreamPlayer.new()
 
 func start_drill() -> void:
+	set_arc_percent=float(StorySession.game_options.get_value("attack","set_height_percent",100.))
 	var positions := StorySession.load_drill_setup("attack_positions")
 	coach_station=positions.get("coach",coach_station)
 	setter_station=positions.get("setter",setter_station)
@@ -196,9 +199,14 @@ func camp_title() -> String:
 func update_prompts(_next: String) -> void:
 	var entries := [["View","Take control" if cpu_hitter else "Watch CPU attack"]]
 	if not cpu_hitter: entries.append_array([["LS","Move"],["LT","Lock on / shuffle"],["RT","Sprint"],[JOY_BUTTON_X,"Hold line"],[JOY_BUTTON_Y,"Hold six"],[JOY_BUTTON_B,"Hold cross"],[JOY_BUTTON_LEFT_SHOULDER,"Roll"],[JOY_BUTTON_RIGHT_SHOULDER,"Tip"]])
-	entries.append(["Share","/ D-pad ↓   Set height: "+SET_HEIGHT_NAMES[height_preset()]])
+	entries.append(["D-pad Down","Set height: %d" % height_preset()])
 	entries.append([JOY_BUTTON_START,"Settings"])
 	Xbox.prompts(controls_row,entries)
+
+func begin(next: String) -> void:
+	if next=="set_contact" and is_instance_valid(hitter) and height_preset()==0:
+		trace("zero_set_arrival",{"air_height_m":hitter.position.y-START.y,"air_age_s":attack_jump.elapsed-attack_jump.load_duration() if attack_jump.active else -1.})
+	super.begin(next)
 
 func reset_feed() -> void:
 	clear_attack_input()
@@ -228,10 +236,10 @@ func select_attack_touch() -> void:
 	tip_shot=bumper==JOY_BUTTON_RIGHT_SHOULDER
 
 func _input(event: InputEvent) -> void:
-	if event is InputEventJoypadButton and event.button_index in [JOY_BUTTON_MISC1,JOY_BUTTON_DPAD_DOWN] and not settings.visible and not get_tree().paused:
+	if event is InputEventJoypadButton and event.button_index==JOY_BUTTON_DPAD_DOWN and not settings.visible and not get_tree().paused:
 		if event.pressed:
 			save_set_height(SET_HEIGHTS[(height_preset()+1)%SET_HEIGHTS.size()])
-			trace("set_height_change",{"button":event.button_index,"preset":SET_HEIGHT_NAMES[height_preset()]})
+			trace("set_height_change",{"button":event.button_index,"preset":height_preset()})
 		get_viewport().set_input_as_handled()
 		return
 	if event is InputEventJoypadButton:
@@ -352,6 +360,12 @@ func step_attack(delta: float) -> void:
 						prep_velocity=Vector3.ZERO
 					# Close excess distance along the approach line; reserve room for the plant.
 					entry=hitter.position+manual_route*maxf(0.,to_set.dot(manual_route)-1.50)
+			elif phase=="pass" and height_preset()==0:
+				var height := float(APEX[chosen_tempo()])*set_arc_percent*.01
+				var predicted := active_set+Vector3.UP*ATTACK_SET_LIFT
+				var contact := arc(catch_point,predicted,quick_contact_fraction(catch_point,predicted,height),height)
+				entry=contact+Vector3(.6*lane_offset(),0.,-1.45)
+				entry.y=START.y
 			elif phase=="pass" and not cpu_hitter:
 				var pin: Vector3=active_set
 				var offset := (pin-hitter.position).slide(Vector3.UP)
@@ -359,7 +373,7 @@ func step_attack(delta: float) -> void:
 			elif phase=="pass":
 				entry.z+=.35*smoothstep(0.,1.,elapsed)
 			var far := float(attack_jump.approach_recovery(hitter,(endpoint-hitter.position).slide(Vector3.UP).length())) if phase=="set" else 0.
-			var pace := lerpf(5.8 if cpu_hitter else 4.3,6.2,far) if phase=="set" else 1.85
+			var pace := lerpf(5.8 if cpu_hitter else 4.3,6.2,far) if phase=="set" or (phase=="pass" and height_preset()==0) else 1.85
 			var desired := ((entry-hitter.position)*(6. if not cpu_hitter else 4.)).limit_length(pace)
 			prep_velocity=prep_velocity.move_toward(desired,lerpf(8. if cpu_hitter else 13.,20.,far)*delta)
 			var travel := prep_velocity*delta
@@ -413,6 +427,9 @@ func step_attack(delta: float) -> void:
 				var fraction := quick_contact_fraction(catch_point,predicted_pin,height)
 				predicted_pin=arc(catch_point,predicted_pin,fraction,height)
 				set_time*=fraction
+				if height_preset()==0:
+					var rise := attack_jump.flight_duration(effective_attack_height(),true)*.48
+					set_time=minf(set_time,rise-SET_RECEIVE_TIME-SET_PUSH_TIME-.09)
 			plan_attack_plant(maxf(0.,contact_time-elapsed)+SET_RECEIVE_TIME+SET_PUSH_TIME+set_time,predicted_pin,delta)
 		elif phase=="set_contact":
 			var fraction := quick_contact_fraction(source,endpoint,set_arc_height) if quick_set_in_flight() else 1.

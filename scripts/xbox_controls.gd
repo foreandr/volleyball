@@ -42,15 +42,15 @@ static func trigger(left: bool) -> JoyAxis:
 	return JOY_AXIS_TRIGGER_LEFT if left!=swapped else JOY_AXIS_TRIGGER_RIGHT
 
 static var view_icon: Texture2D
-static var share_icon: Texture2D
+static var dpad_down_icon: Texture2D
 
 static func glyph(control: Variant) -> Texture2D:
-	if control is String and control=="Share":
-		if not share_icon:
+	if control is String and control=="D-pad Down":
+		if not dpad_down_icon:
 			var icon := Image.new()
-			icon.load_svg_from_string('<svg xmlns="http://www.w3.org/2000/svg" width="42" height="32"><rect x="3" y="3" width="36" height="26" rx="12" fill="#303b44" stroke="#dfe9eb"/><path d="M14 15v7h14v-7 M21 18V9 M17 13l4-4 4 4" fill="none" stroke="white" stroke-width="2"/></svg>')
-			share_icon=ImageTexture.create_from_image(icon)
-		return share_icon
+			icon.load_svg_from_string('<svg xmlns="http://www.w3.org/2000/svg" width="42" height="32"><rect x="3" y="3" width="36" height="26" rx="12" fill="#303b44" stroke="#dfe9eb"/><path d="M21 8v15 M15 17l6 6 6-6" fill="none" stroke="white" stroke-width="2"/></svg>')
+			dpad_down_icon=ImageTexture.create_from_image(icon)
+		return dpad_down_icon
 	if control is String and control=="View":
 		if not view_icon:
 			var icon := Image.new()

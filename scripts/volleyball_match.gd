@@ -285,6 +285,7 @@ func configure(actor: Node3D, board: Label, status: Label, build := "", players_
 	material.vertex_color_use_as_albedo = true
 	ball.material_override = material
 	add_child(ball)
+	for avatar in players: avatar.watch_ball(ball)
 	aim_ring = MeshInstance3D.new()
 	var ring := TorusMesh.new()
 	ring.inner_radius = 0.31

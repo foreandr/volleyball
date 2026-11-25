@@ -115,17 +115,16 @@ func attack_setup_controls() -> void:
 	map.game=game
 	body.add_child(map)
 	var height := HSlider.new()
-	height.min_value=15
-	height.max_value=160
-	height.value=game.set_arc_percent
+	height.max_value=3
+	height.step=1
+	height.value=game.height_preset()
 	var label := Label.new()
+	label.text="Set height   %d" % game.height_preset()
 	body.add_child(label)
 	body.add_child(height)
-	var update_height := func(v: float):
-		game.save_set_height(v)
-		label.text="Set height   %d%%" % roundi(v)
-	update_height.call(height.value)
-	height.value_changed.connect(update_height)
+	height.value_changed.connect(func(v: float):
+		game.save_set_height(game.SET_HEIGHTS[int(v)])
+		label.text="Set height   %d" % int(v))
 
 func tuning_controls() -> void:
 	var timing_label := Label.new()
@@ -141,7 +140,7 @@ func tuning_controls() -> void:
 	var range_label := Label.new()
 	var refresh := func(): range_label.text="Set range    Medium %.1f m    High %.1f m" % [game.camp_range(0),game.camp_range(1)]
 	var fields := [["Current stamina",0,100,athlete.stamina.fraction()*100.,"%"],["Stamina",0,100,athlete.stamina.rating,""],["Willpower",0,100,athlete.stamina.willpower,""],["Endurance",0,100,athlete.stamina.endurance,""],["Strength",1,100,athlete.attributes.Strength,""],["Hand setting",0,100,athlete.attributes["Hand setting"],""],["Speed",0,100,athlete.attributes.Speed,""],["Jump height",10,120,game.camp_jump_height*100," cm"],["Jump ability",0,100,game.camp_jump_ability,""]]
-	if "set_arc_percent" in game: fields.push_front(["Bell set height",15,160,game.set_arc_percent,"%"])
+	if "set_arc_percent" in game: fields.push_front(["Bell set height",0,3,game.height_preset(),""])
 	for field in fields:
 		var caption := Label.new()
 		body.add_child(caption)
@@ -158,7 +157,7 @@ func tuning_controls() -> void:
 		slider.value_changed.connect(func(v):
 			format_value.call(v)
 			match field[0]:
-				"Bell set height": game.save_set_height(v)
+				"Bell set height": game.save_set_height(game.SET_HEIGHTS[int(v)])
 				"Current stamina":
 					athlete.stamina.value=v*.01*athlete.stamina.capacity()
 					athlete.stamina.rested_capacity=maxf(athlete.stamina.rested_capacity,athlete.stamina.value)

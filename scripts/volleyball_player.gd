@@ -23,6 +23,14 @@ var skeleton: Skeleton3D
 var animator: AnimationPlayer
 var animation_slots := {"idle":"volleyball/goalkeeper_idle","run":"base/Jog_Fwd","jump":"base/Jump_Start","land":"base/Jump_Land"}
 
+func watch_ball(target: Node3D) -> void:
+	var gaze := skeleton.get_node_or_null("BallGaze")
+	if gaze == null:
+		gaze=preload("res://scripts/ball_gaze.gd").new()
+		gaze.name="BallGaze"
+		skeleton.add_child(gaze)
+	gaze.target=target
+
 func _ready() -> void:
 	set_height_cm(height_cm)
 	add_child(preload("res://scripts/player_direction_arrows.gd").new())
