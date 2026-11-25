@@ -186,7 +186,7 @@ func timing_arc(actor: Node3D,value: float,low: float,high: float,contact := Vec
 	if ring.get_child_count()==0:
 		band=MeshInstance3D.new()
 		var plane := PlaneMesh.new()
-		plane.size=Vector2(1.60,1.60)
+		plane.size=Vector2(1.84,1.84)
 		band.mesh=plane
 		var material := ShaderMaterial.new()
 		material.shader=preload("res://assets/gym/court_timing.gdshader")
