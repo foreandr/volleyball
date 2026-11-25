@@ -96,20 +96,25 @@ func attack_meter_error() -> float:
 	var error := release_grade if is_finite(release_grade) else button_timing_error()
 	return combined_attack_error(error+GRADE_ADVANCE)
 
-# Descending intersection of the set parabola with the hitter's full jump reach.
-func quick_contact_fraction(origin: Vector3, destination: Vector3, arc_height: float) -> float:
-	var curve := 4.*arc_height
-	var slope := destination.y-origin.y+curve
-	var reach: float = START.y+hitter.height_cm*.0128+effective_attack_height()
-	var discriminant := slope*slope-4.*curve*(reach-origin.y)
-	return clampf((slope+sqrt(maxf(0.,discriminant)))/(2.*curve),0.,1.)
+func attack_contact_height() -> float:
+	# Match the open palm in the authored spike pose at jump apex.
+	return START.y+hitter.height_cm*.0118+effective_attack_height()
+
+func attack_set_duration(height_index: int) -> float:
+	var ratio := set_arc_percent*.01
+	# Quick tempos spend less time travelling to the same hand-contact point.
+	var quick := smoothstep(.15,.60,ratio)
+	return float(DURATION[height_index])*sqrt(ratio)*lerpf(.66,1.,quick)
+
+func start_set_flight() -> void:
+	flight_time=attack_set_duration(tempo)
+	# arc() adds 4*h*t*(1-t). This gives the ball normal gravity.
+	set_arc_height=9.81*flight_time*flight_time/8.
 
 func quick_set_in_flight() -> bool:
 	return not has_meta("sampling_attack") and set_arc_height < float(APEX[tempo])*.60
 
 func attack_reference_time() -> float:
-	if quick_set_in_flight():
-		return flight_time*quick_contact_fraction(source,endpoint,set_arc_height)+.08
 	return flight_time
 
 func button_timing_error() -> float:
@@ -233,7 +238,11 @@ func reset_feed() -> void:
 	attack_jump.active=false
 
 func set_destination(origin: Vector3, aim: Vector3, height_index: int) -> Vector3:
-	return super.set_destination(origin,aim+active_set-PINS[active_lane],height_index)+Vector3.UP*ATTACK_SET_LIFT
+	var airborne := setter.position.y-BASE.y>.12
+	var carry: Vector3=jump.horizontal_velocity() if airborne and jump.active else Vector3.ZERO
+	var contact: Vector3=setter.reachable_set(origin,aim+active_set-PINS[active_lane],airborne,carry,attack_set_duration(height_index))
+	contact.y=attack_contact_height()
+	return contact
 
 func select_attack_touch() -> void:
 	var bumper := -1 if held_bumpers.is_empty() else int(held_bumpers.back())
@@ -342,8 +351,7 @@ func step_attack(delta: float) -> void:
 		# Bell can send the set wider or tighter after the hitter commits.
 		# Adjust the remaining drive while the hitter can still push off the floor.
 		if approach_started and phase in ["set_contact","set"] and quick_set_in_flight() and attack_jump.elapsed < attack_jump.load_duration():
-			var fraction := quick_contact_fraction(source,endpoint,set_arc_height)
-			var actual := arc(source,endpoint,fraction,set_arc_height)
+			var actual := endpoint
 			var correction := (actual-planned_contact).slide(Vector3.UP).limit_length(.45)
 			attack_jump.approach_lunge=attack_jump.approach_lunge.move_toward(planned_lunge+correction,2.4*delta)
 		attack_jump.step(hitter,delta,Vector2.ZERO)
@@ -369,10 +377,7 @@ func step_attack(delta: float) -> void:
 					# Close excess distance along the approach line; reserve room for the plant.
 					entry=hitter.position+manual_route*maxf(0.,to_set.dot(manual_route)-1.50)
 			elif phase=="pass" and height_preset()==0:
-				var height := float(APEX[chosen_tempo()])*set_arc_percent*.01
-				var predicted := active_set+Vector3.UP*ATTACK_SET_LIFT
-				var contact := arc(catch_point,predicted,quick_contact_fraction(catch_point,predicted,height),height)
-				entry=contact+Vector3(.6*lane_offset(),0.,-1.45)
+				entry=active_set+Vector3(.6*lane_offset(),0.,-1.45)
 				entry.y=START.y
 			elif phase=="pass" and not cpu_hitter:
 				var pin: Vector3=active_set
@@ -428,20 +433,15 @@ func step_attack(delta: float) -> void:
 		return
 	if not approach_started and (cpu_hitter or manual_shot>=0):
 		if phase=="pass" and (set_arc_percent<60. or not cpu_hitter):
-			var predicted_pin: Vector3=active_set+Vector3.UP*ATTACK_SET_LIFT
-			var set_time := float(DURATION[chosen_tempo()])*sqrt(set_arc_percent*.01)
-			if set_arc_percent<60.:
-				var height := float(APEX[chosen_tempo()])*set_arc_percent*.01
-				var fraction := quick_contact_fraction(catch_point,predicted_pin,height)
-				predicted_pin=arc(catch_point,predicted_pin,fraction,height)
-				set_time*=fraction
-				if height_preset()==0:
-					var rise := attack_jump.flight_duration(effective_attack_height(),true)*.48
-					set_time=minf(set_time,rise-SET_RECEIVE_TIME-SET_PUSH_TIME-.09)
+			var predicted_pin := active_set
+			predicted_pin.y=attack_contact_height()
+			var set_time := attack_set_duration(chosen_tempo())
+			if height_preset()==0:
+				var rise := attack_jump.flight_duration(effective_attack_height(),true)*.48
+				set_time=minf(set_time,rise-SET_RECEIVE_TIME-SET_PUSH_TIME-.09)
 			plan_attack_plant(maxf(0.,contact_time-elapsed)+SET_RECEIVE_TIME+SET_PUSH_TIME+set_time,predicted_pin,delta)
 		elif phase=="set_contact":
-			var fraction := quick_contact_fraction(source,endpoint,set_arc_height) if quick_set_in_flight() else 1.
-			plan_attack_plant(maxf(0.,SET_RECEIVE_TIME+push_time-elapsed)+flight_time*fraction,arc(source,endpoint,fraction,set_arc_height),delta)
+			plan_attack_plant(maxf(0.,SET_RECEIVE_TIME+push_time-elapsed)+flight_time,endpoint,delta)
 	super.step_practice(delta)
 	if phase=="pass": message.text="Coach toss to setter"
 	if phase=="set_contact": message.text="Setter contact"
@@ -524,8 +524,7 @@ func attack_flight_time(origin: Vector3, landing: Vector3) -> float:
 func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 	message.text="Approach and spike"
 	var remaining := attack_reference_time()-elapsed
-	var fraction := quick_contact_fraction(source,endpoint,set_arc_height) if quick_set_in_flight() else 1.
-	plan_attack_plant(flight_time*fraction-elapsed,arc(source,endpoint,fraction,set_arc_height),delta)
+	plan_attack_plant(flight_time-elapsed,endpoint,delta)
 	if approach_started and swing_time<0. and remaining<=.16/arm_speed_factor()+(.095 if not has_meta("sampling_attack") else 0.): swing_time=0.
 	if swing_time<0. and attack_jump.active and attack_jump.elapsed>attack_jump.load_duration():
 		pose_swing()
@@ -584,7 +583,7 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 			var shot_time := attack_flight_time(ball.position,landing)
 			drop_velocity=(landing-ball.position)/shot_time+Vector3.UP*(4.905*shot_time)
 			roll_time=-1.
-			trace("spike",{"tip_shot":tip_shot,"roll_shot":roll_shot,"from":str(ball.position),"palm_gap":nearest.distance_to(palm),"contact_grade_ms":roundi(contact_grade*1000.) if is_finite(contact_grade) else null,"approach_delay_ms":roundi(approach_delay*1000.),"button_ms":roundi(release_grade*1000.) if is_finite(release_grade) else null})
+			trace("spike",{"ball_contact":str(strike_point),"intended_contact":str(endpoint),"set_marker":str(active_set),"tip_shot":tip_shot,"roll_shot":roll_shot,"from":str(ball.position),"palm_gap":nearest.distance_to(palm),"contact_grade_ms":roundi(contact_grade*1000.) if is_finite(contact_grade) else null,"approach_delay_ms":roundi(approach_delay*1000.),"button_ms":roundi(release_grade*1000.) if is_finite(release_grade) else null})
 			spend_swing_stamina()
 			begin("spike")
 			return true
