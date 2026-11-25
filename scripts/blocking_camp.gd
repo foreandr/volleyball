@@ -18,7 +18,7 @@ var read_lead := 1
 
 func height_preset() -> int:
 	if route==1: return 0
-	return drawn_height if drawn_height>=0 else mini(super.height_preset(),1 if route in [1,2] else 2)
+	return drawn_height if drawn_height>=0 else mini(attack_tempo,1 if route in [1,2] else 2)
 
 var quick_jump := preload("res://scripts/setter_jump.gd").new()
 var quick_committed := false
@@ -51,6 +51,11 @@ func block_meter() -> float:
 	return clampf(.5+error/.6,0.,1.)
 
 var block_vertical := roundf(Block.HEIGHT/.0254)
+var attack_vertical := float(StorySession.game_options.get_value("blocking","attack_vertical",50.))
+var attack_tempo := clampi(int(StorySession.game_options.get_value("blocking","attack_tempo",2)),0,2)
+var tempo_label := Label.new()
+var tempo_slider := HSlider.new()
+var randomize_button := CheckButton.new()
 var read_set := false
 var closing := [false,false,true]
 var height_control := HSlider.new()
@@ -97,7 +102,6 @@ func build_settings() -> void:
 	controls_row.get_parent().add_child(row)
 	row.add_child(height_label)
 	row.add_child(height_control)
-	var randomize_button := CheckButton.new()
 	randomize_button.text="Random set height"
 	randomize_button.tooltip_text="Middle: 0. Pipe: 0 or 1. Pins: 0, 1 or 2."
 	randomize_button.button_pressed=random_heights
@@ -124,6 +128,40 @@ func build_settings() -> void:
 	height_control.focus_mode=Control.FOCUS_NONE
 	height_label.text="Block vertical    %d in" % roundi(block_vertical)
 	height_control.value_changed.connect(set_block_vertical)
+
+	var attack_row := HBoxContainer.new()
+	controls_row.get_parent().add_child(attack_row)
+	var vertical_slider := HSlider.new()
+	var vertical_label := Label.new()
+	for node in [vertical_label,vertical_slider,tempo_label,tempo_slider]: attack_row.add_child(node)
+	for slider in [vertical_slider,tempo_slider]:
+		slider.custom_minimum_size=Vector2(130,30)
+		slider.focus_mode=Control.FOCUS_NONE
+		slider.step=1
+	vertical_slider.max_value=60
+	vertical_slider.value=attack_vertical
+	vertical_label.text="Attack vertical  %d in" % attack_vertical
+	vertical_slider.value_changed.connect(func(value):
+		attack_vertical=value
+		vertical_label.text="Attack vertical  %d in" % value
+		StorySession.game_options.set_value("blocking","attack_vertical",value)
+		StorySession.save_options()
+	)
+	tempo_slider.max_value=2
+	tempo_slider.value=attack_tempo
+	tempo_label.text="Attack tempo  %d" % attack_tempo
+	tempo_slider.value_changed.connect(func(value):
+		save_set_height(SET_HEIGHTS[int(value)])
+	)
+
+func save_set_height(value: float) -> void:
+	attack_tempo=clampi(SET_HEIGHTS.find(value),0,2)
+	randomize_button.button_pressed=false
+	StorySession.game_options.set_value("blocking","attack_tempo",attack_tempo)
+	StorySession.save_options()
+	tempo_slider.set_value_no_signal(attack_tempo)
+	tempo_label.text="Attack tempo  %d" % attack_tempo
+	update_prompts(phase)
 
 func set_block_vertical(value: float) -> void:
 	block_vertical=value
@@ -166,9 +204,10 @@ func reset_feed() -> void:
 	route=rotation_drill.random.randi_range(0,attackers.size()-1)
 	for lane in ROUTES.size():
 		var highest := 1 if lane in [1,2] else 2
-		route_tempos[lane]=rotation_drill.random.randi_range(0,highest) if random_heights else mini(super.height_preset(),highest)
+		route_tempos[lane]=rotation_drill.random.randi_range(0,highest) if random_heights else mini(attack_tempo,highest)
 	route_tempos[1]=0
-	drawn_height=route_tempos[route] if random_heights else -1
+	drawn_height=route_tempos[route]
+	jump_height=attack_vertical*.0254
 	read_delay=rotation_drill.random.randf_range(.055,.13)
 	hitter=attackers[route]
 	former.play_action("idle")
@@ -464,7 +503,7 @@ func step_blocker(slot: int,delta: float) -> void:
 		var seen_velocity := (ball.position-source)/maxf(elapsed,.001)
 		var time_estimate := maxf(0.,flight_time-elapsed)*rotation_drill.random.randf_range(.93,1.07)
 		read_x=clampf(ball.position.x+seen_velocity.x*time_estimate,-4.5,4.5)
-		read_lead=2 if read_x>1.85 else (0 if read_x< -1.85 else 1)
+		read_lead=2 if read_x>2.25 else (0 if read_x< -2.25 else 1)
 		var available := maxf(0.,flight_time-elapsed-Block.START-Block.AIR*.5)
 		for i in blockers.size():
 			var seam := read_x+.61*(i-read_lead)
@@ -517,7 +556,7 @@ func step_blocker(slot: int,delta: float) -> void:
 		actor.rotation.y=rotate_toward(actor.rotation.y,heading,delta*6.)
 	if sprinting and velocity.length()>.15: actor.stamina.spend(actor.stamina.SPRINT_DRAIN*delta,"Sprint")
 	GroundControls.shuffle(actor,shuffle_steps[actor],velocity,focused,delta)
-	if read_set and slot==read_lead and (automatic_block or slot!=MANUAL_SLOT) and cpu and closing[slot] and not attempted[slot] and phase=="set" and absf(actor.position.x-read_x)<1.65 and flight_time-elapsed<=Block.START+Block.AIR*.5:
+	if read_set and (slot==read_lead or attempted[read_lead]) and (automatic_block or slot!=MANUAL_SLOT) and cpu and closing[slot] and not attempted[slot] and phase=="set" and absf(actor.position.x-read_x)<1.65 and flight_time-elapsed<=Block.START+Block.AIR*.5:
 		begin_block(slot)
 
 func advance_spike(delta: float) -> void:

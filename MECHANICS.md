@@ -77,3 +77,4 @@ In the blocking drill adjacent blockers fast-shuffle toward the lead blocker. Ne
 CPU blockers can Kong toward an uncovered edge using the approaching ball and its outgoing velocity.
 On a pin set the lead blocker cues every committed CPU closer to jump. Each closer leans and turns toward the next teammate in the block and carries limited lateral motion into the jump while preserving body spacing.
 CPU takeoff checks the ball read against lateral reach, closing momentum and distance from the net. A reachable exposed edge calls for a one-handed Kong. Manual block release remains unconditional.
+Blocking HUD attack vertical and fixed tempo apply on the next feed. Selecting a fixed tempo disables random heights and preserves each route limit. CPU closers recheck reach after the lead jumps.
