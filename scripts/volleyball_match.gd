@@ -14,6 +14,7 @@ const Attack = preload("res://scripts/match_attack.gd")
 const Block = preload("res://scripts/match_block.gd")
 const Jump = preload("res://scripts/setter_jump.gd")
 const Flight = preload("res://scripts/pass_flight.gd")
+const GroundMovement = preload("res://scripts/player_ground_controls.gd")
 const Net = preload("res://scripts/net_collision.gd")
 const BallPreview = preload("res://scripts/animation_ball_preview.gd")
 const Court = preload("res://scripts/preview_court.gd")
@@ -2255,7 +2256,9 @@ func peel_cpu_off_net(index: int, staging: Vector3, delta: float) -> void:
 		var recovery: Dictionary = recoveries[index]
 		if recovery.has("save") or match_clock-float(recovery.started) < 0.11: return
 		recoveries.erase(index)
-	move_cpu(index,frames[team(index)].to_global(staging),delta,7.4,Vector3.INF,true,true,17.0)
+	var frame := frames[team(index)] as Node3D
+	var sight := GroundMovement.forward_sight(frame.to_local(ball.global_position)-players[index].position)
+	move_cpu(index,frame.to_global(staging),delta,4.1,sight,false,false,3.5)
 
 func move_cpu_to_approach(hitter: int, staging: Vector3, delta: float, speed: float) -> void:
 	var offset := (staging-players[hitter].position).slide(Vector3.UP)
@@ -2268,7 +2271,7 @@ func prepare_cpu_approach(hitter: int, driver: Node3D, delta: float) -> void:
 	var pin: Vector3 = driver.rally_set_target
 	var time_left: float = driver.pin_arrival-(driver.clock-driver.stage_start)
 	var gap := (pin-actor.position).slide(Vector3.UP).length()
-	var staging := pin-Vector3.BACK*2.02
+	var staging := GroundMovement.attack_staging(pin)
 	if follow_run_into_plant(hitter,driver,staging,time_left,delta): return
 	var peeling := actor.position.z > pin.z-1.70 and time_left > 0.82
 	if peeling:
@@ -2334,9 +2337,7 @@ func position_attack(delta: float) -> void:
 	var hitter := hitter_for_set(setter)
 	if is_human(hitter) or blocks.has(hitter) or set_jumps[hitter].active: return
 	var receive_at := arrival(1.55)
-	var receive_depth := frames[receiving_team].to_local(path_point(receive_at)).z
-	var run_up := lerpf(2.72,2.18,smoothstep(1.55,2.85,receive_depth))
-	var staging := set_pin_for(setter)-Vector3.BACK*run_up
+	var staging := GroundMovement.attack_staging(set_pin_for(setter))
 	var distance := (staging-players[hitter].position).slide(Vector3.UP).length()
 	var speed := clampf(distance/maxf(0.24,receive_at-elapsed+0.16),1.5,4.1)
 	if players[hitter].position.z-staging.z > 0.45:

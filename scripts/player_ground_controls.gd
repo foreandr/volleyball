@@ -2,6 +2,15 @@ extends RefCounted
 
 const Xbox = preload("res://scripts/xbox_controls.gd")
 
+# Both courts use team-local +Z toward the net.
+static func attack_staging(pin: Vector3) -> Vector3:
+	var line := preload("res://scripts/net_collision.gd").NET_Z-3.
+	return Vector3(pin.x,pin.y,minf(line,pin.z-1.55))
+
+static func forward_sight(ball_offset: Vector3) -> Vector3:
+	var yaw := clampf(atan2(ball_offset.x,maxf(.35,ball_offset.z)),-.55,.55)
+	return Vector3(sin(yaw),0.,cos(yaw))
+
 static func focus(axis: Callable) -> bool:
 	return axis.call(Xbox.trigger(true))>.25 or Input.is_physical_key_pressed(KEY_CTRL)
 

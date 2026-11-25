@@ -49,6 +49,7 @@ func save_set_height(value: float) -> void:
 	update_prompts(phase)
 
 var jump_height := JUMP_HEIGHT
+var feed_started := false
 var cpu_hitter := true
 var approach_started := false
 const JUMP_HEIGHT := 33.*.0254
@@ -222,8 +223,12 @@ func reset_feed() -> void:
 	approach_started=false
 	swing_time=-1.
 	message.text="Coach toss"
-	hitter.position=Vector3(START.x*lane_offset(),START.y,START.z)
-	hitter.rotation.y=0.
+	if not cpu_hitter or not feed_started:
+		hitter.position=Vector3(START.x*lane_offset(),START.y,START.z)
+		hitter.rotation.y=0.
+	else:
+		hitter.position.y=START.y
+	feed_started=true
 	hitter.play_action("idle")
 	attack_jump.active=false
 
@@ -348,8 +353,11 @@ func step_attack(delta: float) -> void:
 		var steering := not cpu_hitter and stick.length()>.16
 		var lock_on := not cpu_hitter and GroundControls.focus(axis)
 		var tracking := cpu_hitter or (manual_shot>=0 and (phase=="set" or (set_arc_percent<60. and phase in ["pass","set_contact"])) and not steering)
-		if tracking and not approach_started and phase in ["cart","feed","pass","set_contact","set"]:
-			var entry := Vector3(4.95*lane_offset(),START.y,.65)
+		var recovering := cpu_hitter and phase in ["spike","between","drop"] and not attack_jump.active
+		if recovering or (tracking and not approach_started and phase in ["cart","feed","pass","set_contact","set"]):
+			var entry := GroundControls.attack_staging(active_set)
+			entry.x+=1.18*lane_offset()
+			entry.y=START.y
 			if phase in ["set_contact","set"]:
 				entry=endpoint+Vector3(1.18*lane_offset(),0.,-1.82)
 				entry.y=START.y
@@ -370,16 +378,16 @@ func step_attack(delta: float) -> void:
 				var pin: Vector3=active_set
 				var offset := (pin-hitter.position).slide(Vector3.UP)
 				entry=hitter.position+offset.normalized()*maxf(0.,offset.length()-1.5)
-			elif phase=="pass":
-				entry.z+=.35*smoothstep(0.,1.,elapsed)
+			
 			var far := float(attack_jump.approach_recovery(hitter,(endpoint-hitter.position).slide(Vector3.UP).length())) if phase=="set" else 0.
-			var pace := lerpf(5.8 if cpu_hitter else 4.3,6.2,far) if phase=="set" or (phase=="pass" and height_preset()==0) else 1.85
+			var pace := lerpf(5.8 if cpu_hitter else 4.3,6.2,far) if phase=="set" or (phase=="pass" and height_preset()==0) else (3.8 if cpu_hitter else 1.85)
 			var desired := ((entry-hitter.position)*(6. if not cpu_hitter else 4.)).limit_length(pace)
 			prep_velocity=prep_velocity.move_toward(desired,lerpf(8. if cpu_hitter else 13.,20.,far)*delta)
 			var travel := prep_velocity*delta
 			hitter.position=rotation_drill.move_actor(hitter,travel)
 			var watch := (ball.position-hitter.position).slide(Vector3.UP)
-			if not cpu_hitter and not lock_on: watch=manual_route
+			if cpu_hitter: watch=GroundControls.forward_sight(watch)
+			elif not lock_on: watch=manual_route
 			if watch.length_squared()>.01:
 				hitter.rotation.y=rotate_toward(hitter.rotation.y,atan2(watch.x,watch.z),3.5*delta)
 			var local := hitter.basis.inverse()*prep_velocity

@@ -4,6 +4,8 @@ The following describes the intended full game. A menu route, stored rating or p
 
 ## Indoor practice baseline
 
+CPU hitters recover off the net with a forward-facing shuffle toward the three-metre line before their next approach.
+
 During live play, coaches and athletes track the active ball with bounded head yaw and pitch. Tracking eases off during fast chases and when the ball passes behind them.
 
 A new indoor drill starts with practice already happening in a staffed gym. Inherit `scenes/indoor_practice.tscn` and extend `scripts/indoor_practice.gd`. The career setter tryout uses this entry point. Older standalone drill scenes predate it and require migration when revised.
