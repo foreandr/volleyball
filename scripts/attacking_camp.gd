@@ -171,3 +171,6 @@ func pose_swing() -> void:
 	for joint in ["spine_01","spine_02","calf_r","calf_l","clavicle_r","upperarm_r","lowerarm_r","hand_r","clavicle_l","upperarm_l","lowerarm_l","hand_l"]:
 		var id := rig.find_bone(joint)
 		rig.set_bone_pose_rotation(id,pose[id].basis.get_rotation_quaternion())
+
+func frame_editor_attacker() -> Node3D:
+	return hitter

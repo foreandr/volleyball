@@ -113,10 +113,13 @@ var last_toss := -INF
 var contact_index := -1
 
 func record_setter(delta: float) -> void:
-	if not game.solo_setting or game.phase not in ["pass","forehead_catch","set_contact","set"]: return
+	var attack := game.has_method("frame_editor_attacker")
+	if attack:
+		if game.phase not in ["set_contact","set","spike","drop"]: return
+	elif not game.solo_setting or game.phase not in ["pass","forehead_catch","set_contact","set"]: return
 	if last_toss!=game.last_toss:
 		last_toss=game.last_toss
-		if contact_index>=0:
+		if contact_index>=0 or (attack and setter_frames.size()>1 and previous_set.is_empty()):
 			previous_set=setter_frames
 			previous_contact=contact_index
 		setter_frames=[]
@@ -125,12 +128,13 @@ func record_setter(delta: float) -> void:
 	rep_clock+=delta
 	var frame_count := mini(360,1+floori(rep_clock*60.))
 	if setter_frames.size()>=frame_count: return
-	var actor = game.setter
+	var actor = game.frame_editor_attacker() if attack else game.setter
 	var pose: Array[Transform3D]=[]
 	for i in actor.skeleton.get_bone_count(): pose.append(actor.skeleton.get_bone_pose(i))
 	for modifier in actor.skeleton.get_children():
 		if "editor_bones" in modifier: modifier.editor_bones=pose
-	if game.phase in ["forehead_catch","set_contact","set"] and contact_index<0: contact_index=setter_frames.size()
+	var contact_phase: bool = game.phase=="spike" if attack else game.phase in ["forehead_catch","set_contact","set"]
+	if contact_phase and contact_index<0: contact_index=setter_frames.size()
 	while setter_frames.size()<frame_count:
 		setter_frames.append({"time":setter_frames.size()/60.,"ball":game.ball.global_transform,
 			"actors":[{"root":actor.transform,"bones":pose}]})
@@ -141,8 +145,16 @@ func edit_setter_frames() -> void:
 	replay.frames=previous_set if use_previous else setter_frames
 	var contact := previous_contact if use_previous else contact_index
 	replay.index=contact if contact>=0 else replay.frames.size()-1
-	StorySession.edit_animation=replay.bake_recorded_actor(game.setter,0,"Setter release",contact,true)
+	var attack := game.has_method("frame_editor_attacker")
+	var actor = game.frame_editor_attacker() if attack else game.setter
+	if replay.frames.is_empty():
+		var bones: Array[Transform3D]=[]
+		for i in actor.skeleton.get_bone_count(): bones.append(actor.skeleton.get_bone_pose(i))
+		for i in 2: replay.frames.append({"time":i/60.,"ball":game.ball.global_transform,"actors":[{"root":actor.transform,"bones":bones}]})
+		replay.index=0
+	StorySession.edit_animation=replay.bake_recorded_actor(actor,0,"Attacker spike" if attack else "Setter release",contact,true)
 	StorySession.edit_entry={"id":"camp_setter_catch","name":"Setter release","category":"Setting","type":"Overhead"}
+	if attack: StorySession.edit_entry={"id":"camp_attacker_spike","name":"Attacker spike","category":"Attacking","type":"Spike"}
 	StorySession.animation_draft.clear()
 
 func _process(delta: float) -> void:

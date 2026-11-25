@@ -34,7 +34,7 @@ func configure(host: Node, layer: Node = null) -> void:
 	options_button = bar(home,"Options",open_options)
 	if practice and "solo_setting" in game and game.solo_setting:
 		bar(home,"Sliders",open_sliders)
-		bar(home,"Edit set frames",open_frame_editor)
+		bar(home,"Edit attacker frames" if game.has_method("frame_editor_attacker") else "Edit set frames",open_frame_editor)
 	bar(home,"Restart",restart)
 	bar(home,"Quit",quit_gameplay)
 	options.custom_minimum_size.x = 400
@@ -153,7 +153,9 @@ func open_options() -> void:
 	categories.get_child(0).grab_focus()
 
 func open_frame_editor() -> void:
-	if practice and "solo_setting" in game and game.solo_setting and (game.replay_inspector.setter_frames.size()>1 or not game.replay_inspector.previous_set.is_empty()):
+	if practice and game.has_method("frame_editor_attacker"):
+		game.replay_inspector.edit_setter_frames()
+	elif practice and "solo_setting" in game and game.solo_setting and (game.replay_inspector.setter_frames.size()>1 or not game.replay_inspector.previous_set.is_empty()):
 		game.replay_inspector.edit_setter_frames()
 	else:
 		StorySession.prepare_ready_frame_editor()
