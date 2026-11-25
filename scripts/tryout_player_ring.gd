@@ -29,7 +29,10 @@ func _draw() -> void:
 		return
 	if not game.is_node_ready() or game.settings.visible or game.phase in ["intro","net_guide","complete"]: return
 	var human: Node3D=game.rotation_drill.roster[0]
-	for actor in extra_jumps: draw_player(actor,true)
+	if "automatic_block" in game and not game.automatic_block and game.blockers.size()>game.MANUAL_SLOT:
+		draw_player(game.blockers[game.MANUAL_SLOT],true)
+	else:
+		for actor in extra_jumps: draw_player(actor,true)
 	draw_player(human,true)
 	if game.setter!=human: draw_player(game.setter,false)
 	if not setting_cues:
@@ -144,6 +147,10 @@ func draw_player(actor: Node3D,human: bool) -> void:
 				var contact: Vector2=game.contact_band() if pressing else game.grade_contact
 				timing_arc(at,outer,PI,timing_fill,band.x,band.y,contact)
 	var label: String=actor.display_name.strip_edges().get_slice(" ",actor.display_name.strip_edges().count(" ")).to_upper()
+	if "automatic_block" in game and not game.automatic_block and actor==game.blockers[game.MANUAL_SLOT]:
+		label="509   YOU"
+		if game.block_held or game.clock<game.meter_until:
+			timing_arc(at,radius+Vector2(7,7),PI,game.block_meter(),.38,.62,Vector2(.10,.90),Color("14191d"),not game.block_held)
 	var origin := at+Vector2(-80,radius.y+19)
 	draw_string_outline(ThemeDB.fallback_font,origin,label,HORIZONTAL_ALIGNMENT_CENTER,160,14,4,Color("10191f"))
 	draw_string(ThemeDB.fallback_font,origin,label,HORIZONTAL_ALIGNMENT_CENTER,160,14,Color("ffce75") if is_setter else Color.WHITE)

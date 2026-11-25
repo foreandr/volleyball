@@ -9,7 +9,18 @@ var lateral_speed := [0.,0.,0.]
 var attempted := [false,false,false]
 var deflected := false
 var block_held := false
-var automatic_block := true
+var automatic_block := false
+var block_load := preload("res://scripts/tryout_squat.gd").new()
+var released_meter := 0.
+var meter_until := -1.
+
+func block_meter() -> float:
+	if not block_held: return released_meter
+	if phase!="set": return 0.
+	var load_left := Block.START*(1.-clampf(block_load.seconds/block_load.FULL_LOAD,0.,1.))
+	var error := elapsed-flight_time+load_left+Block.AIR*.5
+	return clampf(.5+error/.6,0.,1.)
+
 var block_vertical := float(StorySession.game_options.get_value("blocking","vertical_inches",roundf(Block.HEIGHT/.0254)))
 var aim_six := false
 var read_set := false
@@ -27,6 +38,7 @@ func start_drill() -> void:
 	net.global_transform=net_pose
 	for node in world.get_children():
 		if node is Light3D: node.transform=switch_ends*node.transform
+	block_load.configure(world)
 	for x: float in HOMES:
 		var actor := athlete(Vector3(x,START.y,BallNet.NET_Z+.38),"286881")
 		var variant := 5+blockers.size()
@@ -37,6 +49,7 @@ func start_drill() -> void:
 		blockers.append(actor)
 	super.start_drill()
 	review_setup.power=attack_speed()
+	hitter.set_height_cm(188.)
 
 func build_settings() -> void:
 	super.build_settings()
@@ -87,6 +100,8 @@ func reset_feed() -> void:
 	read_set=false
 	closing=[false,false,true]
 	deflected=false
+	block_load.cancel()
+	meter_until=-1.
 	block_held=false
 	for i in blockers.size():
 		lateral_speed[i]=0.
@@ -115,20 +130,26 @@ func _input(event: InputEvent) -> void:
 				if not event.is_echo():
 					if toggle and event.is_pressed():
 						automatic_block = not automatic_block
+						block_load.cancel()
 						block_held=false
 						apply_camera()
 						update_prompts(phase)
 					elif jump_pressed and not automatic_block:
-						if event.is_pressed():
-							block_held=jumps[MANUAL_SLOT]==null
-						elif block_held and phase=="set":
+						if event.is_pressed() and not block_held and jumps[MANUAL_SLOT]==null:
+							block_held=true
+							block_load.begin(blockers[MANUAL_SLOT])
+						elif not event.is_pressed() and block_held:
+							released_meter=block_meter()
+							meter_until=clock+.65
+							var depth := clampf(block_load.seconds/block_load.FULL_LOAD,0.,1.)
 							block_held=false
-							if jumps[MANUAL_SLOT]==null: begin_block(MANUAL_SLOT)
+							block_load.cancel()
+							if jumps[MANUAL_SLOT]==null: begin_block(MANUAL_SLOT,depth)
 				get_viewport().set_input_as_handled()
 				return
 	super._input(event)
 
-func begin_block(slot: int) -> void:
+func begin_block(slot: int,loaded := 0.) -> void:
 	var jump := Block.new()
 	var stamina=blockers[slot].stamina
 	if stamina.exhausted: return
@@ -137,12 +158,16 @@ func begin_block(slot: int) -> void:
 	trace("block_takeoff",{"slot":slot,"vertical_m":jump.jump_height,"stamina":stamina.value})
 	jump.aggressive_press=true
 	jump.begin(blockers[slot])
+	jump.age=Block.START*loaded
 	jumps[slot]=jump
 	attempted[slot]=true
 
 func step_attack(delta: float) -> void:
 	for i in blockers.size():
 		step_blocker(i,delta)
+	if block_held:
+		block_load.update(blockers[MANUAL_SLOT],delta)
+		block_load.ring.hide()
 	if phase=="cart":
 		for i in blockers.size():
 			var home := Vector3(HOMES[i],START.y,BallNet.NET_Z+.38)
