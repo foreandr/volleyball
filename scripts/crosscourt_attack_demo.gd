@@ -22,11 +22,11 @@ func reset_feed() -> void:
 	if spikes>0:
 		hitter.position=Vector3(last_position.x,START.y,last_position.z)
 		hitter.rotation.y=last_heading
-	var shot := spikes%3
-	# Zone six sits in the middle third. Line targets stay on the attacker's sideline.
-	var targets_x := [-1.1,3.9,3.85]
-	var targets_z := [12.3,12.4,8.0]
-	review_setup.x=-float(targets_x[shot])
-	review_setup.z=targets_z[shot]
-	cross_court=shot==0
-	bounce_line=shot==2
+	# Court coordinates for sharp cross, six, one, and the line bounce.
+	var targets := [Vector2(-3.95,8.2),Vector2(-.35,11.4),Vector2(3.75,11.55),Vector2(3.85,8.65)]
+	var shot := spikes%targets.size()
+	var aim: Vector2=targets[shot]
+	review_setup.x=-aim.x
+	review_setup.z=aim.y
+	cross_court=shot<2
+	bounce_line=shot==3
