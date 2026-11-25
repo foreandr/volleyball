@@ -2,6 +2,9 @@ extends RefCounted
 static var recipe: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://assets/animation_recipes/directional_movement.json"))
 var actor: Node3D
 var author: RefCounted
+var touched := PackedInt32Array()
+var chain := PackedInt32Array()
+var pose := []
 var phase := 0.0
 var weight := 0.0
 var travel := Vector3.ZERO
@@ -9,6 +12,14 @@ var travel := Vector3.ZERO
 func _init(player: Node3D) -> void:
 	actor = player
 	author = actor.get_pose_author()
+	var rig: Skeleton3D=actor.skeleton
+	pose.resize(rig.get_bone_count())
+	for name in ["pelvis","spine_01","spine_02","thigh_l","calf_l","foot_l","thigh_r","calf_r","foot_r"]:
+		var bone := rig.find_bone(name)
+		touched.append(bone)
+		while bone>=0 and not chain.has(bone):
+			chain.append(bone)
+			bone=rig.get_bone_parent(bone)
 
 func step(direction: Vector3, delta: float, step_rate: float, continuous := false, grounded_shuffle := false) -> void:
 	weight = move_toward(weight,1.0 if direction.length()>0.05 else 0.0,delta*7)
@@ -16,8 +27,7 @@ func step(direction: Vector3, delta: float, step_rate: float, continuous := fals
 	travel = travel.lerp(direction,1-exp(-delta*16))
 	phase = fposmod(phase+delta*float(recipe.cadence)*step_rate,1.0)
 	var rig: Skeleton3D = actor.skeleton
-	var pose: Array = []
-	for bone in rig.get_bone_count(): pose.append(Transform3D(Basis(rig.get_bone_pose_rotation(bone)),rig.get_bone_pose_position(bone)))
+	for bone in chain: pose[bone]=Transform3D(Basis(rig.get_bone_pose_rotation(bone)),rig.get_bone_pose_position(bone))
 	var original := pose.duplicate() if grounded_shuffle else []
 	var pelvis := rig.find_bone("pelvis")
 	var parent := rig.get_bone_parent(pelvis)
@@ -55,7 +65,7 @@ func step(direction: Vector3, delta: float, step_rate: float, continuous := fals
 		var swing := clampf((offset-0.5)*2.0,0.0,1.0)
 		var pitch := deg_to_rad(12.0)*sin(swing*TAU)*travel.z*weight
 		author.set_world_basis(pose,"foot_"+side,Basis(Vector3.RIGHT,pitch)*ready_foot.basis)
-	for bone in rig.get_bone_count():
+	for bone in touched:
 		if grounded_shuffle:
 			pose[bone]=original[bone].interpolate_with(pose[bone],smoothstep(0.,1.,weight))
 		rig.set_bone_pose_position(bone,pose[bone].origin)

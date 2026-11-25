@@ -893,9 +893,10 @@ func move_actor(actor: Node3D,step: Vector3) -> Vector3:
 		for i in rig.get_bone_count(): rig.set_bone_pose_rotation(i,pose[i].basis.orthonormalized().get_rotation_quaternion())
 	# Steer before shoulder contact. Both walkers keep to their own right
 	# during a head-on pass, including when the other walker holds position.
+	var nearby := roster+workers.map(func(w): return w.actor)+[game.coach]
 	var steer := Vector3.ZERO
 	var ahead := step.normalized()
-	for other in roster+workers.map(func(w): return w.actor)+[game.coach]:
+	for other in nearby:
 		if other==actor or not other: continue
 		if actor==runner and other==game.coach and returning: continue
 		var offset := ((other as Node3D).position-here).slide(Vector3.UP)
@@ -910,7 +911,7 @@ func move_actor(actor: Node3D,step: Vector3) -> Vector3:
 	var pushed := pushed_cart(actor)
 	if pushed: excluded.append(pushed.get_node("CartHull").get_child(0).get_rid())
 	var next: Vector3=game.contacts.travel(game.world,here,step*(1.-.45*depth),actor.height_cm*.01*(1.-.39*depth),excluded)
-	for other in roster+workers.map(func(w): return w.actor)+[game.coach]:
+	for other in nearby:
 		if other==actor or not other: continue
 		if actor==runner and other==game.coach and returning: continue
 		var gap := (next-(other as Node3D).position).slide(Vector3.UP)

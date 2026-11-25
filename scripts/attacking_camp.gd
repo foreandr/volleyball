@@ -512,7 +512,8 @@ func start_approach(steps := 3, cadence := 1.,destination := Vector3.INF) -> voi
 		contact_stance=Vector3(destination.x,START.y,destination.z)-manual_route*.09
 	var heading := (contact_stance-hitter.position).slide(Vector3.UP).normalized()
 	hitter.rotation.y=atan2(heading.x,heading.z)
-	attack_jump.begin(hitter,Vector2(-heading.x,heading.z),contact_stance,PLANT_TIME*cadence,jump_height,steps,false,cadence,false,.38)
+	var entering_from_gait: bool = hitter.animator.current_animation in ["base/Walk","base/Jog_Fwd","base/Sprint","volleyball/slow_jog"]
+	attack_jump.begin(hitter,Vector2(-heading.x,heading.z),contact_stance,PLANT_TIME*cadence,jump_height,steps,entering_from_gait,cadence,false,.38)
 	planned_contact=destination
 	planned_lunge=attack_jump.approach_lunge
 	attack_jump.attack_entry_speed=maxf(0.,prep_velocity.dot(heading))

@@ -109,7 +109,7 @@ func step(delta: float, world_ball: Vector3) -> bool:
 		var balance := opposite*(1.-spread)
 		var spine: Vector3=author.point(pose,"spine_03")
 		var side_sign := signf(shoulder.x-spine.x)
-		var diagonal := Vector3(side_sign*.78,.25,.52)
+		var diagonal := Vector3(side_sign*1.05,.19,.37)
 		var counterweight := Vector3(side_sign*.48,-.47,.12)
 		target=target.lerp(shoulder+counterweight/scale_,balance)
 		target=target.lerp(shoulder+diagonal/scale_,spread)
@@ -139,8 +139,28 @@ func step(delta: float, world_ball: Vector3) -> bool:
 			var wrist_world := rig.to_global(author.point(bent,"hand_"+side))
 			var across_net := preload("res://scripts/net_collision.gd").NET_Z-wrist_world.z
 			var above_tape := wrist_world.y-preload("res://scripts/net_collision.gd").NET_TOP
-			extension=lerpf(132.,174.,smoothstep(0.,.12,across_net)*smoothstep(0.,.14,above_tape))
+			var tape_clear := smoothstep(0.,.14,above_tape)
+			var press_extension := smoothstep(0.,.12,across_net)*tape_clear
+			# A lateral Kong can reach full length above the tape even when
+			# the wrist is on our side. A forward press still crosses first.
+			extension=lerpf(132.,174.,press_extension)
+			extension=lerpf(extension,178.,spread*tape_clear)
 		author.limb(pose,arm,"lowerarm_"+side,"hand_"+side,target,pole,weight,extension)
+		if spread>.001:
+			var elbow: Vector3=author.point(pose,"lowerarm_"+side)
+			var wrist_at: Vector3=author.point(pose,"hand_"+side)
+			var upper_axis := shoulder.direction_to(target)
+			var straight := shoulder+upper_axis*(shoulder.distance_to(elbow)+elbow.distance_to(wrist_at))
+			var straight_world := rig.to_global(straight)
+			var seam_room := minf(straight_world.x-min_hand_x,max_hand_x-straight_world.x)
+			var clearance := minf(rig.to_global(elbow).y,straight_world.y)-preload("res://scripts/net_collision.gd").NET_TOP
+			var own_side := minf(rig.to_global(elbow).z,straight_world.z)-preload("res://scripts/net_collision.gd").NET_Z
+			var clear_path := maxf(smoothstep(.0,.10,clearance),smoothstep(.04,.10,own_side))
+			var straighten := spread*clear_path*smoothstep(.0,.08,seam_room)
+			author.aim_joint(pose,arm,"lowerarm_"+side,elbow.lerp(shoulder+upper_axis*shoulder.distance_to(elbow),straighten))
+			elbow=author.point(pose,"lowerarm_"+side)
+			wrist_at=author.point(pose,"hand_"+side)
+			author.aim_joint(pose,"lowerarm_"+side,"hand_"+side,wrist_at.lerp(elbow+upper_axis*elbow.distance_to(wrist_at),.98*straighten))
 		for digit in ["thumb","index","middle","ring","pinky"]:
 			for segment in ["01","02","03"]:
 				var bone := rig.find_bone("%s_%s_%s" % [digit,segment,side])
@@ -156,6 +176,10 @@ func step(delta: float, world_ball: Vector3) -> bool:
 			var normal := (outgoing-incoming).normalized()
 			if normal.length_squared()>.5: palm_normal=(rig.global_basis.inverse()*normal).normalized()
 		var up := Vector3.UP.slide(palm_normal).normalized()
+		if spread>.001:
+			var forearm: Vector3=wrist.origin-author.point(pose,"lowerarm_"+side)
+			var fingertips := forearm.slide(palm_normal)
+			if fingertips.length_squared()>.0001: up=up.slerp(fingertips.normalized(),spread).normalized()
 		var edge := up.cross(palm_normal)*-outward
 		var palm := HandPose.hand_basis(up,edge)*HandPose.hand_basis(finger_direction,across).inverse()*wrist.basis
 		author.set_world_basis(pose,hand_name,wrist.basis.orthonormalized().slerp(palm.orthonormalized(),weight))

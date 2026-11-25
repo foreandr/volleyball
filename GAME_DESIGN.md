@@ -243,6 +243,12 @@ In blocking practice, all four attackers run their own approach lanes as the pas
 
 The CPU middle can commit to a nearby quick runner accelerating toward Bell before release. This read uses the visible approach and can leave the middle airborne against a pipe or pin set. Each rep logs the released route and endpoint.
 
-The pipe covers deep in six, the far pin shades inward from its own lane, and nearby front-row hitters cover shorter. Random set height draws 0, 1, 2 or 3 independently of the hitter on each new feed.
+The pipe covers deep in six, the far pin shades inward from its own lane, and nearby front-row hitters cover shorter. In-system middle and pipe routes use tempos 0 and 1. Pins use 0, 1 and 2. Tempo 3 is reserved for out-of-system play.
 
 Random-height blocking feeds assign a separate tempo to every route. Each runner times the approach to that call. Uncommitted blockers observe the released ball before estimating its lateral destination.
+
+## Future blocker scouting
+
+Track set distribution by opponent rotation, eligible hitter and tempo. A CPU middle can combine those tendencies with a read of the live approach to shade a lane or take a first step before release. A small sample should carry little weight, and a setter running against tendency can wrong-foot the block.
+
+All blocking-drill hitters transition from running into the shared attack swing. Blocker bumper inputs do not select the CPU shot type.

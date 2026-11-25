@@ -14,13 +14,13 @@ var read_x := 0.
 var read_lead := 1
 
 func height_preset() -> int:
-	return drawn_height if drawn_height>=0 else super.height_preset()
+	return drawn_height if drawn_height>=0 else mini(super.height_preset(),1 if route in [1,2] else 2)
 
 var middle_read_attempted := false
 var route := -1
 func rep_set_percent() -> float:
 	if drawn_height>=0: return SET_HEIGHTS[drawn_height]
-	return SET_HEIGHTS[1] if route in [1,2] else super.rep_set_percent()
+	return SET_HEIGHTS[height_preset()]
 
 var blockers: Array[Node3D] = []
 var jumps := [null,null,null]
@@ -28,6 +28,8 @@ var lateral_speed := [0.,0.,0.]
 var attempted := [false,false,false]
 var block_sound_count := 0
 var deflected := false
+var pending_manual_jump := -1.
+var block_press_clock := 0.
 var block_held := false
 var manual_shuffle_open := false
 var automatic_block := false
@@ -50,6 +52,8 @@ var height_control := HSlider.new()
 var height_label := Label.new()
 
 func start_drill() -> void:
+	get_viewport().scaling_3d_scale=1.0
+	get_viewport().msaa_3d=Viewport.MSAA_2X
 	# Gameplay trajectories use team-local coordinates. Swap court ends relative
 	# to the gym while keeping the net contact mesh in simulation coordinates.
 	var switch_ends := Transform3D(Basis(Vector3.UP,PI),Vector3(0.,0.,2.*BallNet.NET_Z))
@@ -58,6 +62,7 @@ func start_drill() -> void:
 	gym.transform=switch_ends
 	net.global_transform=net_pose
 	for node in world.get_children():
+		if node is OmniLight3D and absf(node.position.z-BallNet.NET_Z)>1.: node.shadow_enabled=false
 		if node is Light3D: node.transform=switch_ends*node.transform
 	block_load.configure(world)
 	for x: float in HOMES:
@@ -88,7 +93,7 @@ func build_settings() -> void:
 	row.add_child(height_control)
 	var randomize_button := CheckButton.new()
 	randomize_button.text="Random set height"
-	randomize_button.tooltip_text="Draw a new height from 0 to 3 on each feed"
+	randomize_button.tooltip_text="Middle and pipe: 0 or 1. Pins: 0, 1 or 2."
 	randomize_button.button_pressed=random_heights
 	row.add_child(randomize_button)
 	randomize_button.toggled.connect(func(enabled):
@@ -129,6 +134,10 @@ func update_prompts(_next: String) -> void:
 func attack_speed() -> float:
 	return 30.
 
+func select_attack_touch() -> void:
+	roll_shot=false
+	tip_shot=false
+
 func allow_cpu_soft_attack() -> bool:
 	return false
 
@@ -139,7 +148,8 @@ func reset_feed() -> void:
 	var former := hitter
 	route=rotation_drill.random.randi_range(0,attackers.size()-1)
 	for lane in ROUTES.size():
-		route_tempos[lane]=rotation_drill.random.randi_range(0,3) if random_heights else (1 if lane in [1,2] else super.height_preset())
+		var highest := 1 if lane in [1,2] else 2
+		route_tempos[lane]=rotation_drill.random.randi_range(0,highest) if random_heights else mini(super.height_preset(),highest)
 	drawn_height=route_tempos[route] if random_heights else -1
 	read_delay=rotation_drill.random.randf_range(.055,.13)
 	hitter=attackers[route]
@@ -163,13 +173,11 @@ func reset_feed() -> void:
 	closing=[false,false,true]
 	deflected=false
 	set_meta("blocked_attack",false)
-	block_load.cancel()
 	meter_until=-1.
-	block_held=false
 	for i in blockers.size():
 		lateral_speed[i]=0.
-		jumps[i]=null
 		attempted[i]=false
+		if jumps[i]!=null or (i==MANUAL_SLOT and block_held): continue
 		blockers[i].position.y=START.y
 		blockers[i].play_action("idle")
 	super.reset_feed()
@@ -196,28 +204,32 @@ func _input(event: InputEvent) -> void:
 						automatic_block = not automatic_block
 						block_load.cancel()
 						block_held=false
+						pending_manual_jump=-1.
 						apply_camera()
 						update_prompts(phase)
 					elif jump_pressed and not automatic_block:
-						if event.is_pressed() and not block_held and jumps[MANUAL_SLOT]==null:
+						if event.is_pressed() and not block_held:
 							block_held=true
-							block_load.begin(blockers[MANUAL_SLOT])
+							block_press_clock=clock
+							if jumps[MANUAL_SLOT]==null: block_load.begin(blockers[MANUAL_SLOT])
 						elif not event.is_pressed() and block_held:
 							released_meter=block_meter()
 							meter_until=clock+.65
-							var depth := clampf(block_load.seconds/block_load.FULL_LOAD,0.,1.)
+							var depth := clampf(maxf(block_load.seconds,clock-block_press_clock)/block_load.FULL_LOAD,0.,1.)
 							block_held=false
 							block_load.cancel()
-							if jumps[MANUAL_SLOT]==null: begin_block(MANUAL_SLOT,depth)
+							if jumps[MANUAL_SLOT]==null: begin_block(MANUAL_SLOT,depth,true)
+							else: pending_manual_jump=depth
 				get_viewport().set_input_as_handled()
 				return
 	super._input(event)
 
-func begin_block(slot: int,loaded := 0.) -> void:
+func begin_block(slot: int,loaded := 0.,manual := false) -> void:
 	var jump := Block.new()
 	var stamina=blockers[slot].stamina
-	if stamina.exhausted or attempted[slot]: return
+	if not manual and (stamina.exhausted or attempted[slot]): return
 	jump.jump_height=block_vertical*.0254*stamina.effectiveness()
+	if manual: jump.jump_height=maxf(.10,jump.jump_height)
 	stamina.spend(5,"Block jump")
 	trace("block_takeoff",{"slot":slot,"vertical_m":jump.jump_height,"stamina":stamina.value})
 	jump.aggressive_press=true
@@ -273,13 +285,19 @@ func step_hitting_line(i: int,delta: float) -> void:
 		if not shuffle_steps.has(actor): shuffle_steps[actor]=preload("res://scripts/directional_footwork.gd").new(actor)
 		GroundControls.shuffle(actor,shuffle_steps[actor],velocity,true,delta)
 
+func step_practice(delta: float) -> void:
+	# Cover runners only need one pose per displayed frame. The contact
+	# simulation still substeps the ball, striker and active block.
+	for i in attackers.size():
+		if i!=route: step_hitting_line(i,delta)
+	super.step_practice(delta)
+
 func step_attack(delta: float) -> void:
 	if phase=="pass" and not manual_shuffle_open and ball.position.distance_to(catch_point)<=1.:
 		manual_shuffle_open=true
 		trace("manual_block_shuffle_open",{"distance_m":ball.position.distance_to(catch_point)})
-	for i in attackers.size():
-		if i==route and (attack_jump.active or (phase=="set" and approach_started) or phase=="spike"): continue
-		step_hitting_line(i,delta)
+	if route>=0 and not attack_jump.active and not (phase=="set" and approach_started) and phase!="spike":
+		step_hitting_line(route,delta)
 	for i in blockers.size():
 		step_blocker(i,delta)
 	if phase=="cart":
@@ -306,7 +324,14 @@ func step_blocker(slot: int,delta: float) -> void:
 		jump.min_hand_x=(blockers[slot-1].position.x+actor.position.x)*.5+.09 if slot>0 else -INF
 		jump.max_hand_x=(blockers[slot+1].position.x+actor.position.x)*.5-.09 if slot<2 else INF
 		jump.court_aim=Vector3(0.,0.,BallNet.NET_Z-3.)
-		if not jump.step(delta,ball.global_position): jumps[slot]=null
+		if not jump.step(delta,ball.global_position):
+			jumps[slot]=null
+			if slot==MANUAL_SLOT and not automatic_block:
+				if pending_manual_jump>=0.:
+					var load_depth := pending_manual_jump
+					pending_manual_jump=-1.
+					begin_block(slot,load_depth,true)
+				elif block_held: block_load.begin(actor)
 		return
 	# Read the quick runner's approach once while the pass is still live.
 	if slot==1 and phase=="pass" and not middle_read_attempted and contact_time-elapsed<=.10:
@@ -356,7 +381,7 @@ func step_blocker(slot: int,delta: float) -> void:
 		block_load.update(actor,delta)
 		block_load.ring.hide()
 	GroundControls.shuffle(actor,shuffle_steps[actor],Vector3((actor.position.x-previous)/maxf(delta,.0001),0.,motion.y/maxf(delta,.0001)),true,delta)
-	if read_set and (slot!=1 or read_lead==1) and cpu and closing[slot] and not attempted[slot] and phase=="set" and absf(actor.position.x-read_x)<1.65 and flight_time-elapsed<=Block.START+Block.AIR*.5:
+	if read_set and (slot!=1 or read_lead==1) and (automatic_block or slot!=MANUAL_SLOT) and cpu and closing[slot] and not attempted[slot] and phase=="set" and absf(actor.position.x-read_x)<1.65 and flight_time-elapsed<=Block.START+Block.AIR*.5:
 		begin_block(slot)
 
 func advance_spike(delta: float) -> void:

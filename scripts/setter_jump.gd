@@ -398,7 +398,7 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 			var entry_basis: Basis = plant_legs[side].basis
 			var entry_world := actor.get_parent_node_3d().global_basis*entry_basis
 			var entry_local := (rig.global_basis.inverse()*entry_world).orthonormalized()
-			foot_pose.basis = entry_local.slerp(foot_pose.basis,smoothstep(0.0,0.16,elapsed))
+			foot_pose.basis = entry_local.slerp(foot_pose.basis.orthonormalized(),smoothstep(0.0,0.16,elapsed))
 		elif approach_plant and pose_time < LOAD_TIME+0.08:
 			var step_progress := smoothstep(0.105,0.21,pose_time) if left else smoothstep(0.015,0.105,pose_time)
 			if lead_time > 0.0:

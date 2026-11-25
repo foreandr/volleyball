@@ -55,6 +55,14 @@ In blocking practice, all four attackers run their own approach lanes as the pas
 
 The CPU middle can commit to a nearby quick runner accelerating toward Bell before release. This read uses the visible approach and can leave the middle airborne against a pipe or pin set. Each rep logs the released route and endpoint.
 
-The pipe covers deep in six, the far pin shades inward from its own lane, and nearby front-row hitters cover shorter. Random set height draws 0, 1, 2 or 3 independently of the hitter on each new feed.
+The pipe covers deep in six, the far pin shades inward from its own lane, and nearby front-row hitters cover shorter. In-system middle and pipe routes use tempos 0 and 1. Pins use 0, 1 and 2. Tempo 3 is reserved for out-of-system play.
 
 Random-height blocking feeds assign a separate tempo to every route. Each runner times the approach to that call. Uncommitted blockers observe the released ball before estimating its lateral destination.
+
+Proposed blocker scouting combines rotation-specific set history, sample size and live approach cues. The current blocking drill uses live cues and reaction time.
+
+All blocking-drill hitters transition from running into the shared attack swing. Blocker bumper inputs do not select the CPU shot type.
+
+A fully held Kong reach above the tape extends the selected elbow toward 178 degrees and aligns the fingers with the lateral reach. The neighboring blocker still limits available space.
+
+A manual block release can jump on any phase or repeat after landing. A release during flight queues the next grounded jump. Exhaustion limits its height.
