@@ -30,8 +30,8 @@ const EARLY_LIMIT := -.18
 const LATE_LIMIT := .085
 const ATTACK_CONTACT_RADIUS := .30
 var reach_assist := Vector3.ZERO
-const CLEAN_EARLY := .048
-const CLEAN_LATE := .060
+const CLEAN_EARLY := .085
+const CLEAN_LATE := .020
 const METER_START := -.32
 const METER_END := .12
 
@@ -40,8 +40,6 @@ func attack_meter_position(error: float) -> float:
 
 func attack_meter_error() -> float:
 	if is_finite(release_grade): return release_grade
-	if is_finite(first_palm_at):
-		return minf(release_at,clock)-first_palm_at
 	if phase!="set": return METER_START
 	return minf(release_at,clock)-clock+elapsed-flight_time+.08
 
@@ -49,7 +47,7 @@ func show_attack_timing(error: float) -> void:
 	var clean := error>=-CLEAN_EARLY and error<=CLEAN_LATE
 	var color := Color("61ed88") if clean else (Color("f7bd46") if error<0. else Color("f45550"))
 	if error<EARLY_LIMIT or error>LATE_LIMIT: color=Color("778088")
-	show_player_timing(hitter,"On time" if clean else "%d ms too %s" % [roundi(absf(error)*1000.),"early" if error<0. else "late"],color)
+	show_player_timing(hitter,"Perfect" if clean else ("Early" if error<0. else "Late"),color)
 
 func clear_attack_input() -> void:
 	manual_route=Vector3.ZERO

@@ -1668,7 +1668,7 @@ func update_timing_note() -> void:
 		timing_note.hide()
 		return
 	timing_note.position=camera.unproject_position(above_head)-Vector2(timing_note.size.x*.5,timing_note.size.y)
-	timing_note.modulate.a=smoothstep(0.,.10,TIMING_LABEL_SECONDS-remaining)*smoothstep(0.,.40,remaining)
+	timing_note.modulate.a=lerpf(.90,1.,smoothstep(0.,.045,TIMING_LABEL_SECONDS-remaining))*smoothstep(0.,.40,remaining)
 
 func timing_window() -> float:
 	if not bump_aim.is_zero_approx(): return .085+.135*setter.effective_rating("Forearm setting")/100.
