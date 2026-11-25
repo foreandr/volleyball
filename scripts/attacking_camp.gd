@@ -51,11 +51,12 @@ func save_set_height(value: float) -> void:
 var jump_height := JUMP_HEIGHT
 var feed_started := false
 var cpu_hitter := true
+const CPU_PAD_DEVICE := -82
 var approach_started := false
 const JUMP_HEIGHT := 33.*.0254
 const ATTACK_SET_LIFT := .10
 const PLANT_TIME := .30
-const MANUAL_JUMP_ADVANCE := 1.0 / 3.0 - 0.060
+const RELEASE_LEAD := .10
 const SPIKE_STAMINA_COST := 4.0
 const ROLL_STAMINA_COST := 1.5
 const SHOT_BUTTONS := [JOY_BUTTON_X,JOY_BUTTON_Y,JOY_BUTTON_B]
@@ -74,7 +75,6 @@ var launched_attack := false
 var rebound_age := -1.0
 var placement_offset := Vector2.ZERO
 var depth_error := 0.
-var power_scale := 1.
 
 const EARLY_LIMIT := -.18
 const LATE_LIMIT := .40
@@ -94,7 +94,7 @@ func attack_meter_position(error: float) -> float:
 func attack_meter_error() -> float:
 	if is_finite(contact_grade): return contact_grade
 	var error := release_grade if is_finite(release_grade) else button_timing_error()
-	return combined_attack_error(error+GRADE_ADVANCE)
+	return error+GRADE_ADVANCE
 
 func attack_contact_height() -> float:
 	# Match the open palm in the authored spike pose at jump apex.
@@ -125,11 +125,9 @@ func attack_reference_time() -> float:
 
 func button_timing_error() -> float:
 	if phase!="set": return METER_START-GRADE_ADVANCE
-	return elapsed-attack_reference_time()+.08
-
-func combined_attack_error(button_error: float) -> float:
-	if button_error<EARLY_LIMIT or approach_delay<=CLEAN_LATE: return button_error
-	return maxf(button_error,minf(approach_delay,LATE_LIMIT))
+	if not approach_started or endpoint.y>attack_contact_height()+ATTACK_CONTACT_RADIUS:
+		return METER_START-GRADE_ADVANCE
+	return elapsed-attack_reference_time()+RELEASE_LEAD
 
 func show_attack_timing(error: float, cleared := false) -> void:
 	var clean := error>=-CLEAN_EARLY and error<=CLEAN_LATE
@@ -153,7 +151,6 @@ func clear_attack_input() -> void:
 	rebound_age=-1.
 	placement_offset=Vector2.ZERO
 	depth_error=0.
-	power_scale=1.
 
 var spikes := 0
 var strike_shoulder_offset := Vector3.ZERO
@@ -280,28 +277,47 @@ func _input(event: InputEvent) -> void:
 			update_prompts(phase)
 			get_viewport().set_input_as_handled()
 			return
-		if not cpu_hitter and phase in ["cart","feed","pass","set_contact","set"] and not event.is_echo():
+		var simulated := event is InputEventJoypadButton and event.device==CPU_PAD_DEVICE
+		if (not cpu_hitter or simulated) and phase in ["cart","feed","pass","set_contact","set"] and not event.is_echo():
 			for index in SHOT_BUTTONS.size():
 				var button: bool=event is InputEventJoypadButton and event.button_index==Xbox.physical(SHOT_BUTTONS[index])
 				var key: bool=event is InputEventKey and event.physical_keycode==[KEY_SPACE,KEY_Y,KEY_B][index]
 				if not (button or key): continue
-				if event.is_pressed():
-					if manual_shot!=index: aim_center=Vector2.INF
-					manual_shot=index
-					select_attack_touch()
-					release_at=INF
-					release_grade=INF
-				elif manual_shot==index:
-					release_grade=button_timing_error()
-					release_at=clock
-					show_attack_timing(attack_meter_error())
-					trace("attack_release",{"shot":index,"meter_error_ms":roundi(attack_meter_error()*1000.),"button_ms":roundi(release_grade*1000.),"approach_delay_ms":roundi(approach_delay*1000.),"approach":approach_started})
-					if not approach_started and (phase!="set" or attack_meter_error()<EARLY_LIMIT or attack_meter_error()>LATE_LIMIT): manual_shot=-1
+				attack_button(index,event.is_pressed())
 				get_viewport().set_input_as_handled()
 				return
 		if event is InputEventJoypadButton and event.button_index!=Xbox.physical(JOY_BUTTON_START): return
 		if event is InputEventKey and event.physical_keycode!=KEY_ESCAPE: return
 	super._input(event)
+
+func attack_button(index: int, pressed: bool) -> void:
+	if pressed:
+		if manual_shot!=index: aim_center=Vector2.INF
+		manual_shot=index
+		select_attack_touch()
+		release_at=INF
+		release_grade=INF
+	elif manual_shot==index:
+		release_grade=button_timing_error()
+		release_at=clock
+		show_attack_timing(attack_meter_error())
+		trace("attack_release",{"shot":index,"meter_error_ms":roundi(attack_meter_error()*1000.),"button_ms":roundi(release_grade*1000.),"approach_delay_ms":roundi(approach_delay*1000.),"approach":approach_started})
+		if not approach_started and (phase!="set" or attack_meter_error()<EARLY_LIMIT or attack_meter_error()>LATE_LIMIT): manual_shot=-1
+
+func cpu_pad_button(index: int, pressed: bool) -> void:
+	var event := InputEventJoypadButton.new()
+	event.device=CPU_PAD_DEVICE
+	event.button_index=Xbox.physical(SHOT_BUTTONS[index])
+	event.pressed=pressed
+	_input(event)
+
+func drive_cpu_attack() -> void:
+	if phase=="pass" and manual_shot<0:
+		var lane := 0 if bounce_line or not cross_court else (1 if spikes%4==1 else 2)
+		cpu_pad_button(lane,true)
+	elif phase=="set" and manual_shot>=0 and not is_finite(release_at):
+		if button_timing_error()+GRADE_ADVANCE>=0.:
+			cpu_pad_button(manual_shot,false)
 
 func step_practice(delta: float) -> void:
 	var steps := maxi(1,ceili(delta*90.)) if phase=="set" else 1
@@ -353,6 +369,7 @@ func steer_attack_aim(delta: float) -> void:
 	aim_center.y=clampf(aim_center.y+strength*lerpf(6.,13.,placement_skill())*delta,4.65,BallNet.NET_Z+9.+3.048)
 
 func step_attack(delta: float) -> void:
+	if cpu_hitter and not has_meta("sampling_attack"): drive_cpu_attack()
 	if not cpu_hitter and approach_started and phase=="set" and manual_shot>=0 and not is_finite(release_at):
 		steer_attack_aim(delta)
 	if attack_jump.active:
@@ -439,7 +456,7 @@ func step_attack(delta: float) -> void:
 			rotation_drill.free_ball(drop_velocity)
 			begin("between")
 		return
-	if not approach_started and (cpu_hitter or manual_shot>=0):
+	if not approach_started and (has_meta("sampling_attack") or manual_shot>=0):
 		if phase=="pass" and (set_arc_percent<60. or not cpu_hitter):
 			var predicted_pin := active_set
 			predicted_pin.y=planned_attack_contact_height()
@@ -466,8 +483,8 @@ func plan_attack_plant(remaining: float,destination: Vector3,delta: float) -> vo
 	cadence=lerpf(1. if cpu_hitter else .94,.76,attack_jump.approach_recovery(hitter,distance))
 	var load_time := cadence*((steps-2)*attack_jump.LEAD_STEP_TIME+PLANT_TIME)
 	var plant_start := load_time+rise+.025
-	var jump_advance := 0.0 if cpu_hitter or (set_arc_percent<60. if phase=="pass" else quick_set_in_flight()) else MANUAL_JUMP_ADVANCE
-	if distance<=3.35 and (cpu_hitter or manual_shot>=0) and remaining<=plant_start+jump_advance:
+
+	if distance<=3.35 and (has_meta("sampling_attack") or manual_shot>=0) and remaining<=plant_start:
 		if not approach_started:
 			approach_delay=maxf(0.,load_time+rise+.025-remaining-delta)
 			start_approach(steps,cadence,destination)
@@ -536,7 +553,7 @@ func attack_flight_time(origin: Vector3, landing: Vector3) -> float:
 			var lift := BallNet.NET_TOP+Contact.BALL_RADIUS+.18-lerpf(origin.y,landing.y,fraction)
 			flight=maxf(flight,sqrt(2.*maxf(0.,lift)/((9.81 if tip_shot else 11.81)*fraction*(1.-fraction))))
 		return flight
-	return maxf(.05,distance/(attack_speed()*power_scale*attack_jump.spike_power_factor()))
+	return maxf(.05,distance/(attack_speed()*attack_jump.spike_power_factor()))
 
 func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 	message.text="Approach and spike"
@@ -554,35 +571,19 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 			closest_spike_gap=minf(closest_spike_gap,nearest.distance_to(palm))
 		var at_set_target := has_meta("sampling_attack") or (ball.position-endpoint).slide(Vector3.UP).length()<=.25
 		if at_set_target and swing_time>=.055 and swing_time<=.30 and nearest.distance_to(palm)<=ATTACK_CONTACT_RADIUS:
-			if not cpu_hitter:
-				if not is_finite(first_palm_at):
-					first_palm_at=clock
-					var before := combined_attack_error(release_grade+GRADE_ADVANCE)
-					approach_delay=maxf(approach_delay,button_timing_error())
-					if is_finite(release_grade) and before<=CLEAN_LATE and combined_attack_error(release_grade+GRADE_ADVANCE)>CLEAN_LATE:
-						show_attack_timing(attack_meter_error())
-				if manual_shot<0 or not is_finite(release_at):
-					if elapsed<flight_time: return false
-				else:
-					var error := release_grade+GRADE_ADVANCE
-					if error<EARLY_LIMIT or error>LATE_LIMIT:
-						manual_shot=-1
-						return false
-					placement_offset=Vector2.from_angle(rotation_drill.random.randf()*TAU)*sqrt(rotation_drill.random.randf())*aim_radius()
-					# The final feedback uses actual hand arrival; it never feeds back into launch.
-					var air_age := attack_jump.elapsed-attack_jump.load_duration()
-					var expected_air_age := attack_jump.flight_duration(effective_attack_height(),true)*.48-.055
-					var plant_lag := maxf(approach_delay,expected_air_age-air_age)
-					contact_grade=error
-					if plant_lag>CLEAN_LATE: contact_grade=maxf(contact_grade,plant_lag)
-					show_attack_timing(contact_grade)
-					error=combined_attack_error(error)
-					var severity := smoothstep(CLEAN_LATE if error>0. else CLEAN_EARLY,LATE_LIMIT if error>0. else -EARLY_LIMIT,absf(error))
-					power_scale=lerpf(1.,.63,severity)
-					depth_error=(-1. if error>0. else 1.)*severity*rotation_drill.random.randf_range(0.,12. if error>0. else 8.)
-			if not cpu_hitter and (manual_shot<0 or not is_finite(release_at)):
-				return false
-			hard_spike_floor_pending=not tip_shot and not roll_shot and attack_speed()*power_scale*attack_jump.spike_power_factor()>=Contact.HARD_SPIKE_SPEED
+			if not is_finite(first_palm_at): first_palm_at=clock
+			var grade := release_grade+GRADE_ADVANCE
+			var valid_release := manual_shot>=0 and is_finite(release_at) and grade>=EARLY_LIMIT and grade<=LATE_LIMIT
+			if valid_release:
+				contact_grade=grade
+				show_attack_timing(grade)
+				placement_offset=Vector2.from_angle(rotation_drill.random.randf()*TAU)*sqrt(rotation_drill.random.randf())*aim_radius()
+				var severity := smoothstep(CLEAN_LATE if grade>0. else CLEAN_EARLY,LATE_LIMIT if grade>0. else -EARLY_LIMIT,absf(grade))
+				depth_error=(-1. if grade>0. else 1.)*severity*rotation_drill.random.randf_range(0.,12. if grade>0. else 8.)
+			elif not has_meta("sampling_attack"):
+				if elapsed<flight_time: return false
+				return miss_attack()
+			hard_spike_floor_pending=not tip_shot and not roll_shot and attack_speed()*attack_jump.spike_power_factor()>=Contact.HARD_SPIKE_SPEED
 			if hard_spike_floor_pending and not has_meta("live_sampler"):
 				hand_impact.volume_db=-2.
 				hand_impact.play()
@@ -605,21 +606,23 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 			spend_swing_stamina()
 			begin("spike")
 			return true
-	if elapsed>=flight_time:
-		trace("spike_miss",{"cpu_hitter":cpu_hitter,"stamina":hitter.stamina.value,"set_height_percent":set_arc_percent,"planned_contact":str(planned_contact),"closest_palm_gap_m":closest_spike_gap if is_finite(closest_spike_gap) else -1.,"ball":str(ball.position),"palm":str(Contact.palm(hitter,"r"))})
-		feedback="Missed spike"
-		if not cpu_hitter:
-			if is_finite(release_grade) and (release_grade+GRADE_ADVANCE<EARLY_LIMIT or release_grade+GRADE_ADVANCE>LATE_LIMIT):
-				feedback+="   /   Released too early" if release_grade+GRADE_ADVANCE<EARLY_LIMIT else "   /   Released too late"
-			elif is_finite(release_grade) and closest_spike_gap>ATTACK_CONTACT_RADIUS: feedback+="   /   Out of reach"
-			elif not is_finite(release_grade): feedback+="   /   No release"
-		message.text=feedback
-		success=false
-		drop_velocity=(endpoint-source-Vector3.UP*4.*set_arc_height)/flight_time
-		spend_swing_stamina()
-		begin("drop")
-		return true
+	if elapsed>=flight_time: return miss_attack()
 	return false
+
+func miss_attack() -> bool:
+	trace("spike_miss",{"cpu_hitter":cpu_hitter,"stamina":hitter.stamina.value,"set_height_percent":set_arc_percent,"planned_contact":str(planned_contact),"closest_palm_gap_m":closest_spike_gap if is_finite(closest_spike_gap) else -1.,"ball":str(ball.position),"palm":str(Contact.palm(hitter,"r"))})
+	feedback="Missed spike"
+	if not cpu_hitter:
+		if is_finite(release_grade) and (release_grade+GRADE_ADVANCE<EARLY_LIMIT or release_grade+GRADE_ADVANCE>LATE_LIMIT):
+			feedback+="   /   Released too early" if release_grade+GRADE_ADVANCE<EARLY_LIMIT else "   /   Released too late"
+		elif is_finite(release_grade) and closest_spike_gap>ATTACK_CONTACT_RADIUS: feedback+="   /   Out of reach"
+		elif not is_finite(release_grade): feedback+="   /   No release"
+	message.text=feedback
+	success=false
+	drop_velocity=(endpoint-source-Vector3.UP*4.*set_arc_height)/flight_time
+	spend_swing_stamina()
+	begin("drop")
+	return true
 
 func spend_swing_stamina() -> void:
 	if swing_time>=0.:
@@ -729,7 +732,7 @@ func shot_landing(origin: Vector3) -> Vector3:
 		aim+=placement_offset
 		return Vector3(aim.x,Contact.BALL_RADIUS,maxf(origin.z+.45,aim.y+depth_error))
 	if not review_setup.is_empty():
-		return Vector3(-float(review_setup.get("x",-3.4)),Contact.BALL_RADIUS,review_setup.get("z",11.))
+		return Vector3(-float(review_setup.get("x",-3.4))+placement_offset.x,Contact.BALL_RADIUS,maxf(BallNet.NET_Z+.45,float(review_setup.get("z",11.))+placement_offset.y+depth_error))
 	return Vector3(-3.4 if cross_court else clampf(origin.x,-3.8,3.8),Contact.BALL_RADIUS,11.)
 
 func pose_swing() -> void:
