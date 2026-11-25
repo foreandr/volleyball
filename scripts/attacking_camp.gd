@@ -187,10 +187,9 @@ func initial_attack_aim(origin: Vector3) -> Vector2:
 
 func steer_attack_aim(delta: float) -> void:
 	if aim_center==Vector2.INF: aim_center=initial_attack_aim(endpoint)
-	var stick := Vector2(-axis(JOY_AXIS_LEFT_X),-axis(JOY_AXIS_LEFT_Y)).limit_length(1.)
-	var strength := maxf(0.,(stick.length()-.16)/.84)
-	aim_center+=stick.normalized()*strength*lerpf(6.,13.,placement_skill())*delta
-	aim_center=aim_center.clamp(Vector2(-4.45,4.65),Vector2(4.45,12.95))
+	var depth := -axis(JOY_AXIS_LEFT_Y)
+	var strength := signf(depth)*maxf(0.,(absf(depth)-.16)/.84)
+	aim_center.y=clampf(aim_center.y+strength*lerpf(6.,13.,placement_skill())*delta,4.65,12.95)
 
 func step_attack(delta: float) -> void:
 	if not cpu_hitter and approach_started and phase=="set" and manual_shot>=0 and not is_finite(release_at):
