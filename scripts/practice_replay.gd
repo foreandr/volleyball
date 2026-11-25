@@ -3,6 +3,9 @@ extends CanvasLayer
 const Xbox = preload("res://scripts/xbox_controls.gd")
 const SUB := 4
 var speed := 1.
+var slow_speed := .5
+var rate := Button.new()
+var toggle_boxes: CheckButton
 var show_boxes := false
 var boxes: Array[MeshInstance3D] = []
 const SAMPLE_INTERVAL := 0.1
@@ -61,18 +64,17 @@ func _ready() -> void:
 		arrow.tooltip_text="Previous frame" if direction<0 else "Next frame"
 		arrow.pressed.connect(step_frame.bind(direction))
 		tools.add_child(arrow)
-	var rate := Button.new()
 	rate.text="Slow-mo  1x"
-	rate.pressed.connect(func():
-		speed=speed*.5 if speed>1./16. else 1.
-		rate.text="Slow-mo  %s" % ("1x" if speed==1. else "1/%dx" % roundi(1./speed))
-		if slider.value>=slider.max_value: slider.value=0
-		playing=true
-		playback_elapsed=0.
-	)
+	rate.pressed.connect(func(): set_replay_speed(speed*.5 if speed>1./16. else 1.))
+	var rs_prompt := HBoxContainer.new()
+	tools.add_child(rs_prompt)
+	Xbox.prompts(rs_prompt,[["RS","Click"]])
 	tools.add_child(rate)
 	if "practice_blockers" in game:
-		var toggle_boxes := CheckButton.new()
+		var ls_prompt := HBoxContainer.new()
+		tools.add_child(ls_prompt)
+		Xbox.prompts(ls_prompt,[["LS","Click"]])
+		toggle_boxes=CheckButton.new()
 		toggle_boxes.text="Block hitboxes"
 		toggle_boxes.toggled.connect(func(on): show_boxes=on; display_frame(slider.value))
 		tools.add_child(toggle_boxes)
@@ -80,6 +82,14 @@ func _ready() -> void:
 	slider.step = 1
 	slider.value_changed.connect(func(value): if active: display_frame(value))
 	panel.hide()
+
+func set_replay_speed(value: float) -> void:
+	speed=value
+	if speed<1.: slow_speed=speed
+	rate.text="Slow-mo  %s" % ("1x" if speed==1. else "1/%dx" % roundi(1./speed))
+	if slider.value>=slider.max_value: slider.value=0
+	playing=true
+	playback_elapsed=0.
 
 func capture(rendered := false) -> Dictionary:
 	var objects := {}
@@ -354,6 +364,9 @@ func _input(event: InputEvent) -> void:
 					if slider.value>=slider.max_value: slider.value=0
 					playing=not playing
 					playback_elapsed=0.
+				JOY_BUTTON_RIGHT_STICK: set_replay_speed(slow_speed if speed==1. else 1.)
+				JOY_BUTTON_LEFT_STICK:
+					if toggle_boxes!=null: toggle_boxes.button_pressed=not toggle_boxes.button_pressed
 				JOY_BUTTON_BACK: toggle()
 				JOY_BUTTON_DPAD_LEFT,JOY_BUTTON_DPAD_RIGHT:
 					playing=false
