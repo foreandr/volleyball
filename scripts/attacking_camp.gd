@@ -279,7 +279,7 @@ func pose_swing() -> void:
 	var draw_load := smoothstep(.055,attack_jump.flight_duration(jump_height,true)*.48-.11,air_age)
 	draw_load *= 1.-smoothstep(-.11,.045,apex_offset)
 	var arch := deg_to_rad(9.)*load_weight+deg_to_rad(11.)*draw_load
-	twist-=deg_to_rad(7.)*draw_load
+	twist-=deg_to_rad(18.)*draw_load
 	author.rotate_world(pose,"spine_01",Vector3.RIGHT,-arch*.45)
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,-arch*.55)
 	author.rotate_world(pose,"spine_01",Vector3.UP,twist*.45)
@@ -353,7 +353,7 @@ func pose_swing() -> void:
 	var draw := smoothstep(.035,draw_end,air_age) if attack_jump.active else 0.
 	var origin := strike_point if phase=="spike" else ball.position
 	var shot_axis := hitter.basis.inverse()*origin.direction_to(shot_landing(origin)).slide(Vector3.UP).normalized()
-	Swing.apply(pose,hitter.get_pose_author(),rig.to_local(strike_point if phase=="spike" else ball.position),maxf(draw,smoothstep(0.,.065,swing_time)),reach,follow,maxf(draw,reach),0.,0.,Swing.DEFAULT_ELBOW_CLEARANCE,0.,INF,shot_axis,0.,.10,false,true,false,smoothstep(0.,.12,swing_time-net_clear_time) if phase=="spike" and net_clear_time>=0. and int(review_setup.get("spin",0))!=3 else 0.)
+	Swing.apply(pose,hitter.get_pose_author(),rig.to_local(strike_point if phase=="spike" else ball.position),maxf(draw,smoothstep(0.,.065,swing_time)),reach,follow,maxf(draw,reach),0.,0.,Swing.DEFAULT_ELBOW_CLEARANCE,0.,INF,shot_axis,0.,.10,false,true,false,smoothstep(0.,.12,swing_time-net_clear_time) if phase=="spike" and net_clear_time>=0. and int(review_setup.get("spin",0))!=3 else 0.,(hip_turn+twist)*draw_load)
 	var spin_choice := int(review_setup.get("spin",0))
 	var wrap := smoothstep(.055,.14,swing_time)*(1.-smoothstep(.34,.54,swing_time))
 	if wrap>0.:

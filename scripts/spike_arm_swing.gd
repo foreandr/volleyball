@@ -8,7 +8,7 @@ static func follow_heading(target: Vector3, origin: Vector3, facing := 0.0) -> f
 	var direction := target-origin
 	return clampf(angle_difference(facing,atan2(direction.x,direction.z)),-0.95,0.95)
 
-static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float, extension: float, follow: float, draw_progress: float, arm_lift: float, line_weight: float, elbow_clearance: float, previous_roll: float, roll_step: float, shot_direction: Vector3, compact_finish: float, backswing_reach: float, overhead_entry := false, contact_palm := false, preserve_finish_roll := false, release_roll := 1.) -> float:
+static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float, extension: float, follow: float, draw_progress: float, arm_lift: float, line_weight: float, elbow_clearance: float, previous_roll: float, roll_step: float, shot_direction: Vector3, compact_finish: float, backswing_reach: float, overhead_entry := false, contact_palm := false, preserve_finish_roll := false, release_roll := 1., draw_yaw := 0.) -> float:
 	var shoulder: Vector3 = author.point(pose,"upperarm_r")
 	var draw := Vector3(-0.04,0.40,0.08).lerp(Vector3(0.02,0.05,-0.12),draw_progress)
 	var wrist_target := ball-(ball-shoulder).normalized()*0.06-shot_direction*0.11
@@ -20,6 +20,7 @@ static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float,
 	var lift_target := Vector3(-0.095,0.035,-0.065) if overhead_entry else Vector3(-0.08,0.40,0.22)
 	var raised_draw := draw.lerp(lift_target,arm_lift)
 	raised_draw.z -= backswing_reach
+	raised_draw=raised_draw.rotated(Vector3.UP,draw_yaw)
 	var target := (shoulder+raised_draw).lerp(wrist_target,extension)
 	target += Vector3(-0.05,0.14,-0.10)*sin(PI*extension)
 	var finish := follow
@@ -37,6 +38,7 @@ static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float,
 		var extended := shoulder+reach_vector.normalized()*maxf(reach_vector.length(),arm_length*0.998)
 		target = target.lerp(extended,reach)
 	var elbow_pole := Vector3(-1.0,0.16,-0.84).lerp(Vector3(-0.75,0.38,-0.28),smoothstep(0.62,1.0,extension))
+	elbow_pole=elbow_pole.rotated(Vector3.UP,draw_yaw*(1.-smoothstep(.12,.65,extension)))
 	var draw_elbow_limit := 112.0+42.0*smoothstep(0.0,0.60,backswing_reach)
 	var elbow_limit := lerpf(draw_elbow_limit,178.0 if contact_palm else 158.0,smoothstep(0.29,0.98,extension))
 	if contact_palm:
