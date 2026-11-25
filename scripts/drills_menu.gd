@@ -8,6 +8,7 @@ const CATEGORIES := {
 	"Attacking": [{"title":"Approach and Spike","scene":"res://scenes/attacking_camp.tscn"},{"title":"Butterfly"}],
 	"Serving": [{"title":"Spin Serve"}],
 	"Digging": [],
+	"Blocking": [{"title":"Block at the Net","scene":"res://scenes/blocking_camp.tscn"}],
 }
 
 var heading: Label
@@ -94,7 +95,10 @@ func show_categories() -> void:
 	heading.text = "TRAINING CAMP"
 	clear_list()
 	for name_ in CATEGORIES:
-		var item := add_item(name_,show_category.bind(name_))
+		var action := show_category.bind(name_)
+		if name_ == "Blocking":
+			action = MenuPresentation.load_scene.bind(CATEGORIES[name_][0].scene)
+		var item := add_item(name_,action)
 		if name_ == previous or (previous.is_empty() and list.get_child_count() == 1):
 			item.grab_focus()
 

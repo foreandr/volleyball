@@ -28,3 +28,5 @@ At attack takeoff the CPU tests its hard shot against the net using its fatigue-
 CPU attackers press, hold and release the mapped attack button. The timing meter uses the same release grade as contact. Across the colored window, timing changes placement error. Physical palm reach still matters. Takeoff is timed against the predicted contact at the pin.
 
 CPU hitters conserve stamina at 30% or below. A line bounce requires more than 50% stamina. The hard-shot clearance check allows for the palm contacting below the intended set. A fatigued line bounce becomes a roll shot.
+
+Training Camp Blocking runs the shared attacking-camp feed across three pin locations. View switches between CPU and manual blocking. The attack set-height controls also apply.
