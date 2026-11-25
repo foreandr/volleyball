@@ -34,7 +34,11 @@ func configure(host: Node, layer: Node = null) -> void:
 	options_button = bar(home,"Options",open_options)
 	if practice and "solo_setting" in game and game.solo_setting:
 		bar(home,"Sliders",open_sliders)
-		if game.has_method("edit_approach_frames"):
+		if game.has_method("frame_editor_blocker"):
+			bar(home,"Replay",func():
+				hide()
+				game.replay_inspector.toggle())
+		elif game.has_method("edit_approach_frames"):
 			bar(home,"Attack setup",func():
 				home.hide()
 				options.show()
@@ -45,7 +49,7 @@ func configure(host: Node, layer: Node = null) -> void:
 			bar(home,"Review 50 swings",game.edit_approach_frames.bind(true,true,false,true))
 			bar(home,"Down-the-line swing",game.edit_approach_frames.bind(true,true,false))
 			bar(home,"Cross-court swing",game.edit_approach_frames.bind(true,true,true))
-		bar(home,"Edit attacker frames" if game.has_method("frame_editor_attacker") else "Edit set frames",open_frame_editor)
+		bar(home,"Edit blocker frames" if game.has_method("frame_editor_blocker") else "Edit attacker frames" if game.has_method("frame_editor_attacker") else "Edit set frames",open_frame_editor)
 	bar(home,"Restart",restart)
 	var quit_button := bar(home,"Quit",quit_gameplay)
 	primary.focus_neighbor_top=primary.get_path_to(quit_button)

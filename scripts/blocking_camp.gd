@@ -73,6 +73,9 @@ func set_block_vertical(value: float) -> void:
 	StorySession.game_options.set_value("blocking","vertical_inches",value)
 	StorySession.save_options()
 
+func frame_editor_blocker() -> Node3D:
+	return blockers[MANUAL_SLOT]
+
 func camp_title() -> String:
 	return "BLOCKING   /   BLOCK AT THE NET"
 

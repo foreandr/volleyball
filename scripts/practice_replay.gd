@@ -10,6 +10,8 @@ var slider := HSlider.new()
 var panel := VBoxContainer.new()
 var elapsed := 0.0
 var active := false
+var playing := false
+var playback_elapsed := 0.
 var hidden_controls := []
 var modifiers := []
 
@@ -23,7 +25,7 @@ func _ready() -> void:
 	panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	panel.offset_bottom = -18
 	var legend := Label.new()
-	legend.text = "Replay    |    Drag to rewind    |    WASD move    Q/E down/up    |    Middle-drag look    Scroll zoom    |    Esc return"
+	legend.text = "Replay    |    Space play/pause    Drag to rewind    |    WASD move    Q/E down/up    |    Middle-drag look    Scroll zoom    |    Esc return"
 	legend.add_theme_constant_override("outline_size",5)
 	panel.add_child(legend)
 	panel.add_child(slider)
@@ -68,6 +70,7 @@ func toggle() -> void:
 	if active:
 		apply(live)
 		active = false
+		playing = false
 		for modifier in modifiers: modifier.active = true
 		modifiers.clear()
 		game.camera.make_current()
@@ -128,7 +131,7 @@ func record_setter(delta: float) -> void:
 	rep_clock+=delta
 	var frame_count := mini(360,1+floori(rep_clock*60.))
 	if setter_frames.size()>=frame_count: return
-	var actor = game.frame_editor_attacker() if attack else game.setter
+	var actor = game.frame_editor_blocker() if game.has_method("frame_editor_blocker") else game.frame_editor_attacker() if attack else game.setter
 	var pose: Array[Transform3D]=[]
 	for i in actor.skeleton.get_bone_count(): pose.append(actor.skeleton.get_bone_pose(i))
 	for modifier in actor.skeleton.get_children():
@@ -146,20 +149,28 @@ func edit_setter_frames() -> void:
 	var contact := previous_contact if use_previous else contact_index
 	replay.index=contact if contact>=0 else replay.frames.size()-1
 	var attack := game.has_method("frame_editor_attacker")
-	var actor = game.frame_editor_attacker() if attack else game.setter
+	var actor = game.frame_editor_blocker() if game.has_method("frame_editor_blocker") else game.frame_editor_attacker() if attack else game.setter
 	if replay.frames.is_empty():
 		var bones: Array[Transform3D]=[]
 		for i in actor.skeleton.get_bone_count(): bones.append(actor.skeleton.get_bone_pose(i))
 		for i in 2: replay.frames.append({"time":i/60.,"ball":game.ball.global_transform,"actors":[{"root":actor.transform,"bones":bones}]})
 		replay.index=0
-	StorySession.edit_animation=replay.bake_recorded_actor(actor,0,"Attacker spike" if attack else "Setter release",contact,true)
+	StorySession.edit_animation=replay.bake_recorded_actor(actor,0,"Blocker 509" if game.has_method("frame_editor_blocker") else "Attacker spike" if attack else "Setter release",contact,true)
 	StorySession.edit_entry={"id":"camp_setter_catch","name":"Setter release","category":"Setting","type":"Overhead"}
 	if attack: StorySession.edit_entry={"id":"camp_attacker_spike","name":"Attacker spike","category":"Attacking","type":"Spike"}
+	if game.has_method("frame_editor_blocker"): StorySession.edit_entry={"id":"camp_blocker_509","name":"Blocker 509","category":"Blocking","type":"Block"}
 	StorySession.animation_draft.clear()
 
 func _process(delta: float) -> void:
 	if active:
 		if CareerSession.prompt.visible: return
+		if playing:
+			playback_elapsed+=delta
+			var frames := floori(playback_elapsed/SAMPLE_INTERVAL)
+			if frames>0:
+				playback_elapsed=fmod(playback_elapsed,SAMPLE_INTERVAL)
+				slider.value+=frames
+				if slider.value>=slider.max_value: playing=false
 		var direction := Vector3(float(Input.is_physical_key_pressed(KEY_D))-float(Input.is_physical_key_pressed(KEY_A)),0,float(Input.is_physical_key_pressed(KEY_S))-float(Input.is_physical_key_pressed(KEY_W)))
 		var rise := float(Input.is_physical_key_pressed(KEY_E))-float(Input.is_physical_key_pressed(KEY_Q))
 		camera.global_position += (camera.global_basis*direction+Vector3.UP*rise).limit_length(1)*delta*5.0
@@ -175,6 +186,11 @@ func _input(event: InputEvent) -> void:
 	if not active or CareerSession.prompt.visible: return
 	if event is InputEventKey and event.pressed:
 		match event.physical_keycode:
+			KEY_SPACE:
+				if event.is_echo(): return
+				if slider.value>=slider.max_value: slider.value=0
+				playing=not playing
+				playback_elapsed=0.
 			KEY_ESCAPE: toggle()
 			KEY_LEFT: slider.value -= 1
 			KEY_RIGHT: slider.value += 1
