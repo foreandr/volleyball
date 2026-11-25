@@ -18,6 +18,10 @@ func attack_speed() -> float:
 func reset_feed() -> void:
 	var last_position := hitter.position
 	var last_heading := hitter.rotation.y
+	# Each demonstration feed starts with a rested jump setter.
+	setter.stamina.rested_capacity=setter.stamina.capacity()
+	setter.stamina.value=setter.stamina.rested_capacity
+	setter.stamina.exhausted=false
 	super.reset_feed()
 	if spikes>0:
 		hitter.position=Vector3(last_position.x,START.y,last_position.z)

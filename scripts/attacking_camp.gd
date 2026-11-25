@@ -141,13 +141,10 @@ func step_attack(delta: float) -> void:
 			if watch.length_squared()>.01:
 				hitter.rotation.y=rotate_toward(hitter.rotation.y,atan2(watch.x,watch.z),3.5*delta)
 			var local := hitter.basis.inverse()*prep_velocity
-			if local.z<-.18 and -local.z>absf(local.x)*.75:
-				hitter.animator.play("base/Walk",.20,-clampf(prep_velocity.length()/1.45,.28,1.35),true)
-			elif absf(local.x)>.25 and absf(local.x)>absf(local.z):
-				hitter.play_action("idle",.20)
-				if not shuffle_steps.has(hitter): shuffle_steps[hitter]=preload("res://scripts/directional_footwork.gd").new(hitter)
-				shuffle_steps[hitter].step((local/2.).limit_length(1.),delta,clampf(local.length()/2.,.55,1.35),true,true)
-			else: hitter.play_ground_gait(prep_velocity.length())
+			hitter.play_action("idle",.20)
+			if not shuffle_steps.has(hitter):
+				shuffle_steps[hitter]=preload("res://scripts/directional_footwork.gd").new(hitter)
+			shuffle_steps[hitter].step((local/2.).limit_length(1.),delta,clampf(local.length()/2.,.55,1.35),true,true)
 		if not cpu_hitter and not approach_started:
 			var stick := Vector2(axis(JOY_AXIS_LEFT_X),axis(JOY_AXIS_LEFT_Y)).limit_length(1.)
 			var right := camera.global_basis.x.slide(Vector3.UP).normalized()

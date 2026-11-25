@@ -172,3 +172,13 @@ Missed sets land and roll for half a second before the next attempt. Switching t
 Players can change between any available set targets during preparation. Near contact, the reach check also accounts for the ball and head moving past each other within torso-lean range.
 Light analog input eases into walking, with cadence matched to movement speed. The walk cycle owns its footfalls through slow turns and continues across player-controlled camp feeds.
 Training Camp > Attacking > Approach and Spike uses the Setting Camp coach feed and CPU hand-set mechanics. The CPU hitter waits for the set, takes a three-step approach with a backswing, and jumps forward to spike. View toggles player control. Left stick moves, LB starts the approach, and X times the swing.
+
+## Next session agenda
+
+- Attack variations: cut shots, roll shots, tips, pokies, fists and dolphins. Check left- and right-handed hitters throughout.
+- Setter dumps, faking an attack approach into a set, and two balls.
+- Blocking, defense, digging and serving.
+- Celebrations, high-fives, crowd animation and spectators in the stands.
+- Review the out-of-bounds hit and how the net reacts at gameplay camera distance.
+
+The attacking demo refreshes its feed setter's stamina each rep and the hitter shuffles into position. Shared net impacts compress the cloth and tape, then recoil around the impact point.
