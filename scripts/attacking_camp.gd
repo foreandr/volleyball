@@ -192,17 +192,21 @@ func pose_swing() -> void:
 		var knee: Vector3 = author.point(pose,calf)
 		var shin: Vector3 = (author.point(pose,foot)-knee).normalized()
 		var outward := -.12 if side=="r" else .12
-		var heel := Vector3(outward,.32 if side=="r" else .09,-1.).normalized()
-		var early_shin := Vector3(.12,.16,-.98) if side=="l" else Vector3(-.08,.03,-1.)
-		heel = early_shin.normalized().slerp(heel,smoothstep(.115,.20,minf(tuck_age,.144)))
+		# In the edited hang the ankles rise above the knees while the toes hang down.
+		var heel := Vector3(outward,.64,-.80).normalized()
 		var extended := Vector3(outward,-1.,-.14).normalized()
 		var blend := maxf(knee_load,airborne)*(1.-follow)
 		author.aim_joint(pose,calf,foot,knee+shin.slerp(heel.slerp(extended,reach),blend))
+		var ankle: Vector3 = author.point(pose,foot)
+		var toes := "ball_"+str(side)
+		var toe_axis: Vector3 = (author.point(pose,toes)-ankle).normalized()
+		var hanging_toes := Vector3(outward*.3,-.98,-.16).normalized()
+		author.aim_joint(pose,foot,toes,ankle+toe_axis.slerp(hanging_toes,knee_load))
 	# Apply pelvic rotation after solving the tuck so both legs inherit it.
 	author.rotate_world(pose,"pelvis",Vector3.UP,hip_turn)
 	var draw := smoothstep(.065,.21,attack_jump.elapsed-attack_jump.load_duration()) if attack_jump.active else 0.
 	Swing.apply(pose,hitter.get_pose_author(),rig.to_local(strike_point if phase=="spike" else ball.position),maxf(draw,smoothstep(0.,.065,swing_time)),reach,follow,1.,0.,0.,Swing.DEFAULT_ELBOW_CLEARANCE,0.,INF,Vector3.BACK,0.,.10,false,true)
-	for joint in ["pelvis","spine_01","spine_02","thigh_r","thigh_l","calf_r","calf_l","clavicle_r","upperarm_r","lowerarm_r","hand_r","clavicle_l","upperarm_l","lowerarm_l","hand_l"]:
+	for joint in ["pelvis","spine_01","spine_02","thigh_r","thigh_l","calf_r","calf_l","foot_r","foot_l","clavicle_r","upperarm_r","lowerarm_r","hand_r","clavicle_l","upperarm_l","lowerarm_l","hand_l"]:
 		var id := rig.find_bone(joint)
 		rig.set_bone_pose_rotation(id,pose[id].basis.get_rotation_quaternion())
 
