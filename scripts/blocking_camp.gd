@@ -312,15 +312,25 @@ func _input(event: InputEvent) -> void:
 				return
 	super._input(event)
 
+func block_read_target(slot: int) -> float:
+	var target := read_x if read_set else attackers[1].position.x
+	if phase=="spike" and drop_velocity.z>.1:
+		var time_to_net := clampf((BallNet.NET_Z-ball.position.z)/drop_velocity.z,0.,.20)
+		return ball.position.x+drop_velocity.x*time_to_net
+	if slot==1 and read_set:
+		# The middle covers the inside hitting lane alongside the pin blocker.
+		return move_toward(target,0.,minf(.50,absf(target)*.28))
+	return target
+
 func begin_block(slot: int,loaded := 0.,manual := false) -> void:
 	var jump := Block.new()
 	var stamina=blockers[slot].stamina
 	if not manual and (stamina.exhausted or attempted[slot]): return
 	if not manual:
 		var actor := blockers[slot]
-		var aim_x: float=read_x if read_set else attackers[1].position.x
+		var aim_x: float=block_read_target(slot)
 		var offset := aim_x-actor.position.x
-		var carry := clampf(lateral_speed[slot]*.12,-.24,.24) if read_set and slot!=read_lead else 0.
+		var carry := clampf(lateral_speed[slot]*.12,-.24,.24) if read_set else 0.
 		var gap := absf(offset-carry)
 		if gap>1.10 or actor.position.z>BallNet.NET_Z+.95: return
 		if gap>.50:
@@ -340,6 +350,7 @@ func begin_block(slot: int,loaded := 0.,manual := false) -> void:
 	jump.aggressive_press=true
 	jump.begin(blockers[slot])
 	jump.age=Block.START*loaded
+	if not manual and jump.kong_direction!=0.: jump.lean_input=jump.kong_direction*.75
 	jumps[slot]=jump
 	attempted[slot]=true
 	if read_set and closing[slot] and slot!=read_lead and not manual:
@@ -515,7 +526,8 @@ func step_blocker(slot: int,delta: float) -> void:
 			closing[i]=maxf(0.,travel-.75)/GroundControls.speed(true,true)<=available or absi(i-read_lead)<=1
 		read_set=true
 		trace("block_set_read",{"set_route":ROUTE_NAMES[route],"route_tempos":route_tempos.duplicate(),"read_x":read_x,"set_height_percent":rep_set_percent(),"set_endpoint":str(endpoint),"far_closes":closing[0],"middle_closes":closing[1],"available_s":available})
-	if phase=="set" and read_set:
+	var late_window := phase=="spike" and elapsed<.18 and ball.position.z<=BallNet.NET_Z+.12 and not deflected
+	if (phase=="set" or late_window) and read_set:
 		if closing[slot] and slot!=read_lead:
 			goal=blockers[read_lead].position.x+.61*(slot-read_lead)
 		elif closing[slot]: goal=read_x+.61*(slot-read_lead)
@@ -560,8 +572,9 @@ func step_blocker(slot: int,delta: float) -> void:
 		actor.rotation.y=rotate_toward(actor.rotation.y,heading,delta*6.)
 	if sprinting and velocity.length()>.15: actor.stamina.spend(actor.stamina.SPRINT_DRAIN*delta,"Sprint")
 	GroundControls.shuffle(actor,shuffle_steps[actor],velocity,focused,delta)
-	if read_set and (slot==read_lead or attempted[read_lead]) and (automatic_block or slot!=MANUAL_SLOT) and cpu and closing[slot] and not attempted[slot] and phase=="set" and absf(actor.position.x-read_x)<1.65 and flight_time-elapsed<=Block.START+Block.AIR*.5:
-		begin_block(slot)
+	if read_set and (slot==read_lead or attempted[read_lead]) and (automatic_block or slot!=MANUAL_SLOT) and cpu and closing[slot] and not attempted[slot] and ((phase=="set" and flight_time-elapsed<=Block.START+Block.AIR*.5) or late_window):
+		var preload_fraction := clampf(1.-(flight_time-elapsed-Block.AIR*.5)/Block.START,0.,1.) if phase=="set" else 1.
+		begin_block(slot,preload_fraction)
 
 func advance_spike(delta: float) -> void:
 	var previous := ball.global_position

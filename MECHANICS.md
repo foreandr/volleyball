@@ -78,3 +78,4 @@ CPU blockers can Kong toward an uncovered edge using the approaching ball and it
 On a pin set the lead blocker cues every committed CPU closer to jump. Each closer leans and turns toward the next teammate in the block and carries limited lateral motion into the jump while preserving body spacing.
 CPU takeoff checks the ball read against lateral reach, closing momentum and distance from the net. A reachable exposed edge calls for a one-handed Kong. Manual block release remains unconditional.
 Blocking HUD hit speed (9–40 m/s) controls spike power independently of set height. Attack vertical applies on the next feed. CPU closers recheck reach after the lead jumps.
+On wide quicks the middle reads the inside hitting lane, counts closing momentum, and can take a late loaded jump with a torso lean and one-hand reach. Once struck, the ball velocity informs the last reach check at the net.
