@@ -200,25 +200,60 @@ func begin_block(slot: int,loaded := 0.) -> void:
 	if slot==int([2,1,1,0][route]) and slot!=1 and closing[1] and jumps[1]==null:
 		begin_block(1,loaded)
 
+var route_velocity := [Vector3.ZERO,Vector3.ZERO,Vector3.ZERO,Vector3.ZERO]
+
+func team_controls_approach() -> bool:
+	return true
+
+func ready_spot(i: int) -> Vector3:
+	var pin: Vector3=ROUTES[i]
+	var outside := 0.55 if i==0 else (-0.55 if i==3 else 0.)
+	return Vector3(pin.x+outside,START.y,pin.z-3.45)
+
+func step_hitting_line(i: int,delta: float) -> void:
+	var actor := attackers[i]
+	var target := ready_spot(i)
+	var attacking := (phase=="set" and i==route) or phase=="set_contact" or (phase=="pass" and contact_time-elapsed<.9)
+	if attacking:
+		var pin: Vector3=ROUTES[i]
+		var progress := 1. if phase in ["set","set_contact"] else clampf(1.-(contact_time-elapsed)/.9,0.,1.)
+		target=target.lerp(Vector3(pin.x,START.y,pin.z-1.65),progress)
+	elif phase in ["set","spike"]:
+		if i==route: return
+		# Three distinct cover lanes relative to the hitter, ordered across the court.
+		var rank := 0
+		for j in attackers.size():
+			if j!=route and ROUTES[j].x<ROUTES[i].x: rank+=1
+		target.x=clampf(endpoint.x,-2.9,2.9)+(rank-1)*1.35
+		target.z=endpoint.z-(2.85 if rank==1 else 1.6)
+	var offset := (target-actor.position).slide(Vector3.UP)
+	var velocity: Vector3=route_velocity[i]
+	velocity=velocity.move_toward((offset*5.).limit_length(3.8),13.*delta)
+	route_velocity[i]=velocity
+	if i==route: prep_velocity=velocity
+	actor.position=rotation_drill.move_actor(actor,velocity*delta)
+	if i!=route or phase=="cart": actor.animator.advance(delta)
+	if attacking:
+		GroundControls.face(actor,(ROUTES[i]-actor.position).slide(Vector3.UP),delta)
+		actor.play_ground_gait(velocity.length())
+	else:
+		GroundControls.face(actor,ball.position-actor.position,delta)
+		actor.play_action("idle",.16)
+		if not shuffle_steps.has(actor): shuffle_steps[actor]=preload("res://scripts/directional_footwork.gd").new(actor)
+		GroundControls.shuffle(actor,shuffle_steps[actor],velocity,true,delta)
+
 func step_attack(delta: float) -> void:
 	if phase=="pass" and not manual_shuffle_open and ball.position.distance_to(catch_point)<=1.:
 		manual_shuffle_open=true
 		trace("manual_block_shuffle_open",{"distance_m":ball.position.distance_to(catch_point)})
 	for i in attackers.size():
-		if attackers[i]==hitter and (phase!="cart" or elapsed>0.): continue
-		var actor := attackers[i]
-		var home := Vector3(ROUTES[i].x,START.y,ROUTES[i].z-2.65)
-		var old := actor.position
-		actor.play_action("idle",.16)
-		actor.animator.advance(delta)
-		actor.position=old.move_toward(home,2.4*delta)
-		if not shuffle_steps.has(actor): shuffle_steps[actor]=preload("res://scripts/directional_footwork.gd").new(actor)
-		GroundControls.shuffle(actor,shuffle_steps[actor],(actor.position-old)/maxf(.0001,delta),true,delta)
+		if i==route and (attack_jump.active or (phase=="set" and approach_started) or phase=="spike"): continue
+		step_hitting_line(i,delta)
 	for i in blockers.size():
 		step_blocker(i,delta)
 	if phase=="cart":
 		for i in attackers.size():
-			var home := Vector3(ROUTES[i].x,START.y,ROUTES[i].z-2.65)
+			var home := ready_spot(i)
 			if elapsed==0. and attackers[i].position.distance_to(home)>.035: return
 		for i in blockers.size():
 			var home := Vector3(HOMES[i],START.y,BallNet.NET_Z+.38)

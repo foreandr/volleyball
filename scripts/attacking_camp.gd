@@ -375,6 +375,9 @@ func steer_attack_aim(delta: float) -> void:
 	aim_center.x=clampf(aim_center.x+lateral_input*lerpf(1.5,3.,placement_skill())*delta,lane-1.,lane+1.)
 	aim_center.y=clampf(aim_center.y+strength*lerpf(6.,13.,placement_skill())*delta,4.65,BallNet.NET_Z+9.+3.048)
 
+func team_controls_approach() -> bool:
+	return false
+
 func step_attack(delta: float) -> void:
 	if cpu_hitter and not has_meta("sampling_attack"): drive_cpu_attack()
 	if not cpu_hitter and approach_started and phase=="set" and manual_shot>=0 and not is_finite(release_at):
@@ -394,7 +397,7 @@ func step_attack(delta: float) -> void:
 		var lock_on := not cpu_hitter and GroundControls.focus(axis)
 		var tracking := cpu_hitter or (manual_shot>=0 and (phase=="set" or (rep_set_percent()<60. and phase in ["pass","set_contact"])) and not steering)
 		var recovering := cpu_hitter and phase in ["spike","between","drop"] and not attack_jump.active
-		if recovering or (tracking and not approach_started and phase in ["cart","feed","pass","set_contact","set"]):
+		if not team_controls_approach() and (recovering or (tracking and not approach_started and phase in ["cart","feed","pass","set_contact","set"])):
 			var entry := GroundControls.attack_staging(active_set)
 			entry.x+=1.18*lane_offset()
 			entry.y=START.y
