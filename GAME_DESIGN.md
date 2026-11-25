@@ -189,3 +189,5 @@ Shared approach and setting jumps scale vertical reach with stamina at the start
 In attacker control, hold X for line, Y for six, or B for cross. The hitter tracks the set and leads toward its intercept with the left foot. Release at contact for power. Early timing biases depth long and late timing drives the shot down.
 
 Attacks allow 30 cm from palm to ball center during the strike window. A small upper-body reach assists close swings and eases away through the follow-through.
+
+Player-controlled ground movement uses shared LT lock-on and RT sprint bindings. LT keeps the athlete facing the ball as the stick steers a grounded shuffle. LT and RT together accelerate that shuffle and consume stamina.

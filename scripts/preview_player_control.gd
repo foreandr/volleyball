@@ -45,6 +45,8 @@ var save_clock := 0.0
 var footwork: RefCounted
 var stamina: RefCounted
 var sprinting := false
+const GroundControls = preload("res://scripts/player_ground_controls.gd")
+var focus_requested := false
 var sprint_requested := false
 var locomotion := ""
 var stamina_ring: MeshInstance3D
@@ -203,9 +205,12 @@ func update_stamina_ring() -> void:
 	if stamina_ring.visible: stamina_ring.set_fraction(stamina.fraction())
 
 func read_pace_input() -> void:
-	sprint_requested = Input.is_physical_key_pressed(KEY_SHIFT)
-	var connected := Input.get_connected_joypads()
-	if not connected.is_empty(): sprint_requested = sprint_requested or Input.is_joy_button_pressed(connected[0],preload("res://scripts/xbox_controls.gd").physical(JOY_BUTTON_RIGHT_SHOULDER))
+	var pads := Input.get_connected_joypads()
+	var axis := func(which): return Input.get_joy_axis(pads[0],which) if not pads.is_empty() else 0.
+	focus_requested=GroundControls.focus(axis)
+	sprint_requested=GroundControls.sprint(axis)
+	if not pads.is_empty():
+		sprint_requested=sprint_requested or Input.is_joy_button_pressed(pads[0],GroundControls.Xbox.physical(JOY_BUTTON_RIGHT_SHOULDER))
 
 func movement_input() -> Vector2:
 	var direction := Vector2.ZERO
@@ -491,6 +496,7 @@ func move_cpu_toward(travel: Vector3, delta: float, track_ball := true) -> void:
 	forward = forward.normalized()
 	var distance := travel.length()
 	var direction := travel.normalized()*minf(1.0,distance/0.27)
+	focus_requested=false
 	sprint_requested = distance>0.85
 	move_player(Vector2(direction.dot(forward.cross(Vector3.UP)),direction.dot(forward)),delta,track_ball)
 
@@ -508,7 +514,8 @@ func move_player(direction: Vector2, delta: float, track_ball := true, setting_t
 		setter_travel = setter_travel.move_toward(travel*movement_scale,delta*8.0).limit_length(movement_scale)
 		if approach_speed <= 0.0: travel = setter_travel
 	var step_direction := direction
-	if setting and turn_with_ball: track_setting_ball(actor,setting_target,delta,court_weight)
+	if focus_requested and setting: GroundControls.face(actor,setting_target-actor.global_position,delta)
+	elif setting and turn_with_ball: track_setting_ball(actor,setting_target,delta,court_weight)
 	elif not setting and drill and track_ball: face_ball()
 	if drill or setting:
 		var facing := actor.basis.z.normalized()
@@ -516,21 +523,24 @@ func move_player(direction: Vector2, delta: float, track_ball := true, setting_t
 	var quick_pace: bool= sprint_requested and direction.length()>0.1 and stamina.can_sprint()
 	var toward_ball := (setting_target-actor.global_position).slide(Vector3.UP).normalized() if setting else Vector3.ZERO
 	var ball_sprint := run_after_pass and setting and travel.normalized().dot(toward_ball) > 0.76 and step_direction.normalized().y > 0.76
-	sprinting = quick_pace and ((not setting and step_direction.y>0.3) or ball_sprint)
+	sprinting = not focus_requested and quick_pace and ((not setting and step_direction.y>0.3) or ball_sprint)
 	var quick_step: bool= quick_pace if not run_after_pass else sprinting
 	var step_rate := QUICK_STEP_RATE if quick_step else 1.0
 	if setting:
 		setter_step_rate = move_toward(setter_step_rate,QUICK_STEP_RATE*step_rate,delta*7.0)
 		step_rate = setter_step_rate
 	var speed := RUN_SPEED if sprinting else SHUFFLE_SPEED*step_rate
-	if approach_speed > 0.0:
+	if focus_requested:
+		quick_step=quick_pace
+		speed=GroundControls.speed(true,quick_pace)
+	elif approach_speed > 0.0:
 		speed = approach_speed
 		step_rate = approach_rate
 	var velocity := travel*speed
 	var before := actor.position
 	var movement := velocity*delta
 	var lateral := absf(step_direction.x)>0.3
-	var shuffle_step: bool = not setting and not sprinting and (side_steps.active or lateral)
+	var shuffle_step: bool = not focus_requested and not setting and not sprinting and (side_steps.active or lateral)
 	side_steps.sampled = false
 	if shuffle_step:
 		if lateral: shuffle_heading = travel.normalized()
@@ -566,7 +576,9 @@ func move_player(direction: Vector2, delta: float, track_ball := true, setting_t
 	var model_yaw := atan2(local_velocity.x,local_velocity.z) if sprinting and not drill else 0.0
 	actor.model.rotation.y = lerp_angle(actor.model.rotation.y,model_yaw,1-exp(-delta*16))
 	side_weight = move_toward(side_weight,1.0 if shuffle_step else 0.0,delta*9)
-	if shuffle_step or sprinting:
+	if focus_requested:
+		GroundControls.shuffle(actor,footwork,velocity,now_moving,delta)
+	elif shuffle_step or sprinting:
 		footwork.weight = 0
 	else:
 		footwork.step(local_velocity/speed if moving else Vector3.ZERO,delta,step_rate*(1.0 if approach_speed > 0.0 else SHUFFLE_CLIP_RATE),setting)

@@ -184,6 +184,7 @@ var free_jump := preload("res://scripts/setter_jump.gd").new()
 var free_jump_used := false
 var free_target := -1
 var free_press := 0.0
+const GroundControls = preload("res://scripts/player_ground_controls.gd")
 var shuffle_steps := {}
 var ground_velocity := {}
 var cue_until := 0.0
@@ -677,15 +678,15 @@ func move_setter(delta: float,actor: Node3D=setter,off_ball := false) -> bool:
 	if solo_setting and not off_ball:
 		var right := camera.global_basis.x.slide(Vector3.UP).normalized()
 		direction=(right*motion.x+right.cross(Vector3.UP)*motion.y).limit_length(1)
-	var focus := axis(Xbox.trigger(true))>0.25 or Input.is_key_pressed(KEY_CTRL)
-	var sprint := axis(Xbox.trigger(false))>0.25 or Input.is_key_pressed(KEY_SHIFT)
+	var focus := GroundControls.focus(axis)
+	var sprint := GroundControls.sprint(axis)
 	if not off_ball and focus!=focused:
 		focused = focus
 		trace("focus",{"active":focus})
 		message.text = ("Focused on ball   /   " if focus else "")+TARGETS[called()]
 	sprint=sprint and energy[actor].can_sprint()
 	if sprint and not direction.is_zero_approx(): energy[actor].spend(delta*25,"Sprint")
-	var speed := (4.1 if sprint else 2.35) if focus else (6.2 if sprint else 4.3)
+	var speed := GroundControls.speed(focus,sprint)
 	var previous_position := actor.position
 	if solo_setting and actor==setter: speed*=camp_speed_scale()
 	var planting := not off_ball and (phase=="set_contact" or (phase=="pass" and held>=0 and elapsed>contact_time-.13))
@@ -719,12 +720,7 @@ func move_setter(delta: float,actor: Node3D=setter,off_ball := false) -> bool:
 
 	if not shuffle_steps.has(actor): shuffle_steps[actor]=preload("res://scripts/directional_footwork.gd").new(actor)
 	var steps: RefCounted=shuffle_steps[actor]
-	var shuffle := Vector3.ZERO
-	if (focus or at_net) and not planting:
-		shuffle=actor.basis.orthonormalized().inverse()*Vector3(ground_velocity[actor])
-		shuffle=(shuffle/2.35).limit_length(1.)
-	steps.step(shuffle,delta,clampf(velocity.length()/2.35,.55,1.35),true,true)
-	actor.set_meta("moving_shuffle",steps.weight>.04 and velocity.length()>.12)
+	GroundControls.shuffle(actor,steps,ground_velocity[actor],(focus or at_net) and not planting,delta)
 	return not direction.is_zero_approx()
 
 var angular_speed := {}

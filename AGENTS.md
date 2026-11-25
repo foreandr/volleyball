@@ -17,3 +17,5 @@
 - Push each project update to GitHub and report its verified commit SHA to the user.
 
 - Reuse the shared practice kit, Xbox glyph bindings, gameplay pause menu, indoor court equipment and tryout movement helpers in new gameplay chapters. Use the gameplay_pause scene group for additional standalone gameplay scenes. Carry forward cart pickup, rim-entry scoring, movement limits and space-making huddles when those interactions recur.
+
+- Use player_ground_controls.gd for manually controlled ground movement in drills, career and match play. Check analog steering, LT facing the ball while shuffling, RT sprint and LT+RT fast shuffle through the playable entry point when adding a mode or changing movement. Keep sport-specific actions in the mode controller.
