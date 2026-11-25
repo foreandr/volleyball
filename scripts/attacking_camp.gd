@@ -5,6 +5,8 @@ const START := Vector3(3.65,.04,.76)
 var hitter: Node3D
 var attack_jump := preload("res://scripts/setter_jump.gd").new()
 var swing_time := -1.
+var contact_swing_time := 0.
+var cross_court := false
 var cpu_hitter := true
 var approach_started := false
 const JUMP_HEIGHT := 33.*.0254
@@ -131,13 +133,14 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 		var palm := Contact.palm(hitter,"r")
 		var nearest := Geometry3D.get_closest_point_to_segment(palm,previous,ball.position)
 		if swing_time>=.055 and swing_time<=.30 and nearest.distance_to(palm)<=Contact.BALL_RADIUS+.065:
+			contact_swing_time=swing_time
 			strike_point=ball.position
 			spikes+=1
 			success=true
 			feedback="Spike"
 			message.text=feedback
 			gym.update_board(spikes)
-			var landing := Vector3(clampf(ball.position.x,-3.8,3.8),Contact.BALL_RADIUS,11.)
+			var landing := shot_landing(ball.position)
 			var shot_time := .68
 			drop_velocity=(landing-ball.position)/shot_time+Vector3.UP*(4.905*shot_time)
 			roll_time=-1.
@@ -153,6 +156,9 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 		return true
 	return false
 
+func shot_landing(origin: Vector3) -> Vector3:
+	return Vector3(-3.4 if cross_court else clampf(origin.x,-3.8,3.8),Contact.BALL_RADIUS,11.)
+
 func pose_swing() -> void:
 	if swing_time>.50: return
 	var rig: Skeleton3D=hitter.skeleton
@@ -162,7 +168,7 @@ func pose_swing() -> void:
 	var follow := smoothstep(.16,.46,swing_time)
 	var author = hitter.get_pose_author()
 	var airborne := smoothstep(0.,.12,attack_jump.elapsed-attack_jump.load_duration()) if attack_jump.active else 0.
-	var load_weight := airborne*(1.-reach)
+	var load_weight := airborne*(1.-smoothstep(.025,.23,swing_time))
 	var toward_feed := (source-hitter.position).slide(Vector3.UP).normalized()
 	var open_axis := hitter.basis.inverse()*(toward_feed+Vector3.BACK*1.1)
 	var twist := clampf(atan2(open_axis.x,open_axis.z),-.85,.85)*load_weight
@@ -175,7 +181,11 @@ func pose_swing() -> void:
 	var air_age := attack_jump.elapsed-attack_jump.load_duration()
 	# Drive the hips through takeoff and let the heels trail until the strike.
 	var tuck_age := maxf(0.,air_age-.015)
-	var knee_load := smoothstep(0.,.055,tuck_age)*(1.-reach)*(1.-follow) if attack_jump.active else 0.
+	var since_hit := swing_time-contact_swing_time if phase=="spike" else 0.
+	var extension := smoothstep(0.,.115,since_hit)
+	var landing_blend := 1.-smoothstep(.19,.33,since_hit)
+	var leg_weight := smoothstep(0.,.055,tuck_age)*landing_blend if attack_jump.active else 0.
+	var knee_load := leg_weight*(1.-extension)
 	var lift_pose := knee_load
 	var pelvis := rig.find_bone("pelvis")
 	var parent_pose: Transform3D = author.world_pose(pose,rig.get_bone_parent(pelvis))
@@ -192,7 +202,7 @@ func pose_swing() -> void:
 		var thigh_axis := Vector3(.33,-.74,.58) if side=="l" else Vector3(-.13,-.80,.59)
 		var trailing_thigh := Vector3(.17,-.89,-.43) if side=="l" else Vector3(-.14,-.84,-.53)
 		thigh_axis = thigh_axis.normalized().slerp(trailing_thigh.normalized(),lift_pose)
-		author.aim_joint(pose,thigh,calf,hip+leg.slerp(thigh_axis,knee_load))
+		author.aim_joint(pose,thigh,calf,hip+leg.slerp(thigh_axis.slerp(Vector3(0.,-.87,.49).normalized(),extension),leg_weight))
 		var knee: Vector3 = author.point(pose,calf)
 		var shin: Vector3 = (author.point(pose,foot)-knee).normalized()
 		var outward := -.12 if side=="r" else .12
@@ -201,9 +211,9 @@ func pose_swing() -> void:
 		var full_tuck := (seat-knee).normalized()
 		var previous_tuck := Vector3(outward,.83,-.55).normalized()
 		var heel := previous_tuck.slerp(full_tuck,.63)
-		var extended := Vector3(outward,-1.,-.14).normalized()
-		var blend := maxf(knee_load,airborne)*(1.-follow)
-		author.aim_joint(pose,calf,foot,knee+shin.slerp(heel.slerp(extended,reach),blend))
+		var extended := (knee-hip).normalized()
+		var blend := maxf(knee_load,airborne)*landing_blend
+		author.aim_joint(pose,calf,foot,knee+shin.slerp(heel.slerp(extended,extension),blend))
 		var ankle: Vector3 = author.point(pose,foot)
 		var toes := "ball_"+str(side)
 		var toe_axis: Vector3 = (author.point(pose,toes)-ankle).normalized()
@@ -213,7 +223,9 @@ func pose_swing() -> void:
 	# Apply pelvic rotation after solving the tuck so both legs inherit it.
 	author.rotate_world(pose,"pelvis",Vector3.UP,hip_turn)
 	var draw := smoothstep(.065,.21,attack_jump.elapsed-attack_jump.load_duration()) if attack_jump.active else 0.
-	Swing.apply(pose,hitter.get_pose_author(),rig.to_local(strike_point if phase=="spike" else ball.position),maxf(draw,smoothstep(0.,.065,swing_time)),reach,follow,1.,0.,0.,Swing.DEFAULT_ELBOW_CLEARANCE,0.,INF,Vector3.BACK,0.,.10,false,true)
+	var origin := strike_point if phase=="spike" else ball.position
+	var shot_axis := hitter.basis.inverse()*origin.direction_to(shot_landing(origin)).slide(Vector3.UP).normalized()
+	Swing.apply(pose,hitter.get_pose_author(),rig.to_local(strike_point if phase=="spike" else ball.position),maxf(draw,smoothstep(0.,.065,swing_time)),reach,follow,1.,0.,1. if cross_court else 0.,Swing.DEFAULT_ELBOW_CLEARANCE,0.,INF,shot_axis,0.,.10,false,true)
 	var guide_target := rig.to_local(strike_point if phase=="spike" else ball.global_position)
 	var shoulder: Vector3 = author.point(pose,"upperarm_l")
 	var guide_drop := maxf(reach,follow)
@@ -229,7 +241,8 @@ func pose_swing() -> void:
 func frame_editor_attacker() -> Node3D:
 	return hitter
 
-func edit_approach_frames(arm_lift := false, arm_swing := false) -> void:
+func edit_approach_frames(arm_lift := false, arm_swing := false, cross := false) -> void:
+	cross_court=cross
 	# Warm up from the first step so the editor inherits the live plant pose.
 	hitter.position=START
 	hitter.rotation.y=0.
@@ -243,7 +256,7 @@ func edit_approach_frames(arm_lift := false, arm_swing := false) -> void:
 	var first_frame := floori((takeoff-.15)*60.) if arm_lift else 0
 	var duration := takeoff+.25 if arm_lift else takeoff
 	if arm_swing:
-		duration=(first_frame+40)/60.
+		duration=(first_frame+50)/60.
 		cpu_hitter=true
 		flight_time=DURATION[1]
 	swing_time=-1.
@@ -274,7 +287,7 @@ func edit_approach_frames(arm_lift := false, arm_swing := false) -> void:
 			bones.append(hitter.skeleton.get_bone_pose(id))
 		recording.frames.append({"time":time-first_frame/60.,"ball":ball.global_transform,"actors":[{"root":hitter.transform,"bones":bones}]})
 	var title := "Takeoff and arm lift" if arm_lift else "Three-step approach and backswing"
-	if arm_swing: title="Right arm spike swing"
+	if arm_swing: title="Cross-court swing" if cross else "Down-the-line swing"
 	recording.index=0
 	StorySession.edit_animation=recording.bake_recorded_actor(hitter,0,title,recording.frames.size()-1,arm_lift)
 	StorySession.edit_animation.remove_meta("contact_time")
