@@ -43,3 +43,4 @@ On a double block the middle tracks the inside shoulder of the outside blocker a
 Manual blocker 509 can shuffle once the incoming ball is within one meter of the predicted setter contact point. CPU blockers read the released set.
 Block arms extend as wrists cross above the tape. Arm contact uses segment-specific capsule radii, widest at the open hand. Blocking replay samples up to 60 poses per second and replays the hand sound on a recorded block touch.
 Holding A on 509 layers the shuffle over the loaded squat while moving laterally. Recorded spikes, block touches and spike floor contacts trigger the impact recordings in replay playback.
+Blockers bring their legs slightly forward as they press at jump apex. Forward foot travel is limited near the net and blends out before landing.

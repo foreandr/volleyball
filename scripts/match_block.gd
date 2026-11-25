@@ -57,6 +57,16 @@ func step(delta: float, world_ball: Vector3) -> bool:
 			var bend: Vector3 = author.point(pose,knee)-author.point(pose,thigh)
 			author.limb(pose,thigh,knee,foot,ankle.origin+drop,bend)
 			author.set_world_basis(pose,foot,ankle.basis)
+	if court_aim.is_finite() and phase>0. and phase<1.:
+		var pike := smoothstep(.28,.50,phase)*(1.-smoothstep(.50,.74,phase))*smoothstep(.30,.80,lift)
+		for side in ["l","r"]:
+			var foot: String="foot_"+side
+			var ankle: Vector3=rig.to_global(author.point(pose,foot))
+			var forward := actor.global_basis.z.normalized()
+			var travel := minf(.20*pike,maxf(0.,ankle.z-preload("res://scripts/net_collision.gd").NET_Z-.19))
+			var target := rig.to_local(ankle+forward*travel+Vector3.UP*.035*pike)
+			var pole: Vector3=author.point(pose,"calf_"+side)-author.point(pose,"thigh_"+side)
+			if pike>.001: author.limb(pose,"thigh_"+side,"calf_"+side,foot,target,pole,pike,173.)
 	previous_hands = hands.duplicate()
 	previous_wrists = wrists.duplicate()
 	hands.clear()
