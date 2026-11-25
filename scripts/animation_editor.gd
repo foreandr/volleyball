@@ -71,6 +71,9 @@ func _ready() -> void:
 		view_focus = preview_player.position+Vector3(0,1.85 if spike else 1.10,0)
 		view_distance = 5.8 if spike else 4.6
 		orbit_yaw = -2.1 if spike else 1.1
+		if entry.id=="camp_attack_arm_lift":
+			view_focus.y+=1.25
+			view_distance=7.2
 		if spike: preview_player.get_node("DirectionArrows").hide()
 		update_camera()
 	ball_preview = preload("res://scripts/animation_ball_preview.gd").new()

@@ -164,8 +164,8 @@ func pose_swing() -> void:
 	var toward_feed := (source-hitter.position).slide(Vector3.UP).normalized()
 	var open_axis := hitter.basis.inverse()*(toward_feed+Vector3.BACK*1.1)
 	var twist := clampf(atan2(open_axis.x,open_axis.z),-.85,.85)*load_weight
-	author.rotate_world(pose,"pelvis",Vector3.UP,twist*.30)
-	twist *= .70
+	var hip_turn := twist*.50
+	twist -= hip_turn
 	author.rotate_world(pose,"spine_01",Vector3.UP,twist*.45)
 	author.rotate_world(pose,"spine_02",Vector3.UP,twist*.55)
 	for side in ["r","l"]:
@@ -187,6 +187,8 @@ func pose_swing() -> void:
 		var extended := Vector3(outward,-1.,-.14).normalized()
 		var blend := maxf(knee_load,airborne)*(1.-follow)
 		author.aim_joint(pose,calf,foot,knee+shin.slerp(heel.slerp(extended,reach),blend))
+	# Apply pelvic rotation after solving the tuck so both legs inherit it.
+	author.rotate_world(pose,"pelvis",Vector3.UP,hip_turn)
 	var draw := smoothstep(.065,.21,attack_jump.elapsed-attack_jump.load_duration()) if attack_jump.active else 0.
 	Swing.apply(pose,hitter.get_pose_author(),rig.to_local(strike_point if phase=="spike" else ball.position),maxf(draw,smoothstep(0.,.065,swing_time)),reach,follow,1.,0.,0.,Swing.DEFAULT_ELBOW_CLEARANCE,0.,INF,Vector3.BACK,0.,.10,false,true)
 	for joint in ["pelvis","spine_01","spine_02","thigh_r","thigh_l","calf_r","calf_l","clavicle_r","upperarm_r","lowerarm_r","hand_r","clavicle_l","upperarm_l","lowerarm_l","hand_l"]:
@@ -212,21 +214,24 @@ func edit_approach_frames(arm_lift := false) -> void:
 	swing_time=-1.
 	if arm_lift:
 		phase="set"
-		source=setter.position
-		ball.position=Vector3(endpoint.x,2.85,endpoint.z)
+		source=setter.position+Vector3.UP*(setter.height_cm*.01+.12)
+		endpoint.y=2.65
 	var count := ceili(duration*60.)
 	for i in range(count+1):
 		var time := minf(i/60.,duration)
 		if i>0: attack_jump.step(hitter,time-(i-1)/60.,Vector2.ZERO)
-		if arm_lift and time>takeoff: pose_swing()
+		if arm_lift:
+			var remaining := takeoff+attack_jump.flight_duration(JUMP_HEIGHT,true)*.48+.025-time
+			ball.position=arc(source,endpoint,clampf(1.-remaining/DURATION[1],0.,1.),APEX[1])
+			if time>takeoff: pose_swing()
 		if i<first_frame: continue
 		var bones: Array[Transform3D]=[]
 		for id in hitter.skeleton.get_bone_count():
 			bones.append(hitter.skeleton.get_bone_pose(id))
-		recording.frames.append({"time":time-first_frame/60.,"actors":[{"root":hitter.transform,"bones":bones}]})
+		recording.frames.append({"time":time-first_frame/60.,"ball":ball.global_transform,"actors":[{"root":hitter.transform,"bones":bones}]})
 	var title := "Takeoff and arm lift" if arm_lift else "Three-step approach and backswing"
 	recording.index=0
-	StorySession.edit_animation=recording.bake_recorded_actor(hitter,0,title,recording.frames.size()-1,false)
+	StorySession.edit_animation=recording.bake_recorded_actor(hitter,0,title,recording.frames.size()-1,arm_lift)
 	StorySession.edit_animation.remove_meta("contact_time")
 	StorySession.edit_animation.set_meta("editor_height_cm",hitter.height_cm)
 	StorySession.edit_entry={"id":"camp_attack_arm_lift" if arm_lift else "camp_spike_approach","name":title,"category":"Attacking","type":"Approach"}
