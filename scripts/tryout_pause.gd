@@ -128,10 +128,27 @@ func attack_setup_controls() -> void:
 
 	if game.scene_file_path=="res://scenes/attacking_camp.tscn":
 		var count := OptionButton.new()
-		for text in ["No blockers","1 blocker","2 blockers"]: count.add_item(text)
+		for text in ["No blockers","1 blocker (right side)","2 blockers (right side + middle)"]: count.add_item(text)
 		count.select(game.attack_blocker_count)
 		count.item_selected.connect(game.set_attack_blocker_count)
 		body.add_child(count)
+		for i in 2:
+			var title := "Right-side vertical" if i==0 else "Middle vertical"
+			var key := "right_block_vertical" if i==0 else "middle_block_vertical"
+			var readout := Label.new()
+			var vertical := HSlider.new()
+			vertical.max_value=60
+			vertical.step=1
+			vertical.value=game.practice_vertical[i]
+			readout.text="%s  %d in" % [title,vertical.value]
+			body.add_child(readout)
+			body.add_child(vertical)
+			vertical.value_changed.connect(func(value):
+				game.practice_vertical[i]=value
+				readout.text="%s  %d in" % [title,value]
+				StorySession.game_options.set_value("attack",key,value)
+				StorySession.save_options()
+			)
 
 func tuning_controls() -> void:
 	if "block_vertical" in game:

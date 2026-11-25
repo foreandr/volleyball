@@ -61,7 +61,7 @@ func _ready() -> void:
 	back_field = parameter("Back from net",-12.0,40.0,StorySession.feed_spot.y-4.0)
 	back_field.value_changed.connect(func(value): StorySession.feed_spot.y = 4.0+value)
 	back_field.get_meta("slider").value_changed.connect(func(value): StorySession.feed_spot.y = 4.0+value)
-	incoming_speed_field = parameter("Speed",1.0,120.0,StorySession.incoming_speed,"m/s")
+	incoming_speed_field = parameter("Speed",3.6,432.0,StorySession.incoming_speed*3.6,"km/h")
 	incoming_speed_field.value_changed.connect(func(_value): StorySession.feed_fit = "angle")
 	incoming_speed_field.get_meta("slider").value_changed.connect(func(_value): StorySession.feed_fit = "angle")
 	incoming_angle_field = parameter("Angle",1.0,85.0,StorySession.incoming_angle,"°")
@@ -226,7 +226,7 @@ func apply_setup(player: Node3D, face_source := false) -> void:
 	StorySession.pass_apex = apex_field.value
 	StorySession.source_height = height_field.value
 	StorySession.pass_distance = distance_field.value
-	StorySession.incoming_speed = incoming_speed_field.value
+	StorySession.incoming_speed = incoming_speed_field.value/3.6
 	StorySession.incoming_angle = incoming_angle_field.value
 	StorySession.incoming_spin = SPINS[spin_picker.selected]
 	StorySession.spin_rate = spin_rate_field.value
@@ -264,8 +264,8 @@ func sync_feed(feed: Dictionary) -> void:
 	var velocity: Vector3 = feed.incoming
 	var speed := velocity.length()
 	var angle := rad_to_deg(atan2(-velocity.y,Vector2(velocity.x,velocity.z).length()))
-	incoming_speed_field.set_value_no_signal(speed)
-	incoming_speed_field.get_meta("slider").set_value_no_signal(speed)
+	incoming_speed_field.set_value_no_signal(speed*3.6)
+	incoming_speed_field.get_meta("slider").set_value_no_signal(speed*3.6)
 	incoming_angle_field.set_value_no_signal(angle)
 	incoming_angle_field.get_meta("slider").set_value_no_signal(angle)
 	StorySession.incoming_speed = speed

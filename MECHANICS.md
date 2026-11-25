@@ -82,3 +82,4 @@ On wide quicks the middle reads the inside hitting lane, counts closing momentum
 On pin sets each closer evaluates their own adjacent strip of net toward cross court. Reachable CPU blockers may take off independently at the last viable instant if the lead has not jumped.
 Approach and Spike exposes saved attacker vertical (inches) and nominal hard-hit speed (m/s) directly on the HUD. They feed the jump and swing calculations for human and CPU attacks.
 Approach and Spike lets the hitter train against zero, one or two CPU blockers in Pause > Attack setup. Block touches use the same swept arm and hand contact, deflection and impact audio as blocking practice.
+Attack setup uses the right-side blocker for singles and adds the middle for doubles. Each has a saved block vertical. Ball speed controls display km/h while simulation and saved speed values remain in m/s.

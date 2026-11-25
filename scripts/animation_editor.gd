@@ -172,7 +172,7 @@ func add_shot_slider(box: VBoxContainer, caption: String, key: String, low: floa
 	slider.value=float(shot_setup.get(key,fallback))
 	var display := func(value: float):
 		shot_setup[key]=value
-		label.text="%s   %s %s" % [caption,str(snappedf(value,step_size)),unit]
+		label.text="%s   %s %s" % [caption,("%.1f" % (value*3.6)) if unit=="km/h" else str(snappedf(value,step_size)),unit]
 	display.call(slider.value)
 	slider.value_changed.connect(display)
 	slider.value_changed.connect(func(value):
@@ -325,7 +325,7 @@ func build_controls(controls: VBoxContainer) -> void:
 			shot_setup.spin=index
 			queue_live_shot())
 		settings_box.add_child(spin)
-		add_shot_slider(settings_box,"Hit power","power",9.,40.,1.,14.,"m/s")
+		add_shot_slider(settings_box,"Hit power","power",9.,40.,1.,14.,"km/h")
 		add_shot_slider(settings_box,"Vertical jump","jump",24.,60.,1.,33.,"in")
 
 	controls.add_child(copy_name)

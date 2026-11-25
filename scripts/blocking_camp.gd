@@ -151,11 +151,11 @@ func build_settings() -> void:
 	speed_slider.min_value=9
 	speed_slider.max_value=40
 	speed_slider.value=hit_speed
-	speed_label.text="Hit speed  %d m/s" % hit_speed
+	speed_label.text="Hit speed  %.1f km/h" % (hit_speed*3.6)
 	speed_slider.value_changed.connect(func(value):
 		hit_speed=value
 		review_setup.power=value
-		speed_label.text="Hit speed  %d m/s" % value
+		speed_label.text="Hit speed  %.1f km/h" % (value*3.6)
 		StorySession.game_options.set_value("blocking","hit_speed_mps",value)
 		StorySession.save_options()
 	)

@@ -189,11 +189,11 @@ func build_settings() -> void:
 		slider.focus_mode=Control.FOCUS_NONE
 		slider.value=StorySession.game_options.get_value("attack",key,33. if is_jump else 14.)
 		var caption := Label.new()
-		var format_text := "Attack vertical  %d in" if is_jump else "Hit speed  %d m/s"
+		var format_text := "Attack vertical  %d in" if is_jump else "Hit speed  %.1f km/h"
 		row.add_child(caption)
 		row.add_child(slider)
 		var apply_value := func(value: float):
-			caption.text=format_text % value
+			caption.text=format_text % (value if is_jump else value*3.6)
 			if is_jump: jump_height=value*.0254
 			else: drill_hit_speed=value
 		apply_value.call(slider.value)
@@ -206,6 +206,7 @@ func build_settings() -> void:
 const PracticeBlock = preload("res://scripts/match_block.gd")
 var attack_blocker_count := 1
 var practice_blockers: Array[Node3D]=[]
+var practice_vertical := [float(StorySession.game_options.get_value("attack","right_block_vertical",46.)),float(StorySession.game_options.get_value("attack","middle_block_vertical",46.))]
 var practice_jumps := [null,null]
 var practice_attempted := [false,false]
 var practice_footwork := []
@@ -232,10 +233,10 @@ func step_practice_blockers(delta: float) -> void:
 		if jump!=null:
 			if not jump.step(delta,ball.global_position): practice_jumps[i]=null
 			continue
-		var home_x := -1. if i==0 else 1.
+		var home_x := 2.15 if i==0 else 0.
 		var goal := home_x
 		if phase=="set" or phase=="spike":
-			var seam_offset := (i-.5)*.68 if attack_blocker_count==2 else 0.
+			var seam_offset := (.5-i)*.68 if attack_blocker_count==2 else 0.
 			goal=clampf(endpoint.x+seam_offset,-4.4,4.4)
 		var old_x := actor.position.x
 		actor.position.x=move_toward(old_x,goal,GroundControls.speed(true,true)*delta)
@@ -243,13 +244,14 @@ func step_practice_blockers(delta: float) -> void:
 		GroundControls.shuffle(actor,practice_footwork[i],Vector3((actor.position.x-old_x)/maxf(.0001,delta),0,0),true,delta)
 		if phase=="set" and not practice_attempted[i] and absf(goal-actor.position.x)<.85 and flight_time-elapsed<=PracticeBlock.START+PracticeBlock.AIR*.5:
 			jump=PracticeBlock.new()
+			jump.jump_height=float(practice_vertical[i])*.0254
 			jump.net_heading=PI
 			jump.aggressive_press=true
 			jump.court_aim=Vector3(0.,0.,BallNet.NET_Z-3.)
 			if attack_blocker_count==2:
 				var seam := (practice_blockers[0].position.x+practice_blockers[1].position.x)*.5
-				if i==0: jump.max_hand_x=seam-.06
-				else: jump.min_hand_x=seam+.06
+				if i==0: jump.min_hand_x=seam+.06
+				else: jump.max_hand_x=seam-.06
 			jump.begin(actor)
 			practice_jumps[i]=jump
 			practice_attempted[i]=true
@@ -285,9 +287,9 @@ func start_drill() -> void:
 	if scene_file_path=="res://scenes/attacking_camp.tscn" and not has_meta("live_sampler"):
 		attack_blocker_count=clampi(int(StorySession.game_options.get_value("attack","blockers",1)),0,2)
 		for i in 2:
-			var actor := athlete(Vector3(-1.+2.*i,START.y,BallNet.NET_Z+.38),"286881")
-			register_student(actor,5+i)
-			preload("res://scripts/practice_kit.gd").apply(actor,false,5+i)
+			var actor := athlete(Vector3(2.15 if i==0 else 0.,START.y,BallNet.NET_Z+.38),"286881")
+			register_student(actor,7-i)
+			preload("res://scripts/practice_kit.gd").apply(actor,false,7-i)
 			actor.rotation.y=PI
 			practice_blockers.append(actor)
 			practice_footwork.append(preload("res://scripts/directional_footwork.gd").new(actor))

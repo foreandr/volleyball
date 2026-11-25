@@ -123,7 +123,7 @@ func build_controls(host: Control, parent: VBoxContainer) -> void:
 	add_slider(host,left,"source_y","Source height","m",0.3,7.0,0.05,source.y,func(v): source.y = v)
 	add_slider(host,left,"heading","Direction","°",-180,180,1,heading,func(v): heading = v)
 	add_slider(host,left,"angle","Downward angle","°",-65,75,1,angle,func(v): angle = v)
-	add_slider(host,left,"speed","Ball speed","m/s",2,40,0.5,speed,func(v): speed = v)
+	add_slider(host,left,"speed","Ball speed","km/h",2,40,0.5,speed,func(v): speed = v)
 	var selector := OptionButton.new()
 	selector.name = "PassingSpinType"
 	for style in SPINS: selector.add_item(style)
@@ -153,7 +153,7 @@ func add_slider(host: Control, parent: VBoxContainer, id: String, caption: Strin
 	parent.add_child(slider)
 	sliders[id] = slider
 	var update := func(value: float):
-		label.text = "%s  %.2f %s" % [caption,value,unit]
+		label.text = "%s  %.2f %s" % [caption,value*3.6 if unit=="km/h" else value,unit]
 		apply.call(value)
 		update_setup()
 	slider.value_changed.connect(func(value: float):
