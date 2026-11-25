@@ -23,6 +23,8 @@ Home offers Career, Play, Training Camp with performance stars, Create Player, S
 ## Rules and techniques
 Short court confines both teams to the three-meter zones and allows normal attacks, back sets and jump sets. Volleys begins with an underhand serve and requires one touch over the net. Singles plays like tennis. Team volleys rotates entrants through the back and eliminates the responsible player on a floor ball or error, down to uneven sides such as 1v6. Support short-court volleys. Arcade supports 1v1 through 10v10 with slow time, fire, ice, stun, super jumps, teleportation and lightning.
 
+Future camera feature: optional ball-follow in the swing preview to watch the landing and rebound.
+
 Future arcade spike challenges include two power shots:
 
 - Roof the ball. Spike the ball into the opposite court and bounce it high enough to hit the gym ceiling.

@@ -12,7 +12,6 @@ var trajectory_base: Animation
 var trajectory_solver: RefCounted
 var trajectory_revision := -1
 var review_source: Animation
-var follow_preview_ball := false
 var shot_setup := {}
 var floor_ball: MeshInstance3D
 var dragging_floor_ball := false
@@ -266,10 +265,6 @@ func build_controls(controls: VBoxContainer) -> void:
 		controls.add_child(toggle)
 		controls.add_child(settings_box)
 		settings_box.show()
-		var follow_toggle := CheckButton.new()
-		follow_toggle.text="Follow ball"
-		follow_toggle.toggled.connect(func(enabled: bool): follow_preview_ball=enabled; update_camera())
-		settings_box.add_child(follow_toggle)
 		var court := Control.new()
 		court.custom_minimum_size=Vector2(0,132)
 		court.mouse_filter=Control.MOUSE_FILTER_STOP
@@ -444,24 +439,12 @@ func set_frame(value: int) -> void:
 	frame_field.set_value_no_signal(frame)
 	timeline.set_value_no_signal(frame)
 	session.sample(frame)
-	if entry.id=="camp_right_arm_swing": update_camera()
 	if is_instance_valid(ball_preview) and not playing:
 		ball_preview.tick(session.time_at(frame),false)
 		refresh_contact_frame()
 	refresh_rotation()
 	if is_instance_valid(next_pose_button): next_pose_button.disabled = frame >= session.last_frame
 	if is_instance_valid(later_pose_button): later_pose_button.disabled = frame >= session.last_frame
-
-func update_camera() -> void:
-	super.update_camera()
-	if not follow_preview_ball or session==null or entry.get("id","")!="camp_right_arm_swing": return
-	var samples: Array=session.source.get_meta("editor_ball_frames",[])
-	if samples.is_empty(): return
-	var hit := int(session.source.get_meta("swing_hit_frame",36))
-	if hit<0: hit=36
-	var weight := smoothstep(hit,hit+16,frame)
-	var offset: Vector3=(samples[mini(frame,samples.size()-1)].origin-view_focus)*weight
-	preview_camera.position+=offset
 
 func contact_frame() -> int:
 	return clampi(roundi(ball_preview.contact_time*session.frame_rate),0,session.last_frame)
