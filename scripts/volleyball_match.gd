@@ -2181,7 +2181,7 @@ func tick_blocks(delta: float, previous: float) -> void:
 				var wrist: Vector3 = block.previous_wrists[hand].lerp(block.wrists[hand],fraction)
 				var center := Geometry3D.get_closest_point_to_segment(point,wrist,tip)
 				var gap := point.distance_to(center)
-				var reach := 0.28 if block.overpass_swing else (0.30 if block.aggressive_press else 0.27)
+				var reach := 0.28 if block.overpass_swing else (Block.ARM_RADII[2]+(0.18 if block.aggressive_press else 0.15))
 				if gap > reach or center.y < Net.NET_TOP or absf(point.z-Net.NET_Z) > 0.9: continue
 				if block.overpass_swing:
 					if hit_overpass(index,point): return

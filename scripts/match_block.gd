@@ -4,7 +4,7 @@ const HandPose = preload("res://scripts/hand_setting_pose.gd")
 const STUFF_SPEED_RETENTION := 0.60
 const START := 0.16
 const AIR := 0.74
-const BODY_RADII := [.105,.09,.115]
+const BODY_RADII := [.1575,.09,.13225]
 const BODY_PARTS := ["shoulder","neck","head"]
 var body_chains := []
 
@@ -25,7 +25,7 @@ func body_hit(previous: Vector3,current: Vector3,ball_radius: float) -> Dictiona
 				best={"point":pair[0],"part":BODY_PARTS[segment],"side":side if segment==0 else -1}
 	return best
 
-const ARM_RADII := [.085,.095,.12]
+const ARM_RADII := [.085,.1425,.18]
 const HEIGHT := 1.16
 var actor: Node3D
 var age := 0.0
