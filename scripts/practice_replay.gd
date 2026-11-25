@@ -12,6 +12,8 @@ var elapsed := 0.0
 var sample_interval := SAMPLE_INTERVAL
 var sample_limit := MAX_SAMPLES
 var active := false
+var replay_hand := AudioStreamPlayer.new()
+var replay_floor := AudioStreamPlayer.new()
 var playing := false
 var playback_elapsed := 0.
 var hidden_controls := []
@@ -20,6 +22,12 @@ var modifiers := []
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	process_priority = 100
+	replay_hand.stream=preload("res://assets/audio/hand_impacts.tres")
+	replay_floor.stream=preload("res://assets/audio/floor_impacts.tres")
+	for player in [replay_hand,replay_floor]:
+		player.bus=StorySession.IMPACT_BUS
+		player.max_polyphony=3
+		add_child(player)
 	if "block_sound_count" in game:
 		sample_interval=1./60.
 		sample_limit=900
@@ -54,7 +62,7 @@ func capture(rendered := false) -> Dictionary:
 			objects[obj.model] = [obj.model.transform,obj.model.visible]
 		elif obj != game.ball and obj is not RigidBody3D and obj not in game.targets and obj not in game.rotation_drill.bins and obj != game.rotation_drill.basket: continue
 		objects[obj] = [obj.transform,obj.visible]
-	return {"block_sound_count":game.block_sound_count if "block_sound_count" in game else 0,"objects":objects,"poses":poses,"whistle_height":game.coach_motion.whistle_cue.raised}
+	return {"floor_count":game.floor_sound_count,"floor_db":game.floor_impact.volume_db,"spike_count":game.spike_sound_count if "spike_sound_count" in game else 0,"block_sound_count":game.block_sound_count if "block_sound_count" in game else 0,"objects":objects,"poses":poses,"whistle_height":game.coach_motion.whistle_cue.raised}
 
 func apply(sample: Dictionary) -> void:
 	game.coach_motion.whistle_cue.raised = sample.whistle_height
@@ -76,6 +84,8 @@ func toggle() -> void:
 		apply(live)
 		active = false
 		playing = false
+		replay_hand.stop()
+		replay_floor.stop()
 		for modifier in modifiers: modifier.active = true
 		modifiers.clear()
 		game.camera.make_current()
@@ -176,8 +186,16 @@ func _process(delta: float) -> void:
 				playback_elapsed=fmod(playback_elapsed,sample_interval)
 				var old_index := int(slider.value)
 				slider.value+=frames
-				if history[int(slider.value)].block_sound_count>history[old_index].block_sound_count:
-					game.hand_impact.play()
+				for i in range(old_index+1,int(slider.value)+1):
+					var sample := history[i]
+					var prior := history[i-1]
+					for hit in ["spike_count","block_sound_count"]:
+						if sample[hit]>prior[hit]:
+							replay_hand.volume_db=-2.
+							replay_hand.play()
+					if sample.floor_count>prior.floor_count:
+						replay_floor.volume_db=sample.floor_db
+						replay_floor.play()
 				if slider.value>=slider.max_value: playing=false
 		var direction := Vector3(float(Input.is_physical_key_pressed(KEY_D))-float(Input.is_physical_key_pressed(KEY_A)),0,float(Input.is_physical_key_pressed(KEY_S))-float(Input.is_physical_key_pressed(KEY_W)))
 		var rise := float(Input.is_physical_key_pressed(KEY_E))-float(Input.is_physical_key_pressed(KEY_Q))

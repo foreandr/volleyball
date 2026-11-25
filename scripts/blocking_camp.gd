@@ -106,6 +106,7 @@ func reset_feed() -> void:
 	read_set=false
 	closing=[false,false,true]
 	deflected=false
+	set_meta("blocked_attack",false)
 	block_load.cancel()
 	meter_until=-1.
 	block_held=false
@@ -176,9 +177,6 @@ func step_attack(delta: float) -> void:
 		trace("manual_block_shuffle_open",{"distance_m":ball.position.distance_to(catch_point)})
 	for i in blockers.size():
 		step_blocker(i,delta)
-	if block_held:
-		block_load.update(blockers[MANUAL_SLOT],delta)
-		block_load.ring.hide()
 	if phase=="cart":
 		for i in blockers.size():
 			var home := Vector3(HOMES[i],START.y,BallNet.NET_Z+.38)
@@ -229,6 +227,9 @@ func step_blocker(slot: int,delta: float) -> void:
 	actor.animator.advance(delta)
 	if not shuffle_steps.has(actor):
 		shuffle_steps[actor]=preload("res://scripts/directional_footwork.gd").new(actor)
+	if slot==MANUAL_SLOT and block_held:
+		block_load.update(actor,delta)
+		block_load.ring.hide()
 	GroundControls.shuffle(actor,shuffle_steps[actor],Vector3((actor.position.x-previous)/maxf(delta,.0001),0.,motion.y/maxf(delta,.0001)),true,delta)
 	if slot!=1 and cpu and closing[slot] and not attempted[slot] and phase=="set" and absf(actor.position.x-endpoint.x)<1.65 and flight_time-elapsed<=Block.START+Block.AIR*.5:
 		begin_block(slot)
@@ -254,6 +255,7 @@ func advance_spike(delta: float) -> void:
 			spin_acceleration = Vector3.ZERO
 			deflected = true
 			block_sound_count+=1
+			set_meta("blocked_attack",true)
 			hand_impact.volume_db=-2.
 			hand_impact.play()
 			trace("block_hand_contact",{"rep":rep})

@@ -167,6 +167,7 @@ var contact_offset := Vector3.ZERO
 var net_clear_time := -1.
 const PALM_CONTACT := 2./60.
 
+var spike_sound_count := 0
 var hand_impact := AudioStreamPlayer.new()
 
 func start_drill() -> void:
@@ -597,6 +598,7 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 			if hard_spike_floor_pending and not has_meta("live_sampler"):
 				hand_impact.volume_db=-2.
 				hand_impact.play()
+				spike_sound_count+=1
 			contact_swing_time=swing_time
 			strike_point=ball.position
 			strike_shoulder_offset=hitter.skeleton.to_local(strike_point)-hitter.skeleton.get_bone_global_pose(hitter.skeleton.find_bone("upperarm_r")).origin
