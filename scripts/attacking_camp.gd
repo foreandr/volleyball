@@ -20,7 +20,14 @@ func choose_camp_toss() -> Vector3:
 func lane_offset() -> float:
 	return [1.,0.,-1.][active_lane]
 
-var set_arc_percent := 100.0
+var set_arc_percent := float(StorySession.game_options.get_value("attack","set_height_percent",100.))
+
+func save_set_height(value: float) -> void:
+	if is_equal_approx(value,set_arc_percent): return
+	set_arc_percent=value
+	StorySession.game_options.set_value("attack","set_height_percent",value)
+	StorySession.save_options()
+
 var jump_height := JUMP_HEIGHT
 var cpu_hitter := true
 var approach_started := false
@@ -356,25 +363,49 @@ func step_attack(delta: float) -> void:
 			rotation_drill.free_ball(drop_velocity)
 			begin("between")
 		return
+	if not approach_started and (cpu_hitter or manual_shot>=0):
+		if phase=="pass" and set_arc_percent<60.:
+			var predicted_pin: Vector3=PINS[called()]+Vector3(-1.1*lane_offset() if active_lane!=1 else -1.05,ATTACK_SET_LIFT,0.)
+			var set_time := float(DURATION[chosen_tempo()])*sqrt(set_arc_percent*.01)
+			plan_attack_plant(maxf(0.,contact_time-elapsed)+SET_RECEIVE_TIME+SET_PUSH_TIME+set_time,predicted_pin,delta)
+		elif phase=="set_contact":
+			plan_attack_plant(maxf(0.,SET_RECEIVE_TIME+push_time-elapsed)+flight_time,endpoint,delta)
 	super.step_practice(delta)
 	if phase=="pass": message.text="Coach toss to setter"
 	if phase=="set_contact": message.text="Setter contact"
 
-func start_approach(steps := 3, cadence := 1.) -> void:
+func plan_attack_plant(remaining: float,destination: Vector3,delta: float) -> void:
 	if approach_started: return
+	var rise := attack_jump.flight_duration(effective_attack_height(),true)*.48
+	var distance := (destination-hitter.position).slide(Vector3.UP).length()
+	var steps := 3
+	var cadence := 1.
+	if not cpu_hitter:
+		if distance<1.25: steps=2
+		elif distance>2.25: steps=4
+	cadence=lerpf(1. if cpu_hitter else .94,.76,attack_jump.approach_recovery(hitter,distance))
+	var load_time := cadence*((steps-2)*attack_jump.LEAD_STEP_TIME+PLANT_TIME)
+	if distance<=3.35 and (cpu_hitter or manual_shot>=0) and remaining<=load_time+rise+.025:
+		if not approach_started:
+			approach_delay=maxf(0.,load_time+rise+.025-remaining-delta)
+			start_approach(steps,cadence,destination)
+
+func start_approach(steps := 3, cadence := 1.,destination := Vector3.INF) -> void:
+	if approach_started: return
+	if not destination.is_finite(): destination=endpoint
 	last_shoulder_time=-1.
 	reach_assist=Vector3.ZERO
 	closest_spike_gap=INF
 	approach_started=true
 	hitter.stamina.spend(5,"Jump")
-	var contact_stance := Vector3(endpoint.x+.09,.04,endpoint.z-.09)
+	var contact_stance := Vector3(destination.x+.09,.04,destination.z-.09)
 	if not cpu_hitter and not manual_route.is_zero_approx():
-		contact_stance=Vector3(endpoint.x,START.y,endpoint.z)-manual_route*.09
+		contact_stance=Vector3(destination.x,START.y,destination.z)-manual_route*.09
 	var heading := (contact_stance-hitter.position).slide(Vector3.UP).normalized()
 	hitter.rotation.y=atan2(heading.x,heading.z)
 	attack_jump.begin(hitter,Vector2(-heading.x,heading.z),contact_stance,PLANT_TIME*cadence,jump_height,steps,false,cadence,false,.22)
 	attack_jump.attack_entry_speed=maxf(0.,prep_velocity.dot(heading))
-	var to_ball := (endpoint-hitter.position).slide(Vector3.UP)
+	var to_ball := (destination-hitter.position).slide(Vector3.UP)
 	if not to_ball.is_zero_approx(): attack_jump.lead_heading=to_ball.normalized()
 	attack_jump.release()
 
@@ -417,19 +448,7 @@ func attack_flight_time(origin: Vector3, landing: Vector3) -> float:
 func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 	message.text="Approach and spike"
 	var remaining := flight_time-elapsed
-	var rise := attack_jump.flight_duration(effective_attack_height(),true)*.48
-	var distance := (endpoint-hitter.position).slide(Vector3.UP).length()
-	var steps := 3
-	var cadence := 1.
-	if not cpu_hitter:
-		if distance<1.25: steps=2
-		elif distance>2.25: steps=4
-	cadence=lerpf(1. if cpu_hitter else .94,.76,attack_jump.approach_recovery(hitter,distance))
-	var load_time := cadence*((steps-2)*attack_jump.LEAD_STEP_TIME+PLANT_TIME)
-	if distance<=3.35 and (cpu_hitter or manual_shot>=0) and remaining<=load_time+rise+.025:
-		if not approach_started:
-			approach_delay=maxf(0.,load_time+rise+.025-remaining-delta)
-			start_approach(steps,cadence)
+	plan_attack_plant(remaining,endpoint,delta)
 	if approach_started and swing_time<0. and remaining<=.16/arm_speed_factor()+(.095 if not has_meta("sampling_attack") else 0.): swing_time=0.
 	if swing_time<0. and attack_jump.active and attack_jump.elapsed>attack_jump.load_duration():
 		pose_swing()

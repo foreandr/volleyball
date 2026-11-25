@@ -12,6 +12,7 @@ var ribbon := Polygon2D.new()
 var wipe_tween: Tween
 
 func _ready() -> void:
+	process_mode=Node.PROCESS_MODE_ALWAYS
 	refresh_menu_buttons()
 	build_theme()
 	overlay.layer = 20
@@ -260,6 +261,31 @@ func show_loading(destination: String) -> void:
 	var fit := func(): fact.custom_minimum_size.x = clampf(center.size.x - 56,120,580)
 	center.resized.connect(fit)
 	fit.call()
+
+var repeat_direction := 0
+var repeat_at := 0
+
+func _process(_delta: float) -> void:
+	var focus := get_viewport().gui_get_focus_owner()
+	var direction := 0
+	if focus and focus.is_visible_in_tree() and not is_instance_valid(loading_screen):
+		for device in Input.get_connected_joypads():
+			var axis := Input.get_joy_axis(device,JOY_AXIS_LEFT_Y)
+			if Input.is_joy_button_pressed(device,JOY_BUTTON_DPAD_DOWN) or axis>.65: direction=1
+			elif Input.is_joy_button_pressed(device,JOY_BUTTON_DPAD_UP) or axis<-.65: direction=-1
+			if direction!=0: break
+	var now := Time.get_ticks_msec()
+	if direction!=repeat_direction:
+		repeat_direction=direction
+		repeat_at=now+360
+	elif direction!=0 and now>=repeat_at:
+		repeat_at=now+125
+		var event := InputEventAction.new()
+		event.action="ui_down" if direction>0 else "ui_up"
+		event.pressed=true
+		get_viewport().push_input(event)
+		event.pressed=false
+		get_viewport().push_input(event)
 
 func _input(event: InputEvent) -> void:
 	if is_instance_valid(loading_screen):

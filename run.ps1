@@ -5,4 +5,11 @@ if (!(Test-Path -LiteralPath $enginePath)) { throw 'Godot 4.6 is missing from th
 $gameArgs = @('--path',('"'+$PSScriptRoot+'"'),'--maximized')
 
 if ($Cinematic) { $gameArgs += @('--rendering-method','forward_plus') }
-Start-Process -FilePath $enginePath -ArgumentList $gameArgs
+# Give Windows a stable, game-specific audio session when running from source.
+$runtimeDir = Join-Path $PSScriptRoot '.godot\runtime'
+$null = New-Item -ItemType Directory -Path $runtimeDir -Force
+$runtime = Join-Path $runtimeDir 'AndreForemanVolleyball.exe'
+if (!(Test-Path -LiteralPath $runtime) -or (Get-FileHash -LiteralPath $runtime).Hash -ne (Get-FileHash -LiteralPath $enginePath).Hash) {
+    Copy-Item -LiteralPath $enginePath -Destination $runtime -Force
+}
+Start-Process -FilePath $runtime -ArgumentList $gameArgs -WorkingDirectory $PSScriptRoot

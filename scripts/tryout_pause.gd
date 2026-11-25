@@ -47,7 +47,9 @@ func configure(host: Node, layer: Node = null) -> void:
 			bar(home,"Cross-court swing",game.edit_approach_frames.bind(true,true,true))
 		bar(home,"Edit attacker frames" if game.has_method("frame_editor_attacker") else "Edit set frames",open_frame_editor)
 	bar(home,"Restart",restart)
-	bar(home,"Quit",quit_gameplay)
+	var quit_button := bar(home,"Quit",quit_gameplay)
+	primary.focus_neighbor_top=primary.get_path_to(quit_button)
+	quit_button.focus_neighbor_bottom=quit_button.get_path_to(primary)
 	options.custom_minimum_size.x = 400
 	options.add_child(categories)
 	var sections := ["Camera","Audio","Controls"]
@@ -146,7 +148,7 @@ func attack_setup_controls() -> void:
 	body.add_child(label)
 	body.add_child(height)
 	var update_height := func(v: float):
-		game.set_arc_percent=v
+		game.save_set_height(v)
 		label.text="Set height   %d%%" % roundi(v)
 	update_height.call(height.value)
 	height.value_changed.connect(update_height)
@@ -182,7 +184,7 @@ func tuning_controls() -> void:
 		slider.value_changed.connect(func(v):
 			format_value.call(v)
 			match field[0]:
-				"Bell set height": game.set_arc_percent=v
+				"Bell set height": game.save_set_height(v)
 				"Current stamina":
 					athlete.stamina.value=v*.01*athlete.stamina.capacity()
 					athlete.stamina.rested_capacity=maxf(athlete.stamina.rested_capacity,athlete.stamina.value)

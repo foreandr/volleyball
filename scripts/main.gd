@@ -15,6 +15,7 @@ func _ready() -> void:
 		return
 
 	MenuPresentation.mount_menu(self,column)
+	MenuPresentation.set_music(true)
 	open_page(MenuPresentation.return_page)
 
 var route := "Home"
