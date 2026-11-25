@@ -128,9 +128,18 @@ var pad_bindings := [JOY_BUTTON_A,JOY_BUTTON_X,JOY_BUTTON_Y,JOY_BUTTON_B]
 var game_options := ConfigFile.new()
 const OPTIONS := "user://game_options.cfg"
 
+var master_volume := 20.
+var master_gain := AudioEffectAmplify.new()
+
+func set_master_volume(value: float) -> void:
+	master_volume=clampf(value,0.,100.)
+	# Below 20 attenuate after limiting, preserving the old low-volume response.
+	AudioServer.set_bus_volume_db(0,linear_to_db(minf(master_volume/20.,1.)))
+	master_gain.volume_db=6.+linear_to_db(maxf(1.,master_volume/20.))
+
 func save_options() -> void:
 	game_options.set_value("match","buttons",pad_bindings)
-	game_options.set_value("audio","volume_db",AudioServer.get_bus_volume_db(0))
+	game_options.set_value("audio","master_percent",master_volume)
 	game_options.save(OPTIONS)
 
 var open_home_play := false
@@ -146,7 +155,6 @@ const PREVIEW_FIELDS := ["pass_start","pass_distance","pass_output_angle","incom
 const IMPACT_BUS := "Ball impacts"
 
 func _ready() -> void:
-	var master_gain := AudioEffectAmplify.new()
 	master_gain.volume_db=6.
 	AudioServer.add_bus_effect(0,master_gain)
 	AudioServer.add_bus_effect(0,AudioEffectHardLimiter.new())
@@ -159,7 +167,8 @@ func _ready() -> void:
 	AudioServer.add_bus_effect(impact_bus,AudioEffectHardLimiter.new())
 	if game_options.load(OPTIONS) == OK:
 		pad_bindings = game_options.get_value("match","buttons",pad_bindings)
-		AudioServer.set_bus_volume_db(0,game_options.get_value("audio","volume_db",0.0))
+		var previous := db_to_linear(float(game_options.get_value("audio","volume_db",0.0)))*20.
+		set_master_volume(game_options.get_value("audio","master_percent",previous))
 	if DisplayServer.get_name() != "headless":
 		Engine.max_fps = 60
 	match_preferences.load(MATCH_SETTINGS_PATH)

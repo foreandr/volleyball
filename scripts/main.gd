@@ -119,11 +119,12 @@ func show_settings() -> void:
 	caption.text = "Master volume"
 	column.add_child(caption)
 	volume.max_value = 100
-	volume.value = db_to_linear(AudioServer.get_bus_volume_db(0))*100
-	volume.value_changed.connect(func(value: float): AudioServer.set_bus_volume_db(0,linear_to_db(value/100.0)))
+	volume.value = StorySession.master_volume
+	volume.value_changed.connect(func(value: float):
+		StorySession.set_master_volume(value)
+		StorySession.save_options())
 	column.add_child(volume)
 	volume.grab_focus()
-	volume.drag_ended.connect(func(_changed: bool): StorySession.save_options())
 	var soundtrack := CheckButton.new()
 	soundtrack.text = "Menu soundtrack"
 	soundtrack.button_pressed = MenuPresentation.music_enabled

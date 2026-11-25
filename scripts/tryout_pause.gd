@@ -255,7 +255,7 @@ func fields() -> Array:
 
 func saved(field: Array) -> float:
 	if field[0]=="Field of view" and active_camera(): return active_camera().fov
-	if field[0]=="Master volume": return db_to_linear(AudioServer.get_bus_volume_db(0))*100
+	if field[0]=="Master volume": return StorySession.master_volume
 	return StorySession.game_options.get_value("tryout_camera",field[0],field[3])
 
 func apply_field(key: String,value: float,save: bool) -> void:
@@ -265,7 +265,7 @@ func apply_field(key: String,value: float,save: bool) -> void:
 		"Camera orbit": game.yaw = deg_to_rad(value)
 		"Elevation": game.elevation = value
 		"Distance": game.distance = value
-		"Master volume": AudioServer.set_bus_volume_db(0,linear_to_db(value/100))
+		"Master volume": StorySession.set_master_volume(value)
 	if practice: game.apply_camera()
 	if save:
 		StorySession.game_options.set_value("tryout_camera",key,value)
