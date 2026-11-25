@@ -161,6 +161,8 @@ func begin_block(slot: int,loaded := 0.) -> void:
 	jump.age=Block.START*loaded
 	jumps[slot]=jump
 	attempted[slot]=true
+	if slot==MANUAL_SLOT and closing[1] and jumps[1]==null:
+		begin_block(1,loaded)
 
 func step_attack(delta: float) -> void:
 	for i in blockers.size():
@@ -199,7 +201,8 @@ func step_blocker(slot: int,delta: float) -> void:
 		read_set=true
 		trace("block_set_read",{"far_closes":closing[0],"middle_closes":closing[1],"available_s":available})
 	if phase=="set":
-		if closing[slot]: goal=clampf(endpoint.x,1.6,4.25)-.61*(2-slot)
+		if slot==1 and closing[slot]: goal=blockers[MANUAL_SLOT].position.x-.61
+		elif closing[slot]: goal=clampf(endpoint.x,1.6,4.25)-.61*(2-slot)
 		else: depth_goal+=2.7
 	elif phase=="spike" and not closing[slot]:
 		depth_goal+=2.7
@@ -217,7 +220,7 @@ func step_blocker(slot: int,delta: float) -> void:
 	if not shuffle_steps.has(actor):
 		shuffle_steps[actor]=preload("res://scripts/directional_footwork.gd").new(actor)
 	GroundControls.shuffle(actor,shuffle_steps[actor],Vector3((actor.position.x-previous)/maxf(delta,.0001),0.,motion.y/maxf(delta,.0001)),true,delta)
-	if cpu and closing[slot] and not attempted[slot] and phase=="set" and absf(actor.position.x-endpoint.x)<1.65 and flight_time-elapsed<=Block.START+Block.AIR*.5:
+	if slot!=1 and cpu and closing[slot] and not attempted[slot] and phase=="set" and absf(actor.position.x-endpoint.x)<1.65 and flight_time-elapsed<=Block.START+Block.AIR*.5:
 		begin_block(slot)
 
 func advance_spike(delta: float) -> void:
