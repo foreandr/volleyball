@@ -1,7 +1,7 @@
 extends "res://scripts/crosscourt_attack_demo.gd"
 
 const Block = preload("res://scripts/match_block.gd")
-const HOMES := [-3.,0.,3.]
+const HOMES := [-2.15,0.,2.15]
 const MANUAL_SLOT := 2
 var blockers: Array[Node3D] = []
 var jumps := [null,null,null]
@@ -12,9 +12,8 @@ var block_held := false
 var automatic_block := true
 var block_vertical := float(StorySession.game_options.get_value("blocking","vertical_inches",roundf(Block.HEIGHT/.0254)))
 var aim_six := false
-var middle_reset := true
-var far_read := false
-var far_closing := false
+var read_set := false
+var closing := [false,false,true]
 var height_control := HSlider.new()
 var height_label := Label.new()
 
@@ -52,10 +51,11 @@ func set_block_vertical(value: float) -> void:
 	StorySession.save_options()
 
 func apply_camera() -> void:
-	var saved_yaw := yaw
-	yaw+=PI
 	super.apply_camera()
-	yaw=saved_yaw
+	# Rotate the resolved attacking view around center court, including its pivot.
+	var center := Vector3(0.,0.,BallNet.NET_Z)
+	camera.position=center+(camera.position-center).rotated(Vector3.UP,PI)
+	camera.global_basis=Basis(Vector3.UP,PI)*camera.global_basis
 
 func camp_title() -> String:
 	return "BLOCKING   /   BLOCK AT THE NET"
@@ -78,9 +78,8 @@ func reset_feed() -> void:
 	hitter.stamina.exhausted=false
 	attack_lane = 0
 	next_set = Vector3(3.65,2.65,3.)
-	middle_reset=true
-	far_read=false
-	far_closing=false
+	read_set=false
+	closing=[false,false,true]
 	deflected=false
 	block_held=false
 	for i in blockers.size():
@@ -116,7 +115,7 @@ func _input(event: InputEvent) -> void:
 					elif jump_pressed and not automatic_block:
 						if event.is_pressed():
 							block_held=jumps[MANUAL_SLOT]==null
-						elif block_held:
+						elif block_held and phase=="set":
 							block_held=false
 							if jumps[MANUAL_SLOT]==null: begin_block(MANUAL_SLOT)
 				get_viewport().set_input_as_handled()
@@ -138,6 +137,15 @@ func begin_block(slot: int) -> void:
 func step_attack(delta: float) -> void:
 	for i in blockers.size():
 		step_blocker(i,delta)
+	if phase=="cart":
+		for i in blockers.size():
+			var home := Vector3(HOMES[i],START.y,BallNet.NET_Z+.38)
+			if jumps[i]!=null or blockers[i].position.distance_to(home)>.025: return
+		if elapsed==0.:
+			for i in blockers.size():
+				blockers[i].position=Vector3(HOMES[i],START.y,BallNet.NET_Z+.38)
+				lateral_speed[i]=0.
+			trace("blockers_home",{"positions":str([blockers[0].position,blockers[1].position,blockers[2].position])})
 	super.step_attack(delta)
 
 func step_blocker(slot: int,delta: float) -> void:
@@ -151,26 +159,21 @@ func step_blocker(slot: int,delta: float) -> void:
 		return
 	var goal: float=HOMES[slot]
 	var depth_goal := BallNet.NET_Z+.38
-	if slot==1 and absf(actor.position.x)<.12: middle_reset=false
-	if phase in ["pass","set_contact","set"]:
-		var pin := endpoint.x if phase=="set" else active_set.x
-		if slot==2: goal=clampf(pin,1.6,4.25)
-		elif slot==1 and not middle_reset: goal=clampf(pin-.61,-1.,3.64)
-		elif slot==0:
-			var close_x := clampf(pin-1.22,-1.6,3.03)
-			if not far_read:
-				var available := attack_set_duration(chosen_tempo())
-				if phase=="pass": available+=maxf(0.,contact_time-elapsed)
-				var travel := Vector2(close_x-actor.position.x,depth_goal-actor.position.z).length()
-				far_closing=available-Block.START-Block.AIR*.5 >= travel/GroundControls.speed(true,false)+.18
-				far_read=true
-				trace("far_block_read",{"close":far_closing,"available":available})
-			if far_closing: goal=close_x
-			else: depth_goal+=2.7
-	elif phase=="spike" and slot==0 and not far_closing:
+	if phase=="set" and not read_set:
+		var available := maxf(0.,flight_time-elapsed-Block.START-Block.AIR*.5)
+		for i in 2:
+			var seam := clampf(endpoint.x,1.6,4.25)-.61*(2-i)
+			var travel := Vector2(seam-blockers[i].position.x,depth_goal-blockers[i].position.z).length()
+			closing[i]=maxf(0.,travel-.35)/GroundControls.speed(true,false)+.14<=available
+		read_set=true
+		trace("block_set_read",{"far_closes":closing[0],"middle_closes":closing[1],"available_s":available})
+	if phase=="set":
+		if closing[slot]: goal=clampf(endpoint.x,1.6,4.25)-.61*(2-slot)
+		else: depth_goal+=2.7
+	elif phase=="spike" and not closing[slot]:
 		depth_goal+=2.7
 	var previous := actor.position.x
-	var cpu := automatic_block or slot!=MANUAL_SLOT
+	var cpu := automatic_block or slot!=MANUAL_SLOT or phase!="set"
 	var pace := GroundControls.speed(true,false)
 	var desired := clampf((goal-previous)*4.,-pace,pace) if cpu else axis(JOY_AXIS_LEFT_X)*camera.global_basis.x.x*pace
 	lateral_speed[slot]=move_toward(lateral_speed[slot],desired,8.*delta)
@@ -183,7 +186,7 @@ func step_blocker(slot: int,delta: float) -> void:
 	if not shuffle_steps.has(actor):
 		shuffle_steps[actor]=preload("res://scripts/directional_footwork.gd").new(actor)
 	GroundControls.shuffle(actor,shuffle_steps[actor],Vector3((actor.position.x-previous)/maxf(delta,.0001),0.,motion.y/maxf(delta,.0001)),true,delta)
-	if cpu and (slot!=0 or far_closing) and not attempted[slot] and phase=="set" and absf(actor.position.x-endpoint.x)<1.65 and flight_time-elapsed<=Block.START+Block.AIR*.5:
+	if cpu and closing[slot] and not attempted[slot] and phase=="set" and absf(actor.position.x-endpoint.x)<1.65 and flight_time-elapsed<=Block.START+Block.AIR*.5:
 		begin_block(slot)
 
 func advance_spike(delta: float) -> void:
