@@ -30,7 +30,7 @@ const EARLY_LIMIT := -.18
 const LATE_LIMIT := .085
 const ATTACK_CONTACT_RADIUS := .30
 var reach_assist := Vector3.ZERO
-const CLEAN_WINDOW := .018
+const CLEAN_WINDOW := .048
 const METER_START := -.32
 const METER_END := .12
 
@@ -43,6 +43,11 @@ func attack_meter_error() -> float:
 		return minf(release_at,clock)-first_palm_at
 	if phase!="set": return METER_START
 	return minf(release_at,clock)-clock+elapsed-flight_time+.08
+
+func show_attack_timing(error: float) -> void:
+	timing_note.text="On time" if absf(error)<=CLEAN_WINDOW else "%d ms too %s" % [roundi(absf(error)*1000.),"early" if error<0. else "late"]
+	timing_note.reset_size()
+	timing_until=clock+2.2
 
 func clear_attack_input() -> void:
 	manual_route=Vector3.ZERO
@@ -139,6 +144,7 @@ func _input(event: InputEvent) -> void:
 				elif manual_shot==index:
 					release_grade=attack_meter_error()
 					release_at=clock
+					show_attack_timing(release_grade)
 					trace("attack_release",{"shot":index,"meter_error_ms":roundi(release_grade*1000.),"approach":approach_started})
 					if not approach_started: manual_shot=-1
 				get_viewport().set_input_as_handled()
@@ -362,6 +368,11 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 	if elapsed>=flight_time:
 		trace("spike_miss",{"closest_palm_gap_m":closest_spike_gap if is_finite(closest_spike_gap) else -1.,"ball":str(ball.position),"palm":str(Contact.palm(hitter,"r"))})
 		feedback="Missed spike"
+		if not cpu_hitter:
+			if is_finite(release_grade) and (release_grade<EARLY_LIMIT or release_grade>LATE_LIMIT):
+				feedback+="   /   Released too early" if release_grade<0. else "   /   Released too late"
+			elif is_finite(release_grade) and closest_spike_gap>ATTACK_CONTACT_RADIUS: feedback+="   /   Out of reach"
+			elif not is_finite(release_grade): feedback+="   /   No release"
 		message.text=feedback
 		success=false
 		drop_velocity=(endpoint-source-Vector3.UP*4.*set_arc_height)/flight_time

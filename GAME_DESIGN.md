@@ -195,3 +195,5 @@ Player-controlled ground movement uses shared LT lock-on and RT sprint bindings.
 Once an automatic attack approach starts, the face button selects shot width and the left stick adjusts only depth on the opponent's court until release. Every manual shot starts 4.5 metres beyond the net. Effective Spike placement controls target speed and scatter radius. Release timing can push the shot beyond the indicated area.
 
 The attack landing marker previews the aimed ball flight: green in, yellow tape-over, red net, orange out. Depth extends ten feet beyond the baseline.
+
+Short attack plants use the authored front arm-lift curve. The attack release meter grades releases within 48 ms of center as on time and reports early or late offsets in milliseconds.

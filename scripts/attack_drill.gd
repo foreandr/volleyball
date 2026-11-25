@@ -1488,7 +1488,7 @@ func pose_hitting_elbow(rig: Skeleton3D, pose: Array[Transform3D], world_contact
 		approach_render_rotations[bone] = rotation
 
 # Shoulder-to-wrist pitch for each 60 fps frame of the paired lift.
-const ARM_LIFT_PITCH := [-153.0,-148.0,-142.0,-134.0,-124.0,-113.0,-101.0,-88.0,-74.0,-59.0,-44.0,-29.0,-14.0,0.0,14.0,27.0,39.0,49.0,54.0]
+
 
 func apply_two_arm_lift(pose: Array, author: RefCounted, age: float, extension: float, lift_age: float) -> void:
 	var source := pose.duplicate()
@@ -1496,10 +1496,7 @@ func apply_two_arm_lift(pose: Array, author: RefCounted, age: float, extension: 
 		SpikeArm.blend_arm(source,approach_arm_transition,author,1.0,side)
 	var raise := smootherstep(0.0,0.28,lift_age)
 	var together := smoothstep(0.0,0.14,lift_age)
-	var last_key := ARM_LIFT_PITCH.size()-1
-	var lift_frame := clampf(lift_age*60.0,0.0,float(last_key))
-	var key := floori(lift_frame)
-	var shared_angle := deg_to_rad(lerpf(ARM_LIFT_PITCH[key],ARM_LIFT_PITCH[mini(key+1,last_key)],lift_frame-key))
+	var shared_angle := SpikeArm.front_lift_pitch(lift_age*60.)
 	for side in ["r","l"]:
 		var upper: String = "upperarm_"+side
 		var lower: String = "lowerarm_"+side

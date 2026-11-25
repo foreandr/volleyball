@@ -4,6 +4,14 @@ const SWING_NAME := "06 Low Bow"
 const DEFAULT_DRAW_DELAY := 0.05
 const DEFAULT_ELBOW_CLEARANCE := 0.12
 
+const ARM_LIFT_PITCH := [-153.0,-148.0,-142.0,-134.0,-124.0,-113.0,-101.0,-88.0,-74.0,-59.0,-44.0,-29.0,-14.0,0.0,14.0,27.0,39.0,49.0,54.0]
+
+static func front_lift_pitch(frame: float) -> float:
+	var last := ARM_LIFT_PITCH.size()-1
+	var t := clampf(frame,0.,last)
+	var i := floori(t)
+	return deg_to_rad(lerpf(ARM_LIFT_PITCH[i],ARM_LIFT_PITCH[mini(i+1,last)],t-i))
+
 static func follow_heading(target: Vector3, origin: Vector3, facing := 0.0) -> float:
 	var direction := target-origin
 	return clampf(angle_difference(facing,atan2(direction.x,direction.z)),-0.95,0.95)

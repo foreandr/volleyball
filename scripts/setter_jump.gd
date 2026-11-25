@@ -449,6 +449,18 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 			var hand_orientation := HandPose.hand_basis(Vector3(-outward*0.24,0.85,0.34),Vector3(-outward*0.72,-0.24,-0.52))
 			var rotation := hand_orientation*HandPose.hand_basis(fingers,across).inverse()
 			author.set_world_basis(pose,hand,Basis(Quaternion.IDENTITY.slerp(rotation.get_rotation_quaternion(),jump_drive*0.75))*base.basis)
+		# A short plant still sweeps through the low point and forward before the draw.
+		if attack_arm_lift and approach_plant and lead_time==0.:
+			var plant := load_duration()
+			var front_phase := inverse_lerp(plant*.38,plant+.065,elapsed)
+			var blend := smoothstep(0.,.17,front_phase)*(1.-smoothstep(1.,1.35,front_phase))
+			if blend>0.:
+				var pitch := preload("res://scripts/spike_arm_swing.gd").front_lift_pitch(front_phase*18.)
+				var length := shoulder.distance_to(elbow)+elbow.distance_to(wrist)
+				var outward := 1. if left else -1.
+				var arc := Vector3(outward*.10,sin(pitch),cos(pitch)).normalized()
+				var goal := shoulder+arc*length*.94
+				author.limb(pose,upper_arm,forearm,"hand_"+side,goal,Vector3(outward,-.15,.35),blend,158.,true)
 	if lead_time > 0.0 and lead_arm_clip != null and lead_age >= 0.0 and elapsed < lead_time+0.10:
 		var track := lead_arm_clip.find_track(^"Armature/Skeleton3D:upperarm_r",Animation.TYPE_ROTATION_3D)
 		if track >= 0:
