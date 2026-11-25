@@ -203,3 +203,5 @@ Shared cloth and tape rebounds retain 20% of incoming speed at release. Spike la
 Attack timing also considers approach arrival. A playable button release can grade Late when the plant starts behind schedule or the palm first reaches the descending set late. Net contact alone does not determine the timing grade.
 
 A late attack plant can trade up to 24 cm or 24% of effective jump height, whichever is smaller, for a reachable descending contact. The adjusted jump feeds swing timing, approach grading, power and net prediction.
+
+Spike feedback centers its timing bands 35 ms earlier, checks release against palm arrival and plant timing, and confirms Perfect only after clean net clearance. Grading never redirects the launch. All spikes can rebound from the floor.

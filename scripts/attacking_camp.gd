@@ -24,8 +24,9 @@ var contact_shift := 0.0
 var approach_delay := 0.
 var first_palm_at := INF
 var aim_center := Vector2.INF
-var clean_clear_aim := false
+var contact_grade := INF
 var launched_attack := false
+var rebound_age := -1.0
 var placement_offset := Vector2.ZERO
 var depth_error := 0.
 var power_scale := 1.
@@ -34,6 +35,7 @@ const EARLY_LIMIT := -.18
 const LATE_LIMIT := .085
 const ATTACK_CONTACT_RADIUS := .30
 var reach_assist := Vector3.ZERO
+const GRADE_ADVANCE := .035
 const CLEAN_EARLY := .085
 const CLEAN_LATE := .020
 const METER_START := -.32
@@ -43,8 +45,9 @@ func attack_meter_position(error: float) -> float:
 	return clampf(inverse_lerp(METER_START,METER_END,error),0.,1.)
 
 func attack_meter_error() -> float:
+	if is_finite(contact_grade): return contact_grade
 	var error := release_grade if is_finite(release_grade) else button_timing_error()
-	return combined_attack_error(error)
+	return combined_attack_error(error+GRADE_ADVANCE)
 
 func button_timing_error() -> float:
 	if phase!="set": return METER_START
@@ -54,8 +57,9 @@ func combined_attack_error(button_error: float) -> float:
 	if button_error<EARLY_LIMIT or approach_delay<=CLEAN_LATE: return button_error
 	return maxf(button_error,minf(approach_delay,LATE_LIMIT))
 
-func show_attack_timing(error: float) -> void:
+func show_attack_timing(error: float, cleared := false) -> void:
 	var clean := error>=-CLEAN_EARLY and error<=CLEAN_LATE
+	if clean and not cleared: return
 	var color := Color("61ed88") if clean else (Color("f7bd46") if error<0. else Color("f45550"))
 	if error<EARLY_LIMIT or error>LATE_LIMIT: color=Color("778088")
 	show_player_timing(hitter,"Perfect" if clean else ("Early" if error<0. else "Late"),color)
@@ -69,8 +73,9 @@ func clear_attack_input() -> void:
 	approach_delay=0.
 	first_palm_at=INF
 	aim_center=Vector2.INF
-	clean_clear_aim=false
+	contact_grade=INF
 	launched_attack=false
+	rebound_age=-1.
 	placement_offset=Vector2.ZERO
 	depth_error=0.
 	power_scale=1.
@@ -159,10 +164,7 @@ func _input(event: InputEvent) -> void:
 				elif manual_shot==index:
 					release_grade=button_timing_error()
 					release_at=clock
-					if aim_center.is_finite():
-						var intended := Vector3(aim_center.x,Contact.BALL_RADIUS,aim_center.y)
-						clean_clear_aim=predicted_shot_color(predicted_attack_origin(),intended)==Color("61ed88")
-					show_attack_timing(combined_attack_error(release_grade))
+					show_attack_timing(attack_meter_error())
 					trace("attack_release",{"shot":index,"meter_error_ms":roundi(attack_meter_error()*1000.),"button_ms":roundi(release_grade*1000.),"approach_delay_ms":roundi(approach_delay*1000.),"approach":approach_started})
 					if not approach_started: manual_shot=-1
 				get_viewport().set_input_as_handled()
@@ -284,8 +286,8 @@ func step_attack(delta: float) -> void:
 		elapsed+=delta
 		swing_time+=delta
 		pose_swing()
-		advance_spike(delta,bounce_line if cpu_hitter else (aim_center.is_finite() and aim_center.y<7.))
-		if roll_time>=.5:
+		advance_spike(delta)
+		if roll_time>=.5 or (rebound_age>=.85 and not (cpu_hitter and bounce_line)):
 			rotation_drill.free_ball(drop_velocity)
 			begin("between")
 		return
@@ -370,7 +372,7 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 					var before := combined_attack_error(release_grade)
 					approach_delay=maxf(approach_delay,button_timing_error())
 					if is_finite(release_grade) and before<=CLEAN_LATE and combined_attack_error(release_grade)>CLEAN_LATE:
-						show_attack_timing(combined_attack_error(release_grade))
+						show_attack_timing(attack_meter_error())
 				if manual_shot<0 or not is_finite(release_at):
 					if elapsed<flight_time: return false
 				else:
@@ -379,6 +381,13 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 						manual_shot=-1
 						return false
 					placement_offset=Vector2.from_angle(rotation_drill.random.randf()*TAU)*sqrt(rotation_drill.random.randf())*aim_radius()
+					# The final feedback uses actual hand arrival; it never feeds back into launch.
+					var air_age := attack_jump.elapsed-attack_jump.load_duration()
+					var expected_air_age := attack_jump.flight_duration(effective_attack_height(),true)*.48-.055
+					var plant_lag := maxf(approach_delay,expected_air_age-air_age)
+					contact_grade=release_at-first_palm_at+GRADE_ADVANCE
+					if plant_lag>CLEAN_LATE: contact_grade=maxf(contact_grade,plant_lag)
+					show_attack_timing(contact_grade)
 					error=combined_attack_error(error)
 					var severity := smoothstep(CLEAN_LATE if error>0. else CLEAN_EARLY,LATE_LIMIT if error>0. else -EARLY_LIMIT,absf(error))
 					power_scale=lerpf(1.,.63,severity)
@@ -400,7 +409,7 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 			var shot_time := attack_flight_time(landing.distance_to(ball.position))
 			drop_velocity=(landing-ball.position)/shot_time+Vector3.UP*(4.905*shot_time)
 			roll_time=-1.
-			trace("spike",{"from":str(ball.position),"palm_gap":nearest.distance_to(palm),"approach_delay_ms":roundi(approach_delay*1000.),"button_ms":roundi(release_grade*1000.) if is_finite(release_grade) else null})
+			trace("spike",{"from":str(ball.position),"palm_gap":nearest.distance_to(palm),"contact_grade_ms":roundi(contact_grade*1000.) if is_finite(contact_grade) else null,"approach_delay_ms":roundi(approach_delay*1000.),"button_ms":roundi(release_grade*1000.) if is_finite(release_grade) else null})
 			begin("spike")
 			return true
 	if elapsed>=flight_time:
@@ -429,30 +438,35 @@ func attack_spin_axis(direction: Vector3, spin: int) -> Vector3:
 		return (top*.8+Vector3.UP*(-.6 if spin==1 else .6)).normalized()
 	return top
 
-func advance_spike(delta: float, bounce: bool) -> void:
+func advance_spike(delta: float) -> void:
 	var age := swing_time-contact_swing_time
 	if age<=PALM_CONTACT+.00001:
 		ball.position=Contact.palm(hitter,"r")+striking_palm_offset()
 		var landing := shot_landing(strike_point)
-		landing=adjust_clear_landing(ball.position,landing)
 		var flight := attack_flight_time(ball.position.distance_to(landing))
 		spin_acceleration=shot_spin_force(ball.position,landing,flight)
 		drop_velocity=launch_velocity(ball.position,landing,flight,spin_acceleration)
 		return
 	if not launched_attack:
 		launched_attack=true
-		trace("spike_launch",{"origin":str(ball.position),"velocity":str(drop_velocity),"aim":str(aim_center),"clear_at_release":clean_clear_aim})
+		trace("spike_launch",{"origin":str(ball.position),"velocity":str(drop_velocity),"aim":str(aim_center)})
 	var incoming_basis := ball.basis
 	var in_flight := roll_time<0.
 	var forward := drop_velocity.slide(Vector3.UP).normalized()
 	var descent := drop_velocity.y
 	if in_flight: drop_velocity+=spin_acceleration*delta
 	var had_net_contact := not drop_net_hit.is_empty()
-	advance_missed_ball(delta,bounce)
+	advance_missed_ball(delta,true)
+	if rebound_age>=0.: rebound_age+=delta
+	elif descent<0. and drop_velocity.y>0. and ball.position.y<.45:
+		rebound_age=0.
+		trace("spike_floor_rebound",{"up_mps":drop_velocity.y})
 	if not had_net_contact and not drop_net_hit.is_empty():
 		trace("spike_net_contact",{"point":str(drop_net_hit.point),"kind_of_hit":drop_net_hit.kind,"over":drop_net_hit.rollover})
 		if not cpu_hitter and not drop_net_hit.rollover:
-			show_player_timing(hitter,"Net",Color("f25454"))
+			var was_clean := contact_grade>=-CLEAN_EARLY and contact_grade<=CLEAN_LATE
+			if was_clean: contact_grade=CLEAN_LATE+.001
+			show_player_timing(hitter,"Late" if was_clean else "Net",Color("f25454"))
 	if not drop_net_hit.is_empty() or roll_time>=0. or (descent<0. and drop_velocity.y>0.): spin_acceleration=Vector3.ZERO
 	if in_flight and roll_time<0. and not forward.is_zero_approx():
 		var spin := int(review_setup.get("spin",0))
@@ -461,20 +475,8 @@ func advance_spike(delta: float, bounce: bool) -> void:
 		ball.basis=Basis(axis,float(rate[spin])*delta)*incoming_basis
 	if net_clear_time<0. and ball.position.z>=4.+Contact.BALL_RADIUS and ball.position.y>2.43+Contact.BALL_RADIUS:
 		net_clear_time=swing_time
-
-func adjust_clear_landing(origin: Vector3, landing: Vector3) -> Vector3:
-	var grade := combined_attack_error(release_grade)
-	if clean_clear_aim and grade>=-CLEAN_EARLY and grade<=CLEAN_LATE:
-		# If placement scatter clips the mesh, prefer the intended depth first,
-		# then a slightly deeper in-court target reachable from the actual palm.
-		if predicted_shot_color(origin,landing)==Color("f25454"):
-			var corrected := landing
-			for i in 9:
-				corrected.z=minf(BallNet.NET_Z+9.,maxf(landing.z,aim_center.y)+i*.20)
-				if predicted_shot_color(origin,corrected)==Color("61ed88"):
-					return corrected
-					break
-	return landing
+		if not cpu_hitter and drop_net_hit.is_empty() and contact_grade>=-CLEAN_EARLY and contact_grade<=CLEAN_LATE:
+			show_attack_timing(contact_grade,true)
 
 func shot_spin_force(origin: Vector3, landing: Vector3, flight: float) -> Vector3:
 	var direction := origin.direction_to(landing).slide(Vector3.UP).normalized()
@@ -798,7 +800,7 @@ func sample_attack_clip(arm_lift: bool,arm_swing: bool,cross: bool,review: bool,
 			if arm_swing and phase in ["spike","drop"]:
 				swing_time+=1./60.
 				pose_swing()
-				if phase=="spike": advance_spike(1./60.,true)
+				if phase=="spike": advance_spike(1./60.)
 				else: advance_missed_ball(1./60.,true)
 			else:
 				var previous := ball.position
