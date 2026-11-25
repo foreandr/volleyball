@@ -296,6 +296,13 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 	var hips: Transform3D = author.world_pose(pose,parent)
 	var scale_: float = rig.global_basis.y.length()
 	var lead_age := elapsed-entry_time
+	var backswing_peak := 0.
+	if attack_arm_lift and approach_plant and lead_time>0.:
+		# Load over the long right step, then unfold through the closing left plant.
+		var plant_phase := (elapsed-lead_time)/(load_duration()-lead_time)
+		backswing_peak = smoothstep(.035,.53,plant_phase)*(1.-smoothstep(.53,1.,plant_phase))
+		author.rotate_world(pose,"spine_01",Vector3.RIGHT,deg_to_rad(24.)*backswing_peak)
+		author.rotate_world(pose,"spine_02",Vector3.RIGHT,deg_to_rad(14.)*backswing_peak)
 	var lead_plant_load := 0.0
 	if lead_time > 0.0:
 		lead_plant_load = smoothstep(lead_step_duration*0.38,lead_step_duration*0.82,lead_age)*(1.0-smoothstep(0.0,0.135,pose_time))
@@ -386,7 +393,7 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 				var sweep := smoothstep(lead_time*.44,lead_time+(load_duration()-lead_time)*.53,elapsed)
 				arm_load = sweep*(1.-smoothstep(.66,1.10,plant_phase))
 		var jump_drive := arm_drive if not approach_plant or attack_arm_lift else 0.0
-		author.rotate_world(pose,upper_arm,Vector3.RIGHT,(1.52+load_arm_extra)*arm_load-front_swing)
+		author.rotate_world(pose,upper_arm,Vector3.RIGHT,(1.52+load_arm_extra)*arm_load-front_swing+deg_to_rad(15.)*backswing_peak)
 		author.rotate_world(pose,forearm,Vector3.RIGHT,-0.25*jump_drive)
 		var shoulder: Vector3 = author.point(pose,upper_arm)
 		var elbow: Vector3 = author.point(pose,forearm)
