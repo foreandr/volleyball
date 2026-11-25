@@ -177,6 +177,7 @@ func start_drill() -> void:
 	next_set=positions.get("target",next_set)
 	attack_lane=0 if next_set.x>1.5 else (2 if next_set.x < -1.5 else 1)
 	hand_impact.stream=preload("res://assets/audio/hand_impacts.tres")
+	hand_impact.max_polyphony=2
 	hand_impact.bus=StorySession.IMPACT_BUS
 	add_child(hand_impact)
 	hitter=athlete(START,"e97937")
