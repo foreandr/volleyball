@@ -191,3 +191,5 @@ In attacker control, hold X for line, Y for six, or B for cross. The hitter trac
 Attacks allow 30 cm from palm to ball center during the strike window. A small upper-body reach assists close swings and eases away through the follow-through.
 
 Player-controlled ground movement uses shared LT lock-on and RT sprint bindings. LT keeps the athlete facing the ball as the stick steers a grounded shuffle. LT and RT together accelerate that shuffle and consume stamina.
+
+Once an automatic attack approach starts, the left stick moves the shot target on the opponent's court until release. Effective Spike placement controls target speed and scatter radius. Release timing can push the shot beyond the indicated area.

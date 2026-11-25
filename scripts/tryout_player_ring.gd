@@ -35,7 +35,19 @@ func _draw() -> void:
 	for actor in extra_jumps: draw_player(actor,true)
 	draw_player(human,true)
 	if game.setter!=human: draw_player(game.setter,false)
-	if not setting_cues: return
+	if not setting_cues:
+		if not extra_jumps.is_empty() and not game.cpu_hitter and game.phase=="set" and game.aim_center.is_finite() and game.manual_shot>=0:
+			var center := Vector3(game.aim_center.x,.06,game.aim_center.y)
+			var points := PackedVector2Array()
+			for i in 49:
+				var angle := TAU*i/48.
+				var ground := center+Vector3(cos(angle),0.,sin(angle))*float(game.aim_radius())
+				if game.camera.is_position_behind(ground): return
+				points.append(game.camera.unproject_position(ground))
+			draw_polyline(points,Color("10171dc0"),4.,true)
+			draw_polyline(points,Color.WHITE,1.5,true)
+			draw_circle(game.camera.unproject_position(center),2.,Color.WHITE)
+		return
 	if game.phase=="pass": draw_incoming_toss()
 	if not game.bump_aim.is_zero_approx() and game.phase in ["feed","pass"]:
 		var aim: Vector3=game.bump_destination()

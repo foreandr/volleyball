@@ -21,6 +21,8 @@ var manual_shot := -1
 var release_at := INF
 var release_grade := INF
 var first_palm_at := INF
+var aim_center := Vector2.INF
+var placement_offset := Vector2.ZERO
 var depth_error := 0.
 var power_scale := 1.
 
@@ -48,6 +50,8 @@ func clear_attack_input() -> void:
 	release_at=INF
 	release_grade=INF
 	first_palm_at=INF
+	aim_center=Vector2.INF
+	placement_offset=Vector2.ZERO
 	depth_error=0.
 	power_scale=1.
 
@@ -128,6 +132,7 @@ func _input(event: InputEvent) -> void:
 				var key: bool=event is InputEventKey and event.physical_keycode==[KEY_SPACE,KEY_Y,KEY_B][index]
 				if not (button or key): continue
 				if event.is_pressed():
+					if manual_shot!=index: aim_center=Vector2.INF
 					manual_shot=index
 					release_at=INF
 					release_grade=INF
@@ -170,7 +175,26 @@ var manual_route := Vector3.ZERO
 var prep_velocity := Vector3.ZERO
 var bounce_line := false
 
+func placement_skill() -> float:
+	return clampf(hitter.effective_rating("Spike placement")*.01,0.,1.)
+
+func aim_radius() -> float:
+	return lerpf(1.35,.20,placement_skill())
+
+func initial_attack_aim(origin: Vector3) -> Vector2:
+	var side := -1. if origin.x<0. else 1.
+	return [Vector2(side*3.75,11.55),Vector2(0.,11.4),Vector2(-side*3.65,8.45)][manual_shot]
+
+func steer_attack_aim(delta: float) -> void:
+	if aim_center==Vector2.INF: aim_center=initial_attack_aim(endpoint)
+	var stick := Vector2(-axis(JOY_AXIS_LEFT_X),-axis(JOY_AXIS_LEFT_Y)).limit_length(1.)
+	var strength := maxf(0.,(stick.length()-.16)/.84)
+	aim_center+=stick.normalized()*strength*lerpf(6.,13.,placement_skill())*delta
+	aim_center=aim_center.clamp(Vector2(-4.45,4.65),Vector2(4.45,12.95))
+
 func step_attack(delta: float) -> void:
+	if not cpu_hitter and approach_started and phase=="set" and manual_shot>=0 and not is_finite(release_at):
+		steer_attack_aim(delta)
 	if attack_jump.active:
 		attack_jump.step(hitter,delta,Vector2.ZERO)
 	else:
@@ -232,7 +256,7 @@ func step_attack(delta: float) -> void:
 		elapsed+=delta
 		swing_time+=delta
 		pose_swing()
-		advance_spike(delta,cpu_hitter and bounce_line)
+		advance_spike(delta,bounce_line if cpu_hitter else (aim_center.is_finite() and aim_center.y<7.))
 		if roll_time>=.5:
 			rotation_drill.free_ball(drop_velocity)
 			begin("between")
@@ -311,6 +335,7 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 					if error<EARLY_LIMIT or error>LATE_LIMIT:
 						manual_shot=-1
 						return false
+					placement_offset=Vector2.from_angle(rotation_drill.random.randf()*TAU)*sqrt(rotation_drill.random.randf())*aim_radius()
 					var severity := smoothstep(CLEAN_WINDOW,LATE_LIMIT if error>0. else -EARLY_LIMIT,absf(error))
 					power_scale=lerpf(1.,.63,severity)
 					depth_error=(-1. if error>0. else 1.)*severity*rotation_drill.random.randf_range(0.,12. if error>0. else 8.)
@@ -386,8 +411,8 @@ func advance_spike(delta: float, bounce: bool) -> void:
 
 func shot_landing(origin: Vector3) -> Vector3:
 	if not cpu_hitter and manual_shot>=0:
-		var side := -1. if origin.x<0. else 1.
-		var aim: Vector2=[Vector2(side*3.75,11.55),Vector2(0.,11.4),Vector2(-side*3.65,8.45)][manual_shot]
+		var aim := initial_attack_aim(origin) if aim_center==Vector2.INF else aim_center
+		aim+=placement_offset
 		return Vector3(aim.x,Contact.BALL_RADIUS,maxf(origin.z+.45,aim.y+depth_error))
 	if not review_setup.is_empty():
 		return Vector3(-float(review_setup.get("x",-3.4)),Contact.BALL_RADIUS,review_setup.get("z",11.))
