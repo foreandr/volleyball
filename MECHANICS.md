@@ -20,3 +20,5 @@ Use this index when tuning a rep. Each row identifies the inputs to inspect and 
 Setter–hitter chemistry could improve anticipation on quick sets. A general Game sense rating could eventually inform a setter’s read across multiple decisions. Neither is a separate rating in the attack contact calculation today.
 
 Attack staging reserves roughly 2.7–2.85 m for the approach when space permits. Distance limits the lead step, plant and airborne travel. For a setter jump, a staggered stance drives the trailing knee and a square stance uses both legs. See attacking_camp.gd and setter_jump.gd.
+
+In the attack drill, D-pad Up raises the set tempo preset one height and Down lowers it. The four heights stop at 0 and 3.
