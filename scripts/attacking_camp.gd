@@ -16,6 +16,9 @@ const ATTACK_SET_LIFT := .10
 const PLANT_TIME := .30
 var spikes := 0
 var strike_point := Vector3.ZERO
+var contact_offset := Vector3.ZERO
+var net_clear_time := -1.
+const PALM_CONTACT := 2./60.
 
 func start_drill() -> void:
 	hitter=athlete(START,"e97937")
@@ -103,7 +106,7 @@ func step_practice(delta: float) -> void:
 		elapsed+=delta
 		swing_time+=delta
 		pose_swing()
-		advance_missed_ball(delta)
+		advance_spike(delta,false)
 		if roll_time>=.5:
 			rotation_drill.free_ball(drop_velocity)
 			begin("between")
@@ -144,6 +147,8 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 			feedback="Spike"
 			message.text=feedback
 			gym.update_board(spikes)
+			contact_offset=(ball.position-palm).normalized()*Contact.BALL_RADIUS
+			net_clear_time=-1.
 			var landing := shot_landing(ball.position)
 			var shot_time := .68
 			if not review_setup.is_empty(): shot_time=landing.distance_to(ball.position)/float(review_setup.get("power",14.))
@@ -160,6 +165,18 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 		begin("drop")
 		return true
 	return false
+
+func advance_spike(delta: float, bounce: bool) -> void:
+	var age := swing_time-contact_swing_time
+	if age<=PALM_CONTACT+.00001:
+		ball.position=Contact.palm(hitter,"r")+contact_offset
+		var landing := shot_landing(strike_point)
+		var flight := .68 if review_setup.is_empty() else ball.position.distance_to(landing)/float(review_setup.get("power",14.))
+		drop_velocity=(landing-ball.position)/flight+Vector3.UP*(4.905*flight)
+		return
+	advance_missed_ball(delta,bounce)
+	if net_clear_time<0. and ball.position.z>=4.+Contact.BALL_RADIUS and ball.position.y>2.43+Contact.BALL_RADIUS:
+		net_clear_time=swing_time
 
 func shot_landing(origin: Vector3) -> Vector3:
 	if not review_setup.is_empty():
@@ -185,9 +202,10 @@ func pose_swing() -> void:
 	twist = clampf(atan2(feed_local.x,feed_local.z),-1.48,1.48)*load_weight-hip_turn
 	var shot_origin := strike_point if phase=="spike" else ball.position
 	var shot_local := hitter.basis.inverse()*shot_origin.direction_to(shot_landing(shot_origin))
-	var aim_turn := clampf(atan2(shot_local.x,shot_local.z),-1.15,1.15)*smoothstep(.035,.145,swing_time)
+	var aim_turn := clampf(atan2(shot_local.x,shot_local.z),-1.15,1.15)*smoothstep(.005,.12,swing_time)
 	twist+=aim_turn*.76
-	hip_turn+=aim_turn*.24
+	hip_turn+=aim_turn*(.24+.17*airborne)
+	twist+=aim_turn*.09*airborne
 	author.rotate_world(pose,"spine_01",Vector3.RIGHT,deg_to_rad(-9.)*load_weight)
 	author.rotate_world(pose,"spine_01",Vector3.UP,twist*.45)
 	author.rotate_world(pose,"spine_02",Vector3.UP,twist*.55)
@@ -243,15 +261,16 @@ func pose_swing() -> void:
 		var toes := "ball_"+str(side)
 		var toe_axis: Vector3 = (author.point(pose,toes)-ankle).normalized()
 		var shin_axis := (ankle-knee).normalized()
-		var hanging_toes := Vector3.FORWARD.slide(shin_axis).normalized()
-		author.aim_joint(pose,foot,toes,ankle+toe_axis.slerp(hanging_toes,knee_load))
+		var foot_side := Vector3.RIGHT.rotated(Vector3.UP,outward*.85)
+		var hanging_toes := shin_axis.cross(foot_side).normalized()
+		author.aim_joint(pose,foot,toes,ankle+toe_axis.slerp(hanging_toes,leg_weight))
 	# Apply pelvic rotation after solving the tuck so both legs inherit it.
 	author.rotate_world(pose,"pelvis",Vector3.UP,hip_turn)
 	var draw_end := attack_jump.flight_duration(jump_height,true)*.48-.095
 	var draw := smoothstep(.035,draw_end,air_age) if attack_jump.active else 0.
 	var origin := strike_point if phase=="spike" else ball.position
 	var shot_axis := hitter.basis.inverse()*origin.direction_to(shot_landing(origin)).slide(Vector3.UP).normalized()
-	Swing.apply(pose,hitter.get_pose_author(),rig.to_local(strike_point if phase=="spike" else ball.position),maxf(draw,smoothstep(0.,.065,swing_time)),reach,follow,maxf(draw,reach),0.,1. if cross_court else 0.,Swing.DEFAULT_ELBOW_CLEARANCE,0.,INF,shot_axis,0.,.10,false,true)
+	Swing.apply(pose,hitter.get_pose_author(),rig.to_local(strike_point if phase=="spike" else ball.position),maxf(draw,smoothstep(0.,.065,swing_time)),reach,follow,maxf(draw,reach),0.,0.,Swing.DEFAULT_ELBOW_CLEARANCE,0.,INF,shot_axis,0.,.10,false,true,false,smoothstep(0.,.12,swing_time-net_clear_time) if phase=="spike" and net_clear_time>=0. else 0.)
 	var guide_target := rig.to_local(strike_point if phase=="spike" else ball.global_position)
 	var shoulder: Vector3 = author.point(pose,"upperarm_l")
 	var guide_drop := maxf(reach,follow)
@@ -317,7 +336,8 @@ func sample_attack_clip(arm_lift: bool,arm_swing: bool,cross: bool,review: bool,
 			if arm_swing and phase in ["spike","drop"]:
 				swing_time+=1./60.
 				pose_swing()
-				advance_missed_ball(1./60.,true)
+				if phase=="spike": advance_spike(1./60.,true)
+				else: advance_missed_ball(1./60.,true)
 			else:
 				var previous := ball.position
 				ball.position=arc(source,endpoint,clampf(1.-remaining/DURATION[1],0.,1.),APEX[1])
