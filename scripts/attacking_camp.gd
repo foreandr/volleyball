@@ -194,7 +194,9 @@ func pose_swing() -> void:
 		var outward := -.12 if side=="r" else .12
 		# In the edited hang the ankles rise above the knees while the toes hang down.
 		var seat := hip+Vector3(outward*.45,-.065,-.17)/rig.global_basis.y.length()
-		var heel := (seat-knee).normalized()
+		var full_tuck := (seat-knee).normalized()
+		var previous_tuck := Vector3(outward,.83,-.55).normalized()
+		var heel := previous_tuck.slerp(full_tuck,.70)
 		var extended := Vector3(outward,-1.,-.14).normalized()
 		var blend := maxf(knee_load,airborne)*(1.-follow)
 		author.aim_joint(pose,calf,foot,knee+shin.slerp(heel.slerp(extended,reach),blend))
