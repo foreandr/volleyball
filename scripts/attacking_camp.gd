@@ -30,6 +30,9 @@ const PLANT_TIME := .30
 const SPIKE_STAMINA_COST := 4.0
 const ROLL_STAMINA_COST := 1.5
 const SHOT_BUTTONS := [JOY_BUTTON_X,JOY_BUTTON_Y,JOY_BUTTON_B]
+const TIP_STAMINA_COST := .5
+var tip_shot := false
+var held_bumpers: Array[int] = []
 var roll_shot := false
 var manual_shot := -1
 var release_at := INF
@@ -80,6 +83,7 @@ func show_attack_timing(error: float, cleared := false) -> void:
 func clear_attack_input() -> void:
 	manual_route=Vector3.ZERO
 	roll_shot=false
+	tip_shot=false
 	manual_shot=-1
 	release_at=INF
 	release_grade=INF
@@ -137,7 +141,7 @@ func camp_title() -> String:
 
 func update_prompts(_next: String) -> void:
 	var entries := [["View","Take control" if cpu_hitter else "Watch CPU attack"]]
-	if not cpu_hitter: entries.append_array([["LS","Move"],["LT","Lock on / shuffle"],["RT","Sprint"],[JOY_BUTTON_X,"Hold line"],[JOY_BUTTON_Y,"Hold six"],[JOY_BUTTON_B,"Hold cross"],[JOY_BUTTON_LEFT_SHOULDER,"Hold for roll shot"]])
+	if not cpu_hitter: entries.append_array([["LS","Move"],["LT","Lock on / shuffle"],["RT","Sprint"],[JOY_BUTTON_X,"Hold line"],[JOY_BUTTON_Y,"Hold six"],[JOY_BUTTON_B,"Hold cross"],[JOY_BUTTON_LEFT_SHOULDER,"Roll"],[JOY_BUTTON_RIGHT_SHOULDER,"Tip"]])
 	entries.append([JOY_BUTTON_START,"Settings"])
 	Xbox.prompts(controls_row,entries)
 
@@ -162,7 +166,21 @@ func reset_feed() -> void:
 func set_destination(origin: Vector3, aim: Vector3, height_index: int) -> Vector3:
 	return super.set_destination(origin,aim+Vector3(-1.1*lane_offset() if active_lane!=1 else -1.05,0.,0.),height_index)+Vector3.UP*ATTACK_SET_LIFT
 
+func select_attack_touch() -> void:
+	var bumper := -1 if held_bumpers.is_empty() else int(held_bumpers.back())
+	roll_shot=bumper==JOY_BUTTON_LEFT_SHOULDER
+	tip_shot=bumper==JOY_BUTTON_RIGHT_SHOULDER
+
 func _input(event: InputEvent) -> void:
+	if event is InputEventJoypadButton:
+		for bumper in [JOY_BUTTON_LEFT_SHOULDER,JOY_BUTTON_RIGHT_SHOULDER]:
+			if event.button_index!=Xbox.physical(bumper): continue
+			held_bumpers.erase(bumper)
+			if event.pressed: held_bumpers.append(bumper)
+			if not cpu_hitter and not settings.visible and not get_tree().paused:
+				if manual_shot>=0 and not is_finite(release_at): select_attack_touch()
+				get_viewport().set_input_as_handled()
+				return
 	if not settings.visible and not get_tree().paused:
 		if (event is InputEventJoypadButton and event.button_index==JOY_BUTTON_BACK or event is InputEventKey and event.physical_keycode==KEY_TAB) and event.is_pressed() and not event.is_echo():
 			clear_attack_input()
@@ -171,10 +189,6 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			return
 		if not cpu_hitter and phase in ["cart","feed","pass","set_contact","set"] and not event.is_echo():
-			if event is InputEventJoypadButton and event.button_index==Xbox.physical(JOY_BUTTON_LEFT_SHOULDER):
-				if manual_shot>=0 and not is_finite(release_at): roll_shot=event.pressed
-				get_viewport().set_input_as_handled()
-				return
 			for index in SHOT_BUTTONS.size():
 				var button: bool=event is InputEventJoypadButton and event.button_index==Xbox.physical(SHOT_BUTTONS[index])
 				var key: bool=event is InputEventKey and event.physical_keycode==[KEY_SPACE,KEY_Y,KEY_B][index]
@@ -182,7 +196,7 @@ func _input(event: InputEvent) -> void:
 				if event.is_pressed():
 					if manual_shot!=index: aim_center=Vector2.INF
 					manual_shot=index
-					roll_shot=event is InputEventJoypadButton and Input.is_joy_button_pressed(event.device,Xbox.physical(JOY_BUTTON_LEFT_SHOULDER))
+					select_attack_touch()
 					release_at=INF
 					release_grade=INF
 				elif manual_shot==index:
@@ -345,6 +359,7 @@ func roll_reach_fraction() -> float:
 	return smoothstep(2.,10.,distance)
 
 func arm_speed_factor() -> float:
+	if tip_shot: return .90
 	if roll_shot:
 		return lerpf(.84,1.08,roll_reach_fraction())
 	var effort := float(review_setup.get("power",14.))
@@ -364,13 +379,13 @@ func attack_speed() -> float:
 
 func attack_flight_time(origin: Vector3, landing: Vector3) -> float:
 	var distance := origin.distance_to(landing)
-	if roll_shot:
+	if roll_shot or tip_shot:
 		var horizontal := (landing-origin).slide(Vector3.UP).length()
-		var flight := clampf(horizontal/7.,.65,1.65)
+		var flight := clampf(horizontal/(5.4 if tip_shot else 7.),.65,1.65)
 		var fraction := (BallNet.NET_Z-origin.z)/maxf(.01,landing.z-origin.z)
 		if fraction>0. and fraction<1.:
 			var lift := BallNet.NET_TOP+Contact.BALL_RADIUS+.18-lerpf(origin.y,landing.y,fraction)
-			flight=maxf(flight,sqrt(2.*maxf(0.,lift)/(11.81*fraction*(1.-fraction))))
+			flight=maxf(flight,sqrt(2.*maxf(0.,lift)/((9.81 if tip_shot else 11.81)*fraction*(1.-fraction))))
 		return flight
 	return maxf(.05,distance/(attack_speed()*power_scale*attack_jump.spike_power_factor()))
 
@@ -396,7 +411,7 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 	if swing_time>=0.:
 		swing_time+=delta
 		pose_swing()
-		var palm := Contact.palm(hitter,"r")
+		var palm := Contact.joint(hitter,"middle_03_r") if tip_shot else Contact.palm(hitter,"r")
 		var nearest := Geometry3D.get_closest_point_to_segment(palm,previous,ball.position)
 		if swing_time>=.055 and swing_time<=.30:
 			closest_spike_gap=minf(closest_spike_gap,nearest.distance_to(palm))
@@ -434,7 +449,7 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 			strike_shoulder_offset=hitter.skeleton.to_local(strike_point)-hitter.skeleton.get_bone_global_pose(hitter.skeleton.find_bone("upperarm_r")).origin
 			spikes+=1
 			success=true
-			feedback="Roll shot" if roll_shot else "Spike"
+			feedback="Tip" if tip_shot else "Roll shot" if roll_shot else "Spike"
 			message.text=feedback
 			gym.update_board(spikes)
 			contact_offset=striking_palm_offset()
@@ -444,7 +459,7 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 			var shot_time := attack_flight_time(ball.position,landing)
 			drop_velocity=(landing-ball.position)/shot_time+Vector3.UP*(4.905*shot_time)
 			roll_time=-1.
-			trace("spike",{"roll_shot":roll_shot,"from":str(ball.position),"palm_gap":nearest.distance_to(palm),"contact_grade_ms":roundi(contact_grade*1000.) if is_finite(contact_grade) else null,"approach_delay_ms":roundi(approach_delay*1000.),"button_ms":roundi(release_grade*1000.) if is_finite(release_grade) else null})
+			trace("spike",{"tip_shot":tip_shot,"roll_shot":roll_shot,"from":str(ball.position),"palm_gap":nearest.distance_to(palm),"contact_grade_ms":roundi(contact_grade*1000.) if is_finite(contact_grade) else null,"approach_delay_ms":roundi(approach_delay*1000.),"button_ms":roundi(release_grade*1000.) if is_finite(release_grade) else null})
 			spend_swing_stamina()
 			begin("spike")
 			return true
@@ -466,9 +481,11 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 
 func spend_swing_stamina() -> void:
 	if swing_time>=0.:
-		hitter.stamina.spend(ROLL_STAMINA_COST if roll_shot else SPIKE_STAMINA_COST,"Roll shot" if roll_shot else "Spike")
+		hitter.stamina.spend(TIP_STAMINA_COST if tip_shot else ROLL_STAMINA_COST if roll_shot else SPIKE_STAMINA_COST,"Tip" if tip_shot else "Roll shot" if roll_shot else "Spike")
 
 func striking_palm_offset() -> Vector3:
+	if tip_shot:
+		return Contact.palm(hitter,"r").direction_to(Contact.joint(hitter,"middle_03_r"))*Contact.BALL_RADIUS
 	var fingers := Contact.joint(hitter,"middle_01_r")-Contact.joint(hitter,"hand_r")
 	var edge := Contact.joint(hitter,"pinky_01_r")-Contact.joint(hitter,"index_01_r")
 	return fingers.cross(edge).normalized()*Contact.BALL_RADIUS
@@ -482,7 +499,7 @@ func attack_spin_axis(direction: Vector3, spin: int) -> Vector3:
 func advance_spike(delta: float) -> void:
 	var age := swing_time-contact_swing_time
 	if age<=PALM_CONTACT+.00001:
-		ball.position=Contact.palm(hitter,"r")+striking_palm_offset()
+		ball.position=(Contact.joint(hitter,"middle_03_r") if tip_shot else Contact.palm(hitter,"r"))+striking_palm_offset()
 		var landing := shot_landing(strike_point)
 		var flight := attack_flight_time(ball.position,landing)
 		spin_acceleration=shot_spin_force(ball.position,landing,flight)
@@ -513,13 +530,14 @@ func advance_spike(delta: float) -> void:
 		var spin := int(review_setup.get("spin",0))
 		var axis := attack_spin_axis(forward,spin)
 		var rate := [32.,26.,26.,0.,-18.]
-		ball.basis=Basis(axis,float(rate[spin])*delta)*incoming_basis
+		ball.basis=Basis(axis,(4. if tip_shot else float(rate[spin]))*delta)*incoming_basis
 	if net_clear_time<0. and ball.position.z>=4.+Contact.BALL_RADIUS and ball.position.y>2.43+Contact.BALL_RADIUS:
 		net_clear_time=swing_time
 		if not cpu_hitter and drop_net_hit.is_empty() and contact_grade>=-CLEAN_EARLY and contact_grade<=CLEAN_LATE:
 			show_attack_timing(contact_grade,true)
 
 func shot_spin_force(origin: Vector3, landing: Vector3, flight: float) -> Vector3:
+	if tip_shot: return Vector3.ZERO
 	if roll_shot: return Vector3.DOWN*2.
 	var direction := origin.direction_to(landing).slide(Vector3.UP).normalized()
 	var speed := origin.distance_to(landing)/flight
@@ -560,7 +578,7 @@ func predicted_shot_color(origin: Vector3, landing: Vector3) -> Color:
 func shot_landing(origin: Vector3) -> Vector3:
 	if not cpu_hitter and manual_shot>=0:
 		var aim := initial_attack_aim(origin) if aim_center==Vector2.INF else aim_center
-		if roll_shot:
+		if roll_shot or tip_shot:
 			aim+=placement_offset*.5
 			return Vector3(aim.x,Contact.BALL_RADIUS,maxf(BallNet.NET_Z+.65,aim.y+depth_error*.08))
 		aim+=placement_offset
@@ -593,6 +611,7 @@ func pose_swing() -> void:
 	if phase=="spike":
 		var progress := clampf((swing_time-contact_swing_time)*arm_speed_factor()/.32,0.,1.)
 		follow=progress*(1.5-.5*progress)
+		if tip_shot: follow*=.16
 		if roll_shot: follow*=lerpf(.42,.70,roll_reach_fraction())
 	var author = hitter.get_pose_author()
 	var airborne := smoothstep(0.,.12,attack_jump.elapsed-attack_jump.load_duration()) if attack_jump.active else 0.
@@ -613,6 +632,7 @@ func pose_swing() -> void:
 	twist+=heading*(1.-hip_share)*smoothstep(-.15,.085,apex_offset)
 	if phase=="spike":
 		var carry := smoothstep(PALM_CONTACT,.27,swing_time-contact_swing_time)
+		if tip_shot: carry*=.18
 		if roll_shot: carry*=lerpf(.4,.65,roll_reach_fraction())
 		hip_turn+=heading*.30*carry
 		twist+=heading*.13*carry
@@ -640,7 +660,7 @@ func pose_swing() -> void:
 	var clearance := maxf(0.,4.-hitter.global_position.z-.23)
 	var reach_length := float(hitter.height_cm)*.006
 	var net_angle := asin(clampf(clearance/reach_length,0.,1.))
-	var drive := smoothstep(9.,40.,attack_speed()) if not roll_shot else .12
+	var drive := smoothstep(9.,40.,attack_speed()) if not (roll_shot or tip_shot) else .12
 	var intensity := lerpf(.13,1.,drive)
 	var peak_time := lerpf(.235,.175,drive*(.55+.45*athleticism))
 	var pike := smoothstep(.015,peak_time,since_hit)*(1.-smoothstep(peak_time,.38,since_hit))
@@ -719,7 +739,7 @@ func pose_swing() -> void:
 			author.rotate_world(pose,"lowerarm_r",arm_axis,turn*palm_weight)
 	var spin_choice := int(review_setup.get("spin",0))
 	var wrap := smoothstep(.055,.14,swing_time)*(1.-smoothstep(.34,.54,swing_time))
-	if wrap>0.:
+	if wrap>0. and not tip_shot:
 		var wrap_axis := attack_spin_axis(shot_axis,spin_choice)
 		var wrap_degrees := [24.,33.,33.,0.,-16.]
 		author.rotate_world(pose,"hand_r",wrap_axis,deg_to_rad(float(wrap_degrees[spin_choice]))*wrap)

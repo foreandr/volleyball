@@ -5,8 +5,6 @@ var game: Control
 var participants: Array = []
 var extra_jumps := {}
 var setting_cues := true
-var display_clock := 0.0
-var jump_readouts := {}
 
 func _ready() -> void:
 	mouse_filter=Control.MOUSE_FILTER_IGNORE
@@ -14,7 +12,6 @@ func _ready() -> void:
 	z_index=2
 
 func _process(delta: float) -> void:
-	display_clock+=delta
 	queue_redraw()
 
 func arc_band(center: Vector2,radius: Vector2,start: float,end: float,color: Color,width: float) -> void:
@@ -129,35 +126,9 @@ func draw_player(actor: Node3D,human: bool) -> void:
 		draw_rect(Rect2(origin,Vector2(available,7)),Color.WHITE)
 		var spent := minf(104.-available,energy.action_cost/energy.capacity()*104.)
 		if spent>0.: draw_rect(Rect2(origin+Vector2(available,0),Vector2(spent,7)),Color("51cbe9"))
-		var caption := "Stamina %d/%d" % [roundi(energy.value),roundi(energy.capacity())]
 		if energy.value<0.:
 			draw_rect(Rect2(origin,Vector2(104.*absf(energy.value)/maxf(1.,energy.willpower),7)),Color("d7a6ff"))
-			caption="Reserve used %d/%d" % [ceili(-energy.value),roundi(energy.willpower)]
-		if energy.action!="": caption+="   %s -%d" % [energy.action,ceili(energy.action_cost)]
-		var text_pos := origin+Vector2(-48,22)
-		draw_string_outline(ThemeDB.fallback_font,text_pos,caption,HORIZONTAL_ALIGNMENT_CENTER,200,13,4,ink)
-		draw_string(ThemeDB.fallback_font,text_pos,caption,HORIZONTAL_ALIGNMENT_CENTER,200,13)
 		var outer := radius+Vector2(4,4)
-		var readout: Vector2=jump_readouts.get(actor,Vector2(0.,-100.))
-		var fill := -1.0
-		if game!=null:
-			var jump: RefCounted=extra_jumps.get(actor,game.jump if is_setter else game.free_jump)
-			var squat: RefCounted=game.squat if is_setter else game.free_squat
-			if not extra_jumps.has(actor) and squat.charging: fill=squat.seconds/squat.FULL_LOAD
-			elif jump.active: fill=jump.elapsed/maxf(.001,jump.load_duration())
-		else:
-			var lift := actor.global_position.y-.04
-			if lift>.03: fill=lift/maxf(.1,float(actor.attributes.get("Vertical",30.))*.0254)
-		var now: float=game.clock if game!=null else display_clock
-		if fill>=0.:
-			readout=Vector2(clampf(fill,0.,1.),now)
-			jump_readouts[actor]=readout
-		var opacity := 1.-smoothstep(.85,1.15,now-readout.y)
-		if opacity>0.:
-			var base := at+Vector2(radius.x+10,2)
-			draw_rect(Rect2(base-Vector2(2,34),Vector2(14,36)),Color(Color.WHITE,opacity))
-			draw_rect(Rect2(base-Vector2(0,32),Vector2(10,32)),Color(ink,opacity))
-			draw_rect(Rect2(base-Vector2(0,32*readout.x),Vector2(10,32*readout.x)),Color(Color("51cbe9"),opacity))
 		if extra_jumps.has(actor) and not game.cpu_hitter and game.manual_shot>=0 and (game.phase in ["cart","feed","pass","set_contact","set"] or (game.phase=="spike" and game.elapsed<.45)):
 			var cursor: float=game.attack_meter_position(game.attack_meter_error())
 			var contact_window:=Vector2(game.attack_meter_position(game.EARLY_LIMIT),game.attack_meter_position(game.LATE_LIMIT))
