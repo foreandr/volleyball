@@ -11,6 +11,9 @@ var jump_height := HEIGHT
 var landing_recovery := 0.13
 var overpass_swing := false
 var aggressive_press := false
+var court_aim := Vector3.INF
+var elbows: Array[Vector3] = []
+var shoulders: Array[Vector3] = []
 var min_hand_x := -INF
 var max_hand_x := INF
 var base: Vector3
@@ -57,6 +60,8 @@ func step(delta: float, world_ball: Vector3) -> bool:
 	previous_hands = hands.duplicate()
 	previous_wrists = wrists.duplicate()
 	hands.clear()
+	elbows.clear()
+	shoulders.clear()
 	wrists.clear()
 	for side in ["l","r"]:
 		var arm: String = "upperarm_"+side
@@ -70,6 +75,7 @@ func step(delta: float, world_ball: Vector3) -> bool:
 		if is_finite(min_hand_x) or is_finite(max_hand_x):
 			var world_target := rig.to_global(target)
 			var forward := actor.global_basis.z.normalized()
+			if court_aim.is_finite(): world_target.x+=clampf(court_aim.x-world_target.x,-1.,1.)*.09*press
 			world_target+=forward*.18*press*(1.-below_tape)
 			world_target.x=clampf(move_toward(world_target.x,world_ball.x,.12*press),min_hand_x,max_hand_x)
 			target=rig.to_local(world_target)
@@ -94,12 +100,19 @@ func step(delta: float, world_ball: Vector3) -> bool:
 		var finger_direction: Vector3 = author.point(pose,"middle_01_"+side)-wrist.origin
 		var across: Vector3 = author.point(pose,"index_01_"+side)-author.point(pose,"pinky_01_"+side)
 		var palm_normal := Vector3(clampf(aim.x-wrist.origin.x,-0.18,0.18),-0.45,1.0).normalized()
+		if court_aim.is_finite():
+			var incoming := world_ball.direction_to(rig.to_global(wrist.origin))
+			var outgoing := rig.to_global(wrist.origin).direction_to(court_aim)
+			var normal := (outgoing-incoming).normalized()
+			if normal.length_squared()>.5: palm_normal=(rig.global_basis.inverse()*normal).normalized()
 		var up := Vector3.UP.slide(palm_normal).normalized()
 		var edge := up.cross(palm_normal)*-outward
 		var palm := HandPose.hand_basis(up,edge)*HandPose.hand_basis(finger_direction,across).inverse()*wrist.basis
 		author.set_world_basis(pose,hand_name,wrist.basis.orthonormalized().slerp(palm.orthonormalized(),weight))
 		var hand: Vector3 = author.point(pose,"hand_"+side)
 		var tip: Vector3 = author.point(pose,"middle_03_"+side)
+		shoulders.append(rig.to_global(shoulder))
+		elbows.append(rig.to_global(author.point(pose,"lowerarm_"+side)))
 		hands.append(rig.to_global(tip))
 		wrists.append(rig.to_global(hand))
 	if previous_hands.is_empty():

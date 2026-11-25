@@ -138,10 +138,8 @@ func tuning_controls() -> void:
 		body.add_child(caption)
 		body.add_child(slider)
 		slider.value_changed.connect(func(v):
-			game.block_vertical=v
-			caption.text="Block vertical    %d in" % roundi(v)
-			StorySession.game_options.set_value("blocking","vertical_inches",v)
-			StorySession.save_options())
+			game.set_block_vertical(v)
+			caption.text="Block vertical    %d in" % roundi(v))
 		return
 	var timing_label := Label.new()
 	timing_label.text="CPU release timing"

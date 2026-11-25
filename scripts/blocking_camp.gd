@@ -12,6 +12,11 @@ var block_held := false
 var automatic_block := true
 var block_vertical := float(StorySession.game_options.get_value("blocking","vertical_inches",roundf(Block.HEIGHT/.0254)))
 var aim_six := false
+var middle_reset := true
+var far_read := false
+var far_closing := false
+var height_control := HSlider.new()
+var height_label := Label.new()
 
 func start_drill() -> void:
 	for x: float in HOMES:
@@ -24,9 +29,31 @@ func start_drill() -> void:
 		blockers.append(actor)
 	super.start_drill()
 
+func build_settings() -> void:
+	super.build_settings()
+	var row := HBoxContainer.new()
+	controls_row.get_parent().add_child(row)
+	row.add_child(height_label)
+	row.add_child(height_control)
+	height_control.custom_minimum_size=Vector2(210,30)
+	height_control.min_value=0
+	height_control.max_value=60
+	height_control.step=1
+	height_control.value=block_vertical
+	height_control.focus_mode=Control.FOCUS_NONE
+	height_label.text="Block vertical    %d in" % roundi(block_vertical)
+	height_control.value_changed.connect(set_block_vertical)
+
+func set_block_vertical(value: float) -> void:
+	block_vertical=value
+	height_control.set_value_no_signal(value)
+	height_label.text="Block vertical    %d in" % roundi(value)
+	StorySession.game_options.set_value("blocking","vertical_inches",value)
+	StorySession.save_options()
+
 func apply_camera() -> void:
 	var saved_yaw := yaw
-	if not automatic_block: yaw+=PI
+	yaw+=PI
 	super.apply_camera()
 	yaw=saved_yaw
 
@@ -51,6 +78,9 @@ func reset_feed() -> void:
 	hitter.stamina.exhausted=false
 	attack_lane = 0
 	next_set = Vector3(3.65,2.65,3.)
+	middle_reset=true
+	far_read=false
+	far_closing=false
 	deflected=false
 	block_held=false
 	for i in blockers.size():
@@ -116,14 +146,29 @@ func step_blocker(slot: int,delta: float) -> void:
 	if jump!=null:
 		jump.min_hand_x=(blockers[slot-1].position.x+actor.position.x)*.5+.09 if slot>0 else -INF
 		jump.max_hand_x=(blockers[slot+1].position.x+actor.position.x)*.5-.09 if slot<2 else INF
+		jump.court_aim=Vector3(0.,0.,BallNet.NET_Z-3.)
 		if not jump.step(delta,ball.global_position): jumps[slot]=null
 		return
 	var goal: float=HOMES[slot]
-	if phase in ["pass","set_contact","set","spike"]:
-		var pin := endpoint.x if phase in ["set","spike"] else active_set.x
+	var depth_goal := BallNet.NET_Z+.38
+	if slot==1 and absf(actor.position.x)<.12: middle_reset=false
+	if phase in ["pass","set_contact","set"]:
+		var pin := endpoint.x if phase=="set" else active_set.x
 		if slot==2: goal=clampf(pin,1.6,4.25)
-		elif slot==1: goal=clampf(pin-.61,-1.,3.64)
-		else: goal=-2.
+		elif slot==1 and not middle_reset: goal=clampf(pin-.61,-1.,3.64)
+		elif slot==0:
+			var close_x := clampf(pin-1.22,-1.6,3.03)
+			if not far_read:
+				var available := attack_set_duration(chosen_tempo())
+				if phase=="pass": available+=maxf(0.,contact_time-elapsed)
+				var travel := Vector2(close_x-actor.position.x,depth_goal-actor.position.z).length()
+				far_closing=available-Block.START-Block.AIR*.5 >= travel/GroundControls.speed(true,false)+.18
+				far_read=true
+				trace("far_block_read",{"close":far_closing,"available":available})
+			if far_closing: goal=close_x
+			else: depth_goal+=2.7
+	elif phase=="spike" and slot==0 and not far_closing:
+		depth_goal+=2.7
 	var previous := actor.position.x
 	var cpu := automatic_block or slot!=MANUAL_SLOT
 	var pace := GroundControls.speed(true,false)
@@ -131,12 +176,14 @@ func step_blocker(slot: int,delta: float) -> void:
 	lateral_speed[slot]=move_toward(lateral_speed[slot],desired,8.*delta)
 	var low := -4.5 if slot==0 else blockers[slot-1].position.x+.61
 	var high := 4.5 if slot==2 else blockers[slot+1].position.x-.61
-	actor.position.x=clampf(previous+lateral_speed[slot]*delta,low,high)
+	var motion := Vector2(lateral_speed[slot],(depth_goal-actor.position.z)*4.).limit_length(pace)*delta
+	actor.position.x=clampf(previous+motion.x,low,high)
+	actor.position.z+=motion.y
 	actor.animator.advance(delta)
 	if not shuffle_steps.has(actor):
 		shuffle_steps[actor]=preload("res://scripts/directional_footwork.gd").new(actor)
-	GroundControls.shuffle(actor,shuffle_steps[actor],Vector3((actor.position.x-previous)/maxf(delta,.0001),0.,0.),true,delta)
-	if cpu and not attempted[slot] and phase=="set" and absf(actor.position.x-endpoint.x)<1.65 and flight_time-elapsed<=Block.START+Block.AIR*.5:
+	GroundControls.shuffle(actor,shuffle_steps[actor],Vector3((actor.position.x-previous)/maxf(delta,.0001),0.,motion.y/maxf(delta,.0001)),true,delta)
+	if cpu and (slot!=0 or far_closing) and not attempted[slot] and phase=="set" and absf(actor.position.x-endpoint.x)<1.65 and flight_time-elapsed<=Block.START+Block.AIR*.5:
 		begin_block(slot)
 
 func advance_spike(delta: float) -> void:
@@ -146,10 +193,17 @@ func advance_spike(delta: float) -> void:
 	for block: RefCounted in jumps:
 		if block==null: continue
 		for i in block.hands.size():
-			var closest := Geometry3D.get_closest_points_between_segments(previous,ball.global_position,block.wrists[i],block.hands[i])
-			if closest[0].distance_to(closest[1]) > Contact.BALL_RADIUS + .065: continue
-			drop_velocity.z = -absf(drop_velocity.z)*.55
-			drop_velocity.y = minf(-1.,drop_velocity.y*.5)
+			var chain := [block.shoulders[i],block.elbows[i],block.wrists[i],block.hands[i]]
+			var touched := false
+			for segment in 3:
+				var closest := Geometry3D.get_closest_points_between_segments(previous,ball.global_position,chain[segment],chain[segment+1])
+				if closest[0].distance_to(closest[1]) <= Contact.BALL_RADIUS+.065:
+					touched=true
+					break
+			if not touched: continue
+			var toward: Vector3=ball.global_position.direction_to(block.court_aim)
+			var normal: Vector3=(toward-drop_velocity.normalized()).normalized()
+			drop_velocity=drop_velocity.bounce(normal)*.55
 			spin_acceleration = Vector3.ZERO
 			deflected = true
 			hand_impact.volume_db=-2.
