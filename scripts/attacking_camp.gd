@@ -190,7 +190,7 @@ func steer_attack_aim(delta: float) -> void:
 	if aim_center==Vector2.INF: aim_center=initial_attack_aim(endpoint)
 	var depth := -axis(JOY_AXIS_LEFT_Y)
 	var strength := signf(depth)*maxf(0.,(absf(depth)-.16)/.84)
-	aim_center.y=clampf(aim_center.y+strength*lerpf(6.,13.,placement_skill())*delta,4.65,12.95)
+	aim_center.y=clampf(aim_center.y+strength*lerpf(6.,13.,placement_skill())*delta,4.65,BallNet.NET_Z+9.+3.048)
 
 func step_attack(delta: float) -> void:
 	if not cpu_hitter and approach_started and phase=="set" and manual_shot>=0 and not is_finite(release_at):
@@ -386,13 +386,8 @@ func advance_spike(delta: float, bounce: bool) -> void:
 		ball.position=Contact.palm(hitter,"r")+striking_palm_offset()
 		var landing := shot_landing(strike_point)
 		var flight := attack_flight_time(ball.position.distance_to(landing))
-		var direction := ball.position.direction_to(landing).slide(Vector3.UP).normalized()
-		var speed := landing.distance_to(ball.position)/flight
-		var spin := int(review_setup.get("spin",0))
-		var force_axis: Vector3=[Vector3.DOWN,Vector3.DOWN*.8+direction.cross(Vector3.UP)*.6,Vector3.DOWN*.8+Vector3.UP.cross(direction)*.6,Vector3.ZERO,Vector3.UP][spin]
-		spin_acceleration=force_axis*(minf(3.,speed*.20) if spin==4 else minf(22.,speed*.78))
-		# Compensate at launch to keep the selected landing point on the curved path.
-		drop_velocity=(landing-ball.position)/flight+(Vector3.UP*9.81-spin_acceleration)*(.5*flight)
+		spin_acceleration=shot_spin_force(ball.position,landing,flight)
+		drop_velocity=launch_velocity(ball.position,landing,flight,spin_acceleration)
 		return
 	var incoming_basis := ball.basis
 	var in_flight := roll_time<0.
@@ -408,6 +403,43 @@ func advance_spike(delta: float, bounce: bool) -> void:
 		ball.basis=Basis(axis,float(rate[spin])*delta)*incoming_basis
 	if net_clear_time<0. and ball.position.z>=4.+Contact.BALL_RADIUS and ball.position.y>2.43+Contact.BALL_RADIUS:
 		net_clear_time=swing_time
+
+func shot_spin_force(origin: Vector3, landing: Vector3, flight: float) -> Vector3:
+	var direction := origin.direction_to(landing).slide(Vector3.UP).normalized()
+	var speed := origin.distance_to(landing)/flight
+	var spin := int(review_setup.get("spin",0))
+	var axis: Vector3=[Vector3.DOWN,Vector3.DOWN*.8+direction.cross(Vector3.UP)*.6,Vector3.DOWN*.8+Vector3.UP.cross(direction)*.6,Vector3.ZERO,Vector3.UP][spin]
+	return axis*(minf(3.,speed*.20) if spin==4 else minf(22.,speed*.78))
+
+func launch_velocity(origin: Vector3, landing: Vector3, flight: float, spin: Vector3) -> Vector3:
+	return (landing-origin)/flight+(Vector3.UP*9.81-spin)*(.5*flight)
+
+func predicted_attack_origin() -> Vector3:
+	if is_finite(first_palm_at): return Contact.palm(hitter,"r")+striking_palm_offset()
+	var shoulder := Contact.joint(hitter,"upperarm_r")
+	var elbow := Contact.joint(hitter,"lowerarm_r")
+	var wrist := Contact.joint(hitter,"hand_r")
+	var reach := shoulder.y-hitter.global_position.y+shoulder.distance_to(elbow)+elbow.distance_to(wrist)+wrist.distance_to(Contact.palm(hitter,"r"))
+	var contact_age := maxf(elapsed,flight_time-.08)
+	# Follow the descending set to the first height reachable during this jump.
+	for i in 25:
+		var t := lerpf(contact_age,flight_time,i/24.)
+		var air := clampf((attack_jump.elapsed+t-elapsed-attack_jump.load_duration())/maxf(.001,attack_jump.flight_duration(effective_attack_height(),true)),0.,1.)
+		var top := START.y+reach+4.*effective_attack_height()*air*(1.-air)+Contact.BALL_RADIUS
+		var point := arc(source,endpoint,t/flight_time,set_arc_height)
+		if point.y<=top: return point
+	return Vector3(endpoint.x,minf(endpoint.y,START.y+reach+effective_attack_height()),endpoint.z)
+
+func predicted_shot_color(origin: Vector3, landing: Vector3) -> Color:
+	var flight := attack_flight_time(origin.distance_to(landing))
+	var spin := shot_spin_force(origin,landing,flight)
+	var velocity := launch_velocity(origin,landing,flight,spin)
+	var acceleration := spin+Vector3.DOWN*9.81
+	var path := func(t: float) -> Vector3: return origin+velocity*t+acceleration*(.5*t*t)
+	var hit := BallNet.first_hit(path,0.,flight)
+	if not hit.is_empty(): return Color("ffdc58") if hit.rollover else Color("f25454")
+	if absf(landing.x)>4.5 or landing.z>BallNet.NET_Z+9.: return Color("ff953d")
+	return Color("61ed88")
 
 func shot_landing(origin: Vector3) -> Vector3:
 	if not cpu_hitter and manual_shot>=0:

@@ -45,8 +45,9 @@ func _draw() -> void:
 				if game.camera.is_position_behind(ground): return
 				points.append(game.camera.unproject_position(ground))
 			draw_polyline(points,Color("10171dc0"),4.,true)
-			draw_polyline(points,Color.WHITE,1.5,true)
-			draw_circle(game.camera.unproject_position(center),2.,Color.WHITE)
+			var tint: Color=game.predicted_shot_color(game.predicted_attack_origin(),Vector3(center.x,game.Contact.BALL_RADIUS,center.z))
+			draw_polyline(points,tint,2.5,true)
+			draw_circle(game.camera.unproject_position(center),3.,tint)
 		return
 	if game.phase=="pass": draw_incoming_toss()
 	if not game.bump_aim.is_zero_approx() and game.phase in ["feed","pass"]:
