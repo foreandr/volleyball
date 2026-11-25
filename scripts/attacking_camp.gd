@@ -204,13 +204,13 @@ func pose_swing() -> void:
 		var thigh := "thigh_"+str(side)
 		var hip: Vector3 = author.point(pose,thigh)
 		var leg: Vector3 = (author.point(pose,calf)-hip).normalized()
+		var outward := -.12 if side=="r" else .12
 		var thigh_axis := Vector3(.33,-.74,.58) if side=="l" else Vector3(-.13,-.80,.59)
 		var trailing_thigh := Vector3(.17,-.89,-.43) if side=="l" else Vector3(-.14,-.84,-.53)
 		thigh_axis = thigh_axis.normalized().slerp(trailing_thigh.normalized(),lift_pose)
-		author.aim_joint(pose,thigh,calf,hip+leg.slerp(thigh_axis.slerp(Vector3(0.,-.87,.49).normalized(),extension),leg_weight))
+		author.aim_joint(pose,thigh,calf,hip+leg.slerp(thigh_axis.slerp(Vector3(outward,-.87,.49).normalized(),extension),leg_weight))
 		var knee: Vector3 = author.point(pose,calf)
 		var shin: Vector3 = (author.point(pose,foot)-knee).normalized()
-		var outward := -.12 if side=="r" else .12
 		# In the edited hang the ankles rise above the knees while the toes hang down.
 		var seat := hip+Vector3(outward*.45,-.065,-.17)/rig.global_basis.y.length()
 		var full_tuck := (seat-knee).normalized()
@@ -218,7 +218,14 @@ func pose_swing() -> void:
 		var heel := previous_tuck.slerp(full_tuck,.63)
 		var extended := (knee-hip).normalized()
 		var blend := maxf(knee_load,airborne)*landing_blend
-		author.aim_joint(pose,calf,foot,knee+shin.slerp(heel.slerp(extended,extension),blend))
+		# Unfold in the forward/back plane; a 3D arc can swing an ankle sideways mid-stroke.
+		var folded := atan2(heel.z,-heel.y)
+		if folded>0.: folded-=TAU
+		var fold_angle := lerpf(folded,atan2(extended.z,-extended.y),extension)
+		var lateral := lerpf(heel.x,extended.x,extension)
+		var plane_length := sqrt(maxf(0.,1.-lateral*lateral))
+		var shin_target := Vector3(lateral,-cos(fold_angle)*plane_length,sin(fold_angle)*plane_length)
+		author.aim_joint(pose,calf,foot,knee+shin.slerp(shin_target,blend))
 		var ankle: Vector3 = author.point(pose,foot)
 		var toes := "ball_"+str(side)
 		var toe_axis: Vector3 = (author.point(pose,toes)-ankle).normalized()
