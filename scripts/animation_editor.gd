@@ -137,7 +137,7 @@ func _ready() -> void:
 				set_frame(argument.get_slice("=",1).to_int())
 func show_swing(number: int) -> void:
 	review_number=wrapi(number-1,0,50)+1
-	session.replace_source(preload("res://scripts/numbered_swings.gd").make(review_source,review_number))
+	session.replace_source(preload("res://scripts/numbered_swings.gd").make(review_source,review_number,session.rig))
 	undo_history.clear()
 	redo_history.clear()
 	refresh_history()
@@ -195,7 +195,7 @@ func update_live_shot() -> void:
 		var clip: Animation=result.clip
 		if review:
 			review_source=clip
-			clip=preload("res://scripts/numbered_swings.gd").make(clip,review_number)
+			clip=preload("res://scripts/numbered_swings.gd").make(clip,review_number,session.rig)
 		var rotations: Dictionary=session.edits.duplicate(true)
 		var positions: Dictionary=session.position_edits.duplicate(true)
 		InteractionTrace.record("shot_preview",{"settings":shot_sampler.review_setup.duplicate(),"contact_frame":clip.get_meta("swing_hit_frame",-1),"frame":frame,"playing":playing})

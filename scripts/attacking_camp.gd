@@ -354,6 +354,19 @@ func pose_swing() -> void:
 	var origin := strike_point if phase=="spike" else ball.position
 	var shot_axis := hitter.basis.inverse()*origin.direction_to(shot_landing(origin)).slide(Vector3.UP).normalized()
 	Swing.apply(pose,hitter.get_pose_author(),rig.to_local(strike_point if phase=="spike" else ball.position),maxf(draw,smoothstep(0.,.065,swing_time)),reach,follow,maxf(draw,reach),0.,0.,Swing.DEFAULT_ELBOW_CLEARANCE,0.,INF,shot_axis,0.,.10,false,true,false,smoothstep(0.,.12,swing_time-net_clear_time) if phase=="spike" and net_clear_time>=0. and int(review_setup.get("spin",0))!=3 else 0.,(hip_turn+twist)*draw_load)
+	# Pronate through the forearm while the striking hand is drawing back.
+	var palm_weight := smoothstep(.015,.11,air_age)*(1.-smoothstep(.10,.65,reach))
+	if palm_weight>0. and follow==0.:
+		var hand: Vector3=author.point(pose,"hand_r")
+		var elbow_point: Vector3=author.point(pose,"lowerarm_r")
+		var arm_axis := elbow_point.direction_to(hand)
+		var fingers_axis: Vector3=hand.direction_to(author.point(pose,"middle_01_r"))
+		var across_hand: Vector3=author.point(pose,"pinky_01_r")-author.point(pose,"index_01_r")
+		var normal := fingers_axis.cross(across_hand).normalized().slide(arm_axis)
+		var down := Vector3.DOWN.slide(arm_axis)
+		if normal.length_squared()>.01 and down.length_squared()>.01:
+			var turn := normal.signed_angle_to(down,arm_axis)
+			author.rotate_world(pose,"lowerarm_r",arm_axis,turn*palm_weight)
 	var spin_choice := int(review_setup.get("spin",0))
 	var wrap := smoothstep(.055,.14,swing_time)*(1.-smoothstep(.34,.54,swing_time))
 	if wrap>0.:
