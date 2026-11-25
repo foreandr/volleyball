@@ -12,6 +12,7 @@ var trajectory_base: Animation
 var trajectory_solver: RefCounted
 var trajectory_revision := -1
 var review_source: Animation
+var shot_setup := {}
 var review_number := 1
 var review_status := Label.new()
 var review_votes := ConfigFile.new()
@@ -132,6 +133,28 @@ func show_swing(number: int) -> void:
 	set_frame(10)
 	set_playing(true)
 
+func add_shot_slider(box: VBoxContainer, caption: String, key: String, low: float, high: float, step_size: float, fallback: float, unit: String) -> HSlider:
+	var label := Label.new()
+	var slider := HSlider.new()
+	slider.min_value=low
+	slider.max_value=high
+	slider.step=step_size
+	slider.value=float(shot_setup.get(key,fallback))
+	var display := func(value: float):
+		shot_setup[key]=value
+		label.text="%s   %s %s" % [caption,str(snappedf(value,step_size)),unit]
+	display.call(slider.value)
+	slider.value_changed.connect(display)
+	box.add_child(label)
+	box.add_child(slider)
+	return slider
+
+func apply_review_shot() -> void:
+	shot_setup["z"]=4.+float(shot_setup.depth)
+	StorySession.save_drill_setup("swing_review",shot_setup)
+	Engine.set_meta("reload_swing_review",true)
+	MenuPresentation.load_scene("res://scenes/attacking_camp.tscn")
+
 func vote_swing(choice: String) -> void:
 	review_votes.set_value("votes",str(review_number),choice)
 	show_swing(review_number+1)
@@ -178,6 +201,42 @@ func build_controls(controls: VBoxContainer) -> void:
 		row.add_child(button("Yes",vote_swing.bind("Yes")))
 		row.add_child(button("No",vote_swing.bind("No")))
 		row.add_child(button(">",func(): show_swing(review_number+1)))
+		shot_setup=StorySession.load_drill_setup("swing_review")
+		var settings_box := VBoxContainer.new()
+		var toggle := button("Shot setup",func(): settings_box.visible=not settings_box.visible)
+		controls.add_child(toggle)
+		controls.add_child(settings_box)
+		settings_box.hide()
+		var court := Control.new()
+		court.custom_minimum_size=Vector2(0,132)
+		court.mouse_filter=Control.MOUSE_FILTER_STOP
+		court.tooltip_text="Click or drag to aim. The net is at the bottom."
+		settings_box.add_child(court)
+		var lateral := add_shot_slider(settings_box,"Landing left / right","x",-4.4,4.4,.1,3.4,"m")
+		var depth := add_shot_slider(settings_box,"Landing depth from net","depth",.5,8.9,.1,7.,"m")
+		court.draw.connect(func():
+			var area := Rect2(Vector2.ONE*4.,court.size-Vector2.ONE*8.)
+			court.draw_rect(area,Color("#a97548"))
+			court.draw_rect(area,Color.WHITE,false,2.)
+			var attack_y := area.end.y-area.size.y/3.
+			court.draw_line(Vector2(area.position.x,attack_y),Vector2(area.end.x,attack_y),Color.WHITE,1.)
+			court.draw_line(Vector2(area.position.x,area.end.y),area.end,Color.WHITE,4.)
+			var marker := area.position+area.size*Vector2((lateral.value+4.5)/9.,1.-depth.value/9.)
+			court.draw_circle(marker,6.,Color.BLACK)
+			court.draw_circle(marker,4.,Color.WHITE))
+		court.gui_input.connect(func(event: InputEvent):
+			if event is InputEventMouseButton and event.button_index==MOUSE_BUTTON_LEFT and event.pressed or event is InputEventMouseMotion and event.button_mask&MOUSE_BUTTON_MASK_LEFT:
+				var point: Vector2=(event.position-Vector2.ONE*4.)/(court.size-Vector2.ONE*8.)
+				lateral.value=point.x*9.-4.5
+				depth.value=(1.-point.y)*9.
+				court.accept_event())
+		lateral.value_changed.connect(func(_v): court.queue_redraw())
+		depth.value_changed.connect(func(_v): court.queue_redraw())
+		add_shot_slider(settings_box,"Set left / right","set_x",-.65,.65,.05,0.,"m")
+		add_shot_slider(settings_box,"Set forward / back","set_z",-.45,.45,.05,0.,"m")
+		add_shot_slider(settings_box,"Hit power","power",9.,40.,1.,14.,"m/s")
+		add_shot_slider(settings_box,"Vertical jump","jump",24.,44.,1.,33.,"in")
+		settings_box.add_child(button("Apply and replay",apply_review_shot))
 	controls.add_child(copy_name)
 	var frames := HBoxContainer.new()
 	controls.add_child(frames)

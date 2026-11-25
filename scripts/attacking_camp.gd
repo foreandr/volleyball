@@ -7,6 +7,8 @@ var attack_jump := preload("res://scripts/setter_jump.gd").new()
 var swing_time := -1.
 var contact_swing_time := 0.
 var cross_court := false
+var review_setup := {}
+var jump_height := JUMP_HEIGHT
 var cpu_hitter := true
 var approach_started := false
 const JUMP_HEIGHT := 33.*.0254
@@ -30,10 +32,12 @@ func start_drill() -> void:
 	attack_jump.front_limit=3.65
 	attack_jump.attack_arm_lift=true
 	super.start_drill()
-	var review := "--review-swings" in OS.get_cmdline_user_args()
+	var reload_review := Engine.has_meta("reload_swing_review")
+	if reload_review: Engine.remove_meta("reload_swing_review")
+	var review := reload_review or "--review-swings" in OS.get_cmdline_user_args()
 	var arm_swing := review or "--edit-arm-swing" in OS.get_cmdline_user_args()
 	var arm_lift := arm_swing or "--edit-arm-lift" in OS.get_cmdline_user_args()
-	if (arm_lift or "--edit-approach" in OS.get_cmdline_user_args()) and not Engine.has_meta("approach_editor_opened"):
+	if (arm_lift or "--edit-approach" in OS.get_cmdline_user_args()) and (reload_review or not Engine.has_meta("approach_editor_opened")):
 		Engine.set_meta("approach_editor_opened",true)
 		edit_approach_frames.call_deferred(arm_lift,arm_swing,false,review)
 
@@ -115,7 +119,7 @@ func start_approach() -> void:
 	var contact_stance := Vector3(endpoint.x+.18,.04,endpoint.z-.30)
 	var heading := (contact_stance-hitter.position).slide(Vector3.UP).normalized()
 	hitter.rotation.y=atan2(heading.x,heading.z)
-	attack_jump.begin(hitter,Vector2(-heading.x,heading.z),contact_stance,PLANT_TIME,JUMP_HEIGHT,3,false,1.,false,.22)
+	attack_jump.begin(hitter,Vector2(-heading.x,heading.z),contact_stance,PLANT_TIME,jump_height,3,false,1.,false,.22)
 	var to_ball := (endpoint-hitter.position).slide(Vector3.UP)
 	if not to_ball.is_zero_approx(): attack_jump.lead_heading=to_ball.normalized()
 	attack_jump.release()
@@ -123,7 +127,7 @@ func start_approach() -> void:
 func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 	message.text="Approach and spike"
 	var remaining := flight_time-elapsed
-	var rise := attack_jump.flight_duration(JUMP_HEIGHT,true)*.48
+	var rise := attack_jump.flight_duration(jump_height,true)*.48
 	if cpu_hitter and remaining<=attack_jump.LEAD_STEP_TIME+PLANT_TIME+rise+.025: start_approach()
 	if cpu_hitter and approach_started and swing_time<0. and remaining<=.16: swing_time=0.
 	if swing_time<0. and attack_jump.active and attack_jump.elapsed>attack_jump.load_duration():
@@ -143,6 +147,7 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 			gym.update_board(spikes)
 			var landing := shot_landing(ball.position)
 			var shot_time := .68
+			if not review_setup.is_empty(): shot_time=landing.distance_to(ball.position)/float(review_setup.get("power",14.))
 			drop_velocity=(landing-ball.position)/shot_time+Vector3.UP*(4.905*shot_time)
 			roll_time=-1.
 			trace("spike",{"from":str(ball.position),"palm_gap":nearest.distance_to(palm)})
@@ -158,6 +163,8 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 	return false
 
 func shot_landing(origin: Vector3) -> Vector3:
+	if not review_setup.is_empty():
+		return Vector3(review_setup.get("x",3.4),Contact.BALL_RADIUS,review_setup.get("z",11.))
 	return Vector3(-3.4 if cross_court else clampf(origin.x,-3.8,3.8),Contact.BALL_RADIUS,11.)
 
 func pose_swing() -> void:
@@ -235,7 +242,7 @@ func pose_swing() -> void:
 		author.aim_joint(pose,foot,toes,ankle+toe_axis.slerp(hanging_toes,knee_load))
 	# Apply pelvic rotation after solving the tuck so both legs inherit it.
 	author.rotate_world(pose,"pelvis",Vector3.UP,hip_turn)
-	var draw_end := attack_jump.flight_duration(JUMP_HEIGHT,true)*.48-.095
+	var draw_end := attack_jump.flight_duration(jump_height,true)*.48-.095
 	var draw := smoothstep(.035,draw_end,air_age) if attack_jump.active else 0.
 	var origin := strike_point if phase=="spike" else ball.position
 	var shot_axis := hitter.basis.inverse()*origin.direction_to(shot_landing(origin)).slide(Vector3.UP).normalized()
@@ -257,12 +264,17 @@ func frame_editor_attacker() -> Node3D:
 
 func edit_approach_frames(arm_lift := false, arm_swing := false, cross := false, review := false) -> void:
 	cross_court=cross
+	if review:
+		review_setup=StorySession.load_drill_setup("swing_review")
+		jump_height=float(review_setup.get("jump",33.))*.0254
+		cross_court=float(review_setup.get("x",3.4))<1.
 	# Warm up from the first step so the editor inherits the live plant pose.
 	hitter.position=START
 	hitter.rotation.y=0.
 	hitter.play_action("idle",0.)
 	hitter.animator.advance(0.)
 	endpoint=START+Vector3(-.18,0.,2.20)
+	endpoint+=Vector3(review_setup.get("set_x",0.),0.,review_setup.get("set_z",0.))
 	approach_started=false
 	start_approach()
 	var recording := preload("res://scripts/match_replay.gd").new()
@@ -277,14 +289,14 @@ func edit_approach_frames(arm_lift := false, arm_swing := false, cross := false,
 	if arm_lift:
 		phase="set"
 		source=setter.position+Vector3.UP*(setter.height_cm*.01+.12)
-		endpoint.y=2.65+ATTACK_SET_LIFT
+		endpoint.y=2.65+ATTACK_SET_LIFT+jump_height-JUMP_HEIGHT
 	var hit_frame := -1
 	var count := ceili(duration*60.)
 	for i in range(count+1):
 		var time := minf(i/60.,duration)
 		if i>0: attack_jump.step(hitter,time-(i-1)/60.,Vector2.ZERO)
 		if arm_lift:
-			var remaining := takeoff+attack_jump.flight_duration(JUMP_HEIGHT,true)*.48+.025-time
+			var remaining := takeoff+attack_jump.flight_duration(jump_height,true)*.48+.025-time
 			if arm_swing and phase in ["spike","drop"]:
 				swing_time+=1./60.
 				pose_swing()
