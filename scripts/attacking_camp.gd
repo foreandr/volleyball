@@ -535,7 +535,8 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 		var nearest := Geometry3D.get_closest_point_to_segment(palm,previous,ball.position)
 		if swing_time>=.055 and swing_time<=.30:
 			closest_spike_gap=minf(closest_spike_gap,nearest.distance_to(palm))
-		if swing_time>=.055 and swing_time<=.30 and nearest.distance_to(palm)<=ATTACK_CONTACT_RADIUS:
+		var at_set_target := has_meta("sampling_attack") or (ball.position-endpoint).slide(Vector3.UP).length()<=.25
+		if at_set_target and swing_time>=.055 and swing_time<=.30 and nearest.distance_to(palm)<=ATTACK_CONTACT_RADIUS:
 			if not cpu_hitter:
 				if not is_finite(first_palm_at):
 					first_palm_at=clock
