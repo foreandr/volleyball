@@ -60,9 +60,15 @@ func _ready() -> void:
 		arrow.tooltip_text="Previous frame" if direction<0 else "Next frame"
 		arrow.pressed.connect(step_frame.bind(direction))
 		tools.add_child(arrow)
-	var rate := OptionButton.new()
-	for value in ["1x","1/2x","1/4x","1/8x","1/16x"]: rate.add_item(value)
-	rate.item_selected.connect(func(index): speed=pow(.5,index))
+	var rate := Button.new()
+	rate.text="Slow-mo  1x"
+	rate.pressed.connect(func():
+		speed=speed*.5 if speed>1./16. else 1.
+		rate.text="Slow-mo  %s" % ("1x" if speed==1. else "1/%dx" % roundi(1./speed))
+		if slider.value>=slider.max_value: slider.value=0
+		playing=true
+		playback_elapsed=0.
+	)
 	tools.add_child(rate)
 	if "blockers" in game:
 		var toggle_boxes := CheckButton.new()

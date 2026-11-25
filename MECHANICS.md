@@ -55,7 +55,7 @@ In blocking practice, all four attackers run their own approach lanes as the pas
 
 The CPU middle can commit to a nearby quick runner accelerating toward Bell before release. This read uses the visible approach and can leave the middle airborne against a pipe or pin set. Each rep logs the released route and endpoint.
 
-The pipe covers deep in six, the far pin shades inward from its own lane, and nearby front-row hitters cover shorter. In-system middle and pipe routes use tempos 0 and 1. Pins use 0, 1 and 2. Tempo 3 is reserved for out-of-system play.
+The pipe covers deep in six, the far pin shades inward from its own lane, and nearby front-row hitters cover shorter. The middle runs a 50 or 30 at tempo zero every feed, including decoy jumps. The pipe uses tempo 0 or 1. Pins use 0, 1 and 2. Tempo 3 is reserved for out-of-system play.
 
 Random-height blocking feeds assign a separate tempo to every route. Each runner times the approach to that call. Uncommitted blockers observe the released ball before estimating its lateral destination.
 
@@ -66,3 +66,9 @@ All blocking-drill hitters transition from running into the shared attack swing.
 A fully held Kong reach above the tape extends the selected elbow toward 178 degrees and aligns the fingers with the lateral reach. The neighboring blocker still limits available space.
 
 A manual block release can jump on any phase or repeat after landing. A release during flight queues the next grounded jump. Exhaustion limits its height.
+
+Random height defaults on for blocking. The controlled blocker can move from coach release. Replay Slow-mo cycles half, quarter, eighth and sixteenth speed.
+
+After the dead-ball reset, the ready whistle gives 509 full lateral and depth control until the rally ends. CPU close and peel assignments only steer computer-controlled blockers.
+
+The attack aim selector offers random court placement, targeting the block and avoiding the block. Near the tape, LT squares the blocker to the net. Holding A prepares a swing block and the body completes the turn through takeoff while lateral lean and individual arm reaches remain available.

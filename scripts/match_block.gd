@@ -11,6 +11,7 @@ var tempo := 1.0
 var jump_height := HEIGHT
 var landing_recovery := 0.13
 var overpass_swing := false
+var net_heading := INF
 var aggressive_press := false
 var lean_input := 0.
 var reach_input := Vector2.ZERO
@@ -34,6 +35,7 @@ func begin(player: Node3D) -> void:
 	actor.animator.seek(0.0,true)
 
 func step(delta: float, world_ball: Vector3) -> bool:
+	if is_finite(net_heading): actor.rotation.y=rotate_toward(actor.rotation.y,net_heading,delta*9.)
 	age += delta*tempo
 	var phase := clampf((age-START)/AIR,0.0,1.0)
 	var lift := 4.0*jump_height*phase*(1.0-phase)

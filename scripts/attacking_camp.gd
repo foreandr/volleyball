@@ -512,8 +512,7 @@ func start_approach(steps := 3, cadence := 1.,destination := Vector3.INF) -> voi
 		contact_stance=Vector3(destination.x,START.y,destination.z)-manual_route*.09
 	var heading := (contact_stance-hitter.position).slide(Vector3.UP).normalized()
 	hitter.rotation.y=atan2(heading.x,heading.z)
-	var entering_from_gait: bool = hitter.animator.current_animation in ["base/Walk","base/Jog_Fwd","base/Sprint","volleyball/slow_jog"]
-	attack_jump.begin(hitter,Vector2(-heading.x,heading.z),contact_stance,PLANT_TIME*cadence,jump_height,steps,entering_from_gait,cadence,false,.38)
+	attack_jump.begin(hitter,Vector2(-heading.x,heading.z),contact_stance,PLANT_TIME*cadence,jump_height,steps,false,cadence,false,.38)
 	planned_contact=destination
 	planned_lunge=attack_jump.approach_lunge
 	attack_jump.attack_entry_speed=maxf(0.,prep_velocity.dot(heading))
@@ -659,6 +658,9 @@ func attack_spin_axis(direction: Vector3, spin: int) -> Vector3:
 	if spin in [1,2]:
 		return (top*.8+Vector3.UP*(-.6 if spin==1 else .6)).normalized()
 	return top
+
+func advance_missed_ball(delta: float,rebound_floor := false) -> void:
+	super.advance_missed_ball(delta,rebound_floor or phase=="drop")
 
 func advance_spike(delta: float) -> void:
 	var age := swing_time-contact_swing_time

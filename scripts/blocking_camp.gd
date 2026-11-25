@@ -3,19 +3,25 @@ extends "res://scripts/crosscourt_attack_demo.gd"
 const Block = preload("res://scripts/match_block.gd")
 const HOMES := [-2.15,0.,2.15]
 const MANUAL_SLOT := 2
-const ROUTES := [Vector3(3.65,2.65,2.7),Vector3(.4,2.65,3.25),Vector3(-.65,2.65,1.45),Vector3(-3.65,2.65,2.7)]
+var ROUTES := [Vector3(3.65,2.65,2.7),Vector3(.4,2.65,3.25),Vector3(-.65,2.65,1.45),Vector3(-3.65,2.65,2.7)]
 var attackers: Array[Node3D]=[]
 const ROUTE_NAMES := ["left","51","pipe","right"]
-var random_heights := bool(StorySession.game_options.get_value("blocking","random_heights",false))
+var random_heights := bool(StorySession.game_options.get_value("blocking","random_heights",true))
 var drawn_height := -1
 var route_tempos := [2,1,1,2]
+enum AimMode { RANDOM, INTO_BLOCK, AVOID_BLOCK }
+var aim_mode := clampi(int(StorySession.game_options.get_value("blocking","aim_mode",0)),0,2)
+var aim_committed := false
 var read_delay := .08
 var read_x := 0.
 var read_lead := 1
 
 func height_preset() -> int:
+	if route==1: return 0
 	return drawn_height if drawn_height>=0 else mini(super.height_preset(),1 if route in [1,2] else 2)
 
+var quick_jump := preload("res://scripts/setter_jump.gd").new()
+var quick_committed := false
 var middle_read_attempted := false
 var route := -1
 func rep_set_percent() -> float:
@@ -31,7 +37,7 @@ var deflected := false
 var pending_manual_jump := -1.
 var block_press_clock := 0.
 var block_held := false
-var manual_shuffle_open := false
+var ready_whistled := false
 var automatic_block := false
 var block_load := preload("res://scripts/tryout_squat.gd").new()
 var released_meter := 0.
@@ -45,7 +51,6 @@ func block_meter() -> float:
 	return clampf(.5+error/.6,0.,1.)
 
 var block_vertical := float(StorySession.game_options.get_value("blocking","vertical_inches",roundf(Block.HEIGHT/.0254)))
-var aim_six := false
 var read_set := false
 var closing := [false,false,true]
 var height_control := HSlider.new()
@@ -93,9 +98,18 @@ func build_settings() -> void:
 	row.add_child(height_control)
 	var randomize_button := CheckButton.new()
 	randomize_button.text="Random set height"
-	randomize_button.tooltip_text="Middle and pipe: 0 or 1. Pins: 0, 1 or 2."
+	randomize_button.tooltip_text="Middle: 0. Pipe: 0 or 1. Pins: 0, 1 or 2."
 	randomize_button.button_pressed=random_heights
 	row.add_child(randomize_button)
+	var shot_modes := OptionButton.new()
+	for title in ["Random court target","Hit into block","Avoid block"]: shot_modes.add_item(title)
+	shot_modes.select(aim_mode)
+	shot_modes.item_selected.connect(func(index):
+		aim_mode=index
+		StorySession.game_options.set_value("blocking","aim_mode",index)
+		StorySession.save_options()
+	)
+	row.add_child(shot_modes)
 	randomize_button.toggled.connect(func(enabled):
 		random_heights=enabled
 		StorySession.game_options.set_value("blocking","random_heights",enabled)
@@ -142,14 +156,17 @@ func allow_cpu_soft_attack() -> bool:
 	return false
 
 func reset_feed() -> void:
-	manual_shuffle_open=false
+	ready_whistled=false
 	middle_read_attempted=false
 	if route<0: attackers.push_front(hitter)
+	quick_committed=false
+	ROUTES[1].x=.4 if rotation_drill.random.randf()<.5 else 1.8
 	var former := hitter
 	route=rotation_drill.random.randi_range(0,attackers.size()-1)
 	for lane in ROUTES.size():
 		var highest := 1 if lane in [1,2] else 2
 		route_tempos[lane]=rotation_drill.random.randi_range(0,highest) if random_heights else mini(super.height_preset(),highest)
+	route_tempos[1]=0
 	drawn_height=route_tempos[route] if random_heights else -1
 	read_delay=rotation_drill.random.randf_range(.055,.13)
 	hitter=attackers[route]
@@ -182,16 +199,43 @@ func reset_feed() -> void:
 		blockers[i].play_action("idle")
 	super.reset_feed()
 	var random := rotation_drill.random as RandomNumberGenerator
-	var depth := 4.5 if random.randf()<.8 else random.randf_range(4.,5.)
-	var target_x := 4.5-random.randf_range(0.,1.)
-	aim_six=not aim_six
-	if aim_six: target_x=random.randf_range(-.5,.5)
-	if route==3 and not aim_six: target_x=-target_x
-	review_setup.x=target_x if active_lane==2 else -target_x
-	review_setup.z=BallNet.NET_Z+depth
+	review_setup.x=random.randf_range(-4.45,4.45)
+	review_setup.z=BallNet.NET_Z+random.randf_range(1.1,8.95)
+	aim_committed=false
 	cross_court=false
 	bounce_line=false
-	trace("block_drill_target",{"lane":"six" if aim_six else "line","target_x":target_x,"depth_m":depth})
+
+func choose_block_target() -> void:
+	aim_committed=true
+	if aim_mode==AimMode.RANDOM: return
+	var origin := endpoint
+	var obstacles: Array[Vector2]=[]
+	for slot in blockers.size():
+		var actor := blockers[slot]
+		if actor.position.z>BallNet.NET_Z+1.2: continue
+		var jump: RefCounted=jumps[slot]
+		if jump!=null and not jump.hands.is_empty():
+			for tip: Vector3 in jump.hands: obstacles.append(Vector2(tip.x,maxf(tip.y,BallNet.NET_TOP+.10)))
+		else:
+			obstacles.append(Vector2(actor.position.x,BallNet.NET_TOP+.22))
+	if obstacles.is_empty(): return
+	var best := -INF
+	for column in 17:
+		for depth in [2.,4.,6.,8.7]:
+			var landing := Vector3(lerpf(-4.45,4.45,column/16.),Contact.BALL_RADIUS,BallNet.NET_Z+float(depth))
+			var fraction := clampf((BallNet.NET_Z-origin.z)/(landing.z-origin.z),0.,1.)
+			var duration := attack_flight_time(origin,landing)
+			var spin := shot_spin_force(origin,landing,duration)
+			var time := duration*fraction
+			var crossing := origin+launch_velocity(origin,landing,duration,spin)*time+(Vector3.DOWN*9.81+spin)*(.5*time*time)
+			if crossing.y<BallNet.NET_TOP+Contact.BALL_RADIUS: continue
+			var gap := INF
+			for hand in obstacles: gap=minf(gap,hand.distance_to(Vector2(crossing.x,crossing.y)))
+			var score := gap if aim_mode==AimMode.AVOID_BLOCK else -gap
+			if score>best:
+				best=score
+				review_setup.x=-landing.x
+				review_setup.z=landing.z
 
 func _input(event: InputEvent) -> void:
 	if not settings.visible and not get_tree().paused:
@@ -232,6 +276,7 @@ func begin_block(slot: int,loaded := 0.,manual := false) -> void:
 	if manual: jump.jump_height=maxf(.10,jump.jump_height)
 	stamina.spend(5,"Block jump")
 	trace("block_takeoff",{"slot":slot,"vertical_m":jump.jump_height,"stamina":stamina.value})
+	jump.net_heading=PI
 	jump.aggressive_press=true
 	jump.begin(blockers[slot])
 	jump.age=Block.START*loaded
@@ -285,22 +330,41 @@ func step_hitting_line(i: int,delta: float) -> void:
 		if not shuffle_steps.has(actor): shuffle_steps[actor]=preload("res://scripts/directional_footwork.gd").new(actor)
 		GroundControls.shuffle(actor,shuffle_steps[actor],velocity,true,delta)
 
+func _process(delta: float) -> void:
+	if ready_whistled and not automatic_block and not settings.visible and coach_motion.whistle_cue.signal_time>=0.:
+		step_blocker(MANUAL_SLOT,delta)
+	super._process(delta)
+
 func step_practice(delta: float) -> void:
 	# Cover runners only need one pose per displayed frame. The contact
 	# simulation still substeps the ball, striker and active block.
+	if phase=="pass" and not quick_committed and contact_time-elapsed<=PLANT_TIME+.32:
+		quick_committed=true
+		var target := Vector3(ROUTES[1].x,START.y,ROUTES[1].z-.09)
+		var runner := attackers[1]
+		if route==1:
+			if not approach_started: start_approach(3,.84,Vector3(target.x,planned_attack_contact_height(),target.z))
+		else:
+			var heading := (target-runner.position).slide(Vector3.UP).normalized()
+			runner.rotation.y=atan2(heading.x,heading.z)
+			quick_jump.attack_arm_lift=true
+			quick_jump.front_limit=3.65
+			quick_jump.begin(runner,Vector2(-heading.x,heading.z),target,PLANT_TIME*.84,jump_height,3,false,.84,false,.38)
+			runner.stamina.spend(5,"Quick decoy jump")
+			quick_jump.release()
 	for i in attackers.size():
-		if i!=route: step_hitting_line(i,delta)
+		if i==1 and quick_jump.active:
+			quick_jump.step(attackers[i],delta,Vector2.ZERO)
+		elif i!=route: step_hitting_line(i,delta)
 	super.step_practice(delta)
 
 func step_attack(delta: float) -> void:
-	if phase=="pass" and not manual_shuffle_open and ball.position.distance_to(catch_point)<=1.:
-		manual_shuffle_open=true
-		trace("manual_block_shuffle_open",{"distance_m":ball.position.distance_to(catch_point)})
+	if phase=="set" and not aim_committed and flight_time-elapsed<=.23: choose_block_target()
 	if route>=0 and not attack_jump.active and not (phase=="set" and approach_started) and phase!="spike":
 		step_hitting_line(route,delta)
 	for i in blockers.size():
 		step_blocker(i,delta)
-	if phase=="cart":
+	if phase=="cart" and not ready_whistled:
 		for i in attackers.size():
 			var home := ready_spot(i)
 			if elapsed==0. and attackers[i].position.distance_to(home)>.035: return
@@ -311,6 +375,8 @@ func step_attack(delta: float) -> void:
 			for i in blockers.size():
 				blockers[i].position=Vector3(HOMES[i],START.y,BallNet.NET_Z+.38)
 				lateral_speed[i]=0.
+			ready_whistled=true
+			coach_motion.whistle_cue.signal_drill(coach)
 			trace("blockers_home",{"positions":str([blockers[0].position,blockers[1].position,blockers[2].position])})
 	super.step_attack(delta)
 
@@ -323,6 +389,16 @@ func step_blocker(slot: int,delta: float) -> void:
 			jump.reach_input=Vector2(axis(Xbox.trigger(true)),axis(Xbox.trigger(false))).clamp(Vector2.ZERO,Vector2.ONE)
 		jump.min_hand_x=(blockers[slot-1].position.x+actor.position.x)*.5+.09 if slot>0 else -INF
 		jump.max_hand_x=(blockers[slot+1].position.x+actor.position.x)*.5-.09 if slot<2 else INF
+		if not automatic_block and ready_whistled:
+			if slot==MANUAL_SLOT:
+				jump.min_hand_x=-INF
+				jump.max_hand_x=INF
+				for other in blockers:
+					if other==actor or absf(other.position.z-actor.position.z)>.6: continue
+					var seam: float=(other.position.x+actor.position.x)*.5
+					if other.position.x<actor.position.x: jump.min_hand_x=maxf(jump.min_hand_x,seam+.05)
+					else: jump.max_hand_x=minf(jump.max_hand_x,seam-.05)
+			elif slot==1 and blockers[2].position.x<actor.position.x: jump.max_hand_x=INF
 		jump.court_aim=Vector3(0.,0.,BallNet.NET_Z-3.)
 		if not jump.step(delta,ball.global_position):
 			jumps[slot]=null
@@ -364,23 +440,42 @@ func step_blocker(slot: int,delta: float) -> void:
 	elif phase=="spike" and not closing[slot]:
 		depth_goal+=2.7
 	var previous := actor.position.x
-	var manual_window := phase in ["set_contact","set"] or (phase=="pass" and manual_shuffle_open)
+	var manual_window := ready_whistled and phase!="between"
 	var cpu := automatic_block or slot!=MANUAL_SLOT or not manual_window
-	var pace := GroundControls.speed(true,false)
+	var focused := cpu or block_held or GroundControls.focus(axis)
+	var sprinting: bool=not cpu and GroundControls.sprint(axis) and actor.stamina.can_sprint()
+	var pace := GroundControls.speed(focused,sprinting)
 	var desired := clampf((goal-previous)*4.,-pace,pace) if cpu else axis(JOY_AXIS_LEFT_X)*camera.global_basis.x.x*pace
 	lateral_speed[slot]=move_toward(lateral_speed[slot],desired,8.*delta)
 	var low := -4.5 if slot==0 else blockers[slot-1].position.x+.61
 	var high := 4.5 if slot==2 else blockers[slot+1].position.x-.61
-	var motion := Vector2(lateral_speed[slot],(depth_goal-actor.position.z)*4.).limit_length(pace)*delta
+	if not cpu:
+		low=-4.5
+		high=4.5
+	elif slot==1 and not automatic_block and manual_window:
+		high=4.5
+	var depth_speed := (depth_goal-actor.position.z)*4. if cpu else axis(JOY_AXIS_LEFT_Y)*camera.global_basis.z.z*pace
+	var motion := Vector2(lateral_speed[slot],depth_speed).limit_length(pace)*delta
 	actor.position.x=clampf(previous+motion.x,low,high)
-	actor.position.z+=motion.y
+	actor.position.z=clampf(actor.position.z+motion.y,BallNet.NET_Z+.28,BallNet.NET_Z+9.)
 	actor.animator.advance(delta)
 	if not shuffle_steps.has(actor):
 		shuffle_steps[actor]=preload("res://scripts/directional_footwork.gd").new(actor)
 	if slot==MANUAL_SLOT and block_held:
 		block_load.update(actor,delta)
 		block_load.ring.hide()
-	GroundControls.shuffle(actor,shuffle_steps[actor],Vector3((actor.position.x-previous)/maxf(delta,.0001),0.,motion.y/maxf(delta,.0001)),true,delta)
+	var velocity := Vector3((actor.position.x-previous)/maxf(delta,.0001),0.,motion.y/maxf(delta,.0001))
+	if not cpu and not focused:
+		GroundControls.face(actor,velocity,delta,6.)
+		actor.play_ground_gait(velocity.length())
+	elif not cpu:
+		if not block_held: actor.play_action("idle",.20)
+		var facing := ball.position-actor.position
+		var square := 1. if block_held else 1.-smoothstep(.6,1.8,actor.position.z-BallNet.NET_Z)
+		var heading := lerp_angle(atan2(facing.x,facing.z),PI,square)
+		actor.rotation.y=rotate_toward(actor.rotation.y,heading,delta*6.)
+	if sprinting and velocity.length()>.15: actor.stamina.spend(actor.stamina.SPRINT_DRAIN*delta,"Sprint")
+	GroundControls.shuffle(actor,shuffle_steps[actor],velocity,focused,delta)
 	if read_set and (slot!=1 or read_lead==1) and (automatic_block or slot!=MANUAL_SLOT) and cpu and closing[slot] and not attempted[slot] and phase=="set" and absf(actor.position.x-read_x)<1.65 and flight_time-elapsed<=Block.START+Block.AIR*.5:
 		begin_block(slot)
 

@@ -1,6 +1,7 @@
 extends "res://scripts/preview_court.gd"
 
 const Contacts = preload("res://scripts/gym_physics.gd")
+var brace_transforms: Array[Transform3D]=[]
 var digits: Array[Array] = []
 var benches: Array[MeshInstance3D] = []
 
@@ -87,6 +88,16 @@ func _ready() -> void:
 		box("Door rail",Vector3(1.8,0.06,0.12),Vector3(x,1.1,14.30),steel)
 		wall_text("EXIT",Vector3(x,2.67,14.32),0.003,Color.PALE_GREEN)
 	build_gallery(steel,paint)
+	var steel_web := MultiMesh.new()
+	steel_web.transform_format=MultiMesh.TRANSFORM_3D
+	steel_web.mesh=BoxMesh.new()
+	steel_web.instance_count=brace_transforms.size()
+	for i in brace_transforms.size(): steel_web.set_instance_transform(i,brace_transforms[i])
+	var webs := MultiMeshInstance3D.new()
+	webs.multimesh=steel_web
+	webs.material_override=steel
+	add_child(webs)
+	brace_transforms.clear()
 	for side in [-1,1]:
 		var crest := Sprite3D.new()
 		crest.texture = preload("res://assets/gym/falcon.svg")
@@ -104,9 +115,9 @@ func _ready() -> void:
 	probe.intensity = 0.65
 	add_child(probe)
 
-func brace(a: Vector3,b: Vector3,width: float,style: Material) -> void:
-	var beam := box("Steel web",Vector3(width,a.distance_to(b),width),(a+b)*0.5,style)
-	beam.quaternion = Quaternion(Vector3.UP,(b-a).normalized())
+func brace(a: Vector3,b: Vector3,width: float,_style: Material) -> void:
+	var basis := Basis(Quaternion(Vector3.UP,(b-a).normalized()))*Basis.from_scale(Vector3(width,a.distance_to(b),width))
+	brace_transforms.append(Transform3D(basis,(a+b)*.5))
 
 func build_gallery(steel: Material,paint: Material) -> void:
 	var glass := material("bacece")

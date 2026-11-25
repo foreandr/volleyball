@@ -243,7 +243,7 @@ In blocking practice, all four attackers run their own approach lanes as the pas
 
 The CPU middle can commit to a nearby quick runner accelerating toward Bell before release. This read uses the visible approach and can leave the middle airborne against a pipe or pin set. Each rep logs the released route and endpoint.
 
-The pipe covers deep in six, the far pin shades inward from its own lane, and nearby front-row hitters cover shorter. In-system middle and pipe routes use tempos 0 and 1. Pins use 0, 1 and 2. Tempo 3 is reserved for out-of-system play.
+The pipe covers deep in six, the far pin shades inward from its own lane, and nearby front-row hitters cover shorter. The middle runs a 50 or 30 at tempo zero every feed, including decoy jumps. The pipe uses tempo 0 or 1. Pins use 0, 1 and 2. Tempo 3 is reserved for out-of-system play.
 
 Random-height blocking feeds assign a separate tempo to every route. Each runner times the approach to that call. Uncommitted blockers observe the released ball before estimating its lateral destination.
 
@@ -252,3 +252,9 @@ Random-height blocking feeds assign a separate tempo to every route. Each runner
 Track set distribution by opponent rotation, eligible hitter and tempo. A CPU middle can combine those tendencies with a read of the live approach to shade a lane or take a first step before release. A small sample should carry little weight, and a setter running against tendency can wrong-foot the block.
 
 All blocking-drill hitters transition from running into the shared attack swing. Blocker bumper inputs do not select the CPU shot type.
+
+Random height defaults on for blocking. The controlled blocker can move from coach release. Replay Slow-mo cycles half, quarter, eighth and sixteenth speed.
+
+After the dead-ball reset, the ready whistle gives 509 full lateral and depth control until the rally ends. CPU close and peel assignments only steer computer-controlled blockers.
+
+The attack aim selector offers random court placement, targeting the block and avoiding the block. Near the tape, LT squares the blocker to the net. Holding A prepares a swing block and the body completes the turn through takeoff while lateral lean and individual arm reaches remain available.
