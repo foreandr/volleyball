@@ -16,6 +16,8 @@ const ATTACK_SET_LIFT := .10
 const PLANT_TIME := .30
 var spikes := 0
 var strike_point := Vector3.ZERO
+var last_shoulder := Quaternion.IDENTITY
+var last_shoulder_time := -1.
 var contact_offset := Vector3.ZERO
 var net_clear_time := -1.
 const PALM_CONTACT := 2./60.
@@ -117,6 +119,7 @@ func step_practice(delta: float) -> void:
 
 func start_approach() -> void:
 	if approach_started: return
+	last_shoulder_time=-1.
 	approach_started=true
 	var contact_stance := Vector3(endpoint.x+.18,.04,endpoint.z-.30)
 	var heading := (contact_stance-hitter.position).slide(Vector3.UP).normalized()
@@ -281,7 +284,16 @@ func pose_swing() -> void:
 	author.aim_joint(pose,"hand_l","middle_01_l",wrist+fingers.slerp(point_axis,airborne*(1.-guide_drop)))
 	for joint in ["pelvis","spine_01","spine_02","thigh_r","thigh_l","calf_r","calf_l","foot_r","foot_l","clavicle_r","upperarm_r","lowerarm_r","hand_r","clavicle_l","upperarm_l","lowerarm_l","hand_l"]:
 		var id := rig.find_bone(joint)
-		rig.set_bone_pose_rotation(id,pose[id].basis.get_rotation_quaternion().slerp(rig.get_bone_pose_rotation(id),recovery))
+		var rotation: Quaternion=pose[id].basis.get_rotation_quaternion().slerp(rig.get_bone_pose_rotation(id),recovery)
+		if joint=="upperarm_r":
+			# Near full extension the elbow solver can choose opposite shoulder twists on adjacent frames.
+			if phase=="spike" and since_hit>PALM_CONTACT and last_shoulder_time>=0.:
+				var gap := last_shoulder.angle_to(rotation)
+				var budget := deg_to_rad(660.)*maxf(0.,swing_time-last_shoulder_time)
+				if gap>budget: rotation=last_shoulder.slerp(rotation,budget/gap)
+			last_shoulder=rotation
+			last_shoulder_time=swing_time
+		rig.set_bone_pose_rotation(id,rotation)
 
 func frame_editor_attacker() -> Node3D:
 	return hitter
