@@ -193,7 +193,8 @@ func pose_swing() -> void:
 		var shin: Vector3 = (author.point(pose,foot)-knee).normalized()
 		var outward := -.12 if side=="r" else .12
 		# In the edited hang the ankles rise above the knees while the toes hang down.
-		var heel := Vector3(outward,.83,-.55).normalized()
+		var seat := hip+Vector3(outward*.45,-.065,-.17)/rig.global_basis.y.length()
+		var heel := (seat-knee).normalized()
 		var extended := Vector3(outward,-1.,-.14).normalized()
 		var blend := maxf(knee_load,airborne)*(1.-follow)
 		author.aim_joint(pose,calf,foot,knee+shin.slerp(heel.slerp(extended,reach),blend))
@@ -201,7 +202,7 @@ func pose_swing() -> void:
 		var toes := "ball_"+str(side)
 		var toe_axis: Vector3 = (author.point(pose,toes)-ankle).normalized()
 		var shin_axis := (ankle-knee).normalized()
-		var hanging_toes := Vector3.DOWN.slide(shin_axis).normalized()
+		var hanging_toes := Vector3.FORWARD.slide(shin_axis).normalized()
 		author.aim_joint(pose,foot,toes,ankle+toe_axis.slerp(hanging_toes,knee_load))
 	# Apply pelvic rotation after solving the tuck so both legs inherit it.
 	author.rotate_world(pose,"pelvis",Vector3.UP,hip_turn)
