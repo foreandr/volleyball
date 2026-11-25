@@ -96,7 +96,7 @@ func reset_feed() -> void:
 	hitter.stamina.value=hitter.stamina.rested_capacity
 	hitter.stamina.exhausted=false
 	attack_lane = 0
-	next_set = Vector3(3.65,2.65,3.)
+	next_set = Vector3(3.65,2.65,BallNet.NET_Z-1.30)
 	read_set=false
 	closing=[false,false,true]
 	deflected=false
