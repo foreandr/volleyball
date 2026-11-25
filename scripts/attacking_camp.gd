@@ -203,6 +203,40 @@ func build_settings() -> void:
 			StorySession.save_options()
 		)
 
+	block_hud_label=Label.new()
+	block_hud_slider=HSlider.new()
+	row.add_child(block_hud_label)
+	row.add_child(block_hud_slider)
+	block_hud_slider.custom_minimum_size=Vector2(110,30)
+	block_hud_slider.max_value=60
+	block_hud_slider.step=1
+	block_hud_slider.focus_mode=Control.FOCUS_NONE
+	sync_block_vertical_hud()
+	block_hud_slider.value_changed.connect(func(value): set_practice_vertical(0,value))
+
+var block_hud_label: Label
+var block_hud_slider: HSlider
+var recent_shot_slopes: Array[float]=[]
+
+func sync_block_vertical_hud() -> void:
+	if is_instance_valid(block_hud_slider):
+		block_hud_slider.set_value_no_signal(practice_vertical[0])
+		block_hud_label.text="Block vertical  %d in" % practice_vertical[0]
+
+func set_practice_vertical(slot: int,value: float) -> void:
+	practice_vertical[slot]=value
+	StorySession.game_options.set_value("attack","right_block_vertical" if slot==0 else "middle_block_vertical",value)
+	StorySession.save_options()
+	sync_block_vertical_hud()
+
+func learned_block_offset() -> float:
+	var weighted := 0.
+	var total := 2.
+	for i in recent_shot_slopes.size():
+		weighted+=recent_shot_slopes[i]*(i+1)
+		total+=i+1
+	return clampf(weighted/total*clampf(BallNet.NET_Z-endpoint.z,.35,2.),-1.15,1.15)
+
 const PracticeBlock = preload("res://scripts/match_block.gd")
 var attack_blocker_count := 1
 var practice_blockers: Array[Node3D]=[]
@@ -231,13 +265,22 @@ func step_practice_blockers(delta: float) -> void:
 		var actor := practice_blockers[i]
 		var jump: RefCounted=practice_jumps[i]
 		if jump!=null:
+			var lane := endpoint.x+learned_block_offset()
+			if phase=="spike" and launched_attack and drop_velocity.z>.1:
+				lane=ball.position.x+drop_velocity.x*clampf((BallNet.NET_Z-ball.position.z)/drop_velocity.z,0.,.20)
+			var offset := lane-actor.position.x
+			if jump.shoulders.size()==2:
+				var amount := smoothstep(.22,.78,absf(offset))
+				var left: bool=(jump.shoulders[0].x-jump.shoulders[1].x)*offset>0.
+				jump.reach_input=Vector2(amount,0.) if left else Vector2(0.,amount)
+				jump.lean_input=clampf(offset,-.8,.8)
 			if not jump.step(delta,ball.global_position): practice_jumps[i]=null
 			continue
 		var home_x := 2.15 if i==0 else 0.
 		var goal := home_x
 		if phase=="set" or phase=="spike":
 			var seam_offset := (.5-i)*.68 if attack_blocker_count==2 else 0.
-			goal=clampf(endpoint.x+seam_offset,-4.4,4.4)
+			goal=clampf(endpoint.x+learned_block_offset()+seam_offset,-4.4,4.4)
 		var old_x := actor.position.x
 		actor.position.x=move_toward(old_x,goal,GroundControls.speed(true,true)*delta)
 		actor.animator.advance(delta)
@@ -289,6 +332,7 @@ func start_drill() -> void:
 		for i in 2:
 			var actor := athlete(Vector3(2.15 if i==0 else 0.,START.y,BallNet.NET_Z+.38),"286881")
 			register_student(actor,7-i)
+			actor.set_height_cm(195.58)
 			preload("res://scripts/practice_kit.gd").apply(actor,false,7-i)
 			actor.rotation.y=PI
 			practice_blockers.append(actor)
@@ -470,7 +514,7 @@ func steer_attack_aim(delta: float) -> void:
 	var lateral := -axis(JOY_AXIS_LEFT_X)
 	var lane := initial_attack_aim(endpoint).x
 	var lateral_input := signf(lateral)*maxf(0.,(absf(lateral)-.16)/.84)
-	aim_center.x=clampf(aim_center.x+lateral_input*lerpf(1.5,3.,placement_skill())*delta,lane-1.,lane+1.)
+	aim_center.x=clampf(aim_center.x+lateral_input*lerpf(1.5,3.,placement_skill())*delta,lane-2.5,lane+2.5)
 	aim_center.y=clampf(aim_center.y+strength*lerpf(6.,13.,placement_skill())*delta,4.65,BallNet.NET_Z+9.+3.048)
 
 func team_controls_approach() -> bool:
@@ -700,8 +744,9 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 				if elapsed<flight_time: return false
 				return miss_attack()
 			hard_spike_floor_pending=not tip_shot and not roll_shot and attack_speed()*attack_jump.spike_power_factor()>=Contact.HARD_SPIKE_SPEED
-			if hard_spike_floor_pending and not has_meta("live_sampler"):
-				hand_impact.volume_db=-2.
+			attack_floor_pending=true
+			if not tip_shot and not has_meta("live_sampler"):
+				hand_impact.volume_db=-2. if hard_spike_floor_pending else (-10. if roll_shot else -6.)
 				hand_impact.play()
 				spike_sound_count+=1
 			contact_swing_time=swing_time
@@ -772,6 +817,9 @@ func advance_spike(delta: float) -> void:
 		return
 	if not launched_attack:
 		launched_attack=true
+		if not practice_blockers.is_empty() and drop_velocity.z>.1:
+			recent_shot_slopes.append(clampf(drop_velocity.x/drop_velocity.z,-2.,2.))
+			if recent_shot_slopes.size()>5: recent_shot_slopes.pop_front()
 		trace("spike_launch",{"origin":str(ball.position),"velocity":str(drop_velocity),"aim":str(aim_center)})
 	var incoming_basis := ball.basis
 	var in_flight := roll_time<0.

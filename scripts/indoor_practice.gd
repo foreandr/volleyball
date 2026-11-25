@@ -227,6 +227,7 @@ var original_render_scale := 1.0
 var original_msaa := Viewport.MSAA_DISABLED
 
 var floor_sound_count := 0
+var attack_floor_pending := false
 var hard_spike_floor_pending := false
 var floor_impact := AudioStreamPlayer.new()
 
@@ -534,6 +535,7 @@ func choose_camp_toss() -> Vector3:
 	return Vector3.INF
 
 func reset_feed() -> void:
+	attack_floor_pending=false
 	hard_spike_floor_pending=false
 	bump_aim=Vector3.ZERO
 	bump_released=false
@@ -1617,10 +1619,12 @@ func advance_missed_ball(delta: float, rebound_floor := false) -> void:
 			var hard_landing: bool = hard_spike_floor_pending and (drop_velocity.length()>=Contact.HARD_SPIKE_SPEED or get_meta("blocked_attack",false))
 			set_meta("blocked_attack",false)
 			hard_spike_floor_pending=false
-			if hard_landing and not has_meta("live_sampler"):
+			if (hard_landing or attack_floor_pending) and not has_meta("live_sampler"):
+				floor_impact.stream=preload("res://assets/audio/floor_impacts.tres") if hard_landing else preload("res://assets/audio/ball_floor.wav")
 				floor_impact.volume_db=linear_to_db(clampf(-drop_velocity.y/12.,.06,.88))
 				floor_impact.play()
 				floor_sound_count+=1
+			attack_floor_pending=false
 			if rebound_floor and drop_velocity.y < -1.5:
 				ball.position.y=maxf(ball.position.y,Contact.BALL_RADIUS+.006)
 				drop_velocity=drop_velocity.bounce(Vector3.UP)*.70
