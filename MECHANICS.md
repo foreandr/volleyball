@@ -99,3 +99,4 @@ Active blocks also collide across both shoulders, neck and head. These contacts 
 Blocking capsule radii are 18 cm at the hand, 14.25 cm at the forearm, 15.75 cm at the shoulder and about 13.2 cm at the head.
 Spike approaches drive both hands overhead during the final plant. Airborne CPU drill blockers prioritize a reachable ball above the tape over their lane disguise or spread.
 Both arms use the same forward lift arc on short and full spike approaches. The arc starts up to 65 ms earlier while retaining its original key intervals.
+Full spike approaches reserve up to 0.90 m of forward carry into the contact stance, putting takeoff roughly one metre behind the ball. Runway and available airtime limit carry. CPU read blocks start loading 35 ms earlier.

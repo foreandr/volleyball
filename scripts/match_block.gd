@@ -3,6 +3,7 @@ extends RefCounted
 const HandPose = preload("res://scripts/hand_setting_pose.gd")
 const STUFF_SPEED_RETENTION := 0.60
 const START := 0.16
+const CPU_LEAD := .035
 const AIR := 0.74
 const BODY_RADII := [.1575,.09,.13225]
 const BODY_PARTS := ["shoulder","neck","head"]

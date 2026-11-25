@@ -594,8 +594,8 @@ func step_blocker(slot: int,delta: float) -> void:
 	if sprinting and velocity.length()>.15: actor.stamina.spend(actor.stamina.SPRINT_DRAIN*delta,"Sprint")
 	GroundControls.shuffle(actor,shuffle_steps[actor],velocity,focused,delta)
 	var last_chance := late_window or (phase=="set" and flight_time-elapsed<=Block.AIR*.5)
-	if read_set and (slot==read_lead or attempted[read_lead] or last_chance) and (automatic_block or slot!=MANUAL_SLOT) and cpu and closing[slot] and not attempted[slot] and ((phase=="set" and flight_time-elapsed<=Block.START+Block.AIR*.5) or late_window):
-		var preload_fraction := clampf(1.-(flight_time-elapsed-Block.AIR*.5)/Block.START,0.,1.) if phase=="set" else 1.
+	if read_set and (slot==read_lead or attempted[read_lead] or last_chance) and (automatic_block or slot!=MANUAL_SLOT) and cpu and closing[slot] and not attempted[slot] and ((phase=="set" and flight_time-elapsed<=Block.START+Block.AIR*.5+Block.CPU_LEAD) or late_window):
+		var preload_fraction := clampf(1.-(flight_time-elapsed-Block.AIR*.5-Block.CPU_LEAD)/Block.START,0.,1.) if phase=="set" else 1.
 		begin_block(slot,preload_fraction)
 
 func advance_spike(delta: float) -> void:

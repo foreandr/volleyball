@@ -139,6 +139,21 @@ func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time
 		approach_lunge = reach.normalized()*clampf(reach.length()-0.055,0.0,0.95)
 		attack_glide = minf(glide,stride*0.68)
 		stride -= attack_glide
+		if attack_arm_lift and glide>0. and approach_steps>=3:
+			# Reserve the last metre for takeoff-to-contact travel when runway allows.
+			var runway := ball_offset.length()
+			var reserve := .90*smoothstep(.65,1.85,runway)
+			var ground := entry_distance+lead_distance+stride
+			var ground_scale := clampf((runway-reserve)/maxf(.001,ground),0.,1.)
+			entry_distance*=ground_scale
+			lead_distance*=ground_scale
+			stride*=ground_scale
+			var rise := flight_duration(jump_height*takeoff_effectiveness,true)*.48
+			var carry := minf(reserve,2.8*rise)
+			attack_glide=maxf(0.,carry-stride*AIR_TRAVEL_FRACTION*.48)/(minf(rise,.46)/.46+AIR_TRAVEL_FRACTION*.48)
+			var remaining := runway-ground*ground_scale-carry
+			approach_lunge=heading*clampf(remaining,0.,.95)
+
 		if toward_ball.is_zero_approx(): toward_ball = heading.slide(Vector3.UP).normalized()
 		var plant_width := -0.19 if actor.mirror_animation else 0.19
 		left_plant = right_plant+toward_ball*0.43+Vector3.UP.cross(toward_ball)*plant_width
