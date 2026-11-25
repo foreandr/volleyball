@@ -214,6 +214,8 @@ Spike feedback centers its timing bands 305 ms earlier, checks release against p
 
 ## Future training camp drills
 
+- Blocking test: run single, double, and triple blocks against live sets to each front-row position.
+
 - Touch Ten
 - Butterfly defense
 - Drills off the box
