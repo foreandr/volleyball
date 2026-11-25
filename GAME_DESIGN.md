@@ -201,3 +201,5 @@ Short attack plants use the authored front arm-lift curve. The attack release me
 Shared cloth and tape rebounds retain 20% of incoming speed at release. Spike launch pace depends on forward approach momentum and fatigue-adjusted jump height, including short plants at the net.
 
 Attack timing also considers approach arrival. A playable button release can grade Late when the plant starts behind schedule or the palm first reaches the descending set late. Net contact alone does not determine the timing grade.
+
+A late attack plant can trade up to 24 cm or 24% of effective jump height, whichever is smaller, for a reachable descending contact. The adjusted jump feeds swing timing, approach grading, power and net prediction.

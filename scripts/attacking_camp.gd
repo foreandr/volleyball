@@ -20,6 +20,7 @@ const SHOT_BUTTONS := [JOY_BUTTON_X,JOY_BUTTON_Y,JOY_BUTTON_B]
 var manual_shot := -1
 var release_at := INF
 var release_grade := INF
+var contact_shift := 0.0
 var approach_delay := 0.
 var first_palm_at := INF
 var aim_center := Vector2.INF
@@ -45,7 +46,7 @@ func attack_meter_error() -> float:
 
 func button_timing_error() -> float:
 	if phase!="set": return METER_START
-	return elapsed-flight_time+.08
+	return elapsed-flight_time+.08-contact_shift
 
 func combined_attack_error(button_error: float) -> float:
 	if button_error<EARLY_LIMIT or approach_delay<=CLEAN_LATE: return button_error
@@ -62,6 +63,7 @@ func clear_attack_input() -> void:
 	manual_shot=-1
 	release_at=INF
 	release_grade=INF
+	contact_shift=0.
 	approach_delay=0.
 	first_palm_at=INF
 	aim_center=Vector2.INF
@@ -284,7 +286,7 @@ func step_attack(delta: float) -> void:
 	if phase=="pass": message.text="Coach toss to setter"
 	if phase=="set_contact": message.text="Setter contact"
 
-func start_approach(steps := 3, cadence := 1.) -> void:
+func start_approach(steps := 3, cadence := 1., height_scale := 1.) -> void:
 	if approach_started: return
 	last_shoulder_time=-1.
 	reach_assist=Vector3.ZERO
@@ -296,7 +298,7 @@ func start_approach(steps := 3, cadence := 1.) -> void:
 		contact_stance=Vector3(endpoint.x,START.y,endpoint.z)-manual_route*.09
 	var heading := (contact_stance-hitter.position).slide(Vector3.UP).normalized()
 	hitter.rotation.y=atan2(heading.x,heading.z)
-	attack_jump.begin(hitter,Vector2(-heading.x,heading.z),contact_stance,PLANT_TIME*cadence,jump_height,steps,false,cadence,false,.22)
+	attack_jump.begin(hitter,Vector2(-heading.x,heading.z),contact_stance,PLANT_TIME*cadence,jump_height*height_scale,steps,false,cadence,false,.22)
 	attack_jump.attack_entry_speed=maxf(0.,prep_velocity.dot(heading))
 	var to_ball := (endpoint-hitter.position).slide(Vector3.UP)
 	if not to_ball.is_zero_approx(): attack_jump.lead_heading=to_ball.normalized()
@@ -311,7 +313,7 @@ func requested_set_arc() -> float:
 	return super.requested_set_arc()*set_arc_percent*.01
 
 func effective_attack_height() -> float:
-	return jump_height*(attack_jump.takeoff_effectiveness if attack_jump.active else hitter.stamina.effectiveness())
+	return attack_jump.assisted_height*attack_jump.takeoff_effectiveness if attack_jump.active else jump_height*hitter.stamina.effectiveness()
 
 func attack_speed() -> float:
 	var strength := float(hitter.attributes.get("Strength",65))
@@ -334,9 +336,17 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 		cadence=.94
 	var load_time := cadence*((steps-2)*attack_jump.LEAD_STEP_TIME+PLANT_TIME)
 	if (cpu_hitter or (manual_shot>=0 and distance<=3.35)) and remaining<=load_time+rise+.025:
-		if not approach_started: approach_delay=maxf(0.,load_time+rise+.025-remaining-delta)
-		start_approach(steps,cadence)
-	if approach_started and swing_time<0. and remaining<=.16/arm_speed_factor()+(.095 if not has_meta("sampling_attack") else 0.): swing_time=0.
+		if not approach_started:
+			approach_delay=maxf(0.,load_time+rise+.025-remaining-delta)
+			var h := effective_attack_height()
+			var u := clampf(1.-.08/flight_time,0.,1.)
+			var descent := (source.y-endpoint.y+4.*set_arc_height*(2.*u-1.))/flight_time
+			var drop := attack_jump.late_attack_drop(h,approach_delay,descent,.48)
+			contact_shift=minf(.075,drop/maxf(.01,descent))
+			var saved_rise := rise-attack_jump.flight_duration(maxf(0.,h-drop),true)*.48
+			approach_delay=maxf(0.,approach_delay-saved_rise-contact_shift)
+			start_approach(steps,cadence,1.-drop/maxf(.001,h))
+	if approach_started and swing_time<0. and remaining+contact_shift<=.16/arm_speed_factor()+(.095 if not has_meta("sampling_attack") else 0.): swing_time=0.
 	if swing_time<0. and attack_jump.active and attack_jump.elapsed>attack_jump.load_duration():
 		pose_swing()
 	if swing_time>=0.:
@@ -452,7 +462,7 @@ func predicted_attack_origin() -> Vector3:
 	var elbow := Contact.joint(hitter,"lowerarm_r")
 	var wrist := Contact.joint(hitter,"hand_r")
 	var reach := shoulder.y-hitter.global_position.y+shoulder.distance_to(elbow)+elbow.distance_to(wrist)+wrist.distance_to(Contact.palm(hitter,"r"))
-	var contact_age := maxf(elapsed,flight_time-.08)
+	var contact_age := maxf(elapsed,flight_time-.08+contact_shift)
 	# Follow the descending set to the first height reachable during this jump.
 	for i in 25:
 		var t := lerpf(contact_age,flight_time,i/24.)

@@ -604,7 +604,10 @@ func time_approach_plant(delta: float) -> void:
 		var ground_budget := remaining-nominal_rise
 		var rush := 1.0-smoothstep(minimum_plant+lead_time*0.55,plant_time+lead_time,ground_budget)
 		var lower_jump := clampf((ball_target.y-approach_hand_height())/0.91+0.04,minf(0.78,jump_height),jump_height)
-		jump_height = lerpf(jump_height,lower_jump,rush)
+		var fatigue: float=setter.stamina.effectiveness()
+		var descent := maxf(0.,Flight.GRAVITY*contact_at-pass_motion.y)
+		var drop := jump.late_attack_drop(jump_height*fatigue,plant_time+lead_time-ground_budget,descent,air_fraction)
+		jump_height = minf(lerpf(jump_height,lower_jump,rush),jump_height-drop/maxf(.001,fatigue))
 		air_fraction = lerpf(0.54,0.43,rush)
 		contact_height = minf(ball_target.y,approach_hand_height()+jump_height*0.91)
 		contact_at = descending_time(pass_origin,pass_motion,contact_height)
