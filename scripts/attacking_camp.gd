@@ -181,11 +181,11 @@ func step_attack(delta: float) -> void:
 						manual_route=to_set.normalized()
 						prep_velocity=Vector3.ZERO
 					# Close excess distance along the approach line; reserve room for the plant.
-					entry=hitter.position+manual_route*maxf(0.,to_set.dot(manual_route)-1.85)
+					entry=hitter.position+manual_route*maxf(0.,to_set.dot(manual_route)-1.50)
 			elif phase=="pass":
 				entry.z+=.35*smoothstep(0.,1.,elapsed)
-			var desired := ((entry-hitter.position)*4.).limit_length(5.8 if phase=="set" else 1.85)
-			prep_velocity=prep_velocity.move_toward(desired,8.*delta)
+			var desired := ((entry-hitter.position)*(6. if not cpu_hitter else 4.)).limit_length(5.8 if phase=="set" else 1.85)
+			prep_velocity=prep_velocity.move_toward(desired,(13. if not cpu_hitter else 8.)*delta)
 			var travel := prep_velocity*delta
 			hitter.position=rotation_drill.move_actor(hitter,travel)
 			var watch := (ball.position-hitter.position).slide(Vector3.UP)
@@ -193,10 +193,13 @@ func step_attack(delta: float) -> void:
 			if watch.length_squared()>.01:
 				hitter.rotation.y=rotate_toward(hitter.rotation.y,atan2(watch.x,watch.z),3.5*delta)
 			var local := hitter.basis.inverse()*prep_velocity
-			hitter.play_action("idle",.20)
+			if not cpu_hitter and local.length()>2.35:
+				hitter.play_ground_gait(local.length())
+			else:
+				hitter.play_action("idle",.20)
 			if not shuffle_steps.has(hitter):
 				shuffle_steps[hitter]=preload("res://scripts/directional_footwork.gd").new(hitter)
-			shuffle_steps[hitter].step((local/2.).limit_length(1.),delta,clampf(local.length()/2.,.55,1.35),true,true)
+			if cpu_hitter or local.length()<=2.35: shuffle_steps[hitter].step((local/2.).limit_length(1.),delta,clampf(local.length()/2.,.55,1.35),true,true)
 		if not tracking and not approach_started:
 			var stick := Vector2(axis(JOY_AXIS_LEFT_X),axis(JOY_AXIS_LEFT_Y)).limit_length(1.)
 			var right := camera.global_basis.x.slide(Vector3.UP).normalized()
@@ -216,7 +219,7 @@ func step_attack(delta: float) -> void:
 	if phase=="pass": message.text="Coach toss to setter"
 	if phase=="set_contact": message.text="Setter contact"
 
-func start_approach() -> void:
+func start_approach(steps := 3, cadence := 1.) -> void:
 	if approach_started: return
 	last_shoulder_time=-1.
 	reach_assist=Vector3.ZERO
@@ -228,7 +231,7 @@ func start_approach() -> void:
 		contact_stance=Vector3(endpoint.x,START.y,endpoint.z)-manual_route*.09
 	var heading := (contact_stance-hitter.position).slide(Vector3.UP).normalized()
 	hitter.rotation.y=atan2(heading.x,heading.z)
-	attack_jump.begin(hitter,Vector2(-heading.x,heading.z),contact_stance,PLANT_TIME,jump_height,3,false,1.,false,.22)
+	attack_jump.begin(hitter,Vector2(-heading.x,heading.z),contact_stance,PLANT_TIME*cadence,jump_height,steps,false,cadence,false,.22)
 	var to_ball := (endpoint-hitter.position).slide(Vector3.UP)
 	if not to_ball.is_zero_approx(): attack_jump.lead_heading=to_ball.normalized()
 	attack_jump.release()
@@ -256,8 +259,16 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 	message.text="Approach and spike"
 	var remaining := flight_time-elapsed
 	var rise := attack_jump.flight_duration(effective_attack_height(),true)*.48
-	var in_range := (endpoint-hitter.position).slide(Vector3.UP).length()<=3.15
-	if (cpu_hitter or (manual_shot>=0 and in_range)) and remaining<=attack_jump.LEAD_STEP_TIME+PLANT_TIME+rise+.025: start_approach()
+	var distance := (endpoint-hitter.position).slide(Vector3.UP).length()
+	var steps := 3
+	var cadence := 1.
+	if not cpu_hitter:
+		if distance<1.25: steps=2
+		elif distance>2.25: steps=4
+		cadence=.94
+	var load_time := cadence*((steps-2)*attack_jump.LEAD_STEP_TIME+PLANT_TIME)
+	if (cpu_hitter or (manual_shot>=0 and distance<=3.35)) and remaining<=load_time+rise+.025:
+		start_approach(steps,cadence)
 	if approach_started and swing_time<0. and remaining<=.16/arm_speed_factor()+(.095 if not has_meta("sampling_attack") else 0.): swing_time=0.
 	if swing_time<0. and attack_jump.active and attack_jump.elapsed>attack_jump.load_duration():
 		pose_swing()
