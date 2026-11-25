@@ -65,6 +65,8 @@ const EARLY_LIMIT := -.18
 const LATE_LIMIT := .40
 const ATTACK_CONTACT_RADIUS := .46
 var reach_assist := Vector3.ZERO
+var planned_contact := Vector3.ZERO
+var planned_lunge := Vector3.ZERO
 const GRADE_ADVANCE := .305
 const CLEAN_EARLY := .085
 const CLEAN_LATE := .27
@@ -306,6 +308,13 @@ func step_attack(delta: float) -> void:
 	if not cpu_hitter and approach_started and phase=="set" and manual_shot>=0 and not is_finite(release_at):
 		steer_attack_aim(delta)
 	if attack_jump.active:
+		# Bell can send the set wider or tighter after the hitter commits.
+		# Adjust the remaining drive while the hitter can still push off the floor.
+		if approach_started and phase in ["set_contact","set"] and quick_set_in_flight() and attack_jump.elapsed < attack_jump.load_duration():
+			var fraction := quick_contact_fraction(source,endpoint,set_arc_height)
+			var actual := arc(source,endpoint,fraction,set_arc_height)
+			var correction := (actual-planned_contact).slide(Vector3.UP).limit_length(.45)
+			attack_jump.approach_lunge=attack_jump.approach_lunge.move_toward(planned_lunge+correction,2.4*delta)
 		attack_jump.step(hitter,delta,Vector2.ZERO)
 	else:
 		hitter.animator.advance(delta)
@@ -426,6 +435,8 @@ func start_approach(steps := 3, cadence := 1.,destination := Vector3.INF) -> voi
 	var heading := (contact_stance-hitter.position).slide(Vector3.UP).normalized()
 	hitter.rotation.y=atan2(heading.x,heading.z)
 	attack_jump.begin(hitter,Vector2(-heading.x,heading.z),contact_stance,PLANT_TIME*cadence,jump_height,steps,false,cadence,false,.22)
+	planned_contact=destination
+	planned_lunge=attack_jump.approach_lunge
 	attack_jump.attack_entry_speed=maxf(0.,prep_velocity.dot(heading))
 	var to_ball := (destination-hitter.position).slide(Vector3.UP)
 	if not to_ball.is_zero_approx(): attack_jump.lead_heading=to_ball.normalized()
@@ -535,7 +546,7 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 			begin("spike")
 			return true
 	if elapsed>=flight_time:
-		trace("spike_miss",{"closest_palm_gap_m":closest_spike_gap if is_finite(closest_spike_gap) else -1.,"ball":str(ball.position),"palm":str(Contact.palm(hitter,"r"))})
+		trace("spike_miss",{"cpu_hitter":cpu_hitter,"stamina":hitter.stamina.value,"set_height_percent":set_arc_percent,"planned_contact":str(planned_contact),"closest_palm_gap_m":closest_spike_gap if is_finite(closest_spike_gap) else -1.,"ball":str(ball.position),"palm":str(Contact.palm(hitter,"r"))})
 		feedback="Missed spike"
 		if not cpu_hitter:
 			if is_finite(release_grade) and (release_grade+GRADE_ADVANCE<EARLY_LIMIT or release_grade+GRADE_ADVANCE>LATE_LIMIT):

@@ -212,6 +212,10 @@ Spike feedback centers its timing bands 305 ms earlier, checks release against p
 - Larger configurable courts, including 10 m and 15 m size options. Exact layouts are open.
 - Multiple live balls at once. In Swedish two-ball, one player on each side serves simultaneously across the net to start two rallies. Scoring and restart rules are open.
 
+## Future player chemistry
+
+Track chemistry between teammates. Higher setter-hitter chemistry improves anticipation of set location and tempo so the hitter more consistently times the approach and takeoff.
+
 ## Future training camp drills
 
 - Blocking test: run single, double, and triple blocks against live sets to each front-row position.
