@@ -1,6 +1,7 @@
 extends "res://scripts/preview_court.gd"
 
 const Contacts = preload("res://scripts/gym_physics.gd")
+var rear_extension := 0.0
 var brace_transforms: Array[Transform3D]=[]
 var digits: Array[Array] = []
 var benches: Array[MeshInstance3D] = []
@@ -37,10 +38,10 @@ func _ready() -> void:
 	var steel := material("535951")
 	var white := material("e7dfc9")
 	box("North wall",Vector3(24,9,0.3),Vector3(0,4.4,14.8),block)
-	box("South wall",Vector3(24,9,0.3),Vector3(0,4.4,-11),block)
-	box("Ceiling",Vector3(24,0.2,26),Vector3(0,9,2),white)
+	box("South wall",Vector3(24,9,0.3),Vector3(0,4.4,-11-rear_extension),block)
+	box("Ceiling",Vector3(24,0.2,26+rear_extension),Vector3(0,9,2-rear_extension*.5),white)
 	for side in [-1,1]:
-		box("Side masonry",Vector3(0.25,9,26),Vector3(side*11.3,4.4,2),block)
+		box("Side masonry",Vector3(0.25,9,26+rear_extension),Vector3(side*11.3,4.4,2-rear_extension*.5),block)
 		for row in 4:
 			var x: float = side*(6.8+row*0.69)
 			box("Bleacher bench",Vector3(0.65,0.15,15),Vector3(x,0.48+row*0.37,3),wood)
@@ -52,7 +53,7 @@ func _ready() -> void:
 				brace(Vector3(x,.10,z),Vector3(x,height-.1,z+.75),.045,steel)
 				box("Folding support",Vector3(0.1,0.45+row*0.37,0.1),Vector3(x,(0.45+row*0.37)/2,z),steel)
 	for dir in [-1,1]:
-		var z := 14.57 if dir==1 else -10.8
+		var z := 14.57 if dir==1 else -10.8-rear_extension
 		box("Painted stripe",Vector3(22.5,0.42,0.08),Vector3(0,3.1,z),paint)
 		for i in 5:
 			var x := (i-2)*3.4

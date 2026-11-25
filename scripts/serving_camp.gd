@@ -18,6 +18,10 @@ var pass_clock := 0.
 var receiver := 0
 var hand_sound := AudioStreamPlayer.new()
 
+func _ready() -> void:
+	gym.rear_extension=1.5
+	super()
+
 func start_drill() -> void:
 	coach.hide()
 	rotation_drill.basket.hide()
@@ -47,7 +51,7 @@ func start_drill() -> void:
 	next_serve()
 
 func apply_camera() -> void:
-	place_practice_camera(Vector3(0,1.5,-4.4),distance*.48)
+	place_practice_camera(Vector3(0,1.5,-4.4),distance*.48+2.)
 
 func next_serve() -> void:
 	phase="serve_ready"
