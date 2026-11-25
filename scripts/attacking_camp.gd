@@ -19,6 +19,9 @@ var strike_point := Vector3.ZERO
 var last_elbow := Quaternion.IDENTITY
 var last_shoulder := Quaternion.IDENTITY
 var last_shoulder_time := -1.
+var spin_acceleration := Vector3.ZERO
+var wrist_history := {}
+var wrist_axes := {}
 var contact_offset := Vector3.ZERO
 var net_clear_time := -1.
 const PALM_CONTACT := 2./60.
@@ -90,6 +93,23 @@ func _input(event: InputEvent) -> void:
 	super._input(event)
 
 func step_practice(delta: float) -> void:
+	step_attack(delta)
+	smooth_wrists(delta)
+
+func smooth_wrists(delta: float) -> void:
+	var rig: Skeleton3D=hitter.skeleton
+	for side in ["l","r"]:
+		var id := rig.find_bone("hand_"+side)
+		var rest := rig.get_bone_rest(id).basis.get_rotation_quaternion()
+		if not wrist_axes.has(side):
+			var along := rig.get_bone_rest(rig.find_bone("middle_01_"+side)).origin.normalized()
+			var across := rig.get_bone_rest(rig.find_bone("index_01_"+side)).origin-rig.get_bone_rest(rig.find_bone("pinky_01_"+side)).origin
+			wrist_axes[side]=[along,across.slide(along).normalized()]
+		var q := preload("res://scripts/spike_wrist_motion.gd").constrain(rig.get_bone_pose_rotation(id),wrist_history.get(side,rest),rest,wrist_axes[side][0],wrist_axes[side][1],delta)
+		rig.set_bone_pose_rotation(id,q)
+		wrist_history[side]=q
+
+func step_attack(delta: float) -> void:
 	if attack_jump.active:
 		attack_jump.step(hitter,delta,Vector2.ZERO)
 	else:
@@ -176,12 +196,21 @@ func advance_spike(delta: float, bounce: bool) -> void:
 		ball.position=Contact.palm(hitter,"r")+contact_offset
 		var landing := shot_landing(strike_point)
 		var flight := .68 if review_setup.is_empty() else ball.position.distance_to(landing)/float(review_setup.get("power",14.))
-		drop_velocity=(landing-ball.position)/flight+Vector3.UP*(4.905*flight)
+		var direction := ball.position.direction_to(landing).slide(Vector3.UP).normalized()
+		var speed := landing.distance_to(ball.position)/flight
+		var spin := int(review_setup.get("spin",0))
+		var force_axis: Vector3=[Vector3.DOWN,Vector3.UP.cross(direction),direction.cross(Vector3.UP),Vector3.ZERO][spin]
+		spin_acceleration=force_axis*minf(22.,speed*.78)
+		# Compensate at launch to keep the selected landing point on the curved path.
+		drop_velocity=(landing-ball.position)/flight+(Vector3.UP*9.81-spin_acceleration)*(.5*flight)
 		return
 	var incoming_basis := ball.basis
 	var in_flight := roll_time<0.
 	var forward := drop_velocity.slide(Vector3.UP).normalized()
+	var descent := drop_velocity.y
+	if in_flight: drop_velocity+=spin_acceleration*delta
 	advance_missed_ball(delta,bounce)
+	if roll_time>=0. or (descent<0. and drop_velocity.y>0.): spin_acceleration=Vector3.ZERO
 	if in_flight and roll_time<0. and not forward.is_zero_approx():
 		var spin := int(review_setup.get("spin",0))
 		var axis := Vector3.UP.cross(forward) if spin==0 else Vector3.UP
@@ -237,7 +266,7 @@ func pose_swing() -> void:
 	# Raise the striking shoulder in the chest's own lateral plane as the arm reaches.
 	var across: Vector3=author.point(pose,"upperarm_l")-author.point(pose,"upperarm_r")
 	var bend_axis := Vector3.UP.cross(across).normalized()
-	var contact_bend := deg_to_rad(19.)*smoothstep(.025,.115,swing_time)*(1.-smoothstep(.18,.32,swing_time))
+	var contact_bend := deg_to_rad(28.)*smoothstep(.025,.115,swing_time)*(1.-smoothstep(.18,.32,swing_time))
 	author.rotate_world(pose,"spine_01",bend_axis,contact_bend*.45)
 	author.rotate_world(pose,"spine_02",bend_axis,contact_bend*.55)
 	var air_age := attack_jump.elapsed-attack_jump.load_duration()
@@ -427,6 +456,7 @@ func sample_attack_clip(arm_lift: bool,arm_swing: bool,cross: bool,review: bool,
 		source=setter.position+Vector3.UP*(setter.height_cm*.01+.12)
 		endpoint.y=2.65+ATTACK_SET_LIFT+jump_height-JUMP_HEIGHT
 	var hit_frame := -1
+	wrist_history.clear()
 	var count := ceili(duration*60.)
 	for i in range(count+1):
 		if has_meta("live_sampler") and i>0 and i%8==0: await get_tree().process_frame
@@ -449,6 +479,7 @@ func sample_attack_clip(arm_lift: bool,arm_swing: bool,cross: bool,review: bool,
 					handle_attack_contact(previous,1./60.)
 					if phase=="spike": hit_frame=i-first_frame
 				elif time>takeoff: pose_swing()
+		smooth_wrists(1./60.)
 		if i<first_frame: continue
 		var bones: Array[Transform3D]=[]
 		for id in hitter.skeleton.get_bone_count():

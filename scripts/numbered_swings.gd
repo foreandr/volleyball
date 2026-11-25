@@ -13,7 +13,7 @@ static func make(source: Animation, number: int) -> Animation:
 		var track := source.find_track(path,Animation.TYPE_ROTATION_3D)
 		if track<0: continue
 		var width := Vector3(40,54,40) if joint=="upperarm_r" else Vector3(30,18,22)
-		if joint=="hand_r": width=Vector3(22,24,18)
+		if joint=="hand_r": width=Vector3.ZERO # The hand inherits the spin-specific, constrained wrist track.
 		var draw := rotation(rng,width)
 		var drive := rotation(rng,width*.58)
 		var finish := rotation(rng,width*1.12)
