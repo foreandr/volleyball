@@ -221,8 +221,9 @@ func advance_spike(delta: float, bounce: bool) -> void:
 		var spin := int(review_setup.get("spin",0))
 		var force_axis: Vector3=[Vector3.DOWN,direction.cross(Vector3.UP),Vector3.UP.cross(direction),Vector3.ZERO][spin]
 		spin_acceleration=force_axis*minf(22.,speed*.78)
-		# Compensate at launch to keep the selected landing point on the curved path.
+		# Keep a driven launch even when the selected corner is beyond this hit.
 		drop_velocity=(landing-ball.position)/flight+(Vector3.UP*9.81-spin_acceleration)*(.5*flight)
+		drop_velocity.y=minf(drop_velocity.y,speed*tan(deg_to_rad(5.)))
 		return
 	var incoming_basis := ball.basis
 	var in_flight := roll_time<0.
