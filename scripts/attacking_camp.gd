@@ -28,6 +28,7 @@ const JUMP_HEIGHT := 33.*.0254
 const ATTACK_SET_LIFT := .10
 const PLANT_TIME := .30
 const SHOT_BUTTONS := [JOY_BUTTON_X,JOY_BUTTON_Y,JOY_BUTTON_B]
+var roll_shot := false
 var manual_shot := -1
 var release_at := INF
 var release_grade := INF
@@ -76,6 +77,7 @@ func show_attack_timing(error: float, cleared := false) -> void:
 
 func clear_attack_input() -> void:
 	manual_route=Vector3.ZERO
+	roll_shot=false
 	manual_shot=-1
 	release_at=INF
 	release_grade=INF
@@ -133,7 +135,7 @@ func camp_title() -> String:
 
 func update_prompts(_next: String) -> void:
 	var entries := [["View","Take control" if cpu_hitter else "Watch CPU attack"]]
-	if not cpu_hitter: entries.append_array([["LS","Move"],["LT","Lock on / shuffle"],["RT","Sprint"],[JOY_BUTTON_X,"Hold line"],[JOY_BUTTON_Y,"Hold six"],[JOY_BUTTON_B,"Hold cross"]])
+	if not cpu_hitter: entries.append_array([["LS","Move"],["LT","Lock on / shuffle"],["RT","Sprint"],[JOY_BUTTON_X,"Hold line"],[JOY_BUTTON_Y,"Hold six"],[JOY_BUTTON_B,"Hold cross"],[JOY_BUTTON_LEFT_SHOULDER,"Hold for roll shot"]])
 	entries.append([JOY_BUTTON_START,"Settings"])
 	Xbox.prompts(controls_row,entries)
 
@@ -167,6 +169,10 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			return
 		if not cpu_hitter and phase in ["cart","feed","pass","set_contact","set"] and not event.is_echo():
+			if event is InputEventJoypadButton and event.button_index==Xbox.physical(JOY_BUTTON_LEFT_SHOULDER):
+				if manual_shot>=0 and not is_finite(release_at): roll_shot=event.pressed
+				get_viewport().set_input_as_handled()
+				return
 			for index in SHOT_BUTTONS.size():
 				var button: bool=event is InputEventJoypadButton and event.button_index==Xbox.physical(SHOT_BUTTONS[index])
 				var key: bool=event is InputEventKey and event.physical_keycode==[KEY_SPACE,KEY_Y,KEY_B][index]
@@ -174,6 +180,7 @@ func _input(event: InputEvent) -> void:
 				if event.is_pressed():
 					if manual_shot!=index: aim_center=Vector2.INF
 					manual_shot=index
+					roll_shot=event is InputEventJoypadButton and Input.is_joy_button_pressed(event.device,Xbox.physical(JOY_BUTTON_LEFT_SHOULDER))
 					release_at=INF
 					release_grade=INF
 				elif manual_shot==index:
@@ -346,7 +353,16 @@ func attack_speed() -> float:
 	var effort := float(review_setup.get("power",14.))
 	return sqrt(14.*effort)*arm_speed_factor()*(1.+(strength-65.)*.005)
 
-func attack_flight_time(distance: float) -> float:
+func attack_flight_time(origin: Vector3, landing: Vector3) -> float:
+	var distance := origin.distance_to(landing)
+	if roll_shot:
+		var horizontal := (landing-origin).slide(Vector3.UP).length()
+		var flight := clampf(horizontal/7.,.65,1.65)
+		var fraction := (BallNet.NET_Z-origin.z)/maxf(.01,landing.z-origin.z)
+		if fraction>0. and fraction<1.:
+			var lift := BallNet.NET_TOP+Contact.BALL_RADIUS+.18-lerpf(origin.y,landing.y,fraction)
+			flight=maxf(flight,sqrt(2.*maxf(0.,lift)/(11.81*fraction*(1.-fraction))))
+		return flight
 	return maxf(.05,distance/(attack_speed()*power_scale*attack_jump.spike_power_factor()))
 
 func handle_attack_contact(previous: Vector3,delta: float) -> bool:
@@ -409,17 +425,17 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 			strike_shoulder_offset=hitter.skeleton.to_local(strike_point)-hitter.skeleton.get_bone_global_pose(hitter.skeleton.find_bone("upperarm_r")).origin
 			spikes+=1
 			success=true
-			feedback="Spike"
+			feedback="Roll shot" if roll_shot else "Spike"
 			message.text=feedback
 			gym.update_board(spikes)
 			contact_offset=striking_palm_offset()
 			ball.position=palm+contact_offset
 			net_clear_time=-1.
 			var landing := shot_landing(ball.position)
-			var shot_time := attack_flight_time(landing.distance_to(ball.position))
+			var shot_time := attack_flight_time(ball.position,landing)
 			drop_velocity=(landing-ball.position)/shot_time+Vector3.UP*(4.905*shot_time)
 			roll_time=-1.
-			trace("spike",{"from":str(ball.position),"palm_gap":nearest.distance_to(palm),"contact_grade_ms":roundi(contact_grade*1000.) if is_finite(contact_grade) else null,"approach_delay_ms":roundi(approach_delay*1000.),"button_ms":roundi(release_grade*1000.) if is_finite(release_grade) else null})
+			trace("spike",{"roll_shot":roll_shot,"from":str(ball.position),"palm_gap":nearest.distance_to(palm),"contact_grade_ms":roundi(contact_grade*1000.) if is_finite(contact_grade) else null,"approach_delay_ms":roundi(approach_delay*1000.),"button_ms":roundi(release_grade*1000.) if is_finite(release_grade) else null})
 			begin("spike")
 			return true
 	if elapsed>=flight_time:
@@ -453,7 +469,7 @@ func advance_spike(delta: float) -> void:
 	if age<=PALM_CONTACT+.00001:
 		ball.position=Contact.palm(hitter,"r")+striking_palm_offset()
 		var landing := shot_landing(strike_point)
-		var flight := attack_flight_time(ball.position.distance_to(landing))
+		var flight := attack_flight_time(ball.position,landing)
 		spin_acceleration=shot_spin_force(ball.position,landing,flight)
 		drop_velocity=launch_velocity(ball.position,landing,flight,spin_acceleration)
 		return
@@ -489,6 +505,7 @@ func advance_spike(delta: float) -> void:
 			show_attack_timing(contact_grade,true)
 
 func shot_spin_force(origin: Vector3, landing: Vector3, flight: float) -> Vector3:
+	if roll_shot: return Vector3.DOWN*2.
 	var direction := origin.direction_to(landing).slide(Vector3.UP).normalized()
 	var speed := origin.distance_to(landing)/flight
 	var spin := int(review_setup.get("spin",0))
@@ -515,7 +532,7 @@ func predicted_attack_origin() -> Vector3:
 	return Vector3(endpoint.x,minf(endpoint.y,START.y+reach+effective_attack_height()),endpoint.z)
 
 func predicted_shot_color(origin: Vector3, landing: Vector3) -> Color:
-	var flight := attack_flight_time(origin.distance_to(landing))
+	var flight := attack_flight_time(origin,landing)
 	var spin := shot_spin_force(origin,landing,flight)
 	var velocity := launch_velocity(origin,landing,flight,spin)
 	var acceleration := spin+Vector3.DOWN*9.81
@@ -528,6 +545,9 @@ func predicted_shot_color(origin: Vector3, landing: Vector3) -> Color:
 func shot_landing(origin: Vector3) -> Vector3:
 	if not cpu_hitter and manual_shot>=0:
 		var aim := initial_attack_aim(origin) if aim_center==Vector2.INF else aim_center
+		if roll_shot:
+			aim+=placement_offset*.5
+			return Vector3(aim.x,Contact.BALL_RADIUS,maxf(BallNet.NET_Z+.65,aim.y+depth_error*.08))
 		aim+=placement_offset
 		return Vector3(aim.x,Contact.BALL_RADIUS,maxf(origin.z+.45,aim.y+depth_error))
 	if not review_setup.is_empty():
@@ -603,7 +623,7 @@ func pose_swing() -> void:
 	var clearance := maxf(0.,4.-hitter.global_position.z-.23)
 	var reach_length := float(hitter.height_cm)*.006
 	var net_angle := asin(clampf(clearance/reach_length,0.,1.))
-	var drive := smoothstep(9.,40.,attack_speed())
+	var drive := smoothstep(9.,40.,attack_speed()) if not roll_shot else .12
 	var intensity := lerpf(.13,1.,drive)
 	var peak_time := lerpf(.235,.175,drive*(.55+.45*athleticism))
 	var pike := smoothstep(.015,peak_time,since_hit)*(1.-smoothstep(peak_time,.38,since_hit))
