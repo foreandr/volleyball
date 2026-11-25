@@ -314,6 +314,7 @@ func pose_swing() -> void:
 	author.rotate_world(pose,"spine_01",Vector3.RIGHT,chest_fold*.65)
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,chest_fold*.35)
 	var leg_angle := minf(deg_to_rad(lerpf(24.,53.,athleticism)),net_angle)
+	var heel_rise := smoothstep(2./60.,16./60.,air_age)
 	var knee_load := leg_weight*(1.-extension)
 	var lift_pose := knee_load
 	var pelvis := rig.find_bone("pelvis")
@@ -341,10 +342,12 @@ func pose_swing() -> void:
 		var previous_tuck := Vector3(outward,.83,-.55).normalized()
 		var heel := previous_tuck.slerp(full_tuck,lerpf(.28,.84,athleticism))
 		var extended := (knee-hip).normalized()
-		var blend := maxf(knee_load,airborne)*landing_blend
+		var blend := heel_rise*landing_blend
 		# Unfold in the forward/back plane; a 3D arc can swing an ankle sideways mid-stroke.
 		var folded := atan2(heel.z,-heel.y)
 		if folded>0.: folded-=TAU
+		# Let the heels begin to drop as the tuck peaks, before the full extension.
+		folded+=deg_to_rad(12.)*smoothstep(16./60.,28./60.,air_age)
 		var fold_angle := lerpf(folded,atan2(extended.z,-extended.y),extension)
 		var lateral := lerpf(heel.x,extended.x,extension)
 		var plane_length := sqrt(maxf(0.,1.-lateral*lateral))
