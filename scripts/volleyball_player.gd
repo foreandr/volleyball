@@ -35,6 +35,7 @@ func _ready() -> void:
 		reflection.add_child(model)
 	else: add_child(model)
 	skeleton = model.find_child("Skeleton3D",true,false)
+	skeleton.add_child(preload("res://scripts/player_arm_clearance.gd").new())
 	for mesh: MeshInstance3D in skeleton.find_children("*","MeshInstance3D",true,false):
 		for surface in mesh.mesh.get_surface_count():
 			var original := mesh.mesh.surface_get_material(surface)

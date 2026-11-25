@@ -393,44 +393,8 @@ func pose_swing() -> void:
 
 func protect_hitting_arm() -> void:
 	var rig: Skeleton3D=hitter.skeleton
-	var bone_point := func(name_: String) -> Vector3:
-		return rig.get_bone_global_pose(rig.find_bone(name_)).origin
-	var shoulder: Vector3=bone_point.call("upperarm_r")
-	var outside: Vector3=(shoulder-bone_point.call("upperarm_l")).normalized()
-	var width: float=shoulder.distance_to(bone_point.call("upperarm_l"))
-	var head: Vector3=bone_point.call("Head")
-	var up: Vector3=(head-bone_point.call("neck_01")).normalized()
-	var centers := [head+up*width*.18,bone_point.call("spine_03"),bone_point.call("spine_02"),bone_point.call("spine_01")]
-	var radii := [.45,.55,.54,.49]
-	var upper := rig.find_bone("upperarm_r")
-	for attempt in 8:
-		var elbow: Vector3=bone_point.call("lowerarm_r")
-		var wrist: Vector3=bone_point.call("hand_r")
-		var tip: Vector3=bone_point.call("middle_03_r")
-		var chain := [shoulder.lerp(elbow,.55),elbow,wrist,tip]
-		var depth := 0.
-		var axis := Vector3.ZERO
-		var turn := 0.
-		for j in centers.size():
-			for i in range(chain.size()-1):
-				var near := Geometry3D.get_closest_point_to_segment(centers[j],chain[i],chain[i+1])
-				var offset: Vector3=near-centers[j]
-				var overlap: float=width*radii[j]-offset.length()
-				if overlap<=depth: continue
-				var lever := near-shoulder
-				var push := offset.slide(lever.normalized())
-				if push.length()<.01: push=outside.slide(lever.normalized())
-				var normal := lever.cross(push)
-				if normal.length_squared()<.000001: continue
-				depth=overlap
-				axis=normal.normalized()
-				turn=minf(.18,(overlap+.002)/maxf(.04,lever.length()))
-		if depth<.001: break
-		var joint := rig.get_bone_global_pose(upper)
-		joint.basis=Basis(axis,turn)*joint.basis
-		var parent := rig.get_bone_global_pose(rig.get_bone_parent(upper))
-		rig.set_bone_pose_rotation(upper,(parent.basis.inverse()*joint.basis).orthonormalized().get_rotation_quaternion())
-	last_shoulder=rig.get_bone_pose_rotation(upper)
+	preload("res://scripts/player_arm_clearance.gd").resolve(rig,"r")
+	last_shoulder=rig.get_bone_pose_rotation(rig.find_bone("upperarm_r"))
 
 func frame_editor_attacker() -> Node3D:
 	return hitter

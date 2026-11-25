@@ -20,6 +20,7 @@ var shot_sampler: Node
 var updating_shot := false
 var shot_revision := 0
 var review_number := 1
+var clearance_notice := Label.new()
 var review_status := Label.new()
 var review_votes := ConfigFile.new()
 const REVIEW_PATH := "user://spike_swing_votes.cfg"
@@ -303,6 +304,9 @@ func build_controls(controls: VBoxContainer) -> void:
 		add_shot_slider(settings_box,"Hit power","power",9.,40.,1.,14.,"m/s")
 		add_shot_slider(settings_box,"Vertical jump","jump",24.,60.,1.,33.,"in")
 
+	clearance_notice.text="Pose limited by body contact"
+	clearance_notice.hide()
+	controls.add_child(clearance_notice)
 	controls.add_child(copy_name)
 	var frames := HBoxContainer.new()
 	controls.add_child(frames)
@@ -439,6 +443,9 @@ func set_frame(value: int) -> void:
 	frame_field.set_value_no_signal(frame)
 	timeline.set_value_no_signal(frame)
 	session.sample(frame)
+	var limited_right := preload("res://scripts/player_arm_clearance.gd").resolve(session.rig,"r")
+	var limited_left := preload("res://scripts/player_arm_clearance.gd").resolve(session.rig,"l")
+	clearance_notice.visible=limited_right or limited_left
 	if is_instance_valid(ball_preview) and not playing:
 		ball_preview.tick(session.time_at(frame),false)
 		refresh_contact_frame()
@@ -560,6 +567,9 @@ func rotation_changed(_value: float) -> void:
 	var angles := Vector3(rotation_fields[0].value,rotation_fields[1].value,rotation_fields[2].value)*PI/180.0
 	apply_rotation_group(Quaternion.from_euler(angles))
 	session.sample(frame)
+	var limited_right := preload("res://scripts/player_arm_clearance.gd").resolve(session.rig,"r")
+	var limited_left := preload("res://scripts/player_arm_clearance.gd").resolve(session.rig,"l")
+	clearance_notice.visible=limited_right or limited_left
 	refresh_keys()
 
 func key_joint() -> void:
@@ -719,6 +729,9 @@ func drag_joint(target: Vector3) -> void:
 		keys[frame] = shoulder_start_offset+parent_basis.inverse()*(forward*distance)
 		session.position_edits[name_] = keys
 		session.sample(frame)
+	var limited_right := preload("res://scripts/player_arm_clearance.gd").resolve(session.rig,"r")
+	var limited_left := preload("res://scripts/player_arm_clearance.gd").resolve(session.rig,"l")
+	clearance_notice.visible=limited_right or limited_left
 		refresh_keys()
 		return
 	var pivot := bone_world(selected_bone)
@@ -728,6 +741,9 @@ func drag_joint(target: Vector3) -> void:
 	var turn := Quaternion(from.normalized(),to.normalized())
 	apply_world_turn(turn)
 	session.sample(frame)
+	var limited_right := preload("res://scripts/player_arm_clearance.gd").resolve(session.rig,"r")
+	var limited_left := preload("res://scripts/player_arm_clearance.gd").resolve(session.rig,"l")
+	clearance_notice.visible=limited_right or limited_left
 	refresh_rotation()
 
 func apply_rotation_group(offset: Quaternion) -> void:
