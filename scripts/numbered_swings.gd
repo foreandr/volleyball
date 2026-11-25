@@ -77,6 +77,15 @@ static func align_contact(clip: Animation, rig: Skeleton3D, hit: int) -> void:
 		var q := rig.get_bone_pose_rotation(hand)
 		clip.rotation_track_insert_key(session.rotation_tracks[hand],f/60.,q.slerp(turn*q,weight).normalized())
 
+	var straight := preload("res://scripts/spike_wrist_motion.gd").straight_right(rig)
+	var track: int=session.rotation_tracks[hand]
+	var start := int(clip.get_meta("swing_frame_offset",0))+7
+	for key in clip.track_get_key_count(track):
+		var f := clip.track_get_key_time(track,key)*60.
+		var lock := smoothstep(start,start+5.,f)*(1.-smoothstep(hit+2.,hit+12.,f))
+		if lock>0.:
+			var q: Quaternion=clip.track_get_key_value(track,key)
+			clip.track_set_key_value(track,key,q.slerp(straight,lock))
 	# Place the recorded ball against the final posed palm during the contact interval.
 	var corrected := balls.duplicate()
 	var entry_shift := Vector3.ZERO

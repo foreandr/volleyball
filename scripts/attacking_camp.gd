@@ -106,6 +106,10 @@ func smooth_wrists(delta: float) -> void:
 			var across := rig.get_bone_rest(rig.find_bone("index_01_"+side)).origin-rig.get_bone_rest(rig.find_bone("pinky_01_"+side)).origin
 			wrist_axes[side]=[along,across.slide(along).normalized()]
 		var q := preload("res://scripts/spike_wrist_motion.gd").constrain(rig.get_bone_pose_rotation(id),wrist_history.get(side,rest),rest,wrist_axes[side][0],wrist_axes[side][1],delta)
+		if side=="r" and approach_started and attack_jump.active:
+			var lock := smoothstep(-.04,.045,attack_jump.elapsed-attack_jump.load_duration())
+			if phase=="spike": lock*=1.-smoothstep(PALM_CONTACT,.20,swing_time-contact_swing_time)
+			q=q.slerp(preload("res://scripts/spike_wrist_motion.gd").straight_right(rig),lock)
 		rig.set_bone_pose_rotation(id,q)
 		wrist_history[side]=q
 

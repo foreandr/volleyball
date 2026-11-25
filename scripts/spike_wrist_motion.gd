@@ -18,3 +18,11 @@ static func constrain(wanted: Quaternion, previous: Quaternion, rest: Quaternion
 	var gap := previous.angle_to(target)
 	var fraction := minf(1.-exp(-18.*dt),deg_to_rad(210.)*dt/maxf(.00001,gap))
 	return previous.slerp(target,fraction).normalized()
+
+# Fixed wrist in forearm space. Palm roll during the draw belongs to the forearm.
+static func straight_right(rig: Skeleton3D) -> Quaternion:
+	var hand := rig.find_bone("hand_r")
+	var rest := rig.get_bone_rest(hand)
+	var neutral := rest.basis.get_rotation_quaternion()
+	var knuckle := rig.get_bone_rest(rig.find_bone("middle_01_r")).origin.normalized()
+	return (Quaternion((neutral*knuckle).normalized(),rest.origin.normalized())*neutral).normalized()
