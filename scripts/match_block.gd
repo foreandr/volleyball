@@ -1,6 +1,7 @@
 extends RefCounted
 
 const HandPose = preload("res://scripts/hand_setting_pose.gd")
+const STUFF_SPEED_RETENTION := 0.60
 const START := 0.16
 const AIR := 0.74
 const ARM_RADII := [.085,.095,.12]

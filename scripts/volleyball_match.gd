@@ -2211,6 +2211,8 @@ func tick_blocks(delta: float, previous: float) -> void:
 				var edge := (center.x-players[index].global_position.x)*outward
 				if absf(center.x) > 3.4 and edge > 0.16 and (point.x-center.x)*outward > 0.025 and power < 0.56:
 					rebound.x = outward*maxf(rebound.x*outward,speed*0.28)
+				if power > 0.56:
+					rebound = rebound.normalized()*speed*Block.STUFF_SPEED_RETENTION
 				trace.write("block_contact",match_clock,{"power":power,"palm_gap":palm_gap,"along":along,"tight":tight,"point":point,"rebound":rebound})
 				stroke = "Stuff block" if power > 0.56 else "Block"
 				play_touch()

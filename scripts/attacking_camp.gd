@@ -1289,7 +1289,7 @@ func resolve_block_contact(previous: Vector3,block_jumps: Array) -> bool:
 			ball.global_position=hit_position
 			if stuff:
 				var floor_target := Vector3(clampf(hit_position.x*.85,-4.2,4.2),Contact.BALL_RADIUS,BallNet.NET_Z-1.65)
-				drop_velocity=hit_position.direction_to(floor_target)*drop_velocity.length()*.78
+				drop_velocity=hit_position.direction_to(floor_target)*drop_velocity.length()*PracticeBlock.STUFF_SPEED_RETENTION
 			else:
 				var side := signf(hit_position.z-BallNet.NET_Z)
 				if is_zero_approx(side): side=signf(drop_velocity.z)
