@@ -7,6 +7,7 @@ var blockers: Array[Node3D] = []
 var jumps := [null,null,null]
 var lateral_speed := [0.,0.,0.]
 var attempted := [false,false,false]
+var block_sound_count := 0
 var deflected := false
 var block_held := false
 var manual_shuffle_open := false
@@ -243,7 +244,7 @@ func advance_spike(delta: float) -> void:
 			var touched := false
 			for segment in 3:
 				var closest := Geometry3D.get_closest_points_between_segments(previous,ball.global_position,chain[segment],chain[segment+1])
-				if closest[0].distance_to(closest[1]) <= Contact.BALL_RADIUS+.065:
+				if closest[0].distance_to(closest[1]) <= Contact.BALL_RADIUS+[.085,.095,.12][segment]:
 					touched=true
 					break
 			if not touched: continue
@@ -252,6 +253,7 @@ func advance_spike(delta: float) -> void:
 			drop_velocity=drop_velocity.bounce(normal)*.55
 			spin_acceleration = Vector3.ZERO
 			deflected = true
+			block_sound_count+=1
 			hand_impact.volume_db=-2.
 			hand_impact.play()
 			trace("block_hand_contact",{"rep":rep})

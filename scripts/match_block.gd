@@ -90,7 +90,16 @@ func step(delta: float, world_ball: Vector3) -> bool:
 			pole = pole.lerp(Vector3(-0.75,-0.27,-0.42),draw)
 		elif overpass_swing:
 			target = target.lerp(shoulder+Vector3(0.12,0.04,0.30)/scale_,smoothstep(0.30,0.56,age))
-		author.limb(pose,arm,"lowerarm_"+side,"hand_"+side,target,pole,weight,174.0)
+		var extension := 174.
+		if court_aim.is_finite():
+			# Probe with a bent elbow. Only a wrist clear of the tape can press straight.
+			var bent := pose.duplicate()
+			author.limb(bent,arm,"lowerarm_"+side,"hand_"+side,target,pole,weight,132.)
+			var wrist_world := rig.to_global(author.point(bent,"hand_"+side))
+			var across_net := preload("res://scripts/net_collision.gd").NET_Z-wrist_world.z
+			var above_tape := wrist_world.y-preload("res://scripts/net_collision.gd").NET_TOP
+			extension=lerpf(132.,174.,smoothstep(0.,.12,across_net)*smoothstep(0.,.14,above_tape))
+		author.limb(pose,arm,"lowerarm_"+side,"hand_"+side,target,pole,weight,extension)
 		for digit in ["thumb","index","middle","ring","pinky"]:
 			for segment in ["01","02","03"]:
 				var bone := rig.find_bone("%s_%s_%s" % [digit,segment,side])

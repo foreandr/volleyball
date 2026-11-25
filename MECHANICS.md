@@ -41,3 +41,4 @@ Blocking practice uses 30 m/s nominal attack speed and swing power. Approach mom
 Manual blocking starts on jersey 509. Holding A loads the squat while the timing cue compares predicted jump apex with attack arrival. Releasing A starts the jump with the loaded portion of takeoff accounted for. The controlled blocker shows a ring and stamina.
 On a double block the middle tracks the inside shoulder of the outside blocker and shares the outside jump cue and load timing, including manual releases.
 Manual blocker 509 can shuffle once the incoming ball is within one meter of the predicted setter contact point. CPU blockers read the released set.
+Block arms extend as wrists cross above the tape. Arm contact uses segment-specific capsule radii, widest at the open hand. Blocking replay samples up to 60 poses per second and replays the hand sound on a recorded block touch.
