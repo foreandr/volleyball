@@ -37,7 +37,7 @@ Each block jump spends 5 stamina, and available stamina scales the selected vert
 Both drill viewpoints look from behind the blockers. The live HUD vertical slider and pause slider share one saved setting. Blocker stamina remains active with its overlay hidden. The middle returns to center between closes. The far blocker compares travel time with the set and drops into defense when the close is unavailable. Hand, forearm and upper-arm touches direct rebounds toward the attacking court.
 Blocking home positions are centered left, middle and right at x = -2.15, 0 and +2.15 m. The coach waits for all three before tossing. The two closing blockers read the released set, comparing remaining flight time to travel and takeoff time, and peel for tips when late. The defensive camera mirrors the attacking camera about center court.
 Blocking uses the hitting camera in gym coordinates. Team-local gameplay runs with court ends exchanged relative to the gym.
-Blocking practice uses 30 m/s nominal attack speed and swing power. Approach momentum still affects actual launch speed.
+Blocking practice defaults to 30 m/s nominal attack speed and swing power. Approach momentum still affects actual launch speed.
 Manual blocking starts on jersey 509. Holding A loads the squat while the timing cue compares predicted jump apex with attack arrival. Releasing A starts the jump with the loaded portion of takeoff accounted for. The controlled blocker shows a ring and stamina.
 On a double block the middle tracks the inside shoulder of the outside blocker and shares the outside jump cue and load timing, including manual releases.
 Manual blocker 509 can shuffle once the incoming ball is within one meter of the predicted setter contact point. CPU blockers read the released set.
@@ -77,4 +77,4 @@ In the blocking drill adjacent blockers fast-shuffle toward the lead blocker. Ne
 CPU blockers can Kong toward an uncovered edge using the approaching ball and its outgoing velocity.
 On a pin set the lead blocker cues every committed CPU closer to jump. Each closer leans and turns toward the next teammate in the block and carries limited lateral motion into the jump while preserving body spacing.
 CPU takeoff checks the ball read against lateral reach, closing momentum and distance from the net. A reachable exposed edge calls for a one-handed Kong. Manual block release remains unconditional.
-Blocking HUD attack vertical and fixed tempo apply on the next feed. Selecting a fixed tempo disables random heights and preserves each route limit. CPU closers recheck reach after the lead jumps.
+Blocking HUD hit speed (9–40 m/s) controls spike power independently of set height. Attack vertical applies on the next feed. CPU closers recheck reach after the lead jumps.

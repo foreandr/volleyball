@@ -53,8 +53,7 @@ func block_meter() -> float:
 var block_vertical := roundf(Block.HEIGHT/.0254)
 var attack_vertical := float(StorySession.game_options.get_value("blocking","attack_vertical",50.))
 var attack_tempo := clampi(int(StorySession.game_options.get_value("blocking","attack_tempo",2)),0,2)
-var tempo_label := Label.new()
-var tempo_slider := HSlider.new()
+var hit_speed := clampf(float(StorySession.game_options.get_value("blocking","hit_speed_mps",30.)),9.,40.)
 var randomize_button := CheckButton.new()
 var read_set := false
 var closing := [false,false,true]
@@ -133,8 +132,10 @@ func build_settings() -> void:
 	controls_row.get_parent().add_child(attack_row)
 	var vertical_slider := HSlider.new()
 	var vertical_label := Label.new()
-	for node in [vertical_label,vertical_slider,tempo_label,tempo_slider]: attack_row.add_child(node)
-	for slider in [vertical_slider,tempo_slider]:
+	var speed_label := Label.new()
+	var speed_slider := HSlider.new()
+	for node in [vertical_label,vertical_slider,speed_label,speed_slider]: attack_row.add_child(node)
+	for slider in [vertical_slider,speed_slider]:
 		slider.custom_minimum_size=Vector2(130,30)
 		slider.focus_mode=Control.FOCUS_NONE
 		slider.step=1
@@ -147,11 +148,16 @@ func build_settings() -> void:
 		StorySession.game_options.set_value("blocking","attack_vertical",value)
 		StorySession.save_options()
 	)
-	tempo_slider.max_value=2
-	tempo_slider.value=attack_tempo
-	tempo_label.text="Attack tempo  %d" % attack_tempo
-	tempo_slider.value_changed.connect(func(value):
-		save_set_height(SET_HEIGHTS[int(value)])
+	speed_slider.min_value=9
+	speed_slider.max_value=40
+	speed_slider.value=hit_speed
+	speed_label.text="Hit speed  %d m/s" % hit_speed
+	speed_slider.value_changed.connect(func(value):
+		hit_speed=value
+		review_setup.power=value
+		speed_label.text="Hit speed  %d m/s" % value
+		StorySession.game_options.set_value("blocking","hit_speed_mps",value)
+		StorySession.save_options()
 	)
 
 func save_set_height(value: float) -> void:
@@ -159,8 +165,6 @@ func save_set_height(value: float) -> void:
 	randomize_button.button_pressed=false
 	StorySession.game_options.set_value("blocking","attack_tempo",attack_tempo)
 	StorySession.save_options()
-	tempo_slider.set_value_no_signal(attack_tempo)
-	tempo_label.text="Attack tempo  %d" % attack_tempo
 	update_prompts(phase)
 
 func set_block_vertical(value: float) -> void:
@@ -185,7 +189,7 @@ func update_prompts(_next: String) -> void:
 	Xbox.prompts(controls_row,entries)
 
 func attack_speed() -> float:
-	return 30.
+	return hit_speed
 
 func select_attack_touch() -> void:
 	roll_shot=false
