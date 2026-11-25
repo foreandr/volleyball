@@ -20,7 +20,6 @@ var shot_sampler: Node
 var updating_shot := false
 var shot_revision := 0
 var review_number := 1
-var clearance_notice := Label.new()
 var review_status := Label.new()
 var review_votes := ConfigFile.new()
 const REVIEW_PATH := "user://spike_swing_votes.cfg"
@@ -308,9 +307,6 @@ func build_controls(controls: VBoxContainer) -> void:
 		add_shot_slider(settings_box,"Hit power","power",9.,40.,1.,14.,"m/s")
 		add_shot_slider(settings_box,"Vertical jump","jump",24.,60.,1.,33.,"in")
 
-	clearance_notice.text="Pose limited by body contact"
-	clearance_notice.hide()
-	controls.add_child(clearance_notice)
 	controls.add_child(copy_name)
 	var frames := HBoxContainer.new()
 	controls.add_child(frames)
@@ -445,7 +441,8 @@ func sample_editor_pose() -> void:
 	session.sample(frame)
 	var limited_right := preload("res://scripts/player_arm_clearance.gd").resolve(session.rig,"r")
 	var limited_left := preload("res://scripts/player_arm_clearance.gd").resolve(session.rig,"l")
-	clearance_notice.visible=limited_right or limited_left
+	if limited_right or limited_left:
+		InteractionTrace.record("pose_limited_by_body_contact",{"swing":review_number,"frame":frame,"right":limited_right,"left":limited_left})
 
 func set_frame(value: int) -> void:
 	if session == null: return

@@ -15,6 +15,7 @@ static func resolve(rig: Skeleton3D, side: String) -> bool:
 	var width: float=shoulder.distance_to(bone_point.call("upperarm_"+other))
 	var head: Vector3=bone_point.call("Head")
 	var up: Vector3=(head-bone_point.call("neck_01")).normalized()
+	var forward: Vector3=(bone_point.call("upperarm_l")-bone_point.call("upperarm_r")).normalized().cross(up)
 	var centers := [head+up*width*.18,bone_point.call("spine_03"),bone_point.call("spine_02"),bone_point.call("spine_01")]
 	var radii := [.51,.55,.54,.49]
 	var upper := rig.find_bone("upperarm_"+side)
@@ -34,8 +35,8 @@ static func resolve(rig: Skeleton3D, side: String) -> bool:
 				var overlap: float=width*radii[j]-offset.length()
 				if overlap<=depth: continue
 				var lever := near-shoulder
-				var push := offset.slide(lever.normalized())
-				if push.length()<.01: push=outside.slide(lever.normalized())
+				var push := (outside+forward*1.6).slide(lever.normalized())
+				if push.length()<.01: push=offset.slide(lever.normalized())
 				var normal := lever.cross(push)
 				if normal.length_squared()<.000001: continue
 				depth=overlap
