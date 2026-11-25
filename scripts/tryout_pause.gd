@@ -5,6 +5,7 @@ var game
 var body := VBoxContainer.new()
 var categories := HBoxContainer.new()
 var home := VBoxContainer.new()
+var attack_setup := VBoxContainer.new()
 var options := VBoxContainer.new()
 var primary: Button
 var options_button: Button
@@ -39,11 +40,19 @@ func configure(host: Node, layer: Node = null) -> void:
 				hide()
 				game.replay_inspector.toggle())
 		if game.has_method("edit_approach_frames") and not game.has_method("frame_editor_blocker"):
+			dock.add_child(attack_setup)
+			attack_setup.hide()
+			var map := preload("res://scripts/attack_setup_map.gd").new()
+			map.game=game
+			attack_setup.add_child(map)
+			var play := bar(attack_setup,"Play",func():
+				hide()
+				game.play_attack_setup())
+			bar(attack_setup,"Back",show_home)
 			bar(home,"Attack setup",func():
 				home.hide()
-				options.show()
-				show_section("Attack setup")
-				body.get_child(2).grab_focus())
+				attack_setup.show()
+				play.grab_focus())
 		if game.has_method("frame_editor_blocker") or not game.has_method("frame_editor_attacker"):
 			bar(home,"Edit blocker frames" if game.has_method("frame_editor_blocker") else "Edit set frames",open_frame_editor)
 	bar(home,"Restart",restart)
@@ -64,8 +73,9 @@ func configure(host: Node, layer: Node = null) -> void:
 	options.add_child(scroll)
 	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(body)
-	bar(options,"Animation Frames",open_frame_editor)
-	StorySession.add_saved_frame_picker(options,leave_for_frame_editor)
+	if not game.has_method("frame_editor_attacker") or game.has_method("frame_editor_blocker"):
+		bar(options,"Animation Frames",open_frame_editor)
+		StorySession.add_saved_frame_picker(options,leave_for_frame_editor)
 	bar(options,"Back",show_home)
 	if practice:
 		for field in fields(): apply_field(field[0],saved(field),false)
@@ -97,6 +107,7 @@ func bar(parent: Container, caption: String, action: Callable) -> Button:
 	return button
 
 func show_home() -> void:
+	attack_setup.hide()
 	options.hide()
 	home.show()
 	primary.grab_focus()
@@ -110,30 +121,15 @@ func open_sliders() -> void:
 			control.grab_focus()
 			break
 
-func attack_setup_controls() -> void:
-	var map := preload("res://scripts/attack_setup_map.gd").new()
-	map.game=game
-	body.add_child(map)
-	var height := HSlider.new()
-	height.max_value=3
-	height.step=1
-	height.value=game.height_preset()
-	var label := Label.new()
-	label.text="Set height   %d" % game.height_preset()
-	body.add_child(label)
-	body.add_child(height)
-	height.value_changed.connect(func(v: float):
-		game.save_set_height(game.SET_HEIGHTS[int(v)])
-		label.text="Set height   %d" % int(v))
-
+func attack_blocker_controls() -> void:
 	if game.scene_file_path=="res://scenes/attacking_camp.tscn":
 		var count := OptionButton.new()
-		for text in ["No blockers","1 blocker (right side)","2 blockers (right side + middle)"]: count.add_item(text)
+		for text in ["No blockers","1 blocker (right side)","2 blockers (right side + middle)","3 blockers"]: count.add_item(text)
 		count.select(game.attack_blocker_count)
 		count.item_selected.connect(game.set_attack_blocker_count)
 		body.add_child(count)
-		for i in 2:
-			var title := "Right-side vertical" if i==0 else "Middle vertical"
+		for i in 3:
+			var title: String=["Right-side vertical","Middle vertical","Left-side vertical"][i]
 
 			var readout := Label.new()
 			var vertical := HSlider.new()
@@ -254,7 +250,7 @@ func _input(event: InputEvent) -> void:
 	var escape: bool = event is InputEventKey and event.keycode == KEY_ESCAPE and event.pressed
 	if visible:
 		if menu or event.is_action_pressed("ui_cancel"):
-			if options.visible and not menu: show_home()
+			if (options.visible or attack_setup.is_visible_in_tree()) and not menu: show_home()
 			else: hide()
 			get_viewport().set_input_as_handled()
 	elif not practice and not get_tree().paused and (menu or escape):
@@ -295,10 +291,8 @@ func show_section(caption: String) -> void:
 	for item in body.get_children():
 		body.remove_child(item)
 		item.queue_free()
-	if caption=="Attack setup":
-		attack_setup_controls()
-		return
 	if caption=="Sliders":
+		attack_blocker_controls()
 		tuning_controls()
 		return
 	if caption=="Controls":

@@ -81,9 +81,11 @@ Blocking HUD hit speed (9–40 m/s) controls spike power independently of set heig
 On wide quicks the middle reads the inside hitting lane, counts closing momentum, and can take a late loaded jump with a torso lean and one-hand reach. Once struck, the ball velocity informs the last reach check at the net.
 On pin sets each closer evaluates their own adjacent strip of net toward cross court. Reachable CPU blockers may take off independently at the last viable instant if the lead has not jumped.
 Approach and Spike exposes saved attacker vertical (inches) and nominal hard-hit speed (m/s) directly on the HUD. They feed the jump and swing calculations for human and CPU attacks.
-Approach and Spike lets the hitter train against zero, one or two CPU blockers in Pause > Attack setup. Block touches use the same swept arm and hand contact, deflection and impact audio as blocking practice.
-Attack setup uses the right-side blocker for singles and adds the middle for doubles. Each has a saved block vertical. Ball speed controls display km/h while simulation and saved speed values remain in m/s.
+Approach and Spike lets the hitter train against zero to three CPU blockers in Pause > Sliders. Block touches use the same swept arm and hand contact, deflection and impact audio as blocking practice.
+Attack practice uses the right-side blocker for singles and adds the middle for doubles. Each has a saved block vertical. Ball speed controls display km/h while simulation and saved speed values remain in m/s.
 Attack placement allows 2.5 m to either side of the selected lane. The 6 ft 5 in practice blockers shade their read immediately toward each observed shot direction, using recent sequences of up to three shots to predict the next lane. Confident attack-drill blockers can show an opening before closing late and drifting into a Kong. The attack HUD block vertical controls the pin blocker.
 Player identification rings are depth-tested court geometry. The timing band shares the ring’s ground plane. Missed attacks play a soft first floor impact. Attack replay includes blocker arm capsules and impact cues. In double blocks the middle closes alongside the pin and presses straight, reserving a one-handed reach for an exposed outside edge.
 Above-tape penetration with a square palm or distal forearm contact drives a stuff toward the floor just behind the opposing net. Glancing contact stays playable.
 In attacking and blocking practice the four set arc presets use 15%, 40%, 70%, and 130%.
+
+Pause > Attack setup contains the Coach, Setter and Set map. Play starts a fresh feed. With three blockers, the pin on the set side leads the close.

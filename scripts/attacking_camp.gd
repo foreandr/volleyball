@@ -234,7 +234,7 @@ func sync_block_vertical_hud() -> void:
 
 func set_practice_vertical(slot: int,value: float) -> void:
 	practice_vertical[slot]=value
-	StorySession.game_options.set_value("attack","right_block_vertical" if slot==0 else "middle_block_vertical",value)
+	StorySession.game_options.set_value("attack",["right_block_vertical","middle_block_vertical","left_block_vertical"][slot],value)
 	StorySession.save_options()
 	sync_block_vertical_hud()
 
@@ -244,14 +244,14 @@ func learned_block_offset() -> float:
 const PracticeBlock = preload("res://scripts/match_block.gd")
 var attack_blocker_count := 1
 var practice_blockers: Array[Node3D]=[]
-var practice_vertical := [float(StorySession.game_options.get_value("attack","right_block_vertical",46.)),float(StorySession.game_options.get_value("attack","middle_block_vertical",46.))]
-var practice_jumps := [null,null]
-var practice_attempted := [false,false]
+var practice_vertical := [float(StorySession.game_options.get_value("attack","right_block_vertical",46.)),float(StorySession.game_options.get_value("attack","middle_block_vertical",46.)),float(StorySession.game_options.get_value("attack","left_block_vertical",46.))]
+var practice_jumps := [null,null,null]
+var practice_attempted := [false,false,false]
 var practice_footwork := []
 var practice_touch := false
 
 func set_attack_blocker_count(count: int) -> void:
-	attack_blocker_count=clampi(count,0,2)
+	attack_blocker_count=clampi(count,0,3)
 	StorySession.game_options.set_value("attack","blockers",attack_blocker_count)
 	StorySession.save_options()
 	refresh_practice_blockers()
@@ -267,39 +267,42 @@ func refresh_practice_blockers() -> void:
 func step_practice_blockers(delta: float) -> void:
 	for i in mini(practice_blockers.size(),attack_blocker_count):
 		var actor := practice_blockers[i]
+		var reverse_close := attack_blocker_count==3 and active_set.x<0.
+		var lead_slot := 2 if reverse_close else 0
 		var jump: RefCounted=practice_jumps[i]
 		if jump!=null:
 			var lane := endpoint.x+learned_block_offset()
 			if phase=="spike" and launched_attack and drop_velocity.z>.1:
 				lane=ball.position.x+drop_velocity.x*clampf((BallNet.NET_Z-ball.position.z)/drop_velocity.z,0.,.20)
 			var offset := lane-actor.position.x
-			if i==0 and jump.age>=PracticeBlock.START and jump.age<PracticeBlock.START+PracticeBlock.AIR*.68:
+			if i==lead_slot and jump.age>=PracticeBlock.START and jump.age<PracticeBlock.START+PracticeBlock.AIR*.68:
 				var next_x := move_toward(jump.base.x,lane,delta*.85)
-				if attack_blocker_count==2:
-					var partner_x := practice_blockers[1-i].position.x
-					next_x=maxf(next_x,partner_x+.60) if i==0 else minf(next_x,partner_x-.60)
+				if attack_blocker_count>=2:
+					var partner_x := practice_blockers[1].position.x
+					next_x=maxf(next_x,partner_x+.60) if lead_slot==0 else minf(next_x,partner_x-.60)
 				jump.base.x=clampf(move_toward(jump.base.x,next_x,delta*.85),-4.45,4.45)
 			if jump.shoulders.size()==2:
 				var amount := smoothstep(.22,.78,absf(offset))
 				if i==1:
-					var away := signf(actor.position.x-practice_blockers[0].position.x)
+					var away := signf(actor.position.x-practice_blockers[lead_slot].position.x)
 					amount=smoothstep(.48,.90,absf(offset)) if launched_attack and offset*away>0. and absf(offset)<1.25 else 0.
 				var left: bool=(jump.shoulders[0].x-jump.shoulders[1].x)*offset>0.
 				jump.reach_input=Vector2(amount,0.) if left else Vector2(0.,amount)
 				jump.lean_input=clampf(offset,-.8,.8) if i==0 else signf(offset)*amount*.20
 			if not jump.step(delta,ball.global_position): practice_jumps[i]=null
 			continue
-		var home_x := 2.15 if i==0 else 0.
+		var home_x := (1-i)*2.15
 		var goal := home_x+clampf(shot_read.prediction,-1.,1.)*(-.35 if disguise_read else .75)
 		if phase=="set" or phase=="spike":
-			var seam_offset := (.5-i)*.68 if attack_blocker_count==2 else 0.
+			var seam_offset := ((attack_blocker_count-1)*.5-i)*.68
 			var shade := learned_block_offset()
 			if disguise_read and phase=="set":
 				var close_in := smoothstep(.0,.27,elapsed-flight_time+PracticeBlock.START+PracticeBlock.AIR*.5+.23)
 				shade=lerpf(-shade*.45,shade,close_in)
 			goal=clampf(endpoint.x+shade+seam_offset,-4.4,4.4)
-		if i==1:
-			goal=0. if phase not in ["set","spike"] else clampf(practice_blockers[0].position.x-.68,-4.45,4.45)
+		if i!=lead_slot:
+			var toward_lead := signi(lead_slot-i)
+			goal=home_x if phase not in ["set","spike"] else clampf(practice_blockers[i+toward_lead].position.x+.68*toward_lead,-4.45,4.45)
 		var old_x := actor.position.x
 		actor.position.x=move_toward(old_x,goal,GroundControls.speed(true,true)*delta)
 		actor.animator.advance(delta)
@@ -310,10 +313,8 @@ func step_practice_blockers(delta: float) -> void:
 			jump.net_heading=PI
 			jump.aggressive_press=true
 			jump.court_aim=Vector3(0.,0.,BallNet.NET_Z-3.)
-			if attack_blocker_count==2:
-				var seam := (practice_blockers[0].position.x+practice_blockers[1].position.x)*.5
-				if i==0: jump.min_hand_x=seam+.06
-				else: jump.max_hand_x=seam-.06
+			if i>0: jump.max_hand_x=(actor.position.x+practice_blockers[i-1].position.x)*.5-.06
+			if i+1<attack_blocker_count: jump.min_hand_x=(actor.position.x+practice_blockers[i+1].position.x)*.5+.06
 			jump.begin(actor)
 			practice_jumps[i]=jump
 			practice_attempted[i]=true
@@ -347,9 +348,9 @@ func start_drill() -> void:
 	attack_jump.attack_arm_lift=true
 	super.start_drill()
 	if scene_file_path=="res://scenes/attacking_camp.tscn" and not has_meta("live_sampler"):
-		attack_blocker_count=clampi(int(StorySession.game_options.get_value("attack","blockers",1)),0,2)
-		for i in 2:
-			var actor := athlete(Vector3(2.15 if i==0 else 0.,START.y,BallNet.NET_Z+.38),"286881")
+		attack_blocker_count=clampi(int(StorySession.game_options.get_value("attack","blockers",1)),0,3)
+		for i in 3:
+			var actor := athlete(Vector3((1-i)*2.15,START.y,BallNet.NET_Z+.38),"286881")
 			register_student(actor,7-i)
 			preload("res://scripts/practice_kit.gd").apply(actor,false,7-i)
 			actor.set_height_cm(195.58)
@@ -384,8 +385,16 @@ func begin(next: String) -> void:
 		trace("zero_set_arrival",{"air_height_m":hitter.position.y-START.y,"air_age_s":attack_jump.elapsed-attack_jump.load_duration() if attack_jump.active else -1.})
 	super.begin(next)
 
+func play_attack_setup() -> void:
+	for i in practice_blockers.size():
+		practice_jumps[i]=null
+		practice_blockers[i].position=Vector3((1-i)*2.15,START.y,BallNet.NET_Z+.38)
+		practice_blockers[i].play_action("idle")
+	setter.position=setter_station
+	reset_feed()
+
 func reset_feed() -> void:
-	practice_attempted=[false,false]
+	practice_attempted=[false,false,false]
 	practice_touch=false
 	disguise_read=shot_read.confidence>.54 and rotation_drill.random.randf()<.58
 	clear_attack_input()
