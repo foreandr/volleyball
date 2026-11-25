@@ -42,9 +42,16 @@ static func trigger(left: bool) -> JoyAxis:
 	return JOY_AXIS_TRIGGER_LEFT if left!=swapped else JOY_AXIS_TRIGGER_RIGHT
 
 static var view_icon: Texture2D
+static var dpad_horizontal_icon: Texture2D
 static var dpad_vertical_icon: Texture2D
 
 static func glyph(control: Variant) -> Texture2D:
+	if control is String and control=="D-pad Left/Right":
+		if not dpad_horizontal_icon:
+			var image := Image.new()
+			image.load_svg_from_string('<svg xmlns="http://www.w3.org/2000/svg" width="42" height="32"><path d="M16 3h10v8h10v10H26v8H16v-8H6V11h10z" fill="#303b44" stroke="#dfe9eb"/><path d="m9 16 5-3v6z M33 16l-5-3v6z" fill="white"/></svg>')
+			dpad_horizontal_icon=ImageTexture.create_from_image(image)
+		return dpad_horizontal_icon
 	if control is String and control=="D-pad Up/Down":
 		if not dpad_vertical_icon:
 			var icon := Image.new()

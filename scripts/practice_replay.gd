@@ -1,5 +1,10 @@
 extends CanvasLayer
 
+const Xbox = preload("res://scripts/xbox_controls.gd")
+const SUB := 4
+var speed := 1.
+var show_boxes := false
+var boxes: Array[MeshInstance3D] = []
 const SAMPLE_INTERVAL := 0.1
 const MAX_SAMPLES := 450
 @onready var game = get_parent()
@@ -37,13 +42,36 @@ func _ready() -> void:
 	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	panel.offset_bottom = -18
-	var legend := Label.new()
-	legend.text = "Replay    |    Space play/pause    Drag to rewind    |    WASD move    Q/E down/up    |    Middle-drag look    Scroll zoom    |    Esc return\nLS move   RS look   LB/RB lower/raise   X/B zoom in/out   LT/RT rewind/advance   D-pad left/right frame   A play/pause   View exit"
-	legend.add_theme_constant_override("outline_size",5)
-	panel.add_child(legend)
+	for entries in [[["LS","Move"],["RS","Look"],["LB","Lower"],["RB","Raise"],["X","Zoom in"],["B","Zoom out"]],[["LT","Rewind"],["RT","Advance"],["D-pad Left/Right","Frame"],["A","Play / pause"],["View","Exit"]]]:
+		var row := HBoxContainer.new()
+		row.alignment=BoxContainer.ALIGNMENT_CENTER
+		panel.add_child(row)
+		Xbox.prompts(row,entries)
+	if Xbox.keyboard_prompts():
+		var legend := Label.new()
+		legend.text="Space play/pause    Drag to rewind    WASD move    Q/E down/up    Middle-drag look    Scroll zoom    Esc return"
+		panel.add_child(legend)
+	var tools := HBoxContainer.new()
+	tools.alignment=BoxContainer.ALIGNMENT_CENTER
+	panel.add_child(tools)
+	for direction: int in [-1,1]:
+		var arrow := Button.new()
+		arrow.text="<" if direction<0 else ">"
+		arrow.tooltip_text="Previous frame" if direction<0 else "Next frame"
+		arrow.pressed.connect(step_frame.bind(direction))
+		tools.add_child(arrow)
+	var rate := OptionButton.new()
+	for value in ["1x","1/2x","1/4x","1/8x","1/16x"]: rate.add_item(value)
+	rate.item_selected.connect(func(index): speed=pow(.5,index))
+	tools.add_child(rate)
+	if "blockers" in game:
+		var toggle_boxes := CheckButton.new()
+		toggle_boxes.text="Arm hitboxes"
+		toggle_boxes.toggled.connect(func(on): show_boxes=on; display_frame(slider.value))
+		tools.add_child(toggle_boxes)
 	panel.add_child(slider)
 	slider.step = 1
-	slider.value_changed.connect(func(value): if active: apply(history[int(value)]))
+	slider.value_changed.connect(func(value): if active: display_frame(value))
 	panel.hide()
 
 func capture(rendered := false) -> Dictionary:
@@ -62,7 +90,14 @@ func capture(rendered := false) -> Dictionary:
 			objects[obj.model] = [obj.model.transform,obj.model.visible]
 		elif obj != game.ball and obj is not RigidBody3D and obj not in game.targets and obj not in game.rotation_drill.bins and obj != game.rotation_drill.basket: continue
 		objects[obj] = [obj.transform,obj.visible]
-	return {"floor_count":game.floor_sound_count,"floor_db":game.floor_impact.volume_db,"spike_count":game.spike_sound_count if "spike_sound_count" in game else 0,"block_sound_count":game.block_sound_count if "block_sound_count" in game else 0,"objects":objects,"poses":poses,"whistle_height":game.coach_motion.whistle_cue.raised}
+	var arms := {}
+	if "jumps" in game:
+		for slot in game.jumps.size():
+			var jump = game.jumps[slot]
+			if jump==null: continue
+			for i in jump.hands.size():
+				arms[slot*2+i]=[jump.shoulders[i],jump.elbows[i],jump.wrists[i],jump.hands[i]]
+	return {"arms":arms,"floor_count":game.floor_sound_count,"floor_db":game.floor_impact.volume_db,"spike_count":game.spike_sound_count if "spike_sound_count" in game else 0,"block_sound_count":game.block_sound_count if "block_sound_count" in game else 0,"objects":objects,"poses":poses,"whistle_height":game.coach_motion.whistle_cue.raised}
 
 func apply(sample: Dictionary) -> void:
 	game.coach_motion.whistle_cue.raised = sample.whistle_height
@@ -79,8 +114,56 @@ func apply(sample: Dictionary) -> void:
 		var bones: Array = sample.poses[rig]
 		for i in bones.size(): rig.set_bone_pose(i,bones[i])
 
+func step_frame(direction: int) -> void:
+	playing=false
+	playback_elapsed=0.
+	slider.value+=direction
+
+func display_frame(value: float) -> void:
+	if history.is_empty(): return
+	var first := mini(int(value)/SUB,history.size()-1)
+	var a := history[first]
+	var b := history[mini(first+1,history.size()-1)]
+	var t := fmod(value,SUB)/SUB
+	apply(a)
+	if t>0.:
+		for obj in a.objects:
+			if is_instance_valid(obj) and b.objects.has(obj):
+				obj.transform=a.objects[obj][0].interpolate_with(b.objects[obj][0],t)
+		for rig in a.poses:
+			if not is_instance_valid(rig) or not b.poses.has(rig): continue
+			for i in a.poses[rig].size():
+				rig.set_bone_pose(i,a.poses[rig][i].interpolate_with(b.poses[rig][i],t))
+	for mesh in boxes: mesh.hide()
+	if not show_boxes: return
+	var used := 0
+	for arm in a.arms:
+		var points: Array=a.arms[arm].duplicate()
+		if b.arms.has(arm):
+			for i in points.size(): points[i]=points[i].lerp(b.arms[arm][i],t)
+		for i in 3:
+			var segment: Vector3=points[i+1]-points[i]
+			if segment.length_squared()<.000001: continue
+			if used==boxes.size():
+				var mesh := MeshInstance3D.new()
+				mesh.mesh=CapsuleMesh.new()
+				var mat := StandardMaterial3D.new()
+				mat.transparency=BaseMaterial3D.TRANSPARENCY_ALPHA
+				mat.albedo_color=Color(.12,.95,.72,.42)
+				mesh.material_override=mat
+				game.world.add_child(mesh)
+				boxes.append(mesh)
+			var capsule := boxes[used]
+			used+=1
+			var radius: float=preload("res://scripts/match_block.gd").ARM_RADII[i]
+			capsule.mesh.radius=radius
+			capsule.mesh.height=segment.length()+2.*radius
+			capsule.global_transform=Transform3D(Basis(Quaternion(Vector3.UP,segment.normalized())),(points[i]+points[i+1])*.5)
+			capsule.show()
+
 func toggle() -> void:
 	if active:
+		for mesh in boxes: mesh.hide()
 		apply(live)
 		active = false
 		playing = false
@@ -115,8 +198,9 @@ func toggle() -> void:
 	camera.make_current()
 	get_tree().paused = true
 	active = true
-	slider.max_value = history.size()-1
+	slider.max_value = (history.size()-1)*SUB
 	slider.set_value_no_signal(slider.max_value)
+	display_frame(slider.value)
 	panel.show()
 
 func _exit_tree() -> void:
@@ -182,17 +266,18 @@ func _process(delta: float) -> void:
 		var pad_id: int=game.pad()
 		var scrub := 0.
 		if pad_id>=0:
-			scrub=Input.get_joy_axis(pad_id,JOY_AXIS_TRIGGER_RIGHT)-Input.get_joy_axis(pad_id,JOY_AXIS_TRIGGER_LEFT)
+			scrub=Input.get_joy_axis(pad_id,Xbox.trigger(false))-Input.get_joy_axis(pad_id,Xbox.trigger(true))
 		if absf(scrub)<.10: scrub=0.
 		if scrub!=0.: playing=false
 		if playing or scrub!=0.:
-			playback_elapsed+=delta*(scrub*4. if scrub!=0. else 1.)
-			var frames := int(playback_elapsed/sample_interval)
+			playback_elapsed+=delta*(scrub*4. if scrub!=0. else speed)
+			var tick := sample_interval/SUB
+			var frames := int(playback_elapsed/tick)
 			if frames!=0:
-				playback_elapsed=fmod(playback_elapsed,sample_interval)
+				playback_elapsed=fmod(playback_elapsed,tick)
 				var old_index := int(slider.value)
 				slider.value+=frames
-				for i in range(old_index+1,int(slider.value)+1):
+				for i in range(old_index/SUB+1,int(slider.value)/SUB+1):
 					var sample := history[i]
 					var prior := history[i-1]
 					for hit in ["spike_count","block_sound_count"]:
@@ -239,7 +324,7 @@ func _input(event: InputEvent) -> void:
 				JOY_BUTTON_BACK: toggle()
 				JOY_BUTTON_DPAD_LEFT,JOY_BUTTON_DPAD_RIGHT:
 					playing=false
-					slider.value+=1 if event.button_index==JOY_BUTTON_DPAD_RIGHT else -1
+					step_frame(1 if event.button_index==JOY_BUTTON_DPAD_RIGHT else -1)
 		get_viewport().set_input_as_handled()
 		return
 	if event is InputEventKey and event.pressed:
@@ -250,8 +335,8 @@ func _input(event: InputEvent) -> void:
 				playing=not playing
 				playback_elapsed=0.
 			KEY_ESCAPE: toggle()
-			KEY_LEFT: slider.value -= 1
-			KEY_RIGHT: slider.value += 1
+			KEY_LEFT: step_frame(-1)
+			KEY_RIGHT: step_frame(1)
 			_: return
 	elif event is InputEventMouseMotion and event.button_mask & MOUSE_BUTTON_MASK_MIDDLE:
 		camera.rotation.y -= event.relative.x*0.004

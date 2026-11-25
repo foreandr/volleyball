@@ -197,6 +197,7 @@ const FACTS := [
 	"The first Snow Volleyball World Tour launched in 2019."
 ]
 const FACT_ART := {FACTS[7]:"res://assets/menu/paris_beach_court.svg"}
+var catalog := FACTS + preload("res://scripts/olympic_facts.gd").FACTS
 var fact_order := []
 var last_fact := ""
 var fact_history := ConfigFile.new()
@@ -207,14 +208,15 @@ func next_fact() -> String:
 		facts_loaded=true
 		if fact_history.load("user://loading_facts.cfg")==OK:
 			last_fact=fact_history.get_value("facts","last","")
-			fact_order=fact_history.get_value("facts","remaining",[]).filter(func(f): return f in FACTS)
+			if fact_history.get_value("facts","size",0)==catalog.size(): fact_order=fact_history.get_value("facts","indices",[])
 	if fact_order.is_empty():
-		fact_order = FACTS.duplicate()
+		fact_order = range(catalog.size())
 		fact_order.shuffle()
-		if fact_order.back() == last_fact: fact_order.reverse()
-	last_fact = fact_order.pop_back()
+		if catalog[fact_order.back()] == last_fact: fact_order.reverse()
+	last_fact = catalog[fact_order.pop_back()]
 	fact_history.set_value("facts","last",last_fact)
-	fact_history.set_value("facts","remaining",fact_order)
+	fact_history.set_value("facts","size",catalog.size())
+	fact_history.set_value("facts","indices",fact_order)
 	fact_history.save("user://loading_facts.cfg")
 	return last_fact
 

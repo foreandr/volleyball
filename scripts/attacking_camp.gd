@@ -106,8 +106,11 @@ func planned_attack_contact_height() -> float:
 	var read := clampf(setter.effective_rating("Hand setting")/100.,0.,1.)
 	return attack_contact_height()+minf(lost_reach,.30)*(1.-read)
 
+func rep_set_percent() -> float:
+	return set_arc_percent
+
 func attack_set_duration(height_index: int) -> float:
-	var ratio := set_arc_percent*.01
+	var ratio := rep_set_percent()*.01
 	# Quick tempos spend less time travelling to the same hand-contact point.
 	var quick := smoothstep(.15,.60,ratio)
 	return float(DURATION[height_index])*sqrt(ratio)*lerpf(.66,1.,quick)
@@ -389,7 +392,7 @@ func step_attack(delta: float) -> void:
 		var stick := Vector2(axis(JOY_AXIS_LEFT_X),axis(JOY_AXIS_LEFT_Y)).limit_length(1.)
 		var steering := not cpu_hitter and stick.length()>.16
 		var lock_on := not cpu_hitter and GroundControls.focus(axis)
-		var tracking := cpu_hitter or (manual_shot>=0 and (phase=="set" or (set_arc_percent<60. and phase in ["pass","set_contact"])) and not steering)
+		var tracking := cpu_hitter or (manual_shot>=0 and (phase=="set" or (rep_set_percent()<60. and phase in ["pass","set_contact"])) and not steering)
 		var recovering := cpu_hitter and phase in ["spike","between","drop"] and not attack_jump.active
 		if recovering or (tracking and not approach_started and phase in ["cart","feed","pass","set_contact","set"]):
 			var entry := GroundControls.attack_staging(active_set)
@@ -461,7 +464,7 @@ func step_attack(delta: float) -> void:
 			begin("between")
 		return
 	if not approach_started and (has_meta("sampling_attack") or manual_shot>=0):
-		if phase=="pass" and (set_arc_percent<60. or not cpu_hitter):
+		if phase=="pass" and (rep_set_percent()<60. or not cpu_hitter):
 			var predicted_pin := active_set
 			predicted_pin.y=planned_attack_contact_height()
 			var set_time := attack_set_duration(chosen_tempo())
@@ -544,7 +547,7 @@ func arm_speed_factor() -> float:
 	return pow(effort/14.,.48)*(1.+(rating-65.)*.004)
 
 func requested_set_arc() -> float:
-	return super.requested_set_arc()*set_arc_percent*.01
+	return super.requested_set_arc()*rep_set_percent()*.01
 
 func effective_attack_height() -> float:
 	return attack_jump.assisted_height*attack_jump.takeoff_effectiveness if attack_jump.active else jump_height*hitter.stamina.effectiveness()

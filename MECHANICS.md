@@ -46,3 +46,7 @@ Holding A on 509 layers the shuffle over the loaded squat while moving laterally
 Blockers bring their legs slightly forward as they press at jump apex. Forward foot travel is limited near the net and blends out before landing.
 At peak block press, the hips shift back, the chest folds and both legs extend forward toward an attack-style pike. Available net clearance limits the leg angle.
 Practice replay supports camera translation and look on the sticks, analog timeline scrubbing on the triggers, bumper elevation and X/B zoom.
+
+In blocking camp the airborne left stick leans the torso toward screen left or right. LT and RT spread the respective arms independently. A central pressed hand above the tape can stuff the attack. Glancing touches pop up on the contact side.
+
+Blocking camp independently draws the left pin, 51, pipe or right pin on each feed. All four hitters reset. A single held trigger reaches laterally over the tape with the other arm dropping for balance. Both triggers spread both arms. Replay can display the recorded arm capsules and interpolate four inspection positions per sample.

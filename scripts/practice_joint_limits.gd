@@ -105,6 +105,9 @@ func enforce_court_floor(rig: Skeleton3D) -> void:
 		var point := rig.to_global(rig.get_bone_global_pose(index).origin)
 		var radius := 0.09 if bone in ["Head","pelvis","spine_03"] else 0.035
 		lift = maxf(lift,floor_height(point)+radius-point.y)
+	if lift>.08 and Time.get_ticks_msec()>=int(rig.get_meta("next_floor_report",0)):
+		rig.set_meta("next_floor_report",Time.get_ticks_msec()+10000)
+		push_error("COURT FLOOR PENETRATION: %s requires %.3f m of pose correction" % [rig.get_path(),lift])
 	if lift > 0:
 		var root := rig.find_bone("pelvis")
 		var parent := rig.get_bone_parent(root)

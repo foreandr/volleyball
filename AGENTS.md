@@ -21,3 +21,5 @@
 - Use player_ground_controls.gd for manually controlled ground movement in drills, career and match play. Check analog steering, LT facing the ball while shuffling, RT sprint and LT+RT fast shuffle through the playable entry point when adding a mode or changing movement. Keep sport-specific actions in the mode controller.
 
 - Update MECHANICS.md whenever a gameplay change adds or changes an interaction. Identify the modes that use it and distinguish proposed mechanics from implemented ones.
+
+Before every change, consult GAME_DESIGN.md and MECHANICS.md. Check every affected UI surface, including replay and pause overlays, for shared Xbox button glyphs and the keyboard-prompt preference.

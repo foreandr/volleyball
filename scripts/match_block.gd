@@ -3,6 +3,7 @@ extends RefCounted
 const HandPose = preload("res://scripts/hand_setting_pose.gd")
 const START := 0.16
 const AIR := 0.74
+const ARM_RADII := [.085,.095,.12]
 const HEIGHT := 1.16
 var actor: Node3D
 var age := 0.0
@@ -11,6 +12,10 @@ var jump_height := HEIGHT
 var landing_recovery := 0.13
 var overpass_swing := false
 var aggressive_press := false
+var lean_input := 0.
+var reach_input := Vector2.ZERO
+var lean := 0.
+var reach := Vector2.ZERO
 var court_aim := Vector3.INF
 var elbows: Array[Vector3] = []
 var shoulders: Array[Vector3] = []
@@ -77,6 +82,13 @@ func step(delta: float, world_ball: Vector3) -> bool:
 			var knee: Vector3=author.point(pose,calf)
 			var shin: Vector3=(author.point(pose,foot)-knee).normalized()
 			author.aim_joint(pose,calf,foot,knee+shin.slerp(direction,pike*.96))
+	var air_weight := smoothstep(0.,.12,phase)*(1.-smoothstep(.82,1.,phase))
+	lean=lerpf(lean,lean_input,1.-exp(-14.*delta))
+	reach=reach.lerp(reach_input,1.-exp(-16.*delta))
+	if absf(lean)*air_weight>.0001:
+		var axis_local := (rig.global_basis.inverse()*Vector3.BACK).normalized()
+		author.rotate_world(pose,"spine_01",axis_local,-lean*.20*air_weight)
+		author.rotate_world(pose,"spine_02",axis_local,-lean*.15*air_weight)
 	previous_hands = hands.duplicate()
 	previous_wrists = wrists.duplicate()
 	hands.clear()
@@ -92,12 +104,21 @@ func step(delta: float, world_ball: Vector3) -> bool:
 		var depth := lerpf(lerpf(0.20,0.55,press),0.17,below_tape)
 		var lateral_limit := 0.24 if aggressive_press else 0.18
 		var target := shoulder+Vector3(clampf(aim.x-shoulder.x,-lateral_limit,lateral_limit)-outward*0.06,0.62,depth)/scale_
+		var spread := (reach.x if side=="l" else reach.y)*air_weight
+		var opposite := (reach.y if side=="l" else reach.x)*air_weight
+		var balance := opposite*(1.-spread)
+		var spine: Vector3=author.point(pose,"spine_03")
+		var side_sign := signf(shoulder.x-spine.x)
+		var diagonal := Vector3(side_sign*.78,.25,.52)
+		var counterweight := Vector3(side_sign*.48,-.47,.12)
+		target=target.lerp(shoulder+counterweight/scale_,balance)
+		target=target.lerp(shoulder+diagonal/scale_,spread)
 		if is_finite(min_hand_x) or is_finite(max_hand_x):
 			var world_target := rig.to_global(target)
 			var forward := actor.global_basis.z.normalized()
 			if court_aim.is_finite(): world_target.x+=clampf(court_aim.x-world_target.x,-1.,1.)*.09*press
 			world_target+=forward*.18*press*(1.-below_tape)
-			world_target.x=clampf(move_toward(world_target.x,world_ball.x,.12*press),min_hand_x,max_hand_x)
+			world_target.x=clampf(move_toward(world_target.x,world_ball.x,.12*press*(1.-maxf(spread,balance))),min_hand_x,max_hand_x)
 			target=rig.to_local(world_target)
 		var pole := Vector3(outward*0.38,-0.55,0.30)
 		if overpass_swing and side == "r":

@@ -232,3 +232,7 @@ Track chemistry between teammates. Higher setter-hitter chemistry improves antic
 - Bounce-offs
 
 Practice observation notes can capture each drill's starting positions, ball feeds, player rotations, and reset or scoring rules.
+
+The practice replay legend uses Xbox glyphs for sticks, bumpers, triggers, face buttons, D-pad and View. Keyboard hints follow the Controls preference.
+
+Blocking practice fields four available hitters. Each feed independently chooses a left pin, 51, pipe or right pin attack. During recovery, each hitter advances the grounded animation before applying shuffle footwork. The loading-screen rotation includes 4,980 historical facts derived from the Olympic athlete-events dataset through 2016 (https://github.com/rgriff23/Olympic_history).

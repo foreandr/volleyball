@@ -3,6 +3,12 @@ extends "res://scripts/crosscourt_attack_demo.gd"
 const Block = preload("res://scripts/match_block.gd")
 const HOMES := [-2.15,0.,2.15]
 const MANUAL_SLOT := 2
+const ROUTES := [Vector3(3.65,2.65,2.7),Vector3(.4,2.65,3.25),Vector3(-.65,2.65,1.45),Vector3(-3.65,2.65,2.7)]
+var attackers: Array[Node3D]=[]
+var route := -1
+func rep_set_percent() -> float:
+	return SET_HEIGHTS[1] if route in [1,2] else super.rep_set_percent()
+
 var blockers: Array[Node3D] = []
 var jumps := [null,null,null]
 var lateral_speed := [0.,0.,0.]
@@ -49,6 +55,14 @@ func start_drill() -> void:
 		energy[actor]=actor.stamina
 		actor.rotation.y=PI
 		blockers.append(actor)
+	for i in [1,2,3]:
+		var attacker := athlete(ROUTES[i]+Vector3(0.,START.y-2.65,-2.65),"e97937")
+		var variant: int=[4,8,9][i-1]
+		register_student(attacker,variant)
+		preload("res://scripts/practice_kit.gd").apply(attacker,false,variant)
+		attacker.set_height_cm(188.)
+		attackers.append(attacker)
+		energy[attacker]=attacker.stamina
 	super.start_drill()
 	review_setup.power=attack_speed()
 	hitter.set_height_cm(188.)
@@ -84,7 +98,7 @@ func camp_title() -> String:
 func update_prompts(_next: String) -> void:
 	var entries := [["View", "Control blocker" if automatic_block else "Watch CPU block"]]
 	if not automatic_block:
-		entries.append_array([["LS","Shuffle"],[JOY_BUTTON_A,"Hold A / release to jump"]])
+		entries.append_array([["LS","Shuffle / air lean"],[JOY_BUTTON_A,"Hold A / release to jump"],["LT","Left reach"],["RT","Right reach"]])
 	entries.append(["D-pad Up/Down","Set height: %d" % height_preset()])
 	entries.append([JOY_BUTTON_START,"Settings"])
 	Xbox.prompts(controls_row,entries)
@@ -97,12 +111,26 @@ func allow_cpu_soft_attack() -> bool:
 
 func reset_feed() -> void:
 	manual_shuffle_open=false
+	if route<0: attackers.push_front(hitter)
+	var former := hitter
+	route=rotation_drill.random.randi_range(0,attackers.size()-1)
+	hitter=attackers[route]
+	former.play_action("idle")
+	for overlay in get_children():
+		if overlay.get_script()==preload("res://scripts/tryout_player_ring.gd"):
+			overlay.extra_jumps.erase(former)
+			overlay.extra_jumps[hitter]=attack_jump
+	wrist_history.clear()
+	wrist_axes.clear()
+	prep_velocity=Vector3.ZERO
+	coach_station=Vector3(-3.1,coach_station.y,-3.)
+	attack_jump.front_limit=BallNet.NET_Z-3.05 if route==2 else 3.65
 	# Supply a full-strength attacker on each blocking rep.
 	hitter.stamina.rested_capacity=hitter.stamina.capacity()
 	hitter.stamina.value=hitter.stamina.rested_capacity
 	hitter.stamina.exhausted=false
-	attack_lane = 0
-	next_set = Vector3(3.65,2.65,BallNet.NET_Z-1.30)
+	attack_lane = [0,1,1,2][route]
+	next_set = ROUTES[route]
 	read_set=false
 	closing=[false,false,true]
 	deflected=false
@@ -122,7 +150,8 @@ func reset_feed() -> void:
 	var target_x := 4.5-random.randf_range(0.,1.)
 	aim_six=not aim_six
 	if aim_six: target_x=random.randf_range(-.5,.5)
-	review_setup.x=-target_x
+	if route==3 and not aim_six: target_x=-target_x
+	review_setup.x=target_x if active_lane==2 else -target_x
 	review_setup.z=BallNet.NET_Z+depth
 	cross_court=false
 	bounce_line=false
@@ -168,16 +197,29 @@ func begin_block(slot: int,loaded := 0.) -> void:
 	jump.age=Block.START*loaded
 	jumps[slot]=jump
 	attempted[slot]=true
-	if slot==MANUAL_SLOT and closing[1] and jumps[1]==null:
+	if slot==int([2,1,1,0][route]) and slot!=1 and closing[1] and jumps[1]==null:
 		begin_block(1,loaded)
 
 func step_attack(delta: float) -> void:
 	if phase=="pass" and not manual_shuffle_open and ball.position.distance_to(catch_point)<=1.:
 		manual_shuffle_open=true
 		trace("manual_block_shuffle_open",{"distance_m":ball.position.distance_to(catch_point)})
+	for i in attackers.size():
+		if attackers[i]==hitter and (phase!="cart" or elapsed>0.): continue
+		var actor := attackers[i]
+		var home := Vector3(ROUTES[i].x,START.y,ROUTES[i].z-2.65)
+		var old := actor.position
+		actor.play_action("idle",.16)
+		actor.animator.advance(delta)
+		actor.position=old.move_toward(home,2.4*delta)
+		if not shuffle_steps.has(actor): shuffle_steps[actor]=preload("res://scripts/directional_footwork.gd").new(actor)
+		GroundControls.shuffle(actor,shuffle_steps[actor],(actor.position-old)/maxf(.0001,delta),true,delta)
 	for i in blockers.size():
 		step_blocker(i,delta)
 	if phase=="cart":
+		for i in attackers.size():
+			var home := Vector3(ROUTES[i].x,START.y,ROUTES[i].z-2.65)
+			if elapsed==0. and attackers[i].position.distance_to(home)>.035: return
 		for i in blockers.size():
 			var home := Vector3(HOMES[i],START.y,BallNet.NET_Z+.38)
 			if jumps[i]!=null or blockers[i].position.distance_to(home)>.025: return
@@ -192,6 +234,9 @@ func step_blocker(slot: int,delta: float) -> void:
 	var actor := blockers[slot]
 	var jump: RefCounted = jumps[slot]
 	if jump!=null:
+		if slot==MANUAL_SLOT and not automatic_block:
+			jump.lean_input=axis(JOY_AXIS_LEFT_X)*camera.global_basis.x.normalized().x
+			jump.reach_input=Vector2(axis(Xbox.trigger(true)),axis(Xbox.trigger(false))).clamp(Vector2.ZERO,Vector2.ONE)
 		jump.min_hand_x=(blockers[slot-1].position.x+actor.position.x)*.5+.09 if slot>0 else -INF
 		jump.max_hand_x=(blockers[slot+1].position.x+actor.position.x)*.5-.09 if slot<2 else INF
 		jump.court_aim=Vector3(0.,0.,BallNet.NET_Z-3.)
@@ -201,15 +246,15 @@ func step_blocker(slot: int,delta: float) -> void:
 	var depth_goal := BallNet.NET_Z+.38
 	if phase=="set" and not read_set:
 		var available := maxf(0.,flight_time-elapsed-Block.START-Block.AIR*.5)
-		for i in 2:
-			var seam := clampf(endpoint.x,1.6,4.25)-.61*(2-i)
+		for i in blockers.size():
+			var seam := endpoint.x+.61*(i-int([2,1,1,0][route]))
 			var travel := Vector2(seam-blockers[i].position.x,depth_goal-blockers[i].position.z).length()
-			closing[i]=maxf(0.,travel-.35)/GroundControls.speed(true,false)+.14<=available
+			closing[i]=maxf(0.,travel-.75)/GroundControls.speed(true,false)<=available or i==int([2,1,1,0][route])
 		read_set=true
 		trace("block_set_read",{"far_closes":closing[0],"middle_closes":closing[1],"available_s":available})
 	if phase=="set":
-		if slot==1 and closing[slot]: goal=blockers[MANUAL_SLOT].position.x-.61
-		elif closing[slot]: goal=clampf(endpoint.x,1.6,4.25)-.61*(2-slot)
+		if route==0 and slot==1 and closing[slot]: goal=blockers[MANUAL_SLOT].position.x-.61
+		elif closing[slot]: goal=endpoint.x+.61*(slot-int([2,1,1,0][route]))
 		else: depth_goal+=2.7
 	elif phase=="spike" and not closing[slot]:
 		depth_goal+=2.7
@@ -231,7 +276,7 @@ func step_blocker(slot: int,delta: float) -> void:
 		block_load.update(actor,delta)
 		block_load.ring.hide()
 	GroundControls.shuffle(actor,shuffle_steps[actor],Vector3((actor.position.x-previous)/maxf(delta,.0001),0.,motion.y/maxf(delta,.0001)),true,delta)
-	if slot!=1 and cpu and closing[slot] and not attempted[slot] and phase=="set" and absf(actor.position.x-endpoint.x)<1.65 and flight_time-elapsed<=Block.START+Block.AIR*.5:
+	if (slot!=1 or route in [1,2]) and cpu and closing[slot] and not attempted[slot] and phase=="set" and absf(actor.position.x-endpoint.x)<1.65 and flight_time-elapsed<=Block.START+Block.AIR*.5:
 		begin_block(slot)
 
 func advance_spike(delta: float) -> void:
@@ -243,21 +288,30 @@ func advance_spike(delta: float) -> void:
 		for i in block.hands.size():
 			var chain := [block.shoulders[i],block.elbows[i],block.wrists[i],block.hands[i]]
 			var touched := false
-			for segment in 3:
+			var stuff := false
+			var hit_position := Vector3.ZERO
+			for segment in [2,1,0]:
 				var closest := Geometry3D.get_closest_points_between_segments(previous,ball.global_position,chain[segment],chain[segment+1])
-				if closest[0].distance_to(closest[1]) <= Contact.BALL_RADIUS+[.085,.095,.12][segment]:
+				var gap := closest[0].distance_to(closest[1])
+				if gap <= Contact.BALL_RADIUS+Block.ARM_RADII[segment]:
 					touched=true
+					hit_position=closest[0]
+					stuff=segment==2 and gap<.13 and closest[1].y>BallNet.NET_TOP+.10 and closest[1].z<BallNet.NET_Z-.04
 					break
 			if not touched: continue
-			var toward: Vector3=ball.global_position.direction_to(block.court_aim)
-			var normal: Vector3=(toward-drop_velocity.normalized()).normalized()
-			drop_velocity=drop_velocity.bounce(normal)*.55
+			ball.global_position=hit_position
+			if stuff:
+				drop_velocity=hit_position.direction_to(block.court_aim)*drop_velocity.length()*.55
+			else:
+				var side := signf(hit_position.z-BallNet.NET_Z)
+				if is_zero_approx(side): side=signf(drop_velocity.z)
+				drop_velocity=Vector3(clampf(drop_velocity.x*.20-hit_position.x*.28,-2.8,2.8),clampf(drop_velocity.length()*.23,3.2,5.8),side*clampf(absf(drop_velocity.z)*.19,1.9,4.4))
 			spin_acceleration = Vector3.ZERO
 			deflected = true
 			block_sound_count+=1
 			set_meta("blocked_attack",true)
 			hand_impact.volume_db=-2.
 			hand_impact.play()
-			trace("block_hand_contact",{"rep":rep})
+			trace("block_hand_contact",{"rep":rep,"stuff":stuff,"outgoing":str(drop_velocity)})
 			message.text = "Block touch"
 			return
