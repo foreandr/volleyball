@@ -7,7 +7,7 @@ uniform bool highlight;
 uniform vec4 miss : source_color;
 void fragment() {
 	vec2 p = UV * 2.0 - 1.0;
-	float t = atan(p.y, p.x) / PI;
+	float t = atan(-p.y, p.x) / PI;
 	float r = length(p);
 	if (t < 0.0 || r < 0.77 || r > 0.99) discard;
 	float progress = 1.0 - t;
