@@ -23,6 +23,11 @@ Home offers Career, Play, Training Camp with performance stars, Create Player, S
 ## Rules and techniques
 Short court confines both teams to the three-meter zones and allows normal attacks, back sets and jump sets. Volleys begins with an underhand serve and requires one touch over the net. Singles plays like tennis. Team volleys rotates entrants through the back and eliminates the responsible player on a floor ball or error, down to uneven sides such as 1v6. Support short-court volleys. Arcade supports 1v1 through 10v10 with slow time, fire, ice, stun, super jumps, teleportation and lightning.
 
+Future arcade spike challenges include two power shots:
+
+- Roof the ball. Spike the ball into the opposite court and bounce it high enough to hit the gym ceiling.
+- Bounce it back. Spike the ball into the opposite court so its bounce carries it back over the net to the hitter's side without another touch.
+
 All players have individual forearm and hand ratings for each of reception, setting and defense. Dives and lunges use the relevant rating. Height spans 5–7 feet, vertical 10–60 inches. Include wingspan, block, speed, stamina and separate ratings for underhand, standing float, jump float, spin, spin-to-float hybrid, float-to-spin hybrid and sky ball. Hold to prepare, reducing mobility. Release at the contact hitbox. Mouse wheel and controller adjust angles. Timing, force, incoming pace, wetness and skill control the vertical and horizontal error cone, including backward errors. Absorb hard contact with elbow give. High arcs enable sky balls; powerful serves have narrower timing and fast descents.
 
 Support cross, line, high hands and stuff blocks. CPU pairs in 3v3 and triples in 6v6 share one block takeoff instant. Include swing, squat and deep beach blocks and long-approach and squat attacks. Include dolphin, pokey, fist, punch, double pokey, spike, jump set, two-ball pokey, back-bump dump, hand-set dump and back-set dump. Dig with either arm, both arms, hands, center platform, chest, head and pancake. Use distinct reach, contact and recovery animations.
