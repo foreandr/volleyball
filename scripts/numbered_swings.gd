@@ -55,11 +55,11 @@ static func align_draw_palm(clip: Animation, rig: Skeleton3D, start: int, hit: i
 		fingers=wrist.direction_to(point.call("middle_01_r"))
 		edge=point.call("pinky_01_r")-point.call("index_01_r")
 		normal=fingers.cross(edge).normalized()
-		if normal.y>-.15 and fingers.slide(Vector3.UP).length()>.15:
+		if normal.y>-.15 and fingers.slide(Vector3.UP).length()>.001:
 			var hand := rig.find_bone("hand_r")
 			var hand_axis := rig.get_bone_global_pose(hand).basis.inverse()*fingers
 			var residual := normal.signed_angle_to(Vector3.DOWN.slide(fingers),fingers)
-			var hand_rotation := rig.get_bone_pose_rotation(hand)*Quaternion(hand_axis.normalized(),clampf(residual,-.52,.52)*weight)
+			var hand_rotation := rig.get_bone_pose_rotation(hand)*Quaternion(hand_axis.normalized(),clampf(residual,-.62,.62)*weight)
 			clip.rotation_track_insert_key(session.rotation_tracks[hand],f/60.,hand_rotation.normalized())
 
 static func rotation(rng: RandomNumberGenerator,width: Vector3) -> Quaternion:
