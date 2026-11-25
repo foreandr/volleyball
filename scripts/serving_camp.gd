@@ -43,9 +43,11 @@ func start_drill() -> void:
 		serves.append(driver)
 	title.text="SERVING"
 	Xbox.prompts(controls_row,[["A","Spin"],["B","Jump float"],["X","Standing float"],["Y","Underhand"]])
-	camera.position=Vector3(0,3.8,-11.2)
-	camera.look_at(Vector3(0,1.6,3.))
+	apply_camera.call_deferred()
 	next_serve()
+
+func apply_camera() -> void:
+	place_practice_camera(Vector3(0,1.5,-4.4),distance*.48)
 
 func next_serve() -> void:
 	phase="serve_ready"

@@ -596,9 +596,11 @@ func reset_feed() -> void:
 	meter.value = 0
 
 func apply_camera() -> void:
-	var pivot := gym.transform*Vector3(0,1.35,1.0)+camera_lead
+	place_practice_camera(gym.transform*Vector3(0,1.35,1.0)+camera_lead,distance)
+
+func place_practice_camera(pivot: Vector3, arm_length: float) -> void:
 	var angle := deg_to_rad(elevation)
-	var arm := gym.basis*Vector3(sin(yaw)*cos(angle),sin(angle),-cos(yaw)*cos(angle))*distance
+	var arm := gym.basis*Vector3(sin(yaw)*cos(angle),sin(angle),-cos(yaw)*cos(angle))*arm_length
 	var obstruction := contacts.sweep(world,contacts.camera_shape,pivot,arm,Contact.GYM)
 	camera.position = pivot+arm*float(obstruction.get("fraction",1.0))
 	camera.look_at(pivot)
