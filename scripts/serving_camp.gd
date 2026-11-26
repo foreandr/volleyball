@@ -31,7 +31,7 @@ var pass_clock := 0.
 const SETTER_HOME := Vector3(3.45,.04,11.1)
 const SETTER_BASE := Vector3(1.4,.04,5.2)
 # Receive in rotation one. The front row can hit in its reception lanes.
-const ATTACK_POINTS := [Vector3(3.55,3.05,5.05), Vector3(0,3.05,5.0), Vector3(-3.55,3.05,5.05), Vector3(0,3.05,6.25)]
+const ATTACK_POINTS := [Vector3(3.55,3.05,5.05), Vector3(0,3.05,5.0), Vector3(-4.28,3.05,5.05), Vector3(0,3.05,6.25)]
 var attack_slot := 0
 var middle_31 := false
 var called_slot := 0
@@ -124,6 +124,7 @@ const SET_LOAD := .20
 var pass_end := Vector3.ZERO
 var receive_at := 0.
 var leave_serve := false
+var first_pass_dropping := false
 var pass_duration := 1.25
 const Reception = preload("res://scripts/bump_setting.gd")
 var receptions: Array[Reception]=[]
@@ -312,6 +313,7 @@ func contact_deadline() -> float:
 	return flight_time+.12
 
 func next_serve() -> void:
+	first_pass_dropping=false
 	replay_rally+=1
 	middle_31=randf()<.5
 	called_slot=3 if randf()<.22 else randi_range(0,2)
@@ -637,11 +639,14 @@ func _process(delta: float) -> void:
 			shot.advance_serve_curve(flight_age)
 			shot.spin_serve_ball(delta)
 			ball.basis=shot.ball.basis
-			var t := minf(flight_age,shot.planned_duration)
+			var landing_time: float=shot.net_hit.end_time if not shot.net_hit.is_empty() else shot.planned_duration
+			var t := minf(flight_age,landing_time)
 			var previous := ball.position
 			ball.position=BallNet.after_hit(shot.net_hit,t) if not shot.net_hit.is_empty() and t>=shot.net_hit.time else shot.flight_point(t)
 			var motion_step := ball.position-previous
 			var surface := contacts.sweep(world,contacts.ball_shape,previous,motion_step,Contact.GYM|Contact.EQUIPMENT)
+			if surface.is_empty() and flight_age>=landing_time:
+				surface={"normal":Vector3.UP,"fraction":1.}
 			if not surface.is_empty():
 				ball.position=previous+motion_step*float(surface.fraction)+Vector3(surface.normal)*.004
 				var incoming := motion_step/maxf(delta,.001)
@@ -654,6 +659,7 @@ func _process(delta: float) -> void:
 				roll_time=-1.
 				flight_age=0.
 				phase="serve_miss"
+				if surface.normal.y>.8 and ball.position.y<.26 and on_receiving_court(ball.position): show_service_ace()
 				trace("serve_gym_contact",{"normal":str(surface.normal),"point":str(ball.position)})
 				return
 			if ball.position.z>BallNet.NET_Z or shot.net_hit.is_empty():
@@ -746,6 +752,7 @@ func begin_offense(passer: Node3D,platform: Reception) -> void:
 	var height: float=second_contact_player().height_cm*.0118
 	var discriminant := velocity.y*velocity.y-19.62*(height-pass_start.y)
 	if discriminant<0.:
+		first_pass_dropping=last_shot_slot<0
 		ball.position=pass_start
 		drop_velocity=velocity
 		phase="serve_miss"
@@ -959,6 +966,7 @@ func step_reception_rally(delta: float) -> void:
 		if pass_clock>=set_at:
 			var hands_height: float=second_contact_player().global_position.y+second_contact_player().height_cm*.0118
 			if ball.position.z<BallNet.NET_Z or ball.position.y>hands_height+.24 or (second_contact_player().position-ball.position).slide(Vector3.UP).length()>.85:
+				first_pass_dropping=last_shot_slot<0
 				trace("serve_set_miss",{"jumped":receiving_jump.active,"ball":str(ball.position),"setter":str(second_contact_player().position)})
 				var t := pass_clock/pass_duration
 				drop_velocity=(pass_end-pass_start+Vector3.UP*arc_term*(1.-2.*t))/pass_duration
@@ -1096,7 +1104,20 @@ func block_on_flight_segment(previous: Vector3) -> bool:
 	return_touched=resolve_block_contact(previous,wall_jumps,-1.)
 	return return_touched
 
+func on_receiving_court(point: Vector3) -> bool:
+	return absf(point.x)<=4.5 and point.z>=BallNet.NET_Z and point.z<=BallNet.NET_Z+9.
+
+func show_service_ace() -> void:
+	message.text="Service ace"
+	trace("service_ace",{"point":str(ball.position)})
+
 func attack_surface_contact(point: Vector3,floor_hit: bool) -> void:
+	if first_pass_dropping:
+		first_pass_dropping=false
+		var served_side_in := floor_hit and absf(point.x)<=4.5 and point.z<BallNet.NET_Z and point.z>=BallNet.NET_Z-9.
+		if not served_side_in:
+			show_service_ace()
+			flight_age=0.
 	if phase!="serve_return":
 		super.attack_surface_contact(point,floor_hit)
 		return
