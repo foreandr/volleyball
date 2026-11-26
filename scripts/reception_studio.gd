@@ -506,10 +506,14 @@ func sample_receiver(c: Dictionary,f: float) -> void:
 		var load_weight := smoothstep(-HandPass.CPU_PREP_LEAD,0.,follow)
 		var rig: Skeleton3D=player.skeleton
 		var forehead := rig.to_global(rig.get_bone_global_pose(rig.find_bone("Head")).origin).y+.12
-		pose_hand_pass_legs(goal,forehead,follow,c.get("jump_set",false))
-		var reach_weight := load_weight*(1.-smoothstep(.035,.28,follow))
-		lean_for_hand_pass(goal,reach_weight)
-		HandPass.standing_set(player,goal,offset,push,follow,load_weight,Vector3.ZERO,false)
+		var jump_set: bool=c.get("jump_set",false)
+		if jump_set:
+			jump_to_set(goal,follow)
+		else:
+			pose_hand_pass_legs(goal,forehead,follow)
+			var reach_weight := load_weight*(1.-smoothstep(.035,.28,follow))
+			lean_for_hand_pass(goal,reach_weight)
+		HandPass.standing_set(player,goal,offset,push,follow,load_weight,Vector3.ZERO,jump_set)
 		return
 	if not Regions.movement(c):
 		sample_layer(index,c,f)
@@ -545,14 +549,40 @@ func lean_for_hand_pass(goal: Vector3, weight: float) -> void:
 		var id := rig.find_bone(spine)
 		rig.set_bone_pose(id,pose[id])
 
-func pose_hand_pass_legs(goal: Vector3, standing_height: float, follow: float, jump_set: bool) -> void:
+func jump_to_set(goal: Vector3, follow: float) -> void:
+	var rig: Skeleton3D=player.skeleton
+	var head := rig.to_global(rig.get_bone_global_pose(rig.find_bone("Head")).origin)
+	var pocket: Vector3=head+player.global_basis.z.normalized()*.23+Vector3.UP*.16
+	var gap := goal-pocket
+	var apex := clampf(gap.y+.07,.12,.48)
+	# Allow enough flight time to cover the horizontal gap as well as the rise.
+	var contact_rise := clampf(gap.y,.035,apex)
+	var descent := sqrt(2.*(apex-contact_rise)/9.81)
+	var lead := maxf(sqrt(2.*apex/9.81)+descent,minf(.52,gap.slide(Vector3.UP).length()/4.8))
+	var upward_speed := contact_rise/lead+4.905*lead
+	var half_air := upward_speed/9.81
+	apex=upward_speed*upward_speed/(2.*9.81)
+	var t := follow+lead
+	var travel: Vector3=player.global_basis.inverse()*gap.slide(Vector3.UP)
+	var fraction := clampf(t,0.,2.*half_air)/lead
+	var landing := 2.*half_air-lead
+	var recover := smoothstep(landing+.10,landing+.57,follow)
+	var offset := travel.limit_length(5.5*lead)*fraction*(1.-recover)
+	player.position=offset
+	player.position.y=maxf(0.,apex-4.905*(t-half_air)*(t-half_air))
+	var load := smoothstep(-.16,-.06,t)*(1.-smoothstep(-.06,0.,t))
+	var compression := clampf(contact_rise-gap.y,0.,.38)*smoothstep(-.16,0.,t)*(1.-recover)
+	var cushion := smoothstep(landing,landing+.06,follow)*(1.-smoothstep(landing+.06,landing+.20,follow))
+	bend_for_hand_pass(compression+.10*(load+cushion))
+
+func pose_hand_pass_legs(goal: Vector3, standing_height: float, follow: float) -> void:
 	var drop := standing_height-goal.y
-	if jump_set or drop < -.10:
-		var height := clampf(-drop-.06,.18 if jump_set else .04,.38)
+	if drop < -.10:
+		var height := clampf(-drop-.06,.04,.38)
 		var half_flight := sqrt(2.*height/9.81)
 		var rise := maxf(0.,height-4.905*follow*follow)
 		var drift: Vector3=player.to_local(goal).slide(Vector3.UP)-Vector3(0,0,.20)
-		player.position+=drift.limit_length(1.0 if jump_set else .32)*(rise/height)
+		player.position+=drift.limit_length(.32)*(rise/height)
 		player.position.y=rise
 		var before := smoothstep(-half_flight-.19,-half_flight-.09,follow)*(1.-smoothstep(-half_flight-.09,-half_flight,follow))
 		var after := smoothstep(half_flight,half_flight+.08,follow)*(1.-smoothstep(half_flight+.08,half_flight+.22,follow))

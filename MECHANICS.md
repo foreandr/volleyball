@@ -138,4 +138,4 @@ Reception Studio can trace the incoming ball in red only inside the selected def
 Future feature: players can create custom setter hand signs and assign each gesture to a setting option for pre-play calls.
 Reflexes (0-100) controls CPU read latency in blocking and digging drills, serve-return defense and match play. Effective Reflexes includes stamina. A live set cues a read block and an attack cues a defensive reaction. At full effectiveness the delay ranges from 240 ms to 60 ms; anticipation on a commit block is separate. Older player profiles default to 65.
 Assigned reception misses display the contact gap from the contact frame onward and log time, defender, region, animation, target, and contact position once per live feed. Hand passes lean toward the feed, adjust squat and step depth, and drift toward high feeds in the jump.
-High Center in the Back slice defaults to jump set #78, using the overhead setting release at the jump apex.
+High Center in the Back slice defaults to jump set #78, timing an upright directional jump from the predicted hand-contact height and horizontal distance, with lower feeds met on descent.
