@@ -77,6 +77,7 @@ var mirror := CheckButton.new()
 var elapsed := 0.
 var source := ""
 var pick_boxes: Array[Dictionary]=[]
+var selected_only := CheckButton.new()
 var unfinished := CheckButton.new()
 var sidebar := PanelContainer.new()
 const FOREARM = preload("res://assets/animations/straight_pass_02.res")
@@ -463,7 +464,7 @@ func draw_pose() -> void:
 	var full_duration := clampf(launch.distance_to(aim)/maxf(1.,incoming_speed.value/3.6),.48,1.25)
 	var rig: Skeleton3D=player.skeleton
 	var grid := grid_for(receiving)
-	var key := [launch,aim,grid.global_transform,cell,quadrant,forearm_preview,hand_leg_preview]
+	var key := [launch,aim,grid.global_transform,cell,quadrant,forearm_preview,hand_leg_preview,selected_only.button_pressed]
 	if route_key!=key:
 		route_key=key
 		trace_incoming_regions(grid.to_local(launch),grid.to_local(aim))
@@ -553,7 +554,9 @@ func trace_incoming_regions(start: Vector3, aim: Vector3) -> void:
 		var point := start.lerp(aim,u)+Vector3.UP*6.*u*(1.-u)
 		var earliest := INF
 		for box in flight_boxes:
-			var audition: bool=box.address==cell and box.part==quadrant and (forearm_preview or hand_leg_preview)
+			var selected: bool=box.address==cell and box.part==quadrant
+			if selected_only.button_pressed and not selected: continue
+			var audition: bool=selected and (forearm_preview or hand_leg_preview)
 			if not box.assigned and not audition: continue
 			var span := zone_interval(previous,point,box.bounds)
 			if span.y<=span.x or span.x>=earliest: continue
@@ -968,6 +971,13 @@ func build_map(tiers: VBoxContainer) -> void:
 	title.text="Contact map"
 	section_title(title)
 	tiers.add_child(title)
+	selected_only.text="Test selected box only"
+	selected_only.button_pressed=StorySession.game_options.get_value("reception_studio","test_selected_only",false)
+	tiers.add_child(selected_only)
+	selected_only.toggled.connect(func(on):
+		StorySession.game_options.set_value("reception_studio","test_selected_only",on)
+		StorySession.save_options()
+		draw_pose())
 	unfinished.text="Unassigned only"
 	unfinished.button_pressed=StorySession.game_options.get_value("reception_studio","unassigned_only",false)
 	tiers.add_child(unfinished)
