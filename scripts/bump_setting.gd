@@ -637,6 +637,8 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 				var fraction := first.distance_to(point)/maxf(0.00001,first.distance_to(last))
 				touch_time = lerpf(sweep_start,sweep_end,clampf(fraction,0.0,1.0))
 				touch = point
+				if not hand_setting and not pancake:
+					touch=point.move_toward(center,minf(.06,maxf(0.,gap_after_adjustment-radius)))
 				if not is_finite(cue_arrival) or low_save.active: timing = touch_time-pressed_at
 				if assisted and not guided_pass: reach_platform(point-center,1.0,0.26,false,true)
 				grade = Timing.Grade.LATE if timing < green_start else (Timing.Grade.EARLY if timing > green_end else Timing.Grade.PERFECT)

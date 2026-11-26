@@ -502,7 +502,7 @@ func _process(delta: float) -> void:
 	if pin_attack.enabled:
 		if phase=="serve_attack" and not aim_read and pin_attack.pin_arrival-pass_clock<=.23:
 			aim_read=true
-			pin_attack.swing_aim=pin_frame.to_local(scoring_target(pass_end))
+			choose_rally_attack(pass_end)
 		pin_attack.tick_attack(delta)
 	if not pin_attack.enabled or pin_attack.setter!=pin_hitter: pin_hitter.animator.advance(delta)
 	if not middle_decoy.enabled and (not pin_attack.enabled or pin_attack.setter!=receiving_middle): receiving_middle.animator.advance(delta)
@@ -1101,8 +1101,8 @@ func scoring_target(origin: Vector3) -> Vector3:
 				var at_block := clampf((blocker.global_position.z-origin.z)/(point.z-origin.z),0.,1.)
 				var lane := lerpf(origin.x,x,at_block)
 				gap=minf(gap,absf(lane-blocker.global_position.x)-.48)
-			var margin := crossing.y-BallNet.NET_TOP-BallNet.RADIUS-.13
-			if margin<0.: continue
+			var flight := origin.distance_to(point)/maxf(1.,attack_kmh/3.6)
+			var margin := crossing.y+4.905*flight*flight*u*(1.-u)-BallNet.NET_TOP-BallNet.RADIUS-.13
 			var score := minf(gap,2.2)+.22*lane_space(x)-5.*maxf(0.,-margin)+randf()*.04
 			if score>best:
 				best=score
@@ -1196,29 +1196,51 @@ func try_cover(previous: Vector3,delta: float) -> void:
 	trace("block_covered",{"player":defender.player_number,"diving":platform.low_save.active})
 	begin_offense(defender,platform)
 
+func choose_rally_attack(origin: Vector3) -> void:
+	var goal := scoring_target(origin)
+	var fraction := clampf((BallNet.NET_Z-origin.z)/(goal.z-origin.z),.01,.99)
+	var lane := lerpf(origin.x,goal.x,fraction)
+	var nearest: Node3D=wall[0]
+	for defender in wall:
+		if absf(defender.global_position.x-lane)<absf(nearest.global_position.x-lane): nearest=defender
+	var flight := origin.distance_to(goal)/maxf(1.,attack_kmh/3.6)
+	var margin := lerpf(origin.y,goal.y,fraction)+4.905*flight*flight*fraction*(1.-fraction)-BallNet.NET_TOP-BallNet.RADIUS
+	var shot := "spike"
+	if margin<-.20:
+		shot="roll"
+	elif absf(nearest.global_position.x-lane)<.95:
+		shot=["roll","tip","cut","high hands"].pick_random()
+	match shot:
+		"tip":
+			goal.z=BallNet.NET_Z-1.8
+			goal.x=clampf(lane+(-1.25 if nearest.global_position.x>=lane else 1.25),-4.2,4.2)
+		"cut":
+			goal=Vector3(-3.9 if origin.x>0. else 3.9,.145,BallNet.NET_Z-2.6)
+		"high hands":
+			var outside := -1. if nearest.global_position.x<0. else 1.
+			goal.x=origin.x+(nearest.global_position.x+outside*.30-origin.x)/fraction
+	pin_attack.rally_shot=shot
+	pin_attack.swing_aim=pin_frame.to_local(goal)
+
 func return_struck(_actor: Node3D,point: Vector3,velocity: Vector3,_spin: float) -> void:
 	if phase!="serve_attack": return
-	# A set can drift between the read and palm contact. Keep the chosen lane,
-	# extending its depth only when the actual launch would clip the tape.
-	if velocity.z<-.01 and point.z>BallNet.NET_Z:
-		var t := (BallNet.NET_Z-point.z)/velocity.z
-		var clearance := point.y+velocity.y*t-4.905*t*t-BallNet.NET_TOP-BallNet.RADIUS
-		if clearance<.06:
-			var goal := pin_frame.to_global(pin_attack.swing_contact_aim)
-			var speed := velocity.length()
-			for depth in 12:
-				goal.z=maxf(BallNet.NET_Z-8.8,goal.z-.65)
-				var offset := goal-point
-				var term := speed*speed-9.81*offset.y
-				var disc := term*term-9.81*9.81*offset.length_squared()
-				if disc<0.: break
-				var duration := sqrt(2.*offset.length_squared()/(term+sqrt(disc)))
-				var trial := offset/duration+Vector3.UP*4.905*duration
-				t=(BallNet.NET_Z-point.z)/trial.z
-				if point.y+trial.y*t-4.905*t*t>=BallNet.NET_TOP+BallNet.RADIUS+.06:
-					velocity=trial
-					break
-	trace("serve_attack_strike",{"slot":attack_slot,"speed_kmh":velocity.length()*3.6,"point":str(point)})
+	var goal := pin_frame.to_global(pin_attack.swing_aim)
+	var offset := goal-point
+	var fraction := (BallNet.NET_Z-point.z)/minf(-.01,offset.z)
+	if fraction>0. and fraction<1.:
+		var shot: String=pin_attack.rally_shot
+		var duration := offset.slide(Vector3.UP).length()/maxf(1.,velocity.slide(Vector3.UP).length())
+		if shot=="roll" or shot=="tip":
+			duration=maxf(duration,offset.slide(Vector3.UP).length()/(6. if shot=="tip" else 9.))
+		var clearance := .14
+		if shot=="high hands":
+			for defender in wall:
+				if absf(defender.global_position.x-lerpf(point.x,goal.x,fraction))<.8:
+					clearance=maxf(clearance,Contact.palm(defender,"r").y-BallNet.NET_TOP)
+		var lift := BallNet.NET_TOP+BallNet.RADIUS+clearance-lerpf(point.y,goal.y,fraction)
+		duration=maxf(duration,sqrt(maxf(0.,lift)/(4.905*fraction*(1.-fraction))))
+		velocity=offset/maxf(.05,duration)+Vector3.UP*4.905*duration
+	trace("serve_attack_strike",{"slot":attack_slot,"shot":pin_attack.rally_shot,"speed_kmh":velocity.length()*3.6,"point":str(point)})
 	for defender in wall: defender.block_read(_actor).record_velocity(velocity)
 	for i in recent_misses.size(): recent_misses[i]*=.8
 	recent_misses[attack_slot]*=.35
@@ -1233,8 +1255,8 @@ func return_struck(_actor: Node3D,point: Vector3,velocity: Vector3,_spin: float)
 	roll_time=-1.
 	floor_linger=0.
 	attack_floor_pending=true
-	hard_spike_floor_pending=true
-	hand_impact.play()
+	hard_spike_floor_pending=pin_attack.rally_shot not in ["tip","roll"]
+	if pin_attack.rally_shot!="tip": hand_impact.play()
 	phase="serve_return"
 
 func step_serve_wall(delta: float) -> void:

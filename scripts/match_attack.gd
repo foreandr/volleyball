@@ -10,6 +10,7 @@ var contact_phase := 0.
 var live_swing_phase := 0.
 var chase_late_sets := false
 var decoy_swing := false
+var rally_shot := "spike"
 var drill_speed_mps := 0.
 var spike_strength := 1.0
 # Jog_Fwd is a loop. The leading ankle reaches support at 0.023 s and half a cycle later.
@@ -67,6 +68,7 @@ func configure_for_match(actor: Node3D, readout: Label) -> void:
 
 func start_set(actor: Node3D, origin: Vector3, velocity: Vector3, target: Vector3, shot: Vector3, age: float, held: bool) -> void:
 	setter = actor
+	rally_shot="spike"
 	feed_origin=origin
 	jump.attack_arm_lift=chase_late_sets
 	jump.reserve_two_step_runway=chase_late_sets
@@ -255,7 +257,7 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 	var height := jump.assisted_height*jump.takeoff_effectiveness
 	camp_swing.apply(setter,jump,"spike" if hit else "set",swing_age,contact_phase,ball.global_position,
 		to_global(feed_origin),to_global(rally_set_target),to_global(swing_contact) if hit else ball.global_position,
-		to_global(swing_aim),contact_offset,height,factor,speed,1.,0,-1.,false,false,0.,true)
+		to_global(swing_aim),contact_offset,height,factor,speed,1.,0,-1.,rally_shot=="roll",rally_shot=="tip",.35,true)
 
 func hit_spike(charge: float, point: Vector3, palm_gap := 0.0) -> void:
 	if chase_late_sets:
