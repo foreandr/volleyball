@@ -14,6 +14,7 @@ const AIR_STEER_SPEED := 1.00
 const AIR_STEER_ACCELERATION := 5.0
 var active := false
 var load_bend_extra := 0.0
+var reserve_two_step_runway := false
 var attack_arm_lift := false
 var load_arm_extra := 0.0
 var front_limit := 2.5
@@ -139,7 +140,7 @@ func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time
 		approach_lunge = reach.normalized()*clampf(reach.length()-0.055,0.0,0.95)
 		attack_glide = minf(glide,stride*0.68)
 		stride -= attack_glide
-		if attack_arm_lift and glide>0. and approach_steps>=3:
+		if attack_arm_lift and glide>0. and (approach_steps>=3 or reserve_two_step_runway):
 			# Reserve the last metre for takeoff-to-contact travel when runway allows.
 			var runway := ball_offset.length()
 			var reserve := .90*smoothstep(.65,1.85,runway)

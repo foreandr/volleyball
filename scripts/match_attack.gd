@@ -7,6 +7,7 @@ var camp_swing := preload("res://scripts/camp_spike_pose.gd").new()
 var feed_origin := Vector3.ZERO
 var contact_offset := Vector3.ZERO
 var contact_phase := 0.
+var live_swing_phase := 0.
 var chase_late_sets := false
 var decoy_swing := false
 var drill_speed_mps := 0.
@@ -68,6 +69,7 @@ func start_set(actor: Node3D, origin: Vector3, velocity: Vector3, target: Vector
 	setter = actor
 	feed_origin=origin
 	jump.attack_arm_lift=chase_late_sets
+	jump.reserve_two_step_runway=chase_late_sets
 	camp_swing.last_shoulder_time=-1.
 	camp_swing.reach_assist=Vector3.ZERO
 	bump.setter = actor
@@ -221,7 +223,7 @@ func drive_lead_time(duration: float) -> float:
 	return duration+.055 if chase_late_sets else super.drive_lead_time(duration)
 
 func spike_assist_radius() -> float:
-	return .30 if chase_late_sets else .19
+	return PALM_RADIUS if chase_late_sets else .19
 
 func sync_approach_arm_lift() -> bool:
 	return not chase_late_sets
@@ -241,16 +243,26 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 	var factor := pow(speed/14.,.48)*(1.+(float(setter.attributes.get("Arm swing",65))-65.)*.004)
 	var hit := stage==Stage.HIT
 	var swing_age := contact_phase+clock-stage_start if hit else clock-stage_start-pin_arrival+.13/factor
+	if not hit:
+		var rig: Skeleton3D=setter.skeleton
+		var shoulder := rig.to_global(rig.get_bone_global_pose(rig.find_bone("upperarm_r")).origin)
+		var distance := shoulder.distance_to(ball.global_position)
+		var arm_length: float=setter.height_cm*.0042
+		var proximity := 1.-smoothstep(arm_length+.10,arm_length+.65,distance)
+		swing_age=minf(swing_age,lerpf(.025,.13,proximity)/factor)
+		live_swing_phase=swing_age
 	var height := jump.assisted_height*jump.takeoff_effectiveness
 	camp_swing.apply(setter,jump,"spike" if hit else "set",swing_age,contact_phase,ball.global_position,
 		to_global(feed_origin),to_global(rally_set_target),to_global(swing_contact) if hit else ball.global_position,
-		to_global(swing_aim),contact_offset,height,factor,speed,1.,0,-1.)
+		to_global(swing_aim),contact_offset,height,factor,speed,1.,0,-1.,false,false,0.,true)
 
 func hit_spike(charge: float, point: Vector3, palm_gap := 0.0) -> void:
 	if chase_late_sets:
-		var speed := drill_speed_mps if drill_speed_mps>0. else 25.
-		var factor := pow(speed/14.,.48)*(1.+(float(setter.attributes.get("Arm swing",65))-65.)*.004)
-		contact_phase=clock-stage_start-pin_arrival+.13/factor
+		contact_phase=live_swing_phase
+		if not decoy_swing:
+			for modifier in setter.skeleton.get_children():
+				if modifier.has_method("mark_spike_contact"):
+					modifier.mark_spike_contact(setter.get_pose_author(),to_global(point))
 		var rig: Skeleton3D=setter.skeleton
 		contact_offset=rig.to_local(to_global(point))-rig.get_bone_global_pose(rig.find_bone("upperarm_r")).origin
 	super.hit_spike(charge,point,palm_gap)

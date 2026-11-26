@@ -458,6 +458,7 @@ func _process(delta: float) -> void:
 	receiving_setter.stamina.recover(delta)
 	pin_hitter.stamina.recover(delta)
 	receiving_middle.stamina.recover(delta)
+	var started_in_return := phase=="serve_return"
 	if pin_attack.enabled:
 		if phase=="serve_attack" and not aim_read and pin_attack.pin_arrival-pass_clock<=.23:
 			aim_read=true
@@ -513,6 +514,7 @@ func _process(delta: float) -> void:
 	if middle_decoy.enabled: middle_decoy.tick_attack(delta)
 	step_serve_wall(delta)
 	if phase=="serve_return":
+		if not started_in_return: return
 		var previous := ball.global_position
 		var was_touched := return_touched
 		advance_missed_ball(delta,true)
@@ -732,7 +734,7 @@ func stage_attacker(actor: Node3D,slot: int,delta: float) -> void:
 	var pin_load := 0.
 	if slot in [0,2] and phase=="serve_pass":
 		pin_load=smoothstep(0.,.52,.57-(set_at-pass_clock))
-		point.z-=1.05*pin_load
+		if slot!=attack_slot: point.z-=1.05*pin_load
 	if slot==1 and phase in ["serve_toss","serve_flight","serve_pass"]:
 		var start := second_contact_player().global_position.slide(Vector3.UP)
 		var finish := (pass_end if phase=="serve_pass" else SETTER_BASE).slide(Vector3.UP)
@@ -896,12 +898,12 @@ func step_reception_rally(delta: float) -> void:
 				pin_attack.pass_origin=pin_frame.to_local(pass_start)
 				pin_attack.pass_motion=pin_frame.global_basis.inverse()*velocity
 				pin_attack.stage_start=pin_attack.clock
-				pin_attack.pin_arrival=duration
 				pin_attack.rally_set_target=pin_frame.to_local(pass_end)
 				pin_attack.approach_intercept=pin_frame.to_local(pass_end)
 				pin_attack.flight_end=preload("res://scripts/pass_flight.gd").landing_time(pin_attack.pass_origin,pin_attack.pass_motion)
 				pin_attack.swing_aim=pin_frame.to_local(target)
 			else: pin_attack.start_set(attacker,pin_frame.to_local(pass_start),pin_frame.global_basis.inverse()*velocity,pin_frame.to_local(pass_end),pin_frame.to_local(target),0.,true)
+			pin_attack.pin_arrival=duration
 			trace("serve_attack_set",{"slot":attack_slot,"duration":duration,"hitter_gap_m":ready_gap,"approach_started":prepared,"release_depth_m":pass_start.z-BallNet.NET_Z,"in_system":pass_in_system,"middle_commit":middle_commit})
 			aim_read=false
 			phase="serve_attack"

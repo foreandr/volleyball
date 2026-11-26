@@ -123,3 +123,4 @@ In serving camp, available front-row hitters retreat facing the ball to 3.3 m of
 After a covered block in serving camp, grounded defenders shuffle back to their own lanes. Each can shade its base by up to 45 cm using its read of the hitter in that lane before closing on the next set.
 Block contacts in attack and serve rallies use the first intersected capsule and deflect according to impact direction. Replay marks the contacted segment in red. The receiving libero clears approach lanes toward deep zone five when free to cover.
 Serving-camp rally hitters and middle decoys use the attack-camp plant arm lift and the same airborne pose solver as attack camp. Set tracking and contact timing remain live.
+Serve-receive hitters reserve horizontal travel for the airborne approach where space allows. Their strike tracks the incoming set and replay presents the palm contact before the outgoing flight.

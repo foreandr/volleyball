@@ -13,7 +13,7 @@ var reach_assist := Vector3.ZERO
 func apply(hitter: Node3D,attack_jump: Jump,phase: String,swing_time: float,contact_swing_time: float,
 		ball_world: Vector3,source: Vector3,endpoint: Vector3,strike_point: Vector3,landing: Vector3,
 		strike_shoulder_offset: Vector3,height: float,speed_factor: float,speed: float,
-		spike_pike_scale: float,spin_choice: int,net_clear_time: float,roll_shot := false,tip_shot := false,roll_reach := 0.) -> void:
+		spike_pike_scale: float,spin_choice: int,net_clear_time: float,roll_shot := false,tip_shot := false,roll_reach := 0., track_contact := false) -> void:
 	if swing_time>.65:
 		if last_shoulder_time>=0.:
 			var rig: Skeleton3D=hitter.skeleton
@@ -201,6 +201,14 @@ func apply(hitter: Node3D,attack_jump: Jump,phase: String,swing_time: float,cont
 		var axis := lever.cross(target)
 		if axis.length_squared()>.00000001:
 			author.rotate_world(pose,bone,axis.normalized(),minf(lever.angle_to(target),deg_to_rad(5. if bone=="spine_02" else 8.)))
+	if track_contact and phase=="set" and reach>.25:
+		var wrist_at: Vector3=author.point(pose,"hand_r")
+		var palm_at: Vector3=wrist_at.lerp(author.point(pose,"middle_01_r"),.75)
+		var goal := rig.to_local(ball_world)-palm_at
+		var near_surface := maxf(0.,goal.length()-Contact.BALL_RADIUS/rig.global_basis.y.length())
+		var wrist_goal := wrist_at+goal.normalized()*minf(.22/rig.global_basis.y.length(),near_surface)
+		var pole: Vector3=author.point(pose,"lowerarm_r")-author.point(pose,"upperarm_r")
+		author.limb(pose,"upperarm_r","lowerarm_r","hand_r",wrist_goal,pole,smoothstep(.25,.86,reach),178.,true)
 	var arm_dt := maxf(0.,swing_time-last_shoulder_time)
 	for joint in ["pelvis","spine_01","spine_02","thigh_r","thigh_l","calf_r","calf_l","foot_r","foot_l","clavicle_r","upperarm_r","lowerarm_r","hand_r","clavicle_l","upperarm_l","lowerarm_l","hand_l"]:
 		var id := rig.find_bone(joint)

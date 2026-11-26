@@ -12,6 +12,48 @@ var push_arm: Array[bool]=[]
 var editor_bones: Array[Transform3D] = []
 var replay_bones: Array[Transform3D] = []
 
+var strike_author: RefCounted
+var strike_center := Vector3.INF
+
+func mark_spike_contact(author: RefCounted, center: Vector3) -> void:
+	strike_author=author
+	strike_center=center
+
+func finish_contact_pose(rig: Skeleton3D) -> void:
+	var pose: Array[Transform3D]=[]
+	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
+	var center := rig.to_local(strike_center)
+	var radius := preload("res://scripts/gym_physics.gd").BALL_RADIUS/rig.global_basis.y.length()
+	for iteration in 4:
+		var wrist: Vector3=strike_author.point(pose,"hand_r")
+		var palm := wrist.lerp(strike_author.point(pose,"middle_01_r"),.8)
+		var gap := center-palm
+		if gap.length()<=radius: break
+		if iteration>0:
+			var pivot: Vector3=strike_author.point(pose,"spine_02")
+			var lever := palm-pivot
+			var desired := center-gap.normalized()*radius-pivot
+			var axis := lever.cross(desired)
+			if axis.length_squared()>.000001:
+				strike_author.rotate_world(pose,"spine_02",axis.normalized(),minf(deg_to_rad(3.),lever.angle_to(desired)))
+				continue
+		var pole: Vector3=strike_author.point(pose,"lowerarm_r")-strike_author.point(pose,"upperarm_r")
+		strike_author.limb(pose,"upperarm_r","lowerarm_r","hand_r",wrist+gap.normalized()*(gap.length()-radius),pole,1.,178.,true)
+	# Let the shoulder girdle reach the last few centimetres with the straight arm.
+	var palm_end: Vector3=strike_author.point(pose,"hand_r").lerp(strike_author.point(pose,"middle_01_r"),.8)
+	var residual := center-palm_end
+	if residual.length()>radius:
+		var clavicle := rig.find_bone("clavicle_r")
+		var parent: Transform3D=strike_author.world_pose(pose,rig.get_bone_parent(clavicle))
+		var glide := residual.normalized()*minf(residual.length()-radius,.045/rig.global_basis.y.length())
+		rig.set_bone_pose_position(clavicle,pose[clavicle].origin+parent.basis.inverse()*glide)
+	for name_ in ["spine_02","upperarm_r","lowerarm_r"]:
+		var bone := rig.find_bone(name_)
+		var rotation := pose[bone].basis.orthonormalized().get_rotation_quaternion()
+		rig.set_bone_pose_rotation(bone,rotation)
+		previous[joints.find(bone)]=rotation
+	strike_center=Vector3.INF
+
 func _process_modification() -> void:
 	var rig := get_skeleton()
 	if joints.is_empty():
@@ -52,6 +94,7 @@ func _process_modification() -> void:
 		if back_grip>0.:
 			for side in ["l","r"]:
 				orient_back_palm(rig,side,back_grip,rig.get_meta("back_extension",0.))
+	if strike_center.is_finite(): finish_contact_pose(rig)
 	enforce_court_floor(rig)
 	if not editor_bones.is_empty():
 		for i in rig.get_bone_count(): editor_bones[i]=rig.get_bone_pose(i)
