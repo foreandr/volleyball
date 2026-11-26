@@ -58,6 +58,9 @@ func _ready() -> void:
 	for x in [-4.8,4.8]: box("SideTape",Vector3(0.05,1.0,0.025),Vector3(x,1.97,4),white)
 	for x in [-4.5,4.5]:
 		for stripe in range(8): box("Antenna",Vector3(0.018,0.1,0.018),Vector3(x,2.52+stripe*0.1,4),white if stripe%2 == 0 else material("cf493d"))
+	build_enclosure()
+
+func build_enclosure() -> void:
 	var wall := material("243a4b")
 	box("FarWall",Vector3(24,3.5,0.2),Vector3(0,1.65,49),wall)
 	box("LeftWall",Vector3(0.2,3.5,68),Vector3(-12,1.65,16),wall)

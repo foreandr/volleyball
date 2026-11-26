@@ -16,6 +16,10 @@ func box(label_: String,size_: Vector3,center: Vector3,style: Material) -> MeshI
 	if label_=="Bleacher bench": benches.append(part)
 	return part
 
+func build_enclosure() -> void:
+	# This gym builds its own masonry enclosure around the stands.
+	pass
+
 func _ready() -> void:
 	super()
 	# One continuous collider matches the visible maple instead of leaving a
