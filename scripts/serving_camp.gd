@@ -6,7 +6,12 @@ const LABELS := ["Spin","Float","Standing float","Underhand"]
 const HOMES := [Vector3(-2.9,.04,9.2),Vector3(0,.04,10.),Vector3(2.9,.04,9.2)]
 var serves := []
 var passers: Array[Node3D]=[]
-var timing := preload("res://scripts/ball_timing_ring.gd").new()
+const SERVE_EARLY := -.22
+const SERVE_LATE := .075
+const SERVE_PERFECT := .055
+var float_step_anchor := Vector3.ZERO
+var float_sample_anchor := Vector3.ZERO
+var float_contact_offset := Vector3.ZERO
 var toss_style := 2
 var hit_style := 2
 var release_time := INF
@@ -28,7 +33,6 @@ func start_drill() -> void:
 	for item in rotation_drill.stock: item.hide()
 	for target in targets: target.hide()
 	score_strip.hide()
-	world.add_child(timing)
 	hand_sound.bus=StorySession.IMPACT_BUS
 	hand_sound.stream=preload("res://assets/audio/hand_impacts.tres")
 	add_child(hand_sound)
@@ -42,9 +46,17 @@ func start_drill() -> void:
 	for i in TECHNIQUES.size():
 		var driver=TECHNIQUES[i].new()
 		world.add_child(driver)
+		if i==0: driver.camp_approach=true
 		driver.configure(setter,Vector3(0,.04,[-8.2,-6.6,-6.1,-6.1][i]))
 		driver.hide()
 		serves.append(driver)
+	var spin=serves[0]
+	spin.pose(spin.APPROACH_START)
+	float_sample_anchor=setter.position
+	serves[1].pose(serves[1].toss_release_time())
+	float_step_anchor=setter.position
+	spin.pose(spin.SPIN_CONTACT)
+	float_contact_offset=Contact.palm(setter,"r")+float_step_anchor-float_sample_anchor-serves[1].preview_origin
 	title.text="SERVING"
 	Xbox.prompts(controls_row,[["A","Spin"],["B","Jump float"],["X","Standing float"],["Y","Underhand"]])
 	apply_camera.call_deferred()
@@ -57,7 +69,6 @@ func next_serve() -> void:
 	phase="serve_ready"
 	serve_clock=0.
 	release_time=INF
-	timing.hide()
 	var ready=serves[2]
 	ready.reset()
 	ball.position=ready.ball.position
@@ -98,23 +109,38 @@ func handle_serve_button(style: int,pressed: bool) -> void:
 		elif not pressed and style==hit_style and not is_finite(release_time):
 			release_time=serve_clock
 
+func serve_meter_position(error: float) -> float:
+	return clampf(inverse_lerp(SERVE_EARLY-.08,SERVE_LATE+.025,error),0.,1.)
+
+func serve_meter_error() -> float:
+	var sample := release_time if is_finite(release_time) else serve_clock
+	return sample-(serves[toss_style].contact_time()-SERVE_LATE)
+
 func serve_pose(time: float) -> void:
 	var toss=serves[toss_style]
-	var offset: float=time-toss.contact_time()
-	var blend := smoothstep(-.20,-.04,offset)*(1.-smoothstep(.10,.28,offset))
-	if hit_style==toss_style or blend<=0.:
-		toss.pose(time)
-		return
-	var strike=serves[hit_style]
-	strike.pose(strike.contact_time()+offset)
-	var rig: Skeleton3D=setter.skeleton
-	var arm := {}
-	for joint in ["upperarm_r","lowerarm_r","hand_r"]:
-		var bone := rig.find_bone(joint)
-		arm[bone]=rig.get_bone_pose_rotation(bone)
 	toss.pose(time)
-	for bone in arm:
-		rig.set_bone_pose_rotation(bone,rig.get_bone_pose_rotation(bone).slerp(arm[bone],blend))
+	if toss_style>=2: return
+	var offset: float=time-toss.contact_time()
+	var rig: Skeleton3D=setter.skeleton
+	if toss_style==1 and time>toss.toss_release_time():
+		var spin=serves[0]
+		var blend := smoothstep(0.,.13,time-toss.toss_release_time())
+		var old_position := setter.position
+		var old_pose: Array[Transform3D]=[]
+		for i in rig.get_bone_count(): old_pose.append(rig.get_bone_pose(i))
+		var sample_time: float=spin.SPIN_CONTACT+offset if offset>=0. else lerpf(spin.APPROACH_START,spin.SPIN_CONTACT,inverse_lerp(toss.toss_release_time(),toss.contact_time(),time))
+		spin.pose(sample_time)
+		if offset<=0.: toss.ball.position+=float_contact_offset*smoothstep(toss.toss_release_time(),toss.contact_time(),time)
+		setter.position=old_position.lerp(float_step_anchor+setter.position-float_sample_anchor,blend)
+		for i in rig.get_bone_count(): rig.set_bone_pose(i,old_pose[i].interpolate_with(rig.get_bone_pose(i),blend))
+	if hit_style==1:
+		var author=setter.get_pose_author()
+		var pose: Array=[]
+		for i in rig.get_bone_count(): pose.append(rig.get_bone_pose(i))
+		serves[1].finish_float_wrist(pose,rig,author,serves[1].contact_time()+offset)
+		for joint in ["lowerarm_r","hand_r"]:
+			var i := rig.find_bone(joint)
+			rig.set_bone_pose_rotation(i,pose[i].basis.orthonormalized().get_rotation_quaternion())
 
 func _process(delta: float) -> void:
 	if serves.is_empty() or settings.visible or get_tree().paused: return
@@ -126,13 +152,9 @@ func _process(delta: float) -> void:
 		serve_pose(minf(serve_clock,strike))
 		motion.spin_toss_ball(previous,minf(serve_clock,strike),1.)
 		ball.transform=motion.ball.transform
-		timing.position=setter.position
-		var ideal := strike-.075
-		timing.update_timing(serve_clock,ideal,-.055,.055)
 		if serve_clock>=strike:
-			timing.hide()
-			var error := release_time-ideal
-			if absf(error)>.22:
+			var error := serve_meter_error() if is_finite(release_time) else INF
+			if error<SERVE_EARLY or error>SERVE_LATE:
 				phase="serve_miss"
 				message.text="Late" if error>0. else "Early"
 				drop_velocity=Vector3.ZERO
@@ -142,7 +164,7 @@ func _process(delta: float) -> void:
 				flight_age=0.
 			else:
 				var shot=serves[hit_style]
-				shot.origin=Contact.palm(setter,"r") if hit_style!=toss_style else ball.position
+				shot.origin=Contact.palm(setter,"r") if toss_style<2 else ball.position
 				shot.apex=maxf(shot.origin.y+.3,4.3 if hit_style==0 else 4.9)
 				shot.target=destination+Vector3(0,0,-error*8.)
 				shot.planned_duration=shot.flight_duration(shot.origin)
@@ -152,7 +174,7 @@ func _process(delta: float) -> void:
 				shot.ball.basis=ball.basis
 				flight_age=0.
 				phase="serve_flight"
-				message.text=("Perfect" if absf(error)<=.055 else ("Early" if error<0. else "Late"))+" / "+LABELS[hit_style]
+				message.text=("Perfect" if absf(error)<=SERVE_PERFECT else ("Early" if error<0. else "Late"))+" / "+LABELS[hit_style]
 				hand_sound.play()
 	elif phase in ["serve_flight","serve_pass","serve_miss"]:
 		serve_clock+=delta

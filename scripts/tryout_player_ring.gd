@@ -157,6 +157,9 @@ func draw_player(actor: Node3D,human: bool) -> void:
 		if spent>0.: draw_rect(Rect2(origin+Vector2(available,0),Vector2(spent,7)),Color("51cbe9"))
 		if energy.value<0.:
 			draw_rect(Rect2(origin,Vector2(104.*absf(energy.value)/maxf(1.,energy.willpower),7)),Color("d7a6ff"))
+		if is_setter and game!=null and game.has_method("serve_meter_error") and (game.phase=="serve_toss" or (game.phase in ["serve_flight","serve_miss"] and game.flight_age<.4)):
+			var contact := Vector2(game.serve_meter_position(game.SERVE_EARLY),game.serve_meter_position(game.SERVE_LATE))
+			timing_arc(actor,game.serve_meter_position(game.serve_meter_error()),game.serve_meter_position(-game.SERVE_PERFECT),game.serve_meter_position(game.SERVE_PERFECT),contact,Color("14191d"),is_finite(game.release_time))
 		if extra_jumps.has(actor) and not game.cpu_hitter and game.manual_shot>=0 and (game.phase in ["cart","feed","pass","set_contact","set"] or (game.phase=="spike" and game.elapsed<.45)):
 			var cursor: float=game.attack_meter_position(game.attack_meter_error())
 			var contact_window:=Vector2(game.attack_meter_position(game.EARLY_LIMIT),game.attack_meter_position(game.LATE_LIMIT))

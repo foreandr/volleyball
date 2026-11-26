@@ -103,3 +103,4 @@ Full spike approaches reserve up to 0.90 m of forward carry into the contact sta
 Near the net, attack and drill block poses check both arm chains and the upper body against the tape before accepting forward travel.
 In practice replay, right-stick click toggles normal playback and the last selected slow speed (initially half speed). Left-stick click toggles block hitboxes wherever they are available.
 Training Camp serving locks the toss on first press. A selects topspin and B selects jump float. Switching A/B before release changes the strike and flight. X selects standing float and Y underhand. Release near contact to serve toward three receivers.
+Serve release uses the attack ground timing arc. Its colored bounds use the same early, perfect and late thresholds as serve contact. Jump serves use the attack front lift and spike arm swing after the toss step, with a firm wrist for float hits.

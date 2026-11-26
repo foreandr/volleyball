@@ -26,6 +26,7 @@ var forward_lean_degrees := DEFAULT_FORWARD_LEAN
 var active_forward_lean_degrees := 0.0
 var released_sidespin := 0.0
 var released_lift := 0.0
+var camp_approach := false
 var approach := SetterJump.new()
 var spike_pose_driver := MatchAttack.new()
 var approach_positions: PackedVector3Array = []
@@ -86,8 +87,9 @@ func prepare_serve_reset() -> void:
 	approach.load_bend_extra = deg_to_rad(85.0)*0.36
 	approach.load_arm_extra = 0.48*0.85
 	var intercept := player.position+forward*2.14+Vector3.UP*3.0
+	approach.attack_arm_lift=camp_approach
 	approach.begin(player,Vector2(-forward.x,forward.z),intercept,SPIN_TAKEOFF-APPROACH_START-SetterJump.LEAD_STEP_TIME,active_jump_height,SPIKE_APPROACH_STEPS,false,1.0,false,SPIKE_GLIDE)
-	if active_jump_carry:
+	if active_jump_carry and not camp_approach:
 		# Build forward momentum through contact and carry it into the landing.
 		approach.air_glide_duration = 0.76
 		approach.approach_lunge = forward*1.98
@@ -97,7 +99,9 @@ func prepare_serve_reset() -> void:
 	for index in range(sample_count+1):
 		if index > 0: approach.step(player,1.0/APPROACH_SAMPLE_RATE,Vector2.ZERO)
 		var time := APPROACH_START+index/APPROACH_SAMPLE_RATE
-		if time <= SPIN_TAKEOFF:
+		if camp_approach:
+			if time>SPIN_TAKEOFF: sample_camp_swing(time)
+		elif time <= SPIN_TAKEOFF:
 			spike_pose_driver.lift_arms_during_plant()
 		else:
 			sample_spike_swing(time)
@@ -225,6 +229,20 @@ func prepare_spike_driver() -> void:
 	spike_pose_driver.swing_finish_pose.clear()
 	spike_pose_driver.finish_hand_axis = Vector3.ZERO
 	spike_pose_driver.finish_hand_turn = INF
+
+func sample_camp_swing(time: float) -> void:
+	var rig: Skeleton3D=player.skeleton
+	var author=player.get_pose_author()
+	var pose: Array=[]
+	for i in rig.get_bone_count(): pose.append(rig.get_bone_pose(i))
+	var draw := smoothstep(SPIN_TAKEOFF+.035,SPIN_CONTACT-.095,time)
+	var reach := smoothstep(SPIN_CONTACT-.12,SPIN_CONTACT,time)
+	var follow := smoothstep(SPIN_CONTACT,SPIN_CONTACT+.32,time)
+	var weight := draw*(1.-smoothstep(SPIN_CONTACT+.36,SPIN_CONTACT+.65,time))
+	var contact: Vector3=author.point(pose,"upperarm_r")+Vector3(-.05,.67,.33)/rig.global_basis.y.length()
+	SpikeArm.apply(pose,author,contact,weight,reach,follow,draw,0.,0.,SpikeArm.DEFAULT_ELBOW_CLEARANCE,0.,INF,Vector3.BACK,0.,.10,false,true)
+	SpikeArm.apply_guide_arm(pose,author,contact-author.point(pose,"upperarm_l"),Vector3(.8,.1,-.2),maxf(reach,follow),weight,174.)
+	for i in rig.get_bone_count(): rig.set_bone_pose_rotation(i,pose[i].basis.orthonormalized().get_rotation_quaternion())
 
 func sample_spike_swing(time: float) -> void:
 	var age := maxf(0.0,time-SPIN_CONTACT)
