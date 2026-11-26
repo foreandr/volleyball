@@ -286,3 +286,4 @@ For a spin serve, the server can toss with the left hand, the right hand, or bot
 Across drills and matches, a received ball should generally leave the receiver with backspin.
 
 CPU receivers signal a leave by spreading both arms as the ball approaches.
+The shared indoor gym has five additional meters of runoff on each side and behind each baseline. The stands and end-wall equipment move with the walls.

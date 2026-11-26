@@ -157,3 +157,4 @@ Random assigned boxes picks an assigned region on the center receiver and a poin
 Outgoing receptions carry backspin about the horizontal axis across the pass direction. Fast forearm receptions scale to 47 degrees of post-contact bend at 120 km/h.
 
 Reception Studio, serve reception, CPU digs and match reception use the shared arms-out gesture on a CPU out call.
+Indoor service placement and approach setup use the expanded gym runoff.

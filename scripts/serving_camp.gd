@@ -514,7 +514,7 @@ func walk_server(delta: float, defending := false) -> void:
 	var old := hitter.position if defending else serve_station
 	var point := old+velocity*delta
 	point.x=clampf(point.x,-5.8 if defending else -4.5,5.8 if defending else 4.5)
-	point.z=clampf(point.z,-10.1,BallNet.NET_Z-.35 if defending else -5.1)
+	point.z=clampf(point.z,-15.1,BallNet.NET_Z-.35 if defending else -5.1)
 	velocity=(point-old)/maxf(delta,.001)
 	if sprint and velocity.length()>.1: hitter.stamina.spend(delta*hitter.stamina.SPRINT_DRAIN,"Sprint")
 	hitter.position=point

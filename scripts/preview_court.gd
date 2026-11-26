@@ -1,8 +1,8 @@
 extends Node3D
 
-const RUNOFF_HALF_WIDTH := 6.5
-const RUNOFF_NEAR_BASELINE := -7.0
-const RUNOFF_FAR_BASELINE := 15.0
+const RUNOFF_HALF_WIDTH := 11.0
+const RUNOFF_NEAR_BASELINE := -12.0
+const RUNOFF_FAR_BASELINE := 19.0
 
 static func clamp_setter(point: Vector3, front_limit := 2.5, back_limit := RUNOFF_NEAR_BASELINE) -> Vector3:
 	return Vector3(clampf(point.x,-RUNOFF_HALF_WIDTH,RUNOFF_HALF_WIDTH),point.y,clampf(point.z,back_limit,front_limit))
@@ -44,7 +44,7 @@ func _ready() -> void:
 	name = "VolleyballCourt"
 	var white := material("f4eee1")
 	var boundary := material("f7f3e5")
-	box("Runoff",Vector3(24,0.12,68),Vector3(0,-0.08,16),material("275469"))
+	box("Runoff",Vector3(34,0.12,68),Vector3(0,-0.08,16),material("275469"))
 	# Nine by eighteen metres; passer is five metres inside the near baseline.
 	for index in range(30):
 		var color := "c69158" if index%3 == 0 else ("d1a269" if index%3 == 1 else "cca067")

@@ -1,6 +1,7 @@
 extends "res://scripts/preview_court.gd"
 
 const Contacts = preload("res://scripts/gym_physics.gd")
+const FRONT_BENCH_X := 11.8
 var rear_extension := 0.0
 var brace_transforms: Array[Transform3D]=[]
 var digits: Array[Array] = []
@@ -37,13 +38,13 @@ func _ready() -> void:
 	wood.shader=preload("res://assets/gym/bleacher_wood.gdshader")
 	var steel := material("535951")
 	var white := material("e7dfc9")
-	box("North wall",Vector3(24,9,0.3),Vector3(0,4.4,14.8),block)
-	box("South wall",Vector3(24,9,0.3),Vector3(0,4.4,-11-rear_extension),block)
-	box("Ceiling",Vector3(24,0.2,26+rear_extension),Vector3(0,9,2-rear_extension*.5),white)
+	box("North wall",Vector3(34,9,0.3),Vector3(0,4.4,19.8),block)
+	box("South wall",Vector3(34,9,0.3),Vector3(0,4.4,-16-rear_extension),block)
+	box("Ceiling",Vector3(34,0.2,36+rear_extension),Vector3(0,9,2-rear_extension*.5),white)
 	for side in [-1,1]:
-		box("Side masonry",Vector3(0.25,9,26+rear_extension),Vector3(side*11.3,4.4,2-rear_extension*.5),block)
+		box("Side masonry",Vector3(0.25,9,36+rear_extension),Vector3(side*16.3,4.4,2-rear_extension*.5),block)
 		for row in 4:
-			var x: float = side*(6.8+row*0.69)
+			var x: float = side*(FRONT_BENCH_X+row*0.69)
 			box("Bleacher bench",Vector3(0.65,0.15,15),Vector3(x,0.48+row*0.37,3),wood)
 			var height := .48+row*.37
 			box("Seat front lip",Vector3(.037,.036,14.98),Vector3(x-side*.312,height+.048,3),wood)
@@ -53,25 +54,25 @@ func _ready() -> void:
 				brace(Vector3(x,.10,z),Vector3(x,height-.1,z+.75),.045,steel)
 				box("Folding support",Vector3(0.1,0.45+row*0.37,0.1),Vector3(x,(0.45+row*0.37)/2,z),steel)
 	for dir in [-1,1]:
-		var z := 14.57 if dir==1 else -10.8-rear_extension
-		box("Painted stripe",Vector3(22.5,0.42,0.08),Vector3(0,3.1,z),paint)
+		var z := 19.57 if dir==1 else -15.8-rear_extension
+		box("Painted stripe",Vector3(32.5,0.42,0.08),Vector3(0,3.1,z),paint)
 		for i in 5:
 			var x := (i-2)*3.4
 			box("Championship felt",Vector3(1.5,2.3,0.07),Vector3(x,5.5,z-dir*0.10),paint)
 			var label := Label3D.new()
-			label.text = "VARSITY\n◆\n%d" % (2006+i*3)
+			label.text = "VARSITY\nâ—†\n%d" % (2006+i*3)
 			label.font_size = 40
 			label.pixel_size = 0.0068
 			label.position = Vector3(x,5.5,z-dir*0.16)
 			if dir==1: label.rotation.y = PI
 			add_child(label)
-	for z in [-8,-3,2,7,12]:
-		box("Roof steel",Vector3(22.6,0.2,0.18),Vector3(0,8.55,z),steel)
-		box("Truss lower chord",Vector3(22.4,.09,.10),Vector3(0,7.91,z),steel)
+	for z in [-13,-8,-3,2,7,12,17]:
+		box("Roof steel",Vector3(32.6,0.2,0.18),Vector3(0,8.55,z),steel)
+		box("Truss lower chord",Vector3(32.4,.09,.10),Vector3(0,7.91,z),steel)
 		for bay in 10:
-			var x := -11.2+bay*2.24
-			brace(Vector3(x,8.52,z),Vector3(x+1.12,7.94,z),.06,steel)
-			brace(Vector3(x+1.12,7.94,z),Vector3(x+2.24,8.52,z),.06,steel)
+			var x := -16.2+bay*3.24
+			brace(Vector3(x,8.52,z),Vector3(x+1.62,7.94,z),.06,steel)
+			brace(Vector3(x+1.62,7.94,z),Vector3(x+3.24,8.52,z),.06,steel)
 		for x in [-5,5]:
 			box("Fixture suspension",Vector3(.035,.14,.035),Vector3(x,8.46,z),steel)
 			box("Fluorescent bank",Vector3(2.8,0.1,0.32),Vector3(x,8.38,z),material("fff3cc"))
@@ -79,15 +80,15 @@ func _ready() -> void:
 
 	var padding := material("314e41")
 	for i in 12:
-		box("Wall pad",Vector3(0.88,1.95,0.16),Vector3((i-5.5)*0.92,1.0,14.43),padding)
-	box("Scoreboard",Vector3(3.8,1.45,0.18),Vector3(0,3.85,14.41),material("26352e"))
-	wall_text("SETS       GOAL",Vector3(0,4.19,14.29),0.003,Color.FLORAL_WHITE)
+		box("Wall pad",Vector3(0.88,1.95,0.16),Vector3((i-5.5)*0.92,1.0,19.43),padding)
+	box("Scoreboard",Vector3(3.8,1.45,0.18),Vector3(0,3.85,19.41),material("26352e"))
+	wall_text("SETS       GOAL",Vector3(0,4.19,19.29),0.003,Color.FLORAL_WHITE)
 	for x in [1.11,.70,-.70,-1.11]: add_digit(float(x))
 	update_board(0)
 	for x in [-8.2,8.2]:
-		box("Gym exit",Vector3(2.1,2.4,0.14),Vector3(x,1.2,14.42),material("656f61"))
-		box("Door rail",Vector3(1.8,0.06,0.12),Vector3(x,1.1,14.30),steel)
-		wall_text("EXIT",Vector3(x,2.67,14.32),0.003,Color.PALE_GREEN)
+		box("Gym exit",Vector3(2.1,2.4,0.14),Vector3(x,1.2,19.42),material("656f61"))
+		box("Door rail",Vector3(1.8,0.06,0.12),Vector3(x,1.1,19.3),steel)
+		wall_text("EXIT",Vector3(x,2.67,19.32),0.003,Color.PALE_GREEN)
 	build_gallery(steel,paint)
 	var steel_web := MultiMesh.new()
 	steel_web.transform_format=MultiMesh.TRANSFORM_3D
@@ -103,14 +104,14 @@ func _ready() -> void:
 		var crest := Sprite3D.new()
 		crest.texture = preload("res://assets/gym/falcon.svg")
 		crest.pixel_size = .0065
-		crest.position = Vector3(side*11.02,4.35,2.1)
+		crest.position = Vector3(side*16.02,4.35,2.1)
 		crest.rotation.y = -side*PI*.5
 		crest.shaded = true
 		add_child(crest)
-	wall_text("F A L C O N S",Vector3(0,7.47,14.45),.010,Color("264939"))
+	wall_text("F A L C O N S",Vector3(0,7.47,19.45),.010,Color("264939"))
 	var probe := ReflectionProbe.new()
 	probe.position = Vector3(0,3,2)
-	probe.size = Vector3(23,11,28)
+	probe.size = Vector3(33,11,38+rear_extension)
 	probe.box_projection = true
 	probe.interior = true
 	probe.intensity = 0.65
@@ -130,32 +131,32 @@ func build_gallery(steel: Material,paint: Material) -> void:
 	tube.emission = Color("fff1d6")
 	tube.emission_energy_multiplier = 2.3
 	for side in [-1,1]:
-		for bay in 7:
-			var z := -7.0+bay*3.15
-			box("Clerestory frame",Vector3(0.15,1.9,2.9),Vector3(side*11.09,6.65,z),steel)
+		for bay in 10:
+			var z := -12.0+bay*3.15
+			box("Clerestory frame",Vector3(0.15,1.9,2.9),Vector3(side*16.09,6.65,z),steel)
 			for pane in 3:
-				box("Daylight glazing",Vector3(0.06,1.72,0.86),Vector3(side*10.98,6.65,z+(pane-1)*0.93),glass)
-	for z in [-8,-3,2,7,12]:
-		box("Truss chord",Vector3(22.5,.08,.08),Vector3(0,7.85,z),steel)
-		for i in 14:
-			var x := -11.2+i*1.6
-			brace(Vector3(x,7.85,z),Vector3(x+.8,8.55,z),.055,steel)
-			brace(Vector3(x+.8,8.55,z),Vector3(x+1.6,7.85,z),.055,steel)
+				box("Daylight glazing",Vector3(0.06,1.72,0.86),Vector3(side*15.98,6.65,z+(pane-1)*0.93),glass)
+	for z in [-13,-8,-3,2,7,12,17]:
+		box("Truss chord",Vector3(32.5,.08,.08),Vector3(0,7.85,z),steel)
+		for i in 18:
+			var x := -16.2+i*1.8
+			brace(Vector3(x,7.85,z),Vector3(x+.9,8.55,z),.055,steel)
+			brace(Vector3(x+.9,8.55,z),Vector3(x+1.8,7.85,z),.055,steel)
 		for x in [-5,5]:
 			box("Fixture diffuser",Vector3(2.66,.045,.26),Vector3(x,8.30,z),tube)
 	for i in 2:
 		var x := -6.4 if i==0 else 6.4
-		box("Backboard",Vector3(1.8,1.05,.12),Vector3(x,3.45,13.95),material("d7d3bd"))
+		box("Backboard",Vector3(1.8,1.05,.12),Vector3(x,3.45,18.95),material("d7d3bd"))
 		for side in [-1,1]:
-			box("Backboard square",Vector3(.045,.42,.025),Vector3(x+side*.29,3.46,13.86),paint)
-		box("Backboard square",Vector3(.62,.045,.025),Vector3(x,3.66,13.86),paint)
+			box("Backboard square",Vector3(.045,.42,.025),Vector3(x+side*.29,3.46,18.86),paint)
+		box("Backboard square",Vector3(.62,.045,.025),Vector3(x,3.66,18.86),paint)
 		var rim := MeshInstance3D.new()
 		var hoop := TorusMesh.new()
 		hoop.inner_radius = .215
 		hoop.outer_radius = .237
 		rim.mesh = hoop
 		rim.material_override = material("db633a")
-		rim.position = Vector3(x,3.05,13.6)
+		rim.position = Vector3(x,3.05,18.6)
 		add_child(rim)
 
 static func light_gym(world: Node3D) -> void:
@@ -250,7 +251,7 @@ func add_digit(x: float) -> void:
 		var centers := [Vector2(0,.23),Vector2(.13,.115),Vector2(.13,-.115),Vector2(0,-.23),Vector2(-.13,-.115),Vector2(-.13,.115),Vector2.ZERO]
 		var at: Vector2 = centers[i]
 		var horizontal := i in [0,3,6]
-		digit.append(box("LED segment",Vector3(.22 if horizontal else .037,.035 if horizontal else .18,.016),Vector3(x-at.x,3.64+at.y,14.28),lit))
+		digit.append(box("LED segment",Vector3(.22 if horizontal else .037,.035 if horizontal else .18,.016),Vector3(x-at.x,3.64+at.y,19.28),lit))
 	digits.append(digit)
 
 func update_board(made: int) -> void:
