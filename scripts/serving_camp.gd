@@ -123,6 +123,7 @@ const SET_VERTICAL := .48
 const SET_LOAD := .20
 var pass_end := Vector3.ZERO
 var receive_at := 0.
+var leave_serve := false
 var pass_duration := 1.25
 const Reception = preload("res://scripts/bump_setting.gd")
 var receptions: Array[Reception]=[]
@@ -604,8 +605,8 @@ func _process(delta: float) -> void:
 				shot.velocity=shot.aimed_velocity(shot.origin,lerpf(.84,1.,quality))
 				shot.planned_duration=preload("res://scripts/pass_flight.gd").landing_time(shot.origin,shot.velocity)
 				shot.begin_serve_curve()
-				plan_serve_reception(shot)
 				shot.net_hit=BallNet.first_hit(shot.flight_point,0.,shot.planned_duration)
+				plan_serve_reception(shot)
 				shot.ball.basis=ball.basis
 				flight_age=0.
 				phase="serve_flight"
@@ -668,6 +669,11 @@ func receive_arrival(shot,height: float) -> float:
 		else: high=mid
 	return high
 
+func reads_serve_out(landing: Vector3, skill: float, read_error: float) -> bool:
+	var uncertainty := lerpf(.48,.12,clampf(skill/100.,0.,1.))
+	var outside := maxf(absf(landing.x)-4.5,landing.z-(BallNet.NET_Z+9.))
+	return outside+read_error*uncertainty>0.
+
 func plan_serve_reception(shot) -> void:
 	receive_at=receive_arrival(shot,PASS_HEIGHT)
 	var predicted: Vector3=shot.flight_point(receive_at)
@@ -676,6 +682,11 @@ func plan_serve_reception(shot) -> void:
 		if passers[i].position.distance_squared_to(predicted)<first_contact_player().position.distance_squared_to(predicted): receiver=i
 	var platform := receptions[receiver]
 	var passer := first_contact_player()
+	var landing: Vector3=shot.flight_point(shot.planned_duration)
+	leave_serve=shot.net_hit.is_empty() and reads_serve_out(landing,passer.effective_rating("Forearm reception"),randf_range(-1.,1.))
+	if leave_serve:
+		trace("serve_called_out",{"receiver":receiver,"projected_landing":str(landing)})
+		return
 	var above := receive_arrival(shot,passer.height_cm*.011)
 	var high_point: Vector3=shot.flight_point(above)
 	var travel := (high_point-passer.position).slide(Vector3.UP)
@@ -697,6 +708,17 @@ func step_serve_reception(shot,previous: Vector3,delta: float) -> void:
 		if not shot.net_hit.is_empty() and t>=shot.net_hit.time: return BallNet.after_hit(shot.net_hit,t)
 		return shot.flight_point(t)
 	var predicted: Vector3=path.call(receive_at)
+	if leave_serve:
+		var here := passer.global_position.slide(Vector3.UP)
+		var lane := predicted.slide(Vector3.UP)
+		var away := here-lane
+		if away.length()<.9:
+			if away.length_squared()<.001: away=Vector3.RIGHT if here.x<=0. else Vector3.LEFT
+			var goal := lane+away.normalized()*.95
+			goal.y=passer.global_position.y
+			move_receiver(passer,passer.get_parent_node_3d().to_local(goal),delta)
+		face_receive_ball(passer,ball.global_position,delta)
+		return
 	var incoming := (ball.position-previous)/maxf(.001,delta)
 	if flight_age<receive_at-.31:
 		move_receiver(passer,Vector3(predicted.x,.04,predicted.z+.52),delta)
