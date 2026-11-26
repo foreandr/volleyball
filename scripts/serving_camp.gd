@@ -1182,7 +1182,7 @@ func block_on_flight_segment(previous: Vector3) -> bool:
 		var platform: Reception=dig_platforms[defender]
 		if defender!=hitter and until_floor<.55: platform.queue_bump(start)
 		if not is_finite(platform.pressed_at): continue
-		platform.update_attempt(dig_clock,start,dig_clock+until_floor,path,drop_velocity,dt,dig_clock+until_floor)
+		sample_defensive_contact(platform,start,dt,until_floor,path)
 		if not is_finite(platform.touch_time): continue
 		last_digger=defender
 		dig_incoming=drop_velocity
@@ -1196,6 +1196,9 @@ func block_on_flight_segment(previous: Vector3) -> bool:
 		trace("server_side_dig",{"player":defender.player_number,"user":defender==hitter})
 		return true
 	return false
+
+func sample_defensive_contact(platform: Reception,start: float,dt: float,until_floor: float,path: Callable) -> void:
+	platform.update_attempt(dig_clock,start,dig_clock+until_floor,path,drop_velocity,dt,dig_clock+until_floor)
 
 func on_receiving_court(point: Vector3) -> bool:
 	return absf(point.x)<=4.5 and point.z>=BallNet.NET_Z and point.z<=BallNet.NET_Z+9.
