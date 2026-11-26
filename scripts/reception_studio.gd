@@ -693,11 +693,17 @@ func sample_receiver(c: Dictionary,f: float,active := true,motion_legs := -2) ->
 			platform+=rig.to_local(segment[0].lerp(segment[1],.68))*.5
 		var reach := platform-chest.origin
 		var toward := goal-chest.origin
-		var limit := deg_to_rad(7.)
+		var limit := deg_to_rad(9.)
 		if joint=="spine_02":
 			reach=reach.slide(Vector3.UP)
 			toward=toward.slide(Vector3.UP)
 			limit=deg_to_rad(24.)
+			var lean_axis := Vector3.UP.cross(toward)
+			if lean_axis.length_squared()>.000001:
+				var lean := deg_to_rad(3.)*smoothstep(.12,.8,toward.length())*blend
+				var lean_local := (chest.basis.inverse()*lean_axis).normalized()
+				rig.set_bone_pose_rotation(bone,rig.get_bone_pose_rotation(bone)*Quaternion(lean_local,lean))
+				chest=rig.get_bone_global_pose(bone)
 		var axis := reach.cross(toward)
 		if axis.length_squared()<.0000001: continue
 		var angle := minf(limit,reach.angle_to(toward))*blend
@@ -1250,7 +1256,7 @@ func assigned_action(address: Vector3i,part: int) -> int:
 	if is_subdivided(address):
 		if StorySession.game_options.has_section_key("studio_three_rows",child_key):
 			return int(StorySession.game_options.get_value("studio_three_rows",child_key))
-		if address==REGION_23: return [0,0,2,3][part]
+		if address==REGION_23: return [0,22,2,3][part]
 		if address==Vector3i(1,2,2):
 			if part<2: return 79
 			var parent_key := Regions.key(address)+"."+str(part%4+1)
