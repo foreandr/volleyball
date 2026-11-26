@@ -4,7 +4,7 @@ The following describes the intended full game. A menu route, stored rating or p
 
 ## Indoor practice baseline
 
-Dig from Five shares the Serve and Receive camera: 52-degree field of view, pivot (0, 1.5, -4.4), and arm length 0.48 times the saved distance plus 2 metres, with the same orbit, elevation and gym obstruction check. The coach feeds a far-side setter for a zone-four attack against one pin blocker; the near-side defender starts in five.
+Dig from Five shares the Serve and Receive camera: 52-degree field of view, pivot (0, 1.5, -4.4), and arm length 0.48 times the saved distance plus 2 metres, with the same orbit, elevation and gym obstruction check. Middle-button drag orbits the live digging camera for the current visit. Reopening the drill restores this opening view. The coach feeds a far-side setter for a zone-four attack against one pin blocker; the near-side defender starts in five.
 
 In serve-and-defend rallies the server can move into defense after recovering from the serve. A pin blocker who cannot close in time peels into short defense, shuffling while facing the ball and attempting digs alongside the server.
 

@@ -5,6 +5,7 @@ var homes := [FIVE,Vector3(-1.6,.04,-2.2)]
 var floor_target := Vector3(2.35,.145,-1.60)
 var target_marker := MeshInstance3D.new()
 var dragged := -1
+var orbit_offset := Vector2.ZERO
 var release_window := 0.
 var set_tempo := 1
 var cpu_defense := true
@@ -57,8 +58,23 @@ func update_prompts(_next: String) -> void:
 	else:
 		Xbox.prompts(controls_row,[["View","Watch CPU"],["A","Release to dig"]])
 
+func apply_camera() -> void:
+	var default_yaw := yaw
+	var default_elevation := elevation
+	yaw+=orbit_offset.x
+	elevation=clampf(elevation+orbit_offset.y,3.,85.)
+	super.apply_camera()
+	yaw=default_yaw
+	elevation=default_elevation
+
 func _input(event: InputEvent) -> void:
 	if not settings.visible and not replay_inspector.active and not get_tree().paused:
+		if event is InputEventMouseMotion and event.button_mask & MOUSE_BUTTON_MASK_MIDDLE and dragged<0:
+			orbit_offset.x=wrapf(orbit_offset.x-event.relative.x*.006,-PI,PI)
+			orbit_offset.y=clampf(orbit_offset.y+event.relative.y*.25,3.-elevation,85.-elevation)
+			apply_camera()
+			get_viewport().set_input_as_handled()
+			return
 		if handle_drag(event):
 			get_viewport().set_input_as_handled()
 			return
