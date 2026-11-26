@@ -51,6 +51,7 @@ var custom_backward_mirror_bones := PackedInt32Array()
 var custom_backward_time := 0.0
 var ready_pose: Array[Transform3D] = []
 var reach := {}
+var allow_knee_reach := false
 var receive_front_limit := 2.5
 var reach_step := Vector3.ZERO
 var reach_travel := Vector3.ZERO
@@ -116,16 +117,7 @@ var last_height := -INF
 
 func configure(player: Node3D, animation: Animation) -> void:
 	setter = player
-	clip = animation
-	contact_frame = float(clip.get_meta("contact_time"))
-	var rig: Skeleton3D = setter.skeleton
-	tracks = animation_tracks(clip)
-	for bone in rig.get_bone_count():
-		var track := tracks[bone]
-		var ready := rig.get_bone_pose(bone)
-		if track.x >= 0: ready.origin = clip.position_track_interpolate(track.x,0.0)
-		if track.y >= 0: ready.basis = Basis(clip.rotation_track_interpolate(track.y,0.0))
-		ready_pose.append(ready)
+	set_receive_clip(animation)
 	style.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	style.vertex_color_use_as_albedo = true
 	mesh = surface
@@ -133,6 +125,19 @@ func configure(player: Node3D, animation: Animation) -> void:
 	cone = SpreadCone.new()
 	add_child(cone)
 	reset()
+
+func set_receive_clip(animation: Animation) -> void:
+	clip = animation
+	contact_frame = float(clip.get_meta("contact_time"))
+	var rig: Skeleton3D = setter.skeleton
+	tracks = animation_tracks(clip)
+	ready_pose.clear()
+	for bone in rig.get_bone_count():
+		var track := tracks[bone]
+		var ready := rig.get_bone_pose(bone)
+		if track.x >= 0: ready.origin = clip.position_track_interpolate(track.x,0.0)
+		if track.y >= 0: ready.basis = Basis(clip.rotation_track_interpolate(track.y,0.0))
+		ready_pose.append(ready)
 
 func animation_tracks(animation: Animation) -> Array[Vector2i]:
 	var result: Array[Vector2i] = []
@@ -899,7 +904,7 @@ func follow_forearm(time: float, incoming: Vector3) -> void:
 
 func pose_reach(weight: float, intercept: Vector3) -> void:
 	if reach.is_empty() or weight <= 0.0: return
-	setter.pose_reception_reach(setter.basis.inverse()*reach_step,Vector3.ZERO,weight,reach_progress,ready_pose,reach,false,0,intercept)
+	setter.pose_reception_reach(setter.basis.inverse()*reach_step,Vector3.ZERO,weight,reach_progress,ready_pose,reach,allow_knee_reach and reach.side_lunge and intercept.y<1.05,0,intercept)
 
 func capture_early_dig_arms() -> void:
 	var rig: Skeleton3D = setter.skeleton

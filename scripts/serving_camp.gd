@@ -32,13 +32,9 @@ const SET_LOAD := .20
 var pass_end := Vector3.ZERO
 var receive_at := 0.
 var pass_duration := 1.25
-var reception_clip := ""
-const PassAccuracy = preload("res://scripts/reception_accuracy.gd")
-const PASS_CLIPS := {
-	"balanced": preload("res://assets/animations/straight_pass_02.res"),
-	"loaded": preload("res://assets/animations/straight_pass_06.res"),
-	"deep": preload("res://assets/animations/straight_pass_11.res"),
-}
+const Reception = preload("res://scripts/bump_setting.gd")
+var receptions: Array[Reception]=[]
+var platform_clips: Array[Animation]=[]
 var receiver := 0
 var hand_sound := AudioStreamPlayer.new()
 
@@ -64,6 +60,15 @@ func start_drill() -> void:
 	hand_sound.bus=StorySession.IMPACT_BUS
 	hand_sound.stream=preload("res://assets/audio/hand_impacts.tres")
 	add_child(hand_sound)
+	for file in ResourceLoader.list_directory("res://assets/animations"):
+		if file.begins_with("straight_pass_") and file.get_extension() in ["res","tres"]:
+			platform_clips.append(load("res://assets/animations/"+file))
+	var backward: Animation
+	var copies := preload("res://scripts/volleyball_animations.gd").custom_entries()
+	for i in range(copies.size()-1,-1,-1):
+		if copies[i].get("source")=="d2_backward_from_d1":
+			backward=load(copies[i].path)
+			break
 	for i in HOMES.size():
 		var passer := athlete(HOMES[i],"286881")
 		register_student(passer,i+3)
@@ -72,6 +77,14 @@ func start_drill() -> void:
 		passer.play_action("idle")
 		passer.animator.advance(.57*(i+1))
 		passers.append(passer)
+		var platform := Reception.new()
+		world.add_child(platform)
+		platform.configure(passer,preload("res://assets/animations/straight_pass_02.res"))
+		platform.set_custom_backward(backward)
+		platform.allow_knee_reach=true
+		platform.receive_front_limit=13.8
+		platform.hide()
+		receptions.append(platform)
 	receiving_jump.front_limit=13.
 	receiving_jump.back_limit=BallNet.NET_Z+.25
 	receiving_setter=athlete(SETTER_HOME,"286881")
@@ -137,6 +150,7 @@ func next_serve() -> void:
 	ball.position=ready.ball.position
 	ball.show()
 	for i in passers.size():
+		receptions[i].reset()
 		passers[i].position=HOMES[i]
 		passers[i].play_action("idle")
 	receiving_jump.active=false
@@ -299,20 +313,7 @@ func _process(delta: float) -> void:
 				shot.planned_duration=shot.flight_duration(shot.origin)
 				shot.velocity=shot.launch_velocity(shot.origin,shot.planned_duration)
 				shot.begin_serve_curve()
-				var low := 0.
-				var high: float=shot.planned_duration
-				for i in 12:
-					var mid := (low+high)*.5
-					if shot.flight_point(mid).y>PASS_HEIGHT: low=mid
-					else: high=mid
-				receive_at=high
-				var expected: Vector3=shot.flight_point(high)
-				receiver=0
-				for i in range(1,passers.size()):
-					if HOMES[i].distance_squared_to(expected)<HOMES[receiver].distance_squared_to(expected): receiver=i
-				var chase: float=HOMES[receiver].distance_to(Vector3(expected.x,.04,expected.z+.42))
-				var pressure: float=chase/maxf(.1,receive_at)+shot.velocity.length()*.07
-				reception_clip="deep" if pressure>2.95 else ("loaded" if pressure>1.95 else "balanced")
+				plan_serve_reception(shot)
 				shot.net_hit=BallNet.first_hit(shot.flight_point,0.,shot.planned_duration)
 				shot.ball.basis=ball.basis
 				flight_age=0.
@@ -346,41 +347,83 @@ func _process(delta: float) -> void:
 			var t := minf(flight_age,shot.planned_duration)
 			var previous := ball.position
 			ball.position=BallNet.after_hit(shot.net_hit,t) if not shot.net_hit.is_empty() and t>=shot.net_hit.time else shot.flight_point(t)
-			var passer := passers[receiver]
-			var predicted: Vector3=shot.flight_point(receive_at)
-			var stance := Vector3(predicted.x,.04,predicted.z+.42)
-			if shot.net_hit.is_empty() or ball.position.z>BallNet.NET_Z:
-				if flight_age>=receive_at-.24 and passer.position.distance_to(stance)<.48:
-					if not passer.animation_slots.has(reception_clip):
-						passer.install_custom(PASS_CLIPS[reception_clip],reception_clip,false)
-					passer.play_action(reception_clip)
-					passer.animator.seek(clampf(.60+flight_age-receive_at,0.,.85),true)
-					passer.animator.advance(delta)
-				else:
-					move_receiver(passer,stance,delta)
-				passer.rotation.y=PI
-			else:
-				passer.animator.advance(delta)
-			if previous.y>=PASS_HEIGHT and ball.position.y<PASS_HEIGHT and ball.position.z>BallNet.NET_Z:
-				var contact := previous.lerp(ball.position,inverse_lerp(previous.y,ball.position.y,PASS_HEIGHT))
-				var platform := passer.position+Vector3(0,PASS_HEIGHT-.04,-.42)
-				if platform.distance_to(contact)<.75:
-					pass_start=contact
-					ball.position=contact
-					pass_end=Vector3(lerpf(SETTER_HOME.x,contact.x,.35),receiving_setter.height_cm*.0118,SETTER_HOME.z+.40+(contact.z-9.)*.18)
-					var pace := previous.distance_to(ball.position)/maxf(delta,.001)
-					var reach := platform.distance_to(contact)/.75
-					var spread := PassAccuracy.spread(reach,pace,shot.reception_spin_rps(),passer.effective_rating("Forearm reception"),false)
-					var error := PassAccuracy.sample_offset(spread)
-					pass_end+=Vector3(error.x,0.,error.z)
-					pass_end.z=maxf(BallNet.NET_Z+.35,pass_end.z)
-					pass_duration=clampf(1.25+error.y*.21,.80,1.75)
-					passer.stamina.spend(1.+reach,"Receive")
-					set_at=pass_duration
-					pass_clock=0.
-					phase="serve_pass"
-					return
-			if flight_age>shot.planned_duration+.45: next_serve()
+			if ball.position.z>BallNet.NET_Z or shot.net_hit.is_empty():
+				step_serve_reception(shot,previous,delta)
+			if phase=="serve_flight" and flight_age>shot.planned_duration+.45: next_serve()
+
+func receive_arrival(shot,height: float) -> float:
+	var low := 0.
+	var high: float=shot.planned_duration
+	for i in 12:
+		var mid := (low+high)*.5
+		if shot.flight_point(mid).y>height: low=mid
+		else: high=mid
+	return high
+
+func plan_serve_reception(shot) -> void:
+	receive_at=receive_arrival(shot,PASS_HEIGHT)
+	var predicted: Vector3=shot.flight_point(receive_at)
+	receiver=0
+	for i in range(1,passers.size()):
+		if HOMES[i].distance_squared_to(predicted)<HOMES[receiver].distance_squared_to(predicted): receiver=i
+	var platform := receptions[receiver]
+	var passer := passers[receiver]
+	var above := receive_arrival(shot,passer.height_cm*.011)
+	var high_point: Vector3=shot.flight_point(above)
+	var travel := (high_point-passer.position).slide(Vector3.UP)
+	platform.hand_setting=hit_style in [1,2] and high_point.z>BallNet.NET_Z and travel.length()<.55+3.3*maxf(0.,above-.22)
+	if platform.hand_setting: receive_at=above
+	elif not platform_clips.is_empty(): platform.set_receive_clip(platform_clips.pick_random())
+	platform.quick_hand_receive=platform.hand_setting
+	platform.passing_skill_override=passer.attributes.get("Hand reception" if platform.hand_setting else "Forearm reception",65)
+	platform.destination=Vector2(SETTER_HOME.x,SETTER_HOME.z)
+	platform.height=4.1
+	platform.quick_low_save=true
+	platform.green_forearm_allowance=.24
+	platform.green_hand_allowance=.18
+
+func step_serve_reception(shot,previous: Vector3,delta: float) -> void:
+	var platform := receptions[receiver]
+	var passer := passers[receiver]
+	var path := func(t: float) -> Vector3:
+		if not shot.net_hit.is_empty() and t>=shot.net_hit.time: return BallNet.after_hit(shot.net_hit,t)
+		return shot.flight_point(t)
+	var predicted: Vector3=path.call(receive_at)
+	var incoming := (ball.position-previous)/maxf(.001,delta)
+	if flight_age<receive_at-.31:
+		move_receiver(passer,Vector3(predicted.x,.04,predicted.z+.52),delta)
+		passer.rotation.y=PI
+		return
+	if not is_finite(platform.pressed_at):
+		passer.play_action("idle")
+		platform.queue_bump(flight_age)
+	passer.animator.advance(delta)
+	platform.allow_auto_dive=(predicted-platform.ready_contact()).slide(Vector3.UP).length()>1.15 or flight_age>receive_at
+	platform.update_attempt(flight_age,flight_age-delta,shot.planned_duration,path,incoming,delta,receive_at,shot.reception_spin_rps())
+	if not is_finite(platform.touch_time): return
+	if platform.hand_setting and not is_finite(platform.release_time):
+		ball.position=platform.platform_center()
+		return
+	pass_start=platform.release_point if platform.hand_setting else platform.touch
+	var velocity := platform.outgoing
+	var height: float=receiving_setter.height_cm*.0118
+	var discriminant := velocity.y*velocity.y-19.62*(height-pass_start.y)
+	if discriminant<0.:
+		ball.position=pass_start
+		drop_velocity=velocity
+		phase="serve_miss"
+		flight_age=0.
+		roll_time=-1.
+		drop_net_hit.clear()
+		drop_net_time=0.
+		return
+	pass_duration=(velocity.y+sqrt(discriminant))/9.81
+	pass_end=pass_start+velocity*pass_duration+Vector3.DOWN*4.905*pass_duration*pass_duration
+	set_at=pass_duration
+	pass_clock=0.
+	ball.position=pass_start
+	passer.stamina.spend(passer.stamina.DIVE_COST if platform.low_save.active else 1.,"Receive")
+	phase="serve_pass"
 
 func move_receiver(actor: Node3D,goal: Vector3,delta: float) -> void:
 	var travel := (goal-actor.position).slide(Vector3.UP)
@@ -419,7 +462,11 @@ func step_reception_rally(delta: float) -> void:
 				set_at=pass_duration*u
 		if receiving_jump.active: receiving_jump.step(receiving_setter,delta,Vector2.ZERO)
 		passers[receiver].animator.advance(delta)
-		if pass_clock>.35: passers[receiver].play_action("idle")
+		var platform := receptions[receiver]
+		if platform.low_save.active and not platform.low_save.finished(flight_age+pass_clock):
+			platform.low_save.sample(passers[receiver],flight_age+pass_clock,platform.touch_time)
+		elif not platform.hand_setting and pass_clock<.35: platform.follow_forearm(platform.touch_time+pass_clock,Vector3.ZERO)
+		else: passers[receiver].play_action("idle")
 		ball.position=arc(pass_start,pass_end,pass_clock/pass_duration,arc_term*.25)
 		if pass_clock>set_at-.33:
 			receiving_setter.rotation.y=atan2(facing.x,facing.z)
