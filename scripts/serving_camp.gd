@@ -261,7 +261,7 @@ func apply_camera() -> void:
 
 func configure_flight(shot,origin: Vector3) -> void:
 	shot.test_speed_mps=serve_test_kmh/3.6
-	if spin_selection!=3: shot.sidespin=[0.,.25,-.25][spin_selection]
+	if spin_selection!=3: shot.sidespin=[0.,.30,-.30][spin_selection]
 	if flight_style() in [1,2]: shot.tape_clearance=float_clearance
 	shot.apex=maxf(origin.y+.03,(4.3 if flight_style()==0 else 4.9)+serve_arc_offset)
 

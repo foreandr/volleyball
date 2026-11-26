@@ -263,4 +263,4 @@ Training Camp Serving includes Serve and Receive, a baseline timing drill with t
 
 ## Future curveball serve
 
-Reserve the full-strength sidespin trajectory (1.15 m of lateral bend at mid-flight) for a future curveball serve. Ordinary D-pad sidespin uses one quarter of that bend.
+Reserve the full-strength sidespin trajectory (1.15 m of lateral bend at mid-flight) for a future curveball serve. Ordinary D-pad sidespin uses 30% of that bend.
