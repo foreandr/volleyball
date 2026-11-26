@@ -6,7 +6,18 @@ const MAP_MIN := Vector3i(-1,0,-1)
 const MAP_MAX := Vector3i(3,3,3)
 const WIDTHS := ["Wide R","Right","Center","Left","Wide L"]
 const HEIGHTS := ["Low","Mid","High","Above"]
-var preview_ball := MeshInstance3D.new()
+const CELL_SIZE := Regions.CELL*1.20
+const MAP_ORIGIN := Vector3(-1.5,0,-1.5)*CELL_SIZE
+const Gym = preload("res://scripts/tryout_gym.gd")
+var feed := preload("res://scripts/standing_float_serve.gd").new()
+var server = preload("res://scripts/volleyball_player.gd").new()
+var zone := MeshInstance3D.new()
+var hover := MeshInstance3D.new()
+var vary := CheckButton.new()
+var place := CheckButton.new()
+var contact_point := Vector3.ZERO
+var contact_key := []
+var reachable := false
 var lattice := MeshInstance3D.new()
 var highlight := MeshInstance3D.new()
 var region_label := Label.new()
@@ -23,8 +34,8 @@ var clips: Array=[]
 var index := 1
 var frame := 0.
 var playing := true
-var yaw := .43
-var elevation := .15
+var yaw := 2.76
+var elevation := .28
 var distance := 4.8
 var label := Label.new()
 var play_button := Button.new()
@@ -41,6 +52,7 @@ var forearm_frames := {}
 const ForearmDrive = preload("res://scripts/reception_pass_drive.gd")
 var incoming_speed := HSlider.new()
 var speed_label := Label.new()
+
 var upper_bones: Array[int]=[]
 
 func _ready() -> void:
@@ -60,26 +72,24 @@ func _ready() -> void:
 			upper_bones.append(bone)
 	var clip=preload("res://assets/animations/straight_pass_02.res")
 	clasp=Save.sample_clip(player.skeleton,clip,clip.get_meta("contact_time"))
-	var floor_mesh := MeshInstance3D.new()
-	var plane := PlaneMesh.new()
-	plane.size=Vector2(30,30)
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color=Color("526772")
-	plane.material=mat
-	floor_mesh.mesh=plane
-	add_child(floor_mesh)
-	var env := WorldEnvironment.new()
-	env.environment=Environment.new()
-	env.environment.background_mode=Environment.BG_COLOR
-	env.environment.background_color=Color("263540")
-	env.environment.ambient_light_source=Environment.AMBIENT_SOURCE_COLOR
-	env.environment.ambient_light_color=Color.WHITE
-	env.environment.ambient_light_energy=.85
-	add_child(env)
-	var light := DirectionalLight3D.new()
-	light.rotation_degrees=Vector3(-48,-30,0)
-	light.shadow_enabled=true
-	add_child(light)
+	add_child(Gym.new())
+	Gym.light_gym(self)
+	add_child(server)
+	preload("res://scripts/practice_kit.gd").apply(server,false,5)
+	add_child(feed)
+	feed.configure(server,Vector3(0,.04,13.4),PI)
+	feed.aim_ring.hide()
+	feed.path_preview.hide()
+	var square := PlaneMesh.new()
+	square.size=Vector2(2,2)
+	var paint := StandardMaterial3D.new()
+	paint.transparency=BaseMaterial3D.TRANSPARENCY_ALPHA
+	paint.albedo_color=Color(.25,.75,1.,.28)
+	square.material=paint
+	zone.mesh=square
+	add_child(zone)
+	zone.position=StorySession.game_options.get_value("reception_studio","zone",Vector3(0,.052,-2))
+	pivot.position=StorySession.game_options.get_value("reception_studio","stance",zone.position)
 	add_child(camera)
 	camera.current=true
 	position_camera()
@@ -100,7 +110,9 @@ func _ready() -> void:
 	button(row,"Next",change_clip.bind(1))
 	mirror.text="Mirror"
 	row.add_child(mirror)
-	mirror.toggled.connect(func(on): pivot.scale.x=-1. if on else 1.)
+	mirror.toggled.connect(func(on):
+		pivot.scale.x=-1. if on else 1.
+		draw_pose())
 	button(row,"−1 frame",step.bind(-1))
 	row.add_child(play_button)
 	play_button.pressed.connect(toggle_play)
@@ -135,11 +147,14 @@ func _ready() -> void:
 	leg_grid.columns=4
 	scroll.add_child(leg_grid)
 	column.add_child(seek)
+	seek.min_value=-85
 	seek.step=1
 	seek.value_changed.connect(func(value): playing=false; frame=value; draw_pose())
 	refresh()
 	update_leg_buttons()
 	draw_pose()
+	cell=Vector3i(((lattice.to_local(contact_point)-MAP_ORIGIN)/CELL_SIZE).floor()).clamp(MAP_MIN,MAP_MAX)
+	preview_cell()
 
 func button(row: Control,title: String,action: Callable) -> void:
 	var b := Button.new()
@@ -174,7 +189,7 @@ func refresh() -> void:
 
 func change_clip(by: int) -> void:
 	index=posmod(index+by,clips.size())
-	frame=0.
+	frame=seek.min_value
 	legs=index
 	update_leg_buttons()
 	seek.max_value=clips[index].frames
@@ -182,7 +197,7 @@ func change_clip(by: int) -> void:
 
 func step(by: int) -> void:
 	playing=false
-	frame=clampf(roundf(frame)+by,0.,clips[index].frames)
+	frame=clampf(roundf(frame)+by,seek.min_value,clips[index].frames)
 	draw_pose()
 
 func toggle_play() -> void:
@@ -195,10 +210,45 @@ func _process(delta: float) -> void:
 		elapsed=0.
 		refresh()
 	if playing:
-		frame=fmod(frame+delta*60.,clips[index].frames+1.)
+		frame+=delta*60.
+		if frame>=clips[index].frames+1.:
+			frame=seek.min_value
+			if vary.button_pressed:
+				cell=Vector3i(randi_range(MAP_MIN.x,MAP_MAX.x),randi_range(0,2),randi_range(1,MAP_MAX.z))
+				preview_cell()
 		draw_pose()
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion or event is InputEventMouseButton:
+		var ray := camera.project_ray_origin(event.position)
+		var direction := camera.project_ray_normal(event.position)
+		var click: bool=event is InputEventMouseButton and event.button_index==MOUSE_BUTTON_LEFT and event.pressed
+		if place.button_pressed:
+			hover.hide()
+			var floor_hit=Plane(Vector3.UP,.052).intersects_ray(ray,direction)
+			if click and floor_hit!=null:
+				var inside: bool=absf(floor_hit.x-zone.position.x)<=1. and absf(floor_hit.z-zone.position.z)<=1.
+				if not inside:
+					zone.position=Vector3(clampf(floor_hit.x,-3.5,3.5),.052,clampf(floor_hit.z,-4.,3.))
+				pivot.position= floor_hit if inside else zone.position
+				lattice.position=pivot.position
+				StorySession.game_options.set_value("reception_studio","zone",zone.position)
+				StorySession.game_options.set_value("reception_studio","stance",pivot.position)
+				StorySession.save_options()
+				position_camera()
+				draw_pose()
+				return
+		else:
+			var hit=Plane(Vector3.BACK,highlight.global_position.z).intersects_ray(ray,direction)
+			hover.hide()
+			if hit!=null:
+				var hovered := Vector3i(((lattice.to_local(hit)-MAP_ORIGIN)/CELL_SIZE).floor())
+				if hovered.x>=MAP_MIN.x and hovered.x<=MAP_MAX.x and hovered.y>=0 and hovered.y<=MAP_MAX.y:
+					hover.position=MAP_ORIGIN+(Vector3(hovered.x,hovered.y,cell.z)+Vector3.ONE*.5)*CELL_SIZE
+					hover.show()
+					if click:
+						pick_cell(hovered.x,hovered.y)
+						return
 	if event is InputEventMouseMotion and event.button_mask & MOUSE_BUTTON_MASK_MIDDLE:
 		yaw+=event.relative.x*.008
 		elevation=clampf(elevation+event.relative.y*.005,-.1,1.1)
@@ -214,20 +264,47 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_M: mirror.button_pressed=not mirror.button_pressed
 
 func position_camera() -> void:
-	var target := Vector3(0,.92,.15)
+	var target := pivot.position+Vector3(0,.92,.15)
 	camera.position=target+Vector3(sin(yaw)*cos(elevation),sin(elevation),cos(yaw)*cos(elevation))*distance
 	camera.look_at(target)
 
 func draw_pose() -> void:
 	var c: Dictionary=clips[index]
 	var f := clampf(roundf(frame),0.,c.frames)
-	seek.set_value_no_signal(f)
-	label.text=" %02d / %02d     Frame %d / %d " % [c.id,clips.size(),f,c.frames]
+	seek.set_value_no_signal(frame)
+	label.text=" %02d / %02d     Frame %d / %d " % [c.id,clips.size(),roundi(frame),c.frames]
 	play_button.text="Pause" if playing else "Play"
-	var seconds := (f-float(c.contact))/60.
-	var velocity := Vector3(0,-.22,-1).normalized()*incoming_speed.value/3.6
-	preview_ball.position=highlight.position+velocity*seconds
-	preview_ball.visible=preview_ball.position.y>=.105
+	var signature := [index,legs,mirror.button_pressed,incoming_speed.value,source,cell,pivot.position]
+	if signature!=contact_key:
+		contact_key=signature
+		sample_receiver(c,c.contact)
+		var rig: Skeleton3D=player.skeleton
+		var center := Vector3.ZERO
+		for side in ["l","r"]:
+			var wrist := rig.get_bone_global_pose(rig.find_bone("hand_"+side)).origin
+			var elbow := rig.get_bone_global_pose(rig.find_bone("lowerarm_"+side)).origin
+			center+=rig.to_global(wrist.lerp(elbow,.32))*.5
+		contact_point=center+Vector3(0,.075,.075)
+		var offset := (contact_point-highlight.global_position).abs()-CELL_SIZE*.5
+		reachable=maxf(offset.x,maxf(offset.y,offset.z))<=.12
+	sample_receiver(c,f)
+	var target := contact_point if reachable else highlight.global_position
+	var launch: Vector3=feed.preview_origin
+	var duration := clampf(launch.distance_to(target)/maxf(1.,incoming_speed.value/3.6),.48,1.25)
+	var seconds := (frame-float(c.contact))/60.
+	var serve_time := clampf(feed.contact_time()+seconds+duration,0.,feed.contact_time()+.42)
+	feed.pose(serve_time)
+	feed.ball.show()
+	if seconds < -duration: return
+	var u := (seconds+duration)/duration
+	var arc := maxf(.95,3.05-launch.lerp(target,.60).y)
+	var point := launch.lerp(target,u)+Vector3.UP*4.*arc*u*(1.-u)
+	if reachable and seconds>0.:
+		point=target+Vector3(0,5.4,4.)*seconds+Vector3.DOWN*4.905*seconds*seconds
+	feed.ball.position=point
+	feed.ball.visible=point.y>=.145
+
+func sample_receiver(c: Dictionary,f: float) -> void:
 	if not Regions.movement(c):
 		sample_layer(index,c,f)
 		return
@@ -309,6 +386,10 @@ func build_map(tiers: VBoxContainer) -> void:
 	var title := Label.new()
 	title.text="Contact map"
 	tiers.add_child(title)
+	place.text="Place ready zone"
+	tiers.add_child(place)
+	vary.text="Vary serves"
+	tiers.add_child(vary)
 	var editor := VBoxContainer.new()
 	tiers.add_child(editor)
 	var depth := HBoxContainer.new()
@@ -342,24 +423,26 @@ func build_map(tiers: VBoxContainer) -> void:
 				start[(axis+2)%3]=j
 				var end := start
 				end[axis]=MAP_MAX[axis]+1
-				lines.surface_add_vertex(Regions.ORIGIN+start*Regions.CELL)
-				lines.surface_add_vertex(Regions.ORIGIN+end*Regions.CELL)
+				lines.surface_add_vertex(MAP_ORIGIN+start*CELL_SIZE)
+				lines.surface_add_vertex(MAP_ORIGIN+end*CELL_SIZE)
 	lines.surface_end()
 	lattice.mesh=lines
 	add_child(lattice)
 	var box := BoxMesh.new()
-	box.size=Regions.CELL
+	box.size=CELL_SIZE
 	var tint := StandardMaterial3D.new()
 	tint.transparency=BaseMaterial3D.TRANSPARENCY_ALPHA
 	tint.albedo_color=Color(1.,.72,.1,.26)
 	box.material=tint
 	highlight.mesh=box
 	lattice.add_child(highlight)
-	var sphere := SphereMesh.new()
-	sphere.radius=.105
-	sphere.height=.21
-	preview_ball.mesh=sphere
-	add_child(preview_ball)
+	hover.mesh=box
+	var hover_style := tint.duplicate() as StandardMaterial3D
+	hover_style.albedo_color=Color(.12,.85,1.,.38)
+	hover.material_override=hover_style
+	lattice.add_child(hover)
+	hover.hide()
+	lattice.position=pivot.position
 	update_region()
 
 func pick_cell(x: int,y: int) -> void:
@@ -388,7 +471,7 @@ func preview_cell() -> void:
 				mirror.button_pressed=(cell.x<1)!=(float(clips[i].side)<0.)
 			break
 	if id==0: select_legs(-1)
-	frame=0.
+	frame=seek.min_value
 	playing=true
 	draw_pose()
 
@@ -396,7 +479,7 @@ func update_region() -> void:
 	depth_label.text=["Far back","Back","Body","Front","Far front"][cell.z-MAP_MIN.z]
 	var id := cell_action()
 	region_label.text="%s %s - %s" % [HEIGHTS[cell.y],WIDTHS[cell.x-MAP_MIN.x],"Ready" if id==0 else "Action #%02d"%id]
-	highlight.position=Regions.ORIGIN+(Vector3(cell)+Vector3.ONE*.5)*Regions.CELL
+	highlight.position=MAP_ORIGIN+(Vector3(cell)+Vector3.ONE*.5)*CELL_SIZE
 
 func assign_region() -> void:
 	var id: int=0 if legs<0 else clips[legs].id

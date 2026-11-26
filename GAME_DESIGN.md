@@ -6,7 +6,7 @@ The following describes the intended full game. A menu route, stored rating or p
 
 Dig from Five shares the Serve and Receive camera: 52-degree field of view, pivot (0, 1.5, -4.4), and arm length 0.48 times the saved distance plus 2 metres, with the same orbit, elevation and gym obstruction check. Middle-button drag orbits the live digging camera for the current visit. Reopening the drill restores this opening view. The coach feeds a far-side setter for a zone-four attack against one pin blocker; the near-side defender starts in five.
 
-The studio previews incoming balls across five widths, four heights and five depths. The original 27 cells retain their movement assignments. In Dig from Five, holding A prepares the mapped movement for the projected contact and releasing A times the dig. Dives are separate full-body actions.
+The studio places the receiver in a two-meter ready square in the indoor gym and previews serves across five widths, four heights and five depths. The original 27 cells retain their movement assignments. In Dig from Five, holding A prepares the mapped movement for the projected contact and releasing A times the dig. Dives are separate full-body actions.
 
 For a two-arm forearm reception, dig, or bump set, establish one platform before the footwork develops. The shoulders reach together, the elbows extend toward the ball, and the hands stay clasped as the elbows absorb impact. The rendered pose and replay must preserve that same platform through the lunge. Overhead hand sets use their own hand shape.
 

@@ -126,4 +126,5 @@ Serving-camp rally hitters and middle decoys use the attack-camp plant arm lift 
 Serve-receive hitters reserve horizontal travel for the airborne approach where space allows. Their strike tracks the incoming set and replay presents the palm contact before the outgoing flight.
 In serving camp, D-pad up selects topspin, left/right add sidespin, and down selects float for the spin serve. Accurate releases produce higher pace. Untouched serves rebound from gym surfaces. The setter uses available jump height, approach time and recent missed swings when choosing hitters and pin tempo. A pipe can originate in the back-row hitter's lane. Middle commits require an airborne middle on an in-system pass.
 
-Reception Studio previews the ball crossing the selected cell on the contact frame. Outer cells default to full-body dives.
+Reception Studio feeds the selected contact region. Outer cells default to full-body dives.
+Studio serves use the region assignment at a saved stance inside a two-meter ready square. Reachable feeds rebound from the forearms. Future coaching strategy will assign ready zones per team, with chase coverage deferred.

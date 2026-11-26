@@ -212,7 +212,7 @@ func orient_palm(pose: Array, rig: Skeleton3D, author: RefCounted, side: String,
 	var fingers: Vector3 = author.point(pose,"middle_01_"+side)-base.origin
 	var width: Vector3 = author.point(pose,"index_01_"+side)-author.point(pose,"pinky_01_"+side)
 	var basis := HandPose.hand_basis(direction,across)*HandPose.hand_basis(fingers,width).inverse()*base.basis
-	author.set_world_basis(pose,hand,base.basis.slerp(basis,weight))
+	author.set_world_basis(pose,hand,base.basis.orthonormalized().slerp(basis.orthonormalized(),weight))
 	for digit in ["thumb","index","middle","ring","pinky"]:
 		for joint in ["01","02","03"]:
 			var bone := rig.find_bone("%s_%s_%s" % [digit,joint,side])
