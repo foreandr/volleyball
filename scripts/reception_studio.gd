@@ -580,6 +580,8 @@ func sample_receiver(c: Dictionary,f: float) -> void:
 		else:
 			if c.get("audition",false):
 				if legs>=0: audition_hand_legs(goal,follow)
+			elif c.get("step_legs",0)==2:
+				grounded_wide_set(goal,forehead,follow,c.get("ground_plant",false))
 			else:
 				pose_hand_pass_legs(goal,forehead,follow,int(c.get("step_legs",0)))
 			var reach_weight := load_weight*(1.-smoothstep(.035,.28,follow))
@@ -704,6 +706,40 @@ func sample_shuffle(direction: Vector3, phase: float, weight: float) -> void:
 	steps.travel=direction
 	steps.weight=weight
 	steps.step(steps.travel,0.,1.,true,true)
+
+func grounded_wide_set(goal: Vector3, forehead: float, follow: float, plant: bool) -> void:
+	var stride := Vector3.ZERO
+	var settle := -.30
+	if plant:
+		var travel: Vector3=player.to_local(goal).slide(Vector3.UP)-Vector3.BACK*.23
+		stride=(travel*.72).limit_length(.92)
+		var phase := follow-settle
+		player.position=stride*smoothstep(-approach_plant.APPROACH_LOAD_TIME,0.,phase)
+		if phase<0.:
+			if phase>=-approach_plant.APPROACH_LOAD_TIME:
+				bend_for_hand_pass(.12*sin(PI*smoothstep(-approach_plant.APPROACH_LOAD_TIME,0.,phase)))
+				sample_approach_plant(stride,phase)
+			return
+	var weight := smoothstep(settle if plant else -.55,-.02,follow)*(1.-smoothstep(.09,.38,follow))
+	if weight>0.:
+		var delta_to_ball: Vector3=player.to_local(goal).slide(Vector3.UP)-Vector3.BACK*.23
+		var recipe: Dictionary=clips[1].duplicate()
+		var scale_m: float=player.skeleton.global_basis.x.length()
+		var reach := delta_to_ball.limit_length(1.1)
+		recipe.side=reach.x/scale_m
+		recipe.forward=reach.z*1.8/scale_m
+		recipe.drop=clampf(forehead-goal.y,0.,float(recipe.drop)*scale_m)/scale_m
+		var pose := ready_pose.duplicate()
+		Regions.legs(player,pose,recipe,weight)
+		for joint in ["pelvis","thigh_l","calf_l","foot_l","thigh_r","calf_r","foot_r"]:
+			var bone: int=player.skeleton.find_bone(joint)
+			player.skeleton.set_bone_pose(bone,pose[bone])
+	if plant and follow>.4:
+		var duration := maxf(.38,stride.length()/1.15)
+		var progress := clampf((follow-.4)/duration,0.,1.)
+		player.position=stride*(1.-smoothstep(0.,1.,progress))
+		if progress<1.:
+			sample_shuffle(-stride.normalized(),progress*maxi(1,roundi(duration*1.65)),sin(PI*progress))
 
 func pose_hand_pass_legs(goal: Vector3, standing_height: float, follow: float, step_legs: int) -> void:
 	var drop := standing_height-goal.y
@@ -1001,6 +1037,7 @@ func assigned_action(address: Vector3i,part: int) -> int:
 				return 80 if parent_action==78 else parent_action
 			if StorySession.game_options.has_section_key("studio_three_rows",parent_key):
 				return int(StorySession.game_options.get_value("studio_three_rows",parent_key))
+			return 82 if part>=4 else 81
 		if address==HEAD_CELL and part>=2: return 0
 	var key := Regions.key(address)
 	if StorySession.game_options.has_section_key("studio_three_rows",key):

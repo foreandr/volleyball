@@ -78,5 +78,7 @@
   {"id": 77, "kind": "sand_split", "side": -0.83, "drop": 0.47, "forward": 0.22, "lean": 22, "contact": 37, "frames": 145, "grip_y": -0.43, "long_platform": true},
   {"id": 78, "kind": "overhead", "jump_set": true, "side": 0, "drop": 0, "forward": 0, "lean": 0, "contact": 42, "frames": 122},
   {"id": 79, "kind": "overhead", "step_legs": 4, "side": 0, "drop": 0, "forward": 0, "lean": 0, "contact": 42, "frames": 122},
-  {"id": 80, "kind": "overhead", "jump_set": true, "approach_step": true, "side": 0, "drop": 0, "forward": 0, "lean": 0, "contact": 42, "frames": 122}
+  {"id": 80, "kind": "overhead", "jump_set": true, "approach_step": true, "side": 0, "drop": 0, "forward": 0, "lean": 0, "contact": 42, "frames": 122},
+  {"id": 81, "kind": "overhead", "step_legs": 2, "side": 0, "drop": 0, "forward": 0, "lean": 0, "contact": 45, "frames": 125},
+  {"id": 82, "kind": "overhead", "step_legs": 2, "ground_plant": true, "side": 0, "drop": 0, "forward": 0, "lean": 0, "contact": 45, "frames": 145}
 ]
