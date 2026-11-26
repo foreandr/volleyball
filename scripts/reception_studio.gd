@@ -28,6 +28,9 @@ const HandPass = preload("res://scripts/hand_setting_pose.gd")
 var feed_offset := Vector3.ZERO
 var contact_point := Vector3.ZERO
 var contact_key := []
+var ball_trail := MeshInstance3D.new()
+var trail_mesh := ImmediateMesh.new()
+var trail_ink := StandardMaterial3D.new()
 var pass_end_frame := 0.
 var reachable := false
 var lattice := MeshInstance3D.new()
@@ -411,19 +414,44 @@ func draw_pose() -> void:
 	var serve_time := clampf(feed.contact_time()+seconds+duration,0.,feed.contact_time()+.42)
 	feed.pose(serve_time)
 	feed.ball.show()
+	if ball_trail.visible: trail_mesh.clear_surfaces()
 	if seconds < -duration: return
-	var u := (seconds+duration)/duration
-	var arc := 1.5
-	var point := launch.lerp(target,u)+Vector3.UP*4.*arc*u*(1.-u)
+	var lift := sqrt(2.*9.81*pass_arc.value)
+	var landing := (lift+sqrt(lift*lift+2.*9.81*maxf(0.,target.y-.145)))/9.81
 	if reachable and seconds>0.:
-		var rise := pass_arc.value
-		var lift := sqrt(2.*9.81*rise)
-		var landing := (lift+sqrt(lift*lift+2.*9.81*maxf(0.,target.y-.145)))/9.81
 		pass_end_frame=float(c.contact)+ceilf(landing*60.)+1.
-		point=target.lerp(Vector3(pass_marker.position.x,target.y,pass_marker.position.z),seconds/landing)
-		point.y+=lift*seconds-4.905*seconds*seconds
+	var point := flight_point(seconds,launch,target,duration,lift,landing)
 	feed.ball.position=point
 	feed.ball.visible=point.y>=.145
+	if ball_trail.visible and seconds > -duration:
+		draw_ball_trail(seconds,launch,target,duration,lift,landing)
+
+func flight_point(t: float,launch: Vector3,target: Vector3,duration: float,lift: float,landing: float) -> Vector3:
+	if reachable and t>0.:
+		var point := target.lerp(Vector3(pass_marker.position.x,target.y,pass_marker.position.z),t/landing)
+		point.y+=lift*t-4.905*t*t
+		return point
+	var u := (t+duration)/duration
+	return launch.lerp(target,u)+Vector3.UP*6.*u*(1.-u)
+
+func draw_ball_trail(seconds: float,launch: Vector3,target: Vector3,duration: float,lift: float,landing: float) -> void:
+	var previous := launch
+	var t := -duration
+	trail_mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES,trail_ink)
+	while t<seconds:
+		var next_time := minf(seconds,t+1./60.)
+		if t<0. and next_time>0.: next_time=0.
+		var point := flight_point(next_time,launch,target,duration,lift,landing)
+		var landed := point.y<.145
+		if landed:
+			point=previous.lerp(point,clampf((previous.y-.145)/maxf(.00001,previous.y-point.y),0.,1.))
+		var width := (point-previous).cross(camera.global_position-previous).normalized()*.018
+		for vertex in [previous-width,previous+width,point+width,previous-width,point+width,point-width]:
+			trail_mesh.surface_add_vertex(vertex)
+		if landed: break
+		t=next_time
+		previous=point
+	trail_mesh.surface_end()
 
 func sample_receiver(c: Dictionary,f: float) -> void:
 	if cell_action()==0:
@@ -566,6 +594,22 @@ func sample_layer(which: int, timeline: Dictionary, f: float) -> void:
 	for bone in pose.size(): rig.set_bone_pose(bone,pose[bone])
 
 func build_map(tiers: VBoxContainer) -> void:
+	trail_ink.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED
+	trail_ink.cull_mode=BaseMaterial3D.CULL_DISABLED
+	trail_ink.albedo_color=Color("#ff2626")
+	ball_trail.mesh=trail_mesh
+	ball_trail.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(ball_trail)
+	var toggle_trail := CheckButton.new()
+	toggle_trail.text="Ball trail"
+	toggle_trail.button_pressed=StorySession.game_options.get_value("reception_studio","ball_trail",true)
+	ball_trail.visible=toggle_trail.button_pressed
+	tiers.add_child(toggle_trail)
+	toggle_trail.toggled.connect(func(on):
+		ball_trail.visible=on
+		StorySession.game_options.set_value("reception_studio","ball_trail",on)
+		StorySession.save_options()
+		draw_pose())
 	var title := Label.new()
 	title.text="Contact map"
 	tiers.add_child(title)
