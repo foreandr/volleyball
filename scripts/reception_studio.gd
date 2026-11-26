@@ -485,6 +485,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				hover_number.text=region_number(address,part)
 				hover.show()
 				if click and event.ctrl_pressed:
+					random_feeds.button_pressed=false
 					activate_receiver(0)
 					cell=address
 					quadrant=part
