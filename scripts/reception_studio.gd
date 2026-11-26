@@ -39,6 +39,7 @@ var set_intercept := Vector3.ZERO
 var ball_trail := MeshInstance3D.new()
 var trail_mesh := ImmediateMesh.new()
 var trail_ink := StandardMaterial3D.new()
+var approach_plant := preload("res://scripts/setter_jump.gd").new()
 var shuffle_by_actor := {}
 var reset_end_frame := 0.
 var pass_end_frame := 0.
@@ -647,8 +648,8 @@ func jump_to_set(goal: Vector3, follow: float, approach_step := false) -> void:
 	var fraction := clampf(t,0.,2.*half_air)/lead
 	var landing := 2.*half_air-lead
 	var recover := smoothstep(landing+.10,landing+.57,follow)
-	var ground_step := (travel*.45).limit_length(.38) if approach_step else Vector3.ZERO
-	var step_progress := smoothstep(-.32,-.035,t)
+	var ground_step := (travel*.60).limit_length(.62) if approach_step else Vector3.ZERO
+	var step_progress := smoothstep(-approach_plant.APPROACH_LOAD_TIME,0.,t)
 	var offset := ground_step*step_progress+(travel-ground_step).limit_length(5.5*lead)*fraction
 	player.position=offset
 	player.position.y=maxf(0.,apex-4.905*(t-half_air)*(t-half_air))
@@ -656,8 +657,8 @@ func jump_to_set(goal: Vector3, follow: float, approach_step := false) -> void:
 	var compression := clampf(contact_rise-gap.y,0.,.38)*smoothstep(-.16,0.,t)*(1.-recover)
 	var cushion := smoothstep(landing,landing+.06,follow)*(1.-smoothstep(landing+.06,landing+.20,follow))
 	bend_for_hand_pass(compression+.17*load+.10*cushion)
-	if approach_step and t<0. and step_progress>0. and step_progress<1.:
-		sample_shuffle(ground_step.normalized(),step_progress,sin(PI*step_progress))
+	if approach_step and t>=-approach_plant.APPROACH_LOAD_TIME and t<0.:
+		sample_approach_plant(ground_step,t)
 	# Hold the landing before the studio shuffles back for its next feed.
 	var elapsed := follow-landing-.40
 	var distance := offset.length()
@@ -668,6 +669,31 @@ func jump_to_set(goal: Vector3, follow: float, approach_step := false) -> void:
 	reset_end_frame=frame+(duration-elapsed)*60.
 	if progress>=1.: return
 	sample_shuffle(-offset.normalized(),progress*maxi(1,roundi(duration*1.65)),smoothstep(0.,.16,progress)*(1.-smoothstep(.80,1.,progress)))
+
+func sample_approach_plant(stride: Vector3, takeoff_time: float) -> void:
+	var rig: Skeleton3D=player.skeleton
+	var author=player.get_pose_author()
+	var pose := ready_pose.duplicate()
+	var pelvis := rig.find_bone("pelvis")
+	pose[pelvis]=rig.get_bone_pose(pelvis)
+	# Sample the attack's right plant and closing left step in takeoff-space.
+	approach_plant.approach_plant=true
+	approach_plant.incoming_plant_speed=1.
+	approach_plant.elapsed=takeoff_time+approach_plant.APPROACH_LOAD_TIME
+	for side in ["r","l"]:
+		approach_plant.plant_legs[side]=Transform3D.IDENTITY
+	approach_plant.right_plant=stride
+	approach_plant.left_plant=stride
+	for side in ["r","l"]:
+		var foot: Transform3D=author.feet[side]
+		var displacement: Vector3=approach_plant.attack_plant_foot(side)-player.position
+		var target: Vector3=foot.origin+rig.global_basis.inverse()*(player.global_basis*displacement)
+		var pole := Vector3(.15 if side=="l" else -.15,.08,1.)
+		author.limb(pose,"thigh_"+side,"calf_"+side,"foot_"+side,target,pole,1.,162.,true)
+		author.set_world_basis(pose,"foot_"+side,foot.basis)
+		for joint in ["thigh_","calf_","foot_"]:
+			var bone := rig.find_bone(joint+side)
+			rig.set_bone_pose(bone,pose[bone])
 
 func sample_shuffle(direction: Vector3, phase: float, weight: float) -> void:
 	if not shuffle_by_actor.has(player):
