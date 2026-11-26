@@ -67,10 +67,13 @@ static func apply(rig: Skeleton3D, author: RefCounted, outgoing: Vector3, power:
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
 
 const FAST_FOREARM_SPEED := 60./3.6
-const FAST_FOREARM_BEND := 38.
+const FAST_FOREARM_BEND := 44.
 
 static func fast_forearm(speed_mps: float) -> bool:
 	return speed_mps>FAST_FOREARM_SPEED
+
+static func forearm_recoil_weight(age: float) -> float:
+	return smoothstep(0.,.085,age)*(1.-smoothstep(.115,FAST_DIG_ELBOW_DURATION,age))
 
 static func recoil_platform(rig: Skeleton3D, age: float) -> void:
 	if age<=0. or age>=FAST_DIG_ELBOW_DURATION: return
@@ -82,16 +85,16 @@ static func recoil_platform(rig: Skeleton3D, age: float) -> void:
 	var wrists := (rig.get_bone_global_pose(rig.find_bone("hand_l")).origin+rig.get_bone_global_pose(rig.find_bone("hand_r")).origin)*.5
 	var direction := axis.cross(wrists-(l+r)*.5).dot((rig.global_basis.inverse()*Vector3.UP).normalized())
 	if axis.is_zero_approx() or is_zero_approx(direction): return
-	var angle := deg_to_rad(FAST_FOREARM_BEND)*signf(direction)*smoothstep(0.,.055,age)*(1.-smoothstep(.09,FAST_DIG_ELBOW_DURATION,age))
+	var angle := deg_to_rad(FAST_FOREARM_BEND)*signf(direction)*forearm_recoil_weight(age)
 	# Both forearms turn about the same line through the elbows, preserving the clasp.
 	for bone in [left,right]:
 		var parent := rig.get_bone_global_pose(rig.get_bone_parent(bone)).basis.orthonormalized()
 		rig.set_bone_pose_rotation(bone,Quaternion((parent.inverse()*axis).normalized(),angle)*rig.get_bone_pose_rotation(bone))
 
-const FAST_DIG_ELBOW_DURATION := 0.32
+const FAST_DIG_ELBOW_DURATION := 0.38
 
 static func absorb_with_joined_platform(actor: Node3D, age: float, degrees: float, contact_grip := Vector3.INF) -> void:
-	var recoil := smoothstep(0.,.045,age)*(1.-smoothstep(.09,FAST_DIG_ELBOW_DURATION,age))
+	var recoil := forearm_recoil_weight(age)
 	pose_joined_platform(actor,1.,174.-degrees*recoil,contact_grip+Vector3.UP*.08*recoil if contact_grip.is_finite() else Vector3.INF)
 
 static func pose_joined_platform(actor: Node3D, weight: float, extension: float, target := Vector3.INF) -> void:
