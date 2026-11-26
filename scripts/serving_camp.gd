@@ -31,6 +31,14 @@ const SET_VERTICAL := .48
 const SET_LOAD := .20
 var pass_end := Vector3.ZERO
 var receive_at := 0.
+var pass_duration := 1.25
+var reception_clip := ""
+const PassAccuracy = preload("res://scripts/reception_accuracy.gd")
+const PASS_CLIPS := {
+	"balanced": preload("res://assets/animations/straight_pass_02.res"),
+	"loaded": preload("res://assets/animations/straight_pass_06.res"),
+	"deep": preload("res://assets/animations/straight_pass_11.res"),
+}
 var receiver := 0
 var hand_sound := AudioStreamPlayer.new()
 
@@ -62,6 +70,7 @@ func start_drill() -> void:
 		preload("res://scripts/practice_kit.gd").apply(passer,false,i+3)
 		passer.rotation.y=PI
 		passer.play_action("idle")
+		passer.animator.advance(.57*(i+1))
 		passers.append(passer)
 	receiving_jump.front_limit=13.
 	receiving_jump.back_limit=BallNet.NET_Z+.25
@@ -248,6 +257,12 @@ func walk_server(delta: float) -> void:
 
 func _process(delta: float) -> void:
 	if serves.is_empty() or settings.visible or get_tree().paused: return
+	for i in passers.size():
+		passers[i].stamina.recover(delta)
+		if i!=receiver or phase not in ["serve_flight","serve_pass"]:
+			passers[i].animator.advance(delta)
+	if phase not in ["serve_pass","serve_bucket"]:
+		receiving_setter.animator.advance(delta)
 	hitter.stamina.recover(delta)
 	receiving_setter.stamina.recover(delta)
 	if phase=="serve_ready":
@@ -295,6 +310,9 @@ func _process(delta: float) -> void:
 				receiver=0
 				for i in range(1,passers.size()):
 					if HOMES[i].distance_squared_to(expected)<HOMES[receiver].distance_squared_to(expected): receiver=i
+				var chase: float=HOMES[receiver].distance_to(Vector3(expected.x,.04,expected.z+.42))
+				var pressure: float=chase/maxf(.1,receive_at)+shot.velocity.length()*.07
+				reception_clip="deep" if pressure>2.95 else ("loaded" if pressure>1.95 else "balanced")
 				shot.net_hit=BallNet.first_hit(shot.flight_point,0.,shot.planned_duration)
 				shot.ball.basis=ball.basis
 				flight_age=0.
@@ -333,11 +351,16 @@ func _process(delta: float) -> void:
 			var stance := Vector3(predicted.x,.04,predicted.z+.42)
 			if shot.net_hit.is_empty() or ball.position.z>BallNet.NET_Z:
 				if flight_age>=receive_at-.24 and passer.position.distance_to(stance)<.48:
-					passer.play_action("forearm")
+					if not passer.animation_slots.has(reception_clip):
+						passer.install_custom(PASS_CLIPS[reception_clip],reception_clip,false)
+					passer.play_action(reception_clip)
+					passer.animator.seek(clampf(.60+flight_age-receive_at,0.,.85),true)
 					passer.animator.advance(delta)
 				else:
 					move_receiver(passer,stance,delta)
 				passer.rotation.y=PI
+			else:
+				passer.animator.advance(delta)
 			if previous.y>=PASS_HEIGHT and ball.position.y<PASS_HEIGHT and ball.position.z>BallNet.NET_Z:
 				var contact := previous.lerp(ball.position,inverse_lerp(previous.y,ball.position.y,PASS_HEIGHT))
 				var platform := passer.position+Vector3(0,PASS_HEIGHT-.04,-.42)
@@ -345,7 +368,15 @@ func _process(delta: float) -> void:
 					pass_start=contact
 					ball.position=contact
 					pass_end=Vector3(lerpf(SETTER_HOME.x,contact.x,.35),receiving_setter.height_cm*.0118,SETTER_HOME.z+.40+(contact.z-9.)*.18)
-					set_at=1.25
+					var pace := previous.distance_to(ball.position)/maxf(delta,.001)
+					var reach := platform.distance_to(contact)/.75
+					var spread := PassAccuracy.spread(reach,pace,shot.reception_spin_rps(),passer.effective_rating("Forearm reception"),false)
+					var error := PassAccuracy.sample_offset(spread)
+					pass_end+=Vector3(error.x,0.,error.z)
+					pass_end.z=maxf(BallNet.NET_Z+.35,pass_end.z)
+					pass_duration=clampf(1.25+error.y*.21,.80,1.75)
+					passer.stamina.spend(1.+reach,"Receive")
+					set_at=pass_duration
 					pass_clock=0.
 					phase="serve_pass"
 					return
@@ -372,10 +403,11 @@ func step_reception_rally(delta: float) -> void:
 		var stance := Vector3(pass_end.x,.04,pass_end.z)-facing*.30
 		var lift: float=SET_VERTICAL*receiving_setter.stamina.effectiveness()
 		# Descending intersection of the existing pass arc with airborne hand height.
-		var rise := pass_end.y-pass_start.y+7.68
-		var u := (rise+sqrt(maxf(0.,rise*rise+30.72*(pass_start.y-pass_end.y-lift))))/15.36
-		var intercept := arc(pass_start,pass_end,u,1.92)
-		var jump_at := 1.25*u-SET_LOAD-receiving_jump.flight_duration(lift,true)*.5
+		var arc_term := 4.905*pass_duration*pass_duration
+		var rise := pass_end.y-pass_start.y+arc_term
+		var u := (rise+sqrt(maxf(0.,rise*rise+4.*arc_term*(pass_start.y-pass_end.y-lift))))/(2.*arc_term)
+		var intercept := arc(pass_start,pass_end,u,arc_term*.25)
+		var jump_at := pass_duration*u-SET_LOAD-receiving_jump.flight_duration(lift,true)*.5
 		var plant := Vector3(intercept.x,.04,intercept.z)-facing*.30
 		if not receiving_jump.active:
 			move_receiver(receiving_setter,plant if pass_clock<=jump_at+delta else stance,delta)
@@ -384,15 +416,24 @@ func step_reception_rally(delta: float) -> void:
 				receiving_jump.begin(receiving_setter,Vector2.ZERO,plant,SET_LOAD,SET_VERTICAL,2,false,1.,true)
 				receiving_jump.release()
 				receiving_setter.stamina.spend(5,"Jump")
-				set_at=1.25*u
+				set_at=pass_duration*u
 		if receiving_jump.active: receiving_jump.step(receiving_setter,delta,Vector2.ZERO)
 		passers[receiver].animator.advance(delta)
 		if pass_clock>.35: passers[receiver].play_action("idle")
-		ball.position=arc(pass_start,pass_end,pass_clock/1.25,1.92)
+		ball.position=arc(pass_start,pass_end,pass_clock/pass_duration,arc_term*.25)
 		if pass_clock>set_at-.33:
 			receiving_setter.rotation.y=atan2(facing.x,facing.z)
 			preload("res://scripts/hand_setting_pose.gd").apply(receiving_setter,ball.position,smoothstep(set_at-.33,set_at-.05,pass_clock))
 		if pass_clock>=set_at:
+			if (receiving_setter.position-ball.position).slide(Vector3.UP).length()>.85:
+				var t := pass_clock/pass_duration
+				drop_velocity=(pass_end-pass_start+Vector3.UP*arc_term*(1.-2.*t))/pass_duration
+				phase="serve_miss"
+				flight_age=0.
+				roll_time=-1.
+				drop_net_hit.clear()
+				drop_net_time=0.
+				return
 			pass_start=ball.position
 			pass_end=receiving_setter.reachable_set(pass_start,bucket.position,receiving_jump.active)
 			pass_clock=0.
