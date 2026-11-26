@@ -276,3 +276,7 @@ Reserve the full-strength sidespin trajectory (1.15 m of lateral bend at mid-fli
 ## Future setter perk
 
 An exceptional setter can deliver faster offensive sets across the net width. Ordinary setters in the serving rally currently cap horizontal set speed at 23.4 km/h.
+
+## Future toss options for Spencer
+
+Spencer can toss the ball with his left hand, his right hand, or both hands together.
