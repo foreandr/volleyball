@@ -1,4 +1,4 @@
-extends "res://scripts/indoor_practice.gd"
+extends "res://scripts/attacking_camp.gd"
 
 const TECHNIQUES := [preload("res://scripts/spin_serve.gd"),preload("res://scripts/jump_float_serve.gd"),preload("res://scripts/standing_float_serve.gd"),preload("res://scripts/underhand_serve.gd")]
 const FACE := [JOY_BUTTON_A,JOY_BUTTON_B,JOY_BUTTON_X,JOY_BUTTON_Y]
@@ -9,9 +9,7 @@ var passers: Array[Node3D]=[]
 const SERVE_EARLY := -.22
 const SERVE_LATE := .075
 const SERVE_PERFECT := .055
-var float_step_anchor := Vector3.ZERO
-var float_sample_anchor := Vector3.ZERO
-var float_contact_offset := Vector3.ZERO
+var toss_airborne := false
 var toss_style := 2
 var hit_style := 2
 var release_time := INF
@@ -28,6 +26,14 @@ func _ready() -> void:
 	super()
 
 func start_drill() -> void:
+	hitter=setter
+	cpu_hitter=false
+	attack_jump.attack_arm_lift=true
+	attack_jump.back_limit=-10.5
+	attack_jump.load_lead_arm_clip()
+	world.add_child(hand_impact)
+	hand_impact.bus=StorySession.IMPACT_BUS
+	hand_impact.stream=preload("res://assets/audio/hand_impacts.tres")
 	coach.hide()
 	rotation_drill.basket.hide()
 	for item in rotation_drill.stock: item.hide()
@@ -46,26 +52,28 @@ func start_drill() -> void:
 	for i in TECHNIQUES.size():
 		var driver=TECHNIQUES[i].new()
 		world.add_child(driver)
-		if i==0: driver.camp_approach=true
 		driver.configure(setter,Vector3(0,.04,[-8.2,-6.6,-6.1,-6.1][i]))
 		driver.hide()
 		serves.append(driver)
-	var spin=serves[0]
-	spin.pose(spin.APPROACH_START)
-	float_sample_anchor=setter.position
-	serves[1].pose(serves[1].toss_release_time())
-	float_step_anchor=setter.position
-	spin.pose(spin.SPIN_CONTACT)
-	float_contact_offset=Contact.palm(setter,"r")+float_step_anchor-float_sample_anchor-serves[1].preview_origin
 	title.text="SERVING"
-	Xbox.prompts(controls_row,[["A","Spin"],["B","Jump float"],["X","Standing float"],["Y","Underhand"]])
+	update_prompts("ready")
 	apply_camera.call_deferred()
 	next_serve()
+
+func update_prompts(_next: String) -> void:
+	if prompt_phase=="serving": return
+	prompt_phase="serving"
+	Xbox.prompts(controls_row,[["A","Spin"],["B","Jump float"],["X","Standing float"],["Y","Underhand"]])
 
 func apply_camera() -> void:
 	place_practice_camera(Vector3(0,1.5,-4.4),distance*.48+2.)
 
 func next_serve() -> void:
+	clear_attack_input()
+	attack_jump.active=false
+	approach_started=false
+	swing_time=-1.
+	toss_airborne=false
 	phase="serve_ready"
 	serve_clock=0.
 	release_time=INF
@@ -116,31 +124,48 @@ func serve_meter_error() -> float:
 	var sample := release_time if is_finite(release_time) else serve_clock
 	return sample-(serves[toss_style].contact_time()-SERVE_LATE)
 
-func serve_pose(time: float) -> void:
-	var toss=serves[toss_style]
-	toss.pose(time)
-	if toss_style>=2: return
-	var offset: float=time-toss.contact_time()
-	var rig: Skeleton3D=setter.skeleton
-	if toss_style==1 and time>toss.toss_release_time():
-		var spin=serves[0]
-		var blend := smoothstep(0.,.13,time-toss.toss_release_time())
-		var old_position := setter.position
-		var old_pose: Array[Transform3D]=[]
-		for i in rig.get_bone_count(): old_pose.append(rig.get_bone_pose(i))
-		var sample_time: float=spin.SPIN_CONTACT+offset if offset>=0. else lerpf(spin.APPROACH_START,spin.SPIN_CONTACT,inverse_lerp(toss.toss_release_time(),toss.contact_time(),time))
-		spin.pose(sample_time)
-		if offset<=0.: toss.ball.position+=float_contact_offset*smoothstep(toss.toss_release_time(),toss.contact_time(),time)
-		setter.position=old_position.lerp(float_step_anchor+setter.position-float_sample_anchor,blend)
-		for i in rig.get_bone_count(): rig.set_bone_pose(i,old_pose[i].interpolate_with(rig.get_bone_pose(i),blend))
-	if hit_style==1:
-		var author=setter.get_pose_author()
-		var pose: Array=[]
-		for i in rig.get_bone_count(): pose.append(rig.get_bone_pose(i))
-		serves[1].finish_float_wrist(pose,rig,author,serves[1].contact_time()+offset)
-		for joint in ["lowerarm_r","hand_r"]:
-			var i := rig.find_bone(joint)
-			rig.set_bone_pose_rotation(i,pose[i].basis.orthonormalized().get_rotation_quaternion())
+func shot_landing(_origin: Vector3) -> Vector3:
+	return destination
+
+func self_set_step(motion, previous_time: float,delta: float) -> bool:
+	var release: float=motion.toss_release_time()
+	if serve_clock<release:
+		motion.pose(serve_clock)
+		ball.transform=motion.ball.transform
+		return false
+	if not toss_airborne:
+		motion.pose(release)
+		source=motion.ball.position
+		ball.position=source
+		endpoint=hitter.position+hitter.basis.z.normalized()*2.15
+		endpoint.y=planned_attack_contact_height()
+		active_set=endpoint
+		flight_time=motion.contact_time()-release
+		set_arc_height=9.81*flight_time*flight_time/8.
+		manual_shot=1
+		aim_center=Vector2(destination.x,destination.z)
+		toss_airborne=true
+	var previous := ball.position
+	elapsed=minf(serve_clock-release,flight_time)
+	ball.position=arc(source,endpoint,elapsed/flight_time,set_arc_height)
+	motion.spin_toss_ball(previous_time,serve_clock,1.)
+	ball.basis=motion.ball.basis
+	phase="set"
+	if attack_jump.active: attack_jump.step(hitter,delta,Vector2.ZERO)
+	if is_finite(release_time):
+		release_at=release_time
+		var error := serve_meter_error()
+		release_grade=remap(error,SERVE_EARLY,SERVE_LATE,EARLY_LIMIT,LATE_LIMIT)-GRADE_ADVANCE
+	var finished := handle_attack_contact(previous,delta)
+	var hit := phase=="spike"
+	phase="serve_toss"
+	if finished and not hit:
+		phase="serve_miss"
+		roll_time=-1.
+		drop_net_hit.clear()
+		drop_net_time=0.
+		flight_age=0.
+	return hit
 
 func _process(delta: float) -> void:
 	if serves.is_empty() or settings.visible or get_tree().paused: return
@@ -149,10 +174,14 @@ func _process(delta: float) -> void:
 		var strike: float=motion.contact_time()
 		var previous := serve_clock
 		serve_clock+=delta
-		serve_pose(minf(serve_clock,strike))
-		motion.spin_toss_ball(previous,minf(serve_clock,strike),1.)
-		ball.transform=motion.ball.transform
-		if serve_clock>=strike:
+		var hit := false
+		if toss_style<2:
+			hit=self_set_step(motion,previous,delta)
+		else:
+			motion.pose(minf(serve_clock,strike))
+			ball.transform=motion.ball.transform
+			hit=serve_clock>=strike
+		if hit:
 			var error := serve_meter_error() if is_finite(release_time) else INF
 			if error<SERVE_EARLY or error>SERVE_LATE:
 				phase="serve_miss"
@@ -175,10 +204,18 @@ func _process(delta: float) -> void:
 				flight_age=0.
 				phase="serve_flight"
 				message.text=("Perfect" if absf(error)<=SERVE_PERFECT else ("Early" if error<0. else "Late"))+" / "+LABELS[hit_style]
-				hand_sound.play()
+				if toss_style>=2: hand_sound.play()
 	elif phase in ["serve_flight","serve_pass","serve_miss"]:
 		serve_clock+=delta
-		if serve_clock<=motion.recovery_end(): serve_pose(serve_clock)
+		if toss_style<2:
+			if attack_jump.active: attack_jump.step(hitter,delta,Vector2.ZERO)
+			if swing_time>=0. and swing_time<=.65:
+				swing_time+=delta
+				var state := phase
+				phase="spike" if state!="serve_miss" else "drop"
+				pose_swing()
+				phase=state
+		elif serve_clock<=motion.recovery_end(): motion.pose(serve_clock)
 		if phase=="serve_miss":
 			advance_missed_ball(delta,true)
 			flight_age+=delta
