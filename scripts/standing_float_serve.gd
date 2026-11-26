@@ -16,6 +16,9 @@ func flight_duration(start: Vector3) -> float:
 	var rise := Net.NET_TOP+Net.RADIUS+tape_clearance-lerpf(start.y,Flight.FLOOR,u)
 	return sqrt(maxf(.01,2.*rise/(Flight.GRAVITY*u*(1.-u))))
 
+func minimum_aim_duration(start: Vector3) -> float:
+	return flight_duration(start) if tape_clearance>=0. else 0.
+
 func launch_velocity(start: Vector3,duration: float) -> Vector3:
 	if tape_clearance<0.: return super.launch_velocity(start,duration)
 	return Vector3(target.x-start.x,Flight.FLOOR-start.y,target.z-start.z)/duration+Vector3.UP*.5*Flight.GRAVITY*duration

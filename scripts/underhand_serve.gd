@@ -141,9 +141,23 @@ func update_path_preview() -> void:
 			var point := preview_origin+launch*time+Vector3.DOWN*0.5*Flight.GRAVITY*time*time+preview_lane_offset(lane,progress,launch)
 			path_preview.multimesh.set_instance_transform(lane*PREVIEW_DOTS+i,Transform3D(Basis.IDENTITY,point))
 
-func aimed_velocity(start: Vector3) -> Vector3:
-	var launch := launch_velocity(start,flight_duration(start))
-	return launch.normalized()*test_speed_mps if test_speed_mps>0. else launch
+func aimed_velocity(start: Vector3, pace := 1.0) -> Vector3:
+	var duration := flight_duration(start)
+	if test_speed_mps>0.:
+		var displacement := Vector3(target.x-start.x,Flight.FLOOR-start.y,target.z-start.z)
+		var speed_term := test_speed_mps*test_speed_mps-Flight.GRAVITY*displacement.y
+		var discriminant := speed_term*speed_term-Flight.GRAVITY*Flight.GRAVITY*displacement.length_squared()
+		# Lower-angle ballistic solution, limited by the height needed to clear the tape.
+		if discriminant>=0. and speed_term>0.:
+			var fast_time := sqrt(2.*displacement.length_squared()/(speed_term+sqrt(discriminant)))
+			duration=maxf(fast_time,minimum_aim_duration(start))
+		else:
+			duration=sqrt(2.*displacement.length()/Flight.GRAVITY)
+	duration=maxf(.05,duration/pace)
+	return Vector3(target.x-start.x,Flight.FLOOR-start.y,target.z-start.z)/duration+Vector3.UP*.5*Flight.GRAVITY*duration
+
+func minimum_aim_duration(_start: Vector3) -> float:
+	return 0.0
 
 func flight_duration(start: Vector3) -> float:
 	return (sqrt(2.0*Flight.GRAVITY*(apex-start.y))+sqrt(2.0*Flight.GRAVITY*(apex-Flight.FLOOR)))/Flight.GRAVITY

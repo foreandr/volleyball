@@ -276,8 +276,8 @@ func update_serve_aim(delta: float) -> void:
 	if height_mode: stick.y=0.
 	if stick.length()>.16:
 		var right := camera.global_basis.x.slide(Vector3.UP).normalized()
-		var forward := -camera.global_basis.z.slide(Vector3.UP).normalized()
-		destination+=(right*stick.x-forward*stick.y)*5.*delta
+		destination.x+=signf(right.x)*stick.x*5.*delta
+		destination.z-=stick.y*5.*delta
 		destination.x=clampf(destination.x,-4.5,4.5)
 		destination.z=clampf(destination.z,BallNet.NET_Z+.2,BallNet.NET_Z+9.)
 	var shot=serves[flight_style()]
@@ -590,11 +590,7 @@ func _process(delta: float) -> void:
 				configure_flight(shot,shot.origin)
 				shot.target=destination+Vector3(0,0,-error*8.)
 				var quality := 1.-clampf(absf(error)/(absf(SERVE_EARLY) if error<0. else SERVE_LATE),0.,1.)
-				if shot.test_speed_mps>0.:
-					shot.velocity=shot.aimed_velocity(shot.origin)*lerpf(.84,1.,quality)
-				else:
-					var duration: float=shot.flight_duration(shot.origin)/lerpf(.86,1.,quality)
-					shot.velocity=shot.launch_velocity(shot.origin,duration)
+				shot.velocity=shot.aimed_velocity(shot.origin,lerpf(.84,1.,quality))
 				shot.planned_duration=preload("res://scripts/pass_flight.gd").landing_time(shot.origin,shot.velocity)
 				shot.begin_serve_curve()
 				plan_serve_reception(shot)
