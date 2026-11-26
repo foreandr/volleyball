@@ -112,7 +112,24 @@ static func solve_platform(rig: Skeleton3D, author: RefCounted, weight: float, e
 	var center: Vector3=(author.point(pose,"hand_l")+author.point(pose,"hand_r"))*.5
 	var across: Vector3=(author.point(pose,"upperarm_l")-author.point(pose,"upperarm_r")).normalized()
 	if point.is_finite(): center=point
-	PlatformPose.connect_arms(pose,author,center,weight,0.,across,false,false,extension,point.is_finite(),.034)
+	var shoulders: Vector3=(author.point(pose,"upperarm_l")+author.point(pose,"upperarm_r"))*.5
+	var up := (rig.global_basis.inverse()*Vector3.UP).normalized()
+	center-=up*maxf(0.,(center-shoulders).dot(up)+.08)
+	if not point.is_finite():
+		var aim := (center-shoulders).normalized()
+		center=shoulders+aim*PlatformPose.arm_range(pose,author,"l",extension)
+	var width := 0.
+	for side in ["l","r"]:
+		width+=.5*author.point(pose,"index_01_"+side).distance_to(author.point(pose,"pinky_01_"+side))
+	PlatformPose.connect_arms(pose,author,center,weight,0.,across,false,false,extension,true,width+.015)
+	# Run both palms down the platform so their fingers cannot aim across the opposite wrist.
+	var fingers := PlatformPose.platform_axis(pose,author).slide(across).normalized()
+	for side in ["l","r"]:
+		var hand: String="hand_"+side
+		var along: Vector3=author.point(pose,"middle_01_"+side)-author.point(pose,hand)
+		if not fingers.is_zero_approx() and not along.is_zero_approx():
+			var basis: Basis=author.world_pose(pose,rig.find_bone(hand)).basis
+			author.set_world_basis(pose,hand,Basis(Quaternion(along.normalized(),fingers))*basis)
 	for side in ["l","r"]:
 		for part in ["upperarm_","lowerarm_","hand_"]:
 			var bone := rig.find_bone(part+side)

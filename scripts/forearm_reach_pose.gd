@@ -41,8 +41,11 @@ static func sample(rig: Skeleton3D, author: RefCounted, step: Vector3, travel: V
 	if dig_lunge:
 		var toward: Vector3=rig.to_local(contact)-author.point(pose,"pelvis")
 		var lean := clampf(toward.x,-1.,1.)*weight
-		author.rotate_world(pose,"spine_02",Vector3.BACK,-.42*lean)
-		author.rotate_world(pose,"spine_03",Vector3.BACK,-.26*lean)
+		var turn := clampf(atan2(toward.x,maxf(.15,toward.z)),-.55,.55)*weight
+		author.rotate_world(pose,"spine_02",Vector3.UP,turn*.6)
+		author.rotate_world(pose,"spine_03",Vector3.UP,turn*.4)
+		author.rotate_world(pose,"spine_02",Vector3.BACK,-.23*lean)
+		author.rotate_world(pose,"spine_03",Vector3.BACK,-.12*lean)
 		author.rotate_world(pose,"spine_02",Vector3.RIGHT,.25*weight)
 	elif side_receive:
 		# Open the shoulders toward the ball and lower the opposite shoulder.

@@ -4,6 +4,7 @@ const Xbox = preload("res://scripts/xbox_controls.gd")
 const SUB := 4
 var speed := 1.
 var slow_speed := .25
+var frame_number := Label.new()
 var rate := Button.new()
 var toggle_boxes: CheckButton
 var show_boxes := false
@@ -64,6 +65,7 @@ func _ready() -> void:
 		arrow.tooltip_text="Previous frame" if direction<0 else "Next frame"
 		arrow.pressed.connect(step_frame.bind(direction))
 		tools.add_child(arrow)
+	tools.add_child(frame_number)
 	rate.text="Slow-mo  1x"
 	var rates := [1.,.25,.125,.0625,.5]
 	rate.pressed.connect(func(): set_replay_speed(rates[(rates.find(speed)+1)%rates.size()]))
@@ -157,11 +159,12 @@ func apply(sample: Dictionary) -> void:
 func step_frame(direction: int) -> void:
 	playing=false
 	playback_elapsed=0.
-	slider.value+=direction
+	slider.value=clampf((floorf(slider.value/SUB)+1. if direction>0 else ceilf(slider.value/SUB)-1.)*SUB,0.,slider.max_value)
 
 func display_frame(value: float) -> void:
 	if history.is_empty(): return
 	var first := mini(int(value)/SUB,history.size()-1)
+	frame_number.text="Frame %d / %d" % [first+1,history.size()]
 	var a := history[first]
 	var b := history[mini(first+1,history.size()-1)]
 	var t := fmod(value,SUB)/SUB
