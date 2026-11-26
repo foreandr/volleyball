@@ -17,7 +17,9 @@ var hit_style := 2
 var release_time := INF
 var serve_clock := 0.
 var flight_age := 0.
-var destination := Vector3.ZERO
+var destination := Vector3(0,.065,10.)
+var serve_arc_offset := 0.0
+var float_clearance := .20
 var pass_start := Vector3.ZERO
 var pass_clock := 0.
 const SETTER_HOME := Vector3(3.45,.04,11.1)
@@ -166,13 +168,24 @@ func start_drill() -> void:
 func update_prompts(_next: String) -> void:
 	if prompt_phase=="serving": return
 	prompt_phase="serving"
-	Xbox.prompts(controls_row,[["A","Spin"],["B","Jump float"],["X","Standing float"],["Y","Underhand"],["LS","Aim"]])
+	Xbox.prompts(controls_row,[["A","Spin"],["B","Jump float"],["X","Standing float"],["Y","Underhand"],["RS","Pre-aim / hold for height"],["LS","Toss aim / hold for height"]])
 
 func apply_camera() -> void:
 	place_practice_camera(Vector3(0,1.5,-4.4),distance*.48+2.)
 
+func configure_flight(shot,origin: Vector3) -> void:
+	if hit_style in [1,2]: shot.tape_clearance=float_clearance
+	shot.apex=maxf(origin.y+.03,(4.3 if hit_style==0 else 4.9)+serve_arc_offset)
+
 func update_serve_aim(delta: float) -> void:
-	var stick := Vector2(axis(JOY_AXIS_LEFT_X),axis(JOY_AXIS_LEFT_Y))
+	var before := phase=="serve_ready"
+	var stick := Vector2(axis(JOY_AXIS_RIGHT_X),axis(JOY_AXIS_RIGHT_Y)) if before else Vector2(axis(JOY_AXIS_LEFT_X),axis(JOY_AXIS_LEFT_Y))
+	var click := JOY_BUTTON_RIGHT_STICK if before else JOY_BUTTON_LEFT_STICK
+	var height_mode := pad()>=0 and Input.is_joy_button_pressed(pad(),Xbox.physical(click))
+	if height_mode and absf(stick.y)>.16:
+		float_clearance=clampf(float_clearance-stick.y*delta*1.25,.03,2.2)
+		serve_arc_offset=clampf(serve_arc_offset-stick.y*delta*1.25,-1.7,2.)
+	if height_mode: stick.y=0.
 	if stick.length()>.16:
 		var right := camera.global_basis.x.slide(Vector3.UP).normalized()
 		var forward := -camera.global_basis.z.slide(Vector3.UP).normalized()
@@ -184,9 +197,11 @@ func update_serve_aim(delta: float) -> void:
 		driver.visible=driver==shot
 		driver.ball.hide()
 		driver.aim_ring.hide()
-	if toss_style<2:
+	if before:
+		shot.preview_origin=serve_station+Vector3(0,attack_contact_height() if hit_style<2 else hitter.height_cm*.012,1.6 if hit_style<2 else .45)
+	elif toss_style<2:
 		shot.preview_origin=endpoint if toss_airborne else setter.position+setter.basis.z*2.15+Vector3.UP*(attack_contact_height()-setter.position.y)
-	shot.apex=maxf(shot.preview_origin.y+.3,4.3 if hit_style==0 else 4.9)
+	configure_flight(shot,shot.preview_origin)
 	shot.target=destination
 	shot.update_path_preview()
 
@@ -264,8 +279,6 @@ func handle_serve_button(style: int,pressed: bool) -> void:
 		hit_style=style
 		serves[style].serve_start=serve_station
 		serves[style].reset()
-		receiver=randi_range(0,2)
-		destination=HOMES[receiver]+Vector3(randf_range(-.55,.55),.065,1.1)
 		phase="serve_toss"
 		message.text=LABELS[style]
 	elif phase=="serve_toss":
@@ -422,6 +435,7 @@ func _process(delta: float) -> void:
 		return
 	if phase=="serve_ready":
 		walk_server(delta)
+		update_serve_aim(delta)
 		return
 	var motion=serves[toss_style]
 	if phase=="serve_toss":
@@ -449,7 +463,7 @@ func _process(delta: float) -> void:
 			else:
 				var shot=serves[hit_style]
 				shot.origin=Contact.palm(setter,"r") if toss_style<2 else ball.position
-				shot.apex=maxf(shot.origin.y+.3,4.3 if hit_style==0 else 4.9)
+				configure_flight(shot,shot.origin)
 				shot.target=destination+Vector3(0,0,-error*8.)
 				shot.planned_duration=shot.flight_duration(shot.origin)
 				shot.velocity=shot.launch_velocity(shot.origin,shot.planned_duration)

@@ -7,6 +7,19 @@ const TOSS_RELEASE := 0.34
 
 var toss_origin: Vector3
 var drift_segments: Array[Dictionary] = []
+var tape_clearance := -1.0
+
+func flight_duration(start: Vector3) -> float:
+	if tape_clearance<0. or target.z<=start.z: return super.flight_duration(start)
+	var net := preload("res://scripts/net_collision.gd")
+	var u := clampf((Net.NET_Z-start.z)/(target.z-start.z),.01,.99)
+	var rise := Net.NET_TOP+Net.RADIUS+tape_clearance-lerpf(start.y,Flight.FLOOR,u)
+	return sqrt(maxf(.01,2.*rise/(Flight.GRAVITY*u*(1.-u))))
+
+func launch_velocity(start: Vector3,duration: float) -> Vector3:
+	if tape_clearance<0.: return super.launch_velocity(start,duration)
+	return Vector3(target.x-start.x,Flight.FLOOR-start.y,target.z-start.z)/duration+Vector3.UP*.5*Flight.GRAVITY*duration
+
 const DRIFT_RADIUS := 0.34
 
 func configure(actor: Node3D, start := START, yaw := 0.0) -> void:
