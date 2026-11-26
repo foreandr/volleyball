@@ -1734,6 +1734,7 @@ func tick_receive(delta: float, previous: float) -> void:
 	if technique == 0 and not can_play_forearms(index): return
 	var height := 1.10 if technique == 0 else hand_contact_height(technique)
 	var is_dig := defensive_ball()
+	if is_dig and not is_human(index) and elapsed<players[index].reaction_seconds(): return
 	var hand_pass := technique == 1 and flight_kind == "serve"
 	var forearm_dig := technique == 0 and is_dig
 	var cpu_dig := forearm_dig and not is_human(index)
@@ -2531,7 +2532,7 @@ func position_defense(delta: float) -> void:
 			else:
 				cover = dig_cover_x(frame,threat,frame.to_global(wall),depth,players[deep].position.x)
 	pocket_x[defense_side] = cover
-	if not is_human(near) and not blocks.has(near):
+	if not is_human(near) and not blocks.has(near) and (not tracking_set or elapsed>=players[near].reaction_seconds()):
 		var target := frame.to_global(Vector3(clampf(x,-4.15,4.15),0.04,3.42))
 		move_cpu(near,target,delta,8.6 if tracking_set else 7.6,Vector3.INF,true)
 		var attack_ready := remaining >= -0.04 and remaining <= 0.41

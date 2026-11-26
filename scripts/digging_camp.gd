@@ -219,6 +219,12 @@ func return_struck(actor: Node3D,point: Vector3,velocity: Vector3,spin: float) -
 func sample_defensive_contact(platform: Reception,start: float,dt: float,_until_floor: float,path: Callable) -> void:
 	var actor=platform.setter
 	var automatic: bool=actor!=hitter or cpu_defense
+	if automatic:
+		var read_at: float=actor.reaction_seconds()
+		if start+dt<=read_at: return
+		if start<read_at:
+			dt-=read_at-start
+			start=read_at
 	if not automatic and not dig_held and release_window<=0.: return
 	var home: Vector3=homes[0 if actor==hitter else 1]
 	var now: Vector3=path.call(start)

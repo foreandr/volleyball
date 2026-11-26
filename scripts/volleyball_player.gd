@@ -133,6 +133,9 @@ func play_ground_gait(speed: float) -> void:
 func effective_rating(skill: String) -> float:
 	return float(attributes.get(skill,65))*stamina.effectiveness()
 
+func reaction_seconds() -> float:
+	return lerpf(.24,.06,clampf(effective_rating("Reflexes")/100.,0.,1.))
+
 func reachable_set(origin: Vector3, requested: Vector3, airborne := false, velocity_at_contact := Vector3.ZERO, flight_seconds := 0., range_scale := 1.) -> Vector3:
 	var distance_limit := lerpf(5.,13.,float(attributes.get("Strength",65))/100.)*stamina.effectiveness()
 	if airborne: distance_limit*=.77

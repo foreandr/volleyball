@@ -136,3 +136,4 @@ Studio overhead hand passes use the shared standing set load, extension and foll
 Reception Studio can trace the incoming ball in red only inside the selected defender grid, stopping at a successful pass in live playback and timeline review. The trail resets with each feed and the toggle persists.
 
 Future feature: players can create custom setter hand signs and assign each gesture to a setting option for pre-play calls.
+Reflexes (0-100) controls CPU read latency in blocking and digging drills, serve-return defense and match play. Effective Reflexes includes stamina. A live set cues a read block and an attack cues a defensive reaction. At full effectiveness the delay ranges from 240 ms to 60 ms; anticipation on a commit block is separate. Older player profiles default to 65.

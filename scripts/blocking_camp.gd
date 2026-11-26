@@ -212,7 +212,7 @@ func reset_feed() -> void:
 	route_tempos[1]=0
 	drawn_height=route_tempos[route]
 	jump_height=attack_vertical*.0254
-	read_delay=rotation_drill.random.randf_range(.055,.13)
+	read_delay=rotation_drill.random.randf_range(0.,.018)
 	hitter=attackers[route]
 	former.play_action("idle")
 	for overlay in get_children():
@@ -534,7 +534,8 @@ func step_blocker(slot: int,delta: float) -> void:
 	if slot==1 and middle_commits() and phase=="pass":
 		goal=attackers[1].position.x+middle_shade(contact_time-elapsed+Block.AIR*.5)
 	var depth_goal := BallNet.NET_Z+.38
-	if phase=="set" and not read_set and elapsed>=read_delay:
+	var can_read: bool= phase!="set" or elapsed>=read_delay+actor.reaction_seconds()
+	if phase=="set" and not read_set and can_read:
 		var seen_velocity := (ball.position-source)/maxf(elapsed,.001)
 		var time_estimate := maxf(0.,flight_time-elapsed)*rotation_drill.random.randf_range(.93,1.07)
 		read_x=clampf(ball.position.x+seen_velocity.x*time_estimate,-4.5,4.5)
@@ -547,14 +548,14 @@ func step_blocker(slot: int,delta: float) -> void:
 		read_set=true
 		trace("block_set_read",{"set_route":ROUTE_NAMES[route],"route_tempos":route_tempos.duplicate(),"read_x":read_x,"set_height_percent":rep_set_percent(),"set_endpoint":str(endpoint),"far_closes":closing[0],"middle_closes":closing[1],"available_s":available})
 	var late_window := phase=="spike" and elapsed<.18 and ball.position.z<=BallNet.NET_Z+.12 and not deflected
-	if (phase=="set" or late_window) and read_set:
+	if (phase=="set" or late_window) and read_set and can_read:
 		if closing[slot] and slot!=read_lead:
 			goal=blockers[read_lead].position.x+.61*(slot-read_lead)
 		elif closing[slot]: goal=read_x+learned_block_offset()+.61*(slot-read_lead)
 		else: depth_goal+=2.7
 	elif phase=="spike" and not closing[slot]:
 		depth_goal+=2.7
-	if slot==1 and read_set and read_lead==1 and phase=="set": goal=read_x+middle_shade(flight_time-elapsed)
+	if slot==1 and can_read and read_set and read_lead==1 and phase=="set": goal=read_x+middle_shade(flight_time-elapsed)
 	var previous := actor.position.x
 	var manual_window := ready_whistled and phase!="between"
 	var cpu := automatic_block or slot!=MANUAL_SLOT or not manual_window
@@ -597,7 +598,7 @@ func step_blocker(slot: int,delta: float) -> void:
 	else:
 		GroundControls.shuffle(actor,shuffle_steps[actor],velocity,focused,delta)
 	var last_chance := late_window or (phase=="set" and flight_time-elapsed<=Block.AIR*.5)
-	if read_set and (slot==read_lead or attempted[read_lead] or last_chance) and (automatic_block or slot!=MANUAL_SLOT) and cpu and closing[slot] and not attempted[slot] and ((phase=="set" and flight_time-elapsed<=Block.START+Block.AIR*.5+Block.CPU_LEAD) or late_window):
+	if can_read and read_set and (slot==read_lead or attempted[read_lead] or last_chance) and (automatic_block or slot!=MANUAL_SLOT) and cpu and closing[slot] and not attempted[slot] and ((phase=="set" and flight_time-elapsed<=Block.START+Block.AIR*.5+Block.CPU_LEAD) or late_window):
 		var preload_fraction := clampf(1.-(flight_time-elapsed-Block.AIR*.5-Block.CPU_LEAD)/Block.START,0.,1.) if phase=="set" else 1.
 		begin_block(slot,preload_fraction)
 

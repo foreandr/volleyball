@@ -1189,6 +1189,7 @@ func block_on_flight_segment(previous: Vector3) -> bool:
 	if off_blocker>=0: defenders.append(wall[off_blocker])
 	for defender in defenders:
 		var platform: Reception=dig_platforms[defender]
+		if defender!=hitter and dig_clock<defender.reaction_seconds(): continue
 		if defender!=hitter and until_floor<.55: platform.queue_bump(start)
 		if not is_finite(platform.pressed_at): continue
 		sample_defensive_contact(platform,start,dt,until_floor,path)
@@ -1375,6 +1376,7 @@ func step_serve_wall(delta: float) -> void:
 			block.read_air_lane(ball.global_position,wall)
 			if not block.step(delta,ball.global_position): wall_jumps[i]=null
 			continue
+		if phase=="serve_attack" and pass_clock<actor.reaction_seconds(): continue
 		if phase=="serve_attack":
 			var far_pin := 2 if pass_end.x<0. else 0
 			if i==far_pin and not wall_committed[i] and absf(actor.position.x-pass_end.x)>3.6*maxf(0.,set_duration-pass_clock-.40)+1.35: off_blocker=i

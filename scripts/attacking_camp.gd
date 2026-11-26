@@ -360,6 +360,7 @@ func step_practice_blockers(delta: float) -> void:
 				middle_reach(jump,lane)
 			if not jump.step(delta,ball.global_position): practice_jumps[i]=null
 			continue
+		if phase=="set" and elapsed<actor.reaction_seconds(): continue
 		var home_x := (1-i)*2.15
 		var goal := home_x+clampf(shot_read.prediction,-1.,1.)*(-.35 if disguise_read else .75)
 		if phase=="set" or phase=="spike":
