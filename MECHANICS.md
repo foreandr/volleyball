@@ -166,4 +166,4 @@ Reception Studio measures remaining reach at contact and blends a body adjustmen
 Reception Studio review starts at serve contact on frame zero and advances to the next repetition immediately after the ball reaches the floor.
 Reception Studio splits box 22 vertically into left and right halves. Both inherit the previous box assignment until individually reassigned.
 Each side of box 22 also has separate front and back targets, inheriting its side assignment.
-The current map merges 22 and 23 into a double-width region with two full-depth height bands. The lower band defaults to 72.
+The current map merges 22 and 23 into a double-width region with two full-depth height bands. The lower band is split left and right. Both lower regions start unassigned.
