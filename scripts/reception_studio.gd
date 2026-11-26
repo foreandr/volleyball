@@ -2,7 +2,6 @@ extends Node3D
 
 const Catalog := "res://assets/reception_studio.json"
 const Dive = preload("res://scripts/forward_reception_dive.gd")
-const Platform = preload("res://scripts/reception_platform_pose.gd")
 const Save = preload("res://scripts/player_reception_save.gd")
 var player = preload("res://scripts/volleyball_player.gd").new()
 var pivot := Node3D.new()
@@ -10,7 +9,7 @@ var camera := Camera3D.new()
 var ready_pose: Array[Transform3D]=[]
 var clasp: Array[Transform3D]=[]
 var clips: Array=[]
-var index := 0
+var index := 1
 var frame := 0.
 var playing := true
 var yaw := .43
@@ -23,9 +22,11 @@ var mirror := CheckButton.new()
 var elapsed := 0.
 var source := ""
 var sidebar := PanelContainer.new()
-var layer_grids: Array[GridContainer]=[]
-var layer_labels: Array[Label]=[]
-var layer_sources := [0,0]
+const FOREARM = preload("res://assets/animations/straight_pass_02.res")
+var leg_grid := GridContainer.new()
+var leg_label := Label.new()
+var legs := 1
+var forearm_frames := {}
 var upper_bones: Array[int]=[]
 
 func _ready() -> void:
@@ -99,26 +100,21 @@ func _ready() -> void:
 	sidebar.offset_right=224
 	var tiers := VBoxContainer.new()
 	sidebar.add_child(tiers)
-	for tier in 2:
-		var caption := Label.new()
-		tiers.add_child(caption)
-		layer_labels.append(caption)
-		var scroll := ScrollContainer.new()
-		scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
-		scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL
-		tiers.add_child(scroll)
-		var grid := GridContainer.new()
-		grid.columns=4
-		scroll.add_child(grid)
-		layer_grids.append(grid)
+	var torso_label := Label.new()
+	torso_label.text="Torso - Forearm reception"
+	tiers.add_child(torso_label)
+	tiers.add_child(leg_label)
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL
+	tiers.add_child(scroll)
+	leg_grid.columns=4
+	scroll.add_child(leg_grid)
 	column.add_child(seek)
 	seek.step=1
 	seek.value_changed.connect(func(value): playing=false; frame=value; draw_pose())
 	refresh()
-	if OS.get_cmdline_user_args().has("--latest"):
-		index=clips.size()-1
-		seek.max_value=clips[index].frames
-	use_current_pair()
+	update_leg_buttons()
 	draw_pose()
 
 func button(row: Control,title: String,action: Callable) -> void:
@@ -134,30 +130,29 @@ func refresh() -> void:
 	if entries is Array and not entries.is_empty():
 		clips=entries
 		source=content
-		for tier in 2:
-			var grid := layer_grids[tier]
-			for child in grid.get_children():
-				grid.remove_child(child)
-				child.queue_free()
-			var group := ButtonGroup.new()
-			for clip_index in range(-1,clips.size()):
-				if clip_index>=0 and clips[clip_index].kind=="overhead": continue
-				var choice := Button.new()
-				choice.text="Ready" if clip_index<0 else "%02d" % clips[clip_index].id
-				choice.toggle_mode=true
-				choice.button_group=group
-				choice.custom_minimum_size=Vector2(43,34)
-				choice.set_meta("clip",clip_index)
-				choice.pressed.connect(select_layer.bind(tier,clip_index))
-				grid.add_child(choice)
+		for child in leg_grid.get_children():
+			leg_grid.remove_child(child)
+			child.queue_free()
+		var group := ButtonGroup.new()
+		for clip_index in range(-1,clips.size()):
+			if clip_index>=0 and clips[clip_index].kind=="overhead": continue
+			var choice := Button.new()
+			choice.text="Ready" if clip_index<0 else "%02d" % clips[clip_index].id
+			choice.toggle_mode=true
+			choice.button_group=group
+			choice.custom_minimum_size=Vector2(43,34)
+			choice.set_meta("clip",clip_index)
+			choice.pressed.connect(select_legs.bind(clip_index))
+			leg_grid.add_child(choice)
 		index=mini(index,clips.size()-1)
 		seek.max_value=clips[index].frames
-		update_layer_buttons()
+		update_leg_buttons()
 
 func change_clip(by: int) -> void:
 	index=posmod(index+by,clips.size())
 	frame=0.
-	use_current_pair()
+	legs=index
+	update_leg_buttons()
 	seek.max_value=clips[index].frames
 	draw_pose()
 
@@ -209,31 +204,30 @@ func draw_pose() -> void:
 	if c.kind=="overhead":
 		sample_layer(index,c,f)
 		return
-	var upper := int(layer_sources[0])
-	var legs := int(layer_sources[1])
-	sample_layer(upper,c,f)
-	if upper==legs: return
-	var upper_pose: Array[Transform3D]=[]
-	for bone in upper_bones: upper_pose.append(player.skeleton.get_bone_pose(bone))
 	sample_layer(legs,c,f)
-	for i in upper_bones.size(): player.skeleton.set_bone_pose(upper_bones[i],upper_pose[i])
+	var contact := float(FOREARM.get_meta("contact_time"))
+	var time := remap(f,0.,c.contact,0.,contact) if f<=c.contact else remap(f,c.contact,c.frames,contact,FOREARM.length)
+	var key := roundi(time*60.)
+	if not forearm_frames.has(key):
+		forearm_frames[key]=Save.sample_clip(player.skeleton,FOREARM,minf(key/60.,FOREARM.length))
+	var weight := smoothstep(0.,5.,f)*(1.-smoothstep(c.frames-6.,c.frames,f))
+	for bone in upper_bones:
+		player.skeleton.set_bone_pose(bone,ready_pose[bone].interpolate_with(forearm_frames[key][bone],weight))
 
-func select_layer(tier: int, which: int) -> void:
-	layer_sources[tier]=which
-	update_layer_buttons()
+func select_legs(which: int) -> void:
+	legs=which
+	if which>=0:
+		var phase := frame/float(clips[index].frames)
+		index=which
+		frame=phase*float(clips[index].frames)
+		seek.max_value=clips[index].frames
+	update_leg_buttons()
 	draw_pose()
 
-func use_current_pair() -> void:
-	layer_sources.assign([index,index])
-	update_layer_buttons()
-
-func update_layer_buttons() -> void:
-	for tier in 2:
-		var which: int=layer_sources[tier]
-		var selection := "Ready" if which<0 else "#%02d" % clips[which].id
-		layer_labels[tier].text=("Torso" if tier==0 else "Legs")+"   "+selection
-		for choice in layer_grids[tier].get_children():
-			choice.set_pressed_no_signal(choice.get_meta("clip")==which)
+func update_leg_buttons() -> void:
+	leg_label.text="Legs   "+("Ready" if legs<0 else "#%02d" % clips[legs].id)
+	for choice in leg_grid.get_children():
+		choice.set_pressed_no_signal(choice.get_meta("clip")==legs)
 
 func sample_layer(which: int, timeline: Dictionary, f: float) -> void:
 	if which<0:
@@ -280,18 +274,8 @@ func sample_layer(which: int, timeline: Dictionary, f: float) -> void:
 		author.set_world_basis(pose,"foot_"+side,foot.basis)
 	var chest: Vector3=author.point(pose,"spine_03")
 	player.position.y=float(c.get("jump",0.))*weight
-	var grip := chest+Vector3(c.side*.72,float(c.get("grip_y",-.18-c.drop*.45)),.58+c.forward*.35)
 	if c.kind=="overhead":
 		for side in ["l","r"]:
 			var sign_x := 1. if side=="l" else -1.
 			author.limb(pose,"upperarm_"+side,"lowerarm_"+side,"hand_"+side,chest+Vector3(sign_x*.12,.38,.30),Vector3(sign_x,-.1,.1),weight)
-	else:
-		var guided: bool=c.get("long_platform",false)
-		var across := Vector3.RIGHT
-		if guided:
-			var left: Vector3=author.point(pose,"upperarm_l")
-			var right: Vector3=author.point(pose,"upperarm_r")
-			across=right.direction_to(left)
-			grip=(left+right)*.5+Vector3(c.side*.4,float(c.grip_y),c.forward+.32).normalized()
-		Platform.connect_arms(pose,author,grip,weight,0.,across,false,false,174.,not guided,.075)
 	for bone in pose.size(): rig.set_bone_pose(bone,pose[bone])
