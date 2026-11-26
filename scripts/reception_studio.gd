@@ -20,6 +20,8 @@ var serve_type := 2
 var serve_from := Vector3(0,.04,13.4)
 const FeedBase = preload("res://scripts/underhand_serve.gd")
 var feed: FeedBase
+var intercept_shift := Vector3.ZERO
+var shift_frame := 0.
 var reach_adjustment := Vector3.ZERO
 var server = preload("res://scripts/volleyball_player.gd").new()
 var zone := MeshInstance3D.new()
@@ -650,10 +652,16 @@ func draw_pose() -> void:
 	if signature!=contact_key:
 		contact_key=signature
 		reach_adjustment=Vector3.ZERO
+		intercept_shift=Vector3.ZERO
+		shift_frame=c.contact
 		actual_fraction=feed_fraction
 		sample_receiver(c,c.contact,active,motion_legs)
 		if c.kind=="overhead":
 			contact_point=HandPass.contact_center(player)
+			if active and contact_point.distance_to(target)>HAND_RADIUS:
+				intercept_shift=target-contact_point
+				sample_receiver(c,c.contact,true,motion_legs)
+				contact_point=HandPass.contact_center(player)
 			reachable=active and contact_point.distance_to(target)<=HAND_RADIUS
 		else:
 			reachable=false
@@ -695,6 +703,16 @@ func draw_pose() -> void:
 						break
 			# Use the closest sampled instant for grazing passes.
 			reachable=active and best_gap<=FOREARM_CONTACT_GRACE
+			if active and not reachable and is_finite(best_gap):
+				shift_frame=clampf(c.contact+(actual_fraction-nominal)*full_duration*60.,0.,c.frames)
+				intercept_shift=correction
+				sample_receiver(c,shift_frame,true,motion_legs)
+				best_gap=INF
+				for shape in RECEPTION_CAPSULES:
+					var seg := reception_segment(rig,shape)
+					var p := Geometry3D.get_closest_point_to_segment(contact_point,seg[0],seg[1])
+					best_gap=minf(best_gap,p.distance_to(contact_point)-float(shape[2])-BALL_RADIUS)
+				reachable=best_gap<=FOREARM_CONTACT_GRACE
 			closest_surface_gap=best_gap
 	if active and c.kind!="overhead":
 		feed_fraction=actual_fraction
@@ -845,6 +863,20 @@ func zone_interval(start: Vector3,finish: Vector3,bounds: AABB) -> Vector2:
 	return interval
 
 func sample_receiver(c: Dictionary,f: float,active := true,motion_legs := -2) -> void:
+	pose_receiver(c,f,active,motion_legs)
+	var weight := smoothstep(shift_frame-30.,shift_frame,f)*(1.-smoothstep(shift_frame+4.,shift_frame+32.,f))
+	player.global_position+=intercept_shift*weight
+	var rig: Skeleton3D=player.skeleton
+	var lift := 0.
+	for joint in ["foot_l","foot_r","ball_l","ball_r","calf_l","calf_r","pelvis","hand_l","hand_r","Head"]:
+		var bone := rig.find_bone(joint)
+		if bone<0: continue
+		var radius := .055 if joint.begins_with("foot") or joint.begins_with("calf") else .035
+		var height := rig.to_global(rig.get_bone_global_pose(bone).origin).y
+		lift=maxf(lift,.04+radius-height)
+	player.global_position.y+=lift
+
+func pose_receiver(c: Dictionary,f: float,active: bool,motion_legs: int) -> void:
 	sample_receiver_base(c,f,active,motion_legs)
 	if not active or c.kind=="overhead": return
 	var age := (f-float(c.contact))/60.
