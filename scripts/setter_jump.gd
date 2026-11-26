@@ -17,6 +17,7 @@ var load_bend_extra := 0.0
 var reserve_two_step_runway := false
 var attack_arm_lift := false
 var load_arm_extra := 0.0
+var plant_limit := INF
 var front_limit := 2.5
 var back_limit := Court.RUNOFF_NEAR_BASELINE
 var elapsed := 0.0
@@ -187,7 +188,7 @@ func carry_run_into_plant(velocity: Vector3) -> void:
 	right_step *= timed_fit
 	left_step *= timed_fit
 	if heading.z > 0.0:
-		var available := (front_limit-start.z-absf(lateral.z))/heading.z-running_left
+		var available := (minf(front_limit,plant_limit)-start.z-absf(lateral.z))/heading.z-running_left
 		var fit := clampf(available/(right_step+left_step),0.0,1.0)
 		right_step *= fit
 		left_step *= fit
@@ -298,6 +299,7 @@ func step(actor: Node3D, delta: float, input: Vector2) -> void:
 	var glide_fraction := (minf(air_age,0.46)+0.20*(fade-fade**3+0.5*fade**4))/0.46
 	var glide := heading*attack_glide*(glide_fraction+AIR_TRAVEL_FRACTION*flight)
 	var position := base+air_offset+lunge+glide
+	if air_delta<=0. and elapsed<=load_time: position.z=minf(position.z,plant_limit)
 	actor.position = Court.clamp_setter(position,front_limit,back_limit)
 	if air_delta > 0.0: air_offset += actor.position-position
 	actor.animator.advance(delta)

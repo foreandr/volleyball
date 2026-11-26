@@ -31,7 +31,7 @@ var pass_clock := 0.
 const SETTER_HOME := Vector3(3.45,.04,11.1)
 const SETTER_BASE := Vector3(1.4,.04,5.2)
 # Receive in rotation one. The front row can hit in its reception lanes.
-const ATTACK_POINTS := [Vector3(3.55,3.05,5.05), Vector3(0,3.05,5.0), Vector3(-3.55,3.05,5.05), Vector3(0,3.05,7.45)]
+const ATTACK_POINTS := [Vector3(3.55,3.05,5.05), Vector3(0,3.05,5.0), Vector3(-3.55,3.05,5.05), Vector3(0,3.05,6.25)]
 var attack_slot := 0
 var middle_31 := false
 var called_slot := 0
@@ -57,7 +57,7 @@ func second_contact_player() -> Node3D:
 func route_point(slot: int) -> Vector3:
 	if slot==1:
 		return Vector3(-1.25 if middle_31 else .85,3.05,5.0)
-	return Vector3(pipe_lane,ATTACK_POINTS[3].y,ATTACK_POINTS[3].z) if slot==3 else ATTACK_POINTS[slot]
+	return ATTACK_POINTS[slot]
 
 var attack_options: Array[Node3D]=[]
 var set_duration := 1.35
@@ -78,7 +78,7 @@ var attack_kmh := 105.
 var serve_test_kmh := 0.
 var spin_selection := 0 # Top, left, right, float.
 var recent_misses := [0.,0.,0.,0.]
-var pipe_lane := 0.
+var pipe_entry := Vector3.ZERO
 
 func flight_style() -> int:
 	return 1 if spin_selection==3 else 0
@@ -540,7 +540,7 @@ func _process(delta: float) -> void:
 			if phase=="serve_return" and (cover_slot>=0 or ball.global_position.z<BallNet.NET_Z and drop_velocity.z<0.):
 				cover=transition_base(slot)
 			var parent := actor.get_parent_node_3d()
-			move_receiver(actor,parent.to_local(cover),delta,parent.to_local(ball.global_position)-actor.position)
+			move_receiver(actor,parent.to_local(cover),delta,parent.to_local(ball.global_position)-actor.position,GroundControls.speed(true,false),true)
 			face_receive_ball(actor,ball.global_position,delta)
 	if phase=="serve_flight" or (phase=="serve_toss" and ready_weight_for_routes()):
 		for slot in attack_options.size():
@@ -758,7 +758,7 @@ func begin_offense(passer: Node3D,platform: Reception) -> void:
 	pass_end=pass_start+velocity*pass_duration+Vector3.DOWN*4.905*pass_duration*pass_duration
 	trace("serve_pass_result",{"pass_target":str(pass_end),"setter_travel_m":(pass_end-second_contact_player().global_position).slide(Vector3.UP).length(),"pass_seconds":pass_duration,"pressure":platform.reception_pressure})
 	var chase_time := (pass_end-second_contact_player().global_position).slide(Vector3.UP).length()/4.8
-	pipe_lane=clampf(passers[0].global_position.x,-3.3,3.3)
+	pipe_entry=passers[0].global_position
 	pass_in_system=pass_end.z<=BallNet.NET_Z+3. and chase_time+.25<pass_duration
 	var middle_ready := (route_point(1)+Vector3.BACK*1.6-receiving_middle.global_position).slide(Vector3.UP).length()/4.8+.38<pass_duration
 	middle_commit=pass_in_system and middle_ready and attack_results[1]>.85 and randf()<clampf(.5+.14*attack_results[1],.5,.92)
@@ -800,7 +800,7 @@ func face_receive_ball(actor: Node3D,point: Vector3,delta: float) -> void:
 
 func transition_base(slot: int) -> Vector3:
 	var point := route_point(slot)
-	if slot==3 and phase in ["serve_flight","serve_toss"]: point.x=passers[0].global_position.x
+	if slot==3: point.x=passers[0].global_position.x
 	if slot in [0,2]: point.x+=signf(point.x)*.85
 	point.z=BallNet.NET_Z+(5.5 if slot==3 else 3.3)
 	point.y=.04
@@ -812,6 +812,10 @@ func stage_attacker(actor: Node3D,slot: int,delta: float) -> void:
 		var quick := slot not in [0,2] or (pass_in_system and pin_flight_time(slot)<=ONE_FLIGHT)
 		var entry := smoothstep(0.,.4,(.92 if quick else .12)-(set_at-pass_clock))
 		point.z=lerpf(point.z,route_point(slot).z+1.6,entry)
+		if slot==3:
+			var target := route_point(3)
+			var depth := maxf(.1,pipe_entry.z-target.z)
+			point.x=pipe_entry.x*clampf((point.z-target.z)/depth,0.,1.)
 		if slot in [0,2]: point.x=lerpf(point.x,route_point(slot).x+signf(point.x)*.45,entry)
 	var pin_load := 0.
 	if slot in [0,2] and phase=="serve_pass":
@@ -831,7 +835,7 @@ func stage_attacker(actor: Node3D,slot: int,delta: float) -> void:
 				point.z=maxf(point.z,retreat_depth)
 	var parent := actor.get_parent_node_3d()
 	var facing := parent.to_local(route_point(slot) if pin_load>0. else ball.global_position)-actor.position
-	move_receiver(actor,parent.to_local(point),delta,facing)
+	move_receiver(actor,parent.to_local(point),delta,facing,GroundControls.speed(true,false),true)
 	if pin_load>0. and slot!=attack_slot: actor.pose_pin_draw(pin_load)
 
 func clear_ground_step(actor: Node3D,step: Vector3) -> Vector3:
@@ -851,7 +855,7 @@ func clear_ground_step(actor: Node3D,step: Vector3) -> Vector3:
 		if safe: return actor.get_parent_node_3d().global_basis.inverse()*candidate
 	return Vector3.ZERO
 
-func move_receiver(actor: Node3D,goal: Vector3,delta: float,face_direction := Vector3.ZERO,pace := 4.8) -> void:
+func move_receiver(actor: Node3D,goal: Vector3,delta: float,face_direction := Vector3.ZERO,pace := 4.8,focused := false) -> void:
 	var travel := (goal-actor.position).slide(Vector3.UP)
 	var step := travel.limit_length(pace*delta)
 	if step.length_squared()>.000001: step=clear_ground_step(actor,step)
@@ -859,8 +863,12 @@ func move_receiver(actor: Node3D,goal: Vector3,delta: float,face_direction := Ve
 	var heading := face_direction if not face_direction.is_zero_approx() else travel
 	if heading.length()>.08:
 		actor.rotation.y=rotate_toward(actor.rotation.y,atan2(heading.x,heading.z),delta*10.)
-	actor.play_travel_gait(step/maxf(delta,.001))
+	if focused: actor.play_ground_gait(0.)
+	else: actor.play_travel_gait(step/maxf(delta,.001))
 	actor.animator.advance(delta)
+	if focused:
+		if not shuffle_steps.has(actor): shuffle_steps[actor]=preload("res://scripts/directional_footwork.gd").new(actor)
+		GroundControls.shuffle(actor,shuffle_steps[actor],step/maxf(delta,.001),true,delta)
 
 func step_reception_rally(delta: float) -> void:
 	pass_clock+=delta
@@ -926,7 +934,8 @@ func step_reception_rally(delta: float) -> void:
 			if runner.get_parent()!=pin_frame: runner.reparent(pin_frame,true)
 			var planned_duration := paced_set_duration(planned,attack_point,ZERO_FLIGHT if attack_slot==1 else pin_flight_time(attack_slot))
 			var launch := (attack_point-planned)/planned_duration+Vector3.UP*4.905*planned_duration
-			pin_attack.jump.front_limit=.96 if attack_slot==3 else 3.35
+			pin_attack.jump.front_limit=3.35
+			pin_attack.jump.plant_limit=.86 if attack_slot==3 else INF
 			pin_attack.start_set(runner,pin_frame.to_local(planned),pin_frame.global_basis.inverse()*launch,pin_frame.to_local(attack_point),pin_frame.to_local(scoring_target(attack_point)),pass_clock-set_at,true)
 			pin_attack.pin_arrival=planned_duration
 			if attack_slot==1 and gap<1.2:
@@ -963,7 +972,7 @@ func step_reception_rally(delta: float) -> void:
 			var accuracy := clampf(second_contact_player().effective_rating("Hand setting")/100.,0.,1.)
 			var miss := Vector2.from_angle(randf()*TAU)*sqrt(randf())*(.18+pressure*(.65+1.8*(1.-accuracy)))
 			pass_start=ball.position
-			pass_end=second_contact_player().reachable_set(pass_start,attack_point+Vector3(miss.x,0.,miss.y),receiving_jump.active)
+			pass_end=second_contact_player().reachable_set(pass_start,attack_point+(Vector3.ZERO if attack_slot==3 else Vector3(miss.x,0.,miss.y)),receiving_jump.active)
 			pass_clock=0.
 
 			var behind_line := pass_start.z>BallNet.NET_Z+3.
@@ -989,7 +998,8 @@ func step_reception_rally(delta: float) -> void:
 			pin_attack.drill_speed_mps=attack_kmh/3.6
 			var attacker := attack_options[attack_slot]
 			if attacker.get_parent()!=pin_frame: attacker.reparent(pin_frame,true)
-			pin_attack.jump.front_limit=.96 if attack_slot==3 else 3.35
+			pin_attack.jump.front_limit=3.35
+			pin_attack.jump.plant_limit=.86 if attack_slot==3 else INF
 			if pin_attack.enabled and pin_attack.setter==attacker and pin_attack.stage==pin_attack.Stage.SET:
 				pin_attack.pass_origin=pin_frame.to_local(pass_start)
 				pin_attack.pass_motion=pin_frame.global_basis.inverse()*velocity
