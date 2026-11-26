@@ -900,7 +900,7 @@ func clear_ground_step(actor: Node3D,step: Vector3) -> Vector3:
 		var candidate := desired.rotated(Vector3.UP,angle)
 		var safe := true
 		for other in receiving_team:
-			if other==actor: continue
+			if not other.visible or other==actor: continue
 			var center := other.global_position.slide(Vector3.UP)
 			var separation := start.distance_to(center)
 			if separation<.70 and candidate.dot(start-center)>0.: continue
@@ -1341,6 +1341,7 @@ func return_struck(_actor: Node3D,point: Vector3,velocity: Vector3,_spin: float)
 func step_serve_wall(delta: float) -> void:
 	for i in wall.size():
 		var actor := wall[i]
+		if not actor.visible: continue
 		actor.stamina.recover(delta)
 		var block: RefCounted=wall_jumps[i]
 		if block!=null:

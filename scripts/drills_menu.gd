@@ -7,7 +7,7 @@ const CATEGORIES := {
 	"Setting": [{"title":"Set to Target","scene":"res://scenes/setting_camp.tscn"}],
 	"Attacking": [{"title":"Approach and Spike","scene":"res://scenes/attacking_camp.tscn"},{"title":"Butterfly"}],
 	"Serving": [{"title":"Serve and Receive","scene":"res://scenes/serving_camp.tscn"},{"title":"Spin Serve"}],
-	"Digging": [],
+	"Digging": [{"title":"Dig from Five","scene":"res://scenes/digging_camp.tscn"}],
 	"Blocking": [{"title":"Block at the Net","scene":"res://scenes/blocking_camp.tscn"}],
 }
 
