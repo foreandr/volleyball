@@ -3,6 +3,8 @@ extends "res://scripts/attacking_camp.gd"
 const TECHNIQUES := [preload("res://scripts/spin_serve.gd"),preload("res://scripts/jump_float_serve.gd"),preload("res://scripts/standing_float_serve.gd"),preload("res://scripts/underhand_serve.gd")]
 const FACE := [JOY_BUTTON_A,JOY_BUTTON_B,JOY_BUTTON_X,JOY_BUTTON_Y]
 const LABELS := ["Spin toss","Jump float toss","Standing toss","Underhand toss"]
+const AUTO_SERVE_MAX_KMH := 100.0
+const TOSS_POWER_STEP := 0.75
 const SPIN_LABELS := ["Topspin","Left spin","Right spin","Float"]
 const HOMES := [Vector3(-2.9,.04,9.2),Vector3(0,.04,10.),Vector3(2.9,.04,9.2)]
 var serves := []
@@ -265,7 +267,8 @@ func apply_camera() -> void:
 	place_practice_camera(Vector3(0,1.5,-4.4),distance*.48+2.)
 
 func configure_flight(shot,origin: Vector3) -> void:
-	shot.test_speed_mps=serve_test_kmh/3.6
+	var maximum := serve_test_kmh if serve_test_kmh>0. else AUTO_SERVE_MAX_KMH
+	shot.test_speed_mps=maximum*pow(TOSS_POWER_STEP,toss_style)/3.6
 	if spin_selection!=3: shot.sidespin=[0.,.30,-.30][spin_selection]
 	if flight_style() in [1,2]: shot.tape_clearance=float_clearance
 	shot.apex=maxf(origin.y+.03,(4.3 if flight_style()==0 else 4.9)+serve_arc_offset)
@@ -595,6 +598,9 @@ func _process(delta: float) -> void:
 				configure_flight(shot,shot.origin)
 				shot.target=destination+Vector3(0,0,-error*8.)
 				var quality := 1.-clampf(absf(error)/(absf(SERVE_EARLY) if error<0. else SERVE_LATE),0.,1.)
+				if toss_style==0:
+					var scatter := Vector2.from_angle(randf()*TAU)*sqrt(randf())*lerpf(.12,.38,1.-quality)
+					shot.target+=Vector3(scatter.x,0.,scatter.y)
 				shot.velocity=shot.aimed_velocity(shot.origin,lerpf(.84,1.,quality))
 				shot.planned_duration=preload("res://scripts/pass_flight.gd").landing_time(shot.origin,shot.velocity)
 				shot.begin_serve_curve()

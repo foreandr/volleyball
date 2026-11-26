@@ -154,7 +154,8 @@ func aimed_velocity(start: Vector3, pace := 1.0) -> Vector3:
 		else:
 			duration=sqrt(2.*displacement.length()/Flight.GRAVITY)
 	duration=maxf(.05,duration/pace)
-	return Vector3(target.x-start.x,Flight.FLOOR-start.y,target.z-start.z)/duration+Vector3.UP*.5*Flight.GRAVITY*duration
+	var velocity_to_target := Vector3(target.x-start.x,Flight.FLOOR-start.y,target.z-start.z)/duration+Vector3.UP*.5*Flight.GRAVITY*duration
+	return velocity_to_target.limit_length(test_speed_mps) if test_speed_mps>0. else velocity_to_target
 
 func minimum_aim_duration(_start: Vector3) -> float:
 	return 0.0
