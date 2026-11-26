@@ -18,6 +18,14 @@ const FRONT_WRIST_FOLLOW_TIME := 0.14
 const SET_WRIST_LOAD_PITCH := -16.0
 const SET_PALM_LOAD_ANGLE := 48.0
 
+static func standing_set(actor: Node3D, contact: Vector3, offset: Vector3, push: Vector3, follow: float, load_weight: float, facing := Vector3.ZERO, steady_torso := true) -> void:
+	if follow<0.:
+		apply(actor,contact,load_weight,Vector3.ZERO,0.,0.,false,Vector3.ZERO,0.,offset,load_weight,true,-1.,null,facing,steady_torso)
+	elif follow<CPU_FOLLOW_TIME:
+		var extension := smoothstep(0.,RELEASE_TIME,follow)
+		var weight := 1.-smoothstep(RELEASE_TIME,CPU_FOLLOW_TIME,follow)
+		apply(actor,contact,weight,push*.23*extension,0.,0.,false,Vector3.ZERO,extension,offset,1.,true,-1.,null,Vector3.ZERO,steady_torso)
+
 static func contact_center(actor: Node3D) -> Vector3:
 	var rig: Skeleton3D = actor.skeleton
 	var center := Vector3.ZERO

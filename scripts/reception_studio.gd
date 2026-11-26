@@ -429,14 +429,19 @@ func sample_receiver(c: Dictionary,f: float) -> void:
 	if cell_action()==0:
 		sample_layer(-1,c,f)
 		return
+	if c.kind=="overhead":
+		sample_layer(-1,c,f)
+		var goal := highlight.global_position+feed_offset
+		var offset := pass_marker.position-goal
+		var lift := sqrt(2.*9.81*pass_arc.value)
+		var flight := (lift+sqrt(lift*lift+2.*9.81*maxf(0.,goal.y-.145)))/9.81
+		var push := (offset.slide(Vector3.UP)/flight+Vector3.UP*lift).normalized()
+		var follow := (f-float(c.contact))/60.
+		var load_weight := smoothstep(-HandPass.CPU_PREP_LEAD,0.,follow)
+		HandPass.standing_set(player,goal,offset,push,follow,load_weight,Vector3.ZERO,false)
+		return
 	if not Regions.movement(c):
 		sample_layer(index,c,f)
-		if c.kind=="overhead":
-			var weight := smoothstep(4.,c.contact,f)*(1.-smoothstep(c.contact+5.,c.frames-6.,f))
-			var goal := highlight.global_position+feed_offset
-			var shift := goal-HandPass.contact_center(player)
-			player.global_position+=shift.slide(Vector3.UP).limit_length(.85)*weight
-			HandPass.apply(player,goal,weight)
 		return
 	sample_layer(legs,c,f)
 	var contact := float(FOREARM.get_meta("contact_time"))
@@ -506,10 +511,6 @@ func sample_layer(which: int, timeline: Dictionary, f: float) -> void:
 	author.rotate_world(pose,"spine_02",Vector3.BACK,-c.side*.36*weight)
 	var chest: Vector3=author.point(pose,"spine_03")
 	player.position.y=float(c.get("jump",0.))*weight
-	if c.kind=="overhead":
-		for side in ["l","r"]:
-			var sign_x := 1. if side=="l" else -1.
-			author.limb(pose,"upperarm_"+side,"lowerarm_"+side,"hand_"+side,chest+Vector3(sign_x*.12,.38,.30),Vector3(sign_x,-.1,.1),weight)
 	for bone in pose.size(): rig.set_bone_pose(bone,pose[bone])
 
 func build_map(tiers: VBoxContainer) -> void:
