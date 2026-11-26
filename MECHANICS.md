@@ -128,3 +128,4 @@ In serving camp, D-pad up selects topspin, left/right add sidespin, and down sel
 
 Reception Studio feeds the selected contact region. Outer cells default to full-body dives.
 Studio serves use the region assignment at a saved stance inside a two-meter ready square. Reachable feeds rebound from the forearms. Future coaching strategy will assign ready zones per team, with chase coverage deferred.
+Reception Studio uses Ctrl-click for court cells. Explicit animation assignments have dark red outlines, while unassigned cells retain automatic preview defaults and dark blue outlines. Three defenders can be positioned by dragging. Serve arc, pass rise, and the floor target are saved.

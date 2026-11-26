@@ -15,8 +15,16 @@ var zone := MeshInstance3D.new()
 var hover := MeshInstance3D.new()
 var vary := CheckButton.new()
 var place := CheckButton.new()
+var defenders: Array[Node3D]=[]
+var dragging := -1
+var drag_offset := Vector3.ZERO
+var pass_marker := MeshInstance3D.new()
+var target_mode := CheckButton.new()
+var serve_arc := HSlider.new()
+var pass_arc := HSlider.new()
 var contact_point := Vector3.ZERO
 var contact_key := []
+var pass_end_frame := 0.
 var reachable := false
 var lattice := MeshInstance3D.new()
 var highlight := MeshInstance3D.new()
@@ -36,7 +44,7 @@ var frame := 0.
 var playing := true
 var yaw := 2.76
 var elevation := .28
-var distance := 4.8
+var distance := 6.8
 var label := Label.new()
 var play_button := Button.new()
 var seek := HSlider.new()
@@ -90,6 +98,19 @@ func _ready() -> void:
 	add_child(zone)
 	zone.position=StorySession.game_options.get_value("reception_studio","zone",Vector3(0,.052,-2))
 	pivot.position=StorySession.game_options.get_value("reception_studio","stance",zone.position)
+	defenders.append(pivot)
+	for i in [1,2]:
+		var receiver = preload("res://scripts/volleyball_player.gd").new()
+		add_child(receiver)
+		preload("res://scripts/practice_kit.gd").apply(receiver,false,2+i)
+		receiver.position=StorySession.game_options.get_value("reception_studio","defender_%d"%i,Vector3(-2.9 if i==1 else 2.9,.052,-1))
+		defenders.append(receiver)
+	var ring := TorusMesh.new()
+	ring.inner_radius=.22
+	ring.outer_radius=.29
+	pass_marker.mesh=ring
+	pass_marker.position=StorySession.game_options.get_value("reception_studio","pass_target",Vector3(1.7,.08,2.8))
+	add_child(pass_marker)
 	add_child(camera)
 	camera.current=true
 	position_camera()
@@ -125,7 +146,9 @@ func _ready() -> void:
 	sidebar.offset_bottom=-106
 	sidebar.offset_right=224
 	var tiers := VBoxContainer.new()
-	sidebar.add_child(tiers)
+	var controls_scroll := ScrollContainer.new()
+	sidebar.add_child(controls_scroll)
+	controls_scroll.add_child(tiers)
 	var torso_label := Label.new()
 	torso_label.text="Torso - Forearm reception"
 	tiers.add_child(torso_label)
@@ -142,7 +165,7 @@ func _ready() -> void:
 	tiers.add_child(leg_label)
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL
+	scroll.vertical_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
 	tiers.add_child(scroll)
 	leg_grid.columns=4
 	scroll.add_child(leg_grid)
@@ -211,7 +234,7 @@ func _process(delta: float) -> void:
 		refresh()
 	if playing:
 		frame+=delta*60.
-		if frame>=clips[index].frames+1.:
+		if frame>=maxf(clips[index].frames,pass_end_frame)+1.:
 			frame=seek.min_value
 			if vary.button_pressed:
 				cell=Vector3i(randi_range(MAP_MIN.x,MAP_MAX.x),randi_range(0,2),randi_range(1,MAP_MAX.z))
@@ -223,6 +246,26 @@ func _unhandled_input(event: InputEvent) -> void:
 		var ray := camera.project_ray_origin(event.position)
 		var direction := camera.project_ray_normal(event.position)
 		var click: bool=event is InputEventMouseButton and event.button_index==MOUSE_BUTTON_LEFT and event.pressed
+		var floor_point=Plane(Vector3.UP,.052).intersects_ray(ray,direction)
+		if click and target_mode.button_pressed and floor_point!=null:
+			pass_marker.position=Vector3(clampf(floor_point.x,-4.5,4.5),.08,clampf(floor_point.z,-5.,4.))
+			StorySession.game_options.set_value("reception_studio","pass_target",pass_marker.position)
+			StorySession.save_options()
+			target_mode.button_pressed=false
+			draw_pose()
+			return
+		if click and not event.ctrl_pressed and not place.button_pressed and floor_point!=null:
+			var nearest := INF
+			for i in defenders.size():
+				var base := defenders[i].position
+				var torso := base+Vector3.UP*.90
+				var along := direction.dot(torso-ray)
+				var gap := (ray+direction*along-torso).length()
+				if along>0 and gap<.82 and gap<nearest:
+					nearest=gap
+					dragging=i
+					drag_offset=base-floor_point
+			if dragging>=0: return
 		if place.button_pressed:
 			hover.hide()
 			var floor_hit=Plane(Vector3.UP,.052).intersects_ray(ray,direction)
@@ -246,7 +289,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				if hovered.x>=MAP_MIN.x and hovered.x<=MAP_MAX.x and hovered.y>=0 and hovered.y<=MAP_MAX.y:
 					hover.position=MAP_ORIGIN+(Vector3(hovered.x,hovered.y,cell.z)+Vector3.ONE*.5)*CELL_SIZE
 					hover.show()
-					if click:
+					if click and event.ctrl_pressed:
 						pick_cell(hovered.x,hovered.y)
 						return
 	if event is InputEventMouseMotion and event.button_mask & MOUSE_BUTTON_MASK_MIDDLE:
@@ -263,6 +306,27 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_SPACE: toggle_play()
 			KEY_M: mirror.button_pressed=not mirror.button_pressed
 
+func _input(event: InputEvent) -> void:
+	if dragging<0: return
+	if event is InputEventMouseMotion:
+		var hit=Plane(Vector3.UP,.052).intersects_ray(camera.project_ray_origin(event.position),camera.project_ray_normal(event.position))
+		if hit!=null:
+			var at: Vector3=hit+drag_offset
+			defenders[dragging].position=Vector3(clampf(at.x,-4.5,4.5),.052,clampf(at.z,-5.,3.9))
+			if dragging==0:
+				lattice.position=pivot.position
+				zone.position=Vector3(clampf(at.x,-3.5,3.5),.052,clampf(at.z,-4.,3.))
+				draw_pose()
+	elif event is InputEventMouseButton and event.button_index==MOUSE_BUTTON_LEFT and not event.pressed:
+		if dragging==0:
+			StorySession.game_options.set_value("reception_studio","stance",pivot.position)
+			StorySession.game_options.set_value("reception_studio","zone",zone.position)
+		else:
+			StorySession.game_options.set_value("reception_studio","defender_%d"%dragging,defenders[dragging].position)
+		StorySession.save_options()
+		dragging=-1
+	get_viewport().set_input_as_handled()
+
 func position_camera() -> void:
 	var target := pivot.position+Vector3(0,.92,.15)
 	camera.position=target+Vector3(sin(yaw)*cos(elevation),sin(elevation),cos(yaw)*cos(elevation))*distance
@@ -272,7 +336,7 @@ func draw_pose() -> void:
 	var c: Dictionary=clips[index]
 	var f := clampf(roundf(frame),0.,c.frames)
 	seek.set_value_no_signal(frame)
-	label.text=" %02d / %02d     Frame %d / %d " % [c.id,clips.size(),roundi(frame),c.frames]
+	label.text=" %02d / %02d     Frame %d / %d " % [c.id,clips.size(),mini(roundi(frame),int(c.frames)),c.frames]
 	play_button.text="Pause" if playing else "Play"
 	var signature := [index,legs,mirror.button_pressed,incoming_speed.value,source,cell,pivot.position]
 	if signature!=contact_key:
@@ -288,6 +352,7 @@ func draw_pose() -> void:
 		var offset := (contact_point-highlight.global_position).abs()-CELL_SIZE*.5
 		reachable=maxf(offset.x,maxf(offset.y,offset.z))<=.12
 	sample_receiver(c,f)
+	pass_end_frame=0.
 	var target := contact_point if reachable else highlight.global_position
 	var launch: Vector3=feed.preview_origin
 	var duration := clampf(launch.distance_to(target)/maxf(1.,incoming_speed.value/3.6),.48,1.25)
@@ -297,10 +362,15 @@ func draw_pose() -> void:
 	feed.ball.show()
 	if seconds < -duration: return
 	var u := (seconds+duration)/duration
-	var arc := maxf(.95,3.05-launch.lerp(target,.60).y)
+	var arc := serve_arc.value
 	var point := launch.lerp(target,u)+Vector3.UP*4.*arc*u*(1.-u)
 	if reachable and seconds>0.:
-		point=target+Vector3(0,5.4,4.)*seconds+Vector3.DOWN*4.905*seconds*seconds
+		var rise := pass_arc.value
+		var lift := sqrt(2.*9.81*rise)
+		var landing := (lift+sqrt(lift*lift+2.*9.81*maxf(0.,target.y-.145)))/9.81
+		pass_end_frame=float(c.contact)+ceilf(landing*60.)+1.
+		point=target.lerp(Vector3(pass_marker.position.x,target.y,pass_marker.position.z),seconds/landing)
+		point.y+=lift*seconds-4.905*seconds*seconds
 	feed.ball.position=point
 	feed.ball.visible=point.y>=.145
 
@@ -390,6 +460,24 @@ func build_map(tiers: VBoxContainer) -> void:
 	tiers.add_child(place)
 	vary.text="Vary serves"
 	tiers.add_child(vary)
+	target_mode.text="Place pass target"
+	tiers.add_child(target_mode)
+	for slider in [serve_arc,pass_arc]:
+		var key := "serve_arc" if slider==serve_arc else "pass_arc"
+		var caption := Label.new()
+		var title_text := "Serve arc" if slider==serve_arc else "Pass rise"
+		slider.min_value=.25
+		slider.max_value=4.
+		slider.step=.05
+		slider.value=StorySession.game_options.get_value("reception_studio",key,1.5)
+		caption.text="%s  %.2f m"%[title_text,slider.value]
+		tiers.add_child(caption)
+		tiers.add_child(slider)
+		slider.value_changed.connect(func(value):
+			caption.text="%s  %.2f m"%[title_text,value]
+			StorySession.game_options.set_value("reception_studio",key,value)
+			StorySession.save_options()
+			draw_pose())
 	var editor := VBoxContainer.new()
 	tiers.add_child(editor)
 	var depth := HBoxContainer.new()
@@ -409,24 +497,7 @@ func build_map(tiers: VBoxContainer) -> void:
 			cells.add_child(b)
 	editor.add_child(region_label)
 	button(editor,"Assign current action",assign_region)
-	var lines := ImmediateMesh.new()
-	var ink := StandardMaterial3D.new()
-	ink.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED
-	ink.transparency=BaseMaterial3D.TRANSPARENCY_ALPHA
-	ink.albedo_color=Color("68cfc958")
-	lines.surface_begin(Mesh.PRIMITIVE_LINES,ink)
-	for axis in 3:
-		for i in range(MAP_MIN[(axis+1)%3],MAP_MAX[(axis+1)%3]+2):
-			for j in range(MAP_MIN[(axis+2)%3],MAP_MAX[(axis+2)%3]+2):
-				var start := Vector3(MAP_MIN)
-				start[(axis+1)%3]=i
-				start[(axis+2)%3]=j
-				var end := start
-				end[axis]=MAP_MAX[axis]+1
-				lines.surface_add_vertex(MAP_ORIGIN+start*CELL_SIZE)
-				lines.surface_add_vertex(MAP_ORIGIN+end*CELL_SIZE)
-	lines.surface_end()
-	lattice.mesh=lines
+	rebuild_colors()
 	add_child(lattice)
 	var box := BoxMesh.new()
 	box.size=CELL_SIZE
@@ -485,4 +556,33 @@ func assign_region() -> void:
 	var id: int=0 if legs<0 else clips[legs].id
 	StorySession.game_options.set_value("dig_regions",Regions.key(cell),id)
 	StorySession.save_options()
+	rebuild_colors()
 	update_region()
+
+func rebuild_colors() -> void:
+	var mesh := ImmediateMesh.new()
+	var ink := StandardMaterial3D.new()
+	ink.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED
+	ink.vertex_color_use_as_albedo=true
+	mesh.surface_begin(Mesh.PRIMITIVE_LINES,ink)
+	for x in range(MAP_MIN.x,MAP_MAX.x+1):
+		for y in range(MAP_MAX.y+1):
+			for z in range(MAP_MIN.z,MAP_MAX.z+1):
+				var address := Vector3i(x,y,z)
+				var assigned := int(StorySession.game_options.get_value("dig_regions",Regions.key(address),0))>0
+				var color := Color("#ae2839") if assigned else Color("#2153a4")
+				var center := MAP_ORIGIN+(Vector3(address)+Vector3.ONE*.5)*CELL_SIZE
+				for axis in 3:
+					for i in [-1,1]:
+						for j in [-1,1]:
+							var corner := Vector3.ZERO
+							corner[axis]=-1
+							corner[(axis+1)%3]=i
+							corner[(axis+2)%3]=j
+							mesh.surface_set_color(color)
+							mesh.surface_add_vertex(center+corner*CELL_SIZE*.48)
+							corner[axis]=1
+							mesh.surface_set_color(color)
+							mesh.surface_add_vertex(center+corner*CELL_SIZE*.48)
+	mesh.surface_end()
+	lattice.mesh=mesh
