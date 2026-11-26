@@ -95,12 +95,24 @@ static func absorb_with_joined_platform(actor: Node3D, age: float, degrees: floa
 static func pose_joined_platform(actor: Node3D, weight: float, extension: float, target := Vector3.INF) -> void:
 	var rig: Skeleton3D=actor.skeleton
 	var author: RefCounted=actor.get_pose_author()
+	request_platform(actor,extension)
+	if target.is_finite(): rig.set_meta("platform_point",rig.to_local(target))
+	solve_platform(rig,author,weight,extension,rig.get_meta("platform_point"))
+
+static func request_platform(actor: Node3D, extension := 174.) -> void:
+	var rig: Skeleton3D=actor.skeleton
+	rig.set_meta("platform_frame",Engine.get_process_frames())
+	rig.set_meta("platform_author",actor.get_pose_author())
+	rig.set_meta("platform_extension",extension)
+	rig.set_meta("platform_point",Vector3.INF)
+
+static func solve_platform(rig: Skeleton3D, author: RefCounted, weight: float, extension: float, point: Vector3) -> void:
 	var pose: Array=[]
 	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
 	var center: Vector3=(author.point(pose,"hand_l")+author.point(pose,"hand_r"))*.5
 	var across: Vector3=(author.point(pose,"upperarm_l")-author.point(pose,"upperarm_r")).normalized()
-	if target.is_finite(): center=rig.to_local(target)
-	PlatformPose.connect_arms(pose,author,center,weight,0.,across,false,false,extension,target.is_finite(),.034)
+	if point.is_finite(): center=point
+	PlatformPose.connect_arms(pose,author,center,weight,0.,across,false,false,extension,point.is_finite(),.034)
 	for side in ["l","r"]:
 		for part in ["upperarm_","lowerarm_","hand_"]:
 			var bone := rig.find_bone(part+side)

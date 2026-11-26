@@ -467,6 +467,8 @@ func blend_dig_transition(time: float) -> void:
 		rig.set_bone_pose_rotation(bone,pose.basis.orthonormalized().get_rotation_quaternion())
 
 func update_attempt(time: float, previous: float, end: float, path: Callable, incoming: Vector3, delta: float, cue_arrival := INF, spin_rps := 0.0, dig_cue := INF, defer_forearm_follow := false) -> void:
+	if not hand_setting and low_save.wide_arm.is_empty() and not low_save.pancake:
+		Drive.request_platform(setter)
 	contact_check.clear()
 	var progress := approach(path,time,end) if grade == Timing.Grade.WAITING else -1.0
 	approach_progress = progress

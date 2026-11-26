@@ -96,6 +96,8 @@ func _process_modification() -> void:
 				orient_back_palm(rig,side,back_grip,rig.get_meta("back_extension",0.))
 	if strike_center.is_finite(): finish_contact_pose(rig)
 	enforce_court_floor(rig)
+	if rig.get_meta("platform_frame",-1)==Engine.get_process_frames():
+		preload("res://scripts/reception_pass_drive.gd").solve_platform(rig,rig.get_meta("platform_author"),1.,rig.get_meta("platform_extension"),rig.get_meta("platform_point"))
 	if not editor_bones.is_empty():
 		for i in rig.get_bone_count(): editor_bones[i]=rig.get_bone_pose(i)
 		editor_bones=[]

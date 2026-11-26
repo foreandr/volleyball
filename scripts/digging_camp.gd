@@ -189,6 +189,7 @@ func walk_server(delta: float,_defending := false) -> void:
 		actor.play_ground_gait(0.)
 		actor.animator.advance(delta)
 		GroundControls.face(actor,ball.global_position-actor.global_position,delta,8.)
+		dig_platforms[actor].Drive.request_platform(actor)
 
 func return_struck(actor: Node3D,point: Vector3,velocity: Vector3,spin: float) -> void:
 	var nearest: Node3D=hitter if hitter.position.distance_squared_to(floor_target)<=wall[1].position.distance_squared_to(floor_target) else wall[1]
