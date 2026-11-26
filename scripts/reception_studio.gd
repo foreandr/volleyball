@@ -1152,7 +1152,7 @@ func halves_only(address: Vector3i) -> bool:
 	return address.y==2 and address.z==2 and address.x!=1
 
 func depth_split(address: Vector3i) -> bool:
-	return address.x==1 and address.z==2 and address.y>=1
+	return address==Vector3i(1,1,1) or address==Vector3i(1,2,2)
 
 func region_suffix(address: Vector3i,part: int) -> String:
 	if depth_split(address):
