@@ -67,16 +67,16 @@ static func apply(rig: Skeleton3D, author: RefCounted, outgoing: Vector3, power:
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
 
 const FAST_FOREARM_SPEED := 60./3.6
-const FAST_FOREARM_BEND := 44.
+const BEND_AT_120_KMH := 44.
 
-static func fast_forearm(speed_mps: float) -> bool:
-	return speed_mps>FAST_FOREARM_SPEED
+static func forearm_bend_degrees(speed_mps: float) -> float:
+	return clampf((speed_mps-FAST_FOREARM_SPEED)/FAST_FOREARM_SPEED,0.,4./3.)*BEND_AT_120_KMH
 
 static func forearm_recoil_weight(age: float) -> float:
 	return smoothstep(0.,.085,age)*(1.-smoothstep(.115,FAST_DIG_ELBOW_DURATION,age))
 
-static func recoil_platform(rig: Skeleton3D, age: float) -> void:
-	if age<=0. or age>=FAST_DIG_ELBOW_DURATION: return
+static func recoil_platform(rig: Skeleton3D, age: float, degrees: float) -> void:
+	if degrees<=0. or age<=0. or age>=FAST_DIG_ELBOW_DURATION: return
 	var left := rig.find_bone("lowerarm_l")
 	var right := rig.find_bone("lowerarm_r")
 	var l := rig.get_bone_global_pose(left).origin
@@ -85,7 +85,7 @@ static func recoil_platform(rig: Skeleton3D, age: float) -> void:
 	var wrists := (rig.get_bone_global_pose(rig.find_bone("hand_l")).origin+rig.get_bone_global_pose(rig.find_bone("hand_r")).origin)*.5
 	var direction := axis.cross(wrists-(l+r)*.5).dot((rig.global_basis.inverse()*Vector3.UP).normalized())
 	if axis.is_zero_approx() or is_zero_approx(direction): return
-	var angle := deg_to_rad(FAST_FOREARM_BEND)*signf(direction)*forearm_recoil_weight(age)
+	var angle := deg_to_rad(degrees)*signf(direction)*forearm_recoil_weight(age)
 	# Both forearms turn about the same line through the elbows, preserving the clasp.
 	for bone in [left,right]:
 		var parent := rig.get_bone_global_pose(rig.get_bone_parent(bone)).basis.orthonormalized()

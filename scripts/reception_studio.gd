@@ -27,7 +27,9 @@ var leg_grid := GridContainer.new()
 var leg_label := Label.new()
 var legs := 1
 var forearm_frames := {}
-var fast_ball := CheckButton.new()
+const ForearmDrive = preload("res://scripts/reception_pass_drive.gd")
+var incoming_speed := HSlider.new()
+var speed_label := Label.new()
 var upper_bones: Array[int]=[]
 
 func _ready() -> void:
@@ -104,9 +106,15 @@ func _ready() -> void:
 	var torso_label := Label.new()
 	torso_label.text="Torso - Forearm reception"
 	tiers.add_child(torso_label)
-	fast_ball.text="Fast ball (>60 km/h)"
-	tiers.add_child(fast_ball)
-	fast_ball.toggled.connect(func(_on): draw_pose())
+	tiers.add_child(speed_label)
+	tiers.add_child(incoming_speed)
+	incoming_speed.max_value=140.
+	incoming_speed.step=1.
+	incoming_speed.value=StorySession.game_options.get_value("reception_studio","incoming_kmh",100.)
+	incoming_speed.value_changed.connect(func(value):
+		StorySession.game_options.set_value("reception_studio","incoming_kmh",value)
+		StorySession.save_options()
+		draw_pose())
 	tiers.add_child(leg_label)
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
@@ -218,8 +226,9 @@ func draw_pose() -> void:
 	for bone in upper_bones:
 		player.skeleton.set_bone_pose(bone,ready_pose[bone].interpolate_with(forearm_frames[key][bone],weight))
 
-	if fast_ball.button_pressed:
-		preload("res://scripts/reception_pass_drive.gd").recoil_platform(player.skeleton,(f-float(c.contact))/60.)
+	var bend := ForearmDrive.forearm_bend_degrees(incoming_speed.value/3.6)
+	speed_label.text="Incoming %d km/h   ·   %.0f°" % [incoming_speed.value,bend]
+	ForearmDrive.recoil_platform(player.skeleton,(f-float(c.contact))/60.,bend)
 
 func select_legs(which: int) -> void:
 	legs=which
