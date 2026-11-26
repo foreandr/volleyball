@@ -1,7 +1,7 @@
 extends Node3D
 
 const Regions = preload("res://scripts/reception_regions.gd")
-var cell := Vector3i(1,2,1)
+var cell := Vector3i(1,2,0)
 const MAP_MIN := Vector3i.ZERO
 const MAP_MAX := Vector3i(2,2,2)
 const WIDTHS := ["Right","Center","Left"]
@@ -506,7 +506,7 @@ func sample_receiver(c: Dictionary,f: float) -> void:
 		var load_weight := smoothstep(-HandPass.CPU_PREP_LEAD,0.,follow)
 		var rig: Skeleton3D=player.skeleton
 		var forehead := rig.to_global(rig.get_bone_global_pose(rig.find_bone("Head")).origin).y+.12
-		pose_hand_pass_legs(goal,forehead,follow)
+		pose_hand_pass_legs(goal,forehead,follow,c.get("jump_set",false))
 		var reach_weight := load_weight*(1.-smoothstep(.035,.28,follow))
 		lean_for_hand_pass(goal,reach_weight)
 		HandPass.standing_set(player,goal,offset,push,follow,load_weight,Vector3.ZERO,false)
@@ -545,14 +545,14 @@ func lean_for_hand_pass(goal: Vector3, weight: float) -> void:
 		var id := rig.find_bone(spine)
 		rig.set_bone_pose(id,pose[id])
 
-func pose_hand_pass_legs(goal: Vector3, standing_height: float, follow: float) -> void:
+func pose_hand_pass_legs(goal: Vector3, standing_height: float, follow: float, jump_set: bool) -> void:
 	var drop := standing_height-goal.y
-	if drop < -.10:
-		var height := clampf(-drop-.06,.04,.38)
+	if jump_set or drop < -.10:
+		var height := clampf(-drop-.06,.18 if jump_set else .04,.38)
 		var half_flight := sqrt(2.*height/9.81)
 		var rise := maxf(0.,height-4.905*follow*follow)
 		var drift: Vector3=player.to_local(goal).slide(Vector3.UP)-Vector3(0,0,.20)
-		player.position+=drift.limit_length(.32)*(rise/height)
+		player.position+=drift.limit_length(1.0 if jump_set else .32)*(rise/height)
 		player.position.y=rise
 		var before := smoothstep(-half_flight-.19,-half_flight-.09,follow)*(1.-smoothstep(-half_flight-.09,-half_flight,follow))
 		var after := smoothstep(half_flight,half_flight+.08,follow)*(1.-smoothstep(half_flight+.08,half_flight+.22,follow))
@@ -736,6 +736,7 @@ func assigned_action(address: Vector3i) -> int:
 	var key := Regions.key(address)
 	if StorySession.game_options.has_section_key("studio_three_rows",key):
 		return int(StorySession.game_options.get_value("studio_three_rows",key))
+	if address==Vector3i(1,2,0): return 78
 	if address.y==1: return 0
 	var previous := Vector3i(address.x,0 if address.y==0 else 1,address.z)
 	var default_action := 10 if previous==Vector3i(1,1,1) else 0
