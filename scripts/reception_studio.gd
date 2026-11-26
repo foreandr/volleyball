@@ -749,7 +749,7 @@ func draw_pose() -> void:
 		crossing.show()
 	feed.ball.rotation=Vector3.ZERO
 	if reachable and seconds>0.:
-		preload("res://scripts/pass_flight.gd").rotate_reception_ball(feed.ball,(pass_marker.position-target)/landing,seconds,feed.reception_spin_rps())
+		preload("res://scripts/pass_flight.gd").rotate_reception_ball(feed.ball,(pass_marker.position-target)/landing,seconds,feed.reception_spin_rps(),c.kind=="overhead")
 	feed.ball.position=point
 	feed.ball.visible=point.y>=.145
 	if ball_trail.visible and seconds > -duration:

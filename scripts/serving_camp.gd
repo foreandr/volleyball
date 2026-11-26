@@ -1032,7 +1032,7 @@ func step_reception_rally(delta: float) -> void:
 			elif is_finite(platform.touch_time) and not platform.hand_setting and pass_clock<.35: platform.follow_forearm(platform.touch_time+pass_clock,Vector3.ZERO)
 			elif first_contact_player()!=passers[1]: first_contact_player().play_action("idle")
 		ball.position=arc(pass_start,pass_end,pass_clock/pass_duration,arc_term*.25)
-		preload("res://scripts/pass_flight.gd").rotate_reception_ball(ball,(pass_end-pass_start)/pass_duration,delta,received_spin_rps)
+		preload("res://scripts/pass_flight.gd").rotate_reception_ball(ball,(pass_end-pass_start)/pass_duration,delta,received_spin_rps,receptions[receiver].hand_setting)
 		if pass_clock>set_at-.33:
 			second_contact_player().rotation.y=atan2(facing.x,facing.z)
 			var load_weight := smoothstep(set_at-.33,set_at-.05,pass_clock)
