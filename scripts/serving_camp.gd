@@ -98,6 +98,8 @@ var cover_clock := 0.
 var attack_results := [0.,0.,0.,0.]
 var middle_commit := false
 var aim_read := false
+var closest_attack_gap := INF
+var closest_attack_age := 0.
 var last_shot_slot := -1
 var cover_players: Array[Node3D]=[]
 
@@ -820,9 +822,9 @@ func clear_ground_step(actor: Node3D,step: Vector3) -> Vector3:
 		if safe: return actor.get_parent_node_3d().global_basis.inverse()*candidate
 	return Vector3.ZERO
 
-func move_receiver(actor: Node3D,goal: Vector3,delta: float,face_direction := Vector3.ZERO) -> void:
+func move_receiver(actor: Node3D,goal: Vector3,delta: float,face_direction := Vector3.ZERO,pace := 4.8) -> void:
 	var travel := (goal-actor.position).slide(Vector3.UP)
-	var step := travel.limit_length(4.8*delta)
+	var step := travel.limit_length(pace*delta)
 	if step.length_squared()>.000001: step=clear_ground_step(actor,step)
 	actor.position+=step
 	var heading := face_direction if not face_direction.is_zero_approx() else travel
@@ -872,7 +874,9 @@ func step_reception_rally(delta: float) -> void:
 		if not receiving_jump.active:
 			var chase_goal := plant if pass_clock<=jump_at+delta else stance
 			chase_goal.z=maxf(chase_goal.z,BallNet.NET_Z+.22)
-			move_receiver(second_contact_player(),chase_goal,delta,facing)
+			var travel := (chase_goal-second_contact_player().position).slide(Vector3.UP).length()
+			var pace := clampf(travel/maxf(.05,set_at-pass_clock-.1),4.8,6.05)
+			move_receiver(second_contact_player(),chase_goal,delta,facing,pace)
 			plant.z=maxf(plant.z,BallNet.NET_Z+.22)
 			var jump_range := 1.25 if crossing_net else .65
 			if pass_clock>=jump_at and pass_clock<pass_duration*u-.12 and second_contact_player().position.distance_to(plant)<jump_range and lift>.20:
@@ -966,6 +970,8 @@ func step_reception_rally(delta: float) -> void:
 			pin_attack.approach_expected_hit_at=pin_attack.stage_start+duration
 			trace("serve_attack_set",{"slot":attack_slot,"duration":duration,"hitter_gap_m":ready_gap,"stamina":selected.stamina.fraction(),"contact_height":pass_end.y,"approach_started":prepared,"release_depth_m":pass_start.z-BallNet.NET_Z,"in_system":pass_in_system,"middle_commit":middle_commit})
 			aim_read=false
+			closest_attack_gap=INF
+			closest_attack_age=0.
 			phase="serve_attack"
 	else:
 		if receiving_jump.active: receiving_jump.step(second_contact_player(),delta,Vector2.ZERO)
@@ -978,9 +984,13 @@ func step_reception_rally(delta: float) -> void:
 			SetHands.apply(second_contact_player(),pass_start,weight,push*.23*extension,0.,0.,false,Vector3.ZERO,extension,offset,1.,true,-1.,null,Vector3.ZERO,true)
 		var t := pass_clock/set_duration
 		ball.position=pass_start.lerp(pass_end,t)+Vector3.UP*4.905*set_duration*set_duration*t*(1.-t)
+		var gap := pin_attack.right_palm().distance_to(pin_frame.to_local(ball.global_position))
+		if gap<closest_attack_gap:
+			closest_attack_gap=gap
+			closest_attack_age=pass_clock
 		if ball.position.y<.11:
 			recent_misses[attack_slot]=minf(3.,recent_misses[attack_slot]+1.)
-			trace("serve_attack_miss",{"slot":attack_slot,"stamina":attack_options[attack_slot].stamina.fraction(),"tempo_seconds":set_duration,"target":str(pass_end)})
+			trace("serve_attack_miss",{"closest_palm_m":closest_attack_gap,"closest_time_s":closest_attack_age,"slot":attack_slot,"stamina":attack_options[attack_slot].stamina.fraction(),"tempo_seconds":set_duration,"target":str(pass_end)})
 			next_serve()
 
 func lane_space(x: float) -> float:
