@@ -1,17 +1,14 @@
 extends "res://scripts/serving_camp.gd"
 
 const FIVE := Vector3(2.65,.04,-2.2)
-const STICK_DEADZONE := .20
-var holding_dig := false
-var stick_engaged := false
-var dig_direction := Vector2.ZERO
+var homes := [FIVE,Vector3(-1.6,.04,-2.2)]
+var floor_target := Vector3(2.35,.145,-1.60)
+var target_marker := MeshInstance3D.new()
+var dragged := -1
 var release_window := 0.
-var neutral_platform := Vector3.ZERO
-var feed_bag: Array[Vector2]=[]
-var feed_direction := Vector2.ZERO
 var set_tempo := 1
 var cpu_defense := true
-var dig_arrival := 0.0
+
 var feed_age := 0.
 var attack_landing := Vector3.ZERO
 
@@ -19,8 +16,13 @@ func start_drill() -> void:
 	cpu_defense=true
 	super.start_drill()
 	title.text="DIGGING  /  DIG FROM FIVE"
-	for actor in passers+[receiving_middle,wall[1],wall[2]]:
+	for actor in passers+[receiving_middle,wall[2]]:
 		actor.hide()
+	target_marker.mesh=ball.mesh
+	target_marker.material_override=ball.material_override
+	target_marker.scale=ball.scale
+	add_child(target_marker)
+	target_marker.position=floor_target
 	coach.show()
 	coach.position=Vector3(-.5,.04,10.3)
 	GroundControls.face(coach,SETTER_BASE-coach.position,1.,10.)
@@ -50,30 +52,22 @@ func update_prompts(_next: String) -> void:
 	if cpu_defense:
 		Xbox.prompts(controls_row,[["View","Control defender"]])
 	else:
-		Xbox.prompts(controls_row,[["View","Watch CPU"],["A","Hold ready"],["RS","Aim / release to dig"]])
+		Xbox.prompts(controls_row,[["View","Watch CPU"],["A","Release to dig"]])
 
 func _input(event: InputEvent) -> void:
 	if not settings.visible and not replay_inspector.active and not get_tree().paused:
-		if event is InputEventJoypadButton and event.button_index==Xbox.physical(JOY_BUTTON_A):
-			active_pad=event.device
-			holding_dig=event.pressed
-			if holding_dig:
-				cpu_defense=false
-				dig_direction=Vector2.ZERO
-				stick_engaged=false
-				update_prompts("")
+		if handle_drag(event):
 			get_viewport().set_input_as_handled()
 			return
-		if not cpu_defense and event is InputEventJoypadButton and event.button_index==StorySession.pad_bindings[1]: return
-		if not cpu_defense and event is InputEventJoypadMotion and holding_dig and event.axis in [JOY_AXIS_RIGHT_X,JOY_AXIS_RIGHT_Y]:
-			var stick := Vector2(axis(JOY_AXIS_RIGHT_X),axis(JOY_AXIS_RIGHT_Y))
-			if event.axis==JOY_AXIS_RIGHT_X: stick.x=event.axis_value
-			else: stick.y=event.axis_value
-			read_dig_stick(stick)
+		if event is InputEventJoypadButton and event.button_index==Xbox.physical(JOY_BUTTON_A):
+			active_pad=event.device
+			cpu_defense=false
+			if not event.pressed and phase=="serve_return": release_window=.18
+			update_prompts("")
+			get_viewport().set_input_as_handled()
+			return
 		if event is InputEventJoypadButton and event.pressed and event.button_index==Xbox.physical(JOY_BUTTON_BACK):
 			cpu_defense=not cpu_defense
-			holding_dig=false
-			stick_engaged=false
 			release_window=0.
 			update_prompts("")
 			get_viewport().set_input_as_handled()
@@ -82,32 +76,26 @@ func _input(event: InputEvent) -> void:
 
 func next_serve() -> void:
 	super.next_serve()
-	holding_dig=not cpu_defense and pad()>=0 and Input.is_joy_button_pressed(pad(),Xbox.physical(JOY_BUTTON_A))
-	stick_engaged=false
 	release_window=0.
-	dig_direction=Vector2.ZERO
-	if feed_bag.is_empty():
-		feed_bag.assign([Vector2.LEFT,Vector2.RIGHT,Vector2.UP,Vector2.DOWN,Vector2.ZERO])
-		feed_bag.shuffle()
-	feed_direction=feed_bag.pop_back()*randf_range(.85,1.)
-	hitter.position=FIVE
+	hitter.position=homes[0]
+	wall[1].position=homes[1]
 	hitter.rotation.y=0.
 	receiving_setter.position=SETTER_BASE
 	receiver=0
 	attack_slot=2
 	called_slot=2
-	off_blocker=-1
+	off_blocker=1
 	wall[0].position=Vector3(-4.,.04,BallNet.NET_Z-.85)
 	serve_clock=10.
 	toss_style=2
 	feed_age=0.
 	phase="coach_feed"
-	attack_landing=Vector3(FIVE.x+randf_range(-1.45,1.45),.145,FIVE.z+randf_range(-.75,.75))
+	attack_landing=floor_target
 	message.text="Coach toss"
 
 func _process(delta: float) -> void:
 	if settings.visible or get_tree().paused or replay_inspector.active: return
-	if ball.position.z>FIVE.z+.18:
+	if phase=="coach_feed" and ball.position.z>hitter.position.z+.18:
 		GroundControls.face(hitter,ball.global_position-hitter.global_position,delta,8.)
 	if phase=="coach_feed":
 		feed_age+=delta
@@ -124,62 +112,58 @@ func _process(delta: float) -> void:
 		return
 	if phase=="serve_return":
 		release_window=maxf(0.,release_window-delta)
-		if cpu_defense:
-			dig_direction=feed_direction
-			var center: Vector3=dig_platforms[hitter].platform_center()
-			var closest_time := (center-ball.position).dot(drop_velocity)/maxf(.01,drop_velocity.length_squared())
-			if closest_time>=0. and closest_time<.08: release_window=.12
-		if release_window>0.: dig_platforms[hitter].queue_bump(dig_clock)
+		if cpu_defense or release_window>0.: dig_platforms[hitter].queue_bump(dig_clock)
+		off_blocker=1
 	super._process(delta)
 
-func read_dig_stick(stick: Vector2) -> void:
-	if stick.length()>.30:
-		dig_direction=stick.normalized()
-		stick_engaged=true
-	elif stick.length()<STICK_DEADZONE and stick_engaged:
-		release_window=.15
-		stick_engaged=false
-
-func platform_offset(direction: Vector2) -> Vector3:
-	var forward := hitter.global_basis.z.slide(Vector3.UP).normalized()
-	var right := forward.cross(Vector3.UP)
-	return right*direction.x*.72-forward*direction.y*.44+Vector3.UP*direction.y*.46
+func handle_drag(event: InputEvent) -> bool:
+	var camera := get_viewport().get_camera_3d()
+	if camera==null: return false
+	if event is InputEventMouseButton and event.button_index==MOUSE_BUTTON_LEFT:
+		if not event.pressed:
+			var handled := dragged>=0
+			dragged=-1
+			return handled
+		var closest := 22.
+		for i in 3:
+			var point: Vector3=floor_target if i==2 else homes[i]
+			var foot := camera.unproject_position(point)
+			var top := camera.unproject_position(point+Vector3.UP*(.01 if i==2 else 1.65))
+			var distance: float=event.position.distance_to(Geometry2D.get_closest_point_to_segment(event.position,foot,top))
+			if distance<closest:
+				dragged=i
+				closest=distance
+		return dragged>=0
+	if event is InputEventMouseMotion and dragged>=0:
+		var hit=Plane(Vector3.UP,0.).intersects_ray(camera.project_ray_origin(event.position),camera.project_ray_normal(event.position))
+		if hit!=null:
+			var point := Vector3(clampf(hit.x,-4.48,4.48),.04,clampf(hit.z,BallNet.NET_Z-8.98,BallNet.NET_Z-.15))
+			if dragged==2:
+				point.y=.145
+				floor_target=point
+				attack_landing=point
+				target_marker.position=point
+			else:
+				homes[dragged]=point
+				var actor=hitter if dragged==0 else wall[1]
+				actor.position=point
+				dig_platforms[actor].low_save.active=false
+		return true
+	return false
 
 func walk_server(delta: float,_defending := false) -> void:
-	hitter.play_ground_gait(0.)
-	hitter.animator.advance(delta)
-	if phase=="server_dig": return
-	if cpu_defense or holding_dig or release_window>0.:
-		var platform: Reception=dig_platforms[hitter]
-		platform.sample_pose(platform.clip,platform.tracks,platform.contact_frame,1.,true)
-		neutral_platform=platform.platform_center()
-		if phase=="serve_return":
-			var save=platform.low_save
-			if dig_direction.y < -.65 and not save.active:
-				var origin := ball.global_position
-				var velocity := drop_velocity
-				var now := dig_clock
-				var path := func(t: float) -> Vector3:
-					var ahead := t-now
-					return origin+velocity*ahead+Vector3.DOWN*4.905*ahead*ahead
-				if save.plan(hitter,path,now,now+.45,platform.clip,true,false):
-					save.travel_scale=0.
-			if save.active:
-				save.sample(hitter,dig_clock,save.contact_time+.07)
-				return
-			if absf(dig_direction.x)>.55:
-				var offset := platform_offset(dig_direction)
-				platform.plan_reach(offset,true)
-				platform.reach_progress=smoothstep(0.,.26,.26+dig_clock-dig_arrival)
-				platform.pose_reach(platform.reach_progress,neutral_platform+offset)
-		platform.reach_platform(platform_offset(dig_direction),1.,.72,true,true)
+	for actor in [hitter,wall[1]]:
+		if phase=="server_dig" and actor==last_digger: continue
+		actor.play_ground_gait(0.)
+		actor.animator.advance(delta)
+		GroundControls.face(actor,ball.global_position-actor.global_position,delta,8.)
 
 func return_struck(actor: Node3D,point: Vector3,velocity: Vector3,spin: float) -> void:
-	var contact := (neutral_platform if neutral_platform!=Vector3.ZERO else FIVE+Vector3(0,1.04,.62))+platform_offset(feed_direction)
-	if feed_direction.y < -.65:
-		contact.y=.46
+	var nearest: Node3D=hitter if hitter.position.distance_squared_to(floor_target)<=wall[1].position.distance_squared_to(floor_target) else wall[1]
+	var offset := floor_target-nearest.position
+	var contact := floor_target
+	contact.y=lerpf(1.04,.46,smoothstep(.80,1.65,offset.slide(Vector3.UP).length()))
 	var travel := maxf(.30,point.distance_to(contact)/maxf(1.,velocity.length()))
-	dig_arrival=travel
 	var launch := (contact-point)/travel+Vector3.UP*4.905*travel
 	var flight := preload("res://scripts/pass_flight.gd").landing_time(point,launch)
 	var landing := point+launch*flight+Vector3.DOWN*4.905*flight*flight
@@ -187,7 +171,30 @@ func return_struck(actor: Node3D,point: Vector3,velocity: Vector3,spin: float) -
 	super.return_struck(actor,point,launch,spin)
 
 func sample_defensive_contact(platform: Reception,start: float,dt: float,_until_floor: float,path: Callable) -> void:
-	if release_window<=0.: return
+	var actor=platform.setter
+	var automatic: bool=actor!=hitter or cpu_defense
+	if not automatic and release_window<=0.: return
+	var now: Vector3=path.call(start)
+	var ahead := clampf((actor.to_global(Vector3(0,1.04,.62))-now).slide(Vector3.UP).dot(drop_velocity.slide(Vector3.UP))/maxf(.01,drop_velocity.slide(Vector3.UP).length_squared()),0.,_until_floor)
+	if ahead>.30: return
+	var intercept: Vector3=path.call(start+ahead)
+	var base: Vector3=actor.to_global(Vector3(0,1.04,.62))
+	var offset := intercept-base
+	var save=platform.low_save
+	if not save.active and (offset.slide(Vector3.UP).length()>1.0 or intercept.y<.62):
+		if save.plan(actor,path,start,start+_until_floor,platform.clip,true,true):
+			save.travel_scale=0.
+	if save.active:
+		save.sample(actor,start+dt,save.contact_time+.07)
+	else:
+		var progress := smoothstep(0.,.22,.24-ahead) if automatic else smoothstep(0.,.09,.18-release_window+dt)
+		platform.sample_pose(platform.clip,platform.tracks,platform.contact_frame*progress,1.,true)
+		var lateral: float=absf((actor.basis.inverse()*offset).x)
+		if lateral>.30:
+			platform.plan_reach(offset,true)
+			platform.reach_progress=progress
+			platform.pose_reach(progress,intercept)
+		if progress>.01: platform.reach_platform(intercept-platform.platform_center(),progress,.72,true,true)
 	var contact := platform.dig_contact_segment(path.call(start),path.call(start+dt))
 	if contact[0].distance_to(contact[1])>platform.PLATFORM_RADIUS: return
 	platform.touch=contact[0]
