@@ -71,7 +71,7 @@ var trail_mesh := ImmediateMesh.new()
 var trail_ink := StandardMaterial3D.new()
 var approach_plant := preload("res://scripts/setter_jump.gd").new()
 var shuffle_by_actor := {}
-var reset_end_frame := 0.
+var incoming_floor_fraction := 1.
 var pass_end_frame := 0.
 var reachable := false
 var lattice := MeshInstance3D.new()
@@ -295,7 +295,7 @@ func _ready() -> void:
 	leg_grid.columns=5
 	scroll.add_child(leg_grid)
 	column.add_child(seek)
-	seek.min_value=-maxf(85.,ceilf(feed.contact_time()*60.+140.))
+	seek.min_value=0.
 	seek.step=1
 	seek.value_changed.connect(func(value): playing=false; frame=value; draw_pose())
 	refresh()
@@ -328,7 +328,7 @@ func configure_feed() -> void:
 	feed.path_preview.hide()
 
 func save_feed() -> void:
-	seek.min_value=-maxf(85.,ceilf(feed.contact_time()*60.+140.))
+	seek.min_value=0.
 	StorySession.game_options.set_value("reception_studio","serve_type",serve_type)
 	StorySession.game_options.set_value("reception_studio","serve_from",serve_from)
 	StorySession.save_options()
@@ -376,7 +376,6 @@ func refresh() -> void:
 			choice.pressed.connect(select_legs.bind(clip_index))
 			leg_grid.add_child(choice)
 		index=mini(index,clips.size()-1)
-		seek.max_value=clips[index].frames
 		update_leg_buttons()
 
 func change_clip(by: int) -> void:
@@ -392,12 +391,11 @@ func change_clip(by: int) -> void:
 	legs=index
 	frame=seek.min_value
 	update_leg_buttons()
-	seek.max_value=clips[index].frames
 	draw_pose()
 
 func step(by: int) -> void:
 	playing=false
-	frame=clampf(roundf(frame)+by,seek.min_value,clips[index].frames)
+	frame=clampf(roundf(frame)+by,seek.min_value,seek.max_value)
 	draw_pose()
 
 func toggle_play() -> void:
@@ -417,13 +415,14 @@ func _process(delta: float) -> void:
 		save_camera_view()
 		refresh()
 	if playing:
-		frame+=delta*60.
-		if frame>=maxf(clips[index].frames,maxf(pass_end_frame,reset_end_frame))+1.:
+		if frame>=pass_end_frame and pass_end_frame>0.:
 			frame=seek.min_value
 			if random_feeds.button_pressed:
 				next_assigned_feed()
 				return
 			pick_feed_point()
+		else:
+			frame=minf(frame+delta*60.,pass_end_frame)
 		draw_pose()
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -598,9 +597,6 @@ func draw_pose() -> void:
 		c=c.duplicate()
 		c.step_legs=0 if legs<0 else int(clips[legs].id)
 		c.audition=true
-	var f := clampf(roundf(frame),0.,c.frames)
-	seek.set_value_no_signal(frame)
-	label.text=" %02d / %02d     Frame %d / %d " % [c.id,clips.size(),mini(roundi(frame),int(c.frames)),c.frames]
 	play_button.text="Pause" if playing else "Play"
 	for anchor in defenders:
 		var toward_server := serve_from-anchor.position
@@ -619,15 +615,14 @@ func draw_pose() -> void:
 		feed_curve=serve_curve(launch,aim,full_duration)
 		var arc_height := feed_curve
 		var slope := aim.y-launch.y+arc_height
-		var floor_u := (slope+sqrt(slope*slope+4.*arc_height*(launch.y-BALL_RADIUS)))/(2.*arc_height)
-		leave_feed=preload("res://scripts/pass_flight.gd").reads_out(launch.lerp(aim,floor_u),line_read_error,player.effective_rating("Forearm reception"))
+		incoming_floor_fraction= (slope+sqrt(slope*slope+4.*arc_height*(launch.y-.145)))/(2.*arc_height)
+		leave_feed=preload("res://scripts/pass_flight.gd").reads_out(launch.lerp(aim,incoming_floor_fraction),line_read_error,player.effective_rating("Forearm reception"))
 		trace_incoming_regions(grid.to_local(launch),grid.to_local(aim))
 	feed_fraction=routed_fraction
 	var target := launch.lerp(aim,feed_fraction)+Vector3.UP*feed_curve*feed_fraction*(1.-feed_fraction)
 	set_intercept=target
 	var duration := full_duration*feed_fraction
-	var lead_frames := (full_duration-duration)*60.
-	var touch_frame: float=c.contact-lead_frames
+	var touch_frame := duration*60.
 	var region := routed_region
 	var address := Vector3i(region.x,region.y,region.z)
 	var assigned := assigned_action(address,region.w) if region.w>=0 else 0
@@ -728,7 +723,6 @@ func draw_pose() -> void:
 		if playing and not miss_logged:
 			print("studio_miss ",Time.get_datetime_string_from_system()," defender=",receiving+1," cell=",address," region=",region_number(address,region.w)," assigned=",assigned," playing=",c.id," target=",target," contact=",contact_point," gap_m=",gap)
 			miss_logged=true
-	reset_end_frame=0.
 	if c.kind=="overhead": pose_frame=maxf(0.,frame-touch_frame+c.contact)
 	sample_receiver(c,pose_frame,active,motion_legs)
 	if leave_feed: player.pose_leave_ball((frame-touch_frame)/60.+duration)
@@ -744,7 +738,6 @@ func draw_pose() -> void:
 			var height := axis.length()+2.*capsule.radius
 			if not is_equal_approx(capsule.height,height): capsule.height=height
 			volume.global_transform=Transform3D(Basis(Quaternion(Vector3.UP,axis.normalized())),(segment[0]+segment[1])*.5)
-	pass_end_frame=0.
 	var seconds := (frame-touch_frame)/60.
 	update_cpu_ring(seconds,duration,active)
 	var serve_time := clampf(feed.contact_time()+seconds+duration,0.,feed.contact_time()+.42)
@@ -752,11 +745,16 @@ func draw_pose() -> void:
 	feed.ball.show()
 	if ball_trail.visible: trail_mesh.clear_surfaces()
 	crossing.hide()
-	if seconds < -duration: return
 	var lift := sqrt(2.*9.81*pass_arc.value)
 	var landing := (lift+sqrt(lift*lift+2.*9.81*maxf(0.,target.y-.145)))/9.81
-	if reachable and seconds>0.:
-		pass_end_frame=touch_frame+ceilf(landing*60.)+1.
+	var end_seconds := duration+landing if reachable else full_duration*incoming_floor_fraction
+	pass_end_frame=ceilf(end_seconds*60.)
+	seek.set_block_signals(true)
+	seek.max_value=pass_end_frame
+	seek.set_block_signals(false)
+	seek.set_value_no_signal(frame)
+	label.text=" %02d / %02d     Frame %d / %d " % [c.id,clips.size(),roundi(frame),int(pass_end_frame)]
+	seconds=minf(seconds,end_seconds-duration)
 	var point := flight_point(seconds,launch,target,duration,lift,landing)
 	var occupied := contact_region(point) if seconds<=0. or not reachable else Vector4i(-1,-1,-1,-1)
 	if reachable and region.w>=0 and seconds>=0. and seconds<.20: occupied=region
@@ -769,7 +767,7 @@ func draw_pose() -> void:
 	if reachable and seconds>0.:
 		preload("res://scripts/pass_flight.gd").rotate_reception_ball(feed.ball,(pass_marker.position-target)/landing,seconds,feed.reception_spin_rps(),c.kind=="overhead")
 	feed.ball.position=point
-	feed.ball.visible=point.y>=.145
+	feed.ball.visible=point.y>=.144
 	if ball_trail.visible and seconds > -duration:
 		draw_ball_trail(seconds,launch,target,duration,lift,landing)
 
@@ -1021,7 +1019,6 @@ func jump_to_set(goal: Vector3, follow: float, approach_step := false) -> void:
 	var duration := maxf(.38,distance/1.15)
 	var progress := clampf(elapsed/duration,0.,1.)
 	player.position=offset*(1.-smoothstep(0.,1.,progress))
-	reset_end_frame=frame+(duration-elapsed)*60.
 	if progress>=1.: return
 	sample_shuffle(-offset.normalized(),progress*maxi(1,roundi(duration*1.65)),smoothstep(0.,.16,progress)*(1.-smoothstep(.80,1.,progress)))
 
@@ -1175,7 +1172,6 @@ func select_legs(which: int) -> void:
 		legs=which
 		if forearm_preview:
 			index=which
-			seek.max_value=clips[index].frames
 			apply_cell_mirror(clips[index])
 		frame=seek.min_value
 		playing=true
@@ -1193,17 +1189,13 @@ func select_legs(which: int) -> void:
 		legs=which
 		frame=seek.min_value
 		playing=true
-		seek.max_value=clips[index].frames
 		contact_key.clear()
 		update_leg_buttons()
 		draw_pose()
 		return
 	legs=which
 	if which>=0:
-		var phase := frame/float(clips[index].frames)
 		index=which
-		frame=phase*float(clips[index].frames)
-		seek.max_value=clips[index].frames
 	update_leg_buttons()
 	draw_pose()
 
@@ -1520,7 +1512,6 @@ func preview_cell() -> void:
 				if saved>=-1 and saved<clips.size():
 					legs=saved
 					hand_leg_preview=true
-			seek.max_value=clips[index].frames
 			update_leg_buttons()
 			apply_cell_mirror(clips[i])
 			break
