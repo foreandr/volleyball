@@ -3,10 +3,10 @@ extends Node3D
 const Regions = preload("res://scripts/reception_regions.gd")
 var cell := Vector3i(1,1,1)
 const MAP_MIN := Vector3i.ZERO
-const MAP_MAX := Vector3i(2,2,2)
+const MAP_MAX := Vector3i(2,1,2)
 const WIDTHS := ["Right","Center","Left"]
-const HEIGHTS := ["Low","Mid","High"]
-const CELL_SIZE := Vector3.ONE*1.30
+const HEIGHTS := ["Low","Mid"]
+const CELL_SIZE := Vector3.ONE*1.10
 const MAP_ORIGIN := Vector3(-1.5,0,-1.5)*CELL_SIZE
 const Gym = preload("res://scripts/tryout_gym.gd")
 var feed := preload("res://scripts/standing_float_serve.gd").new()

@@ -126,7 +126,7 @@ Serving-camp rally hitters and middle decoys use the attack-camp plant arm lift 
 Serve-receive hitters reserve horizontal travel for the airborne approach where space allows. Their strike tracks the incoming set and replay presents the palm contact before the outgoing flight.
 In serving camp, D-pad up selects topspin, left/right add sidespin, and down selects float for the spin serve. Accurate releases produce higher pace. Untouched serves rebound from gym surfaces. The setter uses available jump height, approach time and recent missed swings when choosing hitters and pin tempo. A pipe can originate in the back-row hitter's lane. Middle commits require an airborne middle on an in-system pass.
 
-Reception Studio feeds the selected contact region. All three defenders display the shared 3 by 3 by 3 map. WASD pans the studio camera.
+Reception Studio feeds the selected contact region. All three defenders display the shared map of 1.1-meter cubes, three wide, two high and three deep. WASD pans the studio camera.
 Studio serves use the region assignment at a saved stance inside a two-meter ready square. Reachable feeds rebound from the forearms. Future coaching strategy will assign ready zones per team, with chase coverage deferred.
 Reception Studio uses Ctrl-click for court cells. Explicit animation assignments have dark red outlines, while unassigned cells have dark blue outlines and leave the receiver in the ready pose. Three defenders can be positioned by dragging. The serve arc is fixed. Pass rise and the floor target are saved.
 
