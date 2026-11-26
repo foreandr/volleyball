@@ -33,5 +33,12 @@ static func legs(actor: Node3D, pose: Array, c: Dictionary, weight: float, flip 
 		elif c.kind in ["knee","kneel","low","knee_slide","beach_drop","air_platform"]:
 			goal.z-=.25*weight
 		var pole := Vector3(.15 if side=="l" else -.15,0,1.)
+		if c.get("stack_knee",false) and side==("r" if side_offset<0 else "l"):
+			# Bias the knee toward the vertical line above the planted ankle.
+			var hip: Vector3=author.point(pose,"thigh_"+side)
+			var leg_axis := (goal-hip).normalized()
+			var upright := Vector3.UP.slide(leg_axis)
+			if upright.length_squared()>.001:
+				pole=pole.normalized().lerp(upright.normalized(),.7*weight)
 		author.limb(pose,"thigh_"+side,"calf_"+side,"foot_"+side,goal,pole,weight)
 		author.set_world_basis(pose,"foot_"+side,foot.basis)

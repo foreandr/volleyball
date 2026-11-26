@@ -706,14 +706,23 @@ func draw_pose() -> void:
 			reachable=active and best_gap<=FOREARM_CONTACT_GRACE
 			if active and not reachable and is_finite(best_gap):
 				shift_frame=clampf(c.contact+(actual_fraction-nominal)*full_duration*60.,0.,c.frames)
-				intercept_shift=correction
-				sample_receiver(c,shift_frame,true,motion_legs)
-				best_gap=INF
-				for shape in RECEPTION_CAPSULES:
-					var seg := reception_segment(rig,shape)
-					var p := Geometry3D.get_closest_point_to_segment(contact_point,seg[0],seg[1])
-					best_gap=minf(best_gap,p.distance_to(contact_point)-float(shape[2])-BALL_RADIUS)
-				reachable=best_gap<=FOREARM_CONTACT_GRACE
+				for adjustment in 3:
+					if c.get("stack_knee",false) and correction.y<0.:
+						# Lower the hips over the planted foot rather than translating the feet below the court.
+						reach_adjustment.y+=correction.y
+						correction.y=0.
+					intercept_shift+=correction
+					sample_receiver(c,shift_frame,true,motion_legs)
+					best_gap=INF
+					for shape in RECEPTION_CAPSULES:
+						var seg := reception_segment(rig,shape)
+						var p := Geometry3D.get_closest_point_to_segment(contact_point,seg[0],seg[1])
+						var gap := p.distance_to(contact_point)-float(shape[2])-BALL_RADIUS
+						if gap<best_gap:
+							best_gap=gap
+							correction=(contact_point-p).normalized()*(maxf(0.,gap)+.018)
+					reachable=best_gap<=FOREARM_CONTACT_GRACE
+					if reachable or not c.get("stack_knee",false): break
 			closest_surface_gap=best_gap
 	if active and c.kind!="overhead":
 		feed_fraction=actual_fraction
@@ -915,6 +924,11 @@ func pose_receiver(c: Dictionary,f: float,active: bool,motion_legs: int) -> void
 		var local_axis := (chest.basis.inverse()*axis).normalized()
 		rig.set_bone_pose_rotation(bone,rig.get_bone_pose_rotation(bone)*Quaternion(local_axis,angle))
 
+	if c.has("left_shoulder_forward_deg"):
+		var chest_id := rig.find_bone("spine_03")
+		var chest_pose := rig.get_bone_global_pose(chest_id)
+		var turn_axis := (chest_pose.basis.inverse()*Vector3.UP).normalized()
+		rig.set_bone_pose_rotation(chest_id,rig.get_bone_pose_rotation(chest_id)*Quaternion(turn_axis,-deg_to_rad(float(c.left_shoulder_forward_deg))*blend))
 	if c.get("platform_swing",false):
 		# A shared rotation around the shoulder line keeps the clasp and elbow angles intact.
 		var left := rig.find_bone("upperarm_l")
