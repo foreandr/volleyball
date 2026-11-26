@@ -893,11 +893,11 @@ func pose_receiver(c: Dictionary,f: float,active: bool,motion_legs: int) -> void
 			platform+=rig.to_local(segment[0].lerp(segment[1],.68))*.5
 		var reach := platform-chest.origin
 		var toward := goal-chest.origin
-		var limit := deg_to_rad(9.)
+		var limit := deg_to_rad(17. if c.get("platform_swing",false) else 9.)
 		if joint=="spine_02":
 			reach=reach.slide(Vector3.UP)
 			toward=toward.slide(Vector3.UP)
-			limit=deg_to_rad(24.)
+			limit=deg_to_rad(38. if c.get("platform_swing",false) else 24.)
 			var lean_axis := Vector3.UP.cross(toward)
 			if lean_axis.length_squared()>.000001:
 				var lean := deg_to_rad(3.)*smoothstep(.12,.8,toward.length())*blend
@@ -909,6 +909,22 @@ func pose_receiver(c: Dictionary,f: float,active: bool,motion_legs: int) -> void
 		var angle := minf(limit,reach.angle_to(toward))*blend
 		var local_axis := (chest.basis.inverse()*axis).normalized()
 		rig.set_bone_pose_rotation(bone,rig.get_bone_pose_rotation(bone)*Quaternion(local_axis,angle))
+
+	if c.get("platform_swing",false):
+		# A shared rotation around the shoulder line keeps the clasp and elbow angles intact.
+		var left := rig.find_bone("upperarm_l")
+		var right := rig.find_bone("upperarm_r")
+		var a := rig.get_bone_global_pose(left).origin
+		var b := rig.get_bone_global_pose(right).origin
+		var hinge := (b-a).normalized()
+		var wrists := (rig.get_bone_global_pose(rig.find_bone("hand_l")).origin+rig.get_bone_global_pose(rig.find_bone("hand_r")).origin)*.5
+		var current := (wrists-(a+b)*.5).slide(hinge)
+		var desired := (goal-(a+b)*.5).slide(hinge)
+		if current.length_squared()>.000001 and desired.length_squared()>.000001:
+			var swing := clampf(current.signed_angle_to(desired,hinge),-PI/3.,PI/3.)*blend
+			for shoulder in [left,right]:
+				var axis := (rig.get_bone_global_pose(shoulder).basis.inverse()*hinge).normalized()
+				rig.set_bone_pose_rotation(shoulder,rig.get_bone_pose_rotation(shoulder)*Quaternion(axis,swing))
 
 func sample_receiver_base(c: Dictionary,f: float,active: bool,motion_legs: int) -> void:
 	if motion_legs==-2: motion_legs=legs
