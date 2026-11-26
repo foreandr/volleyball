@@ -22,8 +22,10 @@ var seek := HSlider.new()
 var mirror := CheckButton.new()
 var elapsed := 0.
 var source := ""
-var upper_picker := OptionButton.new()
-var legs_picker := OptionButton.new()
+var sidebar := PanelContainer.new()
+var layer_grids: Array[GridContainer]=[]
+var layer_labels: Array[Label]=[]
+var layer_sources := [0,0]
 var upper_bones: Array[int]=[]
 
 func _ready() -> void:
@@ -89,14 +91,26 @@ func _ready() -> void:
 	play_button.pressed.connect(toggle_play)
 	button(row,"+1 frame",step.bind(1))
 	button(row,"Back",func(): StorySession.drill_menu_category="Digging"; MenuPresentation.load_scene("res://scenes/drills.tscn"))
-	var layers := HBoxContainer.new()
-	column.add_child(layers)
-	for picker in [upper_picker,legs_picker]:
+	layer.add_child(sidebar)
+	sidebar.anchor_bottom=1.
+	sidebar.offset_left=14
+	sidebar.offset_top=58
+	sidebar.offset_bottom=-106
+	sidebar.offset_right=224
+	var tiers := VBoxContainer.new()
+	sidebar.add_child(tiers)
+	for tier in 2:
 		var caption := Label.new()
-		caption.text="Upper body" if picker==upper_picker else "Legs"
-		layers.add_child(caption)
-		layers.add_child(picker)
-		picker.item_selected.connect(func(_item): draw_pose())
+		tiers.add_child(caption)
+		layer_labels.append(caption)
+		var scroll := ScrollContainer.new()
+		scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
+		scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL
+		tiers.add_child(scroll)
+		var grid := GridContainer.new()
+		grid.columns=4
+		scroll.add_child(grid)
+		layer_grids.append(grid)
 	column.add_child(seek)
 	seek.step=1
 	seek.value_changed.connect(func(value): playing=false; frame=value; draw_pose())
@@ -104,6 +118,7 @@ func _ready() -> void:
 	if OS.get_cmdline_user_args().has("--latest"):
 		index=clips.size()-1
 		seek.max_value=clips[index].frames
+	use_current_pair()
 	draw_pose()
 
 func button(row: Control,title: String,action: Callable) -> void:
@@ -119,20 +134,30 @@ func refresh() -> void:
 	if entries is Array and not entries.is_empty():
 		clips=entries
 		source=content
-		for picker in [upper_picker,legs_picker]:
-			var previous: int=picker.selected
-			picker.clear()
-			picker.add_item("Current clip")
-			picker.add_item("Ready stance")
-			for i in clips.size():
-				if clips[i].kind!="overhead": picker.add_item("#%02d" % clips[i].id,i+2)
-			picker.select(clampi(previous,0,picker.item_count-1))
+		for tier in 2:
+			var grid := layer_grids[tier]
+			for child in grid.get_children():
+				grid.remove_child(child)
+				child.queue_free()
+			var group := ButtonGroup.new()
+			for clip_index in range(-1,clips.size()):
+				if clip_index>=0 and clips[clip_index].kind=="overhead": continue
+				var choice := Button.new()
+				choice.text="Ready" if clip_index<0 else "%02d" % clips[clip_index].id
+				choice.toggle_mode=true
+				choice.button_group=group
+				choice.custom_minimum_size=Vector2(43,34)
+				choice.set_meta("clip",clip_index)
+				choice.pressed.connect(select_layer.bind(tier,clip_index))
+				grid.add_child(choice)
 		index=mini(index,clips.size()-1)
 		seek.max_value=clips[index].frames
+		update_layer_buttons()
 
 func change_clip(by: int) -> void:
 	index=posmod(index+by,clips.size())
 	frame=0.
+	use_current_pair()
 	seek.max_value=clips[index].frames
 	draw_pose()
 
@@ -180,12 +205,12 @@ func draw_pose() -> void:
 	seek.set_value_no_signal(f)
 	label.text=" %02d / %02d     Frame %d / %d " % [c.id,clips.size(),f,c.frames]
 	play_button.text="Pause" if playing else "Play"
-	upper_picker.get_parent().visible=c.kind!="overhead"
+	sidebar.visible=c.kind!="overhead"
 	if c.kind=="overhead":
 		sample_layer(index,c,f)
 		return
-	var upper := source_index(upper_picker)
-	var legs := source_index(legs_picker)
+	var upper := int(layer_sources[0])
+	var legs := int(layer_sources[1])
 	sample_layer(upper,c,f)
 	if upper==legs: return
 	var upper_pose: Array[Transform3D]=[]
@@ -193,8 +218,22 @@ func draw_pose() -> void:
 	sample_layer(legs,c,f)
 	for i in upper_bones.size(): player.skeleton.set_bone_pose(upper_bones[i],upper_pose[i])
 
-func source_index(picker: OptionButton) -> int:
-	return index if picker.selected==0 else picker.get_selected_id()-2
+func select_layer(tier: int, which: int) -> void:
+	layer_sources[tier]=which
+	update_layer_buttons()
+	draw_pose()
+
+func use_current_pair() -> void:
+	layer_sources.assign([index,index])
+	update_layer_buttons()
+
+func update_layer_buttons() -> void:
+	for tier in 2:
+		var which: int=layer_sources[tier]
+		var selection := "Ready" if which<0 else "#%02d" % clips[which].id
+		layer_labels[tier].text=("Torso" if tier==0 else "Legs")+"   "+selection
+		for choice in layer_grids[tier].get_children():
+			choice.set_pressed_no_signal(choice.get_meta("clip")==which)
 
 func sample_layer(which: int, timeline: Dictionary, f: float) -> void:
 	if which<0:
