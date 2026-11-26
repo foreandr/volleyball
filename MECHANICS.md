@@ -170,3 +170,4 @@ The current map merges 22 and 23 into a double-width region with two full-depth 
 Within 22-23.bottom.left, near and far divide the lateral reach from the receiver in two. Both span the full depth.
 22-23 now has four full-depth lateral columns in each of two rows. The finished bottom-left near region uses 72. Its opposite-body counterpart is 24.bottom.near and plays mirrored.
 Reception Studio saves a lead-foot choice per region. Animation 72 leads right in 22-23.bottom.right.left and left in 22-23.bottom.right.right.
+Every Reception Studio forearm leg movement can swing the joined platform toward the intercept. The reaching shoulder drops with lateral error, up to 20 degrees, unless the clip specifies its own drop.

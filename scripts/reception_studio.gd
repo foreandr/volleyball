@@ -940,19 +940,23 @@ func pose_receiver(c: Dictionary,f: float,active: bool,motion_legs: int) -> void
 		var chest_pose := rig.get_bone_global_pose(chest_id)
 		var turn_axis := (chest_pose.basis.inverse()*Vector3.UP).normalized()
 		rig.set_bone_pose_rotation(chest_id,rig.get_bone_pose_rotation(chest_id)*Quaternion(turn_axis,-deg_to_rad(float(c.left_shoulder_forward_deg))*blend))
-	if c.has("left_shoulder_drop_deg"):
+	if Regions.movement(c):
 		var chest_id := rig.find_bone("spine_03")
 		var shoulder_line := rig.get_bone_global_pose(rig.find_bone("upperarm_l")).origin-rig.get_bone_global_pose(rig.find_bone("upperarm_r")).origin
+		var mid := (rig.get_bone_global_pose(rig.find_bone("hand_l")).origin+rig.get_bone_global_pose(rig.find_bone("hand_r")).origin)*.5
+		var world_across := (rig.global_basis*shoulder_line).normalized()
+		var offset := (set_intercept-rig.to_global(mid)).dot(world_across)
+		var drop := float(c.get("left_shoulder_drop_deg",signf(offset)*20.*smoothstep(.04,.50,absf(offset))))
 		var roll_axis := shoulder_line.cross(Vector3.DOWN).normalized()
 		var local_axis := (rig.get_bone_global_pose(chest_id).basis.inverse()*roll_axis).normalized()
-		rig.set_bone_pose_rotation(chest_id,rig.get_bone_pose_rotation(chest_id)*Quaternion(local_axis,deg_to_rad(float(c.left_shoulder_drop_deg))*blend))
+		rig.set_bone_pose_rotation(chest_id,rig.get_bone_pose_rotation(chest_id)*Quaternion(local_axis,deg_to_rad(drop)*blend))
 	if c.has("chin_tuck_deg"):
 		var head := rig.find_bone("Head")
 		var parent := rig.get_bone_global_pose(rig.get_bone_parent(head)).basis.orthonormalized()
 		var forward_head := Basis(Vector3.RIGHT,deg_to_rad(float(c.chin_tuck_deg)))*rig.get_bone_global_rest(head).basis.orthonormalized()
 		var target := (parent.inverse()*forward_head).get_rotation_quaternion()
 		rig.set_bone_pose_rotation(head,rig.get_bone_pose_rotation(head).slerp(target,blend))
-	if c.get("platform_swing",false):
+	if Regions.movement(c):
 		# A shared rotation around the shoulder line keeps the clasp and elbow angles intact.
 		var left := rig.find_bone("upperarm_l")
 		var right := rig.find_bone("upperarm_r")
