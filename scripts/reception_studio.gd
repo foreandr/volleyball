@@ -27,6 +27,7 @@ var leg_grid := GridContainer.new()
 var leg_label := Label.new()
 var legs := 1
 var forearm_frames := {}
+var fast_ball := CheckButton.new()
 var upper_bones: Array[int]=[]
 
 func _ready() -> void:
@@ -103,6 +104,9 @@ func _ready() -> void:
 	var torso_label := Label.new()
 	torso_label.text="Torso - Forearm reception"
 	tiers.add_child(torso_label)
+	fast_ball.text="Fast ball (>60 km/h)"
+	tiers.add_child(fast_ball)
+	fast_ball.toggled.connect(func(_on): draw_pose())
 	tiers.add_child(leg_label)
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
@@ -213,6 +217,9 @@ func draw_pose() -> void:
 	var weight := smoothstep(0.,5.,f)*(1.-smoothstep(c.frames-6.,c.frames,f))
 	for bone in upper_bones:
 		player.skeleton.set_bone_pose(bone,ready_pose[bone].interpolate_with(forearm_frames[key][bone],weight))
+
+	if fast_ball.button_pressed:
+		preload("res://scripts/reception_pass_drive.gd").recoil_platform(player.skeleton,(f-float(c.contact))/60.)
 
 func select_legs(which: int) -> void:
 	legs=which

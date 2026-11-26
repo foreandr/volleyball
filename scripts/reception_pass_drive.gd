@@ -66,27 +66,29 @@ static func apply(rig: Skeleton3D, author: RefCounted, outgoing: Vector3, power:
 		var bone := rig.find_bone(name_)
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
 
-const FAST_DIG_ELBOW_DURATION := 0.32
+const FAST_FOREARM_SPEED := 60./3.6
+const FAST_FOREARM_BEND := 12.
 
-static func apply_fast_dig_elbow_bend(rig: Skeleton3D, age: float, degrees := 50., struck_side := "") -> void:
-	var recoil := deg_to_rad(degrees)*smoothstep(0.,.045,age)*(1.-smoothstep(.075,FAST_DIG_ELBOW_DURATION,age))
-	if recoil<=0.: return
-	var chest := rig.get_bone_global_pose(rig.find_bone("spine_03")).origin
-	for side in ["l","r"]:
-		if struck_side!="" and side!=struck_side: continue
-		var bone := rig.find_bone("lowerarm_"+side)
-		var parent := rig.get_bone_parent(bone)
-		var elbow := rig.get_bone_global_pose(bone).origin
-		var upper := (elbow-rig.get_bone_global_pose(parent).origin).normalized()
-		var wrist := rig.get_bone_global_pose(rig.find_bone("hand_"+side)).origin
-		var forearm := (wrist-elbow).normalized()
-		var hinge := upper.cross(forearm)
-		if hinge.length_squared()<.0001: hinge=forearm.cross(chest-wrist)
-		if hinge.is_zero_approx(): continue
-		var bend := minf(recoil,maxf(0.,deg_to_rad(100.)-upper.angle_to(forearm)))
-		var parent_basis := rig.get_bone_global_pose(parent).basis.orthonormalized()
-		var rotation := Quaternion((parent_basis.inverse()*hinge).normalized(),bend)
-		rig.set_bone_pose_rotation(bone,(rotation*rig.get_bone_pose_rotation(bone)).normalized())
+static func fast_forearm(speed_mps: float) -> bool:
+	return speed_mps>FAST_FOREARM_SPEED
+
+static func recoil_platform(rig: Skeleton3D, age: float) -> void:
+	if age<=0. or age>=FAST_DIG_ELBOW_DURATION: return
+	var left := rig.find_bone("lowerarm_l")
+	var right := rig.find_bone("lowerarm_r")
+	var l := rig.get_bone_global_pose(left).origin
+	var r := rig.get_bone_global_pose(right).origin
+	var axis := r.direction_to(l)
+	var wrists := (rig.get_bone_global_pose(rig.find_bone("hand_l")).origin+rig.get_bone_global_pose(rig.find_bone("hand_r")).origin)*.5
+	var direction := axis.cross(wrists-(l+r)*.5).dot((rig.global_basis.inverse()*Vector3.UP).normalized())
+	if axis.is_zero_approx() or is_zero_approx(direction): return
+	var angle := deg_to_rad(FAST_FOREARM_BEND)*signf(direction)*smoothstep(0.,.055,age)*(1.-smoothstep(.09,FAST_DIG_ELBOW_DURATION,age))
+	# Both forearms turn about the same line through the elbows, preserving the clasp.
+	for bone in [left,right]:
+		var parent := rig.get_bone_global_pose(rig.get_bone_parent(bone)).basis.orthonormalized()
+		rig.set_bone_pose_rotation(bone,Quaternion((parent.inverse()*axis).normalized(),angle)*rig.get_bone_pose_rotation(bone))
+
+const FAST_DIG_ELBOW_DURATION := 0.32
 
 static func absorb_with_joined_platform(actor: Node3D, age: float, degrees: float, contact_grip := Vector3.INF) -> void:
 	var recoil := smoothstep(0.,.045,age)*(1.-smoothstep(.09,FAST_DIG_ELBOW_DURATION,age))

@@ -39,7 +39,7 @@ const CpuPolicy = preload("res://scripts/cpu_policy.gd")
 const WIN_SCORE := 15
 const CPU_COURT_FRONT_LIMIT := 3.43
 const RECOVERY_TIME := 0.32
-const FAST_DIG_ELBOW_SPEED := 25.0
+const FAST_DIG_ELBOW_SPEED := preload("res://scripts/reception_pass_drive.gd").FAST_FOREARM_SPEED
 const FAST_DIG_ELBOW_DURATION := preload("res://scripts/reception_pass_drive.gd").FAST_DIG_ELBOW_DURATION
 const FAST_RECEIVE_HOLD := 0.28
 const FAST_RECEIVE_RISE := 0.75
@@ -1156,7 +1156,7 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 	var sample_before := maxf(0.0,bump.touch_time-0.003)
 	var sample_after := minf(flight_end(),bump.touch_time+0.003)
 	var fast_forearm: bool = technique == 0 and not bump.low_save.active and sample_after > sample_before
-	fast_forearm = fast_forearm and path_point(sample_before).distance_to(path_point(sample_after)) >= FAST_DIG_ELBOW_SPEED*(sample_after-sample_before)
+	fast_forearm = fast_forearm and path_point(sample_before).distance_to(path_point(sample_after)) > FAST_DIG_ELBOW_SPEED*(sample_after-sample_before)
 	begin_recovery(index)
 	if fast_forearm:
 		recoveries[index]["fast_elbow_bend"] = true
@@ -1327,7 +1327,7 @@ func advance_recoveries(delta: float) -> void:
 				bone_weight = 1.0-smoothstep(wrist_hold,hold+rise,age)
 			rig.set_bone_pose_rotation(bone,idle.basis.orthonormalized().get_rotation_quaternion().normalized().slerp(rotation,bone_weight))
 		if recovery.get("fast_elbow_bend",false) and age > 0.0 and age < FAST_DIG_ELBOW_DURATION:
-			preload("res://scripts/reception_pass_drive.gd").apply_fast_dig_elbow_bend(rig,age)
+			preload("res://scripts/reception_pass_drive.gd").recoil_platform(rig,age)
 		if recovery.has("kick_foot"):
 			var flick := smoothstep(0.0,0.070,age)*(1.0-smoothstep(0.07,0.22,age))
 			if flick > 0.001: pose_kick_leg(actor,recovery.kick_foot,(Vector3.UP*0.15+actor.global_basis.z*0.11)*flick)

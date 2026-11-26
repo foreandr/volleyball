@@ -164,7 +164,10 @@ func set_custom_backward(animation: Animation) -> void:
 		custom_backward_mirror_bones.append(opposite)
 		custom_backward_mirror_tracks.append(custom_backward_tracks[opposite])
 
+var fast_forearm_contact := false
+
 func reset() -> void:
+	fast_forearm_contact=false
 	bump_load_depth=0.0
 	planned_bump_effort=-1.0
 	bump_playback_rate=1.0
@@ -637,6 +640,7 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 				contact_check.accepted = contact_check.accepted and from_head.y <= 0.53 and gap_after_adjustment <= 0.27
 			if contact_check.accepted:
 				var fraction := first.distance_to(point)/maxf(0.00001,first.distance_to(last))
+				fast_forearm_contact=not hand_setting and Drive.fast_forearm(incoming.length())
 				touch_time = lerpf(sweep_start,sweep_end,clampf(fraction,0.0,1.0))
 				touch = point
 				if not hand_setting and not pancake:
@@ -885,6 +889,11 @@ func capture_bump_contact() -> void:
 		bump_contact_pose.append(setter.skeleton.get_bone_pose(bone))
 
 func follow_forearm(time: float, incoming: Vector3) -> void:
+	pose_forearm_follow(time,incoming)
+	if fast_forearm_contact and not low_save.active:
+		Drive.recoil_platform(setter.skeleton,time-touch_time)
+
+func pose_forearm_follow(time: float, incoming: Vector3) -> void:
 	var follow := (time-touch_time)*bump_playback_rate
 	rear_follow = follow
 	if follow <= 0.0 or follow >= FOREARM_RECOVERY_TIME: return

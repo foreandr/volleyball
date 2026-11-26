@@ -139,7 +139,7 @@ func _process(delta: float) -> void:
 		var platform: Reception=dig_platforms[last_digger]
 		var age := dig_clock-platform.touch_time
 		if age>0. and age<platform.Drive.FAST_DIG_ELBOW_DURATION:
-			var degrees := lerpf(6.,27.,smoothstep(10.,25.,dig_incoming.length()))
+			var degrees: float=platform.Drive.FAST_FOREARM_BEND if platform.Drive.fast_forearm(dig_incoming.length()) else 0.
 			platform.Drive.absorb_with_joined_platform(last_digger,age,degrees,dig_contact_grip)
 
 func handle_drag(event: InputEvent) -> bool:
