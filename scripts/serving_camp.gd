@@ -748,7 +748,7 @@ func stage_attacker(actor: Node3D,slot: int,delta: float) -> void:
 	var parent := actor.get_parent_node_3d()
 	var facing := parent.to_local(route_point(slot) if pin_load>0. else ball.global_position)-actor.position
 	move_receiver(actor,parent.to_local(point),delta,facing)
-	if pin_load>0.: actor.pose_pin_draw(pin_load)
+	if pin_load>0. and slot!=attack_slot: actor.pose_pin_draw(pin_load)
 
 func clear_ground_step(actor: Node3D,step: Vector3) -> Vector3:
 	var start := actor.global_position.slide(Vector3.UP)
@@ -830,7 +830,7 @@ func step_reception_rally(delta: float) -> void:
 		var gap := (attack_point+Vector3.BACK*1.6-runner.global_position).slide(Vector3.UP).length()
 		var planned := intercept if receiving_jump.active else pass_end
 		var fast := pass_in_system and planned.z<=BallNet.NET_Z+3. and gap<1.2 and (runner!=first_contact_player() or pass_clock>.48)
-		if (attack_slot==1 or fast and (attack_slot!=3 or middle_decoy.enabled)) and not pin_attack.enabled and set_at-pass_clock<(.48 if attack_slot==1 else .24):
+		if (attack_slot==1 or fast and (attack_slot!=3 or middle_decoy.enabled)) and not pin_attack.enabled and set_at-pass_clock<(.24 if attack_slot==3 else .48):
 			if runner.get_parent()!=pin_frame: runner.reparent(pin_frame,true)
 			var planned_duration := ZERO_FLIGHT if attack_slot==1 else ONE_FLIGHT
 			var launch := (attack_point-planned)/planned_duration+Vector3.UP*4.905*planned_duration
