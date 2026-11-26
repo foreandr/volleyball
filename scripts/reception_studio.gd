@@ -216,9 +216,11 @@ func _ready() -> void:
 	seek.value_changed.connect(func(value): playing=false; frame=value; draw_pose())
 	refresh()
 	update_leg_buttons()
-	draw_pose()
+	var selection: Dictionary=StorySession.game_options.get_value("reception_studio","selection",{})
+	cell=Vector3i(selection.get("cell",cell)).clamp(MAP_MIN,MAP_MAX)
+	quadrant=clampi(selection.get("part",0),0,region_parts(cell)-1)
+	activate_receiver(clampi(selection.get("receiver",0),0,defenders.size()-1))
 	preview_cell()
-	if cell_action()==0: select_legs(1)
 
 func style_panel(panel: PanelContainer) -> void:
 	var style := StyleBoxFlat.new()
@@ -369,6 +371,7 @@ func _unhandled_input(event: InputEvent) -> void:
 					activate_receiver(chosen)
 					cell=address
 					quadrant=part
+					save_selection()
 					preview_cell()
 					return
 	if event is InputEventMouseMotion and event.button_mask & MOUSE_BUTTON_MASK_MIDDLE:
@@ -465,10 +468,30 @@ func draw_pose() -> void:
 	var duration := full_duration*feed_fraction
 	var lead_frames := (full_duration-duration)*60.
 	var touch_frame: float=c.contact-lead_frames
-	var signature := [index,legs,mirror.button_pressed,incoming_speed.value,source,cell,feed_offset,cell_action(),defenders[receiving].position]
+	var region := contact_region(target)
+	var address := Vector3i(region.x,region.y,region.z)
+	var assigned := assigned_action(address,region.w) if region.w>=0 else 0
+	var selected := address==cell and region.w==quadrant
+	var active := assigned>0 or (selected and (forearm_preview or hand_leg_preview))
+	var motion_legs := legs
+	if not selected and assigned>0:
+		for i in clips.size():
+			if clips[i].id!=assigned: continue
+			c=clips[i]
+			motion_legs=i
+			if c.kind=="overhead":
+				var saved: int=StorySession.game_options.get_value("studio_hand_legs",assignment_key(address,region.w),-2)
+				if saved>=-1 and saved<clips.size():
+					c=c.duplicate()
+					c.step_legs=0 if saved<0 else int(clips[saved].id)
+					c.audition=true
+					motion_legs=saved
+			break
+	var pose_frame := clampf(frame-touch_frame+c.contact,0.,c.frames)
+	var signature := [index,legs,mirror.button_pressed,incoming_speed.value,source,region,assigned,motion_legs,target,feed_offset,cell_action(),defenders[receiving].position]
 	if signature!=contact_key:
 		contact_key=signature
-		sample_receiver(c,c.contact)
+		sample_receiver(c,c.contact,active,motion_legs)
 		var center := Vector3.ZERO
 		for side in ["l","r"]:
 			var wrist := rig.get_bone_global_pose(rig.find_bone("hand_"+side)).origin
@@ -476,21 +499,19 @@ func draw_pose() -> void:
 			center+=rig.to_global(wrist.lerp(elbow,.32))*.5
 		contact_point=center+Vector3(0,.075,.075)
 		if c.kind=="overhead": contact_point=HandPass.contact_center(player)
-		reachable=(cell_action()>0 or hand_leg_preview or forearm_preview) and contact_point.distance_to(target)<=(HAND_RADIUS if c.kind=="overhead" else .22)
-	var missed: bool= frame>=touch_frame and (cell_action()>0 or hand_leg_preview or forearm_preview) and not reachable
+		reachable=active and contact_point.distance_to(target)<=(HAND_RADIUS if c.kind=="overhead" else .22)
+	var missed: bool= frame>=touch_frame and active and not reachable
 	miss_label.visible=missed
 	if missed:
 		var gap := contact_point.distance_to(target)
 		miss_label.text="Miss · %d cm gap"%roundi(gap*100.)
 		if playing and not miss_logged:
-			print("studio_miss ",Time.get_datetime_string_from_system()," defender=",receiving+1," cell=",cell," region=",region_number(cell,quadrant)," assigned=",cell_action()," playing=",c.id," target=",target," contact=",contact_point," gap_m=",gap)
+			print("studio_miss ",Time.get_datetime_string_from_system()," defender=",receiving+1," cell=",address," region=",region_number(address,region.w)," assigned=",assigned," playing=",c.id," target=",target," contact=",contact_point," gap_m=",gap)
 			miss_logged=true
 	reset_end_frame=0.
-	if c.kind=="overhead":
-		sample_receiver(c,maxf(0.,frame+lead_frames))
-	else:
-		sample_receiver(c,clampf(frame+lead_frames,0.,c.frames) if lead_frames>0. else f)
-	hand_volume.visible=hand_toggle.button_pressed and c.kind=="overhead" and (cell_action()>0 or hand_leg_preview)
+	if c.kind=="overhead": pose_frame=maxf(0.,frame-touch_frame+c.contact)
+	sample_receiver(c,pose_frame,active,motion_legs)
+	hand_volume.visible=hand_toggle.button_pressed and c.kind=="overhead" and active
 	if hand_volume.visible: hand_volume.global_position=HandPass.contact_center(player)
 	pass_end_frame=0.
 	var seconds := (frame-touch_frame)/60.
@@ -560,8 +581,9 @@ func zone_interval(start: Vector3,finish: Vector3,bounds: AABB) -> Vector2:
 		if interval.x>=interval.y: return Vector2.ZERO
 	return interval
 
-func sample_receiver(c: Dictionary,f: float) -> void:
-	if cell_action()==0 and not (hand_leg_preview or forearm_preview):
+func sample_receiver(c: Dictionary,f: float,active := true,motion_legs := -2) -> void:
+	if motion_legs==-2: motion_legs=legs
+	if not active:
 		sample_layer(-1,c,f)
 		return
 	if c.kind=="overhead":
@@ -581,7 +603,7 @@ func sample_receiver(c: Dictionary,f: float) -> void:
 			lean_for_hand_pass(goal,load_weight*(1.-smoothstep(.035,.28,follow)),deg_to_rad(5.))
 		else:
 			if c.get("audition",false):
-				if legs>=0: audition_hand_legs(goal,follow)
+				if motion_legs>=0: audition_hand_legs(goal,follow,motion_legs)
 			elif c.get("step_legs",0)==2:
 				grounded_wide_set(goal,forehead,follow,c.get("ground_plant",false))
 			else:
@@ -599,9 +621,9 @@ func sample_receiver(c: Dictionary,f: float) -> void:
 				smoothstep(0.,delay+HandPass.FRONT_WRIST_FOLLOW_TIME,follow),null,Vector3.ZERO,jump_set)
 		return
 	if not Regions.movement(c):
-		sample_layer(index,c,f)
+		sample_layer(motion_legs,c,f)
 		return
-	sample_layer(legs,c,f)
+	sample_layer(motion_legs,c,f)
 	var contact := float(FOREARM.get_meta("contact_time"))
 	var time := remap(f,0.,c.contact,0.,contact) if f<=c.contact else remap(f,c.contact,c.get("source_end",c.frames),contact,FOREARM.length)
 	var key := roundi(time*60.)
@@ -777,8 +799,8 @@ func pose_hand_pass_legs(goal: Vector3, standing_height: float, follow: float, s
 		var bone: int=player.skeleton.find_bone(joint)
 		player.skeleton.set_bone_pose(bone,pose[bone])
 
-func audition_hand_legs(goal: Vector3, follow: float) -> void:
-	var clip: Dictionary=clips[legs]
+func audition_hand_legs(goal: Vector3, follow: float, motion_legs: int) -> void:
+	var clip: Dictionary=clips[motion_legs]
 	var target: Vector3=player.to_local(goal).slide(Vector3.UP)
 	var direction := target.normalized()
 	var stride := Vector2(clip.side,clip.forward).length()
@@ -1005,7 +1027,28 @@ func build_map(tiers: VBoxContainer) -> void:
 
 func change_depth(by: int) -> void:
 	cell.z=posmod(cell.z-MAP_MIN.z+by,3)+MAP_MIN.z
+	quadrant=mini(quadrant,region_parts(cell)-1)
+	save_selection()
 	preview_cell()
+
+func save_selection() -> void:
+	StorySession.game_options.set_value("reception_studio","selection",{"receiver":receiving,"cell":cell,"part":quadrant})
+	StorySession.save_options()
+
+func region_parts(address: Vector3i) -> int:
+	if halves_only(address): return 2
+	if depth_split(address): return 8
+	return 4 if is_subdivided(address) else 1
+
+func contact_region(world_point: Vector3) -> Vector4i:
+	var point := grid_for(receiving).to_local(world_point)
+	var address := Vector3i(((point-MAP_ORIGIN)/CELL_SIZE).floor())
+	if address!=address.clamp(MAP_MIN,MAP_MAX): return Vector4i(-1,-1,-1,-1)
+	for part in region_parts(address):
+		var size := region_size(address,part)
+		if AABB(region_center(address,part)-size*.5,size).has_point(point):
+			return Vector4i(address.x,address.y,address.z,part)
+	return Vector4i(-1,-1,-1,-1)
 
 func cell_action() -> int:
 	return assigned_action(cell,quadrant)
@@ -1134,8 +1177,7 @@ func rebuild_colors() -> void:
 		for y in range(MAP_MAX.y+1):
 			for z in range(MAP_MIN.z,MAP_MAX.z+1):
 				var address := Vector3i(x,y,z)
-				var count := 8 if depth_split(address) else (4 if is_subdivided(address) else 1)
-				if halves_only(address): count=2
+				var count := region_parts(address)
 				for part in count:
 					var size := region_size(address,part)
 					var assigned := assigned_action(address,part)>0
