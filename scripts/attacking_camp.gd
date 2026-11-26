@@ -1357,7 +1357,7 @@ func sample_attack_clip(arm_lift: bool,arm_swing: bool,cross: bool,review: bool,
 	remove_meta("sampling_attack")
 	return {"entry":edit_entry,"clip":clip}
 
-func resolve_block_contact(previous: Vector3,block_jumps: Array) -> bool:
+func resolve_block_contact(previous: Vector3,block_jumps: Array, attack_direction := 1.) -> bool:
 	if attack_decided: return false
 	for slot in block_jumps.size():
 		var block: RefCounted=block_jumps[slot]
@@ -1378,9 +1378,9 @@ func resolve_block_contact(previous: Vector3,block_jumps: Array) -> bool:
 					touched=true
 					hit_position=closest[0]
 					var surface: Vector3=closest[1]
-					var distal_forearm: bool = segment==1 and surface.distance_to(block.wrists[i])<.14 and block.wrists[i].z<block.elbows[i].z
-					var square_hit := gap<Contact.BALL_RADIUS+.055 and drop_velocity.z>0.
-					stuff=(segment==2 or distal_forearm) and square_hit and surface.y>BallNet.NET_TOP+.10 and surface.z<BallNet.NET_Z-.04
+					var distal_forearm: bool = segment==1 and surface.distance_to(block.wrists[i])<.14 and (block.wrists[i].z-block.elbows[i].z)*attack_direction<0.
+					var square_hit := gap<Contact.BALL_RADIUS+.055 and drop_velocity.z*attack_direction>0.
+					stuff=(segment==2 or distal_forearm) and square_hit and surface.y>BallNet.NET_TOP+.10 and (surface.z-BallNet.NET_Z)*attack_direction<-.04
 					break
 			if not arm:
 				var body: Dictionary=block.body_hit(previous,ball.global_position,Contact.BALL_RADIUS)
@@ -1392,7 +1392,7 @@ func resolve_block_contact(previous: Vector3,block_jumps: Array) -> bool:
 			if not touched: continue
 			ball.global_position=hit_position
 			if stuff:
-				var floor_target := Vector3(clampf(hit_position.x*.85,-4.2,4.2),Contact.BALL_RADIUS,BallNet.NET_Z-1.65)
+				var floor_target := Vector3(clampf(hit_position.x*.85,-4.2,4.2),Contact.BALL_RADIUS,BallNet.NET_Z-attack_direction*1.65)
 				drop_velocity=hit_position.direction_to(floor_target)*drop_velocity.length()*PracticeBlock.STUFF_SPEED_RETENTION
 			else:
 				var side := signf(hit_position.z-BallNet.NET_Z)

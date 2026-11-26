@@ -20,10 +20,21 @@ var flight_age := 0.
 var destination := Vector3.ZERO
 var pass_start := Vector3.ZERO
 var pass_clock := 0.
-const SETTER_HOME := Vector3(1.4,.04,5.2)
+const SETTER_HOME := Vector3(3.45,.04,11.1)
+const SETTER_BASE := Vector3(1.4,.04,5.2)
+const LEFT_PIN := Vector3(-3.55,3.05,5.05)
+const HITTER_HOME := Vector3(-3.75,.04,6.95)
+var pin_frame := Node3D.new()
+var pin_attack := preload("res://scripts/match_attack.gd").new()
+var receiving_middle: Node3D
+var floor_linger := -1.
+var pin_hitter: Node3D
+var wall: Array[Node3D]=[]
+var wall_jumps := [null,null,null]
+var wall_committed := [false,false,false]
+var return_touched := false
 const PASS_HEIGHT := 1.08
 var receiving_setter: Node3D
-var bucket: Node3D
 var serve_station := Vector3(0,.04,-8.2)
 var receiving_jump := preload("res://scripts/setter_jump.gd").new()
 var set_at := 1.25
@@ -91,9 +102,27 @@ func start_drill() -> void:
 	receiving_setter=athlete(SETTER_HOME,"286881")
 	register_student(receiving_setter,6)
 	preload("res://scripts/practice_kit.gd").apply(receiving_setter,false,6)
-	bucket=targets[0]
-	bucket.position=Vector3(-3.85,2.65,5.1)
-	bucket.show()
+	pin_frame.position.z=2.*BallNet.NET_Z
+	pin_frame.rotation.y=PI
+	world.add_child(pin_frame)
+	pin_hitter=athlete(HITTER_HOME,"286881")
+	register_student(pin_hitter,7)
+	preload("res://scripts/practice_kit.gd").apply(pin_hitter,false,7)
+	pin_hitter.reparent(pin_frame,true)
+	pin_frame.add_child(pin_attack)
+	pin_attack.configure_for_match(pin_hitter,Label.new())
+	pin_attack.add_child(pin_attack.status)
+	pin_attack.hide()
+	pin_attack.struck.connect(return_struck)
+	for i in 3:
+		var blocker := athlete(Vector3((i-1)*2.75,.04,BallNet.NET_Z-.38),"e97937")
+		register_student(blocker,i+8)
+		preload("res://scripts/practice_kit.gd").apply(blocker,false,i+8)
+		wall.append(blocker)
+	receiving_middle=athlete(Vector3(0,.04,5.55),"286881")
+	register_student(receiving_middle,11)
+	preload("res://scripts/practice_kit.gd").apply(receiving_middle,false,11)
+	receiving_middle.rotation.y=PI
 	for i in TECHNIQUES.size():
 		var driver=TECHNIQUES[i].new()
 		world.add_child(driver)
@@ -141,6 +170,20 @@ func contact_deadline() -> float:
 
 func next_serve() -> void:
 	for driver in serves: driver.hide()
+	pin_attack.enabled=false
+	pin_attack.jump.active=false
+	pin_hitter.position=pin_frame.to_local(HITTER_HOME)
+	pin_hitter.rotation.y=0.
+	pin_hitter.play_action("idle")
+	return_touched=false
+	attack_decided=false
+	last_block_result.hide()
+	for i in wall.size():
+		wall_jumps[i]=null
+		wall_committed[i]=false
+		wall[i].position=Vector3((i-1)*2.75,.04,BallNet.NET_Z-.38)
+		wall[i].rotation.y=0.
+		wall[i].play_action("idle")
 	clear_attack_input()
 	attack_jump.active=false
 	approach_started=false
@@ -281,10 +324,23 @@ func _process(delta: float) -> void:
 		passers[i].stamina.recover(delta)
 		if i!=receiver or phase not in ["serve_flight","serve_pass"]:
 			passers[i].animator.advance(delta)
-	if phase not in ["serve_pass","serve_bucket"]:
+	if phase not in ["serve_pass","serve_attack"]:
 		receiving_setter.animator.advance(delta)
 	hitter.stamina.recover(delta)
 	receiving_setter.stamina.recover(delta)
+	if phase=="serve_flight": move_receiver(receiving_setter,SETTER_BASE,delta)
+	if pin_attack.enabled:
+		pin_attack.tick_attack(delta)
+	else: pin_hitter.animator.advance(delta)
+	receiving_middle.animator.advance(delta)
+	step_serve_wall(delta)
+	if phase=="serve_return":
+		var previous := ball.global_position
+		advance_missed_ball(delta,true)
+		if not return_touched: return_touched=resolve_block_contact(previous,wall_jumps,-1.)
+		if not attack_floor_pending: floor_linger+=delta
+		if floor_linger>.55: next_serve()
+		return
 	if phase=="serve_ready":
 		walk_server(delta)
 		return
@@ -326,7 +382,7 @@ func _process(delta: float) -> void:
 				phase="serve_flight"
 				message.text=("Perfect" if absf(error)<=SERVE_PERFECT else ("Early" if error<0. else "Late"))+" / "+LABELS[hit_style]
 				if toss_style>=2: hand_sound.play()
-	elif phase in ["serve_flight","serve_pass","serve_bucket","serve_caught","serve_miss"]:
+	elif phase in ["serve_flight","serve_pass","serve_attack","serve_miss"]:
 		serves[hit_style].hide()
 		serve_clock+=delta
 		if toss_style<2:
@@ -342,7 +398,7 @@ func _process(delta: float) -> void:
 			advance_missed_ball(delta,true)
 			flight_age+=delta
 			if flight_age>1.4: next_serve()
-		elif phase in ["serve_pass","serve_bucket","serve_caught"]:
+		elif phase in ["serve_pass","serve_attack"]:
 			step_reception_rally(delta)
 		else:
 			var shot=serves[hit_style]
@@ -382,7 +438,7 @@ func plan_serve_reception(shot) -> void:
 	elif not platform_clips.is_empty(): platform.set_receive_clip(platform_clips.pick_random())
 	platform.quick_hand_receive=platform.hand_setting
 	platform.passing_skill_override=passer.attributes.get("Hand reception" if platform.hand_setting else "Forearm reception",65)
-	platform.destination=Vector2(SETTER_HOME.x,SETTER_HOME.z)
+	platform.destination=Vector2(SETTER_BASE.x,SETTER_BASE.z)
 	platform.height=4.1
 	platform.quick_low_save=true
 	platform.green_forearm_allowance=.24
@@ -447,13 +503,8 @@ func move_receiver(actor: Node3D,goal: Vector3,delta: float) -> void:
 
 func step_reception_rally(delta: float) -> void:
 	pass_clock+=delta
-	if phase=="serve_caught":
-		ball.position.y=move_toward(ball.position.y,bucket.position.y-bucket.depth+.14,delta*2.8)
-		if pass_clock>.75: next_serve()
-		return
-	var previous := ball.position
 	if phase=="serve_pass":
-		var facing := (bucket.position-pass_end).slide(Vector3.UP).normalized()
+		var facing := (LEFT_PIN-pass_end).slide(Vector3.UP).normalized()
 		var stance := Vector3(pass_end.x,.04,pass_end.z)-facing*.30
 		var lift: float=SET_VERTICAL*receiving_setter.stamina.effectiveness()
 		# Descending intersection of the existing pass arc with airborne hand height.
@@ -467,7 +518,7 @@ func step_reception_rally(delta: float) -> void:
 			var chase_goal := plant if pass_clock<=jump_at+delta else stance
 			chase_goal.z=maxf(chase_goal.z,BallNet.NET_Z+.22)
 			move_receiver(receiving_setter,chase_goal,delta)
-			if pass_clock>=jump_at and pass_clock-jump_at<=delta and receiving_setter.position.distance_to(plant)<.24 and lift>.20 and receiving_setter.reachable_set(intercept,bucket.position,true).distance_to(bucket.position)<.15:
+			if pass_clock>=jump_at and pass_clock-jump_at<=delta and receiving_setter.position.distance_to(plant)<.24 and lift>.20 and receiving_setter.reachable_set(intercept,LEFT_PIN,true).distance_to(LEFT_PIN)<.15:
 				receiving_setter.rotation.y=atan2(facing.x,facing.z)
 				receiving_jump.begin(receiving_setter,Vector2.ZERO,plant,SET_LOAD,SET_VERTICAL,2,false,1.,true)
 				receiving_jump.release()
@@ -494,14 +545,17 @@ func step_reception_rally(delta: float) -> void:
 				drop_net_hit.clear()
 				drop_net_time=0.
 				return
-			var travel := (ball.position-SETTER_HOME).slide(Vector3.UP).length()
-			var pressure := smoothstep(.7,4.5,travel/maxf(.25,set_at))
+			var pressure := smoothstep(.7,4.5,(ball.position-SETTER_BASE).slide(Vector3.UP).length()/maxf(.25,set_at))
 			var accuracy := clampf(receiving_setter.effective_rating("Hand setting")/100.,0.,1.)
 			var miss := Vector2.from_angle(randf()*TAU)*sqrt(randf())*(.18+pressure*(.65+1.8*(1.-accuracy)))
 			pass_start=ball.position
-			pass_end=receiving_setter.reachable_set(pass_start,bucket.position+Vector3(miss.x,0.,miss.y),receiving_jump.active)
+			pass_end=receiving_setter.reachable_set(pass_start,LEFT_PIN+Vector3(miss.x,0.,miss.y),receiving_jump.active)
 			pass_clock=0.
-			phase="serve_bucket"
+			var duration := 1.35
+			var velocity := (pass_end-pass_start)/duration+Vector3.UP*4.905*duration
+			var target := Vector3(randf_range(-3.8,2.),.11,randf_range(-3.,1.))
+			pin_attack.start_set(pin_hitter,pin_frame.to_local(pass_start),pin_frame.global_basis.inverse()*velocity,pin_frame.to_local(pass_end),pin_frame.to_local(target),0.,true)
+			phase="serve_attack"
 	else:
 		if receiving_jump.active: receiving_jump.step(receiving_setter,delta,Vector2.ZERO)
 		else: receiving_setter.animator.advance(delta)
@@ -510,8 +564,45 @@ func step_reception_rally(delta: float) -> void:
 			preload("res://scripts/hand_setting_pose.gd").apply(receiving_setter,pass_start+push*.18,1.-smoothstep(.07,.22,pass_clock))
 		var t := pass_clock/1.35
 		ball.position=pass_start.lerp(pass_end,t)+Vector3.UP*8.94*t*(1.-t)
-		if bucket.crossed_mouth(previous,ball.position):
-			bucket.impact(ball.position,(ball.position-previous)/maxf(delta,.001))
-			phase="serve_caught"
-			pass_clock=0.
-		elif ball.position.y<.11: next_serve()
+		if ball.position.y<.11: next_serve()
+
+func return_struck(_actor: Node3D,point: Vector3,velocity: Vector3,_spin: float) -> void:
+	ball.global_position=point
+	drop_velocity=velocity
+	drop_net_hit.clear()
+	drop_net_time=0.
+	roll_time=-1.
+	floor_linger=0.
+	attack_floor_pending=true
+	hard_spike_floor_pending=true
+	hand_impact.play()
+	phase="serve_return"
+
+func step_serve_wall(delta: float) -> void:
+	for i in wall.size():
+		var actor := wall[i]
+		actor.stamina.recover(delta)
+		var block: RefCounted=wall_jumps[i]
+		if block!=null:
+			if not block.step(delta,ball.global_position): wall_jumps[i]=null
+			continue
+		if phase!="serve_attack":
+			actor.animator.advance(delta)
+			continue
+		var goal := clampf(pass_end.x+i*.74,-4.35,4.35)
+		var gap := goal-actor.position.x
+		var step := clampf(gap,-3.6*delta,3.6*delta)
+		actor.position.x+=step
+		if not shuffle_steps.has(actor): shuffle_steps[actor]=preload("res://scripts/directional_footwork.gd").new(actor)
+		GroundControls.shuffle(actor,shuffle_steps[actor],Vector3.RIGHT*step/maxf(delta,.001),true,delta)
+		actor.animator.advance(delta)
+		if not wall_committed[i] and absf(gap)<.82 and pin_attack.pin_arrival-pass_clock<=.51:
+			block=PracticeBlock.new()
+			block.aggressive_press=true
+			block.track_near_ball=true
+			block.net_heading=0.
+			block.jump_height=PracticeBlock.HEIGHT*actor.stamina.effectiveness()
+			block.begin(actor)
+			actor.stamina.spend(5,"Block")
+			wall_committed[i]=true
+			wall_jumps[i]=block
