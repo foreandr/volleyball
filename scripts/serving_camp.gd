@@ -24,6 +24,11 @@ const SETTER_HOME := Vector3(1.4,.04,5.2)
 const PASS_HEIGHT := 1.08
 var receiving_setter: Node3D
 var bucket: Node3D
+var serve_station := Vector3(0,.04,-8.2)
+var receiving_jump := preload("res://scripts/setter_jump.gd").new()
+var set_at := 1.25
+const SET_VERTICAL := .48
+const SET_LOAD := .20
 var pass_end := Vector3.ZERO
 var receive_at := 0.
 var receiver := 0
@@ -58,6 +63,8 @@ func start_drill() -> void:
 		passer.rotation.y=PI
 		passer.play_action("idle")
 		passers.append(passer)
+	receiving_jump.front_limit=13.
+	receiving_jump.back_limit=BallNet.NET_Z+.25
 	receiving_setter=athlete(SETTER_HOME,"286881")
 	register_student(receiving_setter,6)
 	preload("res://scripts/practice_kit.gd").apply(receiving_setter,false,6)
@@ -116,12 +123,14 @@ func next_serve() -> void:
 	serve_clock=0.
 	release_time=INF
 	var ready=serves[2]
+	ready.serve_start=serve_station
 	ready.reset()
 	ball.position=ready.ball.position
 	ball.show()
 	for i in passers.size():
 		passers[i].position=HOMES[i]
 		passers[i].play_action("idle")
+	receiving_jump.active=false
 	receiving_setter.position=SETTER_HOME
 	receiving_setter.rotation.y=PI
 	receiving_setter.play_action("idle")
@@ -145,6 +154,7 @@ func handle_serve_button(style: int,pressed: bool) -> void:
 	if pressed and phase=="serve_ready":
 		toss_style=style
 		hit_style=style
+		serves[style].serve_start=serve_station
 		serves[style].reset()
 		receiver=randi_range(0,2)
 		destination=HOMES[receiver]+Vector3(randf_range(-.55,.55),.065,1.1)
@@ -213,9 +223,36 @@ func self_set_step(motion, previous_time: float,delta: float) -> bool:
 		flight_age=0.
 	return hit
 
+func walk_server(delta: float) -> void:
+	var stick := Vector2(axis(JOY_AXIS_LEFT_X),axis(JOY_AXIS_LEFT_Y))
+	stick+=Vector2(int(Input.is_key_pressed(KEY_D))-int(Input.is_key_pressed(KEY_A)),int(Input.is_key_pressed(KEY_S))-int(Input.is_key_pressed(KEY_W)))
+	var right := camera.global_basis.x.slide(Vector3.UP).normalized()
+	var direction := right*stick.x+right.cross(Vector3.UP)*stick.y
+	var amount := clampf((stick.length()-.14)/.86,0.,1.)
+	var focus := GroundControls.focus(axis)
+	var sprint: bool= GroundControls.sprint(axis) and hitter.stamina.can_sprint()
+	var velocity := direction.normalized()*amount*GroundControls.speed(focus,sprint)
+	var old := serve_station
+	serve_station+=velocity*delta
+	serve_station.x=clampf(serve_station.x,-4.5,4.5)
+	serve_station.z=clampf(serve_station.z,-10.1,-5.1)
+	velocity=(serve_station-old)/maxf(delta,.001)
+	if sprint and velocity.length()>.1: hitter.stamina.spend(delta*hitter.stamina.SPRINT_DRAIN,"Sprint")
+	hitter.position=serve_station
+	GroundControls.face(hitter,Vector3.BACK if focus else velocity,delta)
+	hitter.play_ground_gait(0. if focus else velocity.length())
+	hitter.animator.advance(delta)
+	if not shuffle_steps.has(hitter): shuffle_steps[hitter]=preload("res://scripts/directional_footwork.gd").new(hitter)
+	GroundControls.shuffle(hitter,shuffle_steps[hitter],velocity,focus,delta)
+	ball.position=Contact.palm(hitter,"l")+Vector3.UP*.10
+
 func _process(delta: float) -> void:
 	if serves.is_empty() or settings.visible or get_tree().paused: return
 	hitter.stamina.recover(delta)
+	receiving_setter.stamina.recover(delta)
+	if phase=="serve_ready":
+		walk_server(delta)
+		return
 	var motion=serves[toss_style]
 	if phase=="serve_toss":
 		update_serve_aim(delta)
@@ -308,6 +345,7 @@ func _process(delta: float) -> void:
 					pass_start=contact
 					ball.position=contact
 					pass_end=Vector3(lerpf(SETTER_HOME.x,contact.x,.35),receiving_setter.height_cm*.0118,SETTER_HOME.z+.40+(contact.z-9.)*.18)
+					set_at=1.25
 					pass_clock=0.
 					phase="serve_pass"
 					return
@@ -332,20 +370,36 @@ func step_reception_rally(delta: float) -> void:
 	if phase=="serve_pass":
 		var facing := (bucket.position-pass_end).slide(Vector3.UP).normalized()
 		var stance := Vector3(pass_end.x,.04,pass_end.z)-facing*.30
-		move_receiver(receiving_setter,stance,delta)
+		var lift: float=SET_VERTICAL*receiving_setter.stamina.effectiveness()
+		# Descending intersection of the existing pass arc with airborne hand height.
+		var rise := pass_end.y-pass_start.y+7.68
+		var u := (rise+sqrt(maxf(0.,rise*rise+30.72*(pass_start.y-pass_end.y-lift))))/15.36
+		var intercept := arc(pass_start,pass_end,u,1.92)
+		var jump_at := 1.25*u-SET_LOAD-receiving_jump.flight_duration(lift,true)*.5
+		var plant := Vector3(intercept.x,.04,intercept.z)-facing*.30
+		if not receiving_jump.active:
+			move_receiver(receiving_setter,plant if pass_clock<=jump_at+delta else stance,delta)
+			if pass_clock>=jump_at and pass_clock-jump_at<=delta and receiving_setter.position.distance_to(plant)<.24 and lift>.20 and receiving_setter.reachable_set(intercept,bucket.position,true).distance_to(bucket.position)<.15:
+				receiving_setter.rotation.y=atan2(facing.x,facing.z)
+				receiving_jump.begin(receiving_setter,Vector2.ZERO,plant,SET_LOAD,SET_VERTICAL,2,false,1.,true)
+				receiving_jump.release()
+				receiving_setter.stamina.spend(5,"Jump")
+				set_at=1.25*u
+		if receiving_jump.active: receiving_jump.step(receiving_setter,delta,Vector2.ZERO)
 		passers[receiver].animator.advance(delta)
 		if pass_clock>.35: passers[receiver].play_action("idle")
 		ball.position=arc(pass_start,pass_end,pass_clock/1.25,1.92)
-		if pass_clock>.92:
+		if pass_clock>set_at-.33:
 			receiving_setter.rotation.y=atan2(facing.x,facing.z)
-			preload("res://scripts/hand_setting_pose.gd").apply(receiving_setter,ball.position,smoothstep(.92,1.20,pass_clock))
-		if pass_clock>=1.25:
+			preload("res://scripts/hand_setting_pose.gd").apply(receiving_setter,ball.position,smoothstep(set_at-.33,set_at-.05,pass_clock))
+		if pass_clock>=set_at:
 			pass_start=ball.position
-			pass_end=receiving_setter.reachable_set(pass_start,bucket.position)
+			pass_end=receiving_setter.reachable_set(pass_start,bucket.position,receiving_jump.active)
 			pass_clock=0.
 			phase="serve_bucket"
 	else:
-		receiving_setter.animator.advance(delta)
+		if receiving_jump.active: receiving_jump.step(receiving_setter,delta,Vector2.ZERO)
+		else: receiving_setter.animator.advance(delta)
 		if pass_clock<.22:
 			var push := pass_start.direction_to(pass_end+Vector3.UP*2.)
 			preload("res://scripts/hand_setting_pose.gd").apply(receiving_setter,pass_start+push*.18,1.-smoothstep(.07,.22,pass_clock))
