@@ -663,7 +663,6 @@ func plan_serve_reception(shot) -> void:
 	receiver=0
 	for i in range(1,passers.size()):
 		if passers[i].position.distance_squared_to(predicted)<first_contact_player().position.distance_squared_to(predicted): receiver=i
-	if receiving_setter.position.distance_to(predicted)+.65<first_contact_player().position.distance_to(predicted): receiver=passers.size()
 	var platform := receptions[receiver]
 	var passer := first_contact_player()
 	var above := receive_arrival(shot,passer.height_cm*.011)
@@ -698,7 +697,7 @@ func step_serve_reception(shot,previous: Vector3,delta: float) -> void:
 	passer.animator.advance(delta)
 	platform.allow_auto_dive=(predicted-platform.ready_contact()).slide(Vector3.UP).length()>1.15 or flight_age>receive_at
 	if not is_finite(platform.touch_time):
-		var chase: float=(predicted-(SETTER_HOME if receiver==passers.size() else HOMES[receiver])).slide(Vector3.UP).length()/maxf(receive_at,.1)
+		var chase: float=(predicted-HOMES[receiver]).slide(Vector3.UP).length()/maxf(receive_at,.1)
 		var off_center := (predicted-platform.ready_contact()).slide(Vector3.UP).length()
 		platform.reception_pressure=.18*smoothstep(6.,20.,incoming.length())+.25*smoothstep(.4,3.2,chase)+.42*smoothstep(.15,1.1,off_center)
 	platform.update_attempt(flight_age,flight_age-delta,shot.planned_duration,path,incoming,delta,receive_at,shot.reception_spin_rps())
@@ -1077,6 +1076,7 @@ func try_cover(previous: Vector3,delta: float) -> void:
 		var nearest := INF
 		for i in cover_players.size():
 			var actor := cover_players[i]
+			if actor==receiving_setter: continue
 			if (actor==pin_attack.setter and pin_attack.enabled) or (actor==receiving_middle and middle_decoy.enabled) or (actor==second_contact_player() and receiving_jump.active): continue
 			var gap := (actor.global_position-intercept).slide(Vector3.UP).length()
 			if gap<nearest:
