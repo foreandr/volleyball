@@ -703,8 +703,9 @@ func assigned_action(address: Vector3i) -> int:
 	return int(StorySession.game_options.get_value("dig_regions",Regions.key(address),default_action))
 
 func pick_feed_point() -> void:
-	feed_offset=Vector3(randf_range(-.5,.5),randf_range(-.5,.5),randf_range(-.5,.5))*CELL_SIZE
-	feed_offset.y=maxf(feed_offset.y,.15-highlight.global_position.y)
+	var half := CELL_SIZE*.5
+	var bottom := maxf(-half.y,.145-highlight.global_position.y)
+	feed_offset=Vector3(randf_range(-half.x,half.x),randf_range(bottom,half.y),randf_range(-half.z,half.z))
 
 func preview_cell() -> void:
 	update_region()
