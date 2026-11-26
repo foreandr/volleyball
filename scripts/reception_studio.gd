@@ -30,7 +30,12 @@ var pass_arc := HSlider.new()
 const HandPass = preload("res://scripts/hand_setting_pose.gd")
 var feed_offset := Vector3.ZERO
 const HAND_RADIUS := .28
-const FOREARM_RADIUS := .085
+# Local bone endpoints and world-space capsule radii used for both contact and display.
+const RECEPTION_CAPSULES := [
+	["lowerarm_l","hand_l",.085], ["lowerarm_r","hand_r",.085],
+	["upperarm_l","lowerarm_l",.095], ["upperarm_r","lowerarm_r",.095],
+	["spine_03","upperarm_l",.105], ["spine_03","upperarm_r",.105],
+]
 const BALL_RADIUS := .105
 var arm_volumes: Array[MeshInstance3D]=[]
 var hand_volume := MeshInstance3D.new()
@@ -506,14 +511,14 @@ func draw_pose() -> void:
 			reachable=active and contact_point.distance_to(target)<=HAND_RADIUS
 		else:
 			var closest := INF
-			for side in ["l","r"]:
-				var segment := forearm_segment(rig,side)
+			for shape in RECEPTION_CAPSULES:
+				var segment := reception_segment(rig,shape)
 				var point := Geometry3D.get_closest_point_to_segment(target,segment[0],segment[1])
-				var gap := point.distance_to(target)
+				var gap := point.distance_to(target)-float(shape[2])
 				if gap<closest:
 					closest=gap
 					contact_point=point
-			reachable=active and closest<=FOREARM_RADIUS+BALL_RADIUS
+			reachable=active and closest<=BALL_RADIUS
 	var missed: bool= frame>=touch_frame and active and not reachable
 	miss_label.visible=missed
 	if missed:
@@ -531,10 +536,10 @@ func draw_pose() -> void:
 		var volume := arm_volumes[i]
 		volume.visible=hand_toggle.button_pressed and not hand_volume.visible
 		if volume.visible:
-			var segment := forearm_segment(rig,"l" if i==0 else "r")
+			var segment := reception_segment(rig,RECEPTION_CAPSULES[i])
 			var axis := segment[1]-segment[0]
 			var capsule := volume.mesh as CapsuleMesh
-			var height := axis.length()+2.*FOREARM_RADIUS
+			var height := axis.length()+2.*capsule.radius
 			if not is_equal_approx(capsule.height,height): capsule.height=height
 			volume.global_transform=Transform3D(Basis(Quaternion(Vector3.UP,axis.normalized())),(segment[0]+segment[1])*.5)
 	pass_end_frame=0.
@@ -585,10 +590,10 @@ func trace_incoming_regions(start: Vector3, aim: Vector3) -> void:
 		if routed_region.w>=0 or point.y<.09: return
 		previous=point
 
-func forearm_segment(rig: Skeleton3D, side: String) -> PackedVector3Array:
-	var elbow := rig.get_bone_global_pose(rig.find_bone("lowerarm_"+side)).origin
-	var wrist := rig.get_bone_global_pose(rig.find_bone("hand_"+side)).origin
-	return PackedVector3Array([rig.to_global(elbow),rig.to_global(wrist)])
+func reception_segment(rig: Skeleton3D, shape: Array) -> PackedVector3Array:
+	var start := rig.get_bone_global_pose(rig.find_bone(shape[0])).origin
+	var end := rig.get_bone_global_pose(rig.find_bone(shape[1])).origin
+	return PackedVector3Array([rig.to_global(start),rig.to_global(end)])
 
 func flight_point(t: float,launch: Vector3,target: Vector3,duration: float,lift: float,landing: float) -> Vector3:
 	if reachable and t>0.:
@@ -1035,16 +1040,16 @@ func build_map(tiers: VBoxContainer) -> void:
 	hand_volume.mesh=sphere
 	hand_volume.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(hand_volume)
-	for side in 2:
+	for shape in RECEPTION_CAPSULES:
 		var capsule := CapsuleMesh.new()
-		capsule.radius=FOREARM_RADIUS
+		capsule.radius=shape[2]
 		capsule.material=ink
 		var volume := MeshInstance3D.new()
 		volume.mesh=capsule
 		volume.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(volume)
 		arm_volumes.append(volume)
-	hand_toggle.text="Hand / forearm hitboxes"
+	hand_toggle.text="Reception hitboxes"
 	hand_toggle.button_pressed=StorySession.game_options.get_value("reception_studio","hand_hitbox",false)
 	tiers.add_child(hand_toggle)
 	hand_toggle.toggled.connect(func(on):
