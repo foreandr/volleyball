@@ -143,3 +143,4 @@ Back-top jump sets meet the descending serve earlier along its existing flight. 
 On the studio back-top jump set, backward launch speed is limited so the receiver lands within 20 cm behind takeoff.
 In the Body depth slice, High Center is region 17. Its four full-depth quadrants are 17.1 through 17.4, numbered from the upper left in the front view. 17.1 and 17.2 inherit the same overhead hand pass and reach toward their own feeds. Each quadrant supports hover, Ctrl-click, independent assignments and incoming feeds.
 Reception Studio remembers Unassigned only. Hidden regions are excluded from drawing and picking. Jump sets aim for contact in front of the head, allow a small torso adjustment, and use backward travel only beyond a five-centimeter tolerance.
+Upper front-center region 26 has four independently assignable full-depth quadrants. Upper back regions 7, 8 and 9 default to jump set #78.

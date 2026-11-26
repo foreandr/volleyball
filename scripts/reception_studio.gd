@@ -843,33 +843,36 @@ func change_depth(by: int) -> void:
 func cell_action() -> int:
 	return assigned_action(cell,quadrant)
 
+func is_subdivided(address: Vector3i) -> bool:
+	return address==HEAD_CELL or address==Vector3i(1,2,2)
+
 func region_number(address: Vector3i,part: int) -> String:
 	var number := str(1+address.x+3*address.y+9*address.z)
-	return number+"."+str(part+1) if address==HEAD_CELL else number
+	return number+"."+str(part+1) if is_subdivided(address) else number
 
 func region_size(address: Vector3i) -> Vector3:
-	return CELL_SIZE*Vector3(.5,.5,1.) if address==HEAD_CELL else CELL_SIZE
+	return CELL_SIZE*Vector3(.5,.5,1.) if is_subdivided(address) else CELL_SIZE
 
 func region_center(address: Vector3i,part: int,subdivide := true) -> Vector3:
 	var center := MAP_ORIGIN+(Vector3(address)+Vector3.ONE*.5)*CELL_SIZE
-	if address==HEAD_CELL and subdivide:
+	if is_subdivided(address) and subdivide:
 		center+=Vector3(-.25 if part%2==0 else .25,.25 if part<2 else -.25,0.)*CELL_SIZE
 	return center
 
 func assignment_key(address: Vector3i,part: int) -> String:
 	var key := Regions.key(address)
-	return key+"."+str(part+1) if address==HEAD_CELL else key
+	return key+"."+str(part+1) if is_subdivided(address) else key
 
 func assigned_action(address: Vector3i,part: int) -> int:
 	var child_key := assignment_key(address,part)
-	if address==HEAD_CELL:
+	if is_subdivided(address):
 		if StorySession.game_options.has_section_key("studio_three_rows",child_key):
 			return int(StorySession.game_options.get_value("studio_three_rows",child_key))
-		if part>=2: return 0
+		if address==HEAD_CELL and part>=2: return 0
 	var key := Regions.key(address)
 	if StorySession.game_options.has_section_key("studio_three_rows",key):
 		return int(StorySession.game_options.get_value("studio_three_rows",key))
-	if address==Vector3i(1,2,0): return 78
+	if address.y==2 and address.z==0: return 78
 	if address.y==1: return 0
 	var previous := Vector3i(address.x,0 if address.y==0 else 1,address.z)
 	var default_action := 10 if previous==Vector3i(1,1,1) else 0
@@ -923,7 +926,7 @@ func rebuild_colors() -> void:
 			for z in range(MAP_MIN.z,MAP_MAX.z+1):
 				var address := Vector3i(x,y,z)
 				var size := region_size(address)
-				for part in (4 if address==HEAD_CELL else 1):
+				for part in (4 if is_subdivided(address) else 1):
 					var assigned := assigned_action(address,part)>0
 					if assigned and unfinished.button_pressed: continue
 					if pick_boxes.is_empty(): mesh.surface_begin(Mesh.PRIMITIVE_LINES,ink)
