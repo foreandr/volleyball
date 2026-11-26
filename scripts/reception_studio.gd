@@ -574,7 +574,7 @@ func sample_receiver(c: Dictionary,f: float) -> void:
 		var forehead := rig.to_global(rig.get_bone_global_pose(rig.find_bone("Head")).origin).y+.12
 		var jump_set: bool=not c.has("step_legs") and (c.get("jump_set",false) or goal.y>forehead+.10)
 		if jump_set:
-			jump_to_set(goal,follow)
+			jump_to_set(goal,follow,c.get("approach_step",false))
 			lean_for_hand_pass(goal,load_weight*(1.-smoothstep(.035,.28,follow)),deg_to_rad(5.))
 		else:
 			if c.get("audition",false):
@@ -627,7 +627,7 @@ func lean_for_hand_pass(goal: Vector3, weight: float, limit := deg_to_rad(34.)) 
 		var id := rig.find_bone(spine)
 		rig.set_bone_pose(id,pose[id])
 
-func jump_to_set(goal: Vector3, follow: float) -> void:
+func jump_to_set(goal: Vector3, follow: float, approach_step := false) -> void:
 	var rig: Skeleton3D=player.skeleton
 	var head := rig.to_global(rig.get_bone_global_pose(rig.find_bone("Head")).origin)
 	var pocket: Vector3=head+player.global_basis.z.normalized()*.23+Vector3.UP*.16
@@ -647,13 +647,17 @@ func jump_to_set(goal: Vector3, follow: float) -> void:
 	var fraction := clampf(t,0.,2.*half_air)/lead
 	var landing := 2.*half_air-lead
 	var recover := smoothstep(landing+.10,landing+.57,follow)
-	var offset := travel.limit_length(5.5*lead)*fraction
+	var ground_step := (travel*.45).limit_length(.38) if approach_step else Vector3.ZERO
+	var step_progress := smoothstep(-.32,-.035,t)
+	var offset := ground_step*step_progress+(travel-ground_step).limit_length(5.5*lead)*fraction
 	player.position=offset
 	player.position.y=maxf(0.,apex-4.905*(t-half_air)*(t-half_air))
 	var load := smoothstep(-.32,-.085,t)*(1.-smoothstep(-.085,.07,t))
 	var compression := clampf(contact_rise-gap.y,0.,.38)*smoothstep(-.16,0.,t)*(1.-recover)
 	var cushion := smoothstep(landing,landing+.06,follow)*(1.-smoothstep(landing+.06,landing+.20,follow))
 	bend_for_hand_pass(compression+.17*load+.10*cushion)
+	if approach_step and t<0. and step_progress>0. and step_progress<1.:
+		sample_shuffle(ground_step.normalized(),step_progress,sin(PI*step_progress))
 	# Hold the landing before the studio shuffles back for its next feed.
 	var elapsed := follow-landing-.40
 	var distance := offset.length()
@@ -663,13 +667,16 @@ func jump_to_set(goal: Vector3, follow: float) -> void:
 	player.position=offset*(1.-smoothstep(0.,1.,progress))
 	reset_end_frame=frame+(duration-elapsed)*60.
 	if progress>=1.: return
+	sample_shuffle(-offset.normalized(),progress*maxi(1,roundi(duration*1.65)),smoothstep(0.,.16,progress)*(1.-smoothstep(.80,1.,progress)))
+
+func sample_shuffle(direction: Vector3, phase: float, weight: float) -> void:
 	if not shuffle_by_actor.has(player):
 		shuffle_by_actor[player]=preload("res://scripts/directional_footwork.gd").new(player)
 	var steps=shuffle_by_actor[player]
 	# Sample from replay time so stepping backwards reproduces the same feet.
-	steps.phase=progress*maxi(1,roundi(duration*1.65))
-	steps.travel=-offset.normalized()
-	steps.weight=smoothstep(0.,.16,progress)*(1.-smoothstep(.80,1.,progress))
+	steps.phase=phase
+	steps.travel=direction
+	steps.weight=weight
 	steps.step(steps.travel,0.,1.,true,true)
 
 func pose_hand_pass_legs(goal: Vector3, standing_height: float, follow: float, step_legs: int) -> void:
@@ -963,7 +970,8 @@ func assigned_action(address: Vector3i,part: int) -> int:
 		if depth_split(address,part):
 			if part<2: return 79
 			var parent_key := Regions.key(address)+"."+str(part%2+1)
-			return int(StorySession.game_options.get_value("studio_three_rows",parent_key,78))
+			var parent_action := int(StorySession.game_options.get_value("studio_three_rows",parent_key,78))
+			return 80 if parent_action==78 else parent_action
 		if address==HEAD_CELL and part>=2: return 0
 	var key := Regions.key(address)
 	if StorySession.game_options.has_section_key("studio_three_rows",key):
