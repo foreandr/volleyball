@@ -307,7 +307,11 @@ func _ready() -> void:
 func restore_selection() -> void:
 	var selection: Dictionary=StorySession.game_options.get_value("reception_studio","selection",{})
 	cell=Vector3i(selection.get("cell",cell)).clamp(MAP_MIN,MAP_MAX)
-	quadrant=clampi(selection.get("part",0),0,region_parts(cell)-1)
+	var part := int(selection.get("part",0))
+	if cell==REGION_23:
+		cell=REGION_22
+		part=0 if part<2 else 1
+	quadrant=clampi(part,0,region_parts(cell)-1)
 	activate_receiver(0)
 	preview_cell()
 
@@ -1400,6 +1404,7 @@ func build_map(tiers: VBoxContainer) -> void:
 
 func change_depth(by: int) -> void:
 	cell.z=posmod(cell.z-MAP_MIN.z+by,3)+MAP_MIN.z
+	if cell==REGION_23: cell=REGION_22
 	quadrant=mini(quadrant,region_parts(cell)-1)
 	save_selection()
 	preview_cell()
@@ -1409,8 +1414,8 @@ func save_selection() -> void:
 	StorySession.save_options()
 
 func region_parts(address: Vector3i) -> int:
-	if address==REGION_22: return 4
-	if address==REGION_23: return 4
+	if address==REGION_22: return 2
+	if address==REGION_23: return 0
 	if halves_only(address): return 2
 	if depth_split(address): return 8
 	return 4 if is_subdivided(address) else 1
@@ -1419,6 +1424,7 @@ func contact_region(world_point: Vector3) -> Vector4i:
 	var point := grid_for(receiving).to_local(world_point)
 	var address := Vector3i(((point-MAP_ORIGIN)/CELL_SIZE).floor())
 	if address!=address.clamp(MAP_MIN,MAP_MAX): return Vector4i(-1,-1,-1,-1)
+	if address==REGION_23: address=REGION_22
 	for part in region_parts(address):
 		var size := region_size(address,part)
 		if AABB(region_center(address,part)-size*.5,size).has_point(point):
@@ -1438,17 +1444,18 @@ func depth_split(address: Vector3i) -> bool:
 	return address==Vector3i(1,1,1) or address==Vector3i(1,2,2)
 
 func region_suffix(address: Vector3i,part: int) -> String:
-	if address==REGION_22: return (".left" if part%2==0 else ".right")+(".back" if part<2 else ".front")
+	if address==REGION_22: return ".top" if part==0 else ".bottom"
 	if address==REGION_23: return [".back.top",".front.top",".back.bottom",".front.bottom"][part]
 	if depth_split(address):
 		return ".%d.%s" % [part%4+1,"front" if part>=4 else "back"]
 	return "."+str(part+1) if is_subdivided(address) else ""
 
 func region_number(address: Vector3i,part: int) -> String:
+	if address==REGION_22: return "22-23"+region_suffix(address,part)
 	return str(1+address.x+3*address.y+9*address.z)+region_suffix(address,part)
 
 func region_size(address: Vector3i,part: int) -> Vector3:
-	if address==REGION_22: return CELL_SIZE*Vector3(.5,1.,.5)
+	if address==REGION_22: return CELL_SIZE*Vector3(2.,.5,1.)
 	if address==REGION_23: return CELL_SIZE*Vector3(1.,.5,.5)
 	if halves_only(address): return CELL_SIZE*Vector3(1.,.5,1.)
 	if depth_split(address): return CELL_SIZE*Vector3(.5,.5,.5)
@@ -1456,12 +1463,9 @@ func region_size(address: Vector3i,part: int) -> Vector3:
 
 func region_center(address: Vector3i,part: int,subdivide := true) -> Vector3:
 	var center := MAP_ORIGIN+(Vector3(address)+Vector3.ONE*.5)*CELL_SIZE
-	if address==REGION_22 and subdivide:
-		center.x+=(.25 if part%2==1 else -.25)*CELL_SIZE.x
-		center.z+=(.25 if part>=2 else -.25)*CELL_SIZE.z
-	elif address==REGION_23 and subdivide:
-		center.z+=(.25 if part%2==1 else -.25)*CELL_SIZE.z
-		center.y+=(.25 if part<2 else -.25)*CELL_SIZE.y
+	if address==REGION_22:
+		center.x+=.5*CELL_SIZE.x
+		if subdivide: center.y+=(.25 if part==0 else -.25)*CELL_SIZE.y
 	elif halves_only(address) and subdivide:
 		center.y+=(.25 if part==0 else -.25)*CELL_SIZE.y
 	elif is_subdivided(address) and subdivide:
@@ -1479,11 +1483,7 @@ func assigned_action(address: Vector3i,part: int) -> int:
 	if is_subdivided(address):
 		if StorySession.game_options.has_section_key("studio_three_rows",child_key):
 			return int(StorySession.game_options.get_value("studio_three_rows",child_key))
-		if address==REGION_22:
-			var original := Regions.key(address)
-			var side := original+(".left" if part%2==0 else ".right")
-			return int(StorySession.game_options.get_value("studio_three_rows",side,StorySession.game_options.get_value("studio_three_rows",original,0)))
-		if address==REGION_23: return [0,22,2,3][part]
+		if address==REGION_22: return 72 if part==1 else 0
 		if address==Vector3i(1,2,2):
 			if part<2: return 79
 			var parent_key := Regions.key(address)+"."+str(part%4+1)
@@ -1560,7 +1560,7 @@ func update_region() -> void:
 	depth_label.text=["Back","Body","Front"][cell.z-MAP_MIN.z]
 	var id := cell_action()
 	highlight.visible=not unfinished.button_pressed or id==0
-	region_label.text="#%s \u00b7 %s %s - %s" % [region_number(cell,quadrant),HEIGHTS[cell.y],WIDTHS[cell.x-MAP_MIN.x],"Unassigned" if id==0 else "Action #%02d"%id]
+	region_label.text="#%s \u00b7 %s %s - %s" % [region_number(cell,quadrant),HEIGHTS[cell.y],("22-23" if cell==REGION_22 else WIDTHS[cell.x-MAP_MIN.x]),"Unassigned" if id==0 else "Action #%02d"%id]
 	highlight.scale=region_size(cell,quadrant)/CELL_SIZE
 	highlight.position=region_center(cell,quadrant)
 
