@@ -169,7 +169,7 @@ func start_drill() -> void:
 	receiving_middle=athlete(MIDDLE_HOME,"286881")
 	register_student(receiving_middle,11)
 	preload("res://scripts/practice_kit.gd").apply(receiving_middle,false,11)
-	receiving_middle.rotation.y=PI
+	receiving_middle.rotation.y=PI*.5
 	pin_frame.add_child(middle_decoy)
 	middle_decoy.configure_for_match(receiving_middle,Label.new())
 	middle_decoy.add_child(middle_decoy.status)
@@ -291,7 +291,7 @@ func next_serve() -> void:
 	for actor in attack_options:
 		if actor!=pin_hitter and actor.get_parent()==pin_frame: actor.reparent(world,true)
 	receiving_middle.position=MIDDLE_HOME
-	receiving_middle.rotation.y=PI
+	receiving_middle.rotation.y=PI*.5
 	receiving_middle.play_action("idle")
 	if pin_hitter.get_parent()!=pin_frame: pin_hitter.reparent(pin_frame,true)
 	pin_hitter.position=pin_frame.to_local(HITTER_HOME)
@@ -468,7 +468,7 @@ func _process(delta: float) -> void:
 		var release: float=serves[toss_style].toss_release_time() if serves[toss_style].has_method("toss_release_time") else .18
 		var ready_weight := 1. if phase=="serve_ready" else 1.-smoothstep(release,release+.22,serve_clock)
 		for actor in receiving_team:
-			if actor!=receiving_setter: face_receive_ball(actor,hitter.global_position if phase=="serve_ready" else ball.global_position,delta)
+			if actor!=receiving_setter and actor!=receiving_middle: face_receive_ball(actor,hitter.global_position if phase=="serve_ready" else ball.global_position,delta)
 		if ready_weight>.001:
 			for i in passers.size():
 				var actor := passers[i]
@@ -499,7 +499,10 @@ func _process(delta: float) -> void:
 			var cover := route_point(slot).lerp(pass_end,.28)
 			cover.z+=3.6 if slot==3 else 1.95
 			cover.y=.04
-			move_receiver(actor,actor.get_parent_node_3d().to_local(cover),delta)
+			if phase=="serve_return" and (cover_slot>=0 or ball.global_position.z<BallNet.NET_Z and drop_velocity.z<0.):
+				cover=transition_base(slot)
+			var parent := actor.get_parent_node_3d()
+			move_receiver(actor,parent.to_local(cover),delta,parent.to_local(ball.global_position)-actor.position)
 			face_receive_ball(actor,ball.global_position,delta)
 	if phase=="serve_flight" or (phase=="serve_toss" and ready_weight_for_routes()):
 		for slot in attack_options.size():
@@ -712,9 +715,17 @@ func face_receive_ball(actor: Node3D,point: Vector3,delta: float) -> void:
 	var heading := actor.get_parent_node_3d().to_local(point)-actor.position
 	GroundControls.face(actor,heading,delta,9.)
 
-func stage_attacker(actor: Node3D,slot: int,delta: float) -> void:
-	var point := route_point(slot)+Vector3.BACK*1.6
+func transition_base(slot: int) -> Vector3:
+	var point := route_point(slot)
+	point.z=BallNet.NET_Z+(5.5 if slot==3 else 3.3)
 	point.y=.04
+	return point
+
+func stage_attacker(actor: Node3D,slot: int,delta: float) -> void:
+	var point := transition_base(slot)
+	if phase=="serve_pass":
+		var entry := smoothstep(0.,.4,.92-(set_at-pass_clock))
+		point.z=lerpf(point.z,route_point(slot).z+1.6,entry)
 	var pin_load := 0.
 	if slot in [0,2] and phase=="serve_pass":
 		pin_load=smoothstep(0.,.52,.57-(set_at-pass_clock))
@@ -727,9 +738,10 @@ func stage_attacker(actor: Node3D,slot: int,delta: float) -> void:
 			if nearest.distance_to(point.slide(Vector3.UP))<.95 or Geometry3D.get_closest_point_to_segment(actor.global_position.slide(Vector3.UP),start,finish).distance_to(actor.global_position.slide(Vector3.UP))<.85:
 				var lateral := (finish-start).normalized().cross(Vector3.UP)
 				if lateral.dot(actor.global_position.slide(Vector3.UP)-nearest)<0.: lateral=-lateral
+				var retreat_depth := point.z
 				point=nearest+lateral*1.1
 				point.y=.04
-				point.z=maxf(point.z,BallNet.NET_Z+.65)
+				point.z=maxf(point.z,retreat_depth)
 	var parent := actor.get_parent_node_3d()
 	var facing := parent.to_local(route_point(slot) if pin_load>0. else ball.global_position)-actor.position
 	move_receiver(actor,parent.to_local(point),delta,facing)

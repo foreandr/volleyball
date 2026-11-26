@@ -119,3 +119,4 @@ Serve rallies continue after playable blocks. The nearest available teammate cov
 CPU blockers remember the direction of completed swings per opposing hitter on the player object. Use that read in drill and match positioning. A receiving libero clears the pipe approach after passing and covers the attack. Facing-preserving retreats use backward footfalls.
 
 During serve reception both pins start forward and draw their arms before the set, then transition to coverage when another attacker gets the ball.
+In serving camp, available front-row hitters retreat facing the ball to 3.3 m off the net, and the pipe resets 5.5 m deep. On a playable block the assigned defender covers while the others reopen their approach lanes.
