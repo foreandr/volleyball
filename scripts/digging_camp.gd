@@ -7,6 +7,8 @@ var attack_landing := Vector3.ZERO
 
 func start_drill() -> void:
 	super.start_drill()
+	wall_vertical_inches=24.
+	pin_attack.jump.max_height=46.*.0254+.2032
 	title.text="DIGGING  /  DIG FROM FIVE"
 	for actor in passers+[receiving_middle,wall[1],wall[2]]:
 		actor.hide()
@@ -107,6 +109,9 @@ func step_serve_wall(delta: float) -> void:
 	var block: RefCounted=wall_jumps[0]
 	if block!=null:
 		if not block.step(delta,ball.global_position): wall_jumps[0]=null
+		return
+	if phase=="server_dig":
+		move_receiver(actor,Vector3(-4.,.04,BallNet.NET_Z-.85),delta,ball.global_position-actor.global_position,GroundControls.speed(true,false),true)
 		return
 	if phase!="serve_attack": return
 	var six := Vector3(0.,.145,-3.)

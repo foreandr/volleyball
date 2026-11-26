@@ -133,6 +133,8 @@ var receptions: Array[Reception]=[]
 var dig_platforms := {}
 var dig_clock := 0.
 var off_blocker := -1
+var last_digger: Node3D
+var dig_incoming := Vector3.ZERO
 var server_dig_buffer := 0.
 
 var platform_clips: Array[Animation]=[]
@@ -332,6 +334,7 @@ func next_serve() -> void:
 	first_pass_dropping=false
 	off_blocker=-1
 	server_dig_buffer=0.
+	last_digger=null
 	dig_clock=0.
 	for platform in dig_platforms.values(): platform.reset()
 	update_prompts("ready")
@@ -531,11 +534,6 @@ func _process(delta: float) -> void:
 	if phase in ["serve_flight","serve_pass","serve_attack","serve_return"] and not attack_jump.active and (toss_style<2 or serve_clock>serves[toss_style].recovery_end()):
 		walk_server(delta,true)
 		update_prompts("defend")
-	if phase=="server_dig":
-		advance_missed_ball(delta,true)
-		if not attack_floor_pending: floor_linger+=delta
-		if floor_linger>.75: next_serve()
-		return
 	var started_in_return := phase=="serve_return"
 	if pin_attack.enabled:
 		if phase=="serve_attack" and not aim_read and pin_attack.pin_arrival-pass_clock<=.23:
@@ -572,14 +570,14 @@ func _process(delta: float) -> void:
 		for actor in passers:
 			if actor!=first_contact_player() and actor!=second_contact_player() and actor!=pin_attack.setter: face_receive_ball(actor,ball.global_position,delta)
 	if phase in ["serve_pass","serve_attack","serve_return"]: move_libero_to_cover(delta)
-	if phase in ["serve_attack","serve_return"]:
+	if phase in ["serve_attack","serve_return","server_dig"]:
 		for slot in attack_options.size():
 			var actor := attack_options[slot]
 			if (phase=="serve_return" and cover_slot>=0 and actor==cover_players[cover_slot]) or (actor==pin_attack.setter and pin_attack.enabled) or (actor==receiving_middle and middle_decoy.enabled): continue
 			var cover := route_point(slot).lerp(pass_end,.28)
 			cover.z+=3.6 if slot==3 else 1.95
 			cover.y=.04
-			if phase=="serve_return" and (cover_slot>=0 or ball.global_position.z<BallNet.NET_Z and drop_velocity.z<0.):
+			if phase=="server_dig" or phase=="serve_return" and (cover_slot>=0 or ball.global_position.z<BallNet.NET_Z and drop_velocity.z<0.):
 				cover=transition_base(slot)
 			var parent := actor.get_parent_node_3d()
 			move_receiver(actor,parent.to_local(cover),delta,parent.to_local(ball.global_position)-actor.position,GroundControls.speed(true,false),true)
@@ -591,6 +589,20 @@ func _process(delta: float) -> void:
 			stage_attacker(actor,slot,delta)
 	if middle_decoy.enabled: middle_decoy.tick_attack(delta)
 	step_serve_wall(delta)
+	if phase=="server_dig":
+		dig_clock+=delta
+		var platform: Reception=dig_platforms[last_digger]
+		var diving := platform.low_save.active and not platform.low_save.finished(dig_clock)
+		if not diving and platform.low_save.active: platform.low_save.active=false
+		if last_digger!=hitter or not diving: walk_server(delta,true)
+		if diving:
+			platform.low_save.sample(last_digger,dig_clock,platform.touch_time)
+		else:
+			platform.follow_forearm(dig_clock,dig_incoming)
+		advance_missed_ball(delta,true)
+		if not attack_floor_pending: floor_linger+=delta
+		if floor_linger>.75 and not diving: next_serve()
+		return
 	if phase=="serve_return":
 		if not started_in_return: return
 		var previous := ball.global_position
@@ -1172,6 +1184,8 @@ func block_on_flight_segment(previous: Vector3) -> bool:
 		if not is_finite(platform.pressed_at): continue
 		platform.update_attempt(dig_clock,start,dig_clock+until_floor,path,drop_velocity,dt,dig_clock+until_floor)
 		if not is_finite(platform.touch_time): continue
+		last_digger=defender
+		dig_incoming=drop_velocity
 		ball.position=platform.touch
 		drop_velocity=platform.outgoing
 		drop_net_hit.clear()
