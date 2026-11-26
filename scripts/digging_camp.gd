@@ -140,11 +140,7 @@ func _process(delta: float) -> void:
 		var age := dig_clock-platform.touch_time
 		if age>0. and age<platform.Drive.FAST_DIG_ELBOW_DURATION:
 			var degrees := lerpf(6.,27.,smoothstep(10.,25.,dig_incoming.length()))
-			var side: String=platform.low_save.wide_arm if platform.low_save.active else ""
-			if side!="":
-				platform.Drive.apply_fast_dig_elbow_bend(last_digger.skeleton,age,degrees,side)
-			else:
-				platform.Drive.absorb_with_joined_platform(last_digger,age,degrees,dig_contact_grip)
+			platform.Drive.absorb_with_joined_platform(last_digger,age,degrees,dig_contact_grip)
 
 func handle_drag(event: InputEvent) -> bool:
 	var camera := get_viewport().get_camera_3d()
@@ -218,8 +214,10 @@ func sample_defensive_contact(platform: Reception,start: float,dt: float,_until_
 	var offset := intercept-base
 	var save=platform.low_save
 	if platform.reach.is_empty() and not save.active and (offset.slide(Vector3.UP).length()>1.15 or intercept.y<.58):
-		if save.plan(actor,path,start,start+_until_floor,platform.clip,true,true):
+		if save.plan(actor,path,start,start+_until_floor,platform.clip,true,false):
 			save.travel_scale=0.
+			save.wide_arm=""
+			save.heading=(save.aim-save.start).slide(Vector3.UP).normalized()
 	if save.active:
 		save.sample(actor,start+dt,save.contact_time+.07)
 	else:
@@ -242,13 +240,9 @@ func sample_defensive_contact(platform: Reception,start: float,dt: float,_until_
 		platform.knee_bend_depth=progress*lerpf(.07,.24,smoothstep(10.,25.,drop_velocity.length()))
 		platform.apply_knee_bend()
 		if close>.01: platform.reach_platform(intercept-platform.platform_center(),close,.72,true,true)
-	if not save.active or save.wide_arm.is_empty():
-		var extension := 1.-smoothstep(.09,.20,ahead)
-		var target := Vector3.INF
-		if not save.active and not platform.reach.is_empty():
-			target=intercept+actor.basis.z*.10
-			extension=1.-smoothstep(.12,.32,ahead)
-		if extension>.001: platform.Drive.pose_joined_platform(actor,extension,174.,target)
+	var grip_target := Vector3.INF
+	if save.active or not platform.reach.is_empty(): grip_target=intercept+actor.basis.z*.10
+	platform.Drive.pose_joined_platform(actor,1.,174.,grip_target)
 	if not automatic and release_window<=0.: return
 	var contact := platform.dig_contact_segment(path.call(start),path.call(start+dt))
 	if contact[0].distance_to(contact[1])>platform.PLATFORM_RADIUS: return

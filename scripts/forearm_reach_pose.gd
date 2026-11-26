@@ -97,6 +97,15 @@ static func sample(rig: Skeleton3D, author: RefCounted, step: Vector3, travel: V
 		var parent := rig.get_bone_parent(pelvis)
 		pose[pelvis].origin -= author.world_pose(pose,parent).basis.inverse()*Vector3.UP*(0.075 if short_lunge and not short_straight_back else 0.11)*weight
 		author.rotate_world(pose,"spine_02",Vector3.RIGHT,(0.04 if short_lunge and not short_straight_back else 0.12)*weight)
+	if dig_lunge:
+		var hip_world := rig.to_global(author.point(pose,"pelvis"))
+		var chest_world := rig.to_global(author.point(pose,"spine_03"))
+		var forward := (contact-hip_world).slide(Vector3.UP).normalized()
+		var torso := chest_world-hip_world
+		if not forward.is_zero_approx():
+			var pitch := atan2(torso.dot(forward),torso.y)
+			var axis := rig.global_basis.inverse()*Vector3.UP.cross(forward)
+			author.rotate_world(pose,"spine_01",axis.normalized(),clampf(deg_to_rad(30.)-pitch,0.,.65)*weight)
 	var leg_pose := pose.duplicate()
 	leg_pose[pelvis] = hips
 	for side in ["l","r"]:

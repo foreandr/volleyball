@@ -90,8 +90,7 @@ static func apply_fast_dig_elbow_bend(rig: Skeleton3D, age: float, degrees := 50
 
 static func absorb_with_joined_platform(actor: Node3D, age: float, degrees: float, contact_grip := Vector3.INF) -> void:
 	var recoil := smoothstep(0.,.045,age)*(1.-smoothstep(.09,FAST_DIG_ELBOW_DURATION,age))
-	var release := 1.-smoothstep(.17,FAST_DIG_ELBOW_DURATION,age)
-	pose_joined_platform(actor,release,174.-degrees*recoil,contact_grip+Vector3.UP*.08*recoil if contact_grip.is_finite() else Vector3.INF)
+	pose_joined_platform(actor,1.,174.-degrees*recoil,contact_grip+Vector3.UP*.08*recoil if contact_grip.is_finite() else Vector3.INF)
 
 static func pose_joined_platform(actor: Node3D, weight: float, extension: float, target := Vector3.INF) -> void:
 	var rig: Skeleton3D=actor.skeleton
@@ -101,7 +100,7 @@ static func pose_joined_platform(actor: Node3D, weight: float, extension: float,
 	var center: Vector3=(author.point(pose,"hand_l")+author.point(pose,"hand_r"))*.5
 	var across: Vector3=(author.point(pose,"upperarm_l")-author.point(pose,"upperarm_r")).normalized()
 	if target.is_finite(): center=rig.to_local(target)
-	PlatformPose.connect_arms(pose,author,center,weight,0.,across,false,false,extension,target.is_finite())
+	PlatformPose.connect_arms(pose,author,center,weight,0.,across,false,false,extension,target.is_finite(),.034)
 	for side in ["l","r"]:
 		for part in ["upperarm_","lowerarm_","hand_"]:
 			var bone := rig.find_bone(part+side)

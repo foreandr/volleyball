@@ -3,7 +3,7 @@ extends RefCounted
 const HAND_GAP := 0.065
 const ELBOW_ANGLE := 168.0
 
-static func connect_arms(pose: Array, author: RefCounted, desired: Vector3, weight: float, shoulder_advance := 0.022, lateral := Vector3.RIGHT, dive := false, compact := false, extension_angle := ELBOW_ANGLE, lateral_target := false) -> void:
+static func connect_arms(pose: Array, author: RefCounted, desired: Vector3, weight: float, shoulder_advance := 0.022, lateral := Vector3.RIGHT, dive := false, compact := false, extension_angle := ELBOW_ANGLE, lateral_target := false, hand_gap := HAND_GAP) -> void:
 	if weight <= 0.001: return
 	var rig: Skeleton3D = author.rig
 	var original := pose.duplicate()
@@ -14,7 +14,7 @@ static func connect_arms(pose: Array, author: RefCounted, desired: Vector3, weig
 			author.aim_joint(pose,"clavicle_"+side,arm,shoulder+Vector3.BACK*shoulder_advance*weight)
 	var left: Vector3 = author.point(pose,"upperarm_l")
 	var right: Vector3 = author.point(pose,"upperarm_r")
-	var left_hand := lateral*HAND_GAP*0.5
+	var left_hand := lateral*hand_gap*0.5
 	var right_hand := -left_hand
 	# Solve one wrist center that both arms can reach at the same extension.
 	var a := left-left_hand
