@@ -67,7 +67,7 @@ static func apply(rig: Skeleton3D, author: RefCounted, outgoing: Vector3, power:
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
 
 const FAST_FOREARM_SPEED := 60./3.6
-const FAST_FOREARM_BEND := 12.
+const FAST_FOREARM_BEND := 38.
 
 static func fast_forearm(speed_mps: float) -> bool:
 	return speed_mps>FAST_FOREARM_SPEED
