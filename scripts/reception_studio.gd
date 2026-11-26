@@ -24,6 +24,8 @@ var dragging_target := false
 var camera_offset := Vector3.ZERO
 var other_grids: Array[MeshInstance3D]=[]
 var pass_arc := HSlider.new()
+const HandPass = preload("res://scripts/hand_setting_pose.gd")
+var feed_offset := Vector3.ZERO
 var contact_point := Vector3.ZERO
 var contact_key := []
 var pass_end_frame := 0.
@@ -186,7 +188,6 @@ func _ready() -> void:
 	refresh()
 	update_leg_buttons()
 	draw_pose()
-	cell=Vector3i(((lattice.to_local(contact_point)-MAP_ORIGIN)/CELL_SIZE).floor()).clamp(MAP_MIN,MAP_MAX)
 	preview_cell()
 
 func button(row: Control,title: String,action: Callable) -> void:
@@ -251,6 +252,7 @@ func _process(delta: float) -> void:
 		frame+=delta*60.
 		if frame>=maxf(clips[index].frames,pass_end_frame)+1.:
 			frame=seek.min_value
+			pick_feed_point()
 		draw_pose()
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -387,7 +389,8 @@ func draw_pose() -> void:
 	seek.set_value_no_signal(frame)
 	label.text=" %02d / %02d     Frame %d / %d " % [c.id,clips.size(),mini(roundi(frame),int(c.frames)),c.frames]
 	play_button.text="Pause" if playing else "Play"
-	var signature := [index,legs,mirror.button_pressed,incoming_speed.value,source,cell,cell_action(),defenders[receiving].position]
+	var target := highlight.global_position+feed_offset
+	var signature := [index,legs,mirror.button_pressed,incoming_speed.value,source,cell,feed_offset,cell_action(),defenders[receiving].position]
 	if signature!=contact_key:
 		contact_key=signature
 		sample_receiver(c,c.contact)
@@ -398,11 +401,10 @@ func draw_pose() -> void:
 			var elbow := rig.get_bone_global_pose(rig.find_bone("lowerarm_"+side)).origin
 			center+=rig.to_global(wrist.lerp(elbow,.32))*.5
 		contact_point=center+Vector3(0,.075,.075)
-		var offset := (contact_point-highlight.global_position).abs()-CELL_SIZE*.5
-		reachable=cell_action()>0 and maxf(offset.x,maxf(offset.y,offset.z))<=.12
+		if c.kind=="overhead": contact_point=HandPass.contact_center(player)
+		reachable=cell_action()>0 and contact_point.distance_to(target)<=.22
 	sample_receiver(c,f)
 	pass_end_frame=0.
-	var target := contact_point if reachable else highlight.global_position
 	var launch: Vector3=feed.preview_origin
 	var duration := clampf(launch.distance_to(target)/maxf(1.,incoming_speed.value/3.6),.48,1.25)
 	var seconds := (frame-float(c.contact))/60.
@@ -429,6 +431,12 @@ func sample_receiver(c: Dictionary,f: float) -> void:
 		return
 	if not Regions.movement(c):
 		sample_layer(index,c,f)
+		if c.kind=="overhead":
+			var weight := smoothstep(4.,c.contact,f)*(1.-smoothstep(c.contact+5.,c.frames-6.,f))
+			var goal := highlight.global_position+feed_offset
+			var shift := goal-HandPass.contact_center(player)
+			player.global_position+=shift.slide(Vector3.UP).limit_length(.85)*weight
+			HandPass.apply(player,goal,weight)
 		return
 	sample_layer(legs,c,f)
 	var contact := float(FOREARM.get_meta("contact_time"))
@@ -567,10 +575,19 @@ func change_depth(by: int) -> void:
 	preview_cell()
 
 func cell_action() -> int:
-	return int(StorySession.game_options.get_value("dig_regions",Regions.key(cell),0))
+	return assigned_action(cell)
+
+func assigned_action(address: Vector3i) -> int:
+	var default_action := 10 if address==Vector3i(1,1,1) else 0
+	return int(StorySession.game_options.get_value("dig_regions",Regions.key(address),default_action))
+
+func pick_feed_point() -> void:
+	feed_offset=Vector3(randf_range(-.5,.5),randf_range(-.5,.5),randf_range(-.5,.5))*CELL_SIZE
+	feed_offset.y=maxf(feed_offset.y,.15-highlight.global_position.y)
 
 func preview_cell() -> void:
 	update_region()
+	pick_feed_point()
 	var id := cell_action()
 	for i in clips.size():
 		if int(clips[i].id)==id:
@@ -606,7 +623,7 @@ func rebuild_colors() -> void:
 		for y in range(MAP_MAX.y+1):
 			for z in range(MAP_MIN.z,MAP_MAX.z+1):
 				var address := Vector3i(x,y,z)
-				var assigned := int(StorySession.game_options.get_value("dig_regions",Regions.key(address),0))>0
+				var assigned := assigned_action(address)>0
 				var color := Color("#ae2839") if assigned else Color("#2153a4")
 				var center := MAP_ORIGIN+(Vector3(address)+Vector3.ONE*.5)*CELL_SIZE
 				for axis in 3:

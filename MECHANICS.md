@@ -131,3 +131,4 @@ Studio serves use the region assignment at a saved stance inside a two-meter rea
 Reception Studio uses Ctrl-click for court cells. Explicit animation assignments have dark red outlines, while unassigned cells have dark blue outlines and leave the receiver in the ready pose. Three defenders can be positioned by dragging. The serve arc is fixed. Pass rise and the floor target are saved.
 
 Ctrl-clicking a defender cell repeats a standing float there. Drag the floor ring to aim the return.
+In Reception Studio the Mid Center Body cell defaults to overhead hand pass #10. Each standing float samples a point inside the selected box once per repetition.
