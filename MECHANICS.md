@@ -168,3 +168,4 @@ Reception Studio splits box 22 vertically into left and right halves. Both inher
 Each side of box 22 also has separate front and back targets, inheriting its side assignment.
 The current map merges 22 and 23 into a double-width region with two full-depth height bands. The lower band is split left and right. Both lower regions start unassigned.
 Within 22-23.bottom.left, near and far divide the lateral reach from the receiver in two. Both span the full depth.
+22-23 now has four full-depth lateral columns in each of two rows. The finished bottom-left near region uses 72. Its opposite-body counterpart is 24.bottom.near and plays mirrored.
