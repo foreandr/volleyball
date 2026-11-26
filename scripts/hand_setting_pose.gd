@@ -18,6 +18,16 @@ const FRONT_WRIST_FOLLOW_TIME := 0.14
 const SET_WRIST_LOAD_PITCH := -16.0
 const SET_PALM_LOAD_ANGLE := 48.0
 
+static func release_cushion(follow: float, delay: float) -> float:
+	var scale_ := delay/RELEASE_TIME
+	return smoothstep(0.,.045*scale_,follow)*(1.-smoothstep(.045*scale_,.11*scale_,follow))
+
+static func release_extension(follow: float, delay: float) -> float:
+	return smoothstep(.045*delay/RELEASE_TIME,delay,follow)
+
+static func follow_weight(follow: float) -> float:
+	return 1.-smoothstep(.22,.32,follow)
+
 static func standing_set(actor: Node3D, contact: Vector3, offset: Vector3, push: Vector3, follow: float, load_weight: float, facing := Vector3.ZERO, steady_torso := true) -> void:
 	if follow<0.:
 		apply(actor,contact,load_weight,Vector3.ZERO,0.,0.,false,Vector3.ZERO,0.,offset,load_weight,true,-1.,null,facing,steady_torso)

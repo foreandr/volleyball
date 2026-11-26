@@ -725,9 +725,8 @@ func hand_release_delay() -> float:
 func update_hand_push(time: float, follow: float, incoming: Vector3) -> void:
 	if follow >= 0.32 and is_finite(release_time): return
 	var delay := hand_release_delay()
-	var scale_ := delay/HandPose.RELEASE_TIME
-	var cushion := smoothstep(0.0,0.045*scale_,follow)*(1.0-smoothstep(0.045*scale_,0.11*scale_,follow))
-	var extension := smoothstep(0.045*scale_,delay,follow)
+	var cushion := HandPose.release_cushion(follow,delay)
+	var extension := HandPose.release_extension(follow,delay)
 	var force := smoothstep(4.0,10.0,outgoing.length())
 	var direction := outgoing.normalized()
 	var set_offset := Vector3.INF
@@ -738,7 +737,7 @@ func update_hand_push(time: float, follow: float, incoming: Vector3) -> void:
 		set_offset = global_basis*toward
 		direction = (toward.slide(Vector3.UP).normalized()*outgoing.slide(Vector3.UP).length()+Vector3.UP*outgoing.y).normalized()
 	var push := direction*lerpf(0.12,0.33,force)*extension
-	var blend := 1.0-smoothstep(0.22,0.32,follow)
+	var blend := HandPose.follow_weight(follow)
 	var after_release := time-release_time if is_finite(release_time) else 0.0
 	var torso_follow := smoothstep(0.0,0.10,after_release)
 	var anchor := hand_anchor

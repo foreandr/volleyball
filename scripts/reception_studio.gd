@@ -29,6 +29,9 @@ var other_grids: Array[MeshInstance3D]=[]
 var pass_arc := HSlider.new()
 const HandPass = preload("res://scripts/hand_setting_pose.gd")
 var feed_offset := Vector3.ZERO
+const HAND_RADIUS := .28
+var hand_volume := MeshInstance3D.new()
+var hand_toggle := CheckButton.new()
 var contact_point := Vector3.ZERO
 var contact_key := []
 var feed_fraction := 1.
@@ -457,7 +460,7 @@ func draw_pose() -> void:
 			center+=rig.to_global(wrist.lerp(elbow,.32))*.5
 		contact_point=center+Vector3(0,.075,.075)
 		if c.kind=="overhead": contact_point=HandPass.contact_center(player)
-		reachable=cell_action()>0 and contact_point.distance_to(target)<=.22
+		reachable=cell_action()>0 and contact_point.distance_to(target)<=(HAND_RADIUS if c.kind=="overhead" else .22)
 	var missed: bool= frame>=touch_frame and cell_action()>0 and not reachable
 	miss_label.visible=missed
 	if missed:
@@ -471,6 +474,8 @@ func draw_pose() -> void:
 		sample_receiver(c,maxf(0.,frame+lead_frames))
 	else:
 		sample_receiver(c,clampf(frame+lead_frames,0.,c.frames) if lead_frames>0. else f)
+	hand_volume.visible=hand_toggle.button_pressed and c.kind=="overhead" and cell_action()>0
+	if hand_volume.visible: hand_volume.global_position=HandPass.contact_center(player)
 	pass_end_frame=0.
 	var seconds := (frame-touch_frame)/60.
 	var serve_time := clampf(feed.contact_time()+seconds+duration,0.,feed.contact_time()+.42)
@@ -562,7 +567,15 @@ func sample_receiver(c: Dictionary,f: float) -> void:
 			pose_hand_pass_legs(goal,forehead,follow,int(c.get("step_legs",0)))
 			var reach_weight := load_weight*(1.-smoothstep(.035,.28,follow))
 			lean_for_hand_pass(goal,reach_weight)
-		HandPass.standing_set(player,goal,offset,push,follow,load_weight,Vector3.ZERO,jump_set)
+		if follow<0.:
+			HandPass.standing_set(player,goal,offset,push,follow,load_weight,Vector3.ZERO,jump_set)
+		else:
+			var delay := HandPass.RELEASE_TIME
+			var extension := HandPass.release_extension(follow,delay)
+			HandPass.apply(player,goal,HandPass.follow_weight(follow),push*.23*extension,
+				HandPass.release_cushion(follow,delay),smoothstep(delay,delay+.10,follow),
+				false,Vector3.ZERO,extension,offset,smoothstep(0.,delay,follow),true,
+				smoothstep(0.,delay+HandPass.FRONT_WRIST_FOLLOW_TIME,follow),null,Vector3.ZERO,jump_set)
 		return
 	if not Regions.movement(c):
 		sample_layer(index,c,f)
@@ -783,6 +796,24 @@ func build_map(tiers: VBoxContainer) -> void:
 	toggle_trail.toggled.connect(func(on):
 		ball_trail.visible=on
 		StorySession.game_options.set_value("reception_studio","ball_trail",on)
+		StorySession.save_options()
+		draw_pose())
+	var sphere := SphereMesh.new()
+	sphere.radius=HAND_RADIUS
+	sphere.height=2.*HAND_RADIUS
+	var ink := StandardMaterial3D.new()
+	ink.transparency=BaseMaterial3D.TRANSPARENCY_ALPHA
+	ink.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED
+	ink.albedo_color=Color(.1,1.,.65,.25)
+	sphere.material=ink
+	hand_volume.mesh=sphere
+	hand_volume.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(hand_volume)
+	hand_toggle.text="Hand hitbox"
+	hand_toggle.button_pressed=StorySession.game_options.get_value("reception_studio","hand_hitbox",false)
+	tiers.add_child(hand_toggle)
+	hand_toggle.toggled.connect(func(on):
+		StorySession.game_options.set_value("reception_studio","hand_hitbox",on)
 		StorySession.save_options()
 		draw_pose())
 	place.text="Place ready zone"
