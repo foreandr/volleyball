@@ -14,6 +14,9 @@ var attack_landing := Vector3.ZERO
 
 func start_drill() -> void:
 	cpu_defense=true
+	for i in homes.size():
+		homes[i]=StorySession.game_options.get_value("digging","defender_home_"+str(i),homes[i])
+	floor_target=StorySession.game_options.get_value("digging","floor_target",floor_target)
 	super.start_drill()
 	title.text="DIGGING  /  DIG FROM FIVE"
 	for actor in passers+[receiving_middle,wall[2]]:
@@ -127,6 +130,12 @@ func handle_drag(event: InputEvent) -> bool:
 	if event is InputEventMouseButton and event.button_index==MOUSE_BUTTON_LEFT:
 		if not event.pressed:
 			var handled := dragged>=0
+			if handled:
+				if dragged==2:
+					StorySession.game_options.set_value("digging","floor_target",floor_target)
+				else:
+					StorySession.game_options.set_value("digging","defender_home_"+str(dragged),homes[dragged])
+				StorySession.save_options()
 			dragged=-1
 			return handled
 		var closest := 22.
