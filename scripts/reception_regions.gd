@@ -24,16 +24,23 @@ static func legs(actor: Node3D, pose: Array, c: Dictionary, weight: float, flip 
 	var pelvis := rig.find_bone("pelvis")
 	var parent: Transform3D=author.world_pose(pose,rig.get_bone_parent(pelvis))
 	pose[pelvis].origin+=parent.basis.inverse()*Vector3(side_offset*.65,-c.drop,c.forward*.34)*weight
+	var natural := "r" if side_offset<0 else "l"
+	var choice: String=c.get("lead_foot","Auto")
+	var lead := natural if choice=="Auto" else ("r" if choice=="Right" else "l")
 	for side in ["l","r"]:
 		var foot: Transform3D=author.feet[side]
 		var goal := foot.origin
-		if side==("r" if side_offset<0 else "l"):
-			goal+=Vector3(side_offset*.91,0,c.forward*.5)*weight
+		if lead!=natural:
+			goal.x+=side_offset*.65*weight
+		if side==lead:
+			if lead==natural: goal.x+=side_offset*.91*weight
+			var forward: float=c.forward*.5 if choice=="Auto" else maxf(.22,absf(c.forward)*.5)
+			goal.z+=forward*weight
 			goal.y+=.07*sin(PI*weight)+float(c.get("knee_lift",0.))*weight
 		elif c.kind in ["knee","kneel","low","knee_slide","beach_drop","air_platform"]:
 			goal.z-=.25*weight
 		var pole := Vector3(.15 if side=="l" else -.15,0,1.)
-		if c.get("stack_knee",false) and side==("r" if side_offset<0 else "l"):
+		if c.get("stack_knee",false) and side==lead:
 			# Bias the knee toward the vertical line above the planted ankle.
 			var hip: Vector3=author.point(pose,"thigh_"+side)
 			var leg_axis := (goal-hip).normalized()

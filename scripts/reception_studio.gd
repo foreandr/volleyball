@@ -80,6 +80,8 @@ var lattice := MeshInstance3D.new()
 var highlight := MeshInstance3D.new()
 var miss_label := Label.new()
 var miss_logged := false
+var foot_choice := Button.new()
+var posed_lead_foot := "Auto"
 var region_label := Label.new()
 var depth_label := Label.new()
 const Catalog := "res://assets/reception_studio.json"
@@ -655,7 +657,10 @@ func draw_pose() -> void:
 		if StorySession.game_options.get_value("studio_mirror",assignment_key(address,region.w),routed_mirror): orientation.x=-orientation.x
 		defenders[receiving].basis=orientation
 	var pose_frame := clampf(frame-touch_frame+c.contact,0.,c.frames)
-	var signature := [active,serve_type,launch,index,legs,mirror.button_pressed,incoming_speed.value,source,region,assigned,motion_legs,target,feed_offset,cell_action(),defenders[receiving].position]
+	posed_lead_foot=lead_foot(address,region.w) if region.w>=0 else "Auto"
+	if defenders[receiving].basis.determinant()<0. and posed_lead_foot!="Auto":
+		posed_lead_foot="Left" if posed_lead_foot=="Right" else "Right"
+	var signature := [posed_lead_foot,active,serve_type,launch,index,legs,mirror.button_pressed,incoming_speed.value,source,region,assigned,motion_legs,target,feed_offset,cell_action(),defenders[receiving].position]
 	if signature!=contact_key:
 		contact_key=signature
 		reach_adjustment=Vector3.ZERO
@@ -1295,6 +1300,7 @@ func sample_layer(which: int, timeline: Dictionary, f: float) -> void:
 	var direction: Vector3=player.to_local(set_intercept).slide(Vector3.UP).normalized()
 	var stride := Vector2(c.side,c.forward).length()
 	c=c.duplicate()
+	c.lead_foot=posed_lead_foot
 	c.side=direction.x*stride+reach_adjustment.x/.65
 	c.forward=direction.z*stride+reach_adjustment.z/.34
 	c.drop=maxf(0.,float(c.drop)-reach_adjustment.y)
@@ -1398,6 +1404,14 @@ func build_map(tiers: VBoxContainer) -> void:
 	editor.add_child(region_label)
 	miss_label.modulate=Color("#ff897c")
 	editor.add_child(miss_label)
+	editor.add_child(foot_choice)
+	foot_choice.pressed.connect(func():
+		var choices := ["Auto","Left","Right"]
+		var next: String=choices[(choices.find(lead_foot(cell,quadrant))+1)%3]
+		StorySession.game_options.set_value("studio_lead_foot",assignment_key(cell,quadrant),next)
+		StorySession.save_options()
+		update_region()
+		draw_pose())
 	button(editor,"Assign current action",assign_region)
 	rebuild_colors()
 	add_child(lattice)
@@ -1524,6 +1538,7 @@ func assigned_action(address: Vector3i,part: int) -> int:
 		if StorySession.game_options.has_section_key("studio_three_rows",child_key):
 			return int(StorySession.game_options.get_value("studio_three_rows",child_key))
 		if address==REGION_22:
+			if part in [2,7]: return 72
 			var parent_suffix := ".top" if part in [0,4,5,6] else (".bottom.left" if part in [1,3] else ".bottom.right")
 			return int(StorySession.game_options.get_value("studio_three_rows",Regions.key(address)+parent_suffix,72 if part==1 else 0))
 		if address==REGION_24:
@@ -1601,7 +1616,14 @@ func apply_cell_mirror(clip: Dictionary) -> void:
 	mirror.set_pressed_no_signal(on)
 	defenders[receiving].scale.x=-1. if on else 1.
 
+func lead_foot(address: Vector3i,part: int) -> String:
+	var default_foot := "Auto"
+	if address==REGION_22 and part==2: default_foot="Right"
+	if address==REGION_22 and part==7: default_foot="Left"
+	return StorySession.game_options.get_value("studio_lead_foot",assignment_key(address,part),default_foot)
+
 func update_region() -> void:
+	foot_choice.text="Lead foot: "+lead_foot(cell,quadrant)
 	depth_label.text=["Back","Body","Front"][cell.z-MAP_MIN.z]
 	var id := cell_action()
 	highlight.visible=not unfinished.button_pressed or id==0
