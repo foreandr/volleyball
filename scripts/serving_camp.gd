@@ -278,8 +278,8 @@ func update_serve_aim(delta: float) -> void:
 		var right := camera.global_basis.x.slide(Vector3.UP).normalized()
 		destination.x+=signf(right.x)*stick.x*5.*delta
 		destination.z-=stick.y*5.*delta
-		destination.x=clampf(destination.x,-4.5,4.5)
-		destination.z=clampf(destination.z,BallNet.NET_Z+.2,BallNet.NET_Z+9.)
+		destination.x=clampf(destination.x,-6.,6.)
+		destination.z=clampf(destination.z,BallNet.NET_Z+.2,BallNet.NET_Z+10.5)
 	var shot=serves[flight_style()]
 	for driver in serves:
 		driver.visible=driver==shot
