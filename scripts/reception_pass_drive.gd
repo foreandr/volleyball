@@ -68,30 +68,22 @@ static func apply(rig: Skeleton3D, author: RefCounted, outgoing: Vector3, power:
 
 const FAST_DIG_ELBOW_DURATION := 0.32
 
-static func apply_fast_dig_elbow_bend(rig: Skeleton3D, age: float) -> void:
-	var bend := deg_to_rad(50.0)*smoothstep(0.0,0.095,age)*(1.0-smoothstep(0.12,FAST_DIG_ELBOW_DURATION,age))
-	var left := rig.find_bone("lowerarm_l")
-	var right := rig.find_bone("lowerarm_r")
-	var axis := (rig.get_bone_global_pose(left).origin-rig.get_bone_global_pose(right).origin).normalized()
-	if axis.is_zero_approx(): return
+static func apply_fast_dig_elbow_bend(rig: Skeleton3D, age: float, degrees := 50., struck_side := "") -> void:
+	var recoil := deg_to_rad(degrees)*smoothstep(0.,.045,age)*(1.-smoothstep(.075,FAST_DIG_ELBOW_DURATION,age))
+	if recoil<=0.: return
 	var chest := rig.get_bone_global_pose(rig.find_bone("spine_03")).origin
-	var flexion_direction := 0.0
-	for elbow_bone in [left,right]:
-		var elbow := rig.get_bone_global_pose(elbow_bone).origin
-		var shoulder := rig.get_bone_global_pose(rig.get_bone_parent(elbow_bone)).origin
-		var wrist := rig.get_bone_global_pose(rig.find_bone("hand_l" if elbow_bone == left else "hand_r")).origin
-		var upper := (elbow-shoulder).normalized()
+	for side in ["l","r"]:
+		if struck_side!="" and side!=struck_side: continue
+		var bone := rig.find_bone("lowerarm_"+side)
+		var parent := rig.get_bone_parent(bone)
+		var elbow := rig.get_bone_global_pose(bone).origin
+		var upper := (elbow-rig.get_bone_global_pose(parent).origin).normalized()
+		var wrist := rig.get_bone_global_pose(rig.find_bone("hand_"+side)).origin
 		var forearm := (wrist-elbow).normalized()
 		var hinge := upper.cross(forearm)
-		if hinge.length_squared() < 0.0001:
-			hinge = forearm.cross((chest-wrist).normalized())
-		var direction := hinge.normalized().dot(axis)
-		# Skip the recoil if a shared hinge would bend either elbow against its flexion plane.
-		if absf(direction) < 0.05 or flexion_direction*direction < 0.0: return
-		flexion_direction = direction
-		bend = minf(bend,maxf(0.0,deg_to_rad(100.0)-upper.angle_to(forearm)))
-	# Rotation about the elbow span preserves the wrists' separation along that span.
-	for elbow_bone in [left,right]:
-		var parent_basis := rig.get_bone_global_pose(rig.get_bone_parent(elbow_bone)).basis.orthonormalized()
-		var rotation := Quaternion(parent_basis.inverse()*axis,bend*signf(flexion_direction))
-		rig.set_bone_pose_rotation(elbow_bone,(rotation*rig.get_bone_pose_rotation(elbow_bone)).normalized())
+		if hinge.length_squared()<.0001: hinge=forearm.cross(chest-wrist)
+		if hinge.is_zero_approx(): continue
+		var bend := minf(recoil,maxf(0.,deg_to_rad(100.)-upper.angle_to(forearm)))
+		var parent_basis := rig.get_bone_global_pose(parent).basis.orthonormalized()
+		var rotation := Quaternion((parent_basis.inverse()*hinge).normalized(),bend)
+		rig.set_bone_pose_rotation(bone,(rotation*rig.get_bone_pose_rotation(bone)).normalized())

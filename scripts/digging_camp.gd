@@ -137,8 +137,10 @@ func _process(delta: float) -> void:
 	if phase=="server_dig" and last_digger!=null:
 		var platform: Reception=dig_platforms[last_digger]
 		var age := dig_clock-platform.touch_time
-		if age>0. and age<platform.Drive.FAST_DIG_ELBOW_DURATION and not platform.low_save.active:
-			platform.Drive.apply_fast_dig_elbow_bend(last_digger.skeleton,age)
+		if age>0. and age<platform.Drive.FAST_DIG_ELBOW_DURATION:
+			var degrees := lerpf(6.,27.,smoothstep(10.,25.,dig_incoming.length()))
+			var side: String=platform.low_save.wide_arm if platform.low_save.active else ""
+			platform.Drive.apply_fast_dig_elbow_bend(last_digger.skeleton,age,degrees,side)
 
 func handle_drag(event: InputEvent) -> bool:
 	var camera := get_viewport().get_camera_3d()
