@@ -438,6 +438,10 @@ func sample_receiver(c: Dictionary,f: float) -> void:
 		var push := (offset.slide(Vector3.UP)/flight+Vector3.UP*lift).normalized()
 		var follow := (f-float(c.contact))/60.
 		var load_weight := smoothstep(-HandPass.CPU_PREP_LEAD,0.,follow)
+		var rig: Skeleton3D=player.skeleton
+		var forehead := rig.to_global(rig.get_bone_global_pose(rig.find_bone("Head")).origin).y+.12
+		var depth := clampf((forehead-goal.y)*.30,0.,.065)
+		bend_for_hand_pass(depth*load_weight*(1.-smoothstep(0.,HandPass.CPU_FOLLOW_TIME,follow)))
 		HandPass.standing_set(player,goal,offset,push,follow,load_weight,Vector3.ZERO,false)
 		return
 	if not Regions.movement(c):
@@ -457,6 +461,30 @@ func sample_receiver(c: Dictionary,f: float) -> void:
 	var bend := ForearmDrive.forearm_bend_degrees(incoming_speed.value/3.6)
 	speed_label.text="Incoming %d km/h   ·   %.0f°" % [incoming_speed.value,bend]
 	ForearmDrive.recoil_platform(player.skeleton,(f-float(c.contact))/60.,bend)
+
+func bend_for_hand_pass(depth: float) -> void:
+	if depth<=.00001: return
+	var rig: Skeleton3D=player.skeleton
+	var author=player.get_pose_author()
+	var pose := ready_pose.duplicate()
+	var pelvis := rig.find_bone("pelvis")
+	var parent: Transform3D=author.world_pose(pose,rig.get_bone_parent(pelvis))
+	pose[pelvis].origin+=parent.basis.inverse()*rig.global_basis.inverse()*(Vector3.DOWN*depth)
+	rig.set_bone_pose(pelvis,pose[pelvis])
+	for side in ["l","r"]:
+		var hip: String = "thigh_"+side
+		var knee: String = "calf_"+side
+		var ankle: String = "foot_"+side
+		var foot: Transform3D=author.world_pose(ready_pose,rig.find_bone(ankle))
+		var axis: Vector3=(foot.origin-author.point(ready_pose,hip)).normalized()
+		var pole: Vector3=(author.point(ready_pose,knee)-author.point(ready_pose,hip)).slide(axis).normalized()
+		author.limb(pose,hip,knee,ankle,foot.origin,pole)
+		var ankle_id := rig.find_bone(ankle)
+		var shin: Transform3D=author.world_pose(pose,rig.get_bone_parent(ankle_id))
+		pose[ankle_id]=shin.affine_inverse()*foot
+		for joint in [hip,knee,ankle]:
+			var bone := rig.find_bone(joint)
+			rig.set_bone_pose(bone,pose[bone])
 
 func select_legs(which: int) -> void:
 	legs=which

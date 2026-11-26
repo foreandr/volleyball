@@ -132,4 +132,4 @@ Reception Studio uses Ctrl-click for court cells. Explicit animation assignments
 
 Ctrl-clicking a defender cell repeats a standing float there. Drag the floor ring to aim the return.
 In Reception Studio the Mid Center Body cell defaults to overhead hand pass #10. Each standing float samples a point inside the selected box once per repetition.
-Studio overhead hand passes use the shared standing set load, extension and follow-through. The receiver keeps both feet planted and can lean from the torso.
+Studio overhead hand passes use the shared standing set load, extension and follow-through. The receiver keeps both feet planted and can lean from the torso. Lower hand passes add a planted knee bend of up to 6.5 cm at the hips, easing out through release.
