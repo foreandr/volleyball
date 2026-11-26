@@ -2718,7 +2718,7 @@ func check_floor(previous: float) -> void:
 func toggle_replay(prefer_current := false) -> void:
 	replay.toggle(self,prefer_current or phase in [Phase.DEAD,Phase.FINISHED])
 
-func pose_serve_receive_wait() -> void:
+func pose_serve_receive_wait(delta: float) -> void:
 	var weight := smoothstep(0.0,0.24,ready_age)
 	if serve_pending:
 		var release: float = serve.toss_release_time() if serve.has_method("toss_release_time") else 0.0
@@ -2727,27 +2727,14 @@ func pose_serve_receive_wait() -> void:
 	for index in players.size():
 		if team(index) == service_team: continue
 		var actor := players[index]
-		actor.animator.seek(0.0,true)
+		if weight>=.999: actor.animator.seek(0.0,true)
+		else: actor.animator.advance(delta)
 		if weight <= 0.001: continue
 		var bump := platforms[index]
 		bump.knee_bend_depth = (0.055 if index%team_size == 2 else 0.14)*weight
 		bump.apply_knee_bend()
 		bump.knee_bend_depth = 0.0
-		var rig: Skeleton3D = actor.skeleton
-		var author: RefCounted = actor.get_pose_author()
-		var pose: Array[Transform3D] = []
-		for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
-		var scale_: float = rig.global_basis.y.length()
-		for side in ["l","r"]:
-			var thigh: Vector3 = author.point(pose,"thigh_"+side)
-			var knee: Vector3 = author.point(pose,"calf_"+side)
-			var outward := 1.0 if side == "l" else -1.0
-			var target := thigh.lerp(knee,0.82)+Vector3(outward*0.04,0.035,0.075)/scale_
-			author.limb(pose,"upperarm_"+side,"lowerarm_"+side,"hand_"+side,target,
-				Vector3(outward*0.6,-0.4,-0.2),weight*0.85)
-			for name_ in ["upperarm_","lowerarm_","hand_"]:
-				var bone := rig.find_bone(name_+side)
-				rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
+		actor.pose_hands_on_knees(weight)
 
 func tick_match(delta: float, controls: RefCounted) -> void:
 	if replay.active:
@@ -2815,7 +2802,7 @@ func step_match(delta: float, controls: RefCounted) -> void:
 	if phase == Phase.READY:
 		ready_age += delta
 		if not is_human(server_index()) and ready_age >= 0.65: start_serve()
-		pose_serve_receive_wait()
+		pose_serve_receive_wait(delta)
 		if not serve_pending: return
 		serve.step(delta)
 		if not is_finite(serve.contact_clock): return

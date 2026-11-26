@@ -22,7 +22,12 @@ var pass_start := Vector3.ZERO
 var pass_clock := 0.
 const SETTER_HOME := Vector3(3.45,.04,11.1)
 const SETTER_BASE := Vector3(1.4,.04,5.2)
-const LEFT_PIN := Vector3(-3.55,3.05,5.05)
+# Receive in rotation one. The front row can hit in its reception lanes.
+const ATTACK_POINTS := [Vector3(3.55,3.05,5.05), Vector3(0,3.05,5.0), Vector3(-3.55,3.05,5.05), Vector3(0,3.05,7.45)]
+var attack_slot := 0
+var attack_options: Array[Node3D]=[]
+var set_duration := 1.35
+const MIDDLE_HOME := Vector3(0,.04,4.72)
 const HITTER_HOME := Vector3(-3.75,.04,6.95)
 var pin_frame := Node3D.new()
 var pin_attack := preload("res://scripts/match_attack.gd").new()
@@ -119,10 +124,11 @@ func start_drill() -> void:
 		register_student(blocker,i+8)
 		preload("res://scripts/practice_kit.gd").apply(blocker,false,i+8)
 		wall.append(blocker)
-	receiving_middle=athlete(Vector3(0,.04,5.55),"286881")
+	receiving_middle=athlete(MIDDLE_HOME,"286881")
 	register_student(receiving_middle,11)
 	preload("res://scripts/practice_kit.gd").apply(receiving_middle,false,11)
 	receiving_middle.rotation.y=PI
+	attack_options=[passers[2],receiving_middle,pin_hitter,passers[0]]
 	for i in TECHNIQUES.size():
 		var driver=TECHNIQUES[i].new()
 		world.add_child(driver)
@@ -172,6 +178,11 @@ func next_serve() -> void:
 	for driver in serves: driver.hide()
 	pin_attack.enabled=false
 	pin_attack.jump.active=false
+	for actor in attack_options:
+		if actor!=pin_hitter and actor.get_parent()==pin_frame: actor.reparent(world,true)
+	receiving_middle.position=MIDDLE_HOME
+	receiving_middle.rotation.y=PI
+	receiving_middle.play_action("idle")
 	pin_hitter.position=pin_frame.to_local(HITTER_HOME)
 	pin_hitter.rotation.y=0.
 	pin_hitter.play_action("idle")
@@ -204,7 +215,8 @@ func next_serve() -> void:
 	receiving_jump.active=false
 	receiving_setter.position=SETTER_HOME
 	receiving_setter.rotation.y=PI
-	receiving_setter.play_action("idle")
+	receiving_setter.play_action("base/Idle",0.)
+	receiving_setter.animator.seek(0.,true)
 	message.text="Hold to serve"
 
 func _input(event: InputEvent) -> void:
@@ -320,17 +332,39 @@ func _process(delta: float) -> void:
 	if serves.is_empty() or settings.visible or get_tree().paused: return
 	for i in passers.size():
 		passers[i].stamina.recover(delta)
+		if pin_attack.enabled and pin_attack.setter==passers[i]: continue
 		if i!=receiver or phase not in ["serve_flight","serve_pass"]:
 			passers[i].animator.advance(delta)
 	if phase not in ["serve_pass","serve_attack"]:
 		receiving_setter.animator.advance(delta)
 	hitter.stamina.recover(delta)
 	receiving_setter.stamina.recover(delta)
-	if phase=="serve_flight": move_receiver(receiving_setter,SETTER_BASE,delta)
 	if pin_attack.enabled:
 		pin_attack.tick_attack(delta)
 	else: pin_hitter.animator.advance(delta)
-	receiving_middle.animator.advance(delta)
+	if (not pin_attack.enabled or pin_attack.setter!=receiving_middle): receiving_middle.animator.advance(delta)
+	if phase=="serve_ready" or phase=="serve_toss":
+		var release: float=serves[toss_style].toss_release_time() if serves[toss_style].has_method("toss_release_time") else .18
+		var ready_weight := 1. if phase=="serve_ready" else 1.-smoothstep(release,release+.22,serve_clock)
+		var heading := SETTER_BASE-receiving_middle.position
+		receiving_middle.rotation.y=atan2(heading.x,heading.z)
+		if ready_weight>.001:
+			for i in passers.size():
+				var actor := passers[i]
+				actor.animator.seek(0.,true)
+				receptions[i].knee_bend_depth=.14*ready_weight
+				receptions[i].apply_knee_bend()
+				receptions[i].knee_bend_depth=0.
+				actor.pose_hands_on_knees(ready_weight)
+			for actor in [receiving_middle,pin_hitter]:
+				actor.animator.seek(0.,true)
+				actor.pose_hands_on_knees(ready_weight)
+		if phase=="serve_ready" or serve_clock<release:
+			receiving_setter.animator.seek(0.,true)
+		else:
+			if receiving_setter.animator.current_animation=="base/Idle": receiving_setter.play_action("idle")
+			move_receiver(receiving_setter,SETTER_BASE,delta)
+	elif phase=="serve_flight": move_receiver(receiving_setter,SETTER_BASE,delta)
 	step_serve_wall(delta)
 	if phase=="serve_return":
 		var previous := ball.global_position
@@ -484,6 +518,10 @@ func step_serve_reception(shot,previous: Vector3,delta: float) -> void:
 	pass_duration=(velocity.y+sqrt(discriminant))/9.81
 	pass_end=pass_start+velocity*pass_duration+Vector3.DOWN*4.905*pass_duration*pass_duration
 	trace("serve_pass_result",{"pass_target":str(pass_end),"setter_travel_m":(pass_end-SETTER_HOME).slide(Vector3.UP).length(),"pass_seconds":pass_duration,"pressure":platform.reception_pressure})
+	var available: Array[int]=[]
+	for slot in attack_options.size():
+		if attack_options[slot]!=passer or not platform.low_save.active: available.append(slot)
+	attack_slot=available.pick_random()
 	set_at=pass_duration
 	pass_clock=0.
 	ball.position=pass_start
@@ -502,7 +540,15 @@ func move_receiver(actor: Node3D,goal: Vector3,delta: float) -> void:
 func step_reception_rally(delta: float) -> void:
 	pass_clock+=delta
 	if phase=="serve_pass":
-		var facing := (LEFT_PIN-pass_end).slide(Vector3.UP).normalized()
+		var attack_point: Vector3=ATTACK_POINTS[attack_slot]
+		for slot in attack_options.size():
+			var actor := attack_options[slot]
+			if actor==passers[receiver] and (pass_clock<.32 or receptions[receiver].low_save.active): continue
+			var stage_point: Vector3=ATTACK_POINTS[slot]+Vector3(0,0,1.6)
+			stage_point.y=.04
+			if actor.get_parent()==pin_frame: stage_point=pin_frame.to_local(stage_point)
+			move_receiver(actor,stage_point,delta)
+		var facing := (attack_point-pass_end).slide(Vector3.UP).normalized()
 		var stance := Vector3(pass_end.x,.04,pass_end.z)-facing*.30
 		var lift: float=SET_VERTICAL*receiving_setter.stamina.effectiveness()
 		# Descending intersection of the existing pass arc with airborne hand height.
@@ -516,7 +562,7 @@ func step_reception_rally(delta: float) -> void:
 			var chase_goal := plant if pass_clock<=jump_at+delta else stance
 			chase_goal.z=maxf(chase_goal.z,BallNet.NET_Z+.22)
 			move_receiver(receiving_setter,chase_goal,delta)
-			if pass_clock>=jump_at and pass_clock-jump_at<=delta and receiving_setter.position.distance_to(plant)<.24 and lift>.20 and receiving_setter.reachable_set(intercept,LEFT_PIN,true).distance_to(LEFT_PIN)<.15:
+			if pass_clock>=jump_at and pass_clock-jump_at<=delta and receiving_setter.position.distance_to(plant)<.24 and lift>.20 and receiving_setter.reachable_set(intercept,attack_point,true).distance_to(attack_point)<.15:
 				receiving_setter.rotation.y=atan2(facing.x,facing.z)
 				receiving_jump.begin(receiving_setter,Vector2.ZERO,plant,SET_LOAD,SET_VERTICAL,2,false,1.,true)
 				receiving_jump.release()
@@ -547,12 +593,16 @@ func step_reception_rally(delta: float) -> void:
 			var accuracy := clampf(receiving_setter.effective_rating("Hand setting")/100.,0.,1.)
 			var miss := Vector2.from_angle(randf()*TAU)*sqrt(randf())*(.18+pressure*(.65+1.8*(1.-accuracy)))
 			pass_start=ball.position
-			pass_end=receiving_setter.reachable_set(pass_start,LEFT_PIN+Vector3(miss.x,0.,miss.y),receiving_jump.active)
+			pass_end=receiving_setter.reachable_set(pass_start,attack_point+Vector3(miss.x,0.,miss.y),receiving_jump.active)
 			pass_clock=0.
-			var duration := 1.35
+			set_duration=1.08 if attack_slot==1 else 1.35
+			var duration := set_duration
 			var velocity := (pass_end-pass_start)/duration+Vector3.UP*4.905*duration
 			var target := Vector3(randf_range(-3.8,2.),.11,randf_range(-3.,1.))
-			pin_attack.start_set(pin_hitter,pin_frame.to_local(pass_start),pin_frame.global_basis.inverse()*velocity,pin_frame.to_local(pass_end),pin_frame.to_local(target),0.,true)
+			var attacker := attack_options[attack_slot]
+			if attacker.get_parent()!=pin_frame: attacker.reparent(pin_frame,true)
+			pin_attack.jump.front_limit=.96 if attack_slot==3 else 3.35
+			pin_attack.start_set(attacker,pin_frame.to_local(pass_start),pin_frame.global_basis.inverse()*velocity,pin_frame.to_local(pass_end),pin_frame.to_local(target),0.,true)
 			phase="serve_attack"
 	else:
 		if receiving_jump.active: receiving_jump.step(receiving_setter,delta,Vector2.ZERO)
@@ -560,8 +610,8 @@ func step_reception_rally(delta: float) -> void:
 		if pass_clock<.22:
 			var push := pass_start.direction_to(pass_end+Vector3.UP*2.)
 			preload("res://scripts/hand_setting_pose.gd").apply(receiving_setter,pass_start+push*.18,1.-smoothstep(.07,.22,pass_clock))
-		var t := pass_clock/1.35
-		ball.position=pass_start.lerp(pass_end,t)+Vector3.UP*8.94*t*(1.-t)
+		var t := pass_clock/set_duration
+		ball.position=pass_start.lerp(pass_end,t)+Vector3.UP*4.905*set_duration*set_duration*t*(1.-t)
 		if ball.position.y<.11: next_serve()
 
 func return_struck(_actor: Node3D,point: Vector3,velocity: Vector3,_spin: float) -> void:
@@ -587,7 +637,8 @@ func step_serve_wall(delta: float) -> void:
 		if phase!="serve_attack":
 			actor.animator.advance(delta)
 			continue
-		var goal := clampf(pass_end.x+i*.74,-4.35,4.35)
+		var lead := clampi(roundi(pass_end.x/2.75)+1,0,2)
+		var goal := clampf(pass_end.x+(i-lead)*.74,-4.35,4.35)
 		var gap := goal-actor.position.x
 		var step := clampf(gap,-3.6*delta,3.6*delta)
 		actor.position.x+=step

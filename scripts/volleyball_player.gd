@@ -183,6 +183,23 @@ func get_pose_author() -> RefCounted:
 func animation_side(side: String) -> String:
 	return ("r" if side == "l" else "l") if mirror_animation else side
 
+func pose_hands_on_knees(weight: float) -> void:
+	var rig: Skeleton3D = skeleton
+	var author: RefCounted = get_pose_author()
+	var pose: Array[Transform3D] = []
+	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
+	var scale_: float = rig.global_basis.y.length()
+	for side in ["l","r"]:
+		var thigh: Vector3 = author.point(pose,"thigh_"+side)
+		var knee: Vector3 = author.point(pose,"calf_"+side)
+		var outward := 1.0 if side == "l" else -1.0
+		var target := thigh.lerp(knee,0.82)+Vector3(outward*0.04,0.035,0.075)/scale_
+		author.limb(pose,"upperarm_"+side,"lowerarm_"+side,"hand_"+side,target,
+			Vector3(outward*0.6,-0.4,-0.2),weight*0.85)
+		for name_ in ["upperarm_","lowerarm_","hand_"]:
+			var bone := rig.find_bone(name_+side)
+			rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
+
 func pose_reception_reach(step: Vector3, travel: Vector3, weight: float, progress: float, ready: Array[Transform3D], reach: Dictionary, knee_slide: bool, direction: int, contact: Vector3) -> void:
 	if knee_slide:
 		if mirror_animation:
