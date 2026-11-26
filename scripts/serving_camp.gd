@@ -603,7 +603,7 @@ func _process(delta: float) -> void:
 				flight_age=0.
 				phase="serve_flight"
 				message.text=("Perfect" if absf(error)<=SERVE_PERFECT else ("Early" if error<0. else "Late"))+" / "+SPIN_LABELS[spin_selection]
-				if toss_style>=2: hand_sound.play()
+				hand_sound.play()
 	elif phase in ["serve_flight","serve_pass","serve_attack","serve_miss"]:
 		serves[flight_style()].hide()
 		serve_clock+=delta
@@ -636,7 +636,11 @@ func _process(delta: float) -> void:
 			var surface := contacts.sweep(world,contacts.ball_shape,previous,motion_step,Contact.GYM|Contact.EQUIPMENT)
 			if not surface.is_empty():
 				ball.position=previous+motion_step*float(surface.fraction)+Vector3(surface.normal)*.004
-				drop_velocity=(motion_step/maxf(delta,.001)).bounce(surface.normal)*(.70 if surface.normal.y>.8 else .45)
+				var incoming := motion_step/maxf(delta,.001)
+				floor_impact.stream=preload("res://assets/audio/ball_floor.wav")
+				floor_impact.volume_db=linear_to_db(clampf(absf(incoming.dot(surface.normal))/12.,.06,.88))
+				floor_impact.play()
+				drop_velocity=incoming.bounce(surface.normal)*(.70 if surface.normal.y>.8 else .45)
 				drop_net_hit.clear()
 				drop_net_time=0.
 				roll_time=-1.
