@@ -1077,14 +1077,22 @@ func step_serve_wall(delta: float) -> void:
 			if not block.step(delta,ball.global_position): wall_jumps[i]=null
 			continue
 		var committing := middle_commit and i==1 and phase=="serve_pass" and set_at-pass_clock<.43
-		if phase!="serve_attack" and not committing:
+		var reading_set := phase=="serve_attack" or committing
+		var recovering := (phase=="serve_pass" and last_shot_slot>=0) or (phase=="serve_return" and return_touched and not attack_decided and drop_velocity.z>0.)
+		if not reading_set and not recovering:
 			actor.animator.advance(delta)
 			continue
-		var lead := clampi(roundi(pass_end.x/2.75)+1,0,2)
-		var pattern: RefCounted=actor.block_read(attack_options[attack_slot])
-		var shade: float=pattern.shade(pass_end.z-BallNet.NET_Z,pin_attack.pin_arrival-pass_clock)
-		var goal := clampf(pass_end.x+shade+(i-lead)*.74,-4.35,4.35)
-		if committing: goal=route_point(1).x
+		var goal := (i-1)*2.75
+		if reading_set:
+			var lead := clampi(roundi(pass_end.x/2.75)+1,0,2)
+			var pattern: RefCounted=actor.block_read(attack_options[attack_slot])
+			var shade: float=pattern.shade(pass_end.z-BallNet.NET_Z,pin_attack.pin_arrival-pass_clock)
+			goal=route_point(1).x if committing else clampf(pass_end.x+shade+(i-lead)*.74,-4.35,4.35)
+		else:
+			# Read the hitter in this blocker's lane before the setter reveals the next target.
+			var lane_slot: int=[2,1,0][i]
+			var lane_read: RefCounted=actor.block_read(attack_options[lane_slot])
+			goal+=clampf(lane_read.shade(route_point(lane_slot).z-BallNet.NET_Z)*lane_read.confidence,-.45,.45)
 		var gap := goal-actor.position.x
 		var step := clampf(gap,-3.6*delta,3.6*delta)
 		actor.position.x+=step
@@ -1092,7 +1100,7 @@ func step_serve_wall(delta: float) -> void:
 		actor.animator.advance(delta)
 		shuffle_steps[actor].block_step(Vector3.RIGHT*step/maxf(delta,.001),gap,0.,not wall_committed[i],false,delta)
 		var reachable := 1.35 if i==1 and attack_slot==1 else .82
-		if not wall_committed[i] and absf(gap)<reachable and (committing or pin_attack.pin_arrival-pass_clock<=.51):
+		if reading_set and not wall_committed[i] and absf(gap)<reachable and (committing or pin_attack.pin_arrival-pass_clock<=.51):
 			block=PracticeBlock.new()
 			block.aggressive_press=true
 			block.track_near_ball=true
