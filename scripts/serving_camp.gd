@@ -5,6 +5,7 @@ const FACE := [JOY_BUTTON_A,JOY_BUTTON_B,JOY_BUTTON_X,JOY_BUTTON_Y]
 const LABELS := ["Spin","Float","Standing float","Underhand"]
 const HOMES := [Vector3(-2.9,.04,9.2),Vector3(0,.04,10.),Vector3(2.9,.04,9.2)]
 var serves := []
+var serve_contact_offsets: Array[Vector3]=[]
 var passers: Array[Node3D]=[]
 const JUMP_SERVE_VERTICAL := 57.*.0254
 const JUMP_TOSS_APEX := [6.4,5.1]
@@ -15,6 +16,9 @@ var toss_airborne := false
 var toss_style := 2
 var hit_style := 2
 var release_time := INF
+const SERVE_HOLD_SECONDS := .25
+var pending_serve := -1
+var held_seconds := 0.0
 var serve_clock := 0.
 var flight_age := 0.
 var destination := Vector3(0,.065,10.)
@@ -160,6 +164,7 @@ func start_drill() -> void:
 		var driver=TECHNIQUES[i].new()
 		world.add_child(driver)
 		driver.configure(setter,Vector3(0,.04,[-8.2,-6.6,-6.1,-6.1][i]))
+		serve_contact_offsets.append(driver.preview_origin-driver.serve_start)
 		driver.hide()
 		serves.append(driver)
 	title.text="SERVING"
@@ -200,7 +205,7 @@ func update_serve_aim(delta: float) -> void:
 		driver.ball.hide()
 		driver.aim_ring.hide()
 	if before:
-		shot.preview_origin=serve_station+Vector3(0,attack_contact_height() if hit_style<2 else hitter.height_cm*.012,1.6 if hit_style<2 else .45)
+		shot.preview_origin=serve_station+(Vector3(0,attack_contact_height()-serve_station.y,1.6) if hit_style<2 else serve_contact_offsets[hit_style])
 	elif toss_style<2:
 		shot.preview_origin=endpoint if toss_airborne else setter.position+setter.basis.z*2.15+Vector3.UP*(attack_contact_height()-setter.position.y)
 	configure_flight(shot,shot.preview_origin)
@@ -244,6 +249,7 @@ func next_serve() -> void:
 	swing_time=-1.
 	toss_airborne=false
 	phase="serve_ready"
+	pending_serve=-1
 	serve_clock=0.
 	release_time=INF
 	var ready=serves[2]
@@ -276,13 +282,16 @@ func _input(event: InputEvent) -> void:
 		super._input(event)
 
 func handle_serve_button(style: int,pressed: bool) -> void:
-	if pressed and phase=="serve_ready":
-		toss_style=style
-		hit_style=style
-		serves[style].serve_start=serve_station
-		serves[style].reset()
-		phase="serve_toss"
-		message.text=LABELS[style]
+	if phase=="serve_ready":
+		if pressed:
+			pending_serve=style
+			held_seconds=0.
+			toss_style=style
+			hit_style=style
+			update_serve_aim(0.)
+			message.text=LABELS[style]+"  -  Hold to serve"
+		elif pending_serve==style:
+			pending_serve=-1
 	elif phase=="serve_toss":
 		if pressed and toss_style<2 and style<2:
 			hit_style=style
@@ -371,7 +380,10 @@ func walk_server(delta: float) -> void:
 	ball.position=Contact.palm(hitter,"l")+Vector3.UP*.10
 
 func _process(delta: float) -> void:
-	if serves.is_empty() or settings.visible or get_tree().paused: return
+	if settings.visible or get_tree().paused or replay_inspector.active:
+		pending_serve=-1
+		return
+	if serves.is_empty(): return
 	for i in passers.size():
 		passers[i].stamina.recover(delta)
 		if pin_attack.enabled and pin_attack.setter==passers[i]: continue
@@ -438,6 +450,14 @@ func _process(delta: float) -> void:
 	if phase=="serve_ready":
 		walk_server(delta)
 		update_serve_aim(delta)
+		if pending_serve>=0:
+			held_seconds+=delta
+			if held_seconds>=SERVE_HOLD_SECONDS:
+				pending_serve=-1
+				serves[toss_style].serve_start=serve_station
+				serves[toss_style].reset()
+				phase="serve_toss"
+				message.text=LABELS[toss_style]
 		return
 	var motion=serves[toss_style]
 	if phase=="serve_toss":
