@@ -437,7 +437,7 @@ func draw_pose() -> void:
 	feed_fraction=1.
 	var rig: Skeleton3D=player.skeleton
 	var head: Vector3=rig.to_global(player.get_pose_author().point(ready_pose,"Head"))-player.global_position+defenders[receiving].position
-	var jumping: bool=c.kind=="overhead" and (c.get("jump_set",false) or aim.y>head.y+.22)
+	var jumping: bool=c.kind=="overhead" and not c.has("step_legs") and (c.get("jump_set",false) or aim.y>head.y+.22)
 	if jumping and cell_action()>0:
 		var advance := clampf(head.z+.23-aim.z,0.,1.95)
 		feed_fraction-=advance/maxf(1.,launch.z-aim.z)
@@ -554,12 +554,12 @@ func sample_receiver(c: Dictionary,f: float) -> void:
 		var load_weight := smoothstep(-HandPass.CPU_PREP_LEAD,0.,follow)
 		var rig: Skeleton3D=player.skeleton
 		var forehead := rig.to_global(rig.get_bone_global_pose(rig.find_bone("Head")).origin).y+.12
-		var jump_set: bool=c.get("jump_set",false) or goal.y>forehead+.10
+		var jump_set: bool=not c.has("step_legs") and (c.get("jump_set",false) or goal.y>forehead+.10)
 		if jump_set:
 			jump_to_set(goal,follow)
 			lean_for_hand_pass(goal,load_weight*(1.-smoothstep(.035,.28,follow)),deg_to_rad(5.))
 		else:
-			pose_hand_pass_legs(goal,forehead,follow)
+			pose_hand_pass_legs(goal,forehead,follow,int(c.get("step_legs",0)))
 			var reach_weight := load_weight*(1.-smoothstep(.035,.28,follow))
 			lean_for_hand_pass(goal,reach_weight)
 		HandPass.standing_set(player,goal,offset,push,follow,load_weight,Vector3.ZERO,jump_set)
@@ -643,9 +643,9 @@ func jump_to_set(goal: Vector3, follow: float) -> void:
 	steps.weight=smoothstep(0.,.16,progress)*(1.-smoothstep(.80,1.,progress))
 	steps.step(steps.travel,0.,1.,true,true)
 
-func pose_hand_pass_legs(goal: Vector3, standing_height: float, follow: float) -> void:
+func pose_hand_pass_legs(goal: Vector3, standing_height: float, follow: float, step_legs: int) -> void:
 	var drop := standing_height-goal.y
-	if drop < -.10:
+	if step_legs==0 and drop < -.10:
 		var height := clampf(-drop-.06,.04,.38)
 		var half_flight := sqrt(2.*height/9.81)
 		var rise := maxf(0.,height-4.905*follow*follow)
@@ -661,12 +661,16 @@ func pose_hand_pass_legs(goal: Vector3, standing_height: float, follow: float) -
 	var lateral: float=player.to_local(goal).x
 	var recipe_id := 6 if drop>.26 else 4
 	if drop>.12 and absf(lateral)>.20: recipe_id=7
+	if step_legs>0: recipe_id=step_legs
 	var recipe: Dictionary=clips[recipe_id-1].duplicate()
 	var scale_m: float=player.skeleton.global_basis.x.length()
 	recipe.side=minf(absf(lateral)*.55,.15)/scale_m if recipe_id==7 else 0.
 	var depth_offset: float=player.to_local(goal).z-.20
 	recipe.forward=clampf(depth_offset,-.65,.50)/scale_m
 	recipe.drop=minf(float(recipe.drop)+.15,maxf(0.,drop)/scale_m)
+	if step_legs>0:
+		recipe.side=clampf(absf(lateral)*.8,.015,.38)/scale_m
+		recipe.forward=clampf(depth_offset*2.,.12,1.35)/scale_m
 	var pose := ready_pose.duplicate()
 	Regions.legs(player,pose,recipe,weight,lateral<0.)
 	for joint in ["pelvis","thigh_l","calf_l","foot_l","thigh_r","calf_r","foot_r"]:
@@ -879,6 +883,7 @@ func assigned_action(address: Vector3i,part: int) -> int:
 		if StorySession.game_options.has_section_key("studio_three_rows",child_key):
 			return int(StorySession.game_options.get_value("studio_three_rows",child_key))
 		if depth_split(address,part):
+			if part<2: return 79
 			var parent_key := Regions.key(address)+"."+str(part%2+1)
 			return int(StorySession.game_options.get_value("studio_three_rows",parent_key,78))
 		if address==HEAD_CELL and part>=2: return 0
