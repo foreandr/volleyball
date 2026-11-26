@@ -220,7 +220,9 @@ func sample_defensive_contact(platform: Reception,start: float,dt: float,_until_
 	var actor=platform.setter
 	var automatic: bool=actor!=hitter or cpu_defense
 	if automatic:
-		if not return_touched and reads_serve_out(path.call(start+dt+_until_floor),actor.effective_rating("Forearm reception"),return_line_error): return
+		if not return_touched and reads_serve_out(path.call(start+dt+_until_floor),actor.effective_rating("Forearm reception"),return_line_error):
+			actor.pose_leave_ball(start)
+			return
 		var read_at: float=actor.reaction_seconds()
 		if start+dt<=read_at: return
 		if start<read_at:

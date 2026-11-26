@@ -789,6 +789,7 @@ func step_serve_reception(shot,previous: Vector3,delta: float) -> void:
 			goal.y=passer.global_position.y
 			move_receiver(passer,passer.get_parent_node_3d().to_local(goal),delta)
 		face_receive_ball(passer,ball.global_position,delta)
+		passer.pose_leave_ball(flight_age)
 		return
 	var incoming := (ball.position-previous)/maxf(.001,delta)
 	if flight_age<receive_at-.31:
@@ -1191,7 +1192,9 @@ func block_on_flight_segment(previous: Vector3) -> bool:
 	if off_blocker>=0: defenders.append(wall[off_blocker])
 	for defender in defenders:
 		var platform: Reception=dig_platforms[defender]
-		if defender!=hitter and not return_touched and reads_serve_out(now+drop_velocity*until_floor,defender.effective_rating("Forearm reception"),return_line_error): continue
+		if defender!=hitter and not return_touched and reads_serve_out(now+drop_velocity*until_floor,defender.effective_rating("Forearm reception"),return_line_error):
+			defender.pose_leave_ball(dig_clock)
+			continue
 		if defender!=hitter and dig_clock<defender.reaction_seconds(): continue
 		if defender!=hitter and until_floor<.55: platform.queue_bump(start)
 		if not is_finite(platform.pressed_at): continue

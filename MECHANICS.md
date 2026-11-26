@@ -155,3 +155,5 @@ Forearm reception checks the moving ball against the animated reception capsules
 Reception Studio has saved bottom-panel feed controls for serve technique, pace in km/h and starting court coordinates. Close forearm misses can use a small additional leg reach, with contact checked again against the animated capsules.
 Random assigned boxes picks an assigned region on the center receiver and a point inside it for each studio feed. Repeats are allowed. Disabling it restores the manual selection.
 Outgoing receptions carry backspin about the horizontal axis across the pass direction. Fast forearm receptions scale to 47 degrees of post-contact bend at 120 km/h.
+
+Reception Studio, serve reception, CPU digs and match reception use the shared arms-out gesture on a CPU out call.

@@ -204,6 +204,26 @@ func get_pose_author() -> RefCounted:
 func animation_side(side: String) -> String:
 	return ("r" if side == "l" else "l") if mirror_animation else side
 
+func pose_leave_ball(seconds: float) -> void:
+	var weight := smoothstep(0.,.22,seconds)
+	if weight<=0.: return
+	var author := get_pose_author()
+	var pose: Array=[]
+	for i in skeleton.get_bone_count(): pose.append(skeleton.get_bone_pose(i))
+	for side in ["l","r"]:
+		var upper := "upperarm_"+str(side)
+		var lower := "lowerarm_"+str(side)
+		var hand := "hand_"+str(side)
+		var shoulder: Vector3=author.point(pose,upper)
+		var elbow: Vector3=author.point(pose,lower)
+		var length := shoulder.distance_to(elbow)+elbow.distance_to(author.point(pose,hand))
+		var outward := signf(shoulder.x-author.point(pose,"pelvis").x)
+		var direction := Vector3(outward,.19,.13).normalized()
+		author.limb(pose,upper,lower,hand,shoulder+direction*length*.96,Vector3(0,-1,0),weight)
+		for joint in [upper,lower]:
+			var bone := skeleton.find_bone(joint)
+			skeleton.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
+
 func pose_set_call(option: int, middle_31: bool, weight: float) -> void:
 	var author := get_pose_author()
 	var pose: Array=[]

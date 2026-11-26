@@ -669,6 +669,7 @@ func draw_pose() -> void:
 	reset_end_frame=0.
 	if c.kind=="overhead": pose_frame=maxf(0.,frame-touch_frame+c.contact)
 	sample_receiver(c,pose_frame,active,motion_legs)
+	if leave_feed: player.pose_leave_ball((frame-touch_frame)/60.+duration)
 	hand_volume.visible=hand_toggle.button_pressed and c.kind=="overhead" and active
 	if hand_volume.visible: hand_volume.global_position=HandPass.contact_center(player)
 	for i in arm_volumes.size():

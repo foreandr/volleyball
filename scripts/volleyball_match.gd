@@ -1682,7 +1682,9 @@ func tick_receive(delta: float, previous: float) -> void:
 	if not spectator and receiving_team == 0 and is_finite(platforms[0].pressed_at) and not blocks.has(0): index = 0
 	if index < 0 or blocks.has(index): return
 	if not is_human(index) and last_player>=0 and team(last_player)!=team(index):
-		if Flight.reads_out(path_point(flight_end()),line_read_error,players[index].effective_rating("Forearm reception")): return
+		if Flight.reads_out(path_point(flight_end()),line_read_error,players[index].effective_rating("Forearm reception")):
+			players[index].pose_leave_ball(elapsed)
+			return
 	if cpu_second_spike: return
 	if not is_human(index) and not is_finite(platforms[index].pressed_at):
 		var planned_attack := cpu_dump or overpass_flight == flight_number
