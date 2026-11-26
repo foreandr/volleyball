@@ -67,7 +67,7 @@ static func apply(rig: Skeleton3D, author: RefCounted, outgoing: Vector3, power:
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
 
 const FAST_FOREARM_SPEED := 60./3.6
-const BEND_AT_120_KMH := 44.
+const BEND_AT_120_KMH := 47.
 
 static func forearm_bend_degrees(speed_mps: float) -> float:
 	return clampf((speed_mps-FAST_FOREARM_SPEED)/FAST_FOREARM_SPEED,0.,4./3.)*BEND_AT_120_KMH

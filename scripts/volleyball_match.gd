@@ -1210,7 +1210,7 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 		var crossing_point := world_point+world_motion*crossing+Vector3.DOWN*0.5*Flight.GRAVITY*crossing*crossing
 		# A teammate can still play a low pass before it reaches the net.
 		over = crossing_point.y >= Net.NET_TOP+0.02
-	var outgoing_spin := Vector3.ZERO
+	var outgoing_spin := Flight.reception_backspin(world_motion) if touches==1 or technique==0 else Vector3.ZERO
 	if technique == 0 and sample_after > sample_before:
 		var incoming_motion := (path_point(sample_after)-path_point(sample_before))/(sample_after-sample_before)
 		outgoing_spin = Flight.forearm_spin(incoming_motion,world_motion,ball_spin,BallPreview.RADIUS)

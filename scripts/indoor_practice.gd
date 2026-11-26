@@ -1455,7 +1455,9 @@ func step_practice(delta: float) -> void:
 					reception_pose.low_save.sample(setter,bump_follow_start+elapsed,bump_follow_start)
 				else: reception_pose.follow_forearm(bump_follow_start+elapsed,bump_incoming)
 			if bump_aim.is_zero_approx() and automatic_setter() and elapsed<=Hands.CPU_FOLLOW_TIME: face_set(setter,target,delta)
-			ball.rotate_x(delta*4.0)
+			if not bump_aim.is_zero_approx():
+				preload("res://scripts/pass_flight.gd").rotate_reception_ball(ball,(endpoint-source)/flight_time,delta)
+			else: ball.rotate_x(delta*4.0)
 			var t := clampf(elapsed/flight_time,0,1)
 			var desired := arc(source,endpoint,t,set_arc_height)
 			var motion := desired-ball.position

@@ -281,6 +281,6 @@ An exceptional setter can deliver faster offensive sets across the net width. Or
 
 For a spin serve, the server can toss with the left hand, the right hand, or both hands together.
 
-## Future reception backspin
+## Reception backspin
 
 Across drills and matches, a received ball should generally leave the receiver with backspin.

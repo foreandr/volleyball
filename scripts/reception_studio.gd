@@ -32,6 +32,7 @@ var dragging := -1
 var drag_offset := Vector3.ZERO
 var pass_marker := MeshInstance3D.new()
 var dragging_target := false
+var camera_dirty := false
 var camera_offset := Vector3.ZERO
 var other_grids: Array[MeshInstance3D]=[]
 var pass_arc := HSlider.new()
@@ -170,6 +171,11 @@ func _ready() -> void:
 	add_child(pass_marker)
 	add_child(camera)
 	camera.current=true
+	var view: Vector3=StorySession.game_options.get_value("reception_studio","camera_view",Vector3(yaw,elevation,distance))
+	yaw=view.x
+	elevation=view.y
+	distance=view.z
+	camera_offset=StorySession.game_options.get_value("reception_studio","camera_offset",camera_offset)
 	position_camera()
 	var layer := CanvasLayer.new()
 	add_child(layer)
@@ -190,6 +196,8 @@ func _ready() -> void:
 	mirror.text="Mirror"
 	row.add_child(mirror)
 	mirror.toggled.connect(func(on):
+		StorySession.game_options.set_value("studio_mirror",assignment_key(cell,quadrant),on)
+		StorySession.save_options()
 		defenders[receiving].scale.x=-1. if on else 1.
 		draw_pose())
 	button(row,"−1 frame",step.bind(-1))
@@ -287,7 +295,7 @@ func restore_selection() -> void:
 	var selection: Dictionary=StorySession.game_options.get_value("reception_studio","selection",{})
 	cell=Vector3i(selection.get("cell",cell)).clamp(MAP_MIN,MAP_MAX)
 	quadrant=clampi(selection.get("part",0),0,region_parts(cell)-1)
-	activate_receiver(clampi(selection.get("receiver",0),0,defenders.size()-1))
+	activate_receiver(0)
 	preview_cell()
 
 func configure_feed() -> void:
@@ -380,10 +388,12 @@ func _process(delta: float) -> void:
 	if pan!=Vector2.ZERO:
 		var forward := -camera.basis.z.slide(Vector3.UP).normalized()
 		camera_offset+=(camera.basis.x*pan.x+forward*pan.y)*delta*4.
+		camera_dirty=true
 		position_camera()
 	elapsed+=delta
 	if elapsed>.5:
 		elapsed=0.
+		save_camera_view()
 		refresh()
 	if playing:
 		frame+=delta*60.
@@ -455,7 +465,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				hover_number.text=region_number(address,part)
 				hover.show()
 				if click and event.ctrl_pressed:
-					activate_receiver(chosen)
+					activate_receiver(0)
 					cell=address
 					quadrant=part
 					save_selection()
@@ -464,9 +474,11 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion and event.button_mask & MOUSE_BUTTON_MASK_MIDDLE:
 		yaw+=event.relative.x*.008
 		elevation=clampf(elevation+event.relative.y*.005,-.1,1.1)
+		camera_dirty=true
 		position_camera()
 	elif event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_WHEEL_UP,MOUSE_BUTTON_WHEEL_DOWN]:
 		distance=clampf(distance+(-.25 if event.button_index==MOUSE_BUTTON_WHEEL_UP else .25),1.8,7.)
+		camera_dirty=true
 		position_camera()
 	elif event is InputEventKey and event.pressed:
 		match event.keycode:
@@ -524,6 +536,16 @@ func _input(event: InputEvent) -> void:
 		StorySession.save_options()
 		dragging=-1
 	get_viewport().set_input_as_handled()
+
+func save_camera_view() -> void:
+	if not camera_dirty: return
+	camera_dirty=false
+	StorySession.game_options.set_value("reception_studio","camera_view",Vector3(yaw,elevation,distance))
+	StorySession.game_options.set_value("reception_studio","camera_offset",camera_offset)
+	StorySession.save_options()
+
+func _exit_tree() -> void:
+	save_camera_view()
 
 func position_camera() -> void:
 	var target := pivot.position+camera_offset+Vector3(0,.92,.15)
@@ -672,6 +694,9 @@ func draw_pose() -> void:
 		crossing.global_position=grid.to_global(region_center(box_address,occupied.w))
 		crossing.scale=region_size(box_address,occupied.w)/CELL_SIZE
 		crossing.show()
+	feed.ball.rotation=Vector3.ZERO
+	if reachable and seconds>0.:
+		preload("res://scripts/pass_flight.gd").rotate_reception_ball(feed.ball,(pass_marker.position-target)/landing,seconds)
 	feed.ball.position=point
 	feed.ball.visible=point.y>=.145
 	if ball_trail.visible and seconds > -duration:
@@ -1056,7 +1081,7 @@ func select_legs(which: int) -> void:
 		if forearm_preview:
 			index=which
 			seek.max_value=clips[index].frames
-			mirror.button_pressed=(cell.x<1)!=(float(clips[index].side)<0.) if cell.x!=1 else false
+			apply_cell_mirror(clips[index])
 		frame=seek.min_value
 		playing=true
 		contact_key.clear()
@@ -1202,6 +1227,10 @@ func build_map(tiers: VBoxContainer) -> void:
 		StorySession.save_options()
 		draw_pose())
 	place.text="Place ready zone"
+	place.button_pressed=StorySession.game_options.get_value("reception_studio","place_zone",false)
+	place.toggled.connect(func(on):
+		StorySession.game_options.set_value("reception_studio","place_zone",on)
+		StorySession.save_options())
 	tiers.add_child(place)
 	var caption := Label.new()
 	pass_arc.min_value=.25
@@ -1366,7 +1395,7 @@ func next_assigned_feed() -> void:
 		playing=false
 		return
 	var box: Dictionary=assigned.pick_random()
-	activate_receiver(randi_range(0,defenders.size()-1))
+	activate_receiver(0)
 	cell=box.address
 	quadrant=box.part
 	preview_cell()
@@ -1384,6 +1413,7 @@ func preview_cell() -> void:
 	update_region()
 	pick_feed_point()
 	var id := cell_action()
+	if id==0: apply_cell_mirror({})
 	for i in clips.size():
 		if int(clips[i].id)==id:
 			index=i
@@ -1395,13 +1425,18 @@ func preview_cell() -> void:
 					hand_leg_preview=true
 			seek.max_value=clips[index].frames
 			update_leg_buttons()
-			if cell.x!=1:
-				mirror.button_pressed=(cell.x<1)!=(float(clips[i].side)<0.)
+			apply_cell_mirror(clips[i])
 			break
 	
 	frame=seek.min_value
 	playing=true
 	draw_pose()
+
+func apply_cell_mirror(clip: Dictionary) -> void:
+	var automatic := cell.x!=1 and not clip.is_empty() and ((cell.x<1)!=(float(clip.side)<0.))
+	var on: bool=StorySession.game_options.get_value("studio_mirror",assignment_key(cell,quadrant),automatic)
+	mirror.set_pressed_no_signal(on)
+	defenders[receiving].scale.x=-1. if on else 1.
 
 func update_region() -> void:
 	depth_label.text=["Back","Body","Front"][cell.z-MAP_MIN.z]
