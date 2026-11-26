@@ -103,6 +103,11 @@ var closest_attack_age := 0.
 var last_shot_slot := -1
 var cover_players: Array[Node3D]=[]
 
+const MAX_SET_HORIZONTAL_MPS := 6.5
+
+func paced_set_duration(origin: Vector3, target: Vector3, tempo: float) -> float:
+	return maxf(tempo,(target-origin).slide(Vector3.UP).length()/MAX_SET_HORIZONTAL_MPS)
+
 const ZERO_FLIGHT := .34
 const ONE_FLIGHT := .65
 var pass_in_system := false
@@ -839,11 +844,12 @@ func step_reception_rally(delta: float) -> void:
 				if receiving_middle.get_parent()!=pin_frame: receiving_middle.reparent(pin_frame,true)
 				var quick := route_point(1)
 				quick.y=contact_height_for(1)
-				var launch := (quick-pass_end)/ZERO_FLIGHT+Vector3.UP*4.905*ZERO_FLIGHT
+				var quick_duration := paced_set_duration(pass_end,quick,ZERO_FLIGHT)
+				var launch := (quick-pass_end)/quick_duration+Vector3.UP*4.905*quick_duration
 				middle_decoy.jump.front_limit=3.35
 				middle_decoy.jump.max_height=pin_attack.jump.max_height
 				middle_decoy.start_set(receiving_middle,pin_frame.to_local(pass_end),pin_frame.global_basis.inverse()*launch,pin_frame.to_local(quick),pin_frame.to_local(scoring_target(quick)),pass_clock-set_at,true)
-				middle_decoy.pin_arrival=ZERO_FLIGHT
+				middle_decoy.pin_arrival=quick_duration
 				middle_decoy.approach_intercept=pin_frame.to_local(quick)
 				middle_decoy.approach_steps=2
 				middle_decoy.begin_attack_jump(Vector2.ZERO,.30,middle_decoy.jump.max_height-.2032)
@@ -888,12 +894,12 @@ func step_reception_rally(delta: float) -> void:
 		var fast := pass_in_system and planned.z<=BallNet.NET_Z+3. and can_approach and (runner!=first_contact_player() or pass_clock>.48)
 		if (attack_slot==1 or fast and (attack_slot!=3 or middle_decoy.enabled)) and not pin_attack.enabled and set_at-pass_clock<(.24 if attack_slot==3 else .48):
 			if runner.get_parent()!=pin_frame: runner.reparent(pin_frame,true)
-			var planned_duration := ZERO_FLIGHT if attack_slot==1 else pin_flight_time(attack_slot)
+			var planned_duration := paced_set_duration(planned,attack_point,ZERO_FLIGHT if attack_slot==1 else pin_flight_time(attack_slot))
 			var launch := (attack_point-planned)/planned_duration+Vector3.UP*4.905*planned_duration
 			pin_attack.jump.front_limit=.96 if attack_slot==3 else 3.35
 			pin_attack.start_set(runner,pin_frame.to_local(planned),pin_frame.global_basis.inverse()*launch,pin_frame.to_local(attack_point),pin_frame.to_local(scoring_target(attack_point)),pass_clock-set_at,true)
 			pin_attack.pin_arrival=planned_duration
-			if attack_slot==1 and gap<1.2:
+			if attack_slot==1 and gap<1.2 and planned_duration<=ZERO_FLIGHT+.08:
 				pin_attack.approach_steps=2
 				pin_attack.approach_intercept=pin_frame.to_local(attack_point)
 				pin_attack.begin_attack_jump(Vector2.ZERO,.32,pin_attack.jump.max_height-.2032)
@@ -946,6 +952,7 @@ func step_reception_rally(delta: float) -> void:
 			elif pass_in_system and not behind_line:
 				set_duration=clampf(pin_flight_time(attack_slot)+maxf(0.,ready_gap-.8)/4.8,ONE_FLIGHT,1.60)
 			else: set_duration=1.60
+			set_duration=paced_set_duration(pass_start,pass_end,set_duration)
 			var duration := set_duration
 			var velocity := (pass_end-pass_start)/duration+Vector3.UP*4.905*duration
 			var target := scoring_target(pass_end)
