@@ -126,12 +126,12 @@ Serving-camp rally hitters and middle decoys use the attack-camp plant arm lift 
 Serve-receive hitters reserve horizontal travel for the airborne approach where space allows. Their strike tracks the incoming set and replay presents the palm contact before the outgoing flight.
 In serving camp, D-pad up selects topspin, left/right add sidespin, and down selects float for the spin serve. Accurate releases produce higher pace. Untouched serves rebound from gym surfaces. The setter uses available jump height, approach time and recent missed swings when choosing hitters and pin tempo. A pipe can originate in the back-row hitter's lane. Middle commits require an airborne middle on an in-system pass.
 
-Reception Studio feeds the selected contact region. All three defenders display the shared map of 1.1-meter cubes, three wide, two high and three deep. WASD pans the studio camera.
+Reception Studio feeds the selected contact region. All three defenders display the shared map of 1.1-meter-wide and 1.1-meter-deep cells in three equal rows spanning 2.20 meters. WASD pans the studio camera.
 Studio serves use the region assignment at a saved stance inside a two-meter ready square. Reachable feeds rebound from the forearms. Future coaching strategy will assign ready zones per team, with chase coverage deferred.
 Reception Studio uses Ctrl-click for court cells. Explicit animation assignments have dark red outlines, while unassigned cells have dark blue outlines and leave the receiver in the ready pose. Three defenders can be positioned by dragging. The serve arc is fixed. Pass rise and the floor target are saved.
 
 Ctrl-clicking a defender cell repeats a standing float there. Drag the floor ring to aim the return.
-In Reception Studio the Mid Center Body cell defaults to overhead hand pass #10. Each standing float samples a point inside the selected box once per repetition.
+In Reception Studio the High Center Body cell defaults to overhead hand pass #10. Each standing float samples a point inside the selected box once per repetition.
 Studio overhead hand passes use the shared standing set load, extension and follow-through. Lower centered feeds use legs 4 or 6, low lateral feeds use a short mirrored step from legs 7, and high feeds can trigger a jump set with contact at the apex.
 Reception Studio can trace the incoming ball in red only inside the selected defender grid, stopping at a successful pass in live playback and timeline review. The trail resets with each feed and the toggle persists.
 

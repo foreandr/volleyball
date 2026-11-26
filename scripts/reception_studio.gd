@@ -1,12 +1,12 @@
 extends Node3D
 
 const Regions = preload("res://scripts/reception_regions.gd")
-var cell := Vector3i(1,1,1)
+var cell := Vector3i(1,2,1)
 const MAP_MIN := Vector3i.ZERO
-const MAP_MAX := Vector3i(2,1,2)
+const MAP_MAX := Vector3i(2,2,2)
 const WIDTHS := ["Right","Center","Left"]
-const HEIGHTS := ["Low","Mid"]
-const CELL_SIZE := Vector3.ONE*1.10
+const HEIGHTS := ["Low","Mid","High"]
+const CELL_SIZE := Vector3(1.10,2.20/3.,1.10)
 const MAP_ORIGIN := Vector3(-1.5,0,-1.5)*CELL_SIZE
 const Gym = preload("res://scripts/tryout_gym.gd")
 var feed := preload("res://scripts/standing_float_serve.gd").new()
@@ -303,21 +303,25 @@ func _unhandled_input(event: InputEvent) -> void:
 			var address := cell
 			for i in defenders.size():
 				var grid := grid_for(i)
-				var depth := grid.position.z+MAP_ORIGIN.z+(cell.z+.5)*CELL_SIZE.z
-				var hit=Plane(Vector3.BACK,depth).intersects_ray(ray,direction)
-				if hit==null: continue
-				var tile := Vector3i(((grid.to_local(hit)-MAP_ORIGIN)/CELL_SIZE).floor())
-				tile.z=cell.z
-				if tile!=tile.clamp(MAP_MIN,MAP_MAX) or ray.distance_to(hit)>=nearest: continue
+				var origin := grid.position+MAP_ORIGIN
+				var size := Vector3(MAP_MAX+Vector3i.ONE)*CELL_SIZE
+				if event.shift_pressed:
+					origin.z+=cell.z*CELL_SIZE.z
+					size.z=CELL_SIZE.z
+				var end := ray+direction*camera.far
+				var span := zone_interval(ray,end,AABB(origin,size))
+				if span.y<=span.x or span.x>=nearest: continue
+				var inside := ray.lerp(end,span.x)+direction*.00001
+				address=Vector3i(((grid.to_local(inside)-MAP_ORIGIN)/CELL_SIZE).floor()).clamp(MAP_MIN,MAP_MAX)
 				chosen=i
-				address=tile
-				nearest=ray.distance_to(hit)
+				nearest=span.x
 			if chosen>=0:
 				hover.global_position=grid_for(chosen).position+MAP_ORIGIN+(Vector3(address)+Vector3.ONE*.5)*CELL_SIZE
 				hover.show()
 				if click and event.ctrl_pressed:
 					activate_receiver(chosen)
-					pick_cell(address.x,address.y)
+					cell=address
+					preview_cell()
 					return
 	if event is InputEventMouseMotion and event.button_mask & MOUSE_BUTTON_MASK_MIDDLE:
 		yaw+=event.relative.x*.008
@@ -721,11 +725,6 @@ func build_map(tiers: VBoxContainer) -> void:
 	lattice.position=pivot.position
 	update_region()
 
-func pick_cell(x: int,y: int) -> void:
-	cell.x=x
-	cell.y=y
-	preview_cell()
-
 func change_depth(by: int) -> void:
 	cell.z=posmod(cell.z-MAP_MIN.z+by,3)+MAP_MIN.z
 	preview_cell()
@@ -734,8 +733,13 @@ func cell_action() -> int:
 	return assigned_action(cell)
 
 func assigned_action(address: Vector3i) -> int:
-	var default_action := 10 if address==Vector3i(1,1,1) else 0
-	return int(StorySession.game_options.get_value("dig_regions",Regions.key(address),default_action))
+	var key := Regions.key(address)
+	if StorySession.game_options.has_section_key("studio_three_rows",key):
+		return int(StorySession.game_options.get_value("studio_three_rows",key))
+	if address.y==1: return 0
+	var previous := Vector3i(address.x,0 if address.y==0 else 1,address.z)
+	var default_action := 10 if previous==Vector3i(1,1,1) else 0
+	return int(StorySession.game_options.get_value("dig_regions",Regions.key(previous),default_action))
 
 func pick_feed_point() -> void:
 	miss_logged=false
@@ -766,7 +770,7 @@ func update_region() -> void:
 
 func assign_region() -> void:
 	var id: int=0 if legs<0 else clips[legs].id
-	StorySession.game_options.set_value("dig_regions",Regions.key(cell),id)
+	StorySession.game_options.set_value("studio_three_rows",Regions.key(cell),id)
 	StorySession.save_options()
 	rebuild_colors()
 	preview_cell()
