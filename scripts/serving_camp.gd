@@ -1020,7 +1020,7 @@ func step_reception_rally(delta: float) -> void:
 			var platform := receptions[receiver]
 			if platform.low_save.active and not platform.low_save.finished(flight_age+pass_clock):
 				platform.low_save.sample(first_contact_player(),flight_age+pass_clock,platform.touch_time)
-			elif not platform.hand_setting and pass_clock<.35: platform.follow_forearm(platform.touch_time+pass_clock,Vector3.ZERO)
+			elif is_finite(platform.touch_time) and not platform.hand_setting and pass_clock<.35: platform.follow_forearm(platform.touch_time+pass_clock,Vector3.ZERO)
 			elif first_contact_player()!=passers[1]: first_contact_player().play_action("idle")
 		ball.position=arc(pass_start,pass_end,pass_clock/pass_duration,arc_term*.25)
 		if pass_clock>set_at-.33:

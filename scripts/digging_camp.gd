@@ -10,6 +10,7 @@ var neutral_platform := Vector3.ZERO
 var feed_bag: Array[Vector2]=[]
 var feed_direction := Vector2.ZERO
 var cpu_defense := true
+var dig_arrival := 0.0
 var feed_age := 0.
 var attack_landing := Vector3.ZERO
 
@@ -139,11 +140,33 @@ func walk_server(delta: float,_defending := false) -> void:
 		var platform: Reception=dig_platforms[hitter]
 		platform.sample_pose(platform.clip,platform.tracks,platform.contact_frame,1.,true)
 		neutral_platform=platform.platform_center()
+		if phase=="serve_return":
+			var save=platform.low_save
+			if dig_direction.y < -.65 and not save.active:
+				var origin := ball.global_position
+				var velocity := drop_velocity
+				var now := dig_clock
+				var path := func(t: float) -> Vector3:
+					var ahead := t-now
+					return origin+velocity*ahead+Vector3.DOWN*4.905*ahead*ahead
+				if save.plan(hitter,path,now,now+.45,platform.clip,true,false):
+					save.travel_scale=0.
+			if save.active:
+				save.sample(hitter,dig_clock,save.contact_time+.07)
+				return
+			if absf(dig_direction.x)>.55:
+				var offset := platform_offset(dig_direction)
+				platform.plan_reach(offset,true)
+				platform.reach_progress=smoothstep(0.,.26,.26+dig_clock-dig_arrival)
+				platform.pose_reach(platform.reach_progress,neutral_platform+offset)
 		platform.reach_platform(platform_offset(dig_direction),1.,.72,true,true)
 
 func return_struck(actor: Node3D,point: Vector3,velocity: Vector3,spin: float) -> void:
 	var contact := (neutral_platform if neutral_platform!=Vector3.ZERO else FIVE+Vector3(0,1.04,.62))+platform_offset(feed_direction)
+	if feed_direction.y < -.65:
+		contact.y=.46
 	var travel := maxf(.30,point.distance_to(contact)/maxf(1.,velocity.length()))
+	dig_arrival=travel
 	var launch := (contact-point)/travel+Vector3.UP*4.905*travel
 	var flight := preload("res://scripts/pass_flight.gd").landing_time(point,launch)
 	var landing := point+launch*flight+Vector3.DOWN*4.905*flight*flight
