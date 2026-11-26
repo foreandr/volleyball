@@ -71,7 +71,7 @@ func _input(event: InputEvent) -> void:
 	if not settings.visible and not replay_inspector.active and not get_tree().paused:
 		if event is InputEventMouseMotion and event.button_mask & MOUSE_BUTTON_MASK_MIDDLE and dragged<0:
 			orbit_offset.x=wrapf(orbit_offset.x+event.relative.x*.006,-PI,PI)
-			orbit_offset.y=clampf(orbit_offset.y-event.relative.y*.25,3.-elevation,85.-elevation)
+			orbit_offset.y=clampf(orbit_offset.y+event.relative.y*.25,3.-elevation,85.-elevation)
 			apply_camera()
 			get_viewport().set_input_as_handled()
 			return
@@ -223,8 +223,8 @@ func sample_defensive_contact(platform: Reception,start: float,dt: float,_until_
 		save.sample(actor,start+dt,save.contact_time+.07)
 	else:
 		var progress := smoothstep(0.,.39,.42-ahead)
-		var close := smoothstep(0.,.085,.085-ahead)
-		if not automatic: close*=smoothstep(0.,.065,.18-release_window) if release_window>0. else 0.
+		var close := 1.-smoothstep(.09,.20,ahead)
+		if not automatic: close*=smoothstep(0.,.035,.18-release_window+dt) if release_window>0. else 0.
 		platform.sample_pose(platform.clip,platform.tracks,platform.contact_frame*close,1.,true)
 		var lateral: float=absf((actor.basis.inverse()*offset).x)
 		if platform.reach.is_empty() and lateral>.18 and offset.slide(Vector3.UP).length()<1.65:
@@ -241,6 +241,9 @@ func sample_defensive_contact(platform: Reception,start: float,dt: float,_until_
 		platform.knee_bend_depth=progress*lerpf(.07,.24,smoothstep(10.,25.,drop_velocity.length()))
 		platform.apply_knee_bend()
 		if close>.01: platform.reach_platform(intercept-platform.platform_center(),close,.72,true,true)
+	if not save.active or save.wide_arm.is_empty():
+		var extension := 1.-smoothstep(.09,.20,ahead)
+		if extension>.001: platform.Drive.pose_joined_platform(actor,extension,174.)
 	if not automatic and release_window<=0.: return
 	var contact := platform.dig_contact_segment(path.call(start),path.call(start+dt))
 	if contact[0].distance_to(contact[1])>platform.PLATFORM_RADIUS: return
