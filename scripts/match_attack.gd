@@ -168,6 +168,12 @@ func spike_body_target(ball_target: Vector3) -> Vector3:
 	target.z = minf(target.z,jump.front_limit)
 	return target
 
+func approach_heading_yaw() -> float:
+	if not chase_late_sets or absf(rally_set_target.x)<2.5: return super.approach_heading_yaw()
+	# The pin can chase a wide ball with its feet while opening into the court.
+	var inward := -signf(rally_set_target.x)
+	return atan2(inward*clampf(jump.heading.x*inward,.20,.65),maxf(.65,jump.heading.z))
+
 func approach_glide_distance() -> float:
 	return 0.27
 

@@ -136,7 +136,7 @@ func capture(rendered := false) -> Dictionary:
 					var key: int = -1-slot*2-side
 					arms[key]=jump.body_chains[side]
 					armed[key]=true
-	return {"rally":game.get("replay_rally"),"armed":armed,"arms":arms,"floor_count":game.floor_sound_count,"floor_db":game.floor_impact.volume_db,"spike_count":game.spike_sound_count if "spike_sound_count" in game else 0,"block_sound_count":game.block_sound_count if "block_sound_count" in game else 0,"objects":objects,"poses":poses,"whistle_count":game.coach_motion.whistle_cue.play_count,"floor_stream":game.floor_impact.stream,"whistle_height":game.coach_motion.whistle_cue.raised}
+	return {"impact":game.get_meta("block_impact_segment",Vector2i(-999,-1)),"rally":game.get("replay_rally"),"armed":armed,"arms":arms,"floor_count":game.floor_sound_count,"floor_db":game.floor_impact.volume_db,"spike_count":game.spike_sound_count if "spike_sound_count" in game else 0,"block_sound_count":game.block_sound_count if "block_sound_count" in game else 0,"objects":objects,"poses":poses,"whistle_count":game.coach_motion.whistle_cue.play_count,"floor_stream":game.floor_impact.stream,"whistle_height":game.coach_motion.whistle_cue.raised}
 
 func apply(sample: Dictionary) -> void:
 	game.coach_motion.whistle_cue.raised = sample.whistle_height
@@ -181,8 +181,15 @@ func display_frame(value: float) -> void:
 	var used := 0
 	for arm in a.arms:
 		var points: Array=a.arms[arm].duplicate()
-		if b.arms.has(arm):
-			for i in points.size(): points[i]=points[i].lerp(b.arms[arm][i],t)
+		var actors: Array=game.wall if "wall_jumps" in game else game.blockers if "blockers" in game else game.practice_blockers
+		var idx: int=arm if arm>=0 else -1-arm
+		var actor: Node3D=actors[idx/2]
+		var side := "_l" if idx%2==0 else "_r"
+		var joints := ["upperarm"+side,"lowerarm"+side,"hand"+side,"middle_03"+side] if arm>=0 else ["upperarm"+side,"neck_01"]
+		if arm<0 and idx%2==0: joints.append("Head")
+		points.clear()
+		for joint in joints: points.append(preload("res://scripts/gym_physics.gd").joint(actor,joint))
+		if arm<0 and idx%2==0: points.append(points[2]+points[1].direction_to(points[2])*.11)
 		for i in points.size()-1:
 			var segment: Vector3=points[i+1]-points[i]
 			if segment.length_squared()<.000001: continue
@@ -200,6 +207,8 @@ func display_frame(value: float) -> void:
 				boxes.append(mesh)
 			var capsule := boxes[used]
 			capsule.material_override.albedo_color=Color(.08,1.,.44,.65) if a.armed[arm] else Color(.25,.72,1.,.48)
+			if a.impact==Vector2i(arm,i) and a.block_sound_count>history[maxi(first-3,0)].block_sound_count:
+				capsule.material_override.albedo_color=Color(1.,.06,.04,.88)
 			used+=1
 			var radius: float=preload("res://scripts/match_block.gd").ARM_RADII[i] if arm>=0 else preload("res://scripts/match_block.gd").BODY_RADII[i]
 			capsule.mesh.radius=radius

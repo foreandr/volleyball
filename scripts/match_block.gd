@@ -55,6 +55,45 @@ var hands: Array[Vector3] = []
 var wrists: Array[Vector3] = []
 var previous_wrists: Array[Vector3] = []
 
+# Cache the final skinning pose, including the joint-limit modifier.
+var displayed_chains := []
+
+func capture_displayed_chains() -> void:
+	var rig: Skeleton3D=actor.skeleton
+	displayed_chains=[]
+	for side in ["l","r"]:
+		var chain := []
+		for bone in ["upperarm_","lowerarm_","hand_","middle_03_"]:
+			chain.append(rig.get_bone_global_pose(rig.find_bone(bone+side)).origin)
+		displayed_chains.append(chain)
+	displayed_chains.append([rig.get_bone_global_pose(rig.find_bone("neck_01")).origin,rig.get_bone_global_pose(rig.find_bone("Head")).origin])
+
+func use_displayed_geometry() -> void:
+	var rig: Skeleton3D=actor.skeleton
+	if displayed_chains.size()==3 and hands.size()==2:
+		for i in 2:
+			shoulders[i]=rig.to_global(displayed_chains[i][0])
+			elbows[i]=rig.to_global(displayed_chains[i][1])
+			wrists[i]=rig.to_global(displayed_chains[i][2])
+			hands[i]=rig.to_global(displayed_chains[i][3])
+		body_chains=body_geometry(shoulders[0],shoulders[1],rig.to_global(displayed_chains[2][0]),rig.to_global(displayed_chains[2][1]))
+	if not rig.skeleton_updated.is_connected(capture_displayed_chains):
+		rig.skeleton_updated.connect(capture_displayed_chains,CONNECT_ONE_SHOT)
+
+static func first_capsule_touch(start: Vector3,finish: Vector3,a: Vector3,b: Vector3,radius: float) -> Dictionary:
+	var pair := Geometry3D.get_closest_points_between_segments(start,finish,a,b)
+	if pair[0].distance_squared_to(pair[1])>radius*radius: return {}
+	var lo := 0.
+	var hi := clampf((pair[0]-start).dot(finish-start)/maxf(.00000001,start.distance_squared_to(finish)),0.,1.)
+	for j in 10:
+		var t := (lo+hi)*.5
+		var p := start.lerp(finish,t)
+		if p.distance_squared_to(Geometry3D.get_closest_point_to_segment(p,a,b))<=radius*radius: hi=t
+		else: lo=t
+	var point := start.lerp(finish,hi)
+	var surface := Geometry3D.get_closest_point_to_segment(point,a,b)
+	return {"fraction":hi,"point":point,"normal":surface.direction_to(point),"surface":surface}
+
 func begin(player: Node3D) -> void:
 	actor = player
 	base = player.position
@@ -274,7 +313,9 @@ func step(delta: float, world_ball: Vector3) -> bool:
 				for i in points.size(): points[i].z+=retreat
 			for chain in body_chains:
 				for i in chain.size(): chain[i].z+=retreat
-	if age < START+AIR+0.02+landing_recovery: return true
+	if age < START+AIR+0.02+landing_recovery:
+		use_displayed_geometry()
+		return true
 	actor.position = base
 	actor.animator.seek(0.0,true)
 	return false

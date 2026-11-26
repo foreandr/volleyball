@@ -1364,58 +1364,58 @@ func sample_attack_clip(arm_lift: bool,arm_swing: bool,cross: bool,review: bool,
 
 func resolve_block_contact(previous: Vector3,block_jumps: Array, attack_direction := 1.) -> bool:
 	if attack_decided: return false
-	for slot in block_jumps.size():
-		var block: RefCounted=block_jumps[slot]
-		if block==null: continue
-		for i in block.hands.size()+1:
-			var arm: bool = i<block.hands.size()
-			var chain := [block.shoulders[i],block.elbows[i],block.wrists[i],block.hands[i]] if arm else []
-			var side_index: int = i
-			var touched := false
-			var stuff := false
-			var body_part := ""
-			var hit_position := Vector3.ZERO
-			for segment in ([2,1,0] if arm else []):
-				var closest := Geometry3D.get_closest_points_between_segments(previous,ball.global_position,chain[segment],chain[segment+1])
-				var gap := closest[0].distance_to(closest[1])
-				if gap <= Contact.BALL_RADIUS+PracticeBlock.ARM_RADII[segment]:
-					body_part=["upper arm","forearm","hand"][segment]
-					touched=true
-					hit_position=closest[0]
-					var surface: Vector3=closest[1]
-					var distal_forearm: bool = segment==1 and surface.distance_to(block.wrists[i])<.14 and (block.wrists[i].z-block.elbows[i].z)*attack_direction<0.
-					var square_hit := gap<Contact.BALL_RADIUS+.055 and drop_velocity.z*attack_direction>0.
-					stuff=(segment==2 or distal_forearm) and square_hit and surface.y>BallNet.NET_TOP+.10 and (surface.z-BallNet.NET_Z)*attack_direction<-.04
-					break
-			if not arm:
-				var body: Dictionary=block.body_hit(previous,ball.global_position,Contact.BALL_RADIUS)
-				if body.is_empty(): continue
-				hit_position=body.point
-				body_part=body.part
-				side_index=body.side
-				touched=true
-			if not touched: continue
-			ball.global_position=hit_position
-			if stuff:
-				var floor_target := Vector3(clampf(hit_position.x*.85,-4.2,4.2),Contact.BALL_RADIUS,BallNet.NET_Z-attack_direction*1.65)
-				drop_velocity=hit_position.direction_to(floor_target)*drop_velocity.length()*PracticeBlock.STUFF_SPEED_RETENTION
-			else:
-				var side := signf(hit_position.z-BallNet.NET_Z)
-				if is_zero_approx(side): side=signf(drop_velocity.z)
-				drop_velocity=Vector3(clampf(drop_velocity.x*.20-hit_position.x*.28,-2.8,2.8),clampf(drop_velocity.length()*.23,3.2,5.8),side*clampf(absf(drop_velocity.z)*.19,1.9,4.4))
-			spin_acceleration = Vector3.ZERO
-			set_meta("blocked_attack",true)
-			hand_impact.volume_db=-2.
-			hand_impact.play()
-			block_sound_count+=1
-			var role: String=["Right-side","Middle","Left-side"][slot] if block_jumps==practice_jumps else ["Left-side","Middle","Right-side"][slot]
-			var limb := "" if side_index<0 else ("left" if side_index==0 else "right")
-			contact_report="%s blocker / %s" % [role,(limb+" "+body_part).strip_edges()]
-			message.text=contact_report
-			show_player_timing(block.actor,contact_report,Color.WHITE)
-			touched_by_middle=slot==1
-			last_block_result.text=("Stuff block / " if stuff else "Block touch / ")+contact_report
-			last_block_result.show()
-			trace("block_hand_contact",{"rep":rep,"blocker":role,"arm":limb,"segment":body_part,"stuff":stuff,"outgoing":str(drop_velocity)})
-			return true
-	return false
+	var best := {}
+	var slot := -1
+	var side_index := -1
+	var segment := -1
+	var arm := false
+	var key := 0
+	for n in block_jumps.size():
+		var candidate: RefCounted=block_jumps[n]
+		if candidate==null: continue
+		for c in candidate.hands.size()+candidate.body_chains.size():
+			var is_arm: bool=c<candidate.hands.size()
+			var side: int=c if is_arm else c-candidate.hands.size()
+			var chain: Array=[candidate.shoulders[c],candidate.elbows[c],candidate.wrists[c],candidate.hands[c]] if is_arm else candidate.body_chains[side]
+			for j in chain.size()-1:
+				var radius: float=PracticeBlock.ARM_RADII[j] if is_arm else PracticeBlock.BODY_RADII[j]
+				var hit := PracticeBlock.first_capsule_touch(previous,ball.global_position,chain[j],chain[j+1],Contact.BALL_RADIUS+radius)
+				if hit.is_empty() or (not best.is_empty() and hit.fraction>=best.fraction): continue
+				best=hit
+				slot=n
+				arm=is_arm
+				segment=j
+				side_index=side if arm or j==0 else -1
+				key=n*2+side if arm else -1-n*2-side
+	if best.is_empty(): return false
+	var block: RefCounted=block_jumps[slot]
+	var body_part: String=["upper arm","forearm","hand"][segment] if arm else PracticeBlock.BODY_PARTS[segment]
+	var hit_position: Vector3=best.point
+	var normal: Vector3=best.normal
+	if normal.is_zero_approx(): normal=-drop_velocity.normalized()
+	var incidence := -drop_velocity.normalized().dot(normal)
+	var reflected := drop_velocity.bounce(normal)
+	var distal: bool=arm and (segment==2 or segment==1 and best.surface.distance_to(block.wrists[side_index])<.14)
+	var stuff: bool=distal and incidence>.55 and best.surface.y>BallNet.NET_TOP+.10 and (best.surface.z-BallNet.NET_Z)*attack_direction<-.04
+	ball.global_position=hit_position
+	if stuff:
+		var down := Vector3(reflected.x,-maxf(absf(reflected.y),drop_velocity.length()*.65),-attack_direction*maxf(absf(reflected.z),2.))
+		drop_velocity=down.normalized()*drop_velocity.length()*PracticeBlock.STUFF_SPEED_RETENTION
+	else:
+		drop_velocity=Vector3(reflected.x*.42,maxf(2.5,absf(reflected.y)*.48+1.),reflected.z*.42)
+	set_meta("block_impact_segment",Vector2i(key,segment))
+	spin_acceleration = Vector3.ZERO
+	set_meta("blocked_attack",true)
+	hand_impact.volume_db=-2.
+	hand_impact.play()
+	block_sound_count+=1
+	var role: String=["Right-side","Middle","Left-side"][slot] if block_jumps==practice_jumps else ["Left-side","Middle","Right-side"][slot]
+	var limb := "" if side_index<0 else ("left" if side_index==0 else "right")
+	contact_report="%s blocker / %s" % [role,(limb+" "+body_part).strip_edges()]
+	message.text=contact_report
+	show_player_timing(block.actor,contact_report,Color.WHITE)
+	touched_by_middle=slot==1
+	last_block_result.text=("Stuff block / " if stuff else "Block touch / ")+contact_report
+	last_block_result.show()
+	trace("block_hand_contact",{"rep":rep,"blocker":role,"arm":limb,"segment":body_part,"stuff":stuff,"outgoing":str(drop_velocity)})
+	return true

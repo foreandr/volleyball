@@ -1624,6 +1624,9 @@ func advance_missed_ball(delta: float, rebound_floor := false) -> void:
 		var hit := contacts.sweep(world,contacts.ball_shape,ball.position,motion,Contact.GYM|Contact.EQUIPMENT|rotation_drill.CART_WALL)
 		ball.position+=motion*float(hit.get("fraction",1.))
 		if block_on_flight_segment(start):
+			var unused := dt*(1.-clampf(start.distance_to(ball.position)/maxf(.000001,motion.length()),0.,1.))
+			remaining+=unused
+			drop_net_time-=unused
 			continue
 		if roll_time<0. and ((not hit.is_empty() and hit.normal.y>.8 and ball.position.y<.25) or ball.position.y<=Contact.BALL_RADIUS+.004):
 			attack_surface_contact(ball.position,true)

@@ -637,11 +637,14 @@ func begin_attack_jump(direction: Vector2, plant_time := 0.36, jump_height := 0.
 func approach_glide_distance() -> float:
 	return 0.0
 
+func approach_heading_yaw() -> float:
+	return atan2(jump.heading.x,jump.heading.z)
+
 func step_jump(delta: float) -> void:
 	jump.load_bend_extra = deg_to_rad(backswing_bend)*0.36 if uses_assisted_approach() else 0.0
 	jump.load_arm_extra = backswing_reach*0.85 if uses_assisted_approach() else 0.0
 	if uses_assisted_approach() and jump.active and jump.elapsed < jump.load_duration():
-		var yaw := atan2(jump.heading.x,jump.heading.z)
+		var yaw := approach_heading_yaw()
 		var turn_time := minf(0.22,jump.load_duration())
 		setter.rotation.y = lerp_angle(approach_entry_yaw,yaw,smootherstep(0.0,turn_time,jump.elapsed+delta))
 		takeoff_yaw = setter.rotation.y
@@ -1381,7 +1384,8 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 		if uses_assisted_approach() and stage == Stage.SET:
 			guide_drop = maxf(guide_drop*0.75,0.72*smootherstep(0.28,0.49,clock-swing_started))
 		guide_drop = lerpf(guide_drop,1.0,0.90*strike_reach)
-		SpikeArm.apply_guide_arm(pose,author,Vector3(0.06,0.43,0.64-backswing_reach*backswing_weight*0.6),Vector3(0.26,-0.55,0.15),guide_drop,arm_weight,172.0,strike_reach)
+		var guide := (ball_target-Vector3(author.point(pose,"upperarm_l"))).normalized()*.76
+		SpikeArm.apply_guide_arm(pose,author,guide,Vector3(0.26,-0.55,0.15),guide_drop,arm_weight,172.0,strike_reach)
 		if stage == Stage.HIT and follow >= 0.90:
 			swing_finish_pose = pose.duplicate()
 	if uses_assisted_approach() and not approach_arm_transition.is_empty():

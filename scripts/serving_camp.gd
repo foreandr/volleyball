@@ -718,6 +718,7 @@ func face_receive_ball(actor: Node3D,point: Vector3,delta: float) -> void:
 
 func transition_base(slot: int) -> Vector3:
 	var point := route_point(slot)
+	if slot in [0,2]: point.x+=signf(point.x)*.85
 	point.z=BallNet.NET_Z+(5.5 if slot==3 else 3.3)
 	point.y=.04
 	return point
@@ -727,6 +728,7 @@ func stage_attacker(actor: Node3D,slot: int,delta: float) -> void:
 	if phase=="serve_pass":
 		var entry := smoothstep(0.,.4,.92-(set_at-pass_clock))
 		point.z=lerpf(point.z,route_point(slot).z+1.6,entry)
+		if slot in [0,2]: point.x=lerpf(point.x,route_point(slot).x+signf(point.x)*.45,entry)
 	var pin_load := 0.
 	if slot in [0,2] and phase=="serve_pass":
 		pin_load=smoothstep(0.,.52,.57-(set_at-pass_clock))
@@ -926,13 +928,26 @@ func move_libero_to_cover(delta: float) -> void:
 		var reception := receptions[receiver]
 		if reception.low_save.active and not reception.low_save.finished(flight_age+pass_clock): return
 		if pass_clock<.12: return
-	var attack := route_point(attack_slot)
-	var pipe := route_point(3)
-	var side := signf(libero.global_position.x-pipe.x)
-	if absf(libero.global_position.x-pipe.x)<.1: side=1. if attack.x<=pipe.x else -1.
-	var cover := Vector3(lerpf(attack.x,pipe.x,.55),.04,attack.z+2.4)
-	if absf(cover.x-pipe.x)<1.35: cover.x=pipe.x+side*1.35
-	move_receiver(libero,cover,delta,ball.global_position-libero.global_position)
+	# Zone five is on the receiving side's left, looking toward the net.
+	var cover := Vector3(-3.,.04,BallNet.NET_Z+5.9)
+	var here := libero.global_position.slide(Vector3.UP)
+	var waypoint := cover
+	for slot in attack_options.size():
+		var start := attack_options[slot].global_position.slide(Vector3.UP)
+		var finish := route_point(slot).slide(Vector3.UP)
+		if start.distance_squared_to(finish)<.01: continue
+		var nearest := Geometry3D.get_closest_point_to_segment(here,start,finish)
+		if here.distance_to(nearest)<1.25:
+			var away := (here-nearest).normalized()
+			if away.length_squared()<.01: away=Vector3.RIGHT
+			waypoint=here+away*1.4+Vector3.BACK*.35
+			break
+		var edge := Geometry3D.get_closest_points_between_segments(here,cover.slide(Vector3.UP),start,finish)
+		if edge[0].distance_to(edge[1])<1.15:
+			waypoint=Vector3(here.x,.04,maxf(start.z,finish.z)+1.45)
+			break
+	waypoint.y=.04
+	move_receiver(libero,waypoint,delta,ball.global_position-libero.global_position)
 
 func scoring_target(origin: Vector3) -> Vector3:
 	var best := -INF
