@@ -60,7 +60,7 @@ func _ready() -> void:
 			var x := (i-2)*3.4
 			box("Championship felt",Vector3(1.5,2.3,0.07),Vector3(x,5.5,z-dir*0.10),paint)
 			var label := Label3D.new()
-			label.text = "VARSITY\nÃ¢â€”â€ \n%d" % (2006+i*3)
+			label.text = "VARSITY\n\u25c6\n%d" % (2006+i*3)
 			label.font_size = 40
 			label.pixel_size = 0.0068
 			label.position = Vector3(x,5.5,z-dir*0.16)

@@ -204,7 +204,7 @@ func _ready() -> void:
 		StorySession.save_options()
 		defenders[receiving].scale.x=-1. if on else 1.
 		draw_pose())
-	button(row,"ÃƒÂ¢Ã‹â€ Ã¢â‚¬â„¢1 frame",step.bind(-1))
+	button(row,"-1 frame",step.bind(-1))
 	row.add_child(play_button)
 	play_button.pressed.connect(toggle_play)
 	button(row,"+1 frame",step.bind(1))
@@ -690,10 +690,10 @@ func draw_pose() -> void:
 		duration=full_duration*feed_fraction
 	var missed: bool= frame>=touch_frame and active and not reachable
 	miss_label.visible=missed or leave_feed
-	if leave_feed: miss_label.text="Leave Ãƒâ€šÃ‚Â· out"
+	if leave_feed: miss_label.text="Leave \u00b7 out"
 	if missed:
 		var gap := contact_point.distance_to(target) if c.kind=="overhead" else closest_surface_gap
-		miss_label.text="Miss Ãƒâ€šÃ‚Â· %d cm gap"%roundi(gap*100.)
+		miss_label.text="Miss \u00b7 %d cm gap"%roundi(gap*100.)
 		if playing and not miss_logged:
 			print("studio_miss ",Time.get_datetime_string_from_system()," defender=",receiving+1," cell=",address," region=",region_number(address,region.w)," assigned=",assigned," playing=",c.id," target=",target," contact=",contact_point," gap_m=",gap)
 			miss_logged=true
@@ -1288,9 +1288,9 @@ func build_map(tiers: VBoxContainer) -> void:
 	tiers.add_child(editor)
 	var depth := HBoxContainer.new()
 	editor.add_child(depth)
-	button(depth,"ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¹",change_depth.bind(-1))
+	button(depth,"\u2039",change_depth.bind(-1))
 	depth.add_child(depth_label)
-	button(depth,"ÃƒÂ¢Ã¢â€šÂ¬Ã‚Âº",change_depth.bind(1))
+	button(depth,"\u203a",change_depth.bind(1))
 	editor.add_child(region_label)
 	miss_label.modulate=Color("#ff897c")
 	editor.add_child(miss_label)
@@ -1482,7 +1482,7 @@ func update_region() -> void:
 	depth_label.text=["Back","Body","Front"][cell.z-MAP_MIN.z]
 	var id := cell_action()
 	highlight.visible=not unfinished.button_pressed or id==0
-	region_label.text="#%s Ãƒâ€šÃ‚Â· %s %s - %s" % [region_number(cell,quadrant),HEIGHTS[cell.y],WIDTHS[cell.x-MAP_MIN.x],"Unassigned" if id==0 else "Action #%02d"%id]
+	region_label.text="#%s \u00b7 %s %s - %s" % [region_number(cell,quadrant),HEIGHTS[cell.y],WIDTHS[cell.x-MAP_MIN.x],"Unassigned" if id==0 else "Action #%02d"%id]
 	highlight.scale=region_size(cell,quadrant)/CELL_SIZE
 	highlight.position=region_center(cell,quadrant)
 
