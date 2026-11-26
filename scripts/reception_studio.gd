@@ -2,7 +2,7 @@ extends Node3D
 
 const Regions = preload("res://scripts/reception_regions.gd")
 const HEAD_CELL := Vector3i(1,2,1)
-var cell := HEAD_CELL
+var cell := Vector3i(1,1,1)
 var quadrant := 0
 var hover_number := Label3D.new()
 const MAP_MIN := Vector3i.ZERO
@@ -77,6 +77,7 @@ var sidebar := PanelContainer.new()
 const FOREARM = preload("res://assets/animations/straight_pass_02.res")
 var leg_grid := GridContainer.new()
 var leg_label := Label.new()
+var forearm_preview := false
 var hand_leg_preview := false
 var legs := 1
 var forearm_frames := {}
@@ -217,6 +218,7 @@ func _ready() -> void:
 	update_leg_buttons()
 	draw_pose()
 	preview_cell()
+	if cell_action()==0: select_legs(1)
 
 func style_panel(panel: PanelContainer) -> void:
 	var style := StyleBoxFlat.new()
@@ -474,8 +476,8 @@ func draw_pose() -> void:
 			center+=rig.to_global(wrist.lerp(elbow,.32))*.5
 		contact_point=center+Vector3(0,.075,.075)
 		if c.kind=="overhead": contact_point=HandPass.contact_center(player)
-		reachable=(cell_action()>0 or hand_leg_preview) and contact_point.distance_to(target)<=(HAND_RADIUS if c.kind=="overhead" else .22)
-	var missed: bool= frame>=touch_frame and (cell_action()>0 or hand_leg_preview) and not reachable
+		reachable=(cell_action()>0 or hand_leg_preview or forearm_preview) and contact_point.distance_to(target)<=(HAND_RADIUS if c.kind=="overhead" else .22)
+	var missed: bool= frame>=touch_frame and (cell_action()>0 or hand_leg_preview or forearm_preview) and not reachable
 	miss_label.visible=missed
 	if missed:
 		var gap := contact_point.distance_to(target)
@@ -559,7 +561,7 @@ func zone_interval(start: Vector3,finish: Vector3,bounds: AABB) -> Vector2:
 	return interval
 
 func sample_receiver(c: Dictionary,f: float) -> void:
-	if cell_action()==0 and not hand_leg_preview:
+	if cell_action()==0 and not (hand_leg_preview or forearm_preview):
 		sample_layer(-1,c,f)
 		return
 	if c.kind=="overhead":
@@ -816,6 +818,20 @@ func bend_for_hand_pass(depth: float) -> void:
 			rig.set_bone_pose(bone,pose[bone])
 
 func select_legs(which: int) -> void:
+	if cell.y==1 and cell_action()==0:
+		hand_leg_preview=false
+		forearm_preview=which>=0
+		legs=which
+		if forearm_preview:
+			index=which
+			seek.max_value=clips[index].frames
+			mirror.button_pressed=(cell.x<1)!=(float(clips[index].side)<0.) if cell.x!=1 else false
+		frame=seek.min_value
+		playing=true
+		contact_key.clear()
+		update_leg_buttons()
+		draw_pose()
+		return
 	if hand_leg_preview or clips[index].kind=="overhead" or cell_action()==0:
 		if clips[index].kind!="overhead":
 			for i in clips.size():
@@ -841,7 +857,7 @@ func select_legs(which: int) -> void:
 	draw_pose()
 
 func update_leg_buttons() -> void:
-	leg_label.text="Legs   "+("Ready" if legs<0 else "#%02d" % clips[legs].id)
+	leg_label.text=("Forearm pass / Legs   " if forearm_preview or (cell.y==1 and Regions.movement(clips[index])) else "Legs   ")+("Ready" if legs<0 else "#%02d" % clips[legs].id)
 	for choice in leg_grid.get_children():
 		choice.set_pressed_no_signal(choice.get_meta("clip")==legs)
 
@@ -1064,6 +1080,7 @@ func pick_feed_point() -> void:
 	feed_offset=Vector3(randf_range(-half.x,half.x),randf_range(bottom,half.y),randf_range(-half.z,half.z))
 
 func preview_cell() -> void:
+	forearm_preview=false
 	hand_leg_preview=false
 	contact_key.clear()
 	update_region()

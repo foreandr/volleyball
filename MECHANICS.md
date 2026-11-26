@@ -148,3 +148,4 @@ Regions 26.1 through 26.4 each have front and back halves, 0.55 m deep, with ind
 The back halves of 26.1 and 26.2 use grounded overhead action 79, stepping toward the incoming ball with Legs 04. Their front halves use action 80, using the spike approach’s right-left plant toward the feed before taking off with setting hands.
 Regions 26.3 and 26.4 use directional Legs 02 under an overhead pass. Their front halves first use a grounded right-left approach plant, then adjust the wide step to the remaining reach.
 Regions 25 and 27 split top/bottom. Regions 16 and 18 also split left/right. Their upper cells use the right-left plant into a jump set and their lower cells use the grounded plant into Legs 02.
+Reception Studio opens on middle-tier region 14. On an unassigned middle-tier cell, selecting legs auditions the shared forearm platform. Assign saves the choice.
