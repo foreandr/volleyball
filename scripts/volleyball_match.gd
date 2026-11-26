@@ -668,6 +668,7 @@ func launch(point: Vector3, motion: Vector3, kind: String, from: int, spin_rate 
 			motion*=athlete.stamina.effectiveness()
 		athlete.stamina.spend(5. if kind in ["serve","spike","block"] else 2.)
 	flight_number += 1
+	line_read_error=randf_range(-1.,1.)
 	origin = point
 	velocity = motion
 	elapsed = 0.0
@@ -1210,7 +1211,7 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 		var crossing_point := world_point+world_motion*crossing+Vector3.DOWN*0.5*Flight.GRAVITY*crossing*crossing
 		# A teammate can still play a low pass before it reaches the net.
 		over = crossing_point.y >= Net.NET_TOP+0.02
-	var outgoing_spin := Flight.reception_backspin(world_motion) if touches==1 or technique==0 else Vector3.ZERO
+	var outgoing_spin := Flight.reception_backspin(world_motion,ball_spin.length()) if touches==1 or technique==0 else Vector3.ZERO
 	if technique == 0 and sample_after > sample_before:
 		var incoming_motion := (path_point(sample_after)-path_point(sample_before))/(sample_after-sample_before)
 		outgoing_spin = Flight.forearm_spin(incoming_motion,world_motion,ball_spin,BallPreview.RADIUS)
@@ -1642,10 +1643,7 @@ func start_second_ball_spike(index: int, require_open_lane := false) -> bool:
 		show_key(index,"Space")
 	return cpu_second_spike
 
-func should_let_blockout_go() -> bool:
-	if not last_was_block or last_player < 0 or team(last_player) == receiving_team: return false
-	var landing := path_point(flight_end())
-	return absf(landing.x) > 4.72 or landing.z < -5.22 or landing.z > 13.22
+var line_read_error := 0.
 
 func cpu_can_lunge(index: int, contact: Vector3, lead: float) -> bool:
 	if contact.y < 0.42 or lead < -0.035: return false
@@ -1659,11 +1657,6 @@ func cpu_can_lunge(index: int, contact: Vector3, lead: float) -> bool:
 	return Bump.Timing.practice_reach_tier(offset) == 2
 
 func tick_receive(delta: float, previous: float) -> void:
-	if spectator or not is_finite(platforms[0].pressed_at):
-		if should_let_blockout_go(): return
-		if flight_kind == "spike" and not net_hit.is_empty() and team(last_player) != receiving_team:
-			var landing := path_point(flight_end())
-			if absf(landing.x) > 4.85 or landing.z < -5.35 or landing.z > 13.35: return
 	if expected_hitter >= 0 and flight_kind == "set":
 		var hitter := expected_hitter
 		var driver := attackers[team(hitter)]
@@ -1688,6 +1681,8 @@ func tick_receive(delta: float, previous: float) -> void:
 	var index := cpu_choice
 	if not spectator and receiving_team == 0 and is_finite(platforms[0].pressed_at) and not blocks.has(0): index = 0
 	if index < 0 or blocks.has(index): return
+	if not is_human(index) and last_player>=0 and team(last_player)!=team(index):
+		if Flight.reads_out(path_point(flight_end()),line_read_error,players[index].effective_rating("Forearm reception")): return
 	if cpu_second_spike: return
 	if not is_human(index) and not is_finite(platforms[index].pressed_at):
 		var planned_attack := cpu_dump or overpass_flight == flight_number

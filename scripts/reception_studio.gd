@@ -97,6 +97,8 @@ var mirror := CheckButton.new()
 var elapsed := 0.
 var source := ""
 var pick_boxes: Array[Dictionary]=[]
+var line_read_error := 0.
+var leave_feed := false
 var random_feeds := CheckButton.new()
 var selected_only := CheckButton.new()
 var unfinished := CheckButton.new()
@@ -568,9 +570,13 @@ func draw_pose() -> void:
 	speed_label.text="Serve %d km/h" % incoming_speed.value
 	var rig: Skeleton3D=player.skeleton
 	var grid := grid_for(receiving)
-	var key := [serve_type,launch,aim,grid.global_transform,cell,quadrant,forearm_preview,hand_leg_preview,selected_only.button_pressed]
+	var key := [line_read_error,serve_type,launch,aim,grid.global_transform,cell,quadrant,forearm_preview,hand_leg_preview,selected_only.button_pressed]
 	if route_key!=key:
 		route_key=key
+		var arc_height := float(SERVE_ARCS[serve_type])
+		var slope := aim.y-launch.y+arc_height
+		var floor_u := (slope+sqrt(slope*slope+4.*arc_height*(launch.y-BALL_RADIUS)))/(2.*arc_height)
+		leave_feed=preload("res://scripts/pass_flight.gd").reads_out(launch.lerp(aim,floor_u),line_read_error,player.effective_rating("Forearm reception"))
 		trace_incoming_regions(grid.to_local(launch),grid.to_local(aim))
 	feed_fraction=routed_fraction
 	var target := launch.lerp(aim,feed_fraction)+Vector3.UP*float(SERVE_ARCS[serve_type])*feed_fraction*(1.-feed_fraction)
@@ -582,7 +588,7 @@ func draw_pose() -> void:
 	var address := Vector3i(region.x,region.y,region.z)
 	var assigned := assigned_action(address,region.w) if region.w>=0 else 0
 	var selected := address==cell and region.w==quadrant
-	var active := assigned>0 or (selected and (forearm_preview or hand_leg_preview))
+	var active := not leave_feed and (assigned>0 or (selected and (forearm_preview or hand_leg_preview)))
 	var motion_legs := legs
 	if assigned>0 and not (selected and (hand_leg_preview or forearm_preview)) and (not selected or c.id!=assigned):
 		for i in clips.size():
@@ -598,7 +604,7 @@ func draw_pose() -> void:
 					motion_legs=saved
 			break
 	var pose_frame := clampf(frame-touch_frame+c.contact,0.,c.frames)
-	var signature := [serve_type,launch,index,legs,mirror.button_pressed,incoming_speed.value,source,region,assigned,motion_legs,target,feed_offset,cell_action(),defenders[receiving].position]
+	var signature := [active,serve_type,launch,index,legs,mirror.button_pressed,incoming_speed.value,source,region,assigned,motion_legs,target,feed_offset,cell_action(),defenders[receiving].position]
 	if signature!=contact_key:
 		contact_key=signature
 		reach_adjustment=Vector3.ZERO
@@ -652,7 +658,8 @@ func draw_pose() -> void:
 		touch_frame+=(feed_fraction-duration/full_duration)*full_duration*60.
 		duration=full_duration*feed_fraction
 	var missed: bool= frame>=touch_frame and active and not reachable
-	miss_label.visible=missed
+	miss_label.visible=missed or leave_feed
+	if leave_feed: miss_label.text="Leave · out"
 	if missed:
 		var gap := contact_point.distance_to(target) if c.kind=="overhead" else closest_surface_gap
 		miss_label.text="Miss · %d cm gap"%roundi(gap*100.)
@@ -696,7 +703,7 @@ func draw_pose() -> void:
 		crossing.show()
 	feed.ball.rotation=Vector3.ZERO
 	if reachable and seconds>0.:
-		preload("res://scripts/pass_flight.gd").rotate_reception_ball(feed.ball,(pass_marker.position-target)/landing,seconds)
+		preload("res://scripts/pass_flight.gd").rotate_reception_ball(feed.ball,(pass_marker.position-target)/landing,seconds,feed.reception_spin_rps())
 	feed.ball.position=point
 	feed.ball.visible=point.y>=.145
 	if ball_trail.visible and seconds > -duration:
@@ -1401,6 +1408,7 @@ func next_assigned_feed() -> void:
 	preview_cell()
 
 func pick_feed_point() -> void:
+	line_read_error=randf_range(-1.,1.)
 	miss_logged=false
 	var half := region_size(cell,quadrant)*.5
 	var bottom := maxf(-half.y,.145-highlight.global_position.y)

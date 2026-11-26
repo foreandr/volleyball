@@ -10,27 +10,33 @@ static func spin_axis(forward: Vector3, type: String) -> Vector3:
 		"Sidespin right": return Vector3.DOWN
 	return Vector3.ZERO
 
-static func reception_backspin(outgoing: Vector3) -> Vector3:
+# Signed distance from the outer court lines. Read error is sampled once per flight.
+static func reads_out(landing: Vector3, read_error: float, skill := 50.) -> bool:
+	var outside := maxf(absf(landing.x)-4.5,absf(landing.z-4.)-9.)
+	var uncertainty := lerpf(.10,.05,clampf(skill/100.,0.,1.))
+	return outside+clampf(read_error,-1.,1.)*uncertainty>0.
+
+static func reception_backspin(outgoing: Vector3, incoming_rps := 0.) -> Vector3:
 	var flat := outgoing.slide(Vector3.UP)
 	if flat.is_zero_approx(): return Vector3.ZERO
-	return spin_axis(flat,"Backspin")*clampf(1.+flat.length()*.18,1.,3.5)
+	return spin_axis(flat,"Backspin")*(clampf(1.+flat.length()*.18,1.,3.5)+.30*clampf(incoming_rps,0.,18.))
 
-static func rotate_reception_ball(ball: Node3D,outgoing: Vector3,seconds: float) -> void:
-	var spin := reception_backspin(outgoing)
+static func rotate_reception_ball(ball: Node3D,outgoing: Vector3,seconds: float,incoming_rps := 0.) -> void:
+	var spin := reception_backspin(outgoing,incoming_rps)
 	if not spin.is_zero_approx(): ball.rotate(spin.normalized(),spin.length()*TAU*seconds)
 
 static func forearm_spin(incoming: Vector3, outgoing: Vector3, incoming_spin: Vector3, radius: float) -> Vector3:
 	# Estimate the platform normal from the change in velocity. Friction opposes
 	# the ball surface's slip at the contact patch and transfers spin.
 	var impulse := outgoing-incoming
-	if impulse.is_zero_approx(): return reception_backspin(outgoing)
+	if impulse.is_zero_approx(): return reception_backspin(outgoing,incoming_spin.length())
 	var normal := impulse.normalized()
 	var contact_arm := -normal*radius
 	var slip := (incoming+(incoming_spin*TAU).cross(contact_arm)).slide(normal)
 	# Use a compliant contact and bound the friction impulse for clean deflections.
 	var friction := (-slip*0.12).limit_length(impulse.length()*0.15)
 	var spin := incoming_spin+contact_arm.cross(friction)/(0.67*radius*radius*TAU)
-	var back := reception_backspin(outgoing)
+	var back := reception_backspin(outgoing,incoming_spin.length())
 	if back.is_zero_approx(): return spin.limit_length(12.)
 	var axis := back.normalized()
 	return (axis*maxf(back.length(),spin.dot(axis))+spin.slide(axis)*.35).limit_length(12.)

@@ -125,6 +125,8 @@ const SET_VERTICAL := .48
 const SET_LOAD := .20
 var pass_end := Vector3.ZERO
 var receive_at := 0.
+var return_line_error := 0.
+var received_spin_rps := 0.
 var leave_serve := false
 var first_pass_dropping := false
 var pass_duration := 1.25
@@ -740,11 +742,10 @@ func receive_arrival(shot,height: float) -> float:
 	return high
 
 func reads_serve_out(landing: Vector3, skill: float, read_error: float) -> bool:
-	var uncertainty := lerpf(.48,.12,clampf(skill/100.,0.,1.))
-	var outside := maxf(absf(landing.x)-4.5,landing.z-(BallNet.NET_Z+9.))
-	return outside+read_error*uncertainty>0.
+	return preload("res://scripts/pass_flight.gd").reads_out(landing,read_error,skill)
 
 func plan_serve_reception(shot) -> void:
+	received_spin_rps=shot.reception_spin_rps()
 	receive_at=receive_arrival(shot,PASS_HEIGHT)
 	var predicted: Vector3=shot.flight_point(receive_at)
 	receiver=0
@@ -1030,7 +1031,7 @@ func step_reception_rally(delta: float) -> void:
 			elif is_finite(platform.touch_time) and not platform.hand_setting and pass_clock<.35: platform.follow_forearm(platform.touch_time+pass_clock,Vector3.ZERO)
 			elif first_contact_player()!=passers[1]: first_contact_player().play_action("idle")
 		ball.position=arc(pass_start,pass_end,pass_clock/pass_duration,arc_term*.25)
-		preload("res://scripts/pass_flight.gd").rotate_reception_ball(ball,(pass_end-pass_start)/pass_duration,delta)
+		preload("res://scripts/pass_flight.gd").rotate_reception_ball(ball,(pass_end-pass_start)/pass_duration,delta,received_spin_rps)
 		if pass_clock>set_at-.33:
 			second_contact_player().rotation.y=atan2(facing.x,facing.z)
 			var load_weight := smoothstep(set_at-.33,set_at-.05,pass_clock)
@@ -1190,6 +1191,7 @@ func block_on_flight_segment(previous: Vector3) -> bool:
 	if off_blocker>=0: defenders.append(wall[off_blocker])
 	for defender in defenders:
 		var platform: Reception=dig_platforms[defender]
+		if defender!=hitter and not return_touched and reads_serve_out(now+drop_velocity*until_floor,defender.effective_rating("Forearm reception"),return_line_error): continue
 		if defender!=hitter and dig_clock<defender.reaction_seconds(): continue
 		if defender!=hitter and until_floor<.55: platform.queue_bump(start)
 		if not is_finite(platform.pressed_at): continue
@@ -1244,7 +1246,7 @@ func try_cover(previous: Vector3,delta: float) -> void:
 	var downward := drop_velocity.y
 	var until_floor := (downward+sqrt(maxf(0.,downward*downward+19.62*(now.y-.11))))/9.81
 	var landing := now+drop_velocity*until_floor
-	if absf(landing.x)>4.5+Contact.BALL_RADIUS or landing.z>BallNet.NET_Z+9.+Contact.BALL_RADIUS: return
+	if reads_serve_out(landing,50.,return_line_error): return
 	var until_pass := clampf((downward+sqrt(maxf(0.,downward*downward+19.62*(now.y-.95))))/9.81,0.,until_floor)
 	var intercept := now+drop_velocity*until_pass+Vector3.DOWN*4.905*until_pass*until_pass
 	if intercept.z<BallNet.NET_Z or absf(intercept.x)>4.85 or intercept.z>BallNet.NET_Z+9.35: return
@@ -1322,6 +1324,8 @@ func choose_rally_attack(origin: Vector3) -> void:
 
 func return_struck(_actor: Node3D,point: Vector3,velocity: Vector3,_spin: float) -> void:
 	if phase!="serve_attack": return
+	return_line_error=randf_range(-1.,1.)
+	received_spin_rps=absf(_spin)
 	var goal := pin_frame.to_global(pin_attack.swing_aim)
 	var offset := goal-point
 	var fraction := (BallNet.NET_Z-point.z)/minf(-.01,offset.z)
