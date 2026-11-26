@@ -65,6 +65,8 @@ var seek := HSlider.new()
 var mirror := CheckButton.new()
 var elapsed := 0.
 var source := ""
+var pick_boxes: Array[Dictionary]=[]
+var unfinished := CheckButton.new()
 var sidebar := PanelContainer.new()
 const FOREARM = preload("res://assets/animations/straight_pass_02.res")
 var leg_grid := GridContainer.new()
@@ -140,6 +142,7 @@ func _ready() -> void:
 	add_child(layer)
 	var panel := PanelContainer.new()
 	layer.add_child(panel)
+	style_panel(panel)
 	panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
 	panel.grow_horizontal=Control.GROW_DIRECTION_BOTH
 	panel.grow_vertical=Control.GROW_DIRECTION_BEGIN
@@ -166,13 +169,18 @@ func _ready() -> void:
 	sidebar.offset_left=14
 	sidebar.offset_top=58
 	sidebar.offset_bottom=-106
-	sidebar.offset_right=224
+	sidebar.offset_right=294
+	style_panel(sidebar)
 	var tiers := VBoxContainer.new()
 	var controls_scroll := ScrollContainer.new()
 	sidebar.add_child(controls_scroll)
+	controls_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
 	controls_scroll.add_child(tiers)
+	tiers.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	tiers.add_theme_constant_override("separation",8)
 	var torso_label := Label.new()
-	torso_label.text="Torso - Forearm reception"
+	torso_label.text="Reception studio"
+	section_title(torso_label)
 	tiers.add_child(torso_label)
 	tiers.add_child(speed_label)
 	tiers.add_child(incoming_speed)
@@ -183,13 +191,16 @@ func _ready() -> void:
 		StorySession.game_options.set_value("reception_studio","incoming_kmh",value)
 		StorySession.save_options()
 		draw_pose())
+	tiers.add_child(HSeparator.new())
 	build_map(tiers)
+	tiers.add_child(HSeparator.new())
+	section_title(leg_label)
 	tiers.add_child(leg_label)
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.vertical_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
 	tiers.add_child(scroll)
-	leg_grid.columns=4
+	leg_grid.columns=5
 	scroll.add_child(leg_grid)
 	column.add_child(seek)
 	seek.min_value=-85
@@ -199,6 +210,19 @@ func _ready() -> void:
 	update_leg_buttons()
 	draw_pose()
 	preview_cell()
+
+func style_panel(panel: PanelContainer) -> void:
+	var style := StyleBoxFlat.new()
+	style.bg_color=Color("132a39")
+	style.border_color=Color("345661")
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(8)
+	for side in [SIDE_LEFT,SIDE_RIGHT,SIDE_TOP,SIDE_BOTTOM]: style.set_content_margin(side,12.)
+	panel.add_theme_stylebox_override("panel",style)
+
+func section_title(title: Label) -> void:
+	title.add_theme_color_override("font_color",Color("76d5c9"))
+	title.add_theme_font_size_override("font_size",20)
 
 func button(row: Control,title: String,action: Callable) -> void:
 	var b := Button.new()
@@ -309,21 +333,16 @@ func _unhandled_input(event: InputEvent) -> void:
 			var part := 0
 			for i in defenders.size():
 				var grid := grid_for(i)
-				var origin := grid.position+MAP_ORIGIN
-				var size := Vector3(MAP_MAX+Vector3i.ONE)*CELL_SIZE
-				if event.shift_pressed:
-					origin.z+=cell.z*CELL_SIZE.z
-					size.z=CELL_SIZE.z
-				var end := ray+direction*camera.far
-				var span := zone_interval(ray,end,AABB(origin,size))
-				if span.y<=span.x or span.x>=nearest: continue
-				var inside := ray.lerp(end,span.x)+direction*.00001
-				address=Vector3i(((grid.to_local(inside)-MAP_ORIGIN)/CELL_SIZE).floor()).clamp(MAP_MIN,MAP_MAX)
-				var center := region_center(address,0,false)
-				var local_hit := grid.to_local(inside)
-				part=(int(local_hit.x>=center.x)+2*int(local_hit.y<center.y)) if address==HEAD_CELL else 0
-				chosen=i
-				nearest=span.x
+				var local_ray := grid.to_local(ray)
+				var end := grid.to_local(ray+direction*camera.far)
+				for box in pick_boxes:
+					if event.shift_pressed and box.address.z!=cell.z: continue
+					var span := zone_interval(local_ray,end,box.bounds)
+					if span.y<=span.x or span.x>=nearest: continue
+					address=box.address
+					part=box.part
+					chosen=i
+					nearest=span.x
 			if chosen>=0:
 				hover.global_position=grid_for(chosen).position+region_center(address,part)
 				hover.scale=region_size(address)/CELL_SIZE
@@ -414,9 +433,11 @@ func draw_pose() -> void:
 	var launch: Vector3=feed.preview_origin
 	var full_duration := clampf(launch.distance_to(aim)/maxf(1.,incoming_speed.value/3.6),.48,1.25)
 	feed_fraction=1.
-	if c.get("jump_set",false) and cell_action()>0:
-		var behind := defenders[receiving].position.z-aim.z
-		var advance := clampf(behind+.08,0.,1.75)
+	var rig: Skeleton3D=player.skeleton
+	var head: Vector3=rig.to_global(player.get_pose_author().point(ready_pose,"Head"))-player.global_position+defenders[receiving].position
+	var jumping: bool=c.kind=="overhead" and (c.get("jump_set",false) or aim.y>head.y+.22)
+	if jumping and cell_action()>0:
+		var advance := clampf(head.z+.23-aim.z,0.,1.95)
 		feed_fraction-=advance/maxf(1.,launch.z-aim.z)
 	var target := launch.lerp(aim,feed_fraction)+Vector3.UP*6.*feed_fraction*(1.-feed_fraction)
 	set_intercept=target
@@ -427,7 +448,6 @@ func draw_pose() -> void:
 	if signature!=contact_key:
 		contact_key=signature
 		sample_receiver(c,c.contact)
-		var rig: Skeleton3D=player.skeleton
 		var center := Vector3.ZERO
 		for side in ["l","r"]:
 			var wrist := rig.get_bone_global_pose(rig.find_bone("hand_"+side)).origin
@@ -519,7 +539,7 @@ func sample_receiver(c: Dictionary,f: float) -> void:
 		return
 	if c.kind=="overhead":
 		sample_layer(-1,c,f)
-		var goal := set_intercept if c.get("jump_set",false) else highlight.global_position+feed_offset
+		var goal := set_intercept
 		var offset := pass_marker.position-goal
 		var lift := sqrt(2.*9.81*pass_arc.value)
 		var flight := (lift+sqrt(lift*lift+2.*9.81*maxf(0.,goal.y-.145)))/9.81
@@ -528,9 +548,10 @@ func sample_receiver(c: Dictionary,f: float) -> void:
 		var load_weight := smoothstep(-HandPass.CPU_PREP_LEAD,0.,follow)
 		var rig: Skeleton3D=player.skeleton
 		var forehead := rig.to_global(rig.get_bone_global_pose(rig.find_bone("Head")).origin).y+.12
-		var jump_set: bool=c.get("jump_set",false)
+		var jump_set: bool=c.get("jump_set",false) or goal.y>forehead+.10
 		if jump_set:
 			jump_to_set(goal,follow)
+			lean_for_hand_pass(goal,load_weight*(1.-smoothstep(.035,.28,follow)),deg_to_rad(5.))
 		else:
 			pose_hand_pass_legs(goal,forehead,follow)
 			var reach_weight := load_weight*(1.-smoothstep(.035,.28,follow))
@@ -555,7 +576,7 @@ func sample_receiver(c: Dictionary,f: float) -> void:
 	speed_label.text="Incoming %d km/h   ·   %.0f°" % [incoming_speed.value,bend]
 	ForearmDrive.recoil_platform(player.skeleton,(f-float(c.contact))/60.,bend)
 
-func lean_for_hand_pass(goal: Vector3, weight: float) -> void:
+func lean_for_hand_pass(goal: Vector3, weight: float, limit := deg_to_rad(34.)) -> void:
 	if weight<=0.: return
 	var rig: Skeleton3D=player.skeleton
 	var author=player.get_pose_author()
@@ -565,7 +586,7 @@ func lean_for_hand_pass(goal: Vector3, weight: float) -> void:
 	var reach := (rig.to_local(goal)-head-Vector3(0,.12,.20)).slide(Vector3.UP)
 	if reach.length_squared()<.0001: return
 	var axis := Vector3.UP.cross(reach).normalized()
-	var lean := minf(deg_to_rad(34.),reach.length()*1.12)*weight
+	var lean := minf(limit,reach.length()*1.12)*weight
 	for spine in ["spine_01","spine_02","spine_03"]:
 		author.rotate_world(pose,spine,axis,lean/3.)
 		var id := rig.find_bone(spine)
@@ -576,7 +597,7 @@ func jump_to_set(goal: Vector3, follow: float) -> void:
 	var head := rig.to_global(rig.get_bone_global_pose(rig.find_bone("Head")).origin)
 	var pocket: Vector3=head+player.global_basis.z.normalized()*.23+Vector3.UP*.16
 	var gap := goal-pocket
-	var apex := clampf(gap.y+.10,.19,.64)
+	var apex := clampf(gap.y+.10,.19,.76)
 	# Allow enough flight time to cover the horizontal gap as well as the rise.
 	var contact_rise := clampf(gap.y,.035,apex)
 	var descent := sqrt(2.*(apex-contact_rise)/9.81)
@@ -587,7 +608,7 @@ func jump_to_set(goal: Vector3, follow: float) -> void:
 	var t := follow+lead
 	var travel: Vector3=player.global_basis.inverse()*gap.slide(Vector3.UP)
 	# Limit backward launch velocity so even the landing stays near takeoff.
-	travel.z=maxf(travel.z,-.20*lead/(2.*half_air))
+	if travel.z<0.: travel.z=clampf(travel.z+.05,-.20*lead/(2.*half_air),0.)
 	var fraction := clampf(t,0.,2.*half_air)/lead
 	var landing := 2.*half_air-lead
 	var recover := smoothstep(landing+.10,landing+.57,follow)
@@ -715,6 +736,18 @@ func build_map(tiers: VBoxContainer) -> void:
 	ball_trail.mesh=trail_mesh
 	ball_trail.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(ball_trail)
+	var title := Label.new()
+	title.text="Contact map"
+	section_title(title)
+	tiers.add_child(title)
+	unfinished.text="Unassigned only"
+	unfinished.button_pressed=StorySession.game_options.get_value("reception_studio","unassigned_only",false)
+	tiers.add_child(unfinished)
+	unfinished.toggled.connect(func(on):
+		StorySession.game_options.set_value("reception_studio","unassigned_only",on)
+		StorySession.save_options()
+		rebuild_colors()
+		update_region())
 	var toggle_trail := CheckButton.new()
 	toggle_trail.text="Ball trail"
 	toggle_trail.button_pressed=StorySession.game_options.get_value("reception_studio","ball_trail",true)
@@ -725,9 +758,6 @@ func build_map(tiers: VBoxContainer) -> void:
 		StorySession.game_options.set_value("reception_studio","ball_trail",on)
 		StorySession.save_options()
 		draw_pose())
-	var title := Label.new()
-	title.text="Contact map"
-	tiers.add_child(title)
 	place.text="Place ready zone"
 	tiers.add_child(place)
 	var caption := Label.new()
@@ -846,6 +876,7 @@ func preview_cell() -> void:
 func update_region() -> void:
 	depth_label.text=["Back","Body","Front"][cell.z-MAP_MIN.z]
 	var id := cell_action()
+	highlight.visible=not unfinished.button_pressed or id==0
 	region_label.text="#%s · %s %s - %s" % [region_number(cell,quadrant),HEIGHTS[cell.y],WIDTHS[cell.x-MAP_MIN.x],"Unassigned" if id==0 else "Action #%02d"%id]
 	highlight.scale=region_size(cell)/CELL_SIZE
 	highlight.position=region_center(cell,quadrant)
@@ -862,7 +893,8 @@ func rebuild_colors() -> void:
 	var ink := StandardMaterial3D.new()
 	ink.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED
 	ink.vertex_color_use_as_albedo=true
-	mesh.surface_begin(Mesh.PRIMITIVE_LINES,ink)
+	pick_boxes.clear()
+	hover.hide()
 	for x in range(MAP_MIN.x,MAP_MAX.x+1):
 		for y in range(MAP_MAX.y+1):
 			for z in range(MAP_MIN.z,MAP_MAX.z+1):
@@ -870,8 +902,11 @@ func rebuild_colors() -> void:
 				var size := region_size(address)
 				for part in (4 if address==HEAD_CELL else 1):
 					var assigned := assigned_action(address,part)>0
+					if assigned and unfinished.button_pressed: continue
+					if pick_boxes.is_empty(): mesh.surface_begin(Mesh.PRIMITIVE_LINES,ink)
 					var color := Color("#ae2839") if assigned else Color("#2153a4")
 					var center := region_center(address,part)
+					pick_boxes.append({"address":address,"part":part,"bounds":AABB(center-size*.5,size)})
 					for axis in 3:
 						for i in [-1,1]:
 							for j in [-1,1]:
@@ -884,6 +919,6 @@ func rebuild_colors() -> void:
 								corner[axis]=1
 								mesh.surface_set_color(color)
 								mesh.surface_add_vertex(center+corner*size*.48)
-	mesh.surface_end()
+	if not pick_boxes.is_empty(): mesh.surface_end()
 	lattice.mesh=mesh
 	for grid in other_grids: grid.mesh=mesh
