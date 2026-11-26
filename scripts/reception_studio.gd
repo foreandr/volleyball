@@ -35,6 +35,8 @@ var pass_end_frame := 0.
 var reachable := false
 var lattice := MeshInstance3D.new()
 var highlight := MeshInstance3D.new()
+var miss_label := Label.new()
+var miss_logged := false
 var region_label := Label.new()
 var depth_label := Label.new()
 const Catalog := "res://assets/reception_studio.json"
@@ -406,6 +408,14 @@ func draw_pose() -> void:
 		contact_point=center+Vector3(0,.075,.075)
 		if c.kind=="overhead": contact_point=HandPass.contact_center(player)
 		reachable=cell_action()>0 and contact_point.distance_to(target)<=.22
+	var missed: bool= frame>=c.contact and cell_action()>0 and not reachable
+	miss_label.visible=missed
+	if missed:
+		var gap := contact_point.distance_to(target)
+		miss_label.text="Miss · %d cm gap"%roundi(gap*100.)
+		if playing and not miss_logged:
+			print("studio_miss ",Time.get_datetime_string_from_system()," defender=",receiving+1," cell=",cell," assigned=",cell_action()," playing=",c.id," target=",target," contact=",contact_point," gap_m=",gap)
+			miss_logged=true
 	sample_receiver(c,f)
 	pass_end_frame=0.
 	var launch: Vector3=feed.preview_origin
@@ -493,6 +503,8 @@ func sample_receiver(c: Dictionary,f: float) -> void:
 		var rig: Skeleton3D=player.skeleton
 		var forehead := rig.to_global(rig.get_bone_global_pose(rig.find_bone("Head")).origin).y+.12
 		pose_hand_pass_legs(goal,forehead,follow)
+		var reach_weight := load_weight*(1.-smoothstep(.035,.28,follow))
+		lean_for_hand_pass(goal,reach_weight)
 		HandPass.standing_set(player,goal,offset,push,follow,load_weight,Vector3.ZERO,false)
 		return
 	if not Regions.movement(c):
@@ -513,12 +525,31 @@ func sample_receiver(c: Dictionary,f: float) -> void:
 	speed_label.text="Incoming %d km/h   ·   %.0f°" % [incoming_speed.value,bend]
 	ForearmDrive.recoil_platform(player.skeleton,(f-float(c.contact))/60.,bend)
 
+func lean_for_hand_pass(goal: Vector3, weight: float) -> void:
+	if weight<=0.: return
+	var rig: Skeleton3D=player.skeleton
+	var author=player.get_pose_author()
+	var pose: Array[Transform3D]=[]
+	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
+	var head: Vector3=author.point(pose,"Head")
+	var reach := (rig.to_local(goal)-head-Vector3(0,.12,.20)).slide(Vector3.UP)
+	if reach.length_squared()<.0001: return
+	var axis := Vector3.UP.cross(reach).normalized()
+	var lean := minf(deg_to_rad(34.),reach.length()*1.12)*weight
+	for spine in ["spine_01","spine_02","spine_03"]:
+		author.rotate_world(pose,spine,axis,lean/3.)
+		var id := rig.find_bone(spine)
+		rig.set_bone_pose(id,pose[id])
+
 func pose_hand_pass_legs(goal: Vector3, standing_height: float, follow: float) -> void:
 	var drop := standing_height-goal.y
 	if drop < -.10:
 		var height := clampf(-drop-.06,.04,.38)
 		var half_flight := sqrt(2.*height/9.81)
-		player.position.y=maxf(0.,height-4.905*follow*follow)
+		var rise := maxf(0.,height-4.905*follow*follow)
+		var drift: Vector3=player.to_local(goal).slide(Vector3.UP)-Vector3(0,0,.20)
+		player.position+=drift.limit_length(.32)*(rise/height)
+		player.position.y=rise
 		var before := smoothstep(-half_flight-.19,-half_flight-.09,follow)*(1.-smoothstep(-half_flight-.09,-half_flight,follow))
 		var after := smoothstep(half_flight,half_flight+.08,follow)*(1.-smoothstep(half_flight+.08,half_flight+.22,follow))
 		bend_for_hand_pass(.10*(before+after))
@@ -531,7 +562,9 @@ func pose_hand_pass_legs(goal: Vector3, standing_height: float, follow: float) -
 	var recipe: Dictionary=clips[recipe_id-1].duplicate()
 	var scale_m: float=player.skeleton.global_basis.x.length()
 	recipe.side=minf(absf(lateral)*.55,.15)/scale_m if recipe_id==7 else 0.
-	recipe.drop=minf(recipe.drop,maxf(0.,drop)/scale_m)
+	var depth_offset: float=player.to_local(goal).z-.20
+	recipe.forward=clampf(depth_offset,-.65,.50)/scale_m
+	recipe.drop=minf(float(recipe.drop)+.15,maxf(0.,drop)/scale_m)
 	var pose := ready_pose.duplicate()
 	Regions.legs(player,pose,recipe,weight,lateral<0.)
 	for joint in ["pelvis","thigh_l","calf_l","foot_l","thigh_r","calf_r","foot_r"]:
@@ -660,6 +693,8 @@ func build_map(tiers: VBoxContainer) -> void:
 	depth.add_child(depth_label)
 	button(depth,"›",change_depth.bind(1))
 	editor.add_child(region_label)
+	miss_label.modulate=Color("#ff897c")
+	editor.add_child(miss_label)
 	button(editor,"Assign current action",assign_region)
 	rebuild_colors()
 	add_child(lattice)
@@ -703,6 +738,7 @@ func assigned_action(address: Vector3i) -> int:
 	return int(StorySession.game_options.get_value("dig_regions",Regions.key(address),default_action))
 
 func pick_feed_point() -> void:
+	miss_logged=false
 	var half := CELL_SIZE*.5
 	var bottom := maxf(-half.y,.145-highlight.global_position.y)
 	feed_offset=Vector3(randf_range(-half.x,half.x),randf_range(bottom,half.y),randf_range(-half.z,half.z))
