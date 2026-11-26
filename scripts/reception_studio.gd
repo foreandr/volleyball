@@ -961,27 +961,27 @@ func cell_action() -> int:
 func is_subdivided(address: Vector3i) -> bool:
 	return address==HEAD_CELL or address==Vector3i(1,2,2)
 
-func depth_split(address: Vector3i,part: int) -> bool:
-	return address==Vector3i(1,2,2) and (part<2 or part>=4)
+func depth_split(address: Vector3i) -> bool:
+	return address==Vector3i(1,2,2)
 
 func region_suffix(address: Vector3i,part: int) -> String:
-	if depth_split(address,part):
-		return ".%d.%s" % [part%2+1,"front" if part>=4 else "back"]
+	if depth_split(address):
+		return ".%d.%s" % [part%4+1,"front" if part>=4 else "back"]
 	return "."+str(part+1) if is_subdivided(address) else ""
 
 func region_number(address: Vector3i,part: int) -> String:
 	return str(1+address.x+3*address.y+9*address.z)+region_suffix(address,part)
 
 func region_size(address: Vector3i,part: int) -> Vector3:
-	if depth_split(address,part): return CELL_SIZE*Vector3(.5,.5,.5)
+	if depth_split(address): return CELL_SIZE*Vector3(.5,.5,.5)
 	return CELL_SIZE*Vector3(.5,.5,1.) if is_subdivided(address) else CELL_SIZE
 
 func region_center(address: Vector3i,part: int,subdivide := true) -> Vector3:
 	var center := MAP_ORIGIN+(Vector3(address)+Vector3.ONE*.5)*CELL_SIZE
 	if is_subdivided(address) and subdivide:
-		var upper := part<2 or part>=4
+		var upper := part%4<2
 		center+=Vector3(-.25 if part%2==0 else .25,.25 if upper else -.25,0.)*CELL_SIZE
-		if depth_split(address,part):
+		if depth_split(address):
 			center.z+=(.25 if part>=4 else -.25)*CELL_SIZE.z
 	return center
 
@@ -993,11 +993,14 @@ func assigned_action(address: Vector3i,part: int) -> int:
 	if is_subdivided(address):
 		if StorySession.game_options.has_section_key("studio_three_rows",child_key):
 			return int(StorySession.game_options.get_value("studio_three_rows",child_key))
-		if depth_split(address,part):
+		if depth_split(address):
 			if part<2: return 79
-			var parent_key := Regions.key(address)+"."+str(part%2+1)
-			var parent_action := int(StorySession.game_options.get_value("studio_three_rows",parent_key,78))
-			return 80 if parent_action==78 else parent_action
+			var parent_key := Regions.key(address)+"."+str(part%4+1)
+			if part%4<2:
+				var parent_action := int(StorySession.game_options.get_value("studio_three_rows",parent_key,78))
+				return 80 if parent_action==78 else parent_action
+			if StorySession.game_options.has_section_key("studio_three_rows",parent_key):
+				return int(StorySession.game_options.get_value("studio_three_rows",parent_key))
 		if address==HEAD_CELL and part>=2: return 0
 	var key := Regions.key(address)
 	if StorySession.game_options.has_section_key("studio_three_rows",key):
@@ -1068,7 +1071,7 @@ func rebuild_colors() -> void:
 		for y in range(MAP_MAX.y+1):
 			for z in range(MAP_MIN.z,MAP_MAX.z+1):
 				var address := Vector3i(x,y,z)
-				var count := 6 if address==Vector3i(1,2,2) else (4 if is_subdivided(address) else 1)
+				var count := 8 if depth_split(address) else (4 if is_subdivided(address) else 1)
 				for part in count:
 					var size := region_size(address,part)
 					var assigned := assigned_action(address,part)>0

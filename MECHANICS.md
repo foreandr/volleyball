@@ -144,5 +144,5 @@ On the studio back-top jump set, backward launch speed is limited so the receive
 In the Body depth slice, High Center is region 17. Its four full-depth quadrants are 17.1 through 17.4, numbered from the upper left in the front view. 17.1 and 17.2 inherit the same overhead hand pass and reach toward their own feeds. Each quadrant supports hover, Ctrl-click, independent assignments and incoming feeds.
 Reception Studio remembers Unassigned only. Hidden regions are excluded from drawing and picking. Jump sets aim for contact in front of the head, allow a small torso adjustment, and use backward travel only beyond a five-centimeter tolerance.
 Upper front-center region 26 has four independently assignable full-depth quadrants. Upper back regions 7, 8 and 9 default to jump set #78.
-Regions 26.1 and 26.2 each have front and back halves, 0.55 m deep, with independent assignments inherited initially from their parent.
+Regions 26.1 through 26.4 each have front and back halves, 0.55 m deep, with independent assignments inherited initially from their parent.
 The back halves of 26.1 and 26.2 use grounded overhead action 79, stepping toward the incoming ball with Legs 04. Their front halves use action 80, using the spike approach’s right-left plant toward the feed before taking off with setting hands.
