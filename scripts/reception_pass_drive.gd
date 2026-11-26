@@ -88,19 +88,20 @@ static func apply_fast_dig_elbow_bend(rig: Skeleton3D, age: float, degrees := 50
 		var rotation := Quaternion((parent_basis.inverse()*hinge).normalized(),bend)
 		rig.set_bone_pose_rotation(bone,(rotation*rig.get_bone_pose_rotation(bone)).normalized())
 
-static func absorb_with_joined_platform(actor: Node3D, age: float, degrees: float) -> void:
+static func absorb_with_joined_platform(actor: Node3D, age: float, degrees: float, contact_grip := Vector3.INF) -> void:
 	var recoil := smoothstep(0.,.045,age)*(1.-smoothstep(.09,FAST_DIG_ELBOW_DURATION,age))
 	var release := 1.-smoothstep(.17,FAST_DIG_ELBOW_DURATION,age)
-	pose_joined_platform(actor,release,174.-degrees*recoil)
+	pose_joined_platform(actor,release,174.-degrees*recoil,contact_grip+Vector3.UP*.08*recoil if contact_grip.is_finite() else Vector3.INF)
 
-static func pose_joined_platform(actor: Node3D, weight: float, extension: float) -> void:
+static func pose_joined_platform(actor: Node3D, weight: float, extension: float, target := Vector3.INF) -> void:
 	var rig: Skeleton3D=actor.skeleton
 	var author: RefCounted=actor.get_pose_author()
 	var pose: Array=[]
 	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
 	var center: Vector3=(author.point(pose,"hand_l")+author.point(pose,"hand_r"))*.5
 	var across: Vector3=(author.point(pose,"upperarm_l")-author.point(pose,"upperarm_r")).normalized()
-	PlatformPose.connect_arms(pose,author,center,weight,0.,across,false,false,extension)
+	if target.is_finite(): center=rig.to_local(target)
+	PlatformPose.connect_arms(pose,author,center,weight,0.,across,false,false,extension,target.is_finite())
 	for side in ["l","r"]:
 		for part in ["upperarm_","lowerarm_","hand_"]:
 			var bone := rig.find_bone(part+side)

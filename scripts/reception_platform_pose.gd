@@ -3,7 +3,7 @@ extends RefCounted
 const HAND_GAP := 0.065
 const ELBOW_ANGLE := 168.0
 
-static func connect_arms(pose: Array, author: RefCounted, desired: Vector3, weight: float, shoulder_advance := 0.022, lateral := Vector3.RIGHT, dive := false, compact := false, extension_angle := ELBOW_ANGLE) -> void:
+static func connect_arms(pose: Array, author: RefCounted, desired: Vector3, weight: float, shoulder_advance := 0.022, lateral := Vector3.RIGHT, dive := false, compact := false, extension_angle := ELBOW_ANGLE, lateral_target := false) -> void:
 	if weight <= 0.001: return
 	var rig: Skeleton3D = author.rig
 	var original := pose.duplicate()
@@ -32,8 +32,8 @@ static func connect_arms(pose: Array, author: RefCounted, desired: Vector3, weig
 	desired += forward*maxf(0.0,0.24-(desired-center).dot(forward))
 	var aim := (desired-center).slide(axis).normalized()
 	var grip := center+aim*radius
-	if dive:
-		grip = grip.lerp(desired,0.55*smoothstep(0.65,1.0,weight))
+	if lateral_target or dive:
+		grip = desired if lateral_target else grip.lerp(desired,0.55*smoothstep(0.65,1.0,weight))
 		for iteration in 4:
 			grip = a+(grip-a).limit_length(left_range)
 			grip = b+(grip-b).limit_length(right_range)

@@ -37,7 +37,14 @@ static func sample(rig: Skeleton3D, author: RefCounted, step: Vector3, travel: V
 	var shoulder_side := 1.0 if lead == "l" else -1.0
 	author.rotate_world(pose,"spine_02",Vector3.BACK,-side_lean*0.27*weight)
 	var side_receive := not back and (side_lunge or (absf(step.x)>0.10 and absf(step.x)>absf(step.z)*0.55))
-	if side_receive:
+	var dig_lunge := side_receive and not pose_arms and contact.is_finite()
+	if dig_lunge:
+		var toward: Vector3=rig.to_local(contact)-author.point(pose,"pelvis")
+		var lean := clampf(toward.x,-1.,1.)*weight
+		author.rotate_world(pose,"spine_02",Vector3.BACK,-.42*lean)
+		author.rotate_world(pose,"spine_03",Vector3.BACK,-.26*lean)
+		author.rotate_world(pose,"spine_02",Vector3.RIGHT,.25*weight)
+	elif side_receive:
 		# Open the shoulders toward the ball and lower the opposite shoulder.
 		var roll := 0.56 if tier == 2 else 0.43
 		if side_lunge:

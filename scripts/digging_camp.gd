@@ -6,6 +6,7 @@ var floor_target := Vector3(2.35,.145,-1.60)
 var target_marker := MeshInstance3D.new()
 var dragged := -1
 var orbit_offset := Vector2.ZERO
+var dig_contact_grip := Vector3.INF
 var release_window := 0.
 var set_tempo := 1
 var cpu_defense := true
@@ -143,7 +144,7 @@ func _process(delta: float) -> void:
 			if side!="":
 				platform.Drive.apply_fast_dig_elbow_bend(last_digger.skeleton,age,degrees,side)
 			else:
-				platform.Drive.absorb_with_joined_platform(last_digger,age,degrees)
+				platform.Drive.absorb_with_joined_platform(last_digger,age,degrees,dig_contact_grip)
 
 func handle_drag(event: InputEvent) -> bool:
 	var camera := get_viewport().get_camera_3d()
@@ -232,7 +233,7 @@ func sample_defensive_contact(platform: Reception,start: float,dt: float,_until_
 		if not platform.reach.is_empty():
 			platform.reach_progress=progress
 			var step: Vector3=actor.basis.inverse()*platform.reach_step
-			var travel: Vector3=step*.35*progress
+			var travel: Vector3=step*.68*progress
 			actor.position=home+actor.basis*travel
 			platform.reach.lead="l" if step.x>0. else "r"
 			platform.reach.tier=2 if lateral>.55 else 1
@@ -243,7 +244,11 @@ func sample_defensive_contact(platform: Reception,start: float,dt: float,_until_
 		if close>.01: platform.reach_platform(intercept-platform.platform_center(),close,.72,true,true)
 	if not save.active or save.wide_arm.is_empty():
 		var extension := 1.-smoothstep(.09,.20,ahead)
-		if extension>.001: platform.Drive.pose_joined_platform(actor,extension,174.)
+		var target := Vector3.INF
+		if not save.active and not platform.reach.is_empty():
+			target=intercept+actor.basis.z*.10
+			extension=1.-smoothstep(.12,.32,ahead)
+		if extension>.001: platform.Drive.pose_joined_platform(actor,extension,174.,target)
 	if not automatic and release_window<=0.: return
 	var contact := platform.dig_contact_segment(path.call(start),path.call(start+dt))
 	if contact[0].distance_to(contact[1])>platform.PLATFORM_RADIUS: return
@@ -251,6 +256,12 @@ func sample_defensive_contact(platform: Reception,start: float,dt: float,_until_
 	platform.touch_time=start+dt
 	platform.outgoing=platform.aim_velocity(platform.touch)
 	platform.capture_bump_contact()
+	dig_contact_grip=Vector3.INF
+	if not save.active and not platform.reach.is_empty():
+		var rig: Skeleton3D=actor.skeleton
+		var left := rig.get_bone_global_pose(rig.find_bone("hand_l")).origin
+		var right := rig.get_bone_global_pose(rig.find_bone("hand_r")).origin
+		dig_contact_grip=rig.to_global((left+right)*.5)
 
 func scoring_target(_origin: Vector3) -> Vector3:
 	return attack_landing
