@@ -96,6 +96,7 @@ var mirror := CheckButton.new()
 var elapsed := 0.
 var source := ""
 var pick_boxes: Array[Dictionary]=[]
+var random_feeds := CheckButton.new()
 var selected_only := CheckButton.new()
 var unfinished := CheckButton.new()
 var sidebar := PanelContainer.new()
@@ -216,6 +217,17 @@ func _ready() -> void:
 	tiers.add_child(torso_label)
 	var serve_row := HBoxContainer.new()
 	column.add_child(serve_row)
+	random_feeds.text="Random assigned boxes"
+	random_feeds.button_pressed=StorySession.game_options.get_value("reception_studio","random_assigned",false)
+	serve_row.add_child(random_feeds)
+	random_feeds.toggled.connect(func(on):
+		if on:
+			save_selection()
+			next_assigned_feed()
+		else:
+			restore_selection()
+		StorySession.game_options.set_value("reception_studio","random_assigned",on)
+		StorySession.save_options())
 	var types := OptionButton.new()
 	for title in SERVE_NAMES: types.add_item(title)
 	types.select(serve_type)
@@ -268,6 +280,10 @@ func _ready() -> void:
 	seek.value_changed.connect(func(value): playing=false; frame=value; draw_pose())
 	refresh()
 	update_leg_buttons()
+	restore_selection()
+	if random_feeds.button_pressed: next_assigned_feed()
+
+func restore_selection() -> void:
 	var selection: Dictionary=StorySession.game_options.get_value("reception_studio","selection",{})
 	cell=Vector3i(selection.get("cell",cell)).clamp(MAP_MIN,MAP_MAX)
 	quadrant=clampi(selection.get("part",0),0,region_parts(cell)-1)
@@ -373,6 +389,9 @@ func _process(delta: float) -> void:
 		frame+=delta*60.
 		if frame>=maxf(clips[index].frames,maxf(pass_end_frame,reset_end_frame))+1.:
 			frame=seek.min_value
+			if random_feeds.button_pressed:
+				next_assigned_feed()
+				return
 			pick_feed_point()
 		draw_pose()
 
@@ -1340,6 +1359,17 @@ func assigned_action(address: Vector3i,part: int) -> int:
 	var previous := Vector3i(address.x,0 if address.y==0 else 1,address.z)
 	var default_action := 10 if previous==Vector3i(1,1,1) else 0
 	return int(StorySession.game_options.get_value("dig_regions",Regions.key(previous),default_action))
+
+func next_assigned_feed() -> void:
+	var assigned := flight_boxes.filter(func(box): return box.assigned)
+	if assigned.is_empty():
+		playing=false
+		return
+	var box: Dictionary=assigned.pick_random()
+	activate_receiver(randi_range(0,defenders.size()-1))
+	cell=box.address
+	quadrant=box.part
+	preview_cell()
 
 func pick_feed_point() -> void:
 	miss_logged=false
