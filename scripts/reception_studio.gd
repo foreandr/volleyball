@@ -406,7 +406,7 @@ func draw_pose() -> void:
 	feed_fraction=1.
 	if c.get("jump_set",false) and cell_action()>0:
 		var behind := defenders[receiving].position.z-aim.z
-		var advance := clampf(behind*.70,0.,.95)
+		var advance := clampf(behind+.08,0.,1.75)
 		feed_fraction-=advance/maxf(1.,launch.z-aim.z)
 	var target := launch.lerp(aim,feed_fraction)+Vector3.UP*6.*feed_fraction*(1.-feed_fraction)
 	set_intercept=target
@@ -576,6 +576,8 @@ func jump_to_set(goal: Vector3, follow: float) -> void:
 	apex=upward_speed*upward_speed/(2.*9.81)
 	var t := follow+lead
 	var travel: Vector3=player.global_basis.inverse()*gap.slide(Vector3.UP)
+	# Limit backward launch velocity so even the landing stays near takeoff.
+	travel.z=maxf(travel.z,-.20*lead/(2.*half_air))
 	var fraction := clampf(t,0.,2.*half_air)/lead
 	var landing := 2.*half_air-lead
 	var recover := smoothstep(landing+.10,landing+.57,follow)

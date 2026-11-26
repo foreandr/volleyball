@@ -140,3 +140,4 @@ Reflexes (0-100) controls CPU read latency in blocking and digging drills, serve
 Assigned reception misses display the contact gap from the contact frame onward and log time, defender, region, animation, target, and contact position once per live feed. Hand passes lean toward the feed, adjust squat and step depth, and drift toward high feeds in the jump.
 High Center in the Back slice defaults to jump set #78, timing an upright directional jump from the predicted hand-contact height and horizontal distance, with lower feeds met on descent.
 Back-top jump sets meet the descending serve earlier along its existing flight. The receiver starts loading the knees 0.32 seconds before takeoff, lowers the hips up to 0.17 m from the load alone, and finishes extending during early ascent.
+On the studio back-top jump set, backward launch speed is limited so the receiver lands within 20 cm behind takeoff.
