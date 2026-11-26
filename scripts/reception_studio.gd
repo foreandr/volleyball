@@ -1018,7 +1018,7 @@ func sample_receiver_base(c: Dictionary,f: float,active: bool,motion_legs: int) 
 	if not Regions.movement(c):
 		sample_layer(motion_legs,c,f)
 		return
-	var max_shift := float(clips[motion_legs].get("entry_shuffle_m",0.)) if motion_legs>=0 else 0.
+	var max_shift := float(clips[motion_legs].get("entry_plant_m",0.)) if motion_legs>=0 else 0.
 	var shift := Vector3.ZERO
 	var progress := 0.
 	var leg_frame := f
@@ -1026,19 +1026,19 @@ func sample_receiver_base(c: Dictionary,f: float,active: bool,motion_legs: int) 
 		var goal: Vector3=defenders[receiving].to_local(set_intercept).slide(Vector3.UP)
 		var gap := goal-Vector3.BACK*.48
 		var available := minf(float(c.contact)/60.,incoming_lead_seconds)
-		var window := clampf(available-.20,0.,.27)
+		var window := clampf(available-.20,0.,approach_plant.APPROACH_LOAD_TIME)
 		var distance := minf(max_shift,minf(maxf(0.,gap.length()-.30),window*1.35))
 		if distance>.025:
 			var start := float(c.contact)-available*60.
 			var plant := start+window*60.
-			progress=smoothstep(start,plant,f)
+			progress=clampf(inverse_lerp(start,plant,f),0.,1.)
 			shift=gap.normalized()*distance
 			if f<c.contact: leg_frame=float(c.contact)*clampf(inverse_lerp(plant,c.contact,f),0.,1.)
 	sample_layer(motion_legs,c,leg_frame)
 	if not shift.is_zero_approx():
-		player.position+=shift*progress
+		player.position+=shift*smoothstep(0.,1.,progress)
 		if progress>0. and progress<1.:
-			sample_shuffle(shift.normalized(),progress,sin(PI*progress)*shift.length()/max_shift)
+			sample_approach_plant(shift,(progress-1.)*approach_plant.APPROACH_LOAD_TIME)
 	var contact := float(FOREARM.get_meta("contact_time"))
 	var time := remap(f,0.,c.contact,0.,contact) if f<=c.contact else remap(f,c.contact,c.get("source_end",c.frames),contact,FOREARM.length)
 	var key := roundi(time*60.)

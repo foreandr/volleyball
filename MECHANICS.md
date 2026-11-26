@@ -171,4 +171,4 @@ Within 22-23.bottom.left, near and far divide the lateral reach from the receive
 22-23 now has four full-depth lateral columns in each of two rows. The finished bottom-left near region uses 72. Its opposite-body counterpart is 24.bottom.near and plays mirrored.
 Reception Studio saves a lead-foot choice per region. Animation 72 leads right in 22-23.bottom.right.left and left in 22-23.bottom.right.right.
 Every Reception Studio forearm leg movement can swing the joined platform toward the intercept. The reaching shoulder drops with lateral error, up to 20 degrees, unless the clip specifies its own drop.
-Reception Studio leg movement 33 can take one directional shuffle during the simulated hold. Distance depends on the projected contact and available time, with up to 32 cm of travel before the lunge.
+Reception Studio leg movement 33 can use the spike approach right plant and closing left step during the simulated hold. Distance depends on the projected contact and available time, with up to 32 cm of travel before the lunge.
