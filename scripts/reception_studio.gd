@@ -218,11 +218,12 @@ func draw_pose() -> void:
 		return
 	sample_layer(legs,c,f)
 	var contact := float(FOREARM.get_meta("contact_time"))
-	var time := remap(f,0.,c.contact,0.,contact) if f<=c.contact else remap(f,c.contact,c.frames,contact,FOREARM.length)
+	var time := remap(f,0.,c.contact,0.,contact) if f<=c.contact else remap(f,c.contact,c.get("source_end",c.frames),contact,FOREARM.length)
 	var key := roundi(time*60.)
 	if not forearm_frames.has(key):
 		forearm_frames[key]=Save.sample_clip(player.skeleton,FOREARM,minf(key/60.,FOREARM.length))
-	var weight := smoothstep(0.,5.,f)*(1.-smoothstep(c.frames-6.,c.frames,f))
+	var settle: float=c.frames-3. if c.has("source_end") else c.frames
+	var weight := smoothstep(0.,5.,f)*(1.-smoothstep(settle-6.,settle,f))
 	for bone in upper_bones:
 		player.skeleton.set_bone_pose(bone,ready_pose[bone].interpolate_with(forearm_frames[key][bone],weight))
 
@@ -255,7 +256,13 @@ func sample_layer(which: int, timeline: Dictionary, f: float) -> void:
 	if which!=index:
 		if f<=timeline.contact: f=f*c.contact/timeline.contact
 		else: f=remap(f,timeline.contact,timeline.frames,c.contact,c.frames)
-	var weight := smoothstep(5.,c.contact,f)*(1.-smoothstep(c.contact+6.,c.frames-8.,f))
+	var source_end: float=c.get("source_end",c.frames)
+	var weight := smoothstep(5.,c.contact,f)*(1.-smoothstep(c.contact+6.,source_end-8.,f))
+	if weight<=0.:
+		player.position=Vector3.ZERO
+		player.rotation.y=0.
+		for bone in ready_pose.size(): player.skeleton.set_bone_pose(bone,ready_pose[bone])
+		return
 	var author=player.get_pose_author()
 	var rig: Skeleton3D=player.skeleton
 	player.position=Vector3.ZERO
