@@ -35,6 +35,7 @@ var jump_height := HEIGHT
 var landing_recovery := 0.13
 var overpass_swing := false
 var net_heading := INF
+var swing_load := 0.
 var aggressive_press := false
 var track_near_ball := false
 var kong_direction := 0.
@@ -57,6 +58,8 @@ var previous_wrists: Array[Vector3] = []
 func begin(player: Node3D) -> void:
 	actor = player
 	base = player.position
+	swing_load=float(player.get_meta("swing_block_load",0.))
+	player.set_meta("swing_block_load",0.)
 	actor.play_action("idle",0.0)
 	actor.animator.seek(0.0,true)
 
@@ -177,6 +180,10 @@ func step(delta: float, world_ball: Vector3) -> bool:
 			pole = pole.lerp(Vector3(-0.75,-0.27,-0.42),draw)
 		elif overpass_swing:
 			target = target.lerp(shoulder+Vector3(0.12,0.04,0.30)/scale_,smoothstep(0.30,0.56,age))
+		if swing_load>.01 and not overpass_swing:
+			var sweep := swing_load*(1.-smoothstep(.04,.28,age))
+			target=target.lerp(shoulder+Vector3(outward*.13,-.38,-.32)/scale_,sweep)
+			weight=maxf(weight,sweep)
 		var extension := 174.
 		if court_aim.is_finite():
 			# Probe with a bent elbow. Only a wrist clear of the tape can press straight.

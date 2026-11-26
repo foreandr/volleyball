@@ -382,7 +382,7 @@ func step_practice_blockers(delta: float) -> void:
 		var old_x := actor.position.x
 		actor.position.x=move_toward(old_x,goal,GroundControls.speed(true,true)*delta)
 		actor.animator.advance(delta)
-		GroundControls.shuffle(actor,practice_footwork[i],Vector3((actor.position.x-old_x)/maxf(.0001,delta),0,0),true,delta)
+		practice_footwork[i].block_step(Vector3.RIGHT*(actor.position.x-old_x)/maxf(.0001,delta),goal-old_x,PI,phase=="set",false,delta)
 		var may_jump := phase=="set" or (commit and phase in ["pass","set_contact"])
 		if may_jump and not practice_attempted[i] and absf(goal-actor.position.x)<.85 and until_hit<=PracticeBlock.START+PracticeBlock.AIR*.5+PracticeBlock.CPU_LEAD:
 			jump=PracticeBlock.new()

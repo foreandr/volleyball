@@ -183,6 +183,32 @@ func get_pose_author() -> RefCounted:
 func animation_side(side: String) -> String:
 	return ("r" if side == "l" else "l") if mirror_animation else side
 
+func pose_set_call(option: int, middle_31: bool, weight: float) -> void:
+	var author := get_pose_author()
+	var pose: Array=[]
+	for i in skeleton.get_bone_count(): pose.append(skeleton.get_bone_pose(i))
+	var waist: Vector3=author.point(pose,"pelvis")
+	var unit := 1./skeleton.global_basis.y.length()
+	for side in ["l","r"]:
+		var across := 1. if side=="l" else -1.
+		var at := waist+Vector3(across*.085,.12 if side=="l" else .07,.17)*unit
+		author.limb(pose,"upperarm_"+side,"lowerarm_"+side,"hand_"+side,at,Vector3(across,-.45,-.35),weight)
+		for joint in ["upperarm_","lowerarm_","hand_"]:
+			var bone := skeleton.find_bone(joint+side)
+			skeleton.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
+	var fingers := ["index","middle","ring","pinky"]
+	for i in fingers.size():
+		var extended := i<option+1
+		for segment in ["01","02","03"]:
+			var bone := skeleton.find_bone(fingers[i]+"_"+segment+"_r")
+			if bone<0: continue
+			var rest := skeleton.get_bone_rest(bone).basis.get_rotation_quaternion()
+			var curl := .08 if extended else .95
+			skeleton.set_bone_pose_rotation(bone,skeleton.get_bone_pose_rotation(bone).slerp(rest*Quaternion(Vector3.RIGHT,curl),weight))
+	var thumb := skeleton.find_bone("thumb_02_r")
+	if thumb>=0: skeleton.set_bone_pose_rotation(thumb,skeleton.get_bone_rest(thumb).basis.get_rotation_quaternion()*Quaternion(Vector3.RIGHT,(.12 if middle_31 else .85)*weight))
+	if shirt_fabric: shirt_fabric.set_shader_parameter("signal_lift",weight)
+
 func pose_hands_on_knees(weight: float) -> void:
 	var rig: Skeleton3D = skeleton
 	var author: RefCounted = get_pose_author()

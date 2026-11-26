@@ -8,6 +8,7 @@ uniform sampler2D team_crest : source_color,filter_linear_mipmap_anisotropic;
 uniform vec3 hem_particles[12];
 uniform vec3 strap_offsets[4];
 uniform float hem_shift;
+uniform float signal_lift = 0.;
 uniform bool tucked;
 uniform vec4 waist_color : source_color;
 uniform bool jacket = false;
@@ -58,7 +59,7 @@ void vertex(){
 		float section=fract(atan(rest.x,rest.z+.018)/6.2831853+1.)*12.;
 		int i=int(floor(section))%12;
 		VERTEX+=lower*(tucked?.12:1.)*mix(hem_particles[i],hem_particles[(i+1)%12],fract(section));
-		VERTEX.y+=lower*(tucked?0.:hem_shift);
+		VERTEX.y+=lower*((tucked?0.:hem_shift)+.13*signal_lift*smoothstep(-.03,.12,rest.z)*(1.-smoothstep(.08,.24,abs(rest.x))));
 		if(tucked) VERTEX-=NORMAL*.043*(1.-smoothstep(1.04,1.14,rest.y));
 	}
 	float freedom=1.-smoothstep(1.04,1.48,rest.y);

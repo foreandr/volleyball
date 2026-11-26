@@ -42,7 +42,7 @@ func begin(actor: Node3D) -> void:
 	for i in actor.skeleton.get_bone_count(): baseline.append(actor.skeleton.get_bone_pose(i))
 	ring.show()
 
-func update(actor: Node3D,delta: float) -> void:
+func update(actor: Node3D,delta: float,pose_depth := 1.) -> void:
 	ring.position = Vector3(actor.position.x,.085,actor.position.z)
 	if not charging:
 		feedback_time -= delta
@@ -56,7 +56,7 @@ func update(actor: Node3D,delta: float) -> void:
 	var pose := baseline.duplicate()
 	var hips := rig.find_bone("pelvis")
 	var parent: Transform3D = author.world_pose(pose,rig.get_bone_parent(hips))
-	var bend := smoothstep(0,1,depth)
+	var bend := smoothstep(0,1,depth)*pose_depth
 	pose[hips].origin += parent.basis.inverse()*Vector3(0,-.54*bend,-.09*bend)
 	author.rotate_world(pose,"spine_01",Vector3.RIGHT,.40*bend)
 	for side in ["l","r"]:

@@ -579,7 +579,7 @@ func step_blocker(slot: int,delta: float) -> void:
 	if not shuffle_steps.has(actor):
 		shuffle_steps[actor]=preload("res://scripts/directional_footwork.gd").new(actor)
 	if slot==MANUAL_SLOT and block_held:
-		block_load.update(actor,delta)
+		block_load.update(actor,delta,1.-.82*smoothstep(.85,2.35,absf(lateral_speed[slot])))
 		block_load.ring.hide()
 	var velocity := Vector3((actor.position.x-previous)/maxf(delta,.0001),0.,motion.y/maxf(delta,.0001))
 	if not cpu and not focused:
@@ -592,7 +592,10 @@ func step_blocker(slot: int,delta: float) -> void:
 		var heading := lerp_angle(atan2(facing.x,facing.z),PI,square)
 		actor.rotation.y=rotate_toward(actor.rotation.y,heading,delta*6.)
 	if sprinting and velocity.length()>.15: actor.stamina.spend(actor.stamina.SPRINT_DRAIN*delta,"Sprint")
-	GroundControls.shuffle(actor,shuffle_steps[actor],velocity,focused,delta)
+	if cpu or block_held:
+		shuffle_steps[actor].block_step(velocity,goal-previous if cpu else 0.,PI,read_set,block_held and not cpu,delta)
+	else:
+		GroundControls.shuffle(actor,shuffle_steps[actor],velocity,focused,delta)
 	var last_chance := late_window or (phase=="set" and flight_time-elapsed<=Block.AIR*.5)
 	if read_set and (slot==read_lead or attempted[read_lead] or last_chance) and (automatic_block or slot!=MANUAL_SLOT) and cpu and closing[slot] and not attempted[slot] and ((phase=="set" and flight_time-elapsed<=Block.START+Block.AIR*.5+Block.CPU_LEAD) or late_window):
 		var preload_fraction := clampf(1.-(flight_time-elapsed-Block.AIR*.5-Block.CPU_LEAD)/Block.START,0.,1.) if phase=="set" else 1.
