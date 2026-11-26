@@ -31,7 +31,7 @@
   {"id": 30, "kind": "straight", "side": 0.056, "drop": 0.106, "forward": 0.06, "lean": 6, "contact": 37, "frames": 115},
   {"id": 31, "kind": "kneel", "side": 0.384, "drop": 0.449, "forward": 0.187, "lean": 14, "contact": 37, "frames": 115},
   {"id": 32, "kind": "squat", "side": 0.192, "drop": 0.352, "forward": 0.119, "lean": 18, "contact": 37, "frames": 115},
-  {"id": 33, "kind": "forward", "side": 0.475, "drop": 0.246, "forward": 0.323, "lean": 33, "contact": 37, "frames": 115},
+  {"id": 33, "kind": "forward", "entry_shuffle_m": 0.32, "side": 0.475, "drop": 0.246, "forward": 0.323, "lean": 33, "contact": 37, "frames": 115},
   {"id": 34, "kind": "stretch", "side": 0.678, "drop": 0.317, "forward": 0.416, "lean": 30, "contact": 37, "frames": 115},
   {"id": 35, "kind": "low", "side": 0.373, "drop": 0.466, "forward": 0.212, "lean": 25, "contact": 37, "frames": 115},
   {"id": 36, "kind": "overhead", "side": 0.102, "drop": 0.114, "forward": 0.102, "lean": 3, "contact": 37, "frames": 115},

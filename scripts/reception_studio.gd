@@ -67,6 +67,7 @@ var routed_region := Vector4i(-1,-1,-1,-1)
 var flight_boxes: Array[Dictionary]=[]
 var crossing := MeshInstance3D.new()
 var feed_fraction := 1.
+var incoming_lead_seconds := 0.
 var set_intercept := Vector3.ZERO
 var ball_trail := MeshInstance3D.new()
 var trail_mesh := ImmediateMesh.new()
@@ -631,6 +632,7 @@ func draw_pose() -> void:
 	var target := launch.lerp(aim,feed_fraction)+Vector3.UP*feed_curve*feed_fraction*(1.-feed_fraction)
 	set_intercept=target
 	var duration := full_duration*feed_fraction
+	incoming_lead_seconds=duration
 	var touch_frame := duration*60.
 	var region := routed_region
 	var address := Vector3i(region.x,region.y,region.z)
@@ -1016,7 +1018,27 @@ func sample_receiver_base(c: Dictionary,f: float,active: bool,motion_legs: int) 
 	if not Regions.movement(c):
 		sample_layer(motion_legs,c,f)
 		return
-	sample_layer(motion_legs,c,f)
+	var max_shift := float(clips[motion_legs].get("entry_shuffle_m",0.)) if motion_legs>=0 else 0.
+	var shift := Vector3.ZERO
+	var progress := 0.
+	var leg_frame := f
+	if max_shift>0.:
+		var goal: Vector3=defenders[receiving].to_local(set_intercept).slide(Vector3.UP)
+		var gap := goal-Vector3.BACK*.48
+		var available := minf(float(c.contact)/60.,incoming_lead_seconds)
+		var window := clampf(available-.20,0.,.27)
+		var distance := minf(max_shift,minf(maxf(0.,gap.length()-.30),window*1.35))
+		if distance>.025:
+			var start := float(c.contact)-available*60.
+			var plant := start+window*60.
+			progress=smoothstep(start,plant,f)
+			shift=gap.normalized()*distance
+			if f<c.contact: leg_frame=float(c.contact)*clampf(inverse_lerp(plant,c.contact,f),0.,1.)
+	sample_layer(motion_legs,c,leg_frame)
+	if not shift.is_zero_approx():
+		player.position+=shift*progress
+		if progress>0. and progress<1.:
+			sample_shuffle(shift.normalized(),progress,sin(PI*progress)*shift.length()/max_shift)
 	var contact := float(FOREARM.get_meta("contact_time"))
 	var time := remap(f,0.,c.contact,0.,contact) if f<=c.contact else remap(f,c.contact,c.get("source_end",c.frames),contact,FOREARM.length)
 	var key := roundi(time*60.)
