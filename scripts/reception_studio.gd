@@ -36,6 +36,8 @@ var set_intercept := Vector3.ZERO
 var ball_trail := MeshInstance3D.new()
 var trail_mesh := ImmediateMesh.new()
 var trail_ink := StandardMaterial3D.new()
+var shuffle_by_actor := {}
+var reset_end_frame := 0.
 var pass_end_frame := 0.
 var reachable := false
 var lattice := MeshInstance3D.new()
@@ -284,7 +286,7 @@ func _process(delta: float) -> void:
 		refresh()
 	if playing:
 		frame+=delta*60.
-		if frame>=maxf(clips[index].frames,pass_end_frame)+1.:
+		if frame>=maxf(clips[index].frames,maxf(pass_end_frame,reset_end_frame))+1.:
 			frame=seek.min_value
 			pick_feed_point()
 		draw_pose()
@@ -464,7 +466,11 @@ func draw_pose() -> void:
 		if playing and not miss_logged:
 			print("studio_miss ",Time.get_datetime_string_from_system()," defender=",receiving+1," cell=",cell," region=",region_number(cell,quadrant)," assigned=",cell_action()," playing=",c.id," target=",target," contact=",contact_point," gap_m=",gap)
 			miss_logged=true
-	sample_receiver(c,clampf(frame+lead_frames,0.,c.frames) if lead_frames>0. else f)
+	reset_end_frame=0.
+	if c.kind=="overhead":
+		sample_receiver(c,maxf(0.,frame+lead_frames))
+	else:
+		sample_receiver(c,clampf(frame+lead_frames,0.,c.frames) if lead_frames>0. else f)
 	pass_end_frame=0.
 	var seconds := (frame-touch_frame)/60.
 	var serve_time := clampf(feed.contact_time()+seconds+duration,0.,feed.contact_time()+.42)
@@ -612,13 +618,30 @@ func jump_to_set(goal: Vector3, follow: float) -> void:
 	var fraction := clampf(t,0.,2.*half_air)/lead
 	var landing := 2.*half_air-lead
 	var recover := smoothstep(landing+.10,landing+.57,follow)
-	var offset := travel.limit_length(5.5*lead)*fraction*(1.-recover)
+	var offset := travel.limit_length(5.5*lead)*fraction
 	player.position=offset
 	player.position.y=maxf(0.,apex-4.905*(t-half_air)*(t-half_air))
 	var load := smoothstep(-.32,-.085,t)*(1.-smoothstep(-.085,.07,t))
 	var compression := clampf(contact_rise-gap.y,0.,.38)*smoothstep(-.16,0.,t)*(1.-recover)
 	var cushion := smoothstep(landing,landing+.06,follow)*(1.-smoothstep(landing+.06,landing+.20,follow))
 	bend_for_hand_pass(compression+.17*load+.10*cushion)
+	# Hold the landing before the studio shuffles back for its next feed.
+	var elapsed := follow-landing-.40
+	var distance := offset.length()
+	if elapsed<=0. or distance<.001: return
+	var duration := maxf(.38,distance/1.15)
+	var progress := clampf(elapsed/duration,0.,1.)
+	player.position=offset*(1.-smoothstep(0.,1.,progress))
+	reset_end_frame=frame+(duration-elapsed)*60.
+	if progress>=1.: return
+	if not shuffle_by_actor.has(player):
+		shuffle_by_actor[player]=preload("res://scripts/directional_footwork.gd").new(player)
+	var steps=shuffle_by_actor[player]
+	# Sample from replay time so stepping backwards reproduces the same feet.
+	steps.phase=progress*maxi(1,roundi(duration*1.65))
+	steps.travel=-offset.normalized()
+	steps.weight=smoothstep(0.,.16,progress)*(1.-smoothstep(.80,1.,progress))
+	steps.step(steps.travel,0.,1.,true,true)
 
 func pose_hand_pass_legs(goal: Vector3, standing_height: float, follow: float) -> void:
 	var drop := standing_height-goal.y
