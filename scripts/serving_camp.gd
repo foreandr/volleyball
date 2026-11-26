@@ -2,7 +2,8 @@ extends "res://scripts/attacking_camp.gd"
 
 const TECHNIQUES := [preload("res://scripts/spin_serve.gd"),preload("res://scripts/jump_float_serve.gd"),preload("res://scripts/standing_float_serve.gd"),preload("res://scripts/underhand_serve.gd")]
 const FACE := [JOY_BUTTON_A,JOY_BUTTON_B,JOY_BUTTON_X,JOY_BUTTON_Y]
-const LABELS := ["Spin","Float","Standing float","Underhand"]
+const LABELS := ["Spin toss","Jump float toss","Standing toss","Underhand toss"]
+const SPIN_LABELS := ["Topspin","Left spin","Right spin","Float"]
 const HOMES := [Vector3(-2.9,.04,9.2),Vector3(0,.04,10.),Vector3(2.9,.04,9.2)]
 var serves := []
 var serve_contact_offsets: Array[Vector3]=[]
@@ -14,7 +15,6 @@ const SERVE_LATE := .075
 const SERVE_PERFECT := .055
 var toss_airborne := false
 var toss_style := 2
-var hit_style := 2
 var release_time := INF
 const SERVE_HOLD_SECONDS := .25
 var pending_serve := -1
@@ -79,7 +79,7 @@ var recent_misses := [0.,0.,0.,0.]
 var pipe_lane := 0.
 
 func flight_style() -> int:
-	return 1 if hit_style==0 and spin_selection==3 else hit_style
+	return 1 if spin_selection==3 else 0
 
 func contact_height_for(slot: int) -> float:
 	var actor := attack_options[slot]
@@ -254,16 +254,16 @@ func build_rally_sliders() -> void:
 func update_prompts(_next: String) -> void:
 	if prompt_phase=="serving": return
 	prompt_phase="serving"
-	Xbox.prompts(controls_row,[["A","Spin"],["B","Jump float"],["X","Standing float"],["Y","Underhand"],["RS","Pre-aim / hold for height"],["LS","Toss aim / hold for height"],["D-pad Up/Down","Topspin / float"],["D-pad Left/Right","Sidespin"]])
+	Xbox.prompts(controls_row,[["A","Spin toss"],["B","Float toss"],["X","Standing toss"],["Y","Underhand"],["RS","Pre-aim / hold for height"],["LS","Toss aim / hold for height"],["D-pad Up/Down","Topspin / float"],["D-pad Left/Right","Sidespin"]])
 
 func apply_camera() -> void:
 	place_practice_camera(Vector3(0,1.5,-4.4),distance*.48+2.)
 
 func configure_flight(shot,origin: Vector3) -> void:
 	shot.test_speed_mps=serve_test_kmh/3.6
-	if hit_style==0 and spin_selection!=3: shot.sidespin=[0.,1.,-1.][spin_selection]
+	if spin_selection!=3: shot.sidespin=[0.,1.,-1.][spin_selection]
 	if flight_style() in [1,2]: shot.tape_clearance=float_clearance
-	shot.apex=maxf(origin.y+.03,(4.3 if hit_style==0 else 4.9)+serve_arc_offset)
+	shot.apex=maxf(origin.y+.03,(4.3 if flight_style()==0 else 4.9)+serve_arc_offset)
 
 func update_serve_aim(delta: float) -> void:
 	var before := phase=="serve_ready"
@@ -286,9 +286,11 @@ func update_serve_aim(delta: float) -> void:
 		driver.ball.hide()
 		driver.aim_ring.hide()
 	if before:
-		shot.preview_origin=serve_station+(Vector3(0,attack_contact_height()-serve_station.y,1.6) if hit_style<2 else serve_contact_offsets[hit_style])
+		shot.preview_origin=serve_station+(Vector3(0,attack_contact_height()-serve_station.y,1.6) if toss_style<2 else serve_contact_offsets[toss_style])
 	elif toss_style<2:
 		shot.preview_origin=endpoint if toss_airborne else setter.position+setter.basis.z*2.15+Vector3.UP*(attack_contact_height()-setter.position.y)
+	else:
+		shot.preview_origin=serve_station+serve_contact_offsets[toss_style]
 	configure_flight(shot,shot.preview_origin)
 	shot.target=destination
 	shot.update_path_preview()
@@ -361,7 +363,7 @@ func _input(event: InputEvent) -> void:
 		var directions := [JOY_BUTTON_DPAD_UP,JOY_BUTTON_DPAD_LEFT,JOY_BUTTON_DPAD_RIGHT,JOY_BUTTON_DPAD_DOWN]
 		if phase in ["serve_ready","serve_toss"] and event.button_index in directions and event.pressed:
 			spin_selection=directions.find(event.button_index)
-			message.text=["Topspin","Left spin","Right spin","Float"][spin_selection]
+			message.text=SPIN_LABELS[spin_selection]
 			update_serve_aim(0.)
 			get_viewport().set_input_as_handled()
 			return
@@ -380,19 +382,14 @@ func handle_serve_button(style: int,pressed: bool) -> void:
 			pending_serve=style
 			held_seconds=0.
 			toss_style=style
-			hit_style=style
 			update_serve_aim(0.)
 			message.text=LABELS[style]+"  -  Hold to serve"
 		elif pending_serve==style:
 			pending_serve=-1
 	elif phase=="serve_toss":
-		if pressed and toss_style<2 and style<2:
-			hit_style=style
-			release_time=INF
-			message.text=LABELS[toss_style]+" toss / "+LABELS[style]+" hit"
-		elif not pressed and style==hit_style and not is_finite(release_time):
+		if not pressed and style==toss_style and not is_finite(release_time):
 			release_time=serve_clock
-			trace("serve_release",{"toss":toss_style,"hit":hit_style,"timing_ms":roundi(serve_meter_error()*1000.)})
+			trace("serve_release",{"toss":toss_style,"spin":SPIN_LABELS[spin_selection],"timing_ms":roundi(serve_meter_error()*1000.)})
 
 func serve_meter_position(error: float) -> float:
 	return clampf(inverse_lerp(SERVE_EARLY-.08,SERVE_LATE+.025,error),0.,1.)
@@ -605,7 +602,7 @@ func _process(delta: float) -> void:
 				shot.ball.basis=ball.basis
 				flight_age=0.
 				phase="serve_flight"
-				message.text=("Perfect" if absf(error)<=SERVE_PERFECT else ("Early" if error<0. else "Late"))+" / "+LABELS[hit_style]
+				message.text=("Perfect" if absf(error)<=SERVE_PERFECT else ("Early" if error<0. else "Late"))+" / "+SPIN_LABELS[spin_selection]
 				if toss_style>=2: hand_sound.play()
 	elif phase in ["serve_flight","serve_pass","serve_attack","serve_miss"]:
 		serves[flight_style()].hide()
