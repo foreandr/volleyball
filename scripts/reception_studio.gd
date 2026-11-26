@@ -33,6 +33,7 @@ var feed_offset := Vector3.ZERO
 const HAND_RADIUS := .28
 # Local bone endpoints and world-space capsule radii used for both contact and display.
 const RECEPTION_CAPSULES := [
+	["hand_l","middle_03_l",.055], ["hand_r","middle_03_r",.055],
 	["lowerarm_l","hand_l",.085], ["lowerarm_r","hand_r",.085],
 	["upperarm_l","lowerarm_l",.095], ["upperarm_r","lowerarm_r",.095],
 	["spine_03","upperarm_l",.105], ["spine_03","upperarm_r",.105],
