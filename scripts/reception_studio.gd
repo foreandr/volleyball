@@ -440,8 +440,7 @@ func sample_receiver(c: Dictionary,f: float) -> void:
 		var load_weight := smoothstep(-HandPass.CPU_PREP_LEAD,0.,follow)
 		var rig: Skeleton3D=player.skeleton
 		var forehead := rig.to_global(rig.get_bone_global_pose(rig.find_bone("Head")).origin).y+.12
-		var depth := clampf((forehead-goal.y)*.30,0.,.065)
-		bend_for_hand_pass(depth*load_weight*(1.-smoothstep(0.,HandPass.CPU_FOLLOW_TIME,follow)))
+		pose_hand_pass_legs(goal,forehead,follow)
 		HandPass.standing_set(player,goal,offset,push,follow,load_weight,Vector3.ZERO,false)
 		return
 	if not Regions.movement(c):
@@ -461,6 +460,31 @@ func sample_receiver(c: Dictionary,f: float) -> void:
 	var bend := ForearmDrive.forearm_bend_degrees(incoming_speed.value/3.6)
 	speed_label.text="Incoming %d km/h   ·   %.0f°" % [incoming_speed.value,bend]
 	ForearmDrive.recoil_platform(player.skeleton,(f-float(c.contact))/60.,bend)
+
+func pose_hand_pass_legs(goal: Vector3, standing_height: float, follow: float) -> void:
+	var drop := standing_height-goal.y
+	if drop < -.10:
+		var height := clampf(-drop-.06,.04,.38)
+		var half_flight := sqrt(2.*height/9.81)
+		player.position.y=maxf(0.,height-4.905*follow*follow)
+		var before := smoothstep(-half_flight-.19,-half_flight-.09,follow)*(1.-smoothstep(-half_flight-.09,-half_flight,follow))
+		var after := smoothstep(half_flight,half_flight+.08,follow)*(1.-smoothstep(half_flight+.08,half_flight+.22,follow))
+		bend_for_hand_pass(.10*(before+after))
+		return
+	var weight := smoothstep(-.36,-.025,follow)*(1.-smoothstep(.035,.32,follow))
+	if weight<=0.: return
+	var lateral: float=player.to_local(goal).x
+	var recipe_id := 6 if drop>.26 else 4
+	if drop>.12 and absf(lateral)>.20: recipe_id=7
+	var recipe: Dictionary=clips[recipe_id-1].duplicate()
+	var scale_m: float=player.skeleton.global_basis.x.length()
+	recipe.side=minf(absf(lateral)*.55,.15)/scale_m if recipe_id==7 else 0.
+	recipe.drop=minf(recipe.drop,maxf(0.,drop)/scale_m)
+	var pose := ready_pose.duplicate()
+	Regions.legs(player,pose,recipe,weight,lateral<0.)
+	for joint in ["pelvis","thigh_l","calf_l","foot_l","thigh_r","calf_r","foot_r"]:
+		var bone: int=player.skeleton.find_bone(joint)
+		player.skeleton.set_bone_pose(bone,pose[bone])
 
 func bend_for_hand_pass(depth: float) -> void:
 	if depth<=.00001: return
