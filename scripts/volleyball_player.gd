@@ -227,6 +227,16 @@ func pose_set_call(option: int, middle_31: bool, weight: float) -> void:
 	if thumb>=0: skeleton.set_bone_pose_rotation(thumb,skeleton.get_bone_rest(thumb).basis.get_rotation_quaternion()*Quaternion(Vector3.RIGHT,(.12 if middle_31 else .85)*weight))
 	if shirt_fabric: shirt_fabric.set_shader_parameter("signal_lift",weight)
 
+func pose_pin_draw(weight: float) -> void:
+	var rig: Skeleton3D=skeleton
+	var author := get_pose_author()
+	var pose: Array[Transform3D]=[]
+	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
+	for arm in ["upperarm_l","upperarm_r"]:
+		author.rotate_world(pose,arm,Vector3.RIGHT,.95*weight)
+		var bone := rig.find_bone(arm)
+		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
+
 func pose_hands_on_knees(weight: float) -> void:
 	var rig: Skeleton3D = skeleton
 	var author: RefCounted = get_pose_author()

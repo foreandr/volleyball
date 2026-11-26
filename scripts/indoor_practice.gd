@@ -1597,6 +1597,9 @@ func handle_attack_contact(_previous: Vector3,_delta: float) -> bool:
 func attack_surface_contact(_point: Vector3, _floor_hit: bool) -> void:
 	pass
 
+func block_on_flight_segment(_previous: Vector3) -> bool:
+	return false
+
 func advance_missed_ball(delta: float, rebound_floor := false) -> void:
 	var remaining := delta
 	while remaining>.00001:
@@ -1620,6 +1623,8 @@ func advance_missed_ball(delta: float, rebound_floor := false) -> void:
 			continue
 		var hit := contacts.sweep(world,contacts.ball_shape,ball.position,motion,Contact.GYM|Contact.EQUIPMENT|rotation_drill.CART_WALL)
 		ball.position+=motion*float(hit.get("fraction",1.))
+		if block_on_flight_segment(start):
+			continue
 		if roll_time<0. and ((not hit.is_empty() and hit.normal.y>.8 and ball.position.y<.25) or ball.position.y<=Contact.BALL_RADIUS+.004):
 			attack_surface_contact(ball.position,true)
 			var hard_landing: bool = hard_spike_floor_pending and (drop_velocity.length()>=Contact.HARD_SPIKE_SPEED or get_meta("blocked_attack",false))

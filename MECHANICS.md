@@ -103,7 +103,7 @@ Spike approaches drive both hands overhead during the final plant. Airborne CPU 
 Both arms use the same forward lift arc on short and full spike approaches. The arc starts up to 65 ms earlier while retaining its original key intervals.
 Full spike approaches reserve up to 0.90 m of forward carry into the contact stance, putting takeoff roughly one metre behind the ball. Runway and available airtime limit carry. CPU read blocks start loading 35 ms earlier.
 Near the net, attack and drill block poses check both arm chains and the upper body against the tape before accepting forward travel.
-In practice replay, right-stick click toggles normal playback and the last selected slow speed (initially half speed). Left-stick click toggles block hitboxes wherever they are available.
+In practice replay, right-stick click toggles normal playback and the last selected slow speed (initially quarter speed). Left-stick click toggles block hitboxes wherever they are available.
 Training Camp serving locks the toss on first press. A selects topspin and B selects jump float. Switching A/B before release changes the strike and flight. X selects standing float and Y underhand. Release near contact to serve toward three receivers.
 Serve release uses the attack ground timing arc. Its colored bounds use the same early, perfect and late thresholds as serve contact. Jump serves use the attack front lift and spike arm swing after the toss step, with a firm wrist for float hits.
 Once a jump-serve toss leaves the hand it becomes a live set trajectory. Serving uses the attacking drill plant, jump, swing, palm-contact test and follow-through. Toss and outgoing flight retain their selected serving techniques.
@@ -117,3 +117,5 @@ The pipe is an occasional in-system combination. A middle must be available for 
 Serve rallies continue after playable blocks. The nearest available teammate covers, and the libero sets if the setter took the first touch. Recent scoring makes hitters more attractive. A successful quick draws a middle commit and opens the pipe and pins. Serving HUD skills and verticals apply to the receiving offense and serving-side wall. The serve speed override preserves launch direction and allows testing up to 300 km/h.
 
 CPU blockers remember the direction of completed swings per opposing hitter on the player object. Use that read in drill and match positioning. A receiving libero clears the pipe approach after passing and covers the attack. Facing-preserving retreats use backward footfalls.
+
+During serve reception both pins start forward and draw their arms before the set, then transition to coverage when another attacker gets the ball.

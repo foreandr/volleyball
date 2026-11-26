@@ -69,6 +69,7 @@ var pin_hitter: Node3D
 var wall: Array[Node3D]=[]
 var wall_jumps := [null,null,null]
 var wall_committed := [false,false,false]
+var replay_rally := 0
 var return_touched := false
 var wall_vertical_inches := 46.
 var attack_kmh := 105.
@@ -276,6 +277,7 @@ func contact_deadline() -> float:
 	return flight_time+.12
 
 func next_serve() -> void:
+	replay_rally+=1
 	middle_31=randf()<.5
 	called_slot=3 if randf()<.22 else randi_range(0,2)
 	cover_slot=-1
@@ -508,10 +510,9 @@ func _process(delta: float) -> void:
 	step_serve_wall(delta)
 	if phase=="serve_return":
 		var previous := ball.global_position
+		var was_touched := return_touched
 		advance_missed_ball(delta,true)
-		if attack_floor_pending and not attack_decided:
-			if return_touched: try_cover(previous,delta)
-			else: return_touched=resolve_block_contact(previous,wall_jumps,-1.)
+		if attack_floor_pending and not attack_decided and was_touched: try_cover(previous,delta)
 		if not attack_floor_pending: floor_linger+=delta
 		if floor_linger>.55: next_serve()
 		return
@@ -714,6 +715,10 @@ func face_receive_ball(actor: Node3D,point: Vector3,delta: float) -> void:
 func stage_attacker(actor: Node3D,slot: int,delta: float) -> void:
 	var point := route_point(slot)+Vector3.BACK*1.6
 	point.y=.04
+	var pin_load := 0.
+	if slot in [0,2] and phase=="serve_pass":
+		pin_load=smoothstep(0.,.52,.57-(set_at-pass_clock))
+		point.z-=1.05*pin_load
 	if slot==1 and phase in ["serve_toss","serve_flight","serve_pass"]:
 		var start := second_contact_player().global_position.slide(Vector3.UP)
 		var finish := (pass_end if phase=="serve_pass" else SETTER_BASE).slide(Vector3.UP)
@@ -725,7 +730,10 @@ func stage_attacker(actor: Node3D,slot: int,delta: float) -> void:
 				point=nearest+lateral*1.1
 				point.y=.04
 				point.z=maxf(point.z,BallNet.NET_Z+.65)
-	move_receiver(actor,actor.get_parent_node_3d().to_local(point),delta,actor.get_parent_node_3d().to_local(ball.global_position)-actor.position)
+	var parent := actor.get_parent_node_3d()
+	var facing := parent.to_local(route_point(slot) if pin_load>0. else ball.global_position)-actor.position
+	move_receiver(actor,parent.to_local(point),delta,facing)
+	if pin_load>0.: actor.pose_pin_draw(pin_load)
 
 func clear_ground_step(actor: Node3D,step: Vector3) -> Vector3:
 	var start := actor.global_position.slide(Vector3.UP)
@@ -934,12 +942,18 @@ func scoring_target(origin: Vector3) -> Vector3:
 				target=point
 	return target
 
+func block_on_flight_segment(previous: Vector3) -> bool:
+	if phase!="serve_return" or return_touched or not attack_floor_pending: return false
+	return_touched=resolve_block_contact(previous,wall_jumps,-1.)
+	return return_touched
+
 func attack_surface_contact(point: Vector3,floor_hit: bool) -> void:
 	if phase!="serve_return":
 		super.attack_surface_contact(point,floor_hit)
 		return
 	if attack_decided: return
 	attack_decided=true
+	trace("serve_return_surface",{"floor":floor_hit,"position":str(point),"block_touch":return_touched,"net_contact":not drop_net_hit.is_empty()})
 	var outside := absf(point.x)>4.5 or absf(point.z-BallNet.NET_Z)>9. or not floor_hit
 	var scored := return_touched if outside else point.z<BallNet.NET_Z
 	if last_shot_slot>=0:
@@ -1064,7 +1078,8 @@ func step_serve_wall(delta: float) -> void:
 		if not shuffle_steps.has(actor): shuffle_steps[actor]=preload("res://scripts/directional_footwork.gd").new(actor)
 		actor.animator.advance(delta)
 		shuffle_steps[actor].block_step(Vector3.RIGHT*step/maxf(delta,.001),gap,0.,not wall_committed[i],false,delta)
-		if not wall_committed[i] and absf(gap)<.82 and (committing or pin_attack.pin_arrival-pass_clock<=.51):
+		var reachable := 1.35 if i==1 and attack_slot==1 else .82
+		if not wall_committed[i] and absf(gap)<reachable and (committing or pin_attack.pin_arrival-pass_clock<=.51):
 			block=PracticeBlock.new()
 			block.aggressive_press=true
 			block.track_near_ball=true

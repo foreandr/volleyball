@@ -3,7 +3,7 @@ extends CanvasLayer
 const Xbox = preload("res://scripts/xbox_controls.gd")
 const SUB := 4
 var speed := 1.
-var slow_speed := .5
+var slow_speed := .25
 var rate := Button.new()
 var toggle_boxes: CheckButton
 var show_boxes := false
@@ -65,7 +65,8 @@ func _ready() -> void:
 		arrow.pressed.connect(step_frame.bind(direction))
 		tools.add_child(arrow)
 	rate.text="Slow-mo  1x"
-	rate.pressed.connect(func(): set_replay_speed(speed*.5 if speed>1./16. else 1.))
+	var rates := [1.,.25,.125,.0625,.5]
+	rate.pressed.connect(func(): set_replay_speed(rates[(rates.find(speed)+1)%rates.size()]))
 	var rs_prompt := HBoxContainer.new()
 	tools.add_child(rs_prompt)
 	Xbox.prompts(rs_prompt,[["RS","Click"]])
@@ -114,8 +115,8 @@ func capture(rendered := false) -> Dictionary:
 	var arms := {}
 	var armed := {}
 	if "practice_blockers" in game:
-		var actors: Array=game.blockers if "blockers" in game else game.practice_blockers
-		var jumps: Array=game.jumps if "blockers" in game else game.practice_jumps
+		var actors: Array=game.wall if "wall_jumps" in game else game.blockers if "blockers" in game else game.practice_blockers
+		var jumps: Array=game.wall_jumps if "wall_jumps" in game else game.jumps if "blockers" in game else game.practice_jumps
 		for slot in actors.size():
 			if not actors[slot].visible: continue
 			var jump = jumps[slot]
@@ -135,7 +136,7 @@ func capture(rendered := false) -> Dictionary:
 					var key: int = -1-slot*2-side
 					arms[key]=jump.body_chains[side]
 					armed[key]=true
-	return {"armed":armed,"arms":arms,"floor_count":game.floor_sound_count,"floor_db":game.floor_impact.volume_db,"spike_count":game.spike_sound_count if "spike_sound_count" in game else 0,"block_sound_count":game.block_sound_count if "block_sound_count" in game else 0,"objects":objects,"poses":poses,"whistle_count":game.coach_motion.whistle_cue.play_count,"floor_stream":game.floor_impact.stream,"whistle_height":game.coach_motion.whistle_cue.raised}
+	return {"rally":game.get("replay_rally"),"armed":armed,"arms":arms,"floor_count":game.floor_sound_count,"floor_db":game.floor_impact.volume_db,"spike_count":game.spike_sound_count if "spike_sound_count" in game else 0,"block_sound_count":game.block_sound_count if "block_sound_count" in game else 0,"objects":objects,"poses":poses,"whistle_count":game.coach_motion.whistle_cue.play_count,"floor_stream":game.floor_impact.stream,"whistle_height":game.coach_motion.whistle_cue.raised}
 
 func apply(sample: Dictionary) -> void:
 	game.coach_motion.whistle_cue.raised = sample.whistle_height
@@ -165,7 +166,7 @@ func display_frame(value: float) -> void:
 	var b := history[mini(first+1,history.size()-1)]
 	var t := fmod(value,SUB)/SUB
 	apply(a)
-	if t>0.:
+	if t>0. and a.rally==b.rally:
 		for obj in a.objects:
 			if is_instance_valid(obj) and b.objects.has(obj):
 				var interpolated: Transform3D=a.objects[obj][0].interpolate_with(b.objects[obj][0],t)
