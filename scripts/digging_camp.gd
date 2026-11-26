@@ -70,8 +70,8 @@ func apply_camera() -> void:
 func _input(event: InputEvent) -> void:
 	if not settings.visible and not replay_inspector.active and not get_tree().paused:
 		if event is InputEventMouseMotion and event.button_mask & MOUSE_BUTTON_MASK_MIDDLE and dragged<0:
-			orbit_offset.x=wrapf(orbit_offset.x-event.relative.x*.006,-PI,PI)
-			orbit_offset.y=clampf(orbit_offset.y+event.relative.y*.25,3.-elevation,85.-elevation)
+			orbit_offset.x=wrapf(orbit_offset.x+event.relative.x*.006,-PI,PI)
+			orbit_offset.y=clampf(orbit_offset.y-event.relative.y*.25,3.-elevation,85.-elevation)
 			apply_camera()
 			get_viewport().set_input_as_handled()
 			return
@@ -140,7 +140,10 @@ func _process(delta: float) -> void:
 		if age>0. and age<platform.Drive.FAST_DIG_ELBOW_DURATION:
 			var degrees := lerpf(6.,27.,smoothstep(10.,25.,dig_incoming.length()))
 			var side: String=platform.low_save.wide_arm if platform.low_save.active else ""
-			platform.Drive.apply_fast_dig_elbow_bend(last_digger.skeleton,age,degrees,side)
+			if side!="":
+				platform.Drive.apply_fast_dig_elbow_bend(last_digger.skeleton,age,degrees,side)
+			else:
+				platform.Drive.absorb_with_joined_platform(last_digger,age,degrees)
 
 func handle_drag(event: InputEvent) -> bool:
 	var camera := get_viewport().get_camera_3d()
@@ -213,7 +216,7 @@ func sample_defensive_contact(platform: Reception,start: float,dt: float,_until_
 	var base: Vector3=home+actor.basis*Vector3(0,1.04,.62)
 	var offset := intercept-base
 	var save=platform.low_save
-	if platform.reach.is_empty() and not save.active and (offset.slide(Vector3.UP).length()>1.45 or intercept.y<.52):
+	if platform.reach.is_empty() and not save.active and (offset.slide(Vector3.UP).length()>1.15 or intercept.y<.58):
 		if save.plan(actor,path,start,start+_until_floor,platform.clip,true,true):
 			save.travel_scale=0.
 	if save.active:
@@ -228,8 +231,12 @@ func sample_defensive_contact(platform: Reception,start: float,dt: float,_until_
 			platform.plan_reach(offset.normalized()*maxf(.36,offset.length()),true)
 		if not platform.reach.is_empty():
 			platform.reach_progress=progress
-			actor.position=home+platform.reach_step*progress
-			platform.pose_reach(progress,intercept)
+			var step: Vector3=actor.basis.inverse()*platform.reach_step
+			var travel: Vector3=step*.35*progress
+			actor.position=home+actor.basis*travel
+			platform.reach.lead="l" if step.x>0. else "r"
+			platform.reach.tier=2 if lateral>.55 else 1
+			preload("res://scripts/forearm_reach_pose.gd").sample(actor.skeleton,actor.get_pose_author(),step,travel,progress,progress,platform.ready_pose,platform.reach,false,0,intercept,false)
 		platform.deep_squat=true
 		platform.knee_bend_depth=progress*lerpf(.07,.24,smoothstep(10.,25.,drop_velocity.length()))
 		platform.apply_knee_bend()

@@ -12,7 +12,7 @@ static func outward_knee_pole(pole: Vector3, axis: Vector3, outward: Vector3) ->
 		if forward.z < 0.0: forward = -forward
 	return forward.normalized()*sqrt(1.0-0.55*0.55)+out*0.55
 
-static func sample(rig: Skeleton3D, author: RefCounted, step: Vector3, travel: Vector3, weight: float, progress: float, ready: Array[Transform3D], reach: Dictionary, knee_slide: bool, cpu_direction: int, contact: Vector3) -> void:
+static func sample(rig: Skeleton3D, author: RefCounted, step: Vector3, travel: Vector3, weight: float, progress: float, ready: Array[Transform3D], reach: Dictionary, knee_slide: bool, cpu_direction: int, contact: Vector3, pose_arms := true) -> void:
 	var tier: int = reach.tier
 	var back: bool = reach.back
 	var rear_diagonal: bool = reach.rear_diagonal
@@ -134,7 +134,7 @@ static func sample(rig: Skeleton3D, author: RefCounted, step: Vector3, travel: V
 		pole = outward_knee_pole(pole,(target-hip).normalized(),outward)
 		author.limb(pose,"thigh_"+side,"calf_"+side,foot_name,target,pole)
 		author.set_world_basis(pose,foot_name,foot.basis)
-	if high or tier == 2 or side_receive or forward_lunge or back:
+	if pose_arms and (high or tier == 2 or side_receive or forward_lunge or back):
 		var extension := 0.17 if forward_lunge else (0.10 if side_lunge else 0.05)
 		if back and not short_straight: extension = 0.10 if tier == 1 and cpu_direction == 6 else 0.22
 		var arms := Vector3(step.x,0.0,step.z).normalized()*extension*weight
