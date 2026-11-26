@@ -41,6 +41,8 @@ var arm_volumes: Array[MeshInstance3D]=[]
 var hand_volume := MeshInstance3D.new()
 var hand_toggle := CheckButton.new()
 var contact_point := Vector3.ZERO
+var closest_surface_gap := 0.
+var actual_fraction := 1.
 var contact_key := []
 var route_key := []
 var routed_fraction := 1.
@@ -505,24 +507,49 @@ func draw_pose() -> void:
 	var signature := [index,legs,mirror.button_pressed,incoming_speed.value,source,region,assigned,motion_legs,target,feed_offset,cell_action(),defenders[receiving].position]
 	if signature!=contact_key:
 		contact_key=signature
+		actual_fraction=feed_fraction
 		sample_receiver(c,c.contact,active,motion_legs)
 		if c.kind=="overhead":
 			contact_point=HandPass.contact_center(player)
 			reachable=active and contact_point.distance_to(target)<=HAND_RADIUS
 		else:
-			var closest := INF
-			for shape in RECEPTION_CAPSULES:
-				var segment := reception_segment(rig,shape)
-				var point := Geometry3D.get_closest_point_to_segment(target,segment[0],segment[1])
-				var gap := point.distance_to(target)-float(shape[2])
-				if gap<closest:
-					closest=gap
-					contact_point=point
-			reachable=active and closest<=BALL_RADIUS
+			reachable=false
+			var nominal := feed_fraction
+			var best_gap := INF
+			# Sample the moving ball and posed capsules on the same clock. Cache per feed for replay.
+			var bounds := AABB(MAP_ORIGIN,CELL_SIZE*3.).grow(.45)
+			var samples := ceili(full_duration*1.6*480.)
+			for tick in range(samples+1):
+				if not active: break
+				var u := tick/(480.*full_duration)
+				var ball := launch.lerp(aim,u)+Vector3.UP*6.*u*(1.-u)
+				if ball.y<BALL_RADIUS: break
+				if not bounds.has_point(grid.to_local(ball)): continue
+				var at_frame := clampf(c.contact+(u-nominal)*full_duration*60.,0.,c.frames)
+				sample_receiver(c,at_frame,true,motion_legs)
+				var separation := INF
+				for shape in RECEPTION_CAPSULES:
+					var segment := reception_segment(rig,shape)
+					var point := Geometry3D.get_closest_point_to_segment(ball,segment[0],segment[1])
+					var gap := point.distance_to(ball)-float(shape[2])-BALL_RADIUS
+					separation=minf(separation,gap)
+				if separation<best_gap:
+					best_gap=separation
+					contact_point=ball
+					actual_fraction=u
+				if separation<=0.:
+					reachable=true
+					break
+			closest_surface_gap=best_gap
+	if active and c.kind!="overhead":
+		feed_fraction=actual_fraction
+		target=launch.lerp(aim,feed_fraction)+Vector3.UP*6.*feed_fraction*(1.-feed_fraction)
+		touch_frame+=(feed_fraction-duration/full_duration)*full_duration*60.
+		duration=full_duration*feed_fraction
 	var missed: bool= frame>=touch_frame and active and not reachable
 	miss_label.visible=missed
 	if missed:
-		var gap := contact_point.distance_to(target)
+		var gap := contact_point.distance_to(target) if c.kind=="overhead" else closest_surface_gap
 		miss_label.text="Miss · %d cm gap"%roundi(gap*100.)
 		if playing and not miss_logged:
 			print("studio_miss ",Time.get_datetime_string_from_system()," defender=",receiving+1," cell=",address," region=",region_number(address,region.w)," assigned=",assigned," playing=",c.id," target=",target," contact=",contact_point," gap_m=",gap)
