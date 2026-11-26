@@ -34,6 +34,11 @@ var hand_volume := MeshInstance3D.new()
 var hand_toggle := CheckButton.new()
 var contact_point := Vector3.ZERO
 var contact_key := []
+var route_key := []
+var routed_fraction := 1.
+var routed_region := Vector4i(-1,-1,-1,-1)
+var flight_boxes: Array[Dictionary]=[]
+var crossing := MeshInstance3D.new()
 var feed_fraction := 1.
 var set_intercept := Vector3.ZERO
 var ball_trail := MeshInstance3D.new()
@@ -456,25 +461,25 @@ func draw_pose() -> void:
 	var aim := highlight.global_position+feed_offset
 	var launch: Vector3=feed.preview_origin
 	var full_duration := clampf(launch.distance_to(aim)/maxf(1.,incoming_speed.value/3.6),.48,1.25)
-	feed_fraction=1.
 	var rig: Skeleton3D=player.skeleton
-	var head: Vector3=rig.to_global(player.get_pose_author().point(ready_pose,"Head"))-player.global_position+defenders[receiving].position
-	var jumping: bool=c.kind=="overhead" and not c.has("step_legs") and (c.get("jump_set",false) or aim.y>head.y+.22)
-	if jumping and cell_action()>0:
-		var advance := clampf(head.z+.23-aim.z,0.,1.95)
-		feed_fraction-=advance/maxf(1.,launch.z-aim.z)
+	var grid := grid_for(receiving)
+	var key := [launch,aim,grid.global_transform,cell,quadrant,forearm_preview,hand_leg_preview]
+	if route_key!=key:
+		route_key=key
+		trace_incoming_regions(grid.to_local(launch),grid.to_local(aim))
+	feed_fraction=routed_fraction
 	var target := launch.lerp(aim,feed_fraction)+Vector3.UP*6.*feed_fraction*(1.-feed_fraction)
 	set_intercept=target
 	var duration := full_duration*feed_fraction
 	var lead_frames := (full_duration-duration)*60.
 	var touch_frame: float=c.contact-lead_frames
-	var region := contact_region(target)
+	var region := routed_region
 	var address := Vector3i(region.x,region.y,region.z)
 	var assigned := assigned_action(address,region.w) if region.w>=0 else 0
 	var selected := address==cell and region.w==quadrant
 	var active := assigned>0 or (selected and (forearm_preview or hand_leg_preview))
 	var motion_legs := legs
-	if not selected and assigned>0:
+	if assigned>0 and not (selected and (hand_leg_preview or forearm_preview)) and (not selected or c.id!=assigned):
 		for i in clips.size():
 			if clips[i].id!=assigned: continue
 			c=clips[i]
@@ -519,16 +524,45 @@ func draw_pose() -> void:
 	feed.pose(serve_time)
 	feed.ball.show()
 	if ball_trail.visible: trail_mesh.clear_surfaces()
+	crossing.hide()
 	if seconds < -duration: return
 	var lift := sqrt(2.*9.81*pass_arc.value)
 	var landing := (lift+sqrt(lift*lift+2.*9.81*maxf(0.,target.y-.145)))/9.81
 	if reachable and seconds>0.:
 		pass_end_frame=touch_frame+ceilf(landing*60.)+1.
 	var point := flight_point(seconds,launch,target,duration,lift,landing)
+	var occupied := contact_region(point) if seconds<=0. or not reachable else Vector4i(-1,-1,-1,-1)
+	if reachable and region.w>=0 and seconds>=0. and seconds<.20: occupied=region
+	if occupied.w>=0 and point.y>=.145:
+		var box_address := Vector3i(occupied.x,occupied.y,occupied.z)
+		crossing.global_position=grid.to_global(region_center(box_address,occupied.w))
+		crossing.scale=region_size(box_address,occupied.w)/CELL_SIZE
+		crossing.show()
 	feed.ball.position=point
 	feed.ball.visible=point.y>=.145
 	if ball_trail.visible and seconds > -duration:
 		draw_ball_trail(seconds,launch,target,duration,lift,landing)
+
+# Sweep the incoming parabola once per feed, including its continuation past the aim point.
+func trace_incoming_regions(start: Vector3, aim: Vector3) -> void:
+	routed_fraction=1.
+	routed_region=Vector4i(-1,-1,-1,-1)
+	var previous := start
+	for i in range(1,193):
+		var u := i/96.
+		var point := start.lerp(aim,u)+Vector3.UP*6.*u*(1.-u)
+		var earliest := INF
+		for box in flight_boxes:
+			var audition: bool=box.address==cell and box.part==quadrant and (forearm_preview or hand_leg_preview)
+			if not box.assigned and not audition: continue
+			var span := zone_interval(previous,point,box.bounds)
+			if span.y<=span.x or span.x>=earliest: continue
+			earliest=span.x
+			var address: Vector3i=box.address
+			routed_region=Vector4i(address.x,address.y,address.z,box.part)
+			routed_fraction=1. if box.bounds.has_point(aim) else (i-1+(span.x+span.y)*.5)/96.
+		if routed_region.w>=0 or point.y<.09: return
+		previous=point
 
 func flight_point(t: float,launch: Vector3,target: Vector3,duration: float,lift: float,landing: float) -> Vector3:
 	if reachable and t>0.:
@@ -1010,6 +1044,12 @@ func build_map(tiers: VBoxContainer) -> void:
 	tint.transparency=BaseMaterial3D.TRANSPARENCY_ALPHA
 	tint.albedo_color=Color(1.,.72,.1,.26)
 	box.material=tint
+	crossing.mesh=box
+	var active_style := tint.duplicate() as StandardMaterial3D
+	active_style.albedo_color=Color(.18,1.,.43,.48)
+	crossing.material_override=active_style
+	add_child(crossing)
+	crossing.hide()
 	highlight.mesh=box
 	lattice.add_child(highlight)
 	hover.mesh=box
@@ -1172,6 +1212,8 @@ func rebuild_colors() -> void:
 	ink.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED
 	ink.vertex_color_use_as_albedo=true
 	pick_boxes.clear()
+	flight_boxes.clear()
+	route_key.clear()
 	hover.hide()
 	for x in range(MAP_MIN.x,MAP_MAX.x+1):
 		for y in range(MAP_MAX.y+1):
@@ -1181,10 +1223,11 @@ func rebuild_colors() -> void:
 				for part in count:
 					var size := region_size(address,part)
 					var assigned := assigned_action(address,part)>0
+					var center := region_center(address,part)
+					flight_boxes.append({"address":address,"part":part,"assigned":assigned,"bounds":AABB(center-size*.5,size)})
 					if assigned and unfinished.button_pressed: continue
 					if pick_boxes.is_empty(): mesh.surface_begin(Mesh.PRIMITIVE_LINES,ink)
 					var color := Color("#ae2839") if assigned else Color("#2153a4")
-					var center := region_center(address,part)
 					pick_boxes.append({"address":address,"part":part,"bounds":AABB(center-size*.5,size)})
 					for axis in 3:
 						for i in [-1,1]:
