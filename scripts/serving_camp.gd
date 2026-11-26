@@ -245,10 +245,13 @@ func start_drill() -> void:
 	next_serve()
 
 func build_rally_sliders() -> void:
+	add_rally_sliders("serving",[["Block vertical", "block_vertical",1,60,46," in"],["Attack vertical","attack_vertical",1,60,42," in"],["Passing skill","passing_skill",0,100,65,""],["Setting skill","setting_skill",0,100,65,""],["Attack speed","attack_kmh",15,180,105," km/h"],["Serve speed","serve_kmh",0,300,0," km/h"]])
+
+func add_rally_sliders(section: String, specs: Array) -> void:
 	var grid := GridContainer.new()
 	grid.columns=4
 	controls_row.get_parent().add_child(grid)
-	for spec in [["Block vertical", "block_vertical",1,60,46," in"],["Attack vertical","attack_vertical",1,60,42," in"],["Passing skill","passing_skill",0,100,65,""],["Setting skill","setting_skill",0,100,65,""],["Attack speed","attack_kmh",15,180,105," km/h"],["Serve speed","serve_kmh",0,300,0," km/h"]]:
+	for spec in specs:
 		var label := Label.new()
 		var slider := HSlider.new()
 		grid.add_child(label)
@@ -257,7 +260,7 @@ func build_rally_sliders() -> void:
 		slider.min_value=spec[2]
 		slider.max_value=spec[3]
 		slider.step=1
-		slider.value=StorySession.game_options.get_value("serving",spec[1],spec[4])
+		slider.value=StorySession.game_options.get_value(section,spec[1],spec[4])
 		var apply := func(value: float):
 			label.text=str(spec[0])+"  "+("Auto" if spec[1]=="serve_kmh" and value==0 else str(int(value))+str(spec[5]))
 			match spec[1]:
@@ -271,11 +274,15 @@ func build_rally_sliders() -> void:
 					for actor in [receiving_setter,passers[1]]: actor.attributes["Hand setting"]=value
 				"attack_kmh": attack_kmh=value
 				"serve_kmh": serve_test_kmh=value
+				_: apply_drill_slider(spec[1],value)
 		apply.call(slider.value)
 		slider.value_changed.connect(func(value):
 			apply.call(value)
-			StorySession.game_options.set_value("serving",spec[1],value)
+			StorySession.game_options.set_value(section,spec[1],value)
 			StorySession.save_options())
+
+func apply_drill_slider(_key: String, _value: float) -> void:
+	pass
 
 func update_prompts(_next: String) -> void:
 	if _next=="defend":

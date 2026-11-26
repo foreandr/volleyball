@@ -9,16 +9,15 @@ var release_window := 0.
 var neutral_platform := Vector3.ZERO
 var feed_bag: Array[Vector2]=[]
 var feed_direction := Vector2.ZERO
+var set_tempo := 1
 var cpu_defense := true
 var dig_arrival := 0.0
 var feed_age := 0.
 var attack_landing := Vector3.ZERO
 
 func start_drill() -> void:
-	cpu_defense=not OS.get_cmdline_user_args().has("--control-defender")
+	cpu_defense=true
 	super.start_drill()
-	wall_vertical_inches=34.
-	pin_attack.jump.max_height=46.*.0254+.2032
 	title.text="DIGGING  /  DIG FROM FIVE"
 	for actor in passers+[receiving_middle,wall[1],wall[2]]:
 		actor.hide()
@@ -28,7 +27,21 @@ func start_drill() -> void:
 	update_prompts("ready")
 
 func build_rally_sliders() -> void:
-	pass
+	add_rally_sliders("digging",[
+		["Attack speed","attack_kmh",15,180,105," km/h"],
+		["Attack vertical","attack_vertical",1,60,46," in"],
+		["Set tempo","set_tempo",0,3,1,""],
+		["Block vertical","block_vertical",1,60,34," in"],
+	])
+
+func apply_drill_slider(key: String, value: float) -> void:
+	if key=="set_tempo": set_tempo=int(value)
+
+func pin_flight_time(_slot: int) -> float:
+	return [ZERO_FLIGHT,ONE_FLIGHT,1.10,1.60][set_tempo]
+
+func paced_set_duration(origin: Vector3,target: Vector3,_tempo: float) -> float:
+	return super.paced_set_duration(origin,target,pin_flight_time(attack_slot))
 
 func update_prompts(_next: String) -> void:
 	var mode := "cpu_dig" if cpu_defense else "player_dig"
