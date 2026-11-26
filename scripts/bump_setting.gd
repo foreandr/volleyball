@@ -82,6 +82,7 @@ var pose_started_at := -INF
 var cone: MeshInstance3D
 var contact_check := {}
 var approach_progress := -1.0
+var reception_pressure := 0.0
 var contact_spread := Vector2.ZERO
 var forearm_setting := false
 var deep_squat := false
@@ -288,7 +289,7 @@ func accuracy_bounds(error: float, incoming: Vector3, spin_rps: float) -> Vector
 			var control := smoothstep(55.0,100.0,skill)
 			bounds = bounds.lerp(Accuracy.spread(error,incoming.length(),spin_rps,skill,false)*0.65+Vector2(0.25,0.18),control)
 	if fast_hand_dig: bounds = bounds.max(Vector2(6.0,4.0))*1.5
-	return bounds
+	return bounds*(1.+reception_pressure)
 
 func update_aim() -> void:
 	var origin := ready_contact()

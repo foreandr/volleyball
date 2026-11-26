@@ -8,7 +8,7 @@ var serves := []
 var passers: Array[Node3D]=[]
 const JUMP_SERVE_VERTICAL := 57.*.0254
 const JUMP_TOSS_APEX := [6.4,5.1]
-const SERVE_EARLY := -.22
+const SERVE_EARLY := -.26
 const SERVE_LATE := .075
 const SERVE_PERFECT := .055
 var toss_airborne := false
@@ -405,6 +405,10 @@ func step_serve_reception(shot,previous: Vector3,delta: float) -> void:
 		platform.queue_bump(flight_age)
 	passer.animator.advance(delta)
 	platform.allow_auto_dive=(predicted-platform.ready_contact()).slide(Vector3.UP).length()>1.15 or flight_age>receive_at
+	if not is_finite(platform.touch_time):
+		var chase: float=(predicted-HOMES[receiver]).slide(Vector3.UP).length()/maxf(receive_at,.1)
+		var off_center := (predicted-platform.ready_contact()).slide(Vector3.UP).length()
+		platform.reception_pressure=.35+smoothstep(6.,20.,incoming.length())+smoothstep(.4,3.2,chase)+smoothstep(.15,1.1,off_center)
 	platform.update_attempt(flight_age,flight_age-delta,shot.planned_duration,path,incoming,delta,receive_at,shot.reception_spin_rps())
 	if not is_finite(platform.touch_time): return
 	if platform.hand_setting and not is_finite(platform.release_time):
@@ -425,6 +429,7 @@ func step_serve_reception(shot,previous: Vector3,delta: float) -> void:
 		return
 	pass_duration=(velocity.y+sqrt(discriminant))/9.81
 	pass_end=pass_start+velocity*pass_duration+Vector3.DOWN*4.905*pass_duration*pass_duration
+	trace("serve_pass_result",{"pass_target":str(pass_end),"setter_travel_m":(pass_end-SETTER_HOME).slide(Vector3.UP).length(),"pass_seconds":pass_duration,"pressure":platform.reception_pressure})
 	set_at=pass_duration
 	pass_clock=0.
 	ball.position=pass_start
@@ -459,7 +464,9 @@ func step_reception_rally(delta: float) -> void:
 		var jump_at := pass_duration*u-SET_LOAD-receiving_jump.flight_duration(lift,true)*.5
 		var plant := Vector3(intercept.x,.04,intercept.z)-facing*.30
 		if not receiving_jump.active:
-			move_receiver(receiving_setter,plant if pass_clock<=jump_at+delta else stance,delta)
+			var chase_goal := plant if pass_clock<=jump_at+delta else stance
+			chase_goal.z=maxf(chase_goal.z,BallNet.NET_Z+.22)
+			move_receiver(receiving_setter,chase_goal,delta)
 			if pass_clock>=jump_at and pass_clock-jump_at<=delta and receiving_setter.position.distance_to(plant)<.24 and lift>.20 and receiving_setter.reachable_set(intercept,bucket.position,true).distance_to(bucket.position)<.15:
 				receiving_setter.rotation.y=atan2(facing.x,facing.z)
 				receiving_jump.begin(receiving_setter,Vector2.ZERO,plant,SET_LOAD,SET_VERTICAL,2,false,1.,true)
@@ -478,7 +485,7 @@ func step_reception_rally(delta: float) -> void:
 			receiving_setter.rotation.y=atan2(facing.x,facing.z)
 			preload("res://scripts/hand_setting_pose.gd").apply(receiving_setter,ball.position,smoothstep(set_at-.33,set_at-.05,pass_clock))
 		if pass_clock>=set_at:
-			if (receiving_setter.position-ball.position).slide(Vector3.UP).length()>.85:
+			if ball.position.z<BallNet.NET_Z or (receiving_setter.position-ball.position).slide(Vector3.UP).length()>.85:
 				var t := pass_clock/pass_duration
 				drop_velocity=(pass_end-pass_start+Vector3.UP*arc_term*(1.-2.*t))/pass_duration
 				phase="serve_miss"
@@ -487,8 +494,12 @@ func step_reception_rally(delta: float) -> void:
 				drop_net_hit.clear()
 				drop_net_time=0.
 				return
+			var travel := (ball.position-SETTER_HOME).slide(Vector3.UP).length()
+			var pressure := smoothstep(.7,4.5,travel/maxf(.25,set_at))
+			var accuracy := clampf(receiving_setter.effective_rating("Hand setting")/100.,0.,1.)
+			var miss := Vector2.from_angle(randf()*TAU)*sqrt(randf())*(.18+pressure*(.65+1.8*(1.-accuracy)))
 			pass_start=ball.position
-			pass_end=receiving_setter.reachable_set(pass_start,bucket.position,receiving_jump.active)
+			pass_end=receiving_setter.reachable_set(pass_start,bucket.position+Vector3(miss.x,0.,miss.y),receiving_jump.active)
 			pass_clock=0.
 			phase="serve_bucket"
 	else:
