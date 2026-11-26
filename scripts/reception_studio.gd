@@ -28,6 +28,8 @@ const HandPass = preload("res://scripts/hand_setting_pose.gd")
 var feed_offset := Vector3.ZERO
 var contact_point := Vector3.ZERO
 var contact_key := []
+var feed_fraction := 1.
+var set_intercept := Vector3.ZERO
 var ball_trail := MeshInstance3D.new()
 var trail_mesh := ImmediateMesh.new()
 var trail_ink := StandardMaterial3D.new()
@@ -398,7 +400,19 @@ func draw_pose() -> void:
 	seek.set_value_no_signal(frame)
 	label.text=" %02d / %02d     Frame %d / %d " % [c.id,clips.size(),mini(roundi(frame),int(c.frames)),c.frames]
 	play_button.text="Pause" if playing else "Play"
-	var target := highlight.global_position+feed_offset
+	var aim := highlight.global_position+feed_offset
+	var launch: Vector3=feed.preview_origin
+	var full_duration := clampf(launch.distance_to(aim)/maxf(1.,incoming_speed.value/3.6),.48,1.25)
+	feed_fraction=1.
+	if c.get("jump_set",false) and cell_action()>0:
+		var behind := defenders[receiving].position.z-aim.z
+		var advance := clampf(behind*.70,0.,.95)
+		feed_fraction-=advance/maxf(1.,launch.z-aim.z)
+	var target := launch.lerp(aim,feed_fraction)+Vector3.UP*6.*feed_fraction*(1.-feed_fraction)
+	set_intercept=target
+	var duration := full_duration*feed_fraction
+	var lead_frames := (full_duration-duration)*60.
+	var touch_frame: float=c.contact-lead_frames
 	var signature := [index,legs,mirror.button_pressed,incoming_speed.value,source,cell,feed_offset,cell_action(),defenders[receiving].position]
 	if signature!=contact_key:
 		contact_key=signature
@@ -412,7 +426,7 @@ func draw_pose() -> void:
 		contact_point=center+Vector3(0,.075,.075)
 		if c.kind=="overhead": contact_point=HandPass.contact_center(player)
 		reachable=cell_action()>0 and contact_point.distance_to(target)<=.22
-	var missed: bool= frame>=c.contact and cell_action()>0 and not reachable
+	var missed: bool= frame>=touch_frame and cell_action()>0 and not reachable
 	miss_label.visible=missed
 	if missed:
 		var gap := contact_point.distance_to(target)
@@ -420,11 +434,9 @@ func draw_pose() -> void:
 		if playing and not miss_logged:
 			print("studio_miss ",Time.get_datetime_string_from_system()," defender=",receiving+1," cell=",cell," assigned=",cell_action()," playing=",c.id," target=",target," contact=",contact_point," gap_m=",gap)
 			miss_logged=true
-	sample_receiver(c,f)
+	sample_receiver(c,clampf(frame+lead_frames,0.,c.frames) if lead_frames>0. else f)
 	pass_end_frame=0.
-	var launch: Vector3=feed.preview_origin
-	var duration := clampf(launch.distance_to(target)/maxf(1.,incoming_speed.value/3.6),.48,1.25)
-	var seconds := (frame-float(c.contact))/60.
+	var seconds := (frame-touch_frame)/60.
 	var serve_time := clampf(feed.contact_time()+seconds+duration,0.,feed.contact_time()+.42)
 	feed.pose(serve_time)
 	feed.ball.show()
@@ -433,7 +445,7 @@ func draw_pose() -> void:
 	var lift := sqrt(2.*9.81*pass_arc.value)
 	var landing := (lift+sqrt(lift*lift+2.*9.81*maxf(0.,target.y-.145)))/9.81
 	if reachable and seconds>0.:
-		pass_end_frame=float(c.contact)+ceilf(landing*60.)+1.
+		pass_end_frame=touch_frame+ceilf(landing*60.)+1.
 	var point := flight_point(seconds,launch,target,duration,lift,landing)
 	feed.ball.position=point
 	feed.ball.visible=point.y>=.145
@@ -446,7 +458,7 @@ func flight_point(t: float,launch: Vector3,target: Vector3,duration: float,lift:
 		point.y+=lift*t-4.905*t*t
 		return point
 	var u := (t+duration)/duration
-	return launch.lerp(target,u)+Vector3.UP*6.*u*(1.-u)
+	return launch.lerp(target,u)+Vector3.UP*6.*feed_fraction*feed_fraction*u*(1.-u)
 
 func draw_ball_trail(seconds: float,launch: Vector3,target: Vector3,duration: float,lift: float,landing: float) -> void:
 	var previous := launch
@@ -497,7 +509,7 @@ func sample_receiver(c: Dictionary,f: float) -> void:
 		return
 	if c.kind=="overhead":
 		sample_layer(-1,c,f)
-		var goal := highlight.global_position+feed_offset
+		var goal := set_intercept if c.get("jump_set",false) else highlight.global_position+feed_offset
 		var offset := pass_marker.position-goal
 		var lift := sqrt(2.*9.81*pass_arc.value)
 		var flight := (lift+sqrt(lift*lift+2.*9.81*maxf(0.,goal.y-.145)))/9.81
@@ -554,7 +566,7 @@ func jump_to_set(goal: Vector3, follow: float) -> void:
 	var head := rig.to_global(rig.get_bone_global_pose(rig.find_bone("Head")).origin)
 	var pocket: Vector3=head+player.global_basis.z.normalized()*.23+Vector3.UP*.16
 	var gap := goal-pocket
-	var apex := clampf(gap.y+.07,.12,.48)
+	var apex := clampf(gap.y+.10,.19,.64)
 	# Allow enough flight time to cover the horizontal gap as well as the rise.
 	var contact_rise := clampf(gap.y,.035,apex)
 	var descent := sqrt(2.*(apex-contact_rise)/9.81)
@@ -570,10 +582,10 @@ func jump_to_set(goal: Vector3, follow: float) -> void:
 	var offset := travel.limit_length(5.5*lead)*fraction*(1.-recover)
 	player.position=offset
 	player.position.y=maxf(0.,apex-4.905*(t-half_air)*(t-half_air))
-	var load := smoothstep(-.16,-.06,t)*(1.-smoothstep(-.06,0.,t))
+	var load := smoothstep(-.32,-.085,t)*(1.-smoothstep(-.085,.07,t))
 	var compression := clampf(contact_rise-gap.y,0.,.38)*smoothstep(-.16,0.,t)*(1.-recover)
 	var cushion := smoothstep(landing,landing+.06,follow)*(1.-smoothstep(landing+.06,landing+.20,follow))
-	bend_for_hand_pass(compression+.10*(load+cushion))
+	bend_for_hand_pass(compression+.17*load+.10*cushion)
 
 func pose_hand_pass_legs(goal: Vector3, standing_height: float, follow: float) -> void:
 	var drop := standing_height-goal.y
