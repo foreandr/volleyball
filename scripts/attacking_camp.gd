@@ -5,6 +5,7 @@ const START := Vector3(3.65,.04,.76)
 var hitter: Node3D
 var attack_jump := preload("res://scripts/setter_jump.gd").new()
 var swing_time := -1.
+var spike_pike_scale := 1.0
 var closest_spike_gap := INF
 var contact_swing_time := 0.
 var cross_court := false
@@ -828,6 +829,9 @@ func attack_flight_time(origin: Vector3, landing: Vector3) -> float:
 		return flight
 	return maxf(.05,distance/(attack_speed()*attack_jump.spike_power_factor()))
 
+func swing_can_contact() -> bool:
+	return swing_time>=.055 and swing_time<=.30
+
 func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 	message.text="Approach and spike"
 	var remaining := attack_reference_time()-elapsed
@@ -840,10 +844,11 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 		pose_swing()
 		var palm := Contact.joint(hitter,"middle_03_r") if tip_shot else Contact.palm(hitter,"r")
 		var nearest := Geometry3D.get_closest_point_to_segment(palm,previous,ball.position)
-		if swing_time>=.055 and swing_time<=.30:
+		var contact_open := swing_can_contact()
+		if contact_open:
 			closest_spike_gap=minf(closest_spike_gap,nearest.distance_to(palm))
 		var at_set_target := has_meta("sampling_attack") or (ball.position-endpoint).slide(Vector3.UP).length()<=.25
-		if at_set_target and swing_time>=.055 and swing_time<=.30 and nearest.distance_to(palm)<=ATTACK_CONTACT_RADIUS:
+		if at_set_target and contact_open and nearest.distance_to(palm)<=ATTACK_CONTACT_RADIUS:
 			if not is_finite(first_palm_at): first_palm_at=clock
 			var grade := release_grade+GRADE_ADVANCE
 			var valid_release := manual_shot>=0 and is_finite(release_at) and grade>=EARLY_LIMIT and grade<=LATE_LIMIT
@@ -1077,7 +1082,7 @@ func apply_attack_swing() -> void:
 	# Load the chest through the draw, then release the arch into the strike.
 	var draw_load := smoothstep(.055,attack_jump.flight_duration(effective_attack_height(),true)*.48-.11,air_age)
 	draw_load *= 1.-smoothstep(-.11,.045,apex_offset)
-	var arch := deg_to_rad(9.)*load_weight+deg_to_rad(11.)*draw_load
+	var arch := (deg_to_rad(9.)*load_weight+deg_to_rad(11.)*draw_load)*spike_pike_scale
 	twist-=deg_to_rad(18.)*draw_load
 	author.rotate_world(pose,"spine_01",Vector3.RIGHT,-arch*.45)
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,-arch*.55)
@@ -1102,10 +1107,10 @@ func apply_attack_swing() -> void:
 	var intensity := lerpf(.13,1.,drive)
 	var peak_time := lerpf(.235,.175,drive*(.55+.45*athleticism))
 	var pike := smoothstep(.015,peak_time,since_hit)*(1.-smoothstep(peak_time,.38,since_hit))
-	var chest_fold := minf(deg_to_rad(lerpf(26.,60.,athleticism)),net_angle)*pike*intensity
+	var chest_fold := minf(deg_to_rad(lerpf(26.,60.,athleticism))*spike_pike_scale,net_angle)*intensity*pike
 	author.rotate_world(pose,"spine_01",Vector3.RIGHT,chest_fold*.65)
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,chest_fold*.35)
-	var leg_angle := minf(deg_to_rad(lerpf(24.,53.,athleticism)),net_angle)*intensity
+	var leg_angle := minf(deg_to_rad(lerpf(24.,53.,athleticism))*spike_pike_scale,net_angle)*minf(1.,intensity*spike_pike_scale)
 	var heel_rise := smoothstep(2./60.,16./60.,air_age)
 	var knee_load := leg_weight*(1.-extension)
 	var lift_pose := knee_load

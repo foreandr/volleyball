@@ -43,6 +43,7 @@ func _ready() -> void:
 	super()
 
 func start_drill() -> void:
+	spike_pike_scale=1.45
 	jump_height=JUMP_SERVE_VERTICAL
 	hitter=setter
 	cpu_hitter=false
@@ -131,6 +132,10 @@ func update_serve_aim(delta: float) -> void:
 	shot.target=destination
 	shot.update_path_preview()
 
+func swing_can_contact() -> bool:
+	# A descending self-toss can meet the extended hand after the attack clip's normal contact frame.
+	return swing_time>=.055 and elapsed<=contact_deadline()+.04 and attack_jump.active
+
 func contact_deadline() -> float:
 	return flight_time+.12
 
@@ -190,6 +195,7 @@ func handle_serve_button(style: int,pressed: bool) -> void:
 			message.text=LABELS[toss_style]+" toss / "+LABELS[style]+" hit"
 		elif not pressed and style==hit_style and not is_finite(release_time):
 			release_time=serve_clock
+			trace("serve_release",{"toss":toss_style,"hit":hit_style,"timing_ms":roundi(serve_meter_error()*1000.)})
 
 func serve_meter_position(error: float) -> float:
 	return clampf(inverse_lerp(SERVE_EARLY-.08,SERVE_LATE+.025,error),0.,1.)
