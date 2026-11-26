@@ -437,21 +437,45 @@ func flight_point(t: float,launch: Vector3,target: Vector3,duration: float,lift:
 func draw_ball_trail(seconds: float,launch: Vector3,target: Vector3,duration: float,lift: float,landing: float) -> void:
 	var previous := launch
 	var t := -duration
-	trail_mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES,trail_ink)
-	while t<seconds:
-		var next_time := minf(seconds,t+1./60.)
+	var origin := grid_for(receiving).global_position+MAP_ORIGIN
+	var bounds := AABB(origin,Vector3(MAP_MAX-MAP_MIN+Vector3i.ONE)*CELL_SIZE)
+	var end_time := minf(seconds,0.) if reachable else seconds
+	var started := false
+	while t<end_time:
+		var next_time := minf(end_time,t+1./60.)
 		if t<0. and next_time>0.: next_time=0.
 		var point := flight_point(next_time,launch,target,duration,lift,landing)
 		var landed := point.y<.145
 		if landed:
 			point=previous.lerp(point,clampf((previous.y-.145)/maxf(.00001,previous.y-point.y),0.,1.))
-		var width := (point-previous).cross(camera.global_position-previous).normalized()*.018
-		for vertex in [previous-width,previous+width,point+width,previous-width,point+width,point-width]:
-			trail_mesh.surface_add_vertex(vertex)
+		var interval := zone_interval(previous,point,bounds)
+		if interval.y>interval.x:
+			if not started:
+				trail_mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES,trail_ink)
+				started=true
+			var entry := previous.lerp(point,interval.x)
+			var exit_point := previous.lerp(point,interval.y)
+			var width := (exit_point-entry).cross(camera.global_position-entry).normalized()*.018
+			for vertex in [entry-width,entry+width,exit_point+width,entry-width,exit_point+width,exit_point-width]:
+				trail_mesh.surface_add_vertex(vertex)
 		if landed: break
 		t=next_time
 		previous=point
-	trail_mesh.surface_end()
+	if started: trail_mesh.surface_end()
+
+func zone_interval(start: Vector3,finish: Vector3,bounds: AABB) -> Vector2:
+	var interval := Vector2(0.,1.)
+	var travel := finish-start
+	for axis in 3:
+		if is_zero_approx(travel[axis]):
+			if start[axis]<bounds.position[axis] or start[axis]>bounds.end[axis]: return Vector2.ZERO
+			continue
+		var a := (bounds.position[axis]-start[axis])/travel[axis]
+		var b := (bounds.end[axis]-start[axis])/travel[axis]
+		interval.x=maxf(interval.x,minf(a,b))
+		interval.y=minf(interval.y,maxf(a,b))
+		if interval.x>=interval.y: return Vector2.ZERO
+	return interval
 
 func sample_receiver(c: Dictionary,f: float) -> void:
 	if cell_action()==0:

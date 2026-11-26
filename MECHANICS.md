@@ -133,4 +133,6 @@ Reception Studio uses Ctrl-click for court cells. Explicit animation assignments
 Ctrl-clicking a defender cell repeats a standing float there. Drag the floor ring to aim the return.
 In Reception Studio the Mid Center Body cell defaults to overhead hand pass #10. Each standing float samples a point inside the selected box once per repetition.
 Studio overhead hand passes use the shared standing set load, extension and follow-through. Lower centered feeds use legs 4 or 6, low lateral feeds use a short mirrored step from legs 7, and high feeds can trigger a jump set with contact at the apex.
-Reception Studio can trace the served ball in red through the current frame in live playback and timeline review. The trail resets with each feed and the toggle persists.
+Reception Studio can trace the incoming ball in red only inside the selected defender grid, stopping at a successful pass in live playback and timeline review. The trail resets with each feed and the toggle persists.
+
+Future feature: players can create custom setter hand signs and assign each gesture to a setting option for pre-play calls.
