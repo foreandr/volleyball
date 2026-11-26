@@ -854,7 +854,7 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 				var severity := smoothstep(CLEAN_LATE if grade>0. else CLEAN_EARLY,LATE_LIMIT if grade>0. else -EARLY_LIMIT,absf(grade))
 				depth_error=(-1. if grade>0. else 1.)*severity*rotation_drill.random.randf_range(0.,12. if grade>0. else 8.)
 			elif not has_meta("sampling_attack"):
-				if elapsed<flight_time: return false
+				if elapsed<contact_deadline(): return false
 				return miss_attack()
 			hard_spike_floor_pending=not tip_shot and not roll_shot and attack_speed()*attack_jump.spike_power_factor()>=Contact.HARD_SPIKE_SPEED
 			attack_floor_pending=true
@@ -881,8 +881,11 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 			spend_swing_stamina()
 			begin("spike")
 			return true
-	if elapsed>=flight_time: return miss_attack()
+	if elapsed>=contact_deadline(): return miss_attack()
 	return false
+
+func contact_deadline() -> float:
+	return flight_time
 
 func miss_attack() -> bool:
 	trace("spike_miss",{"cpu_hitter":cpu_hitter,"stamina":hitter.stamina.value,"set_height_percent":set_arc_percent,"planned_contact":str(planned_contact),"closest_palm_gap_m":closest_spike_gap if is_finite(closest_spike_gap) else -1.,"ball":str(ball.position),"palm":str(Contact.palm(hitter,"r"))})
