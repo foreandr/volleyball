@@ -30,6 +30,9 @@ var pass_arc := HSlider.new()
 const HandPass = preload("res://scripts/hand_setting_pose.gd")
 var feed_offset := Vector3.ZERO
 const HAND_RADIUS := .28
+const FOREARM_RADIUS := .085
+const BALL_RADIUS := .105
+var arm_volumes: Array[MeshInstance3D]=[]
 var hand_volume := MeshInstance3D.new()
 var hand_toggle := CheckButton.new()
 var contact_point := Vector3.ZERO
@@ -498,14 +501,19 @@ func draw_pose() -> void:
 	if signature!=contact_key:
 		contact_key=signature
 		sample_receiver(c,c.contact,active,motion_legs)
-		var center := Vector3.ZERO
-		for side in ["l","r"]:
-			var wrist := rig.get_bone_global_pose(rig.find_bone("hand_"+side)).origin
-			var elbow := rig.get_bone_global_pose(rig.find_bone("lowerarm_"+side)).origin
-			center+=rig.to_global(wrist.lerp(elbow,.32))*.5
-		contact_point=center+Vector3(0,.075,.075)
-		if c.kind=="overhead": contact_point=HandPass.contact_center(player)
-		reachable=active and contact_point.distance_to(target)<=(HAND_RADIUS if c.kind=="overhead" else .22)
+		if c.kind=="overhead":
+			contact_point=HandPass.contact_center(player)
+			reachable=active and contact_point.distance_to(target)<=HAND_RADIUS
+		else:
+			var closest := INF
+			for side in ["l","r"]:
+				var segment := forearm_segment(rig,side)
+				var point := Geometry3D.get_closest_point_to_segment(target,segment[0],segment[1])
+				var gap := point.distance_to(target)
+				if gap<closest:
+					closest=gap
+					contact_point=point
+			reachable=active and closest<=FOREARM_RADIUS+BALL_RADIUS
 	var missed: bool= frame>=touch_frame and active and not reachable
 	miss_label.visible=missed
 	if missed:
@@ -519,6 +527,16 @@ func draw_pose() -> void:
 	sample_receiver(c,pose_frame,active,motion_legs)
 	hand_volume.visible=hand_toggle.button_pressed and c.kind=="overhead" and active
 	if hand_volume.visible: hand_volume.global_position=HandPass.contact_center(player)
+	for i in arm_volumes.size():
+		var volume := arm_volumes[i]
+		volume.visible=hand_toggle.button_pressed and not hand_volume.visible
+		if volume.visible:
+			var segment := forearm_segment(rig,"l" if i==0 else "r")
+			var axis := segment[1]-segment[0]
+			var capsule := volume.mesh as CapsuleMesh
+			var height := axis.length()+2.*FOREARM_RADIUS
+			if not is_equal_approx(capsule.height,height): capsule.height=height
+			volume.global_transform=Transform3D(Basis(Quaternion(Vector3.UP,axis.normalized())),(segment[0]+segment[1])*.5)
 	pass_end_frame=0.
 	var seconds := (frame-touch_frame)/60.
 	var serve_time := clampf(feed.contact_time()+seconds+duration,0.,feed.contact_time()+.42)
@@ -566,6 +584,11 @@ func trace_incoming_regions(start: Vector3, aim: Vector3) -> void:
 			routed_fraction=1. if box.bounds.has_point(aim) else (i-1+(span.x+span.y)*.5)/96.
 		if routed_region.w>=0 or point.y<.09: return
 		previous=point
+
+func forearm_segment(rig: Skeleton3D, side: String) -> PackedVector3Array:
+	var elbow := rig.get_bone_global_pose(rig.find_bone("lowerarm_"+side)).origin
+	var wrist := rig.get_bone_global_pose(rig.find_bone("hand_"+side)).origin
+	return PackedVector3Array([rig.to_global(elbow),rig.to_global(wrist)])
 
 func flight_point(t: float,launch: Vector3,target: Vector3,duration: float,lift: float,landing: float) -> Vector3:
 	if reachable and t>0.:
@@ -952,6 +975,11 @@ func sample_layer(which: int, timeline: Dictionary, f: float) -> void:
 			rig.set_bone_pose(bone,rig.get_bone_pose(bone).interpolate_with(ready_pose[bone],maxf(recovery,1.-smoothstep(5.,15.,f))))
 		return
 	var pose: Array=ready_pose.duplicate()
+	var direction: Vector3=player.to_local(set_intercept).slide(Vector3.UP).normalized()
+	var stride := Vector2(c.side,c.forward).length()
+	c=c.duplicate()
+	c.side=direction.x*stride
+	c.forward=direction.z*stride
 	Regions.legs(player,pose,c,weight)
 	author.rotate_world(pose,"spine_01",Vector3.RIGHT,deg_to_rad(c.lean)*weight*.65)
 	author.rotate_world(pose,"spine_03",Vector3.RIGHT,deg_to_rad(c.lean)*weight*.35)
@@ -1007,7 +1035,16 @@ func build_map(tiers: VBoxContainer) -> void:
 	hand_volume.mesh=sphere
 	hand_volume.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(hand_volume)
-	hand_toggle.text="Hand hitbox"
+	for side in 2:
+		var capsule := CapsuleMesh.new()
+		capsule.radius=FOREARM_RADIUS
+		capsule.material=ink
+		var volume := MeshInstance3D.new()
+		volume.mesh=capsule
+		volume.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(volume)
+		arm_volumes.append(volume)
+	hand_toggle.text="Hand / forearm hitboxes"
 	hand_toggle.button_pressed=StorySession.game_options.get_value("reception_studio","hand_hitbox",false)
 	tiers.add_child(hand_toggle)
 	hand_toggle.toggled.connect(func(on):
@@ -1104,13 +1141,13 @@ func cell_action() -> int:
 	return assigned_action(cell,quadrant)
 
 func is_subdivided(address: Vector3i) -> bool:
-	return address.y==2 and address.z>=1
+	return (address.y==2 and address.z>=1) or depth_split(address)
 
 func halves_only(address: Vector3i) -> bool:
 	return address.y==2 and address.z==2 and address.x!=1
 
 func depth_split(address: Vector3i) -> bool:
-	return address==Vector3i(1,2,2)
+	return address.x==1 and address.z==2 and address.y>=1
 
 func region_suffix(address: Vector3i,part: int) -> String:
 	if depth_split(address):
@@ -1144,7 +1181,7 @@ func assigned_action(address: Vector3i,part: int) -> int:
 	if is_subdivided(address):
 		if StorySession.game_options.has_section_key("studio_three_rows",child_key):
 			return int(StorySession.game_options.get_value("studio_three_rows",child_key))
-		if depth_split(address):
+		if address==Vector3i(1,2,2):
 			if part<2: return 79
 			var parent_key := Regions.key(address)+"."+str(part%4+1)
 			if part%4<2:
