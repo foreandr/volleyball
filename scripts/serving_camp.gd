@@ -6,6 +6,8 @@ const LABELS := ["Spin","Float","Standing float","Underhand"]
 const HOMES := [Vector3(-2.9,.04,9.2),Vector3(0,.04,10.),Vector3(2.9,.04,9.2)]
 var serves := []
 var passers: Array[Node3D]=[]
+const JUMP_SERVE_VERTICAL := 57.*.0254
+const JUMP_TOSS_APEX := [7.4,6.1]
 const SERVE_EARLY := -.22
 const SERVE_LATE := .075
 const SERVE_PERFECT := .055
@@ -26,6 +28,7 @@ func _ready() -> void:
 	super()
 
 func start_drill() -> void:
+	jump_height=JUMP_SERVE_VERTICAL
 	hitter=setter
 	cpu_hitter=false
 	attack_jump.attack_arm_lift=true
@@ -122,7 +125,9 @@ func serve_meter_position(error: float) -> float:
 
 func serve_meter_error() -> float:
 	var sample := release_time if is_finite(release_time) else serve_clock
-	return sample-(serves[toss_style].contact_time()-SERVE_LATE)
+	var strike: float=serves[toss_style].contact_time()
+	if toss_airborne: strike=serves[toss_style].toss_release_time()+flight_time
+	return sample-(strike-SERVE_LATE)
 
 func shot_landing(_origin: Vector3) -> Vector3:
 	return destination
@@ -140,7 +145,8 @@ func self_set_step(motion, previous_time: float,delta: float) -> bool:
 		endpoint=hitter.position+hitter.basis.z.normalized()*2.15
 		endpoint.y=planned_attack_contact_height()
 		active_set=endpoint
-		flight_time=motion.contact_time()-release
+		var apex := maxf(JUMP_TOSS_APEX[toss_style],maxf(source.y,endpoint.y)+.1)
+		flight_time=sqrt(2.*(apex-source.y)/9.81)+sqrt(2.*(apex-endpoint.y)/9.81)
 		set_arc_height=9.81*flight_time*flight_time/8.
 		manual_shot=1
 		aim_center=Vector2(destination.x,destination.z)
