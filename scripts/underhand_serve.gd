@@ -298,12 +298,12 @@ func pose(time: float) -> void:
 	var fingers: Vector3 = author.point(bones,"middle_01_l")-left_basis.origin
 	var palm_width: Vector3 = author.point(bones,"index_01_l")-author.point(bones,"pinky_01_l")
 	var palm_up := HandPose.hand_basis(Vector3(0.0,0.10,1.0),Vector3.LEFT)*HandPose.hand_basis(fingers,palm_width).inverse()*left_basis.basis
-	author.set_world_basis(bones,"hand_l",left_basis.basis.slerp(palm_up,hold))
+	author.set_world_basis(bones,"hand_l",left_basis.basis.orthonormalized().slerp(palm_up.orthonormalized(),hold))
 	for digit in ["thumb","index","middle","ring","pinky"]:
 		for joint in ["01","02","03"]:
 			var left_digit := rig.find_bone("%s_%s_l" % [digit,joint])
 			var right_digit := rig.find_bone("%s_%s_r" % [digit,joint])
-			bones[left_digit].basis = bones[left_digit].basis.slerp(rig.get_bone_rest(left_digit).basis,hold)
+			bones[left_digit].basis = bones[left_digit].basis.orthonormalized().slerp(rig.get_bone_rest(left_digit).basis.orthonormalized(),hold)
 			bones[right_digit].basis = rig.get_bone_rest(right_digit).basis
 	var knuckles: Vector3 = author.point(bones,"middle_01_l")
 	var ball_center := left_basis.origin.lerp(knuckles,0.72)+Vector3.UP*(BallPreview.RADIUS+0.012)/scale_

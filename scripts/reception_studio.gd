@@ -13,7 +13,14 @@ const HEIGHTS := ["Low","Mid","High"]
 const CELL_SIZE := Vector3(1.10,2.20/3.,1.10)
 const MAP_ORIGIN := Vector3(-1.5,0,-1.5)*CELL_SIZE
 const Gym = preload("res://scripts/tryout_gym.gd")
-var feed := preload("res://scripts/standing_float_serve.gd").new()
+const SERVES := preload("res://scripts/serving_camp.gd").TECHNIQUES
+const SERVE_NAMES := ["Spin","Jump float","Standing float","Underhand"]
+const SERVE_ARCS := [4.5,5.2,6.,8.]
+var serve_type := 2
+var serve_from := Vector3(0,.04,13.4)
+const FeedBase = preload("res://scripts/underhand_serve.gd")
+var feed: FeedBase
+var reach_adjustment := Vector3.ZERO
 var server = preload("res://scripts/volleyball_player.gd").new()
 var zone := MeshInstance3D.new()
 var hover := MeshInstance3D.new()
@@ -126,10 +133,9 @@ func _ready() -> void:
 	Gym.light_gym(self)
 	add_child(server)
 	preload("res://scripts/practice_kit.gd").apply(server,false,5)
-	add_child(feed)
-	feed.configure(server,Vector3(0,.04,13.4),PI)
-	feed.aim_ring.hide()
-	feed.path_preview.hide()
+	serve_type=clampi(StorySession.game_options.get_value("reception_studio","serve_type",2),0,3)
+	serve_from=StorySession.game_options.get_value("reception_studio","serve_from",serve_from)
+	configure_feed()
 	var square := PlaneMesh.new()
 	square.size=Vector2(2,2)
 	var paint := StandardMaterial3D.new()
@@ -208,8 +214,20 @@ func _ready() -> void:
 	torso_label.text="Reception studio"
 	section_title(torso_label)
 	tiers.add_child(torso_label)
-	tiers.add_child(speed_label)
-	tiers.add_child(incoming_speed)
+	var serve_row := HBoxContainer.new()
+	column.add_child(serve_row)
+	var types := OptionButton.new()
+	for title in SERVE_NAMES: types.add_item(title)
+	types.select(serve_type)
+	serve_row.add_child(types)
+	types.item_selected.connect(func(i):
+		serve_type=i
+		configure_feed()
+		save_feed())
+	serve_row.add_child(speed_label)
+	serve_row.add_child(incoming_speed)
+	incoming_speed.custom_minimum_size.x=115
+	incoming_speed.min_value=25.
 	incoming_speed.max_value=140.
 	incoming_speed.step=1.
 	incoming_speed.value=StorySession.game_options.get_value("reception_studio","incoming_kmh",100.)
@@ -217,6 +235,22 @@ func _ready() -> void:
 		StorySession.game_options.set_value("reception_studio","incoming_kmh",value)
 		StorySession.save_options()
 		draw_pose())
+	for axis in [0,2]:
+		var caption := Label.new()
+		caption.text="Server X" if axis==0 else "Server Z"
+		serve_row.add_child(caption)
+		var coord := SpinBox.new()
+		coord.min_value=-5.5 if axis==0 else 12.5
+		coord.max_value=5.5 if axis==0 else 17.
+		coord.step=.1
+		coord.suffix="m"
+		coord.value=serve_from[axis]
+		serve_row.add_child(coord)
+		coord.value_changed.connect(func(value):
+			serve_from[axis]=value
+			feed.serve_start=serve_from
+			feed.reset()
+			save_feed())
 	tiers.add_child(HSeparator.new())
 	build_map(tiers)
 	tiers.add_child(HSeparator.new())
@@ -229,7 +263,7 @@ func _ready() -> void:
 	leg_grid.columns=5
 	scroll.add_child(leg_grid)
 	column.add_child(seek)
-	seek.min_value=-85
+	seek.min_value=-maxf(85.,ceilf(feed.contact_time()*60.+140.))
 	seek.step=1
 	seek.value_changed.connect(func(value): playing=false; frame=value; draw_pose())
 	refresh()
@@ -239,6 +273,22 @@ func _ready() -> void:
 	quadrant=clampi(selection.get("part",0),0,region_parts(cell)-1)
 	activate_receiver(clampi(selection.get("receiver",0),0,defenders.size()-1))
 	preview_cell()
+
+func configure_feed() -> void:
+	if is_instance_valid(feed): feed.stop()
+	feed=SERVES[serve_type].new()
+	add_child(feed)
+	feed.configure(server,serve_from,PI)
+	feed.aim_ring.hide()
+	feed.path_preview.hide()
+
+func save_feed() -> void:
+	seek.min_value=-maxf(85.,ceilf(feed.contact_time()*60.+140.))
+	StorySession.game_options.set_value("reception_studio","serve_type",serve_type)
+	StorySession.game_options.set_value("reception_studio","serve_from",serve_from)
+	StorySession.save_options()
+	frame=seek.min_value
+	draw_pose()
 
 func style_panel(panel: PanelContainer) -> void:
 	var style := StyleBoxFlat.new()
@@ -473,15 +523,16 @@ func draw_pose() -> void:
 	play_button.text="Pause" if playing else "Play"
 	var aim := highlight.global_position+feed_offset
 	var launch: Vector3=feed.preview_origin
-	var full_duration := clampf(launch.distance_to(aim)/maxf(1.,incoming_speed.value/3.6),.48,1.25)
+	var full_duration := launch.distance_to(aim)/maxf(1.,incoming_speed.value/3.6)
+	speed_label.text="Serve %d km/h" % incoming_speed.value
 	var rig: Skeleton3D=player.skeleton
 	var grid := grid_for(receiving)
-	var key := [launch,aim,grid.global_transform,cell,quadrant,forearm_preview,hand_leg_preview,selected_only.button_pressed]
+	var key := [serve_type,launch,aim,grid.global_transform,cell,quadrant,forearm_preview,hand_leg_preview,selected_only.button_pressed]
 	if route_key!=key:
 		route_key=key
 		trace_incoming_regions(grid.to_local(launch),grid.to_local(aim))
 	feed_fraction=routed_fraction
-	var target := launch.lerp(aim,feed_fraction)+Vector3.UP*6.*feed_fraction*(1.-feed_fraction)
+	var target := launch.lerp(aim,feed_fraction)+Vector3.UP*float(SERVE_ARCS[serve_type])*feed_fraction*(1.-feed_fraction)
 	set_intercept=target
 	var duration := full_duration*feed_fraction
 	var lead_frames := (full_duration-duration)*60.
@@ -506,9 +557,10 @@ func draw_pose() -> void:
 					motion_legs=saved
 			break
 	var pose_frame := clampf(frame-touch_frame+c.contact,0.,c.frames)
-	var signature := [index,legs,mirror.button_pressed,incoming_speed.value,source,region,assigned,motion_legs,target,feed_offset,cell_action(),defenders[receiving].position]
+	var signature := [serve_type,launch,index,legs,mirror.button_pressed,incoming_speed.value,source,region,assigned,motion_legs,target,feed_offset,cell_action(),defenders[receiving].position]
 	if signature!=contact_key:
 		contact_key=signature
+		reach_adjustment=Vector3.ZERO
 		actual_fraction=feed_fraction
 		sample_receiver(c,c.contact,active,motion_legs)
 		if c.kind=="overhead":
@@ -521,31 +573,41 @@ func draw_pose() -> void:
 			# Sample the moving ball and posed capsules on the same clock. Cache per feed for replay.
 			var bounds := AABB(MAP_ORIGIN,CELL_SIZE*3.).grow(.45)
 			var samples := ceili(full_duration*1.6*480.)
-			for tick in range(samples+1):
-				if not active: break
-				var u := tick/(480.*full_duration)
-				var ball := launch.lerp(aim,u)+Vector3.UP*6.*u*(1.-u)
-				if ball.y<BALL_RADIUS: break
-				if not bounds.has_point(grid.to_local(ball)): continue
-				var at_frame := clampf(c.contact+(u-nominal)*full_duration*60.,0.,c.frames)
-				sample_receiver(c,at_frame,true,motion_legs)
-				var separation := INF
-				for shape in RECEPTION_CAPSULES:
-					var segment := reception_segment(rig,shape)
-					var point := Geometry3D.get_closest_point_to_segment(ball,segment[0],segment[1])
-					var gap := point.distance_to(ball)-float(shape[2])-BALL_RADIUS
-					separation=minf(separation,gap)
-				if separation<best_gap:
-					best_gap=separation
-					contact_point=ball
-					actual_fraction=u
-				if separation<=0.:
-					reachable=true
-					break
+			var correction := Vector3.ZERO
+			for attempt in 2:
+				if attempt==1:
+					if reachable or best_gap>.095 or not Regions.movement(c): break
+					reach_adjustment=rig.global_basis.inverse()*correction.limit_length(.11)
+					best_gap=INF
+				for tick in range(samples+1):
+					if not active: break
+					var u := tick/(480.*full_duration)
+					var ball := launch.lerp(aim,u)+Vector3.UP*float(SERVE_ARCS[serve_type])*u*(1.-u)
+					if ball.y<BALL_RADIUS: break
+					if not bounds.has_point(grid.to_local(ball)): continue
+					var at_frame := clampf(c.contact+(u-nominal)*full_duration*60.,0.,c.frames)
+					sample_receiver(c,at_frame,true,motion_legs)
+					var separation := INF
+					var nearest_delta := Vector3.ZERO
+					for shape in RECEPTION_CAPSULES:
+						var segment := reception_segment(rig,shape)
+						var point := Geometry3D.get_closest_point_to_segment(ball,segment[0],segment[1])
+						var gap := point.distance_to(ball)-float(shape[2])-BALL_RADIUS
+						if gap<separation:
+							separation=gap
+							nearest_delta=ball-point
+					if separation<best_gap:
+						best_gap=separation
+						correction=nearest_delta.normalized()*(maxf(0.,separation)+.018)
+						contact_point=ball
+						actual_fraction=u
+					if separation<=0.:
+						reachable=true
+						break
 			closest_surface_gap=best_gap
 	if active and c.kind!="overhead":
 		feed_fraction=actual_fraction
-		target=launch.lerp(aim,feed_fraction)+Vector3.UP*6.*feed_fraction*(1.-feed_fraction)
+		target=launch.lerp(aim,feed_fraction)+Vector3.UP*float(SERVE_ARCS[serve_type])*feed_fraction*(1.-feed_fraction)
 		touch_frame+=(feed_fraction-duration/full_duration)*full_duration*60.
 		duration=full_duration*feed_fraction
 	var missed: bool= frame>=touch_frame and active and not reachable
@@ -603,7 +665,7 @@ func trace_incoming_regions(start: Vector3, aim: Vector3) -> void:
 	var previous := start
 	for i in range(1,193):
 		var u := i/96.
-		var point := start.lerp(aim,u)+Vector3.UP*6.*u*(1.-u)
+		var point := start.lerp(aim,u)+Vector3.UP*float(SERVE_ARCS[serve_type])*u*(1.-u)
 		var earliest := INF
 		for box in flight_boxes:
 			var selected: bool=box.address==cell and box.part==quadrant
@@ -630,7 +692,7 @@ func flight_point(t: float,launch: Vector3,target: Vector3,duration: float,lift:
 		point.y+=lift*t-4.905*t*t
 		return point
 	var u := (t+duration)/duration
-	return launch.lerp(target,u)+Vector3.UP*6.*feed_fraction*feed_fraction*u*(1.-u)
+	return launch.lerp(target,u)+Vector3.UP*float(SERVE_ARCS[serve_type])*feed_fraction*feed_fraction*u*(1.-u)
 
 func draw_ball_trail(seconds: float,launch: Vector3,target: Vector3,duration: float,lift: float,landing: float) -> void:
 	var previous := launch
@@ -764,7 +826,6 @@ func sample_receiver_base(c: Dictionary,f: float,active: bool,motion_legs: int) 
 		player.skeleton.set_bone_pose(bone,ready_pose[bone].interpolate_with(forearm_frames[key][bone],weight))
 
 	var bend := ForearmDrive.forearm_bend_degrees(incoming_speed.value/3.6)
-	speed_label.text="Incoming %d km/h   ·   %.0f°" % [incoming_speed.value,bend]
 	ForearmDrive.recoil_platform(player.skeleton,(f-float(c.contact))/60.,bend)
 
 func lean_for_hand_pass(goal: Vector3, weight: float, limit := deg_to_rad(34.)) -> void:
@@ -1047,8 +1108,9 @@ func sample_layer(which: int, timeline: Dictionary, f: float) -> void:
 	var direction: Vector3=player.to_local(set_intercept).slide(Vector3.UP).normalized()
 	var stride := Vector2(c.side,c.forward).length()
 	c=c.duplicate()
-	c.side=direction.x*stride
-	c.forward=direction.z*stride
+	c.side=direction.x*stride+reach_adjustment.x/.65
+	c.forward=direction.z*stride+reach_adjustment.z/.34
+	c.drop=maxf(0.,float(c.drop)-reach_adjustment.y)
 	Regions.legs(player,pose,c,weight)
 	author.rotate_world(pose,"spine_01",Vector3.RIGHT,deg_to_rad(c.lean)*weight*.65)
 	author.rotate_world(pose,"spine_03",Vector3.RIGHT,deg_to_rad(c.lean)*weight*.35)
