@@ -812,7 +812,7 @@ func assigned_action(address: Vector3i,part: int) -> int:
 	if address==HEAD_CELL:
 		if StorySession.game_options.has_section_key("studio_three_rows",child_key):
 			return int(StorySession.game_options.get_value("studio_three_rows",child_key))
-		if part!=0: return 0
+		if part>=2: return 0
 	var key := Regions.key(address)
 	if StorySession.game_options.has_section_key("studio_three_rows",key):
 		return int(StorySession.game_options.get_value("studio_three_rows",key))
