@@ -107,6 +107,7 @@ var pass_in_system := false
 const PASS_HEIGHT := 1.08
 var receiving_setter: Node3D
 var serve_station := Vector3(0,.04,-8.2)
+const SetHands = preload("res://scripts/hand_setting_pose.gd")
 var receiving_jump := preload("res://scripts/setter_jump.gd").new()
 var set_at := 1.25
 const SET_VERTICAL := .48
@@ -907,7 +908,8 @@ func step_reception_rally(delta: float) -> void:
 		ball.position=arc(pass_start,pass_end,pass_clock/pass_duration,arc_term*.25)
 		if pass_clock>set_at-.33:
 			second_contact_player().rotation.y=atan2(facing.x,facing.z)
-			preload("res://scripts/hand_setting_pose.gd").apply(second_contact_player(),ball.position,smoothstep(set_at-.33,set_at-.05,pass_clock))
+			var load_weight := smoothstep(set_at-.33,set_at-.05,pass_clock)
+			SetHands.apply(second_contact_player(),ball.position,load_weight,Vector3.ZERO,0.,0.,false,Vector3.ZERO,0.,attack_point-ball.position,load_weight,true,-1.,null,facing,true)
 		if pass_clock>=set_at:
 			var hands_height: float=second_contact_player().global_position.y+second_contact_player().height_cm*.0118
 			if ball.position.z<BallNet.NET_Z or ball.position.y>hands_height+.24 or (second_contact_player().position-ball.position).slide(Vector3.UP).length()>.85:
@@ -966,9 +968,12 @@ func step_reception_rally(delta: float) -> void:
 	else:
 		if receiving_jump.active: receiving_jump.step(second_contact_player(),delta,Vector2.ZERO)
 		else: second_contact_player().animator.advance(delta)
-		if pass_clock<.22:
-			var push := pass_start.direction_to(pass_end+Vector3.UP*2.)
-			preload("res://scripts/hand_setting_pose.gd").apply(second_contact_player(),pass_start+push*.18,1.-smoothstep(.07,.22,pass_clock))
+		if pass_clock<SetHands.CPU_FOLLOW_TIME:
+			var offset := pass_end-pass_start
+			var push := (offset+Vector3.UP*4.905*set_duration*set_duration).normalized()
+			var extension := smoothstep(0.,SetHands.RELEASE_TIME,pass_clock)
+			var weight := 1.-smoothstep(SetHands.RELEASE_TIME,SetHands.CPU_FOLLOW_TIME,pass_clock)
+			SetHands.apply(second_contact_player(),pass_start,weight,push*.23*extension,0.,0.,false,Vector3.ZERO,extension,offset,1.,true,-1.,null,Vector3.ZERO,true)
 		var t := pass_clock/set_duration
 		ball.position=pass_start.lerp(pass_end,t)+Vector3.UP*4.905*set_duration*set_duration*t*(1.-t)
 		if ball.position.y<.11:
