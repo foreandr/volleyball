@@ -116,10 +116,11 @@ func start_drill() -> void:
 	world.add_child(hand_impact)
 	hand_impact.bus=StorySession.IMPACT_BUS
 	hand_impact.stream=preload("res://assets/audio/hand_impacts.tres")
-	coach.hide()
-	rotation_drill.basket.hide()
-	for item in rotation_drill.stock: item.hide()
-	for target in targets: target.hide()
+	for prop in [coach,rotation_drill.basket]+rotation_drill.stock+targets:
+		prop.hide()
+		if prop is CollisionObject3D: prop.collision_layer=0
+		for body in prop.find_children("*","CollisionObject3D",true,false):
+			body.collision_layer=0
 	score_strip.hide()
 	hand_sound.bus=StorySession.IMPACT_BUS
 	hand_sound.stream=preload("res://assets/audio/hand_impacts.tres")
