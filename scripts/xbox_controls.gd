@@ -35,7 +35,8 @@ static func auxiliary_bindings() -> Array:
 static func physical(logical: int) -> int:
 	var slot := FACE.find(logical)
 	if slot>=0: return StorySession.pad_bindings[slot]
-	return auxiliary_bindings()[AUX.find(logical)]
+	var auxiliary := AUX.find(logical)
+	return auxiliary_bindings()[auxiliary] if auxiliary>=0 else logical
 
 static func trigger(left: bool) -> JoyAxis:
 	var swapped := bool(StorySession.game_options.get_value("xbox","swap_triggers",false))

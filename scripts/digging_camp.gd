@@ -7,12 +7,14 @@ var stick_engaged := false
 var dig_direction := Vector2.ZERO
 var release_window := 0.
 var neutral_platform := Vector3.ZERO
+var feed_bag: Array[Vector2]=[]
 var feed_direction := Vector2.ZERO
 var cpu_defense := true
 var feed_age := 0.
 var attack_landing := Vector3.ZERO
 
 func start_drill() -> void:
+	cpu_defense=not OS.get_cmdline_user_args().has("--control-defender")
 	super.start_drill()
 	wall_vertical_inches=34.
 	pin_attack.jump.max_height=46.*.0254+.2032
@@ -66,11 +68,14 @@ func _input(event: InputEvent) -> void:
 
 func next_serve() -> void:
 	super.next_serve()
-	holding_dig=false
+	holding_dig=not cpu_defense and pad()>=0 and Input.is_joy_button_pressed(pad(),Xbox.physical(JOY_BUTTON_A))
 	stick_engaged=false
 	release_window=0.
 	dig_direction=Vector2.ZERO
-	feed_direction=Vector2(randf_range(-1.,1.),randf_range(-1.,1.)).limit_length(1.)
+	if feed_bag.is_empty():
+		feed_bag.assign([Vector2.LEFT,Vector2.RIGHT,Vector2.UP,Vector2.DOWN,Vector2.ZERO])
+		feed_bag.shuffle()
+	feed_direction=feed_bag.pop_back()*randf_range(.85,1.)
 	hitter.position=FIVE
 	hitter.rotation.y=0.
 	receiving_setter.position=SETTER_BASE
@@ -88,6 +93,8 @@ func next_serve() -> void:
 
 func _process(delta: float) -> void:
 	if settings.visible or get_tree().paused or replay_inspector.active: return
+	if ball.position.z>FIVE.z+.18:
+		GroundControls.face(hitter,ball.global_position-hitter.global_position,delta,8.)
 	if phase=="coach_feed":
 		feed_age+=delta
 		ball.position=coach_motion.toss(coach,clampf((feed_age-.45)/.33,0.,1.))
@@ -120,8 +127,9 @@ func read_dig_stick(stick: Vector2) -> void:
 		stick_engaged=false
 
 func platform_offset(direction: Vector2) -> Vector3:
-	var right := camera.global_basis.x.slide(Vector3.UP).normalized()
-	return right*direction.x*.48+Vector3(0.,direction.y*.38,-direction.y*.32)
+	var forward := hitter.global_basis.z.slide(Vector3.UP).normalized()
+	var right := forward.cross(Vector3.UP)
+	return right*direction.x*.72-forward*direction.y*.44+Vector3.UP*direction.y*.46
 
 func walk_server(delta: float,_defending := false) -> void:
 	hitter.play_ground_gait(0.)
@@ -131,7 +139,7 @@ func walk_server(delta: float,_defending := false) -> void:
 		var platform: Reception=dig_platforms[hitter]
 		platform.sample_pose(platform.clip,platform.tracks,platform.contact_frame,1.,true)
 		neutral_platform=platform.platform_center()
-		platform.reach_platform(platform_offset(dig_direction),1.,.55,true,true)
+		platform.reach_platform(platform_offset(dig_direction),1.,.72,true,true)
 
 func return_struck(actor: Node3D,point: Vector3,velocity: Vector3,spin: float) -> void:
 	var contact := (neutral_platform if neutral_platform!=Vector3.ZERO else FIVE+Vector3(0,1.04,.62))+platform_offset(feed_direction)
