@@ -97,6 +97,8 @@ func pin_flight_time(slot: int) -> float:
 	return ONE_FLIGHT
 var cover_slot := -1
 var cover_clock := 0.
+var recent_set_share := [0.,0.,0.,0.]
+var fallback_pin := 0
 var attack_results := [0.,0.,0.,0.]
 var middle_commit := false
 var aim_read := false
@@ -770,23 +772,29 @@ func begin_offense(passer: Node3D,platform: Reception) -> void:
 	var middle_ready := (route_point(1)+Vector3.BACK*1.6-receiving_middle.global_position).slide(Vector3.UP).length()/4.8+.38<pass_duration
 	middle_commit=pass_in_system and middle_ready and attack_results[1]>.85 and randf()<clampf(.5+.14*attack_results[1],.5,.92)
 	var best := -INF
+	var best_pin := -INF
 	for slot in attack_options.size():
 		var actor := attack_options[slot]
 		if actor==passer and platform.low_save.active: continue
 		if slot in [1,3] and not pass_in_system: continue
 		if slot==3 and not middle_ready: continue
-		if slot==3 and not middle_commit and called_slot!=3: continue
 		var staging := route_point(slot)+Vector3.BACK*1.6
 		var travel := (staging-actor.global_position).slide(Vector3.UP).length()/4.8
 		var recovery := .48 if actor==passer else 0.
 		if slot==3 and (actor.global_position-route_point(3)).slide(Vector3.UP).length()>4.8*maxf(0.,pass_duration+ONE_FLIGHT-.55): continue
 		if slot==1 and travel>pass_duration+ONE_FLIGHT-.25: continue
-		var score := randf()*.85+(.85 if slot==called_slot else 0.)-.50*travel-recovery
+		var score := (.85 if slot==called_slot else 0.)-.50*travel-recovery
+		score-=1.4*recent_set_share[slot]
+		# Sample eligible routes in proportion to their tactical score.
+		score-=.65*log(-log(clampf(randf(),.00001,.99999)))
 		score-=recent_misses[slot]*1.1+.65*(1.-actor.stamina.fraction())
 		score+=1.15*lane_space(route_point(slot).x)
 		score+=clampf(attack_results[slot]*.40,-.55,.65)
 		if middle_commit: score+=[.55,-1.4,.55,1.15][slot]
 		if not pass_in_system and slot in [0,2]: score+=.65
+		if slot in [0,2] and score>best_pin:
+			best_pin=score
+			fallback_pin=slot
 		if score>best:
 			best=score
 			attack_slot=slot
@@ -984,8 +992,8 @@ func step_reception_rally(delta: float) -> void:
 			pass_clock=0.
 
 			var behind_line := pass_start.z>BallNet.NET_Z+3.
-			if attack_slot==3 and (behind_line or not middle_decoy.enabled or receiving_middle.position.y<middle_decoy.jump.start.y+.06):
-				attack_slot=0 if pass_start.x>0. else 2
+			if attack_slot==3 and (behind_line or not middle_decoy.enabled or not middle_decoy.jump.active):
+				attack_slot=fallback_pin
 				attack_point=route_point(attack_slot)
 				attack_point.y=contact_height_for(attack_slot)
 				pass_end=second_contact_player().reachable_set(pass_start,attack_point,receiving_jump.active)
@@ -1019,6 +1027,8 @@ func step_reception_rally(delta: float) -> void:
 			else: pin_attack.start_set(attacker,pin_frame.to_local(pass_start),pin_frame.global_basis.inverse()*velocity,pin_frame.to_local(pass_end),pin_frame.to_local(target),0.,true)
 			pin_attack.pin_arrival=duration
 			pin_attack.approach_expected_hit_at=pin_attack.stage_start+duration
+			for slot in recent_set_share.size(): recent_set_share[slot]*=.75
+			recent_set_share[attack_slot]+=.25
 			trace("serve_attack_set",{"slot":attack_slot,"duration":duration,"hitter_gap_m":ready_gap,"stamina":selected.stamina.fraction(),"contact_height":pass_end.y,"approach_started":prepared,"release_depth_m":pass_start.z-BallNet.NET_Z,"in_system":pass_in_system,"middle_commit":middle_commit})
 			aim_read=false
 			closest_attack_gap=INF
