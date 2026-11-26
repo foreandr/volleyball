@@ -1047,7 +1047,7 @@ func assigned_action(address: Vector3i,part: int) -> int:
 		if address.x!=1:
 			var upper := part==0 if halves_only(address) else part<2
 			return 80 if upper else 82
-		if address==HEAD_CELL and part>=2: return 0
+		if address==HEAD_CELL and part>=2: return 79
 	var key := Regions.key(address)
 	if StorySession.game_options.has_section_key("studio_three_rows",key):
 		return int(StorySession.game_options.get_value("studio_three_rows",key))
