@@ -167,3 +167,4 @@ Reception Studio review starts at serve contact on frame zero and advances to th
 Reception Studio splits box 22 vertically into left and right halves. Both inherit the previous box assignment until individually reassigned.
 Each side of box 22 also has separate front and back targets, inheriting its side assignment.
 The current map merges 22 and 23 into a double-width region with two full-depth height bands. The lower band is split left and right. Both lower regions start unassigned.
+Within 22-23.bottom.left, near and far divide the lateral reach from the receiver in two. Both span the full depth.

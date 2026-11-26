@@ -1414,7 +1414,7 @@ func save_selection() -> void:
 	StorySession.save_options()
 
 func region_parts(address: Vector3i) -> int:
-	if address==REGION_22: return 3
+	if address==REGION_22: return 4
 	if address==REGION_23: return 0
 	if halves_only(address): return 2
 	if depth_split(address): return 8
@@ -1444,7 +1444,7 @@ func depth_split(address: Vector3i) -> bool:
 	return address==Vector3i(1,1,1) or address==Vector3i(1,2,2)
 
 func region_suffix(address: Vector3i,part: int) -> String:
-	if address==REGION_22: return [".top",".bottom.left",".bottom.right"][part]
+	if address==REGION_22: return [".top",".bottom.left.near",".bottom.right",".bottom.left.far"][part]
 	if address==REGION_23: return [".back.top",".front.top",".back.bottom",".front.bottom"][part]
 	if depth_split(address):
 		return ".%d.%s" % [part%4+1,"front" if part>=4 else "back"]
@@ -1455,7 +1455,7 @@ func region_number(address: Vector3i,part: int) -> String:
 	return str(1+address.x+3*address.y+9*address.z)+region_suffix(address,part)
 
 func region_size(address: Vector3i,part: int) -> Vector3:
-	if address==REGION_22: return CELL_SIZE*Vector3(2. if part==0 else 1.,.5,1.)
+	if address==REGION_22: return CELL_SIZE*Vector3([2.,.5,1.,.5][part],.5,1.)
 	if address==REGION_23: return CELL_SIZE*Vector3(1.,.5,.5)
 	if halves_only(address): return CELL_SIZE*Vector3(1.,.5,1.)
 	if depth_split(address): return CELL_SIZE*Vector3(.5,.5,.5)
@@ -1467,7 +1467,7 @@ func region_center(address: Vector3i,part: int,subdivide := true) -> Vector3:
 		center.x+=.5*CELL_SIZE.x
 		if subdivide:
 			center.y+=(.25 if part==0 else -.25)*CELL_SIZE.y
-			if part>0: center.x+=(.5 if part==2 else -.5)*CELL_SIZE.x
+			center.x+=[0.,-.25,.5,-.75][part]*CELL_SIZE.x
 	elif halves_only(address) and subdivide:
 		center.y+=(.25 if part==0 else -.25)*CELL_SIZE.y
 	elif is_subdivided(address) and subdivide:
@@ -1485,7 +1485,9 @@ func assigned_action(address: Vector3i,part: int) -> int:
 	if is_subdivided(address):
 		if StorySession.game_options.has_section_key("studio_three_rows",child_key):
 			return int(StorySession.game_options.get_value("studio_three_rows",child_key))
-		if address==REGION_22: return 0
+		if address==REGION_22:
+			if part in [1,3]: return int(StorySession.game_options.get_value("studio_three_rows",Regions.key(address)+".bottom.left",0))
+			return 0
 		if address==Vector3i(1,2,2):
 			if part<2: return 79
 			var parent_key := Regions.key(address)+"."+str(part%4+1)
