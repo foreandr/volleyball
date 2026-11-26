@@ -347,7 +347,7 @@ func _unhandled_input(event: InputEvent) -> void:
 					nearest=span.x
 			if chosen>=0:
 				hover.global_position=grid_for(chosen).position+region_center(address,part)
-				hover.scale=region_size(address)/CELL_SIZE
+				hover.scale=region_size(address,part)/CELL_SIZE
 				hover_number.text=region_number(address,part)
 				hover.show()
 				if click and event.ctrl_pressed:
@@ -846,29 +846,41 @@ func cell_action() -> int:
 func is_subdivided(address: Vector3i) -> bool:
 	return address==HEAD_CELL or address==Vector3i(1,2,2)
 
-func region_number(address: Vector3i,part: int) -> String:
-	var number := str(1+address.x+3*address.y+9*address.z)
-	return number+"."+str(part+1) if is_subdivided(address) else number
+func depth_split(address: Vector3i,part: int) -> bool:
+	return address==Vector3i(1,2,2) and (part<2 or part>=4)
 
-func region_size(address: Vector3i) -> Vector3:
+func region_suffix(address: Vector3i,part: int) -> String:
+	if depth_split(address,part):
+		return ".%d.%s" % [part%2+1,"front" if part>=4 else "back"]
+	return "."+str(part+1) if is_subdivided(address) else ""
+
+func region_number(address: Vector3i,part: int) -> String:
+	return str(1+address.x+3*address.y+9*address.z)+region_suffix(address,part)
+
+func region_size(address: Vector3i,part: int) -> Vector3:
+	if depth_split(address,part): return CELL_SIZE*Vector3(.5,.5,.5)
 	return CELL_SIZE*Vector3(.5,.5,1.) if is_subdivided(address) else CELL_SIZE
 
 func region_center(address: Vector3i,part: int,subdivide := true) -> Vector3:
 	var center := MAP_ORIGIN+(Vector3(address)+Vector3.ONE*.5)*CELL_SIZE
 	if is_subdivided(address) and subdivide:
-		center+=Vector3(-.25 if part%2==0 else .25,.25 if part<2 else -.25,0.)*CELL_SIZE
+		var upper := part<2 or part>=4
+		center+=Vector3(-.25 if part%2==0 else .25,.25 if upper else -.25,0.)*CELL_SIZE
+		if depth_split(address,part):
+			center.z+=(.25 if part>=4 else -.25)*CELL_SIZE.z
 	return center
 
 func assignment_key(address: Vector3i,part: int) -> String:
-	var key := Regions.key(address)
-	return key+"."+str(part+1) if is_subdivided(address) else key
+	return Regions.key(address)+region_suffix(address,part)
 
 func assigned_action(address: Vector3i,part: int) -> int:
 	var child_key := assignment_key(address,part)
 	if is_subdivided(address):
 		if StorySession.game_options.has_section_key("studio_three_rows",child_key):
 			return int(StorySession.game_options.get_value("studio_three_rows",child_key))
-		if address==Vector3i(1,2,2) and part<2: return 78
+		if depth_split(address,part):
+			var parent_key := Regions.key(address)+"."+str(part%2+1)
+			return int(StorySession.game_options.get_value("studio_three_rows",parent_key,78))
 		if address==HEAD_CELL and part>=2: return 0
 	var key := Regions.key(address)
 	if StorySession.game_options.has_section_key("studio_three_rows",key):
@@ -881,7 +893,7 @@ func assigned_action(address: Vector3i,part: int) -> int:
 
 func pick_feed_point() -> void:
 	miss_logged=false
-	var half := region_size(cell)*.5
+	var half := region_size(cell,quadrant)*.5
 	var bottom := maxf(-half.y,.145-highlight.global_position.y)
 	feed_offset=Vector3(randf_range(-half.x,half.x),randf_range(bottom,half.y),randf_range(-half.z,half.z))
 
@@ -905,7 +917,7 @@ func update_region() -> void:
 	var id := cell_action()
 	highlight.visible=not unfinished.button_pressed or id==0
 	region_label.text="#%s · %s %s - %s" % [region_number(cell,quadrant),HEIGHTS[cell.y],WIDTHS[cell.x-MAP_MIN.x],"Unassigned" if id==0 else "Action #%02d"%id]
-	highlight.scale=region_size(cell)/CELL_SIZE
+	highlight.scale=region_size(cell,quadrant)/CELL_SIZE
 	highlight.position=region_center(cell,quadrant)
 
 func assign_region() -> void:
@@ -926,8 +938,9 @@ func rebuild_colors() -> void:
 		for y in range(MAP_MAX.y+1):
 			for z in range(MAP_MIN.z,MAP_MAX.z+1):
 				var address := Vector3i(x,y,z)
-				var size := region_size(address)
-				for part in (4 if is_subdivided(address) else 1):
+				var count := 6 if address==Vector3i(1,2,2) else (4 if is_subdivided(address) else 1)
+				for part in count:
+					var size := region_size(address,part)
 					var assigned := assigned_action(address,part)>0
 					if assigned and unfinished.button_pressed: continue
 					if pick_boxes.is_empty(): mesh.surface_begin(Mesh.PRIMITIVE_LINES,ink)
