@@ -197,5 +197,12 @@ func draw_pose() -> void:
 			var sign_x := 1. if side=="l" else -1.
 			author.limb(pose,"upperarm_"+side,"lowerarm_"+side,"hand_"+side,chest+Vector3(sign_x*.12,.38,.30),Vector3(sign_x,-.1,.1),weight)
 	else:
-		Platform.connect_arms(pose,author,grip,weight,0.,Vector3.RIGHT,false,false,174.,true,.075)
+		var guided: bool=c.get("long_platform",false)
+		var across := Vector3.RIGHT
+		if guided:
+			var left: Vector3=author.point(pose,"upperarm_l")
+			var right: Vector3=author.point(pose,"upperarm_r")
+			across=right.direction_to(left)
+			grip=(left+right)*.5+Vector3(c.side*.4,float(c.grip_y),c.forward+.32).normalized()
+		Platform.connect_arms(pose,author,grip,weight,0.,across,false,false,174.,not guided,.075)
 	for bone in pose.size(): rig.set_bone_pose(bone,pose[bone])
