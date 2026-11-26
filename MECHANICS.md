@@ -147,3 +147,4 @@ Upper front-center region 26 has four independently assignable full-depth quadra
 Regions 26.1 through 26.4 each have front and back halves, 0.55 m deep, with independent assignments inherited initially from their parent.
 The back halves of 26.1 and 26.2 use grounded overhead action 79, stepping toward the incoming ball with Legs 04. Their front halves use action 80, using the spike approach’s right-left plant toward the feed before taking off with setting hands.
 Regions 26.3 and 26.4 use directional Legs 02 under an overhead pass. Their front halves first use a grounded right-left approach plant, then adjust the wide step to the remaining reach.
+Upper front regions 25 and 27 use the right-left approach plant into a jump set toward the incoming feed.

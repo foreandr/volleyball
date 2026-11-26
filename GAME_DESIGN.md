@@ -277,6 +277,6 @@ Reserve the full-strength sidespin trajectory (1.15 m of lateral bend at mid-fli
 
 An exceptional setter can deliver faster offensive sets across the net width. Ordinary setters in the serving rally currently cap horizontal set speed at 23.4 km/h.
 
-## Future toss options for Spencer
+## Future spin serve toss options
 
-Spencer can toss the ball with his left hand, his right hand, or both hands together.
+For a spin serve, the server can toss with the left hand, the right hand, or both hands together.

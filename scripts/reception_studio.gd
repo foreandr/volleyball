@@ -1042,6 +1042,7 @@ func assigned_action(address: Vector3i,part: int) -> int:
 	var key := Regions.key(address)
 	if StorySession.game_options.has_section_key("studio_three_rows",key):
 		return int(StorySession.game_options.get_value("studio_three_rows",key))
+	if address.y==2 and address.z==2 and address.x!=1: return 80
 	if address.y==2 and address.z==0: return 78
 	if address.y==1: return 0
 	var previous := Vector3i(address.x,0 if address.y==0 else 1,address.z)
