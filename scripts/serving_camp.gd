@@ -445,9 +445,10 @@ func _process(delta: float) -> void:
 		receiving_setter.animator.advance(delta)
 	hitter.stamina.recover(delta)
 	receiving_setter.stamina.recover(delta)
-	if pin_attack.enabled:
-		pin_attack.tick_attack(delta)
-	else: pin_hitter.animator.advance(delta)
+	pin_hitter.stamina.recover(delta)
+	receiving_middle.stamina.recover(delta)
+	if pin_attack.enabled: pin_attack.tick_attack(delta)
+	if not pin_attack.enabled or pin_attack.setter!=pin_hitter: pin_hitter.animator.advance(delta)
 	if (not pin_attack.enabled or pin_attack.setter!=receiving_middle): receiving_middle.animator.advance(delta)
 	if phase=="serve_ready" or phase=="serve_toss":
 		var release: float=serves[toss_style].toss_release_time() if serves[toss_style].has_method("toss_release_time") else .18
@@ -675,7 +676,7 @@ func begin_offense(passer: Node3D,platform: Reception) -> void:
 		var recovery := .48 if actor==passer else 0.
 		if slot==1 and travel>pass_duration+ONE_FLIGHT-.25: continue
 		var score := randf()*.85+(.85 if slot==called_slot else 0.)-.50*travel-recovery
-		score+=attack_results[slot]*.40
+		score+=clampf(attack_results[slot]*.40,-.55,.65)
 		if middle_commit: score+=[.55,-1.4,.55,1.15][slot]
 		if not pass_in_system and slot in [0,2]: score+=.65
 		if score>best:
@@ -734,6 +735,7 @@ func step_reception_rally(delta: float) -> void:
 	pass_clock+=delta
 	if phase=="serve_pass":
 		var attack_point := route_point(attack_slot)
+		attack_point.y=pin_attack.approach_reach_height()
 		if pass_in_system and attack_slot!=1 and not middle_decoy.active and set_at-pass_clock<.48 and set_at-pass_clock>.22:
 			if (receiving_middle.global_position-route_point(1)).slide(Vector3.UP).length()<2.:
 				if receiving_middle.get_parent()!=pin_frame: receiving_middle.reparent(pin_frame,true)
@@ -771,7 +773,7 @@ func step_reception_rally(delta: float) -> void:
 		var runner := attack_options[attack_slot]
 		var gap := (attack_point+Vector3.BACK*1.6-runner.global_position).slide(Vector3.UP).length()
 		var fast := pass_in_system and gap<1.2 and (runner!=first_contact_player() or pass_clock>.48)
-		if (attack_slot==1 or fast and attack_slot!=3) and not pin_attack.enabled and set_at-pass_clock<.48:
+		if (attack_slot==1 or fast and attack_slot!=3) and not pin_attack.enabled and set_at-pass_clock<(.48 if attack_slot==1 else .24):
 			if runner.get_parent()!=pin_frame: runner.reparent(pin_frame,true)
 			var planned := intercept if receiving_jump.active else pass_end
 			var planned_duration := ZERO_FLIGHT if attack_slot==1 else ONE_FLIGHT

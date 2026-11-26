@@ -94,7 +94,11 @@ func set_replay_speed(value: float) -> void:
 func capture(rendered := false) -> Dictionary:
 	var objects := {}
 	var poses := {}
-	for obj in game.world.get_children():
+	var candidates: Array = game.world.get_children()
+	if "receiving_team" in game:
+		for actor in game.receiving_team:
+			if actor.get_parent()!=game.world: candidates.append(actor)
+	for obj in candidates:
 		if obj is not Node3D: continue
 		if "skeleton" in obj and obj.skeleton is Skeleton3D:
 			var rig: Skeleton3D = obj.skeleton
@@ -106,7 +110,7 @@ func capture(rendered := false) -> Dictionary:
 					if "replay_bones" in modifier: modifier.replay_bones = bones
 			objects[obj.model] = [obj.model.transform,obj.model.visible]
 		elif obj != game.ball and obj is not RigidBody3D and obj not in game.targets and obj not in game.rotation_drill.bins and obj != game.rotation_drill.basket: continue
-		objects[obj] = [obj.transform,obj.visible]
+		objects[obj] = [obj.global_transform,obj.visible] if "skeleton" in obj else [obj.transform,obj.visible]
 	var arms := {}
 	var armed := {}
 	if "practice_blockers" in game:
@@ -141,7 +145,8 @@ func apply(sample: Dictionary) -> void:
 			obj.hide()
 			continue
 		var state: Array = sample.objects[obj]
-		obj.transform = state[0]
+		if "skeleton" in obj: obj.global_transform=state[0]
+		else: obj.transform = state[0]
 		obj.visible = state[1]
 	for rig in sample.poses:
 		if not is_instance_valid(rig): continue
@@ -163,7 +168,9 @@ func display_frame(value: float) -> void:
 	if t>0.:
 		for obj in a.objects:
 			if is_instance_valid(obj) and b.objects.has(obj):
-				obj.transform=a.objects[obj][0].interpolate_with(b.objects[obj][0],t)
+				var interpolated: Transform3D=a.objects[obj][0].interpolate_with(b.objects[obj][0],t)
+				if "skeleton" in obj: obj.global_transform=interpolated
+				else: obj.transform=interpolated
 		for rig in a.poses:
 			if not is_instance_valid(rig) or not b.poses.has(rig): continue
 			for i in a.poses[rig].size():
