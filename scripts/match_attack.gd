@@ -4,6 +4,8 @@ signal struck(actor: Node3D, point: Vector3, velocity: Vector3, spin: float)
 
 var enabled := false
 var chase_late_sets := false
+var decoy_swing := false
+var drill_speed_mps := 0.
 var spike_strength := 1.0
 # Jog_Fwd is a loop. The leading ankle reaches support at 0.023 s and half a cycle later.
 const JOG_LEFT_PLANT_PHASE := 0.025
@@ -122,6 +124,8 @@ func tick_attack(delta: float) -> void:
 	var age := clock-stage_start
 	if stage == Stage.SET:
 		play_pin_ball(age,maxf(0.0,age-delta),delta)
+		if decoy_swing and stage==Stage.SET and jump.active and is_finite(swing_started) and age>=pin_arrival:
+			hit_spike(1.,right_palm())
 	elif stage == Stage.HIT and age < SWING_FOLLOW_TIME:
 		var follow := 1.0-pow(1.0-clampf(age/0.19,0.0,1.0),2.0)
 		pose_bow_draw(delta,1.0-smoothstep(0.19,SWING_FOLLOW_TIME,age),swing_contact,swing_contact_extension,follow)
@@ -188,8 +192,17 @@ func uses_front_right_lift() -> bool:
 func keeps_strike_palm_presented() -> bool:
 	return true
 
+func can_drive_to(offset: Vector3,duration: float) -> bool:
+	if not chase_late_sets: return super.can_drive_to(offset,duration)
+	var reach: float=SWING_CONTACT_HEIGHT*setter.height_cm/180.
+	var available_rise := maxf(0.,jump.start.y+jump.height-setter.position.y)
+	return offset.slide(Vector3.UP).length()<=SWING_REACH and offset.y<=reach+minf(.60,available_rise)+.18
+
+func drive_lead_time(duration: float) -> float:
+	return duration+.055 if chase_late_sets else super.drive_lead_time(duration)
+
 func spike_assist_radius() -> float:
-	return 0.19
+	return .30 if chase_late_sets else .19
 
 func sync_approach_arm_lift() -> bool:
 	return true
@@ -203,4 +216,13 @@ func spike_speed_multiplier() -> float:
 
 func hit_spike(charge: float, point: Vector3, palm_gap := 0.0) -> void:
 	super.hit_spike(charge,point,palm_gap)
+	if decoy_swing: return
+	if drill_speed_mps>0.:
+		var displacement := swing_contact_aim-point
+		var g := Flight.GRAVITY
+		var term := drill_speed_mps*drill_speed_mps-g*displacement.y
+		var discriminant := term*term-g*g*displacement.length_squared()
+		if discriminant>=0. and displacement.length_squared()>.01:
+			flight_end=sqrt(2.*displacement.length_squared()/(term+sqrt(discriminant)))
+			pass_motion=displacement/flight_end+Vector3.UP*.5*g*flight_end
 	struck.emit(setter,to_global(point),global_basis*pass_motion,spike_topspin_rps)

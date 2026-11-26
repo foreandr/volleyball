@@ -946,8 +946,8 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 		var duration := lerpf(0.21,0.09,charge)+(0.035 if uses_assisted_approach() else 0.0)
 		var predicted := flight_point(pass_origin,pass_motion,minf(time+duration,flight_end))
 		var toward_ball := predicted-to_local(setter.global_position)
-		if not is_finite(swing_drive_started) and airborne and time >= pin_arrival-0.46:
-			if toward_ball.slide(Vector3.UP).length() <= SWING_REACH and toward_ball.y <= SWING_CONTACT_HEIGHT:
+		if not is_finite(swing_drive_started) and airborne and time >= pin_arrival-drive_lead_time(duration):
+			if can_drive_to(toward_ball,duration):
 				swing_drive_started = clock
 				swing_drive_duration = duration
 				swing_hand_speed = 0.0
@@ -1010,6 +1010,12 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 func smootherstep(start: float, end: float, time: float) -> float:
 	var t := clampf((time-start)/(end-start),0.0,1.0)
 	return t*t*t*(t*(t*6.0-15.0)+10.0)
+
+func can_drive_to(offset: Vector3,_duration: float) -> bool:
+	return offset.slide(Vector3.UP).length()<=SWING_REACH and offset.y<=SWING_CONTACT_HEIGHT
+
+func drive_lead_time(_duration: float) -> float:
+	return .46
 
 func right_palm() -> Vector3:
 	var rig: Skeleton3D = setter.skeleton
