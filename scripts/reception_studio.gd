@@ -52,6 +52,8 @@ var arm_volumes: Array[MeshInstance3D]=[]
 var hand_volume := MeshInstance3D.new()
 var hand_toggle := CheckButton.new()
 var contact_point := Vector3.ZERO
+var timing_display := preload("res://scripts/tryout_player_ring.gd").new()
+var cpu_release_offset := 0.
 var closest_surface_gap := 0.
 var actual_fraction := 1.
 var contact_key := []
@@ -118,6 +120,9 @@ var speed_label := Label.new()
 var upper_bones: Array[int]=[]
 
 func _ready() -> void:
+	add_child(timing_display)
+	timing_display.hide()
+	timing_display.set_process(false)
 	add_child(pivot)
 	pivot.add_child(player)
 	player.animator.pause()
@@ -595,6 +600,11 @@ func draw_pose() -> void:
 	seek.set_value_no_signal(frame)
 	label.text=" %02d / %02d     Frame %d / %d " % [c.id,clips.size(),mini(roundi(frame),int(c.frames)),c.frames]
 	play_button.text="Pause" if playing else "Play"
+	for anchor in defenders:
+		var toward_server := serve_from-anchor.position
+		var facing := Basis(Vector3.UP,atan2(toward_server.x,toward_server.z))
+		if anchor==defenders[receiving] and mirror.button_pressed: facing.x=-facing.x
+		anchor.basis=facing
 	var aim := highlight.global_position+feed_offset
 	var launch: Vector3=feed.preview_origin
 	var full_duration := launch.distance_to(aim)/maxf(1.,incoming_speed.value/3.6)
@@ -718,6 +728,7 @@ func draw_pose() -> void:
 			volume.global_transform=Transform3D(Basis(Quaternion(Vector3.UP,axis.normalized())),(segment[0]+segment[1])*.5)
 	pass_end_frame=0.
 	var seconds := (frame-touch_frame)/60.
+	update_cpu_ring(seconds,duration,active)
 	var serve_time := clampf(feed.contact_time()+seconds+duration,0.,feed.contact_time()+.42)
 	feed.pose(serve_time)
 	feed.ball.show()
@@ -745,6 +756,16 @@ func draw_pose() -> void:
 		draw_ball_trail(seconds,launch,target,duration,lift,landing)
 
 # Sweep the incoming parabola once per feed, including its continuation past the aim point.
+func update_cpu_ring(seconds: float,duration: float,active: bool) -> void:
+	for actor in timing_display.floor_rings:
+		if actor!=player: timing_display.floor_rings[actor].hide()
+	timing_display.position_floor_ring(player)
+	if not active or seconds < -duration or seconds > cpu_release_offset+.65: return
+	var clean := preload("res://scripts/indoor_practice.gd").BUMP_ON_TIME
+	var cursor := clampf(inverse_lerp(-.25,.25,minf(seconds,cpu_release_offset)),0.,1.)
+	timing_display.timing_arc(player,cursor,inverse_lerp(-.25,.25,-clean),inverse_lerp(-.25,.25,clean),
+		Vector2(.10,.90),Color("14191d"),seconds>=cpu_release_offset)
+
 func trace_incoming_regions(start: Vector3, aim: Vector3) -> void:
 	routed_fraction=1.
 	routed_region=Vector4i(-1,-1,-1,-1)
@@ -1443,6 +1464,7 @@ func next_assigned_feed() -> void:
 	preview_cell()
 
 func pick_feed_point() -> void:
+	cpu_release_offset=randf_range(-.16,.16)
 	line_read_error=randf_range(-1.,1.)
 	miss_logged=false
 	var half := region_size(cell,quadrant)*.5

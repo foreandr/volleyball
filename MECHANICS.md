@@ -160,3 +160,4 @@ Reception Studio, serve reception, CPU digs and match reception use the shared a
 Indoor service placement and approach setup use the expanded gym runoff.
 Reception Studio bends slower feeds more and plans net clearance and an in-court descent through the selected contact point when feasible.
 Reception Studio credits a forearm reception within 2 cm of its contact capsules at the closest sampled instant.
+Reception Studio faces receivers toward the service origin and previews CPU hold and release timing on the shared floor ring. The release sample stays fixed when replaying the feed.
