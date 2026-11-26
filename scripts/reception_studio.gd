@@ -2,6 +2,11 @@ extends Node3D
 
 const Regions = preload("res://scripts/reception_regions.gd")
 var cell := Vector3i(1,1,1)
+const MAP_MIN := Vector3i(-1,0,-1)
+const MAP_MAX := Vector3i(3,3,3)
+const WIDTHS := ["Wide R","Right","Center","Left","Wide L"]
+const HEIGHTS := ["Low","Mid","High","Above"]
+var preview_ball := MeshInstance3D.new()
 var lattice := MeshInstance3D.new()
 var highlight := MeshInstance3D.new()
 var region_label := Label.new()
@@ -20,7 +25,7 @@ var frame := 0.
 var playing := true
 var yaw := .43
 var elevation := .15
-var distance := 2.85
+var distance := 4.8
 var label := Label.new()
 var play_button := Button.new()
 var seek := HSlider.new()
@@ -219,8 +224,10 @@ func draw_pose() -> void:
 	seek.set_value_no_signal(f)
 	label.text=" %02d / %02d     Frame %d / %d " % [c.id,clips.size(),f,c.frames]
 	play_button.text="Pause" if playing else "Play"
-	sidebar.visible=Regions.movement(c)
-	lattice.visible=sidebar.visible and region_label.is_visible_in_tree()
+	var seconds := (f-float(c.contact))/60.
+	var velocity := Vector3(0,-.22,-1).normalized()*incoming_speed.value/3.6
+	preview_ball.position=highlight.position+velocity*seconds
+	preview_ball.visible=preview_ball.position.y>=.105
 	if not Regions.movement(c):
 		sample_layer(index,c,f)
 		return
@@ -299,48 +306,47 @@ func sample_layer(which: int, timeline: Dictionary, f: float) -> void:
 	for bone in pose.size(): rig.set_bone_pose(bone,pose[bone])
 
 func build_map(tiers: VBoxContainer) -> void:
-	var toggle := CheckButton.new()
-	toggle.text="Contact map"
-	tiers.add_child(toggle)
+	var title := Label.new()
+	title.text="Contact map"
+	tiers.add_child(title)
 	var editor := VBoxContainer.new()
 	tiers.add_child(editor)
-	editor.hide()
 	var depth := HBoxContainer.new()
 	editor.add_child(depth)
 	button(depth,"‹",change_depth.bind(-1))
 	depth.add_child(depth_label)
 	button(depth,"›",change_depth.bind(1))
 	var cells := GridContainer.new()
-	cells.columns=3
+	cells.columns=5
 	editor.add_child(cells)
-	for y in [2,1,0]:
-		for x in 3:
+	for y in range(MAP_MAX.y,-1,-1):
+		for x in range(MAP_MIN.x,MAP_MAX.x+1):
 			var b := Button.new()
-			b.text=["Right","Center","Left"][x]
-			b.tooltip_text=["Low","Mid","High"][y]
+			b.text=WIDTHS[x-MAP_MIN.x]
+			b.tooltip_text=HEIGHTS[y]
 			b.pressed.connect(pick_cell.bind(x,y))
 			cells.add_child(b)
 	editor.add_child(region_label)
-	button(editor,"Assign current legs",assign_region)
-	toggle.toggled.connect(func(on): editor.visible=on; lattice.visible=on; update_region())
+	button(editor,"Assign current action",assign_region)
 	var lines := ImmediateMesh.new()
 	var ink := StandardMaterial3D.new()
 	ink.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED
-	ink.albedo_color=Color("68cfc9")
+	ink.transparency=BaseMaterial3D.TRANSPARENCY_ALPHA
+	ink.albedo_color=Color("68cfc958")
 	lines.surface_begin(Mesh.PRIMITIVE_LINES,ink)
 	for axis in 3:
-		for i in 4:
-			for j in 4:
-				var start := Vector3.ZERO
+		for i in range(MAP_MIN[(axis+1)%3],MAP_MAX[(axis+1)%3]+2):
+			for j in range(MAP_MIN[(axis+2)%3],MAP_MAX[(axis+2)%3]+2):
+				var start := Vector3(MAP_MIN)
 				start[(axis+1)%3]=i
 				start[(axis+2)%3]=j
 				var end := start
-				end[axis]=3.
+				end[axis]=MAP_MAX[axis]+1
 				lines.surface_add_vertex(Regions.ORIGIN+start*Regions.CELL)
 				lines.surface_add_vertex(Regions.ORIGIN+end*Regions.CELL)
 	lines.surface_end()
 	lattice.mesh=lines
-	pivot.add_child(lattice)
+	add_child(lattice)
 	var box := BoxMesh.new()
 	box.size=Regions.CELL
 	var tint := StandardMaterial3D.new()
@@ -349,22 +355,47 @@ func build_map(tiers: VBoxContainer) -> void:
 	box.material=tint
 	highlight.mesh=box
 	lattice.add_child(highlight)
-	lattice.hide()
+	var sphere := SphereMesh.new()
+	sphere.radius=.105
+	sphere.height=.21
+	preview_ball.mesh=sphere
+	add_child(preview_ball)
 	update_region()
 
 func pick_cell(x: int,y: int) -> void:
 	cell.x=x
 	cell.y=y
-	update_region()
+	preview_cell()
 
 func change_depth(by: int) -> void:
-	cell.z=posmod(cell.z+by,3)
+	cell.z=posmod(cell.z-MAP_MIN.z+by,5)+MAP_MIN.z
+	preview_cell()
+
+func cell_action() -> int:
+	var outer := cell.x<0 or cell.x>2 or cell.z<0 or cell.z>2 or cell.y>2
+	if outer:
+		var fallback := 12 if cell.x!=1 else 11
+		return int(StorySession.game_options.get_value("dig_regions",Regions.key(cell),fallback))
+	return Regions.assignment(cell)
+
+func preview_cell() -> void:
 	update_region()
+	var id := cell_action()
+	for i in clips.size():
+		if int(clips[i].id)==id:
+			select_legs(i)
+			if cell.x!=1:
+				mirror.button_pressed=(cell.x<1)!=(float(clips[i].side)<0.)
+			break
+	if id==0: select_legs(-1)
+	frame=0.
+	playing=true
+	draw_pose()
 
 func update_region() -> void:
-	depth_label.text=["Back","Body","Front"][cell.z]
-	var id := Regions.assignment(cell)
-	region_label.text="%s %s · %s" % [["Low","Mid","High"][cell.y],["right","center","left"][cell.x],"Ready" if id==0 else "Leg #%02d"%id]
+	depth_label.text=["Far back","Back","Body","Front","Far front"][cell.z-MAP_MIN.z]
+	var id := cell_action()
+	region_label.text="%s %s - %s" % [HEIGHTS[cell.y],WIDTHS[cell.x-MAP_MIN.x],"Ready" if id==0 else "Action #%02d"%id]
 	highlight.position=Regions.ORIGIN+(Vector3(cell)+Vector3.ONE*.5)*Regions.CELL
 
 func assign_region() -> void:
