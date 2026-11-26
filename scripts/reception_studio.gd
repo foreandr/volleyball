@@ -1,5 +1,11 @@
 extends Node3D
 
+const Regions = preload("res://scripts/reception_regions.gd")
+var cell := Vector3i(1,1,1)
+var lattice := MeshInstance3D.new()
+var highlight := MeshInstance3D.new()
+var region_label := Label.new()
+var depth_label := Label.new()
 const Catalog := "res://assets/reception_studio.json"
 const Dive = preload("res://scripts/forward_reception_dive.gd")
 const Save = preload("res://scripts/player_reception_save.gd")
@@ -115,6 +121,7 @@ func _ready() -> void:
 		StorySession.game_options.set_value("reception_studio","incoming_kmh",value)
 		StorySession.save_options()
 		draw_pose())
+	build_map(tiers)
 	tiers.add_child(leg_label)
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
@@ -147,7 +154,7 @@ func refresh() -> void:
 			child.queue_free()
 		var group := ButtonGroup.new()
 		for clip_index in range(-1,clips.size()):
-			if clip_index>=0 and clips[clip_index].kind=="overhead": continue
+			if clip_index>=0 and not Regions.movement(clips[clip_index]): continue
 			var choice := Button.new()
 			choice.text="Ready" if clip_index<0 else "%02d" % clips[clip_index].id
 			choice.toggle_mode=true
@@ -208,12 +215,13 @@ func position_camera() -> void:
 
 func draw_pose() -> void:
 	var c: Dictionary=clips[index]
-	var f := roundf(frame)
+	var f := clampf(roundf(frame),0.,c.frames)
 	seek.set_value_no_signal(f)
 	label.text=" %02d / %02d     Frame %d / %d " % [c.id,clips.size(),f,c.frames]
 	play_button.text="Pause" if playing else "Play"
-	sidebar.visible=c.kind!="overhead"
-	if c.kind=="overhead":
+	sidebar.visible=Regions.movement(c)
+	lattice.visible=sidebar.visible and region_label.is_visible_in_tree()
+	if not Regions.movement(c):
 		sample_layer(index,c,f)
 		return
 	sample_layer(legs,c,f)
@@ -256,7 +264,7 @@ func sample_layer(which: int, timeline: Dictionary, f: float) -> void:
 	if which!=index:
 		if f<=timeline.contact: f=f*c.contact/timeline.contact
 		else: f=remap(f,timeline.contact,timeline.frames,c.contact,c.frames)
-	var source_end: float=c.get("source_end",c.frames)
+	var source_end: float=minf(c.get("source_end",c.frames),c.frames)
 	var weight := smoothstep(5.,c.contact,f)*(1.-smoothstep(c.contact+6.,source_end-8.,f))
 	if weight<=0.:
 		player.position=Vector3.ZERO
@@ -278,23 +286,10 @@ func sample_layer(which: int, timeline: Dictionary, f: float) -> void:
 			rig.set_bone_pose(bone,rig.get_bone_pose(bone).interpolate_with(ready_pose[bone],maxf(recovery,1.-smoothstep(5.,15.,f))))
 		return
 	var pose: Array=ready_pose.duplicate()
-	var pelvis := rig.find_bone("pelvis")
-	var parent: Transform3D=author.world_pose(pose,rig.get_bone_parent(pelvis))
-	pose[pelvis].origin+=parent.basis.inverse()*Vector3(c.side*.65,-c.drop,c.forward*.34)*weight
+	Regions.legs(player,pose,c,weight)
 	author.rotate_world(pose,"spine_01",Vector3.RIGHT,deg_to_rad(c.lean)*weight*.65)
 	author.rotate_world(pose,"spine_03",Vector3.RIGHT,deg_to_rad(c.lean)*weight*.35)
 	author.rotate_world(pose,"spine_02",Vector3.BACK,-c.side*.36*weight)
-	for side in ["l","r"]:
-		var foot: Transform3D=author.feet[side]
-		var goal := foot.origin
-		if side==("r" if c.side<0 else "l"):
-			goal+=Vector3(c.side*.91,0,c.forward*.5)*weight
-			goal.y+=.07*sin(PI*weight)+float(c.get("knee_lift",0.))*weight
-		elif c.kind in ["knee","kneel","low","knee_slide","beach_drop","air_platform"]:
-			goal.z-=.25*weight
-		var pole := Vector3(.15 if side=="l" else -.15,0,1.)
-		author.limb(pose,"thigh_"+side,"calf_"+side,"foot_"+side,goal,pole,weight)
-		author.set_world_basis(pose,"foot_"+side,foot.basis)
 	var chest: Vector3=author.point(pose,"spine_03")
 	player.position.y=float(c.get("jump",0.))*weight
 	if c.kind=="overhead":
@@ -302,3 +297,78 @@ func sample_layer(which: int, timeline: Dictionary, f: float) -> void:
 			var sign_x := 1. if side=="l" else -1.
 			author.limb(pose,"upperarm_"+side,"lowerarm_"+side,"hand_"+side,chest+Vector3(sign_x*.12,.38,.30),Vector3(sign_x,-.1,.1),weight)
 	for bone in pose.size(): rig.set_bone_pose(bone,pose[bone])
+
+func build_map(tiers: VBoxContainer) -> void:
+	var toggle := CheckButton.new()
+	toggle.text="Contact map"
+	tiers.add_child(toggle)
+	var editor := VBoxContainer.new()
+	tiers.add_child(editor)
+	editor.hide()
+	var depth := HBoxContainer.new()
+	editor.add_child(depth)
+	button(depth,"‹",change_depth.bind(-1))
+	depth.add_child(depth_label)
+	button(depth,"›",change_depth.bind(1))
+	var cells := GridContainer.new()
+	cells.columns=3
+	editor.add_child(cells)
+	for y in [2,1,0]:
+		for x in 3:
+			var b := Button.new()
+			b.text=["Right","Center","Left"][x]
+			b.tooltip_text=["Low","Mid","High"][y]
+			b.pressed.connect(pick_cell.bind(x,y))
+			cells.add_child(b)
+	editor.add_child(region_label)
+	button(editor,"Assign current legs",assign_region)
+	toggle.toggled.connect(func(on): editor.visible=on; lattice.visible=on; update_region())
+	var lines := ImmediateMesh.new()
+	var ink := StandardMaterial3D.new()
+	ink.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED
+	ink.albedo_color=Color("68cfc9")
+	lines.surface_begin(Mesh.PRIMITIVE_LINES,ink)
+	for axis in 3:
+		for i in 4:
+			for j in 4:
+				var start := Vector3.ZERO
+				start[(axis+1)%3]=i
+				start[(axis+2)%3]=j
+				var end := start
+				end[axis]=3.
+				lines.surface_add_vertex(Regions.ORIGIN+start*Regions.CELL)
+				lines.surface_add_vertex(Regions.ORIGIN+end*Regions.CELL)
+	lines.surface_end()
+	lattice.mesh=lines
+	pivot.add_child(lattice)
+	var box := BoxMesh.new()
+	box.size=Regions.CELL
+	var tint := StandardMaterial3D.new()
+	tint.transparency=BaseMaterial3D.TRANSPARENCY_ALPHA
+	tint.albedo_color=Color(1.,.72,.1,.26)
+	box.material=tint
+	highlight.mesh=box
+	lattice.add_child(highlight)
+	lattice.hide()
+	update_region()
+
+func pick_cell(x: int,y: int) -> void:
+	cell.x=x
+	cell.y=y
+	update_region()
+
+func change_depth(by: int) -> void:
+	cell.z=posmod(cell.z+by,3)
+	update_region()
+
+func update_region() -> void:
+	depth_label.text=["Back","Body","Front"][cell.z]
+	var id := Regions.assignment(cell)
+	region_label.text="%s %s · %s" % [["Low","Mid","High"][cell.y],["right","center","left"][cell.x],"Ready" if id==0 else "Leg #%02d"%id]
+	highlight.position=Regions.ORIGIN+(Vector3(cell)+Vector3.ONE*.5)*Regions.CELL
+
+func assign_region() -> void:
+	var id: int=0 if legs<0 else clips[legs].id
+	StorySession.game_options.set_value("dig_regions",Regions.key(cell),id)
+	StorySession.save_options()
+	update_region()
