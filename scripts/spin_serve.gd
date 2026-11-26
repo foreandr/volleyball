@@ -290,7 +290,7 @@ func launch_velocity(start: Vector3, duration: float) -> Vector3:
 	return (target-start)/duration+Vector3.UP*(0.5*Flight.GRAVITY*duration)
 
 func preview_lane_offset(_lane: int, progress: float, launch: Vector3) -> Vector3:
-	var duration := flight_duration(preview_origin)
+	var duration := Flight.landing_time(preview_origin,launch)
 	return spin_offset(progress,launch,sidespin,spin_lift(preview_origin,launch,duration,sidespin))
 
 func begin_serve_curve() -> void:

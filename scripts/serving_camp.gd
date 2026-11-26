@@ -47,10 +47,10 @@ func add_reception_platform(passer: Node3D,backward: Animation) -> void:
 	receptions.append(platform)
 
 func first_contact_player() -> Node3D:
-	return receiving_setter if receiver==passers.size() else passers[receiver]
+	return cover_players[receiver]
 
 func second_contact_player() -> Node3D:
-	return passers[1] if receiver==passers.size() else receiving_setter
+	return passers[1] if first_contact_player()==receiving_setter else receiving_setter
 
 func route_point(slot: int) -> Vector3:
 	if slot==1:
@@ -70,6 +70,16 @@ var wall: Array[Node3D]=[]
 var wall_jumps := [null,null,null]
 var wall_committed := [false,false,false]
 var return_touched := false
+var wall_vertical_inches := 46.
+var attack_kmh := 105.
+var serve_test_kmh := 0.
+var cover_slot := -1
+var cover_clock := 0.
+var attack_results := [0.,0.,0.,0.]
+var middle_commit := false
+var last_shot_slot := -1
+var cover_players: Array[Node3D]=[]
+
 const ZERO_FLIGHT := .34
 const ONE_FLIGHT := .65
 var pass_in_system := false
@@ -145,6 +155,7 @@ func start_drill() -> void:
 	pin_hitter.reparent(pin_frame,true)
 	pin_frame.add_child(pin_attack)
 	pin_attack.configure_for_match(pin_hitter,Label.new())
+	pin_attack.chase_late_sets=true
 	pin_attack.add_child(pin_attack.status)
 	pin_attack.hide()
 	pin_attack.struck.connect(return_struck)
@@ -158,6 +169,9 @@ func start_drill() -> void:
 	preload("res://scripts/practice_kit.gd").apply(receiving_middle,false,11)
 	receiving_middle.rotation.y=PI
 	attack_options=[passers[2],receiving_middle,pin_hitter,passers[0]]
+	add_reception_platform(receiving_middle,backward)
+	add_reception_platform(pin_hitter,backward)
+	cover_players=[passers[0],passers[1],passers[2],receiving_setter,receiving_middle,pin_hitter]
 	receiving_team=[passers[0],passers[1],passers[2],receiving_middle,pin_hitter,receiving_setter]
 	passers[1].shirt_fabric.set_shader_parameter("fabric",Color("49a6ce"))
 	for i in TECHNIQUES.size():
@@ -167,10 +181,44 @@ func start_drill() -> void:
 		serve_contact_offsets.append(driver.preview_origin-driver.serve_start)
 		driver.hide()
 		serves.append(driver)
+	build_rally_sliders()
 	title.text="SERVING"
 	update_prompts("ready")
 	apply_camera.call_deferred()
 	next_serve()
+
+func build_rally_sliders() -> void:
+	var grid := GridContainer.new()
+	grid.columns=4
+	controls_row.get_parent().add_child(grid)
+	for spec in [["Block vertical", "block_vertical",1,60,46," in"],["Attack vertical","attack_vertical",1,60,42," in"],["Passing skill","passing_skill",0,100,65,""],["Setting skill","setting_skill",0,100,65,""],["Attack speed","attack_kmh",15,180,105," km/h"],["Serve speed","serve_kmh",0,300,0," km/h"]]:
+		var label := Label.new()
+		var slider := HSlider.new()
+		grid.add_child(label)
+		grid.add_child(slider)
+		slider.custom_minimum_size.x=104
+		slider.min_value=spec[2]
+		slider.max_value=spec[3]
+		slider.step=1
+		slider.value=StorySession.game_options.get_value("serving",spec[1],spec[4])
+		var apply := func(value: float):
+			label.text=str(spec[0])+"  "+("Auto" if spec[1]=="serve_kmh" and value==0 else str(int(value))+str(spec[5]))
+			match spec[1]:
+				"block_vertical": wall_vertical_inches=value
+				"attack_vertical": pin_attack.jump.max_height=value*.0254+.2032
+				"passing_skill":
+					for actor in cover_players:
+						actor.attributes["Forearm reception"]=value
+						actor.attributes["Hand reception"]=value
+				"setting_skill":
+					for actor in [receiving_setter,passers[1]]: actor.attributes["Hand setting"]=value
+				"attack_kmh": attack_kmh=value
+				"serve_kmh": serve_test_kmh=value
+		apply.call(slider.value)
+		slider.value_changed.connect(func(value):
+			apply.call(value)
+			StorySession.game_options.set_value("serving",spec[1],value)
+			StorySession.save_options())
 
 func update_prompts(_next: String) -> void:
 	if prompt_phase=="serving": return
@@ -181,6 +229,7 @@ func apply_camera() -> void:
 	place_practice_camera(Vector3(0,1.5,-4.4),distance*.48+2.)
 
 func configure_flight(shot,origin: Vector3) -> void:
+	shot.test_speed_mps=serve_test_kmh/3.6
 	if hit_style in [1,2]: shot.tape_clearance=float_clearance
 	shot.apex=maxf(origin.y+.03,(4.3 if hit_style==0 else 4.9)+serve_arc_offset)
 
@@ -221,7 +270,10 @@ func contact_deadline() -> float:
 
 func next_serve() -> void:
 	middle_31=randf()<.5
-	called_slot=3 if randf()<.12 else randi_range(0,2)
+	called_slot=3 if randf()<.22 else randi_range(0,2)
+	cover_slot=-1
+	last_shot_slot=-1
+	middle_commit=false
 	middle_decoy.active=false
 	for driver in serves: driver.hide()
 	pin_attack.enabled=false
@@ -231,6 +283,7 @@ func next_serve() -> void:
 	receiving_middle.position=MIDDLE_HOME
 	receiving_middle.rotation.y=PI
 	receiving_middle.play_action("idle")
+	if pin_hitter.get_parent()!=pin_frame: pin_hitter.reparent(pin_frame,true)
 	pin_hitter.position=pin_frame.to_local(HITTER_HOME)
 	pin_hitter.rotation.y=0.
 	pin_hitter.play_action("idle")
@@ -257,9 +310,8 @@ func next_serve() -> void:
 	ready.reset()
 	ball.position=ready.ball.position
 	ball.show()
-	receptions.back().reset()
+	for platform in receptions: platform.reset()
 	for i in passers.size():
-		receptions[i].reset()
 		passers[i].position=HOMES[i]
 		passers[i].play_action("idle")
 	receiving_jump.active=false
@@ -427,7 +479,7 @@ func _process(delta: float) -> void:
 	if phase in ["serve_attack","serve_return"]:
 		for slot in attack_options.size():
 			var actor := attack_options[slot]
-			if actor==pin_attack.setter or (actor==receiving_middle and middle_decoy.active): continue
+			if (phase=="serve_return" and cover_slot>=0 and actor==cover_players[cover_slot]) or (actor==pin_attack.setter and pin_attack.enabled) or (actor==receiving_middle and middle_decoy.active): continue
 			var cover := route_point(slot).lerp(pass_end,.28)
 			cover.z+=3.6 if slot==3 else 1.95
 			cover.y=.04
@@ -443,7 +495,9 @@ func _process(delta: float) -> void:
 	if phase=="serve_return":
 		var previous := ball.global_position
 		advance_missed_ball(delta,true)
-		if not return_touched: return_touched=resolve_block_contact(previous,wall_jumps,-1.)
+		if attack_floor_pending and not attack_decided:
+			if return_touched: try_cover(previous,delta)
+			else: return_touched=resolve_block_contact(previous,wall_jumps,-1.)
 		if not attack_floor_pending: floor_linger+=delta
 		if floor_linger>.55: next_serve()
 		return
@@ -487,8 +541,8 @@ func _process(delta: float) -> void:
 				shot.origin=Contact.palm(setter,"r") if toss_style<2 else ball.position
 				configure_flight(shot,shot.origin)
 				shot.target=destination+Vector3(0,0,-error*8.)
-				shot.planned_duration=shot.flight_duration(shot.origin)
-				shot.velocity=shot.launch_velocity(shot.origin,shot.planned_duration)
+				shot.velocity=shot.aimed_velocity(shot.origin)
+				shot.planned_duration=preload("res://scripts/pass_flight.gd").landing_time(shot.origin,shot.velocity)
 				shot.begin_serve_curve()
 				plan_serve_reception(shot)
 				shot.net_hit=BallNet.first_hit(shot.flight_point,0.,shot.planned_duration)
@@ -586,6 +640,9 @@ func step_serve_reception(shot,previous: Vector3,delta: float) -> void:
 	if platform.hand_setting and not is_finite(platform.release_time):
 		ball.position=platform.platform_center()
 		return
+	begin_offense(passer,platform)
+
+func begin_offense(passer: Node3D,platform: Reception) -> void:
 	pass_start=platform.release_point if platform.hand_setting else platform.touch
 	var velocity := platform.outgoing
 	var height: float=second_contact_player().height_cm*.0118
@@ -605,18 +662,21 @@ func step_serve_reception(shot,previous: Vector3,delta: float) -> void:
 	var chase_time := (pass_end-second_contact_player().global_position).slide(Vector3.UP).length()/4.8
 	pass_in_system=pass_end.z<=BallNet.NET_Z+3. and chase_time+.25<pass_duration
 	var middle_ready := (route_point(1)+Vector3.BACK*1.6-receiving_middle.global_position).slide(Vector3.UP).length()/4.8+.38<pass_duration
+	middle_commit=pass_in_system and middle_ready and attack_results[1]>.85 and randf()<clampf(.5+.14*attack_results[1],.5,.92)
 	var best := -INF
 	for slot in attack_options.size():
 		var actor := attack_options[slot]
 		if actor==passer and platform.low_save.active: continue
 		if slot in [1,3] and not pass_in_system: continue
 		if slot==3 and not middle_ready: continue
-		if slot==3 and called_slot!=3: continue
+		if slot==3 and not middle_commit and called_slot!=3: continue
 		var staging := route_point(slot)+Vector3.BACK*1.6
 		var travel := (staging-actor.global_position).slide(Vector3.UP).length()/4.8
 		var recovery := .48 if actor==passer else 0.
 		if slot==1 and travel>pass_duration+ONE_FLIGHT-.25: continue
 		var score := randf()*.85+(.85 if slot==called_slot else 0.)-.50*travel-recovery
+		score+=attack_results[slot]*.40
+		if middle_commit: score+=[.55,-1.4,.55,1.15][slot]
 		if not pass_in_system and slot in [0,2]: score+=.65
 		if score>best:
 			best=score
@@ -768,11 +828,12 @@ func step_reception_rally(delta: float) -> void:
 			else: set_duration=1.60
 			var duration := set_duration
 			var velocity := (pass_end-pass_start)/duration+Vector3.UP*4.905*duration
-			var target := Vector3(randf_range(-3.8,2.),.11,randf_range(-3.,1.))
+			var target := scoring_target(pass_end)
+			pin_attack.spike_strength=attack_kmh/(27.*3.6)*(1.22 if attack_slot==1 else 1.)
 			var attacker := attack_options[attack_slot]
 			if attacker.get_parent()!=pin_frame: attacker.reparent(pin_frame,true)
 			pin_attack.jump.front_limit=.96 if attack_slot==3 else 3.35
-			if pin_attack.enabled and pin_attack.setter==attacker:
+			if pin_attack.enabled and pin_attack.setter==attacker and pin_attack.stage==pin_attack.Stage.SET:
 				pin_attack.pass_origin=pin_frame.to_local(pass_start)
 				pin_attack.pass_motion=pin_frame.global_basis.inverse()*velocity
 				pin_attack.stage_start=pin_attack.clock
@@ -780,6 +841,7 @@ func step_reception_rally(delta: float) -> void:
 				pin_attack.flight_end=preload("res://scripts/pass_flight.gd").landing_time(pin_attack.pass_origin,pin_attack.pass_motion)
 				pin_attack.swing_aim=pin_frame.to_local(target)
 			else: pin_attack.start_set(attacker,pin_frame.to_local(pass_start),pin_frame.global_basis.inverse()*velocity,pin_frame.to_local(pass_end),pin_frame.to_local(target),0.,true)
+			trace("serve_attack_set",{"slot":attack_slot,"duration":duration,"hitter_gap_m":ready_gap,"approach_started":prepared,"in_system":pass_in_system,"middle_commit":middle_commit})
 			phase="serve_attack"
 	else:
 		if receiving_jump.active: receiving_jump.step(second_contact_player(),delta,Vector2.ZERO)
@@ -791,7 +853,97 @@ func step_reception_rally(delta: float) -> void:
 		ball.position=pass_start.lerp(pass_end,t)+Vector3.UP*4.905*set_duration*set_duration*t*(1.-t)
 		if ball.position.y<.11: next_serve()
 
+func scoring_target(origin: Vector3) -> Vector3:
+	var best := -INF
+	var target := Vector3(0,.11,-3.)
+	for x: float in [-4.,-2.,0.,2.,4.]:
+		for z: float in [-4.,-1.,1.]:
+			var point := Vector3(x,.11,z)
+			var u := clampf((BallNet.NET_Z-origin.z)/(point.z-origin.z),0.,1.)
+			var crossing := origin.lerp(point,u)
+			var gap := INF
+			for blocker in wall:
+				gap=minf(gap,absf(crossing.x-blocker.position.x))
+			var score := minf(gap,1.6)+randf()*.22-2.5*maxf(0.,BallNet.NET_TOP+.13-crossing.y)
+			if score>best:
+				best=score
+				target=point
+	return target
+
+func attack_surface_contact(point: Vector3,floor_hit: bool) -> void:
+	if phase!="serve_return":
+		super.attack_surface_contact(point,floor_hit)
+		return
+	if attack_decided: return
+	attack_decided=true
+	var outside := absf(point.x)>4.5 or absf(point.z-BallNet.NET_Z)>9. or not floor_hit
+	var scored := return_touched if outside else point.z<BallNet.NET_Z
+	if last_shot_slot>=0:
+		for i in attack_results.size(): attack_results[i]*=.88
+		attack_results[last_shot_slot]+=1. if scored else -.55
+	message.text=("Block out" if outside and return_touched else "Point") if scored else "Ball down"
+
+func try_cover(previous: Vector3,delta: float) -> void:
+	var now := ball.global_position
+	var downward := drop_velocity.y
+	var until_floor := (downward+sqrt(maxf(0.,downward*downward+19.62*(now.y-.11))))/9.81
+	var landing := now+drop_velocity*until_floor
+	if absf(landing.x)>4.5+Contact.BALL_RADIUS or landing.z>BallNet.NET_Z+9.+Contact.BALL_RADIUS: return
+	var until_pass := clampf((downward+sqrt(maxf(0.,downward*downward+19.62*(now.y-.95))))/9.81,0.,until_floor)
+	var intercept := now+drop_velocity*until_pass+Vector3.DOWN*4.905*until_pass*until_pass
+	if intercept.z<BallNet.NET_Z or absf(intercept.x)>4.85 or intercept.z>BallNet.NET_Z+9.35: return
+	if cover_slot<0:
+		var nearest := INF
+		for i in cover_players.size():
+			var actor := cover_players[i]
+			if (actor==pin_attack.setter and pin_attack.enabled) or (actor==receiving_middle and middle_decoy.active) or (actor==second_contact_player() and receiving_jump.active): continue
+			var gap := (actor.global_position-intercept).slide(Vector3.UP).length()
+			if gap<nearest:
+				nearest=gap
+				cover_slot=i
+		if cover_slot<0: return
+		var defender := cover_players[cover_slot]
+		if defender.get_parent()!=world: defender.reparent(world,true)
+		var platform := receptions[cover_slot]
+		platform.reset()
+		platform.hand_setting=false
+		platform.destination=Vector2(SETTER_BASE.x,SETTER_BASE.z)
+		platform.height=4.1
+		platform.quick_low_save=true
+		platform.allow_auto_dive=true
+		platform.passing_skill_override=defender.effective_rating("Forearm reception")
+		cover_clock=0.
+	var defender := cover_players[cover_slot]
+	var platform := receptions[cover_slot]
+	var start := cover_clock
+	cover_clock+=delta
+	if not platform.low_save.active:
+		move_receiver(defender,Vector3(intercept.x,.04,intercept.z+.38),delta)
+		face_receive_ball(defender,now,delta)
+	if until_pass>.38: return
+	if not is_finite(platform.pressed_at): platform.queue_bump(start)
+	var path := func(t: float) -> Vector3:
+		if t<=cover_clock: return previous.lerp(now,clampf((t-start)/maxf(delta,.001),0.,1.))
+		var ahead := t-cover_clock
+		return now+drop_velocity*ahead+Vector3.DOWN*4.905*ahead*ahead
+	platform.update_attempt(cover_clock,start,cover_clock+until_floor,path,drop_velocity,delta,cover_clock+until_pass)
+	if not is_finite(platform.touch_time): return
+	receiver=cover_slot
+	cover_slot=-1
+	flight_age=cover_clock
+	called_slot=randi_range(0,3)
+	wall_committed.fill(false)
+	return_touched=false
+	trace("block_covered",{"player":defender.player_number,"diving":platform.low_save.active})
+	begin_offense(defender,platform)
+
 func return_struck(_actor: Node3D,point: Vector3,velocity: Vector3,_spin: float) -> void:
+	if phase!="serve_attack": return
+	trace("serve_attack_strike",{"slot":attack_slot,"speed_kmh":velocity.length()*3.6,"point":str(point)})
+	last_shot_slot=attack_slot
+	attack_decided=false
+	cover_slot=-1
+	return_touched=false
 	ball.global_position=point
 	drop_velocity=velocity
 	drop_net_hit.clear()
@@ -811,23 +963,25 @@ func step_serve_wall(delta: float) -> void:
 		if block!=null:
 			if not block.step(delta,ball.global_position): wall_jumps[i]=null
 			continue
-		if phase!="serve_attack":
+		var committing := middle_commit and i==1 and phase=="serve_pass" and set_at-pass_clock<.43
+		if phase!="serve_attack" and not committing:
 			actor.animator.advance(delta)
 			continue
 		var lead := clampi(roundi(pass_end.x/2.75)+1,0,2)
 		var goal := clampf(pass_end.x+(i-lead)*.74,-4.35,4.35)
+		if committing: goal=route_point(1).x
 		var gap := goal-actor.position.x
 		var step := clampf(gap,-3.6*delta,3.6*delta)
 		actor.position.x+=step
 		if not shuffle_steps.has(actor): shuffle_steps[actor]=preload("res://scripts/directional_footwork.gd").new(actor)
 		actor.animator.advance(delta)
 		shuffle_steps[actor].block_step(Vector3.RIGHT*step/maxf(delta,.001),gap,0.,not wall_committed[i],false,delta)
-		if not wall_committed[i] and absf(gap)<.82 and pin_attack.pin_arrival-pass_clock<=.51:
+		if not wall_committed[i] and absf(gap)<.82 and (committing or pin_attack.pin_arrival-pass_clock<=.51):
 			block=PracticeBlock.new()
 			block.aggressive_press=true
 			block.track_near_ball=true
 			block.net_heading=0.
-			block.jump_height=PracticeBlock.HEIGHT*actor.stamina.effectiveness()
+			block.jump_height=wall_vertical_inches*.0254*actor.stamina.effectiveness()
 			block.begin(actor)
 			actor.stamina.spend(5,"Block")
 			wall_committed[i]=true

@@ -3,6 +3,7 @@ extends "res://scripts/attack_drill.gd"
 signal struck(actor: Node3D, point: Vector3, velocity: Vector3, spin: float)
 
 var enabled := false
+var chase_late_sets := false
 var spike_strength := 1.0
 # Jog_Fwd is a loop. The leading ankle reaches support at 0.023 s and half a cycle later.
 const JOG_LEFT_PLANT_PHASE := 0.025
@@ -112,7 +113,10 @@ func adaptive_approach_timing() -> bool:
 
 func tick_attack(delta: float) -> void:
 	if not enabled: return
-	if stage == Stage.SET: queued_approach_input(delta)
+	if stage == Stage.SET:
+		queued_approach_input(delta)
+		if chase_late_sets and not jump.active and not is_finite(swing_started):
+			chase_committed_set(delta)
 	step_jump(delta)
 	clock += delta
 	var age := clock-stage_start
@@ -123,6 +127,34 @@ func tick_attack(delta: float) -> void:
 		pose_bow_draw(delta,1.0-smoothstep(0.19,SWING_FOLLOW_TIME,age),swing_contact,swing_contact_extension,follow)
 	elif not jump.active:
 		enabled = false
+
+func chase_committed_set(delta: float) -> void:
+	var remaining := pin_arrival-(clock-stage_start)
+	if remaining<-.08: return
+	var contact := flight_point(pass_origin,pass_motion,pin_arrival)
+	var plant := spike_body_target(contact)
+	var gap := (plant-setter.position).slide(Vector3.UP)
+	var rise := jump.flight_duration(jump.max_height-.2032,true)*.46
+	if remaining>rise+.18:
+		if gap.length()>.95:
+			var step := gap.limit_length(minf(gap.length()-.95,4.8*delta))
+			setter.position+=step
+			setter.rotation.y=rotate_toward(setter.rotation.y,atan2(gap.x,gap.z),8.*delta)
+			setter.play_ground_gait(step.length()/maxf(delta,.001))
+			setter.animator.advance(delta)
+		return
+	if gap.length()>2.1:
+		var step := gap.limit_length(4.8*delta)
+		setter.position+=step
+		setter.play_ground_gait(step.length()/maxf(delta,.001))
+		setter.animator.advance(delta)
+		return
+	approach_jump_queued=false
+	approach_steps=2
+	approach_intercept=contact
+	approach_expected_hit_at=stage_start+pin_arrival
+	begin_attack_jump(Vector2.ZERO,clampf(remaining-rise,.115,.25),jump.max_height-.2032)
+	jump.release()
 
 func spike_body_target(ball_target: Vector3) -> Vector3:
 	var shot := (swing_aim-ball_target).slide(Vector3.UP).normalized()

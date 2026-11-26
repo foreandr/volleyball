@@ -113,3 +113,5 @@ In rotation-one serve receive the setter signals the intended attacker and the m
 
 The setter squares to zone four for front and back sets. The libero takes second contact after the setter receives. Deep passes rule out pipe. On an in-system pass the middle approaches before release. An airborne middle gets zero tempo and a grounded middle gets a one. Ready pin and pipe hitters can also receive a one. Short block closes use lifted shuffle steps, a stable hold allows a deep squat walk, and longer CPU closes turn into a swing block.
 The pipe is an occasional in-system combination. A middle must be available for the zero and airborne at release. A broken combination goes to a pin.
+
+Serve rallies continue after playable blocks. The nearest available teammate covers, and the libero sets if the setter took the first touch. Recent scoring makes hitters more attractive. A successful quick draws a middle commit and opens the pipe and pins. Serving HUD skills and verticals apply to the receiving offense and serving-side wall. The serve speed override preserves launch direction and allows testing up to 300 km/h.
