@@ -130,6 +130,11 @@ var first_pass_dropping := false
 var pass_duration := 1.25
 const Reception = preload("res://scripts/bump_setting.gd")
 var receptions: Array[Reception]=[]
+var dig_platforms := {}
+var dig_clock := 0.
+var off_blocker := -1
+var server_dig_buffer := 0.
+
 var platform_clips: Array[Animation]=[]
 var receiver := 0
 var hand_sound := AudioStreamPlayer.new()
@@ -213,6 +218,10 @@ func start_drill() -> void:
 	attack_options=[passers[2],receiving_middle,pin_hitter,passers[0]]
 	add_reception_platform(receiving_middle,backward)
 	add_reception_platform(pin_hitter,backward)
+	for defender in [hitter]+wall:
+		add_reception_platform(defender,backward)
+		var platform: Reception=receptions.pop_back()
+		dig_platforms[defender]=platform
 	cover_players=[passers[0],passers[1],passers[2],receiving_setter,receiving_middle,pin_hitter]
 	receiving_team=[passers[0],passers[1],passers[2],receiving_middle,pin_hitter,receiving_setter]
 	passers[1].shirt_fabric.set_shader_parameter("fabric",Color("49a6ce"))
@@ -263,6 +272,11 @@ func build_rally_sliders() -> void:
 			StorySession.save_options())
 
 func update_prompts(_next: String) -> void:
+	if _next=="defend":
+		if prompt_phase!="defend":
+			prompt_phase="defend"
+			Xbox.prompts(controls_row,[["LS","Move"],["LT","Shuffle"],["RT","Sprint"],["X","Dig"]])
+		return
 	if prompt_phase=="serving": return
 	prompt_phase="serving"
 	Xbox.prompts(controls_row,[["A","Spin toss"],["B","Float toss"],["X","Standing toss"],["Y","Underhand"],["RS","Pre-aim / hold for height"],["LS","Toss aim / hold for height"],["D-pad Up/Down","Topspin / float"],["D-pad Left/Right","Sidespin"]])
@@ -316,6 +330,11 @@ func contact_deadline() -> float:
 
 func next_serve() -> void:
 	first_pass_dropping=false
+	off_blocker=-1
+	server_dig_buffer=0.
+	dig_clock=0.
+	for platform in dig_platforms.values(): platform.reset()
+	update_prompts("ready")
 	replay_rally+=1
 	middle_31=randf()<.5
 	called_slot=3 if randf()<.22 else randi_range(0,2)
@@ -372,6 +391,14 @@ func next_serve() -> void:
 
 func _input(event: InputEvent) -> void:
 	if get_tree().paused or replay_inspector.active: return
+	if not settings.visible and phase in ["serve_pass","serve_attack","serve_return"]:
+		var dig_input: bool= (event is InputEventKey and event.keycode==KEY_Q and not event.echo) or (event is InputEventJoypadButton and event.button_index==StorySession.pad_bindings[1])
+		if dig_input:
+			if not event.pressed:
+				server_dig_buffer=.55
+				if phase=="serve_return": dig_platforms[hitter].queue_bump(dig_clock)
+			get_viewport().set_input_as_handled()
+			return
 	if not settings.visible and event is InputEventJoypadButton:
 		var directions := [JOY_BUTTON_DPAD_UP,JOY_BUTTON_DPAD_LEFT,JOY_BUTTON_DPAD_RIGHT,JOY_BUTTON_DPAD_DOWN]
 		if phase in ["serve_ready","serve_toss"] and event.button_index in directions and event.pressed:
@@ -459,7 +486,7 @@ func self_set_step(motion, previous_time: float,delta: float) -> bool:
 		flight_age=0.
 	return hit
 
-func walk_server(delta: float) -> void:
+func walk_server(delta: float, defending := false) -> void:
 	var stick := Vector2(axis(JOY_AXIS_LEFT_X),axis(JOY_AXIS_LEFT_Y))
 	stick+=Vector2(int(Input.is_key_pressed(KEY_D))-int(Input.is_key_pressed(KEY_A)),int(Input.is_key_pressed(KEY_S))-int(Input.is_key_pressed(KEY_W)))
 	var right := camera.global_basis.x.slide(Vector3.UP).normalized()
@@ -468,19 +495,21 @@ func walk_server(delta: float) -> void:
 	var focus := GroundControls.focus(axis)
 	var sprint: bool= GroundControls.sprint(axis) and hitter.stamina.can_sprint()
 	var velocity := direction.normalized()*amount*GroundControls.speed(focus,sprint)
-	var old := serve_station
-	serve_station+=velocity*delta
-	serve_station.x=clampf(serve_station.x,-4.5,4.5)
-	serve_station.z=clampf(serve_station.z,-10.1,-5.1)
-	velocity=(serve_station-old)/maxf(delta,.001)
+	var old := hitter.position if defending else serve_station
+	var point := old+velocity*delta
+	point.x=clampf(point.x,-5.8 if defending else -4.5,5.8 if defending else 4.5)
+	point.z=clampf(point.z,-10.1,BallNet.NET_Z-.35 if defending else -5.1)
+	velocity=(point-old)/maxf(delta,.001)
 	if sprint and velocity.length()>.1: hitter.stamina.spend(delta*hitter.stamina.SPRINT_DRAIN,"Sprint")
-	hitter.position=serve_station
-	GroundControls.face(hitter,Vector3.BACK if focus else velocity,delta)
+	hitter.position=point
+	if not defending: serve_station=point
+	var facing := ball.global_position-hitter.global_position if focus and defending else (Vector3.BACK if focus else velocity)
+	GroundControls.face(hitter,facing,delta)
 	hitter.play_ground_gait(0. if focus else velocity.length())
 	hitter.animator.advance(delta)
 	if not shuffle_steps.has(hitter): shuffle_steps[hitter]=preload("res://scripts/directional_footwork.gd").new(hitter)
 	GroundControls.shuffle(hitter,shuffle_steps[hitter],velocity,focus,delta)
-	ball.position=Contact.palm(hitter,"l")+Vector3.UP*.10
+	if not defending: ball.position=Contact.palm(hitter,"l")+Vector3.UP*.10
 
 func _process(delta: float) -> void:
 	if settings.visible or get_tree().paused or replay_inspector.active:
@@ -498,6 +527,15 @@ func _process(delta: float) -> void:
 	receiving_setter.stamina.recover(delta)
 	pin_hitter.stamina.recover(delta)
 	receiving_middle.stamina.recover(delta)
+	server_dig_buffer=maxf(0.,server_dig_buffer-delta)
+	if phase in ["serve_flight","serve_pass","serve_attack","serve_return"] and not attack_jump.active and (toss_style<2 or serve_clock>serves[toss_style].recovery_end()):
+		walk_server(delta,true)
+		update_prompts("defend")
+	if phase=="server_dig":
+		advance_missed_ball(delta,true)
+		if not attack_floor_pending: floor_linger+=delta
+		if floor_linger>.75: next_serve()
+		return
 	var started_in_return := phase=="serve_return"
 	if pin_attack.enabled:
 		if phase=="serve_attack" and not aim_read and pin_attack.pin_arrival-pass_clock<=.23:
@@ -559,6 +597,7 @@ func _process(delta: float) -> void:
 		var was_touched := return_touched
 		advance_missed_ball(delta,true)
 		if attack_floor_pending and not attack_decided and was_touched: try_cover(previous,delta)
+		if phase=="server_dig": return
 		if not attack_floor_pending: floor_linger+=delta
 		if floor_linger>.55: next_serve()
 		return
@@ -621,7 +660,7 @@ func _process(delta: float) -> void:
 		serve_clock+=delta
 		if toss_style<2:
 			if attack_jump.active: attack_jump.step(hitter,delta,Vector2.ZERO)
-			if swing_time>=0. and swing_time<=.65:
+			if attack_jump.active and swing_time>=0. and swing_time<=.65:
 				swing_time+=delta
 				var state := phase
 				phase="spike" if state!="serve_miss" else "drop"
@@ -799,6 +838,7 @@ func begin_offense(passer: Node3D,platform: Reception) -> void:
 			best=score
 			attack_slot=slot
 
+	off_blocker=-1
 	set_at=pass_duration
 	pass_clock=0.
 	ball.position=pass_start
@@ -1110,9 +1150,38 @@ func scoring_target(origin: Vector3) -> Vector3:
 	return target
 
 func block_on_flight_segment(previous: Vector3) -> bool:
-	if phase!="serve_return" or return_touched or not attack_floor_pending: return false
-	return_touched=resolve_block_contact(previous,wall_jumps,-1.)
-	return return_touched
+	if phase!="serve_return" or not attack_floor_pending: return false
+	if not return_touched:
+		return_touched=resolve_block_contact(previous,wall_jumps,-1.)
+		if return_touched: return true
+	var now := ball.global_position
+	var dt := previous.distance_to(now)/maxf(.01,drop_velocity.length())
+	var start := dig_clock
+	dig_clock+=dt
+	if now.z>BallNet.NET_Z or dt<=0.: return false
+	var until_floor := preload("res://scripts/pass_flight.gd").landing_time(now,drop_velocity)
+	var path := func(t: float) -> Vector3:
+		if t<=dig_clock: return previous.lerp(now,clampf((t-start)/dt,0.,1.))
+		var ahead := t-dig_clock
+		return now+drop_velocity*ahead+Vector3.DOWN*4.905*ahead*ahead
+	var defenders := [hitter]
+	if off_blocker>=0: defenders.append(wall[off_blocker])
+	for defender in defenders:
+		var platform: Reception=dig_platforms[defender]
+		if defender!=hitter and until_floor<.55: platform.queue_bump(start)
+		if not is_finite(platform.pressed_at): continue
+		platform.update_attempt(dig_clock,start,dig_clock+until_floor,path,drop_velocity,dt,dig_clock+until_floor)
+		if not is_finite(platform.touch_time): continue
+		ball.position=platform.touch
+		drop_velocity=platform.outgoing
+		drop_net_hit.clear()
+		hard_spike_floor_pending=false
+		floor_linger=0.
+		phase="server_dig"
+		message.text="Dig"
+		trace("server_side_dig",{"player":defender.player_number,"user":defender==hitter})
+		return true
+	return false
 
 func on_receiving_court(point: Vector3) -> bool:
 	return absf(point.x)<=4.5 and point.z>=BallNet.NET_Z and point.z<=BallNet.NET_Z+9.
@@ -1257,6 +1326,16 @@ func return_struck(_actor: Node3D,point: Vector3,velocity: Vector3,_spin: float)
 	attack_floor_pending=true
 	hard_spike_floor_pending=pin_attack.rally_shot not in ["tip","roll"]
 	if pin_attack.rally_shot!="tip": hand_impact.play()
+	dig_clock=0.
+	for defender in dig_platforms:
+		var platform: Reception=dig_platforms[defender]
+		platform.reset()
+		platform.destination=Vector2(0.,BallNet.NET_Z-1.5)
+		platform.height=3.7
+		platform.green_forearm_allowance=.30
+		platform.allow_auto_dive=true
+		platform.quick_low_save=true
+	if server_dig_buffer>0.: dig_platforms[hitter].queue_bump(0.)
 	phase="serve_return"
 
 func step_serve_wall(delta: float) -> void:
@@ -1267,6 +1346,20 @@ func step_serve_wall(delta: float) -> void:
 		if block!=null:
 			block.read_air_lane(ball.global_position,wall)
 			if not block.step(delta,ball.global_position): wall_jumps[i]=null
+			continue
+		if phase=="serve_attack":
+			var far_pin := 2 if pass_end.x<0. else 0
+			if i==far_pin and not wall_committed[i] and absf(actor.position.x-pass_end.x)>3.6*maxf(0.,set_duration-pass_clock-.40)+1.35: off_blocker=i
+		if i==off_blocker and phase in ["serve_attack","serve_return"]:
+			var cover := Vector3((i-1)*2.15,.04,BallNet.NET_Z-2.4)
+			if phase=="serve_return" and ball.position.z<=BallNet.NET_Z+.3:
+				var ahead := minf(.6,preload("res://scripts/pass_flight.gd").landing_time(ball.position,drop_velocity))
+				cover=ball.position+drop_velocity*ahead
+				cover.z=clampf(cover.z,-4.7,BallNet.NET_Z-.35)
+				cover.x=clampf(cover.x,-4.8,4.8)
+				cover.y=.04
+			if not dig_platforms[actor].low_save.active:
+				move_receiver(actor,cover,delta,ball.global_position-actor.global_position,GroundControls.speed(true,false),true)
 			continue
 		var middle_up := receiving_middle.global_position.y>MIDDLE_HOME.y+.04 and (middle_decoy.jump.active or (pin_attack.setter==receiving_middle and pin_attack.jump.active))
 		var committing := middle_commit and pass_in_system and middle_up and i==1 and phase=="serve_pass"

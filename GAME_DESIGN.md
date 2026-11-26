@@ -4,6 +4,8 @@ The following describes the intended full game. A menu route, stored rating or p
 
 ## Indoor practice baseline
 
+In serve-and-defend rallies the server can move into defense after recovering from the serve. A pin blocker who cannot close in time peels into short defense, shuffling while facing the ball and attempting digs alongside the server.
+
 CPU hitters recover off the net with a forward-facing shuffle toward the three-metre line before their next approach.
 
 During live play, coaches and athletes track the active ball with bounded head yaw and pitch. Tracking eases off during fast chases and when the ball passes behind them.
