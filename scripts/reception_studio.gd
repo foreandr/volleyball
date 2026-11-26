@@ -1,7 +1,10 @@
 extends Node3D
 
 const Regions = preload("res://scripts/reception_regions.gd")
-var cell := Vector3i(1,2,0)
+const HEAD_CELL := Vector3i(1,2,1)
+var cell := HEAD_CELL
+var quadrant := 0
+var hover_number := Label3D.new()
 const MAP_MIN := Vector3i.ZERO
 const MAP_MAX := Vector3i(2,2,2)
 const WIDTHS := ["Right","Center","Left"]
@@ -303,6 +306,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			var nearest := INF
 			var chosen := -1
 			var address := cell
+			var part := 0
 			for i in defenders.size():
 				var grid := grid_for(i)
 				var origin := grid.position+MAP_ORIGIN
@@ -315,14 +319,20 @@ func _unhandled_input(event: InputEvent) -> void:
 				if span.y<=span.x or span.x>=nearest: continue
 				var inside := ray.lerp(end,span.x)+direction*.00001
 				address=Vector3i(((grid.to_local(inside)-MAP_ORIGIN)/CELL_SIZE).floor()).clamp(MAP_MIN,MAP_MAX)
+				var center := region_center(address,0,false)
+				var local_hit := grid.to_local(inside)
+				part=(int(local_hit.x>=center.x)+2*int(local_hit.y<center.y)) if address==HEAD_CELL else 0
 				chosen=i
 				nearest=span.x
 			if chosen>=0:
-				hover.global_position=grid_for(chosen).position+MAP_ORIGIN+(Vector3(address)+Vector3.ONE*.5)*CELL_SIZE
+				hover.global_position=grid_for(chosen).position+region_center(address,part)
+				hover.scale=region_size(address)/CELL_SIZE
+				hover_number.text=region_number(address,part)
 				hover.show()
 				if click and event.ctrl_pressed:
 					activate_receiver(chosen)
 					cell=address
+					quadrant=part
 					preview_cell()
 					return
 	if event is InputEventMouseMotion and event.button_mask & MOUSE_BUTTON_MASK_MIDDLE:
@@ -432,7 +442,7 @@ func draw_pose() -> void:
 		var gap := contact_point.distance_to(target)
 		miss_label.text="Miss · %d cm gap"%roundi(gap*100.)
 		if playing and not miss_logged:
-			print("studio_miss ",Time.get_datetime_string_from_system()," defender=",receiving+1," cell=",cell," assigned=",cell_action()," playing=",c.id," target=",target," contact=",contact_point," gap_m=",gap)
+			print("studio_miss ",Time.get_datetime_string_from_system()," defender=",receiving+1," cell=",cell," region=",region_number(cell,quadrant)," assigned=",cell_action()," playing=",c.id," target=",target," contact=",contact_point," gap_m=",gap)
 			miss_logged=true
 	sample_receiver(c,clampf(frame+lead_frames,0.,c.frames) if lead_frames>0. else f)
 	pass_end_frame=0.
@@ -765,6 +775,10 @@ func build_map(tiers: VBoxContainer) -> void:
 	hover_style.albedo_color=Color(.12,.85,1.,.38)
 	hover.material_override=hover_style
 	lattice.add_child(hover)
+	hover.add_child(hover_number)
+	hover_number.billboard=BaseMaterial3D.BILLBOARD_ENABLED
+	hover_number.font_size=32
+	hover_number.no_depth_test=true
 	hover.hide()
 	lattice.position=pivot.position
 	update_region()
@@ -774,9 +788,31 @@ func change_depth(by: int) -> void:
 	preview_cell()
 
 func cell_action() -> int:
-	return assigned_action(cell)
+	return assigned_action(cell,quadrant)
 
-func assigned_action(address: Vector3i) -> int:
+func region_number(address: Vector3i,part: int) -> String:
+	var number := str(1+address.x+3*address.y+9*address.z)
+	return number+"."+str(part+1) if address==HEAD_CELL else number
+
+func region_size(address: Vector3i) -> Vector3:
+	return CELL_SIZE*Vector3(.5,.5,1.) if address==HEAD_CELL else CELL_SIZE
+
+func region_center(address: Vector3i,part: int,subdivide := true) -> Vector3:
+	var center := MAP_ORIGIN+(Vector3(address)+Vector3.ONE*.5)*CELL_SIZE
+	if address==HEAD_CELL and subdivide:
+		center+=Vector3(-.25 if part%2==0 else .25,.25 if part<2 else -.25,0.)*CELL_SIZE
+	return center
+
+func assignment_key(address: Vector3i,part: int) -> String:
+	var key := Regions.key(address)
+	return key+"."+str(part+1) if address==HEAD_CELL else key
+
+func assigned_action(address: Vector3i,part: int) -> int:
+	var child_key := assignment_key(address,part)
+	if address==HEAD_CELL:
+		if StorySession.game_options.has_section_key("studio_three_rows",child_key):
+			return int(StorySession.game_options.get_value("studio_three_rows",child_key))
+		if part!=0: return 0
 	var key := Regions.key(address)
 	if StorySession.game_options.has_section_key("studio_three_rows",key):
 		return int(StorySession.game_options.get_value("studio_three_rows",key))
@@ -788,7 +824,7 @@ func assigned_action(address: Vector3i) -> int:
 
 func pick_feed_point() -> void:
 	miss_logged=false
-	var half := CELL_SIZE*.5
+	var half := region_size(cell)*.5
 	var bottom := maxf(-half.y,.145-highlight.global_position.y)
 	feed_offset=Vector3(randf_range(-half.x,half.x),randf_range(bottom,half.y),randf_range(-half.z,half.z))
 
@@ -810,12 +846,13 @@ func preview_cell() -> void:
 func update_region() -> void:
 	depth_label.text=["Back","Body","Front"][cell.z-MAP_MIN.z]
 	var id := cell_action()
-	region_label.text="%s %s - %s" % [HEIGHTS[cell.y],WIDTHS[cell.x-MAP_MIN.x],"Unassigned" if id==0 else "Action #%02d"%id]
-	highlight.position=MAP_ORIGIN+(Vector3(cell)+Vector3.ONE*.5)*CELL_SIZE
+	region_label.text="#%s · %s %s - %s" % [region_number(cell,quadrant),HEIGHTS[cell.y],WIDTHS[cell.x-MAP_MIN.x],"Unassigned" if id==0 else "Action #%02d"%id]
+	highlight.scale=region_size(cell)/CELL_SIZE
+	highlight.position=region_center(cell,quadrant)
 
 func assign_region() -> void:
 	var id: int=0 if legs<0 else clips[legs].id
-	StorySession.game_options.set_value("studio_three_rows",Regions.key(cell),id)
+	StorySession.game_options.set_value("studio_three_rows",assignment_key(cell,quadrant),id)
 	StorySession.save_options()
 	rebuild_colors()
 	preview_cell()
@@ -830,21 +867,23 @@ func rebuild_colors() -> void:
 		for y in range(MAP_MAX.y+1):
 			for z in range(MAP_MIN.z,MAP_MAX.z+1):
 				var address := Vector3i(x,y,z)
-				var assigned := assigned_action(address)>0
-				var color := Color("#ae2839") if assigned else Color("#2153a4")
-				var center := MAP_ORIGIN+(Vector3(address)+Vector3.ONE*.5)*CELL_SIZE
-				for axis in 3:
-					for i in [-1,1]:
-						for j in [-1,1]:
-							var corner := Vector3.ZERO
-							corner[axis]=-1
-							corner[(axis+1)%3]=i
-							corner[(axis+2)%3]=j
-							mesh.surface_set_color(color)
-							mesh.surface_add_vertex(center+corner*CELL_SIZE*.48)
-							corner[axis]=1
-							mesh.surface_set_color(color)
-							mesh.surface_add_vertex(center+corner*CELL_SIZE*.48)
+				var size := region_size(address)
+				for part in (4 if address==HEAD_CELL else 1):
+					var assigned := assigned_action(address,part)>0
+					var color := Color("#ae2839") if assigned else Color("#2153a4")
+					var center := region_center(address,part)
+					for axis in 3:
+						for i in [-1,1]:
+							for j in [-1,1]:
+								var corner := Vector3.ZERO
+								corner[axis]=-1
+								corner[(axis+1)%3]=i
+								corner[(axis+2)%3]=j
+								mesh.surface_set_color(color)
+								mesh.surface_add_vertex(center+corner*size*.48)
+								corner[axis]=1
+								mesh.surface_set_color(color)
+								mesh.surface_add_vertex(center+corner*size*.48)
 	mesh.surface_end()
 	lattice.mesh=mesh
 	for grid in other_grids: grid.mesh=mesh

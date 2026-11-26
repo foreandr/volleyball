@@ -141,3 +141,4 @@ Assigned reception misses display the contact gap from the contact frame onward 
 High Center in the Back slice defaults to jump set #78, timing an upright directional jump from the predicted hand-contact height and horizontal distance, with lower feeds met on descent.
 Back-top jump sets meet the descending serve earlier along its existing flight. The receiver starts loading the knees 0.32 seconds before takeoff, lowers the hips up to 0.17 m from the load alone, and finishes extending during early ascent.
 On the studio back-top jump set, backward launch speed is limited so the receiver lands within 20 cm behind takeoff.
+In the Body depth slice, High Center is region 17. Its four full-depth quadrants are 17.1 through 17.4, numbered from the upper left in the front view. Only 17.1 inherits the original hand pass. Each quadrant supports hover, Ctrl-click, independent assignments and incoming feeds.
