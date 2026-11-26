@@ -209,17 +209,15 @@ func next_serve() -> void:
 
 func _input(event: InputEvent) -> void:
 	if get_tree().paused or replay_inspector.active: return
+	if not settings.visible and event is InputEventJoypadButton:
+		for i in FACE.size():
+			if event.button_index==Xbox.physical(FACE[i]):
+				active_pad=event.device
+				handle_serve_button(i,event.pressed)
+				get_viewport().set_input_as_handled()
+				return
 	if settings.visible or event.is_action_pressed("ui_cancel") or (event is InputEventJoypadButton and event.button_index==Xbox.physical(JOY_BUTTON_START)):
 		super._input(event)
-		return
-	if not event is InputEventJoypadButton: return
-	var style := -1
-	for i in FACE.size():
-		if event.button_index==Xbox.physical(FACE[i]): style=i
-	if style<0: return
-	active_pad=event.device
-	handle_serve_button(style,event.pressed)
-	get_viewport().set_input_as_handled()
 
 func handle_serve_button(style: int,pressed: bool) -> void:
 	if pressed and phase=="serve_ready":
@@ -441,7 +439,7 @@ func plan_serve_reception(shot) -> void:
 	platform.destination=Vector2(SETTER_BASE.x,SETTER_BASE.z)
 	platform.height=4.1
 	platform.quick_low_save=true
-	platform.green_forearm_allowance=.24
+	platform.green_forearm_allowance=.30
 	platform.green_hand_allowance=.18
 
 func step_serve_reception(shot,previous: Vector3,delta: float) -> void:
@@ -464,7 +462,7 @@ func step_serve_reception(shot,previous: Vector3,delta: float) -> void:
 	if not is_finite(platform.touch_time):
 		var chase: float=(predicted-HOMES[receiver]).slide(Vector3.UP).length()/maxf(receive_at,.1)
 		var off_center := (predicted-platform.ready_contact()).slide(Vector3.UP).length()
-		platform.reception_pressure=.35+smoothstep(6.,20.,incoming.length())+smoothstep(.4,3.2,chase)+smoothstep(.15,1.1,off_center)
+		platform.reception_pressure=.18*smoothstep(6.,20.,incoming.length())+.25*smoothstep(.4,3.2,chase)+.42*smoothstep(.15,1.1,off_center)
 	platform.update_attempt(flight_age,flight_age-delta,shot.planned_duration,path,incoming,delta,receive_at,shot.reception_spin_rps())
 	if not is_finite(platform.touch_time): return
 	if platform.hand_setting and not is_finite(platform.release_time):
