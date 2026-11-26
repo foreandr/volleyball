@@ -22,6 +22,9 @@ var seek := HSlider.new()
 var mirror := CheckButton.new()
 var elapsed := 0.
 var source := ""
+var upper_picker := OptionButton.new()
+var legs_picker := OptionButton.new()
+var upper_bones: Array[int]=[]
 
 func _ready() -> void:
 	add_child(pivot)
@@ -33,6 +36,11 @@ func _ready() -> void:
 		if modifier is SkeletonModifier3D: modifier.active=false
 	preload("res://scripts/practice_kit.gd").apply(player,false,2)
 	ready_pose.assign(player.get_pose_author().baseline)
+	var rig: Skeleton3D=player.skeleton
+	var spine := rig.find_bone("spine_01")
+	for bone in rig.get_bone_count():
+		if bone==spine or rig.get_bone_parent(bone) in upper_bones:
+			upper_bones.append(bone)
 	var clip=preload("res://assets/animations/straight_pass_02.res")
 	clasp=Save.sample_clip(player.skeleton,clip,clip.get_meta("contact_time"))
 	var floor_mesh := MeshInstance3D.new()
@@ -81,6 +89,14 @@ func _ready() -> void:
 	play_button.pressed.connect(toggle_play)
 	button(row,"+1 frame",step.bind(1))
 	button(row,"Back",func(): StorySession.drill_menu_category="Digging"; MenuPresentation.load_scene("res://scenes/drills.tscn"))
+	var layers := HBoxContainer.new()
+	column.add_child(layers)
+	for picker in [upper_picker,legs_picker]:
+		var caption := Label.new()
+		caption.text="Upper body" if picker==upper_picker else "Legs"
+		layers.add_child(caption)
+		layers.add_child(picker)
+		picker.item_selected.connect(func(_item): draw_pose())
 	column.add_child(seek)
 	seek.step=1
 	seek.value_changed.connect(func(value): playing=false; frame=value; draw_pose())
@@ -103,6 +119,14 @@ func refresh() -> void:
 	if entries is Array and not entries.is_empty():
 		clips=entries
 		source=content
+		for picker in [upper_picker,legs_picker]:
+			var previous: int=picker.selected
+			picker.clear()
+			picker.add_item("Current clip")
+			picker.add_item("Ready stance")
+			for i in clips.size():
+				if clips[i].kind!="overhead": picker.add_item("#%02d" % clips[i].id,i+2)
+			picker.select(clampi(previous,0,picker.item_count-1))
 		index=mini(index,clips.size()-1)
 		seek.max_value=clips[index].frames
 
@@ -156,6 +180,32 @@ func draw_pose() -> void:
 	seek.set_value_no_signal(f)
 	label.text=" %02d / %02d     Frame %d / %d " % [c.id,clips.size(),f,c.frames]
 	play_button.text="Pause" if playing else "Play"
+	upper_picker.get_parent().visible=c.kind!="overhead"
+	if c.kind=="overhead":
+		sample_layer(index,c,f)
+		return
+	var upper := source_index(upper_picker)
+	var legs := source_index(legs_picker)
+	sample_layer(upper,c,f)
+	if upper==legs: return
+	var upper_pose: Array[Transform3D]=[]
+	for bone in upper_bones: upper_pose.append(player.skeleton.get_bone_pose(bone))
+	sample_layer(legs,c,f)
+	for i in upper_bones.size(): player.skeleton.set_bone_pose(upper_bones[i],upper_pose[i])
+
+func source_index(picker: OptionButton) -> int:
+	return index if picker.selected==0 else picker.get_selected_id()-2
+
+func sample_layer(which: int, timeline: Dictionary, f: float) -> void:
+	if which<0:
+		player.position=Vector3.ZERO
+		player.rotation.y=0.
+		for bone in ready_pose.size(): player.skeleton.set_bone_pose(bone,ready_pose[bone])
+		return
+	var c: Dictionary=clips[which]
+	if which!=index:
+		if f<=timeline.contact: f=f*c.contact/timeline.contact
+		else: f=remap(f,timeline.contact,timeline.frames,c.contact,c.frames)
 	var weight := smoothstep(5.,c.contact,f)*(1.-smoothstep(c.contact+6.,c.frames-8.,f))
 	var author=player.get_pose_author()
 	var rig: Skeleton3D=player.skeleton
