@@ -1,6 +1,6 @@
 [
   {"id": 1, "kind": "lunge", "side": 0.59, "drop": 0.33, "forward": 0.43, "lean": 35, "contact": 42, "frames": 122},
-  {"id": 2, "kind": "wide", "side": 0.64, "drop": 0.28, "forward": 0.31, "lean": 26, "contact": 42, "frames": 107, "source_end": 122},
+  {"id": 2, "kind": "wide", "side": 0.64, "drop": 0.28, "forward": 0.31, "lean": 26, "contact": 42, "frames": 100, "source_end": 122},
   {"id": 3, "kind": "knee", "side": 0.22, "drop": 0.47, "forward": 0.29, "lean": 32, "contact": 42, "frames": 122},
   {"id": 4, "kind": "straight", "side": 0.05, "drop": 0.12, "forward": 0.07, "lean": 10, "contact": 42, "frames": 122},
   {"id": 5, "kind": "kneel", "side": 0.34, "drop": 0.51, "forward": 0.22, "lean": 18, "contact": 42, "frames": 122},
