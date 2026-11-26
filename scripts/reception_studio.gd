@@ -679,23 +679,30 @@ func sample_receiver(c: Dictionary,f: float,active := true,motion_legs := -2) ->
 	sample_receiver_base(c,f,active,motion_legs)
 	if not active or c.kind=="overhead": return
 	var age := (f-float(c.contact))/60.
-	var blend := smoothstep(-.24,-.015,age)*(1.-smoothstep(.035,.18,age))
+	var blend := smoothstep(-.48,-.065,age)*(1.-smoothstep(.09,.32,age))
 	if blend<=0.: return
 	var rig: Skeleton3D=player.skeleton
-	var spine := rig.find_bone("spine_03")
-	var chest := rig.get_bone_global_pose(spine)
-	var platform := Vector3.ZERO
-	for side in ["l","r"]:
-		var segment := reception_segment(rig,["lowerarm_"+side,"hand_"+side])
-		platform+=rig.to_local(segment[0].lerp(segment[1],.68))*.5
-	var reach := platform-chest.origin
-	var toward := rig.to_local(set_intercept)-chest.origin
-	var axis := reach.cross(toward)
-	if axis.length_squared()<.0000001: return
-	# Rotate their common parent to preserve the wrist spacing and authored elbow pose.
-	var angle := minf(deg_to_rad(2.),reach.angle_to(toward))*blend
-	var local_axis := chest.basis.inverse()*axis.normalized()
-	rig.set_bone_pose_rotation(spine,rig.get_bone_pose_rotation(spine)*Quaternion(local_axis.normalized(),angle))
+	var goal := rig.to_local(set_intercept)
+	# Turn the lower chest into the feed, then aim both shoulders as one platform.
+	for joint in ["spine_02","spine_03"]:
+		var bone := rig.find_bone(joint)
+		var chest := rig.get_bone_global_pose(bone)
+		var platform := Vector3.ZERO
+		for side in ["l","r"]:
+			var segment := reception_segment(rig,["lowerarm_"+side,"hand_"+side])
+			platform+=rig.to_local(segment[0].lerp(segment[1],.68))*.5
+		var reach := platform-chest.origin
+		var toward := goal-chest.origin
+		var limit := deg_to_rad(7.)
+		if joint=="spine_02":
+			reach=reach.slide(Vector3.UP)
+			toward=toward.slide(Vector3.UP)
+			limit=deg_to_rad(24.)
+		var axis := reach.cross(toward)
+		if axis.length_squared()<.0000001: continue
+		var angle := minf(limit,reach.angle_to(toward))*blend
+		var local_axis := (chest.basis.inverse()*axis).normalized()
+		rig.set_bone_pose_rotation(bone,rig.get_bone_pose_rotation(bone)*Quaternion(local_axis,angle))
 
 func sample_receiver_base(c: Dictionary,f: float,active: bool,motion_legs: int) -> void:
 	if motion_legs==-2: motion_legs=legs
