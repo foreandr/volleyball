@@ -158,3 +158,4 @@ Outgoing receptions carry backspin about the horizontal axis across the pass dir
 
 Reception Studio, serve reception, CPU digs and match reception use the shared arms-out gesture on a CPU out call.
 Indoor service placement and approach setup use the expanded gym runoff.
+Reception Studio bends slower feeds more and plans net clearance and an in-court descent through the selected contact point when feasible.

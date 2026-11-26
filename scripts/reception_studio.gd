@@ -15,7 +15,7 @@ const MAP_ORIGIN := Vector3(-1.5,0,-1.5)*CELL_SIZE
 const Gym = preload("res://scripts/tryout_gym.gd")
 const SERVES := preload("res://scripts/serving_camp.gd").TECHNIQUES
 const SERVE_NAMES := ["Spin","Jump float","Standing float","Underhand"]
-const SERVE_ARCS := [4.5,5.2,6.,8.]
+var feed_curve := 0.0
 var serve_type := 2
 var serve_from := Vector3(0,.04,13.4)
 const FeedBase = preload("res://scripts/underhand_serve.gd")
@@ -204,7 +204,7 @@ func _ready() -> void:
 		StorySession.save_options()
 		defenders[receiving].scale.x=-1. if on else 1.
 		draw_pose())
-	button(row,"Ã¢Ë†â€™1 frame",step.bind(-1))
+	button(row,"ÃƒÂ¢Ã‹â€ Ã¢â‚¬â„¢1 frame",step.bind(-1))
 	row.add_child(play_button)
 	play_button.pressed.connect(toggle_play)
 	button(row,"+1 frame",step.bind(1))
@@ -565,6 +565,25 @@ func position_camera() -> void:
 	camera.position=target+Vector3(sin(yaw)*cos(elevation),sin(elevation),cos(yaw)*cos(elevation))*distance
 	camera.look_at(target)
 
+static func serve_curve(launch: Vector3,aim: Vector3,duration: float) -> float:
+	# u=1 is the requested airborne contact. Gravity bends a slower feed more.
+	var curve := maxf(.01,4.905*duration*duration)
+	var travel := aim-launch
+	if travel.z>=-.001: return curve
+	var net_u := (4.-launch.z)/travel.z
+	if net_u>0. and net_u<1.:
+		curve=maxf(curve,(2.505+BALL_RADIUS+.05-launch.lerp(aim,net_u).y)/(net_u*(1.-net_u)))
+	# For interior targets, steepen the descent enough to land before the
+	# first baseline or sideline along this heading. Cap the correction so
+	# a high target right on a boundary can still genuinely go long.
+	var edge_u := (-4.85-launch.z)/travel.z
+	if absf(travel.x)>.001:
+		edge_u=minf(edge_u,(signf(travel.x)*4.35-launch.x)/travel.x)
+	if edge_u>1.001:
+		var needed := (launch.lerp(aim,edge_u).y-BALL_RADIUS)/(edge_u*(edge_u-1.))
+		curve=maxf(curve,minf(needed,16.))
+	return curve
+
 func draw_pose() -> void:
 	var c: Dictionary=clips[index]
 	if hand_leg_preview:
@@ -581,16 +600,17 @@ func draw_pose() -> void:
 	speed_label.text="Serve %d km/h" % incoming_speed.value
 	var rig: Skeleton3D=player.skeleton
 	var grid := grid_for(receiving)
-	var key := [line_read_error,serve_type,launch,aim,grid.global_transform,cell,quadrant,forearm_preview,hand_leg_preview,selected_only.button_pressed]
+	var key := [incoming_speed.value,line_read_error,serve_type,launch,aim,grid.global_transform,cell,quadrant,forearm_preview,hand_leg_preview,selected_only.button_pressed]
 	if route_key!=key:
 		route_key=key
-		var arc_height := float(SERVE_ARCS[serve_type])
+		feed_curve=serve_curve(launch,aim,full_duration)
+		var arc_height := feed_curve
 		var slope := aim.y-launch.y+arc_height
 		var floor_u := (slope+sqrt(slope*slope+4.*arc_height*(launch.y-BALL_RADIUS)))/(2.*arc_height)
 		leave_feed=preload("res://scripts/pass_flight.gd").reads_out(launch.lerp(aim,floor_u),line_read_error,player.effective_rating("Forearm reception"))
 		trace_incoming_regions(grid.to_local(launch),grid.to_local(aim))
 	feed_fraction=routed_fraction
-	var target := launch.lerp(aim,feed_fraction)+Vector3.UP*float(SERVE_ARCS[serve_type])*feed_fraction*(1.-feed_fraction)
+	var target := launch.lerp(aim,feed_fraction)+Vector3.UP*feed_curve*feed_fraction*(1.-feed_fraction)
 	set_intercept=target
 	var duration := full_duration*feed_fraction
 	var lead_frames := (full_duration-duration)*60.
@@ -640,7 +660,7 @@ func draw_pose() -> void:
 				for tick in range(samples+1):
 					if not active: break
 					var u := tick/(480.*full_duration)
-					var ball := launch.lerp(aim,u)+Vector3.UP*float(SERVE_ARCS[serve_type])*u*(1.-u)
+					var ball := launch.lerp(aim,u)+Vector3.UP*feed_curve*u*(1.-u)
 					if ball.y<BALL_RADIUS: break
 					if not bounds.has_point(grid.to_local(ball)): continue
 					var at_frame := clampf(c.contact+(u-nominal)*full_duration*60.,0.,c.frames)
@@ -665,15 +685,15 @@ func draw_pose() -> void:
 			closest_surface_gap=best_gap
 	if active and c.kind!="overhead":
 		feed_fraction=actual_fraction
-		target=launch.lerp(aim,feed_fraction)+Vector3.UP*float(SERVE_ARCS[serve_type])*feed_fraction*(1.-feed_fraction)
+		target=launch.lerp(aim,feed_fraction)+Vector3.UP*feed_curve*feed_fraction*(1.-feed_fraction)
 		touch_frame+=(feed_fraction-duration/full_duration)*full_duration*60.
 		duration=full_duration*feed_fraction
 	var missed: bool= frame>=touch_frame and active and not reachable
 	miss_label.visible=missed or leave_feed
-	if leave_feed: miss_label.text="Leave Ã‚Â· out"
+	if leave_feed: miss_label.text="Leave Ãƒâ€šÃ‚Â· out"
 	if missed:
 		var gap := contact_point.distance_to(target) if c.kind=="overhead" else closest_surface_gap
-		miss_label.text="Miss Ã‚Â· %d cm gap"%roundi(gap*100.)
+		miss_label.text="Miss Ãƒâ€šÃ‚Â· %d cm gap"%roundi(gap*100.)
 		if playing and not miss_logged:
 			print("studio_miss ",Time.get_datetime_string_from_system()," defender=",receiving+1," cell=",address," region=",region_number(address,region.w)," assigned=",assigned," playing=",c.id," target=",target," contact=",contact_point," gap_m=",gap)
 			miss_logged=true
@@ -728,7 +748,7 @@ func trace_incoming_regions(start: Vector3, aim: Vector3) -> void:
 	var previous := start
 	for i in range(1,193):
 		var u := i/96.
-		var point := start.lerp(aim,u)+Vector3.UP*float(SERVE_ARCS[serve_type])*u*(1.-u)
+		var point := start.lerp(aim,u)+Vector3.UP*feed_curve*u*(1.-u)
 		var earliest := INF
 		for box in flight_boxes:
 			var selected: bool=box.address==cell and box.part==quadrant
@@ -755,7 +775,7 @@ func flight_point(t: float,launch: Vector3,target: Vector3,duration: float,lift:
 		point.y+=lift*t-4.905*t*t
 		return point
 	var u := (t+duration)/duration
-	return launch.lerp(target,u)+Vector3.UP*float(SERVE_ARCS[serve_type])*feed_fraction*feed_fraction*u*(1.-u)
+	return launch.lerp(target,u)+Vector3.UP*feed_curve*feed_fraction*feed_fraction*u*(1.-u)
 
 func draw_ball_trail(seconds: float,launch: Vector3,target: Vector3,duration: float,lift: float,landing: float) -> void:
 	var previous := launch
@@ -1268,9 +1288,9 @@ func build_map(tiers: VBoxContainer) -> void:
 	tiers.add_child(editor)
 	var depth := HBoxContainer.new()
 	editor.add_child(depth)
-	button(depth,"Ã¢â‚¬Â¹",change_depth.bind(-1))
+	button(depth,"ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¹",change_depth.bind(-1))
 	depth.add_child(depth_label)
-	button(depth,"Ã¢â‚¬Âº",change_depth.bind(1))
+	button(depth,"ÃƒÂ¢Ã¢â€šÂ¬Ã‚Âº",change_depth.bind(1))
 	editor.add_child(region_label)
 	miss_label.modulate=Color("#ff897c")
 	editor.add_child(miss_label)
@@ -1462,7 +1482,7 @@ func update_region() -> void:
 	depth_label.text=["Back","Body","Front"][cell.z-MAP_MIN.z]
 	var id := cell_action()
 	highlight.visible=not unfinished.button_pressed or id==0
-	region_label.text="#%s Ã‚Â· %s %s - %s" % [region_number(cell,quadrant),HEIGHTS[cell.y],WIDTHS[cell.x-MAP_MIN.x],"Unassigned" if id==0 else "Action #%02d"%id]
+	region_label.text="#%s Ãƒâ€šÃ‚Â· %s %s - %s" % [region_number(cell,quadrant),HEIGHTS[cell.y],WIDTHS[cell.x-MAP_MIN.x],"Unassigned" if id==0 else "Action #%02d"%id]
 	highlight.scale=region_size(cell,quadrant)/CELL_SIZE
 	highlight.position=region_center(cell,quadrant)
 
