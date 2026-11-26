@@ -40,7 +40,7 @@ const WIN_SCORE := 15
 const CPU_COURT_FRONT_LIMIT := 3.43
 const RECOVERY_TIME := 0.32
 const FAST_DIG_ELBOW_SPEED := 25.0
-const FAST_DIG_ELBOW_DURATION := 0.32
+const FAST_DIG_ELBOW_DURATION := preload("res://scripts/reception_pass_drive.gd").FAST_DIG_ELBOW_DURATION
 const FAST_RECEIVE_HOLD := 0.28
 const FAST_RECEIVE_RISE := 0.75
 const SERVE_RUN_BLEND := 0.15
@@ -1327,39 +1327,10 @@ func advance_recoveries(delta: float) -> void:
 				bone_weight = 1.0-smoothstep(wrist_hold,hold+rise,age)
 			rig.set_bone_pose_rotation(bone,idle.basis.orthonormalized().get_rotation_quaternion().normalized().slerp(rotation,bone_weight))
 		if recovery.get("fast_elbow_bend",false) and age > 0.0 and age < FAST_DIG_ELBOW_DURATION:
-			apply_fast_dig_elbow_bend(rig,age)
+			preload("res://scripts/reception_pass_drive.gd").apply_fast_dig_elbow_bend(rig,age)
 		if recovery.has("kick_foot"):
 			var flick := smoothstep(0.0,0.070,age)*(1.0-smoothstep(0.07,0.22,age))
 			if flick > 0.001: pose_kick_leg(actor,recovery.kick_foot,(Vector3.UP*0.15+actor.global_basis.z*0.11)*flick)
-
-func apply_fast_dig_elbow_bend(rig: Skeleton3D, age: float) -> void:
-	var bend := deg_to_rad(50.0)*smoothstep(0.0,0.095,age)*(1.0-smoothstep(0.12,FAST_DIG_ELBOW_DURATION,age))
-	var left := rig.find_bone("lowerarm_l")
-	var right := rig.find_bone("lowerarm_r")
-	var axis := (rig.get_bone_global_pose(left).origin-rig.get_bone_global_pose(right).origin).normalized()
-	if axis.is_zero_approx(): return
-	var chest := rig.get_bone_global_pose(rig.find_bone("spine_03")).origin
-	var flexion_direction := 0.0
-	for elbow_bone in [left,right]:
-		var elbow := rig.get_bone_global_pose(elbow_bone).origin
-		var shoulder := rig.get_bone_global_pose(rig.get_bone_parent(elbow_bone)).origin
-		var wrist := rig.get_bone_global_pose(rig.find_bone("hand_l" if elbow_bone == left else "hand_r")).origin
-		var upper := (elbow-shoulder).normalized()
-		var forearm := (wrist-elbow).normalized()
-		var hinge := upper.cross(forearm)
-		if hinge.length_squared() < 0.0001:
-			hinge = forearm.cross((chest-wrist).normalized())
-		var direction := hinge.normalized().dot(axis)
-		# Skip the recoil if a shared hinge would bend either elbow against its flexion plane.
-		if absf(direction) < 0.05 or flexion_direction*direction < 0.0: return
-		flexion_direction = direction
-		bend = minf(bend,maxf(0.0,deg_to_rad(100.0)-upper.angle_to(forearm)))
-	# Rotation about the elbow span preserves the wrists' separation along that span.
-	for elbow_bone in [left,right]:
-		var parent_basis := rig.get_bone_global_pose(rig.get_bone_parent(elbow_bone)).basis.orthonormalized()
-		var rotation := Quaternion(parent_basis.inverse()*axis,bend*signf(flexion_direction))
-		rig.set_bone_pose_rotation(elbow_bone,(rotation*rig.get_bone_pose_rotation(elbow_bone)).normalized())
-
 
 func advance_set_jumps(delta: float) -> void:
 	for index in players.size():

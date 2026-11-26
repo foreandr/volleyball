@@ -112,9 +112,14 @@ func _process(delta: float) -> void:
 		return
 	if phase=="serve_return":
 		release_window=maxf(0.,release_window-delta)
-		if cpu_defense or release_window>0.: dig_platforms[hitter].queue_bump(dig_clock)
+		dig_platforms[hitter].queue_bump(dig_clock)
 		off_blocker=1
 	super._process(delta)
+	if phase=="server_dig" and last_digger!=null:
+		var platform: Reception=dig_platforms[last_digger]
+		var age := dig_clock-platform.touch_time
+		if age>0. and age<platform.Drive.FAST_DIG_ELBOW_DURATION and not platform.low_save.active:
+			platform.Drive.apply_fast_dig_elbow_bend(last_digger.skeleton,age)
 
 func handle_drag(event: InputEvent) -> bool:
 	var camera := get_viewport().get_camera_3d()
@@ -153,7 +158,7 @@ func handle_drag(event: InputEvent) -> bool:
 
 func walk_server(delta: float,_defending := false) -> void:
 	for actor in [hitter,wall[1]]:
-		if phase=="server_dig" and actor==last_digger: continue
+		if phase=="server_dig" and actor==last_digger and dig_platforms[actor].low_save.active: continue
 		actor.play_ground_gait(0.)
 		actor.animator.advance(delta)
 		GroundControls.face(actor,ball.global_position-actor.global_position,delta,8.)
@@ -173,28 +178,36 @@ func return_struck(actor: Node3D,point: Vector3,velocity: Vector3,spin: float) -
 func sample_defensive_contact(platform: Reception,start: float,dt: float,_until_floor: float,path: Callable) -> void:
 	var actor=platform.setter
 	var automatic: bool=actor!=hitter or cpu_defense
-	if not automatic and release_window<=0.: return
+	var home: Vector3=homes[0 if actor==hitter else 1]
 	var now: Vector3=path.call(start)
 	var ahead := clampf((actor.to_global(Vector3(0,1.04,.62))-now).slide(Vector3.UP).dot(drop_velocity.slide(Vector3.UP))/maxf(.01,drop_velocity.slide(Vector3.UP).length_squared()),0.,_until_floor)
-	if ahead>.30: return
+	if ahead>.42: return
 	var intercept: Vector3=path.call(start+ahead)
-	var base: Vector3=actor.to_global(Vector3(0,1.04,.62))
+	var base: Vector3=home+actor.basis*Vector3(0,1.04,.62)
 	var offset := intercept-base
 	var save=platform.low_save
-	if not save.active and (offset.slide(Vector3.UP).length()>1.0 or intercept.y<.62):
+	if platform.reach.is_empty() and not save.active and (offset.slide(Vector3.UP).length()>1.45 or intercept.y<.52):
 		if save.plan(actor,path,start,start+_until_floor,platform.clip,true,true):
 			save.travel_scale=0.
 	if save.active:
 		save.sample(actor,start+dt,save.contact_time+.07)
 	else:
-		var progress := smoothstep(0.,.22,.24-ahead) if automatic else smoothstep(0.,.09,.18-release_window+dt)
-		platform.sample_pose(platform.clip,platform.tracks,platform.contact_frame*progress,1.,true)
+		var progress := smoothstep(0.,.39,.42-ahead)
+		var close := smoothstep(0.,.085,.085-ahead)
+		if not automatic: close*=smoothstep(0.,.065,.18-release_window) if release_window>0. else 0.
+		platform.sample_pose(platform.clip,platform.tracks,platform.contact_frame*close,1.,true)
 		var lateral: float=absf((actor.basis.inverse()*offset).x)
-		if lateral>.30:
-			platform.plan_reach(offset,true)
+		if platform.reach.is_empty() and lateral>.18 and offset.slide(Vector3.UP).length()<1.65:
+			platform.plan_reach(offset.normalized()*maxf(.36,offset.length()),true)
+		if not platform.reach.is_empty():
 			platform.reach_progress=progress
+			actor.position=home+platform.reach_step*progress
 			platform.pose_reach(progress,intercept)
-		if progress>.01: platform.reach_platform(intercept-platform.platform_center(),progress,.72,true,true)
+		platform.deep_squat=true
+		platform.knee_bend_depth=progress*lerpf(.07,.24,smoothstep(10.,25.,drop_velocity.length()))
+		platform.apply_knee_bend()
+		if close>.01: platform.reach_platform(intercept-platform.platform_center(),close,.72,true,true)
+	if not automatic and release_window<=0.: return
 	var contact := platform.dig_contact_segment(path.call(start),path.call(start+dt))
 	if contact[0].distance_to(contact[1])>platform.PLATFORM_RADIUS: return
 	platform.touch=contact[0]
