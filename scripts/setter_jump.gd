@@ -143,14 +143,14 @@ func begin(actor: Node3D, input: Vector2, ball_target := Vector3.INF, plant_time
 		if attack_arm_lift and glide>0. and (approach_steps>=3 or reserve_two_step_runway):
 			# Reserve the last metre for takeoff-to-contact travel when runway allows.
 			var runway := ball_offset.length()
-			var reserve := .90*smoothstep(.65,1.85,runway)
+			var reserve := minf(1.05,runway) if reserve_two_step_runway else .90*smoothstep(.65,1.85,runway)
 			var ground := entry_distance+lead_distance+stride
 			var ground_scale := clampf((runway-reserve)/maxf(.001,ground),0.,1.)
 			entry_distance*=ground_scale
 			lead_distance*=ground_scale
 			stride*=ground_scale
 			var rise := flight_duration(jump_height*takeoff_effectiveness,true)*.48
-			var carry := minf(reserve,2.8*rise)
+			var carry := reserve if reserve_two_step_runway else minf(reserve,2.8*rise)
 			attack_glide=maxf(0.,carry-stride*AIR_TRAVEL_FRACTION*.48)/(minf(rise,.46)/.46+AIR_TRAVEL_FRACTION*.48)
 			var remaining := runway-ground*ground_scale-carry
 			approach_lunge=heading*clampf(remaining,0.,.95)

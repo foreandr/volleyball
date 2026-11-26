@@ -126,7 +126,8 @@ func adaptive_approach_timing() -> bool:
 func tick_attack(delta: float) -> void:
 	if not enabled: return
 	if stage == Stage.SET:
-		queued_approach_input(delta)
+		if not (chase_late_sets and absf(rally_set_target.x)>2.5):
+			queued_approach_input(delta)
 		if chase_late_sets and not jump.active and not is_finite(swing_started):
 			chase_committed_set(delta)
 	step_jump(delta)
