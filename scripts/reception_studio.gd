@@ -1409,7 +1409,7 @@ func save_selection() -> void:
 	StorySession.save_options()
 
 func region_parts(address: Vector3i) -> int:
-	if address==REGION_22: return 2
+	if address==REGION_22: return 4
 	if address==REGION_23: return 4
 	if halves_only(address): return 2
 	if depth_split(address): return 8
@@ -1438,7 +1438,7 @@ func depth_split(address: Vector3i) -> bool:
 	return address==Vector3i(1,1,1) or address==Vector3i(1,2,2)
 
 func region_suffix(address: Vector3i,part: int) -> String:
-	if address==REGION_22: return ".left" if part==0 else ".right"
+	if address==REGION_22: return (".left" if part%2==0 else ".right")+(".back" if part<2 else ".front")
 	if address==REGION_23: return [".back.top",".front.top",".back.bottom",".front.bottom"][part]
 	if depth_split(address):
 		return ".%d.%s" % [part%4+1,"front" if part>=4 else "back"]
@@ -1448,7 +1448,7 @@ func region_number(address: Vector3i,part: int) -> String:
 	return str(1+address.x+3*address.y+9*address.z)+region_suffix(address,part)
 
 func region_size(address: Vector3i,part: int) -> Vector3:
-	if address==REGION_22: return CELL_SIZE*Vector3(.5,1.,1.)
+	if address==REGION_22: return CELL_SIZE*Vector3(.5,1.,.5)
 	if address==REGION_23: return CELL_SIZE*Vector3(1.,.5,.5)
 	if halves_only(address): return CELL_SIZE*Vector3(1.,.5,1.)
 	if depth_split(address): return CELL_SIZE*Vector3(.5,.5,.5)
@@ -1457,7 +1457,8 @@ func region_size(address: Vector3i,part: int) -> Vector3:
 func region_center(address: Vector3i,part: int,subdivide := true) -> Vector3:
 	var center := MAP_ORIGIN+(Vector3(address)+Vector3.ONE*.5)*CELL_SIZE
 	if address==REGION_22 and subdivide:
-		center.x+=(.25 if part==1 else -.25)*CELL_SIZE.x
+		center.x+=(.25 if part%2==1 else -.25)*CELL_SIZE.x
+		center.z+=(.25 if part>=2 else -.25)*CELL_SIZE.z
 	elif address==REGION_23 and subdivide:
 		center.z+=(.25 if part%2==1 else -.25)*CELL_SIZE.z
 		center.y+=(.25 if part<2 else -.25)*CELL_SIZE.y
@@ -1478,7 +1479,10 @@ func assigned_action(address: Vector3i,part: int) -> int:
 	if is_subdivided(address):
 		if StorySession.game_options.has_section_key("studio_three_rows",child_key):
 			return int(StorySession.game_options.get_value("studio_three_rows",child_key))
-		if address==REGION_22: return int(StorySession.game_options.get_value("studio_three_rows",Regions.key(address),0))
+		if address==REGION_22:
+			var original := Regions.key(address)
+			var side := original+(".left" if part%2==0 else ".right")
+			return int(StorySession.game_options.get_value("studio_three_rows",side,StorySession.game_options.get_value("studio_three_rows",original,0)))
 		if address==REGION_23: return [0,22,2,3][part]
 		if address==Vector3i(1,2,2):
 			if part<2: return 79

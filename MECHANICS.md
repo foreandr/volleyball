@@ -165,3 +165,4 @@ Overhead serve receptions leave the hands with 0.25 revolutions per second of ba
 Reception Studio measures remaining reach at contact and blends a body adjustment into assigned receptions. Sampled poses lift to clear the court at the feet, knees, hips, hands and head.
 Reception Studio review starts at serve contact on frame zero and advances to the next repetition immediately after the ball reaches the floor.
 Reception Studio splits box 22 vertically into left and right halves. Both inherit the previous box assignment until individually reassigned.
+Each side of box 22 also has separate front and back targets, inheriting its side assignment.
