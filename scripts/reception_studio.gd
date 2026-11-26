@@ -47,6 +47,7 @@ const RECEPTION_CAPSULES := [
 	["spine_03","upperarm_l",.105], ["spine_03","upperarm_r",.105],
 ]
 const BALL_RADIUS := .105
+const FOREARM_CONTACT_GRACE := .02
 var arm_volumes: Array[MeshInstance3D]=[]
 var hand_volume := MeshInstance3D.new()
 var hand_toggle := CheckButton.new()
@@ -654,7 +655,7 @@ func draw_pose() -> void:
 			var correction := Vector3.ZERO
 			for attempt in 2:
 				if attempt==1:
-					if reachable or best_gap>.095 or not Regions.movement(c): break
+					if reachable or best_gap<=FOREARM_CONTACT_GRACE or best_gap>.095 or not Regions.movement(c): break
 					reach_adjustment=rig.global_basis.inverse()*correction.limit_length(.11)
 					best_gap=INF
 				for tick in range(samples+1):
@@ -682,6 +683,8 @@ func draw_pose() -> void:
 					if separation<=0.:
 						reachable=true
 						break
+			# Use the closest sampled instant for grazing passes.
+			reachable=active and best_gap<=FOREARM_CONTACT_GRACE
 			closest_surface_gap=best_gap
 	if active and c.kind!="overhead":
 		feed_fraction=actual_fraction
