@@ -229,7 +229,11 @@ func build_settings() -> void:
 
 var block_hud_label: Label
 var block_hud_slider: HSlider
-var shot_read := preload("res://scripts/block_shot_read.gd").new()
+var fallback_read := preload("res://scripts/block_shot_read.gd").new()
+var shot_read: RefCounted:
+	get:
+		var wall: Array=get("blockers") if "blockers" in self else practice_blockers
+		return wall[0].block_read(hitter) if not wall.is_empty() and hitter!=null else fallback_read
 var disguise_read := false
 
 func sync_block_vertical_hud() -> void:
@@ -244,7 +248,7 @@ func set_practice_vertical(slot: int,value: float) -> void:
 	sync_block_vertical_hud()
 
 func learned_block_offset() -> float:
-	return clampf(shot_read.prediction*clampf(BallNet.NET_Z-endpoint.z,.45,2.),-1.55,1.55)
+	return shot_read.shade(BallNet.NET_Z-endpoint.z)
 
 const PracticeBlock = preload("res://scripts/match_block.gd")
 var attack_blocker_count := 1
@@ -939,7 +943,8 @@ func advance_spike(delta: float) -> void:
 	if not launched_attack:
 		launched_attack=true
 		if drop_velocity.z>.1:
-			shot_read.observe(drop_velocity.x/drop_velocity.z)
+			var observers: Array=get("blockers") if "blockers" in self else practice_blockers
+			for defender in observers: defender.block_read(hitter).record_velocity(drop_velocity)
 		trace("spike_launch",{"origin":str(ball.position),"velocity":str(drop_velocity),"aim":str(aim_center)})
 	var incoming_basis := ball.basis
 	var in_flight := roll_time<0.

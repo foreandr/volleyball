@@ -6,6 +6,15 @@ var history: Array[float]=[]
 var prediction := 0.
 var confidence := 0.
 
+func shade(distance: float,remaining := 0.) -> float:
+	var offset := clampf(prediction*clampf(distance,.45,2.),-1.55,1.55)
+	if confidence>.54 and history.size()%3!=0:
+		return lerpf(offset,-offset*.45,smoothstep(.34,.68,remaining))
+	return offset
+
+func record_velocity(velocity: Vector3) -> void:
+	if absf(velocity.z)>.1: observe(velocity.x/absf(velocity.z))
+
 func observe(slope: float) -> void:
 	history.append(clampf(slope,-2.,2.))
 	if history.size()>20: history.pop_front()

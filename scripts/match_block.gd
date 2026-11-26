@@ -63,6 +63,24 @@ func begin(player: Node3D) -> void:
 	actor.play_action("idle",0.0)
 	actor.animator.seek(0.0,true)
 
+func read_air_lane(ball_at: Vector3,partners: Array) -> void:
+	if shoulders.size()!=2 or overpass_swing: return
+	var gap := ball_at.x-actor.global_position.x
+	min_hand_x=-INF
+	max_hand_x=INF
+	for partner in partners:
+		if partner==actor or not partner.visible: continue
+		var offset: Vector3=partner.global_position-actor.global_position
+		if absf(offset.z)>.8 or absf(offset.x)>1.35: continue
+		var seam: float=actor.global_position.x+offset.x*.5
+		if offset.x<0.: min_hand_x=maxf(min_hand_x,seam+.06)
+		else: max_hand_x=minf(max_hand_x,seam-.06)
+	var open := not is_finite(min_hand_x) if gap<0. else not is_finite(max_hand_x)
+	var amount := smoothstep(.20,.78,absf(gap)) if open else 0.
+	var left := (shoulders[0].x-shoulders[1].x)*gap>0.
+	reach_input=Vector2(amount,0.) if left else Vector2(0.,amount)
+	lean_input=clampf(gap,-.65,.65) if open else 0.
+
 func step(delta: float, world_ball: Vector3) -> bool:
 	if is_finite(net_heading): actor.rotation.y=rotate_toward(actor.rotation.y,net_heading,delta*9.)
 	age += delta*tempo

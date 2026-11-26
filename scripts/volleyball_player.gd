@@ -102,6 +102,24 @@ func _ready() -> void:
 	play_action("idle")
 	animator.advance(float(player_number)*0.31)
 
+var blocker_reads := {}
+
+func block_read(opponent: Node3D) -> RefCounted:
+	var id := opponent.get_instance_id()
+	if not blocker_reads.has(id): blocker_reads[id]=preload("res://scripts/block_shot_read.gd").new()
+	return blocker_reads[id]
+
+func backpedaling(velocity: Vector3) -> bool:
+	var travel := velocity.slide(Vector3.UP)
+	return travel.length()>.22 and travel.normalized().dot(basis.z.normalized())<-.5
+
+func play_travel_gait(velocity: Vector3) -> void:
+	if backpedaling(velocity):
+		var speed := velocity.slide(Vector3.UP).length()
+		var clip := "base/Walk" if speed<1.8 else "volleyball/slow_jog"
+		animator.play(clip,.13,-clampf(speed/(1.45 if speed<1.8 else 2.65),.45,1.8),true)
+	else: play_ground_gait(velocity.length())
+
 func play_ground_gait(speed: float) -> void:
 	var walking := animator.current_animation=="base/Walk"
 	var jogging := animator.current_animation=="volleyball/slow_jog"

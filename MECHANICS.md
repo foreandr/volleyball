@@ -115,3 +115,5 @@ The setter squares to zone four for front and back sets. The libero takes second
 The pipe is an occasional in-system combination. A middle must be available for the zero and airborne at release. A broken combination goes to a pin.
 
 Serve rallies continue after playable blocks. The nearest available teammate covers, and the libero sets if the setter took the first touch. Recent scoring makes hitters more attractive. A successful quick draws a middle commit and opens the pipe and pins. Serving HUD skills and verticals apply to the receiving offense and serving-side wall. The serve speed override preserves launch direction and allows testing up to 300 km/h.
+
+CPU blockers remember the direction of completed swings per opposing hitter on the player object. Use that read in drill and match positioning. A receiving libero clears the pipe approach after passing and covers the attack. Facing-preserving retreats use backward footfalls.

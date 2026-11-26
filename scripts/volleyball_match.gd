@@ -122,8 +122,6 @@ var cpu_second_spike := false
 var cpu_fake_dump := false
 var second_ball_options := 0
 var block_calls := [0,0]
-const ShotPattern = preload("res://scripts/block_shot_read.gd")
-var block_crossing_reads: Array[Dictionary] = [{},{}]
 var jump_set_started := [false,false,false,false]
 var recoveries := {}
 var trace := Trace.new()
@@ -877,6 +875,7 @@ func on_spike(actor: Node3D, point: Vector3, motion: Vector3, spin_rate: float) 
 	if index < 0 or not can_touch(index): return
 	play_touch(motion.length()>=preload("res://scripts/gym_physics.gd").HARD_SPIKE_SPEED)
 	if drill_spike_target.is_finite():
+		observe_opponent_shot(1-team(index),point,motion,spin_rate,index)
 		stroke = "Spike"
 		launch(point,motion,"spike",index,spin_rate)
 		return
@@ -905,7 +904,7 @@ func on_spike(actor: Node3D, point: Vector3, motion: Vector3, spin_rate: float) 
 	if not is_human(index):
 		cpu_policy.used(team(index),"attack depth")
 		cpu_policy.used(team(index),"attack effort")
-	observe_opponent_shot(1-team(index),point,motion,spin_rate)
+	observe_opponent_shot(1-team(index),point,motion,spin_rate,index)
 	launch(point,motion,"spike",index,spin_rate)
 
 func choose_contact_attack(index: int, contact: Vector3, preferred: Vector3, motion: Vector3, spin_rate: float) -> Dictionary:
@@ -931,22 +930,14 @@ func choose_contact_attack(index: int, contact: Vector3, preferred: Vector3, mot
 func shot_read_zone(local_x: float) -> int:
 	return 0 if absf(local_x) < 1.3 else (1 if local_x > 0.0 else -1)
 
-func observe_opponent_shot(side: int, point: Vector3, motion: Vector3, spin_rate: float) -> void:
+func observe_opponent_shot(side: int, point: Vector3, motion: Vector3, spin_rate: float, attacker_index: int) -> void:
 	var frame := frames[side]
+	for i in range(side*team_size,(side+1)*team_size): players[i].block_read(players[attacker_index]).record_velocity(frame.global_basis.inverse()*motion)
 	var time := Flight.landing_time(point,motion,Flight.spike_gravity(spin_rate))
 	var landing := frame.to_local(point+motion*time)
 	if absf(landing.x) > 4.53 or landing.z < -5.03 or landing.z > Net.NET_Z: return
 	var contact := frame.to_local(point)
 	var zone := shot_read_zone(contact.x)
-	var local_motion := frame.global_basis.inverse()*motion
-	if local_motion.z < -0.01 and contact.z >= Net.NET_Z:
-		var cross_time := (Net.NET_Z-contact.z)/local_motion.z
-		var height := contact.y+local_motion.y*cross_time-0.5*Flight.spike_gravity(spin_rate)*cross_time*cross_time
-		var crossing := contact.x+local_motion.x*cross_time
-		if height >= Net.NET_TOP and absf(crossing) < Net.NET_HALF_WIDTH:
-			var offset := crossing-contact.x
-			if not block_crossing_reads[side].has(zone): block_crossing_reads[side][zone]=ShotPattern.new()
-			block_crossing_reads[side][zone].observe(offset)
 	var reads := opponent_shot_reads[side]
 	var count := int(reads.get(zone,Vector2.ZERO).y)
 	var previous := float(reads.get(zone,Vector2(landing.x,0.0)).x)
@@ -1471,10 +1462,12 @@ func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_f
 	actor.animator.speed_scale = lerpf(1.60,1.92,smoothstep(5.85,8.4,pace)) if sprint else 1.0
 	if sprint and paced_run:
 		actor.animator.speed_scale = run_cadence if run_cadence > 0.0 else clampf(pace/3.7,0.22,2.05)
-	actor.play_action("run" if sprint else "idle",0.10)
+	var reverse: bool=actor.backpedaling((actor.position-before)/maxf(delta,.001))
+	if reverse: actor.play_travel_gait((actor.position-before)/maxf(delta,.001))
+	else: actor.play_action("run" if sprint else "idle",0.10)
 	actor.animator.advance(delta)
 	var steps := footwork[index]
-	if sprint:
+	if sprint or reverse:
 		steps.weight = 0.0
 	else:
 		steps.step(movement.limit_length(delta*2.1)/maxf(delta*2.1,0.001),delta,clampf(pace/2.06,0.65,2.25),true)
@@ -2165,6 +2158,8 @@ func tick_blocks(delta: float, previous: float) -> void:
 	var incoming_spike := phase == Phase.LIVE and (flight_kind in ["spike","dump"] or overpass_flight == flight_number)
 	for index in blocks.keys():
 		var block = blocks[index]
+		if not is_human(index):
+			block.read_air_lane(ball.global_position,players.slice(team(index)*team_size,(team(index)+1)*team_size))
 		if not block.step(delta,ball.global_position):
 			blocks.erase(index)
 			continue
@@ -2261,7 +2256,7 @@ func hit_overpass(index: int, point: Vector3) -> bool:
 	var world_motion := frame.global_basis*motion
 	trace.write("overpass_attack",match_clock,{"player":index,"point":point,"target":shot,"blocker":defender},true)
 	play_touch(world_motion.length()>=preload("res://scripts/gym_physics.gd").HARD_SPIKE_SPEED)
-	observe_opponent_shot(1-side,point,world_motion,spin_rate)
+	observe_opponent_shot(1-side,point,world_motion,spin_rate,index)
 	launch(point,world_motion,"spike",index,spin_rate)
 	return true
 
@@ -2527,9 +2522,9 @@ func position_defense(delta: float) -> void:
 			take_line = absf(players[near].position.x-line_x) <= absf(players[near].position.x-cross_x)
 		x = line_x if take_line else cross_x
 		if not is_human(near):
-			var pattern: RefCounted=block_crossing_reads[defense_side].get(shot_read_zone(attack.x))
-			if pattern!=null:
-				x+=clampf(attack.x+pattern.prediction-x,-1.55,1.55)*lerpf(.70,1.,pattern.confidence)
+			var pattern: RefCounted=players[near].block_read(players[expected_hitter])
+			if not pattern.history.is_empty():
+				x+=clampf(attack.x+pattern.shade(attack.z-Net.NET_Z,driver.approach_expected_hit_at-driver.clock)-x,-1.55,1.55)*lerpf(.70,1.,pattern.confidence)
 		cover = cross_goal.x if take_line else line_goal.x
 		if not is_human(deep):
 			cover = learned_cover(defense_side,attack.x,cover)

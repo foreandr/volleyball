@@ -489,6 +489,7 @@ func _process(delta: float) -> void:
 	if phase in ["serve_flight","serve_pass","serve_attack","serve_return"]:
 		for actor in passers:
 			if actor!=first_contact_player() and actor!=second_contact_player() and actor!=pin_attack.setter: face_receive_ball(actor,ball.global_position,delta)
+	if phase in ["serve_pass","serve_attack","serve_return"]: move_libero_to_cover(delta)
 	if phase in ["serve_attack","serve_return"]:
 		for slot in attack_options.size():
 			var actor := attack_options[slot]
@@ -724,8 +725,7 @@ func stage_attacker(actor: Node3D,slot: int,delta: float) -> void:
 				point=nearest+lateral*1.1
 				point.y=.04
 				point.z=maxf(point.z,BallNet.NET_Z+.65)
-	move_receiver(actor,actor.get_parent_node_3d().to_local(point),delta)
-	face_receive_ball(actor,ball.global_position,delta)
+	move_receiver(actor,actor.get_parent_node_3d().to_local(point),delta,actor.get_parent_node_3d().to_local(ball.global_position)-actor.position)
 
 func clear_ground_step(actor: Node3D,step: Vector3) -> Vector3:
 	var start := actor.global_position.slide(Vector3.UP)
@@ -749,10 +749,10 @@ func move_receiver(actor: Node3D,goal: Vector3,delta: float,face_direction := Ve
 	var step := travel.limit_length(4.8*delta)
 	if step.length_squared()>.000001: step=clear_ground_step(actor,step)
 	actor.position+=step
-	actor.play_ground_gait(step.length()/maxf(delta,.001))
 	var heading := face_direction if not face_direction.is_zero_approx() else travel
 	if heading.length()>.08:
 		actor.rotation.y=rotate_toward(actor.rotation.y,atan2(heading.x,heading.z),delta*10.)
+	actor.play_travel_gait(step/maxf(delta,.001))
 	actor.animator.advance(delta)
 
 func step_reception_rally(delta: float) -> void:
@@ -760,8 +760,9 @@ func step_reception_rally(delta: float) -> void:
 	if phase=="serve_pass":
 		var attack_point := route_point(attack_slot)
 		attack_point.y=pin_attack.approach_reach_height()
-		if attack_slot==3:
-			attack_point.y=attack_options[3].height_cm*.0104+pin_attack.jump.max_height-.2032
+		if attack_slot!=1:
+			var standing_reach: float= attack_options[attack_slot].height_cm*(.0104 if attack_slot==3 else .0111)
+			attack_point.y=standing_reach+pin_attack.jump.max_height-.2032
 		if pass_in_system and attack_slot!=1 and not middle_decoy.enabled and set_at-pass_clock<.48 and set_at-pass_clock>.22:
 			if (receiving_middle.global_position-route_point(1)).slide(Vector3.UP).length()<2.:
 				if receiving_middle.get_parent()!=pin_frame: receiving_middle.reparent(pin_frame,true)
@@ -824,7 +825,7 @@ func step_reception_rally(delta: float) -> void:
 			if platform.low_save.active and not platform.low_save.finished(flight_age+pass_clock):
 				platform.low_save.sample(first_contact_player(),flight_age+pass_clock,platform.touch_time)
 			elif not platform.hand_setting and pass_clock<.35: platform.follow_forearm(platform.touch_time+pass_clock,Vector3.ZERO)
-			else: first_contact_player().play_action("idle")
+			elif first_contact_player()!=passers[1]: first_contact_player().play_action("idle")
 		ball.position=arc(pass_start,pass_end,pass_clock/pass_duration,arc_term*.25)
 		if pass_clock>set_at-.33:
 			second_contact_player().rotation.y=atan2(facing.x,facing.z)
@@ -873,6 +874,7 @@ func step_reception_rally(delta: float) -> void:
 				pin_attack.pass_motion=pin_frame.global_basis.inverse()*velocity
 				pin_attack.stage_start=pin_attack.clock
 				pin_attack.pin_arrival=duration
+				pin_attack.rally_set_target=pin_frame.to_local(pass_end)
 				pin_attack.approach_intercept=pin_frame.to_local(pass_end)
 				pin_attack.flight_end=preload("res://scripts/pass_flight.gd").landing_time(pin_attack.pass_origin,pin_attack.pass_motion)
 				pin_attack.swing_aim=pin_frame.to_local(target)
@@ -895,6 +897,22 @@ func lane_space(x: float) -> float:
 	for blocker in wall: nearest=minf(nearest,absf(blocker.global_position.x-x))
 	return clampf((nearest-.45)/2.6,0.,1.)
 
+func move_libero_to_cover(delta: float) -> void:
+	var libero := passers[1]
+	if second_contact_player()==libero and phase=="serve_pass": return
+	if cover_slot>=0 and cover_players[cover_slot]==libero: return
+	if phase=="serve_pass" and first_contact_player()==libero:
+		var reception := receptions[receiver]
+		if reception.low_save.active and not reception.low_save.finished(flight_age+pass_clock): return
+		if pass_clock<.12: return
+	var attack := route_point(attack_slot)
+	var pipe := route_point(3)
+	var side := signf(libero.global_position.x-pipe.x)
+	if absf(libero.global_position.x-pipe.x)<.1: side=1. if attack.x<=pipe.x else -1.
+	var cover := Vector3(lerpf(attack.x,pipe.x,.55),.04,attack.z+2.4)
+	if absf(cover.x-pipe.x)<1.35: cover.x=pipe.x+side*1.35
+	move_receiver(libero,cover,delta,ball.global_position-libero.global_position)
+
 func scoring_target(origin: Vector3) -> Vector3:
 	var best := -INF
 	var target := Vector3(0,.11,-3.)
@@ -908,7 +926,8 @@ func scoring_target(origin: Vector3) -> Vector3:
 				var at_block := clampf((blocker.global_position.z-origin.z)/(point.z-origin.z),0.,1.)
 				var lane := lerpf(origin.x,x,at_block)
 				gap=minf(gap,absf(lane-blocker.global_position.x)-.48)
-			var margin := crossing.y-BallNet.NET_TOP-.13
+			var margin := crossing.y-BallNet.NET_TOP-BallNet.RADIUS-.13
+			if margin<0.: continue
 			var score := minf(gap,2.2)+.22*lane_space(x)-5.*maxf(0.,-margin)+randf()*.04
 			if score>best:
 				best=score
@@ -984,7 +1003,28 @@ func try_cover(previous: Vector3,delta: float) -> void:
 
 func return_struck(_actor: Node3D,point: Vector3,velocity: Vector3,_spin: float) -> void:
 	if phase!="serve_attack": return
+	# A set can drift between the read and palm contact. Keep the chosen lane,
+	# extending its depth only when the actual launch would clip the tape.
+	if velocity.z<-.01 and point.z>BallNet.NET_Z:
+		var t := (BallNet.NET_Z-point.z)/velocity.z
+		var clearance := point.y+velocity.y*t-4.905*t*t-BallNet.NET_TOP-BallNet.RADIUS
+		if clearance<.06:
+			var goal := pin_frame.to_global(pin_attack.swing_contact_aim)
+			var speed := velocity.length()
+			for depth in 12:
+				goal.z=maxf(BallNet.NET_Z-8.8,goal.z-.65)
+				var offset := goal-point
+				var term := speed*speed-9.81*offset.y
+				var disc := term*term-9.81*9.81*offset.length_squared()
+				if disc<0.: break
+				var duration := sqrt(2.*offset.length_squared()/(term+sqrt(disc)))
+				var trial := offset/duration+Vector3.UP*4.905*duration
+				t=(BallNet.NET_Z-point.z)/trial.z
+				if point.y+trial.y*t-4.905*t*t>=BallNet.NET_TOP+BallNet.RADIUS+.06:
+					velocity=trial
+					break
 	trace("serve_attack_strike",{"slot":attack_slot,"speed_kmh":velocity.length()*3.6,"point":str(point)})
+	for defender in wall: defender.block_read(_actor).record_velocity(velocity)
 	last_shot_slot=attack_slot
 	attack_decided=false
 	cover_slot=-1
@@ -1006,6 +1046,7 @@ func step_serve_wall(delta: float) -> void:
 		actor.stamina.recover(delta)
 		var block: RefCounted=wall_jumps[i]
 		if block!=null:
+			block.read_air_lane(ball.global_position,wall)
 			if not block.step(delta,ball.global_position): wall_jumps[i]=null
 			continue
 		var committing := middle_commit and i==1 and phase=="serve_pass" and set_at-pass_clock<.43
@@ -1013,7 +1054,9 @@ func step_serve_wall(delta: float) -> void:
 			actor.animator.advance(delta)
 			continue
 		var lead := clampi(roundi(pass_end.x/2.75)+1,0,2)
-		var goal := clampf(pass_end.x+(i-lead)*.74,-4.35,4.35)
+		var pattern: RefCounted=actor.block_read(attack_options[attack_slot])
+		var shade: float=pattern.shade(pass_end.z-BallNet.NET_Z,pin_attack.pin_arrival-pass_clock)
+		var goal := clampf(pass_end.x+shade+(i-lead)*.74,-4.35,4.35)
 		if committing: goal=route_point(1).x
 		var gap := goal-actor.position.x
 		var step := clampf(gap,-3.6*delta,3.6*delta)
