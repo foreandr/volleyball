@@ -26,7 +26,7 @@ func body_hit(previous: Vector3,current: Vector3,ball_radius: float) -> Dictiona
 				best={"point":pair[0],"part":BODY_PARTS[segment],"side":side if segment==0 else -1}
 	return best
 
-const ARM_RADII := [.085,.1425,.18]
+const ARM_RADII := [.085,.1425,.144]
 const HEIGHT := 1.16
 var actor: Node3D
 var age := 0.0

@@ -523,7 +523,7 @@ func play_spike(time: float, delta: float) -> void:
 					var surface := Geometry3D.get_closest_point_to_segment(point,start,finish)
 					var gap := point.distance_to(surface)
 					last_block_gap = minf(last_block_gap,gap)
-					var reach := BallPreview.RADIUS+(0.12 if is_hand else 0.075)
+					var reach := BallPreview.RADIUS+(0.096 if is_hand else 0.075)
 					if gap > reach or gap/reach >= best_gap: continue
 					if surface.y < Net.NET_TOP and surface.z <= Net.NET_Z: continue
 					best_gap = gap/reach
