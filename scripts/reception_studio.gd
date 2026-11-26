@@ -76,6 +76,7 @@ var sidebar := PanelContainer.new()
 const FOREARM = preload("res://assets/animations/straight_pass_02.res")
 var leg_grid := GridContainer.new()
 var leg_label := Label.new()
+var hand_leg_preview := false
 var legs := 1
 var forearm_frames := {}
 const ForearmDrive = preload("res://scripts/reception_pass_drive.gd")
@@ -261,9 +262,17 @@ func refresh() -> void:
 		update_leg_buttons()
 
 func change_clip(by: int) -> void:
+	if hand_leg_preview or clips[index].kind=="overhead" or cell_action()==0:
+		var next := legs
+		for i in clips.size():
+			next=posmod(next+by,clips.size())
+			if Regions.movement(clips[next]):
+				select_legs(next)
+				break
+		return
 	index=posmod(index+by,clips.size())
-	frame=seek.min_value
 	legs=index
+	frame=seek.min_value
 	update_leg_buttons()
 	seek.max_value=clips[index].frames
 	draw_pose()
@@ -430,6 +439,10 @@ func position_camera() -> void:
 
 func draw_pose() -> void:
 	var c: Dictionary=clips[index]
+	if hand_leg_preview:
+		c=c.duplicate()
+		c.step_legs=0 if legs<0 else int(clips[legs].id)
+		c.audition=true
 	var f := clampf(roundf(frame),0.,c.frames)
 	seek.set_value_no_signal(frame)
 	label.text=" %02d / %02d     Frame %d / %d " % [c.id,clips.size(),mini(roundi(frame),int(c.frames)),c.frames]
@@ -460,8 +473,8 @@ func draw_pose() -> void:
 			center+=rig.to_global(wrist.lerp(elbow,.32))*.5
 		contact_point=center+Vector3(0,.075,.075)
 		if c.kind=="overhead": contact_point=HandPass.contact_center(player)
-		reachable=cell_action()>0 and contact_point.distance_to(target)<=(HAND_RADIUS if c.kind=="overhead" else .22)
-	var missed: bool= frame>=touch_frame and cell_action()>0 and not reachable
+		reachable=(cell_action()>0 or hand_leg_preview) and contact_point.distance_to(target)<=(HAND_RADIUS if c.kind=="overhead" else .22)
+	var missed: bool= frame>=touch_frame and (cell_action()>0 or hand_leg_preview) and not reachable
 	miss_label.visible=missed
 	if missed:
 		var gap := contact_point.distance_to(target)
@@ -474,7 +487,7 @@ func draw_pose() -> void:
 		sample_receiver(c,maxf(0.,frame+lead_frames))
 	else:
 		sample_receiver(c,clampf(frame+lead_frames,0.,c.frames) if lead_frames>0. else f)
-	hand_volume.visible=hand_toggle.button_pressed and c.kind=="overhead" and cell_action()>0
+	hand_volume.visible=hand_toggle.button_pressed and c.kind=="overhead" and (cell_action()>0 or hand_leg_preview)
 	if hand_volume.visible: hand_volume.global_position=HandPass.contact_center(player)
 	pass_end_frame=0.
 	var seconds := (frame-touch_frame)/60.
@@ -545,7 +558,7 @@ func zone_interval(start: Vector3,finish: Vector3,bounds: AABB) -> Vector2:
 	return interval
 
 func sample_receiver(c: Dictionary,f: float) -> void:
-	if cell_action()==0:
+	if cell_action()==0 and not hand_leg_preview:
 		sample_layer(-1,c,f)
 		return
 	if c.kind=="overhead":
@@ -564,7 +577,10 @@ func sample_receiver(c: Dictionary,f: float) -> void:
 			jump_to_set(goal,follow)
 			lean_for_hand_pass(goal,load_weight*(1.-smoothstep(.035,.28,follow)),deg_to_rad(5.))
 		else:
-			pose_hand_pass_legs(goal,forehead,follow,int(c.get("step_legs",0)))
+			if c.get("audition",false):
+				if legs>=0: audition_hand_legs(goal,follow)
+			else:
+				pose_hand_pass_legs(goal,forehead,follow,int(c.get("step_legs",0)))
 			var reach_weight := load_weight*(1.-smoothstep(.035,.28,follow))
 			lean_for_hand_pass(goal,reach_weight)
 		if follow<0.:
@@ -690,6 +706,22 @@ func pose_hand_pass_legs(goal: Vector3, standing_height: float, follow: float, s
 		var bone: int=player.skeleton.find_bone(joint)
 		player.skeleton.set_bone_pose(bone,pose[bone])
 
+func audition_hand_legs(goal: Vector3, follow: float) -> void:
+	var clip: Dictionary=clips[legs]
+	var target: Vector3=player.to_local(goal).slide(Vector3.UP)
+	var direction := target.normalized()
+	var stride := Vector2(clip.side,clip.forward).length()
+	var recipe := clip.duplicate()
+	recipe.side=direction.x*stride
+	recipe.forward=direction.z*stride
+	var weight := smoothstep(-float(clip.contact)/60.,0.,follow)*(1.-smoothstep(.10,float(clip.frames-clip.contact)/60.,follow))
+	var pose := ready_pose.duplicate()
+	Regions.legs(player,pose,recipe,weight)
+	player.position.y=float(clip.get("jump",0.))*weight
+	for joint in ["pelvis","thigh_l","calf_l","foot_l","thigh_r","calf_r","foot_r"]:
+		var bone: int=player.skeleton.find_bone(joint)
+		player.skeleton.set_bone_pose(bone,pose[bone])
+
 func bend_for_hand_pass(depth: float) -> void:
 	if depth<=.00001: return
 	var rig: Skeleton3D=player.skeleton
@@ -715,6 +747,21 @@ func bend_for_hand_pass(depth: float) -> void:
 			rig.set_bone_pose(bone,pose[bone])
 
 func select_legs(which: int) -> void:
+	if hand_leg_preview or clips[index].kind=="overhead" or cell_action()==0:
+		if clips[index].kind!="overhead":
+			for i in clips.size():
+				if clips[i].kind=="overhead":
+					index=i
+					break
+		hand_leg_preview=true
+		legs=which
+		frame=seek.min_value
+		playing=true
+		seek.max_value=clips[index].frames
+		contact_key.clear()
+		update_leg_buttons()
+		draw_pose()
+		return
 	legs=which
 	if which>=0:
 		var phase := frame/float(clips[index].frames)
@@ -934,12 +981,22 @@ func pick_feed_point() -> void:
 	feed_offset=Vector3(randf_range(-half.x,half.x),randf_range(bottom,half.y),randf_range(-half.z,half.z))
 
 func preview_cell() -> void:
+	hand_leg_preview=false
+	contact_key.clear()
 	update_region()
 	pick_feed_point()
 	var id := cell_action()
 	for i in clips.size():
 		if int(clips[i].id)==id:
-			select_legs(i)
+			index=i
+			legs=i
+			if clips[i].kind=="overhead":
+				var saved: int=StorySession.game_options.get_value("studio_hand_legs",assignment_key(cell,quadrant),-2)
+				if saved>=-1 and saved<clips.size():
+					legs=saved
+					hand_leg_preview=true
+			seek.max_value=clips[index].frames
+			update_leg_buttons()
 			if cell.x!=1:
 				mirror.button_pressed=(cell.x<1)!=(float(clips[i].side)<0.)
 			break
@@ -958,6 +1015,9 @@ func update_region() -> void:
 
 func assign_region() -> void:
 	var id: int=0 if legs<0 else clips[legs].id
+	if hand_leg_preview:
+		id=clips[index].id
+		StorySession.game_options.set_value("studio_hand_legs",assignment_key(cell,quadrant),legs)
 	StorySession.game_options.set_value("studio_three_rows",assignment_key(cell,quadrant),id)
 	StorySession.save_options()
 	rebuild_colors()
