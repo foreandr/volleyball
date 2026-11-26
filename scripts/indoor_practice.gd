@@ -39,7 +39,7 @@ var forehead_target := Vector3.ZERO
 var contact_time := 1.0
 const DURATION := [1.25,1.62]
 const APEX := [1.92,3.22]
-const LINES := ["Welcome to the team, %s. IÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢m Coach Ellis.","YouÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢re trying out at setter. Watch the three targets. IÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ll toss the first ones right to you.","Three calls from each coach station. Keep your spot. IÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ll toss above your forehead, including on the jump sets."]
+const LINES := ["Welcome to the team, %s. IÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢m Coach Ellis.","YouÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢re trying out at setter. Watch the three targets. IÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ll toss the first ones right to you.","Three calls from each coach station. Keep your spot. IÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ll toss above your forehead, including on the jump sets."]
 var coach_motion := preload("res://scripts/tryout_coach.gd").new()
 var last_toss := -10.0
 var next_release := 0.0
@@ -317,22 +317,7 @@ func register_student(actor: Node3D, variant: int) -> void:
 	actor.set_meta("school_photo",SchoolHeadshots.request(actor.attributes,variant,actor.team_color))
 
 func seat_teammates() -> void:
-	var seats := [[-1,1,-3.0],[1,0,-1.1],[-1,1,0.9],[1,0,1.4],[-1,2,3.3],[1,1,4.2],[-1,0,5.5],[1,2,6.0],[-1,2,7.8],[1,1,8.0]]
-	for i in seats.size():
-		var seat: Array = seats[i]
-		var side := int(seat[0])
-		var row := int(seat[1])
-		var athlete_ := athlete(Vector3(side*(gym.FRONT_BENCH_X+row*.69),0,float(seat[2])),["245447","a34d31","334357"][i%3])
-		register_student(athlete_,20+i)
-		athlete_.set_height_cm(172+(i*7)%29)
-		preload("res://scripts/practice_kit.gd").apply(athlete_,false,20+i)
-		athlete_.rotation.y = -side*PI/2
-		athlete_.play_action("base/Sitting_Talking",0)
-		athlete_.animator.seek(i*.31,true)
-		var idx := (4 if side==1 else 0)+row
-		var constraint := preload("res://scripts/bleacher_seat.gd").new()
-		constraint.configure(athlete_,gym.benches[idx],gym.benches[idx-1] if row>0 else null,side,float(seat[2]))
-		seats_in_use.append(constraint)
+	seats_in_use.append_array(gym.seat_teammates(athlete,register_student))
 
 func build_hud() -> void:
 	panel.anchor_top = 1
@@ -1577,7 +1562,7 @@ func play_intro(delta: float) -> void:
 	camera.position = [Vector3(4.2,2.9,-3),Vector3(-0.3,1.85,3.8),Vector3(3.2,4.2,-4.5)][line]+Vector3.RIGHT*0.12*fmod(elapsed,4.2)
 	camera.look_at(coach.position+Vector3.UP*1.5 if line==1 else setter.position+Vector3.UP*1.4)
 	coach.rotation.y = atan2(setter.position.x-coach.position.x,setter.position.z-coach.position.z)
-	title.text = "INDOOR  /  DAY ONE     ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢     COACH ELLIS"
+	title.text = "INDOOR  /  DAY ONE     ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢     COACH ELLIS"
 	message.text = ""
 	if line != intro_line:
 		intro_line = line

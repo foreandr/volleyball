@@ -45,11 +45,11 @@ func _ready() -> void:
 		box("Side masonry",Vector3(0.25,9,36+rear_extension),Vector3(side*16.3,4.4,2-rear_extension*.5),block)
 		for row in 4:
 			var x: float = side*(FRONT_BENCH_X+row*0.69)
-			box("Bleacher bench",Vector3(0.65,0.15,15),Vector3(x,0.48+row*0.37,3),wood)
+			box("Bleacher bench",Vector3(0.65,0.15,27),Vector3(x,0.48+row*0.37,3),wood)
 			var height := .48+row*.37
-			box("Seat front lip",Vector3(.037,.036,14.98),Vector3(x-side*.312,height+.048,3),wood)
-			box("Seat underframe",Vector3(.06,.085,14.96),Vector3(x,height-.115,3),steel)
-			for z in [-3,1,5,9]:
+			box("Seat front lip",Vector3(.037,.036,26.98),Vector3(x-side*.312,height+.048,3),wood)
+			box("Seat underframe",Vector3(.06,.085,26.96),Vector3(x,height-.115,3),steel)
+			for z in [-9,-5,-1,3,7,11,15]:
 				box("Bleacher foot plate",Vector3(.30,.028,.22),Vector3(x,.018,z),steel)
 				brace(Vector3(x,.10,z),Vector3(x,height-.1,z+.75),.045,steel)
 				box("Folding support",Vector3(0.1,0.45+row*0.37,0.1),Vector3(x,(0.45+row*0.37)/2,z),steel)
@@ -60,7 +60,7 @@ func _ready() -> void:
 			var x := (i-2)*3.4
 			box("Championship felt",Vector3(1.5,2.3,0.07),Vector3(x,5.5,z-dir*0.10),paint)
 			var label := Label3D.new()
-			label.text = "VARSITY\nâ—†\n%d" % (2006+i*3)
+			label.text = "VARSITY\nÃ¢â€”â€ \n%d" % (2006+i*3)
 			label.font_size = 40
 			label.pixel_size = 0.0068
 			label.position = Vector3(x,5.5,z-dir*0.16)
@@ -116,6 +116,26 @@ func _ready() -> void:
 	probe.interior = true
 	probe.intensity = 0.65
 	add_child(probe)
+
+func seat_teammates(create_player: Callable, profile: Callable = Callable()) -> Array:
+	var occupied := []
+	var seats := [[-1,1,-3.0],[1,0,-1.1],[-1,1,0.9],[1,0,1.4],[-1,2,3.3],[1,1,4.2],[-1,0,5.5],[1,2,6.0],[-1,2,7.8],[1,1,8.0]]
+	for i in seats.size():
+		var seat: Array = seats[i]
+		var side := int(seat[0])
+		var row := int(seat[1])
+		var athlete_: Node3D = create_player.call(Vector3(side*(FRONT_BENCH_X+row*.69),0,float(seat[2])),["245447","a34d31","334357"][i%3])
+		if profile.is_valid(): profile.call(athlete_,20+i)
+		athlete_.set_height_cm(172+(i*7)%29)
+		preload("res://scripts/practice_kit.gd").apply(athlete_,false,20+i)
+		athlete_.rotation.y = -side*PI/2
+		athlete_.play_action("base/Sitting_Talking",0)
+		athlete_.animator.seek(i*.31,true)
+		var idx := (4 if side==1 else 0)+row
+		var constraint := preload("res://scripts/bleacher_seat.gd").new()
+		constraint.configure(athlete_,benches[idx],benches[idx-1] if row>0 else null,side,float(seat[2]))
+		occupied.append(constraint)
+	return occupied
 
 func brace(a: Vector3,b: Vector3,width: float,_style: Material) -> void:
 	var basis := Basis(Quaternion(Vector3.UP,(b-a).normalized()))*Basis.from_scale(Vector3(width,a.distance_to(b),width))
