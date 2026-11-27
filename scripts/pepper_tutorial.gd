@@ -9,7 +9,8 @@ const Physics=preload("res://scripts/gym_physics.gd")
 const Map=preload("res://scripts/mapped_reception.gd")
 var released:Dictionary={}
 var touched_at:=-INF
-const CONTACT_POSE := .60
+var studio:Array=JSON.parse_string(FileAccess.get_file_as_string("res://assets/reception_studio.json"))
+var zones:Array[Dictionary]=[]
 var pairs:Array[Dictionary]=[]
 var game
 var score:=0
@@ -49,31 +50,70 @@ func configure(host,readout:Label,completed:int) -> void:
 			orb.material_override=host.ball.material_override
 			host.world.add_child(orb)
 		orb.show()
-		receiver.play_action("forearm")
-		receiver.animator.seek(CONTACT_POSE,true)
-		var platform:=hands(receiver)
-		receiver.play_action("idle",0.)
-		receiver.animator.advance(0.)
+		var mapper:=Map.new()
+		host.world.add_child(mapper)
+		var anchor:=Node3D.new()
+		host.world.add_child(anchor)
+		mapper.pose_origin=anchor
+		mapper.defenders.append(anchor)
+		mapper.clips=studio
+		if zones.is_empty(): zones=mapper.assigned_boxes()
 		var outcomes:=preload("res://scripts/demo_outcomes.gd").new()
-		pairs.append({"rise":randf_range(2.35,3.05),"outcomes":outcomes,"cpu_misses":outcomes.next_misses(),"receiver":receiver,"feeder":feeder,"ball":orb,"age":-i*.21,"caught":false,"platform":platform,"flying":false,"hit":false,"swing":false,"origin":hands(feeder)})
+		pairs.append({"rise":randf_range(2.35,3.05),"outcomes":outcomes,"cpu_misses":outcomes.next_misses(),"receiver":receiver,"feeder":feeder,"ball":orb,"age":-i*.21,"caught":false,"platform":receiver.global_position+Vector3.UP,"home":receiver.global_transform,"mapper":mapper,"zone_step":i,"motion":{},"flying":false,"hit":false,"swing":false,"origin":hands(feeder)})
 	athletes[8].position=Vector3(-5.3,.04,2.)
 	feedback.text="%d / 5 passes"%score
 	if score==5: complete()
+
+func plan_reception(pair:Dictionary) -> void:
+	var mapper:Map=pair.mapper
+	var receiver:Node3D=pair.receiver
+	receiver.global_transform=pair.home
+	# Work through center, side, low and high feeds in receiver-local space.
+	var lanes:=[Vector3(0,1.05,.55),Vector3(.62,.9,.55),Vector3(-.65,.42,.75),Vector3(0,1.85,.42),Vector3(-.68,1.15,.45),Vector3(.68,.45,.7)]
+	var aim:Vector3=lanes[int(pair.zone_step)%lanes.size()]
+	pair.zone_step+=1
+	var best:Dictionary={}
+	var distance:=INF
+	for zone in zones:
+		var bounds:AABB=zone.bounds
+		var error:=aim.distance_squared_to(aim.clamp(bounds.position,bounds.end))
+		if error<distance:
+			best=zone
+			distance=error
+	var bounds:AABB=best.bounds
+	var local:=aim.clamp(bounds.position+Vector3.ONE*.001,bounds.end-Vector3.ONE*.001)
+	mapper.set_intercept=receiver.to_global(local)
+	mapper.incoming_lead_seconds=ARRIVAL-FEED
+	mapper.pass_goal=pair.feeder.global_position
+	mapper.pass_rise=pair.rise
+	mapper.feed_kmh=3.6*pair.origin.distance_to(mapper.set_intercept)/(ARRIVAL-FEED)
+	pair.motion=mapper.begin_mapped_motion(mapper.pose_origin,receiver,receiver.global_position,pair.origin,best,0.)
+	mapper.sample_receiver(pair.motion,pair.motion.contact,true,mapper.legs)
+	pair.platform=mapper.platform_center(pair.motion)
+	mapper.sample_receiver(pair.motion,0.,false,mapper.legs)
+	game.trace("pepper_grid",{"region":mapper.region_number(best.cell,best.part),"animation":pair.motion.id,"kind":pair.motion.kind,"receiver":receiver.display_name})
 
 func start_human_turn() -> void:
 	demonstrating=false
 	var pair:=pairs[0]
 	var demo:Node3D=pair.receiver
 	var human:Node3D=game.setter
-	var waiting:=human.position
-	human.transform=demo.transform
-	demo.position=waiting
-	demo.play_action("idle")
+	human.global_position=pair.home.origin
+	human.rotation.y=atan2(pair.feeder.position.x-human.position.x,pair.feeder.position.z-human.position.z)
+	pair.home=human.global_transform
+	demo.global_basis=Basis(Vector3.UP,PI*.5)
+	demo.position=Vector3(-game.gym.FRONT_BENCH_X,.04,-2.9)
+	for modifier in demo.skeleton.get_children():
+		if modifier is SkeletonModifier3D: modifier.active=true
+	demo.play_action("base/Sitting_Talking",0.)
+	demo.animator.seek(.62,true)
+	var seat:=preload("res://scripts/bleacher_seat.gd").new()
+	seat.configure(demo,game.gym.benches[0],null,-1,-2.9)
+	game.seats_in_use.append(seat)
 	pair.receiver=human
-	human.play_action("forearm",0.)
-	human.animator.seek(CONTACT_POSE,true)
-	pair.platform=hands(human)
-	human.play_action("idle",.1)
+	pair.motion={}
+	pair.zone_step=0
+	human.play_action("idle",0.)
 	pair.age=0.
 	pair.hit=false
 	pair.caught=false
@@ -122,6 +162,7 @@ func tick(delta:float) -> void:
 			if not pair.flying:
 				pair.flying=true
 				pair.origin=game.coach_motion.toss(feeder,1.)
+				plan_reception(pair)
 			if t<FEED+.16: game.coach_motion.toss(feeder,1.)
 			elif t<ARRIVAL:
 				feeder.play_action("base/Idle",.18)
@@ -129,16 +170,11 @@ func tick(delta:float) -> void:
 			if not pair.caught:
 				var u:float=(t-FEED)/(ARRIVAL-FEED)
 				orb.position=pair.origin.lerp(pair.platform,u)+Vector3.UP*4.*1.4*u*(1.-u)
-			if active and not pair.swing and t>=ARRIVAL-CONTACT_POSE and not pair.caught:
-				receiver.play_action("forearm",.08)
-				pair.swing=true
-			if pair.swing and not pair.caught: receiver.animator.seek(clampf(CONTACT_POSE+t-ARRIVAL,0.,CONTACT_POSE),true)
-			if human and active and not pair.caught:
-				for side in ["l","r"]:
-					var wrist:=Physics.joint(receiver,"hand_"+side)
-					var elbow:=Physics.joint(receiver,"lowerarm_"+side)
-					var nearest:=Geometry3D.get_closest_points_between_segments(previous,orb.position,wrist,elbow)
-					if nearest[0].distance_to(nearest[1])<=Physics.BALL_RADIUS+.055: touched_at=t
+			var mapper:Map=pair.mapper
+			var frame:=clampf(pair.motion.contact+60.*(t-ARRIVAL),0.,pair.motion.frames)
+			if active: pair.swing=true
+			if pair.swing: mapper.sample_receiver(pair.motion,frame,true,mapper.legs)
+			if human and active and not pair.caught and mapper.segment_touch(pair.motion,previous,orb.position): touched_at=t
 			var human_hit:=human and not released.is_empty() and bool(released.playable) and t-touched_at<=.095
 			if not pair.caught and (human_hit or t>=ARRIVAL+(.14 if human else 0.)):
 				if human: active=human_hit
@@ -162,7 +198,7 @@ func tick(delta:float) -> void:
 					orb.position=game.arc(pair.contact_point,catch_at,u,pair.rise)
 				else:
 					orb.position=pair.contact_point.lerp(receiver.position+receiver.basis.z*-.42+Vector3.UP*.105,minf(1.,u*2.))
-		receiver.animator.advance(delta)
+		if not pair.flying: receiver.animator.advance(delta)
 		if t>=RESET:
 			pair.rise=randf_range(2.35,3.05)
 			if human:
@@ -177,6 +213,7 @@ func tick(delta:float) -> void:
 			pair.caught=false
 			pair.swing=false
 			pair.flying=false
+			receiver.global_transform=pair.home
 			receiver.play_action("idle",.16)
 			if i==0: needs_release=holding
 

@@ -1,4 +1,9 @@
 extends Control
+const DEVELOPMENT_TABS:=["Offense","Defense","Physical"]
+const DEFENSE_RATINGS:=["Forearm reception","Hand reception","Forearm defense","Hand defense","Blocking","Reflexes"]
+const PHYSICAL_RATINGS:=["vertical_in","Attack jump","Block jump","Serve jump","Athleticism","Strength","Speed","Stamina","Endurance","Willpower"]
+var development_tab:=0
+var trigger_down:=false
 var screen := ""
 var column: VBoxContainer
 
@@ -122,8 +127,25 @@ func development(selected := "") -> void:
 	if not badges.is_empty(): info.text+="    /    "+", ".join(badges)
 	info.text+="    /    %d perk XP"%int(CareerSession.data.get_value("perk_xp",id,0))
 	column.add_child(info)
+	var tabs:=HBoxContainer.new()
+	column.add_child(tabs)
+	for i in DEVELOPMENT_TABS.size():
+		var tab:=Button.new()
+		tab.text=DEVELOPMENT_TABS[i]
+		tab.toggle_mode=true
+		tab.button_pressed=i==development_tab
+		tab.pressed.connect(func(): select_development_tab(i))
+		tabs.add_child(tab)
+	var trigger:=TextureRect.new()
+	trigger.texture=preload("res://assets/input/xbox/RT.png")
+	trigger.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
+	trigger.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	trigger.custom_minimum_size=Vector2(36,28)
+	tabs.add_child(trigger)
 	var active: Button
 	for rating in CareerSession.Profile.ordered_ratings():
+		var category:=2 if rating in PHYSICAL_RATINGS else (1 if rating in DEFENSE_RATINGS else 0)
+		if category!=development_tab: continue
 		var athlete := CareerSession.Profile.clean(CareerSession.profile())
 		var value := float(athlete[rating])
 		var cost:=CareerSession.price(rating,value)
@@ -151,6 +173,19 @@ func development(selected := "") -> void:
 		MenuPresentation.stat_help(upgrade,upgrade,title,"Jump height on serves, attacks and blocks." if vertical else CareerSession.Profile.RATING_HELP[rating])
 	add_button("Back",show_home)
 	if active: active.grab_focus()
+
+func select_development_tab(index:int) -> void:
+	development_tab=posmod(index,DEVELOPMENT_TABS.size())
+	development()
+
+func _input(event:InputEvent) -> void:
+	if event is InputEventJoypadMotion and event.axis==JOY_AXIS_TRIGGER_RIGHT:
+		if event.axis_value<.25: trigger_down=false
+		elif event.axis_value>.65 and not trigger_down:
+			trigger_down=true
+			if screen=="PLAYER DEVELOPMENT" and get_viewport().gui_get_focus_owner()!=null and column.is_ancestor_of(get_viewport().gui_get_focus_owner()):
+				select_development_tab(development_tab+1)
+				get_viewport().set_input_as_handled()
 
 func confirm_prestige(skill:String,title:String) -> void:
 	var dialog:=ConfirmationDialog.new()
