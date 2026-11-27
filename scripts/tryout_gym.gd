@@ -1,6 +1,7 @@
 extends "res://scripts/preview_court.gd"
 
 const Contacts = preload("res://scripts/gym_physics.gd")
+const CEILING_HEIGHT := 12.0
 const FRONT_BENCH_X := 11.8
 var rear_extension := 0.0
 var brace_transforms: Array[Transform3D]=[]
@@ -42,11 +43,11 @@ func _ready() -> void:
 	wood.shader=preload("res://assets/gym/bleacher_wood.gdshader")
 	var steel := material("535951")
 	var white := material("e7dfc9")
-	box("North wall",Vector3(34,9,0.3),Vector3(0,4.4,19.8),block)
-	box("South wall",Vector3(34,9,0.3),Vector3(0,4.4,-16-rear_extension),block)
-	box("Ceiling",Vector3(34,0.2,36+rear_extension),Vector3(0,9,2-rear_extension*.5),white)
+	box("North wall",Vector3(34,CEILING_HEIGHT,0.3),Vector3(0,5.9,19.8),block)
+	box("South wall",Vector3(34,CEILING_HEIGHT,0.3),Vector3(0,5.9,-16-rear_extension),block)
+	box("Ceiling",Vector3(34,0.2,36+rear_extension),Vector3(0,CEILING_HEIGHT,2-rear_extension*.5),white)
 	for side in [-1,1]:
-		box("Side masonry",Vector3(0.25,9,36+rear_extension),Vector3(side*16.3,4.4,2-rear_extension*.5),block)
+		box("Side masonry",Vector3(0.25,CEILING_HEIGHT,36+rear_extension),Vector3(side*16.3,5.9,2-rear_extension*.5),block)
 		for row in 4:
 			var x: float = side*(FRONT_BENCH_X+row*0.69)
 			var height := .48+row*.37
@@ -72,15 +73,15 @@ func _ready() -> void:
 			if dir==1: label.rotation.y = PI
 			add_child(label)
 	for z in [-13,-8,-3,2,7,12,17]:
-		box("Roof steel",Vector3(32.6,0.2,0.18),Vector3(0,8.55,z),steel)
-		box("Truss lower chord",Vector3(32.4,.09,.10),Vector3(0,7.91,z),steel)
+		box("Roof steel",Vector3(32.6,0.2,0.18),Vector3(0,11.55,z),steel)
+		box("Truss lower chord",Vector3(32.4,.09,.10),Vector3(0,10.91,z),steel)
 		for bay in 10:
 			var x := -16.2+bay*3.24
-			brace(Vector3(x,8.52,z),Vector3(x+1.62,7.94,z),.06,steel)
-			brace(Vector3(x+1.62,7.94,z),Vector3(x+3.24,8.52,z),.06,steel)
+			brace(Vector3(x,11.52,z),Vector3(x+1.62,10.94,z),.06,steel)
+			brace(Vector3(x+1.62,10.94,z),Vector3(x+3.24,11.52,z),.06,steel)
 		for x in [-5,5]:
-			box("Fixture suspension",Vector3(.035,.14,.035),Vector3(x,8.46,z),steel)
-			box("Fluorescent bank",Vector3(2.8,0.1,0.32),Vector3(x,8.38,z),material("fff3cc"))
+			box("Fixture suspension",Vector3(.035,.14,.035),Vector3(x,11.46,z),steel)
+			box("Fluorescent bank",Vector3(2.8,0.1,0.32),Vector3(x,11.38,z),material("fff3cc"))
 
 
 	var padding := material("822737")
@@ -115,8 +116,8 @@ func _ready() -> void:
 		add_child(crest)
 	wall_text("F A L C O N S",Vector3(0,7.47,19.45),.010,Color("8b2035"))
 	var probe := ReflectionProbe.new()
-	probe.position = Vector3(0,3,2)
-	probe.size = Vector3(33,11,38+rear_extension)
+	probe.position = Vector3(0,5,2)
+	probe.size = Vector3(33,14,38+rear_extension)
 	probe.box_projection = true
 	probe.interior = true
 	probe.intensity = 0.65
@@ -161,17 +162,17 @@ func build_gallery(steel: Material,paint: Material) -> void:
 	for side in [-1,1]:
 		for bay in 10:
 			var z := -12.0+bay*3.15
-			box("Clerestory frame",Vector3(0.15,1.9,2.9),Vector3(side*16.09,6.65,z),steel)
+			box("Clerestory frame",Vector3(0.15,1.9,2.9),Vector3(side*16.09,9.65,z),steel)
 			for pane in 3:
-				box("Daylight glazing",Vector3(0.06,1.72,0.86),Vector3(side*15.98,6.65,z+(pane-1)*0.93),glass)
+				box("Daylight glazing",Vector3(0.06,1.72,0.86),Vector3(side*15.98,9.65,z+(pane-1)*0.93),glass)
 	for z in [-13,-8,-3,2,7,12,17]:
-		box("Truss chord",Vector3(32.5,.08,.08),Vector3(0,7.85,z),steel)
+		box("Truss chord",Vector3(32.5,.08,.08),Vector3(0,10.85,z),steel)
 		for i in 18:
 			var x := -16.2+i*1.8
-			brace(Vector3(x,7.85,z),Vector3(x+.9,8.55,z),.055,steel)
-			brace(Vector3(x+.9,8.55,z),Vector3(x+1.8,7.85,z),.055,steel)
+			brace(Vector3(x,10.85,z),Vector3(x+.9,11.55,z),.055,steel)
+			brace(Vector3(x+.9,11.55,z),Vector3(x+1.8,10.85,z),.055,steel)
 		for x in [-5,5]:
-			box("Fixture diffuser",Vector3(2.66,.045,.26),Vector3(x,8.30,z),tube)
+			box("Fixture diffuser",Vector3(2.66,.045,.26),Vector3(x,11.30,z),tube)
 	for i in 2:
 		var x := -6.4 if i==0 else 6.4
 		box("Backboard",Vector3(1.8,1.05,.12),Vector3(x,3.45,18.95),material("d7d3bd"))
@@ -220,11 +221,11 @@ static func light_gym(world: Node3D) -> void:
 	for z in [-4.0,4.0,11.0]:
 		for x in [-5.0,5.0]:
 			var lamp := OmniLight3D.new()
-			lamp.position = Vector3(x,7.65,z)
+			lamp.position = Vector3(x,10.65,z)
 			lamp.light_color = Color("fff0d5") if x>0 else Color("dceafa")
-			lamp.omni_range = 13.5
+			lamp.omni_range = 16.5
 			lamp.omni_attenuation = 1.35
-			lamp.light_energy = 1.85
+			lamp.light_energy = 2.8
 			lamp.light_size=.22
 			lamp.shadow_enabled = true
 			world.add_child(lamp)
@@ -235,7 +236,7 @@ static func light_gym(world: Node3D) -> void:
 	bounce.omni_range = 10
 	world.add_child(bounce)
 	var daylight := SpotLight3D.new()
-	daylight.position = Vector3(-10.6,6.5,-1)
+	daylight.position = Vector3(-10.6,9.5,-1)
 	daylight.light_energy = 4.0
 	daylight.light_color = Color("e6f3ff")
 	daylight.spot_angle = 51
@@ -247,7 +248,7 @@ static func light_gym(world: Node3D) -> void:
 	if cinematic:
 		for z in [-3.1,3.2,9.5]:
 			var sun := SpotLight3D.new()
-			sun.position = Vector3(-10.3,6.7,z)
+			sun.position = Vector3(-10.3,9.7,z)
 			sun.spot_angle = 21
 			sun.spot_range = 23
 			sun.spot_attenuation = 0.25

@@ -1294,7 +1294,7 @@ func step_practice(delta: float) -> void:
 					var air_time := run_distance/4.8+.45+PLANT_DURATION+(.48 if jump_rep() else .30)
 					toss_curve=maxf(3.2,9.81*air_time*air_time/8.)
 				var apex := maxf(source.y,catch_point.y)+toss_curve
-				if solo_setting: apex=minf(apex,8.15) # Leave clearance under the gym roof steel.
+				if solo_setting: apex=minf(apex,gym.CEILING_HEIGHT-.85) # Leave clearance under the gym roof steel.
 				forehead_arrival=sqrt(2.*(apex-source.y)/9.81)+sqrt(2.*(apex-forehead_target.y)/9.81)
 				contact_time=sqrt(2.*(apex-source.y)/9.81)+sqrt(2.*(apex-catch_point.y)/9.81)
 				toss_spin=Vector3([-8.0,1.4,7.5][rotation_drill.tosses%3],rotation_drill.random.randf_range(-3,3),rotation_drill.random.randf_range(-2,2))
