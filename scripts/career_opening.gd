@@ -376,6 +376,16 @@ func finish_pepper() -> void:
 	phase="pepper_complete"
 	training_prompt([[JOY_BUTTON_A,"Continue"]],"Enter to continue")
 
+func fade_receiver_exit() -> void:
+	if curtain.visible: return
+	curtain.z_index=20
+	curtain.modulate.a=0.
+	curtain.show()
+	var fade:=create_tween().set_trans(Tween.TRANS_SINE)
+	fade.tween_property(curtain,"modulate:a",.32,.18)
+	fade.tween_property(curtain,"modulate:a",0.,.30)
+	fade.tween_callback(curtain.hide)
+
 func enter_drill() -> void:
 	var was_footwork:=phase=="footwork_demo"
 	phase="handoff"

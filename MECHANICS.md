@@ -250,3 +250,4 @@ Career Hair and face supports right-stick and middle-drag orbit and wheel zoom t
 Career practice opens with a four-leg footwork circuit. Use the left stick to run forward and backpedal. Hold LT while moving laterally along the net and baseline. Completing the lap starts partner pepper. Hold A through the toss to return it automatically. Timing feedback measures when platform preparation began. Five successful passes complete the drill.
 
 Moving and stationary pepper display the shared ball landing marker for the incoming toss and outgoing pass. Moving receivers recover to ready at the end of the pass. Between five-feed turns, the two athletes run between the receiving spot and the sideline.
+Moving receivers use LT directional footwork while tracking a feed. The contact animation takes over for the final approach. Demo receivers run back to neutral and face the coach before the next toss.

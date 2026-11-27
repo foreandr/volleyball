@@ -281,6 +281,7 @@ func move_passer(pair:Dictionary,dt:float) -> bool:
 		pair.home.basis=actor.global_basis
 		if focused: actor.play_action("idle",.14)
 		else: actor.play_travel_gait(velocity)
+		actor.animator.advance(dt)
 		Ground.shuffle(actor,steps,velocity,focused,dt)
 	if pair.flying: pair.mapper.pose_origin.global_position=base
 	var toward:Vector3=(pair.feeder.position-base).slide(Vector3.UP).normalized()
@@ -316,6 +317,11 @@ func recover_receiver(pair:Dictionary,dt:float) -> void:
 			var start:Transform3D=pair.release_pose[bone]
 			rig.set_bone_pose(bone,start.interpolate_with(rig.get_bone_pose(bone),blend))
 
+func square_up(actor:Node3D,target:Vector3,dt:float) -> bool:
+	var direction:=(target-actor.position).slide(Vector3.UP).normalized()
+	Ground.face(actor,direction,dt)
+	return actor.global_basis.z.normalized().dot(direction)>.995
+
 func walk_rotation(actor:Node3D,destination:Vector3,dt:float) -> bool:
 	var toward:=destination-actor.position
 	if toward.length()<.015:
@@ -324,6 +330,7 @@ func walk_rotation(actor:Node3D,destination:Vector3,dt:float) -> bool:
 	var velocity:=toward.normalized()*3.5
 	Ground.face(actor,toward,dt)
 	actor.play_travel_gait(velocity)
+	actor.animator.advance(dt)
 	actor.position=actor.position.move_toward(destination,velocity.length()*dt)
 	return false
 
@@ -332,6 +339,8 @@ func tick(delta:float) -> void:
 	for i in pairs.size():
 		var pair:=pairs[i]
 		if moving:
+			for teammate in waiting:
+				if teammate!=pair.get("outgoing"): Ground.face(teammate,pair.receiver.position-teammate.position,delta)
 			var cart=game.rotation_drill
 			if pair.has("outgoing"):
 				var old:Node3D=pair.outgoing
@@ -343,7 +352,8 @@ func tick(delta:float) -> void:
 				if not pair.has("exit_lane"): outgoing_done=walk_rotation(old,pair.sideline,delta)
 				var incoming_done:=walk_rotation(pair.receiver,base,delta)
 				if outgoing_done and incoming_done:
-					Ground.face(pair.receiver,pair.feeder.position-pair.receiver.position,delta)
+					if not square_up(pair.receiver,pair.feeder.position,delta): continue
+					Ground.face(old,pair.receiver.position-old.position,delta)
 					pair.home=pair.receiver.global_transform
 					pair.erase("outgoing")
 					if pair.erase("deferred_entry"): start_human_turn()
@@ -351,6 +361,7 @@ func tick(delta:float) -> void:
 			if pair.get("reset_to_five",false):
 				var ready_spot:=Vector3(FIVE_CENTER.x,.04,FIVE_CENTER.y)
 				if not walk_rotation(pair.receiver,ready_spot,delta): continue
+				if not square_up(pair.receiver,pair.feeder.position,delta): continue
 				base=ready_spot
 				pair.home=pair.receiver.global_transform
 				pair.erase("reset_to_five")
@@ -369,7 +380,7 @@ func tick(delta:float) -> void:
 				feedback.text="Return to zone 5 to receive"
 			elif not demonstrating and not pair.flying:
 				feedback.text="%d / 5 passes to setter"%score
-			if (not facing or not in_range) and not pair.flying and not demonstrating:
+			if not pair.flying and (not facing or (not demonstrating and not in_range)):
 				pair.age=0.
 				pair.ball.position=game.coach_motion.toss(pair.feeder,0.)
 				continue
@@ -400,7 +411,10 @@ func tick(delta:float) -> void:
 				orb.position=pair.origin.lerp(pair.platform,u)+Vector3.UP*4.*float(pair.toss_rise)*u*(1.-u)
 			var mapper:Map=pair.mapper
 			var frame:=clampf(pair.motion.contact+60.*(t-arrival),0.,pair.motion.frames)
-			if active and not pair.swing:
+			# The mapped contact pose takes over only for the final approach.
+			# Until then the feet keep the regular LT shuffle while chasing a toss.
+			var preparing:=not moving or t>=arrival-.40
+			if active and preparing and not pair.swing:
 				# The human can begin preparing mid-flight. Blend from the pose
 				# actually on screen when they press, even on a late pickup.
 				mapper.entry_frame=frame
@@ -447,7 +461,7 @@ func tick(delta:float) -> void:
 					orb.position=pair.origin.lerp(pair.platform,fall)+Vector3.UP*4.*float(pair.toss_rise)*fall*(1.-fall)
 				else:
 					orb.position=pair.contact_point.lerp(receiver.position+receiver.basis.z*-.42+Vector3.UP*.105,minf(1.,u*2.))
-		if not pair.flying: receiver.animator.advance(delta)
+		if not moving and not pair.flying: receiver.animator.advance(delta)
 		if t>=arrival+maxf(1.93,sqrt(8.*float(pair.rise)/9.81)+.25):
 			if moving and game.rotation_drill.issued:
 				cart_service.receive(game.rotation_drill.issued,pair.ball.position,pair.hit)
@@ -467,6 +481,7 @@ func tick(delta:float) -> void:
 					CareerSession.checkpoint("moving_reception_complete",score)
 					feedback.text="Moving reception complete   /   %d of 5"%score
 					game.finish_pepper()
+					game.fade_receiver_exit()
 				var next:Node3D=waiting.pop_front()
 				var sideline:=next.global_position
 				pair.outgoing=receiver
