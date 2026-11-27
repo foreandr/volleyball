@@ -175,3 +175,4 @@ Reception Studio leg movement 33 can use the spike approach right plant and clos
 14 is mapped to 22-23.top.left.near and its mirror 24.top.near. Its chin tucks and the shoulder dip increases with lateral reach.
 Reception Studio zones 13 and 15 use opposite orientations of Legs 21 for lateral forearm passes.
 Reception Studio zones 19 and 21 use opposite orientations of Legs 21 with a forearm platform. Unassigned low and middle zones preview leg choices with the forearm platform.
+In zones 19 and 21, Legs 21 uses a wider, deeper lunge, extra torso lean toward contact, and a two-step entry of up to 40 cm when time and distance allow.

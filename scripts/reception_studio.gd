@@ -653,6 +653,13 @@ func draw_pose() -> void:
 					c.audition=true
 					motion_legs=saved
 			break
+	if c.id==21 and address.y==0 and address.z==2 and address.x!=1:
+		c=c.duplicate()
+		c.side*=1.20
+		c.forward*=1.12
+		c.drop+=.045
+		c.entry_plant_m=.40
+		c.contact_lean_deg=19.
 	if active and not selected and assigned>0:
 		var routed_mirror := address.x!=1 and ((address.x<1)!=(float(c.side)<0.))
 		var orientation := Basis(Vector3.UP,atan2(serve_from.x-defenders[receiving].position.x,serve_from.z-defenders[receiving].position.z))
@@ -906,6 +913,8 @@ func pose_receiver(c: Dictionary,f: float,active: bool,motion_legs: int) -> void
 	sample_receiver_base(c,f,active,motion_legs)
 	if not active or c.kind=="overhead": return
 	var age := (f-float(c.contact))/60.
+	var bend := ForearmDrive.forearm_bend_degrees(incoming_speed.value/3.6)
+	ForearmDrive.recoil_platform(player.skeleton,age,bend)
 	var blend := smoothstep(-.48,-.065,age)*(1.-smoothstep(.09,.32,age))
 	if blend<=0.: return
 	var rig: Skeleton3D=player.skeleton
@@ -927,7 +936,7 @@ func pose_receiver(c: Dictionary,f: float,active: bool,motion_legs: int) -> void
 			limit=deg_to_rad(38. if c.get("platform_swing",false) else 24.)
 			var lean_axis := Vector3.UP.cross(toward)
 			if lean_axis.length_squared()>.000001:
-				var lean := deg_to_rad(3.)*smoothstep(.12,.8,toward.length())*blend
+				var lean := deg_to_rad(float(c.get("contact_lean_deg",3.)))*smoothstep(.12,.8,toward.length())*blend
 				var lean_local := (chest.basis.inverse()*lean_axis).normalized()
 				rig.set_bone_pose_rotation(bone,rig.get_bone_pose_rotation(bone)*Quaternion(lean_local,lean))
 				chest=rig.get_bone_global_pose(bone)
@@ -1029,7 +1038,7 @@ func sample_receiver_base(c: Dictionary,f: float,active: bool,motion_legs: int) 
 	if not Regions.movement(c):
 		sample_layer(motion_legs,c,f)
 		return
-	var max_shift := float(clips[motion_legs].get("entry_plant_m",0.)) if motion_legs>=0 else 0.
+	var max_shift := float(c.get("entry_plant_m",clips[motion_legs].get("entry_plant_m",0.))) if motion_legs>=0 else 0.
 	var shift := Vector3.ZERO
 	var progress := 0.
 	var leg_frame := f
@@ -1060,8 +1069,6 @@ func sample_receiver_base(c: Dictionary,f: float,active: bool,motion_legs: int) 
 	for bone in upper_bones:
 		player.skeleton.set_bone_pose(bone,ready_pose[bone].interpolate_with(forearm_frames[key][bone],weight))
 
-	var bend := ForearmDrive.forearm_bend_degrees(incoming_speed.value/3.6)
-	ForearmDrive.recoil_platform(player.skeleton,(f-float(c.contact))/60.,bend)
 
 func lean_for_hand_pass(goal: Vector3, weight: float, limit := deg_to_rad(34.)) -> void:
 	if weight<=0.: return
@@ -1308,7 +1315,7 @@ func sample_layer(which: int, timeline: Dictionary, f: float) -> void:
 		player.rotation.y=0.
 		for bone in ready_pose.size(): player.skeleton.set_bone_pose(bone,ready_pose[bone])
 		return
-	var c: Dictionary=clips[which]
+	var c: Dictionary=timeline if timeline.id==clips[which].id else clips[which]
 	if which!=index:
 		if f<=timeline.contact: f=f*c.contact/timeline.contact
 		else: f=remap(f,timeline.contact,timeline.frames,c.contact,c.frames)
