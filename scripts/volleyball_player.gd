@@ -126,9 +126,11 @@ func play_ground_gait(speed: float) -> void:
 	if speed<(.035 if walking else .075): play_action("idle")
 	elif speed<(1.55 if jogging else 1.95):
 		animator.play("base/Walk",.20,clampf(speed/1.45,.24,1.25))
-	elif speed<3.25: play_action("volleyball/slow_jog")
-	elif speed<4.75: play_action("run")
-	else: play_action("base/Sprint")
+	elif speed<(3.05 if animator.current_animation==animation_slots.get("run","run") else 3.35):
+		play_action("volleyball/slow_jog",.22)
+	elif speed<(4.55 if animator.current_animation=="base/Sprint" else 4.85):
+		play_action("run",.22)
+	else: play_action("base/Sprint",.20)
 
 func effective_rating(skill: String) -> float:
 	return float(attributes.get(skill,65))*stamina.effectiveness()

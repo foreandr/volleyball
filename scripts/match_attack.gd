@@ -48,6 +48,8 @@ func queue_run_plant(velocity: Vector3) -> void:
 	trace.write("approach_run_plant",clock,{"foot":setter.animation_side("l"),"remaining_steps":2,"position":setter.position,"velocity":velocity},true)
 
 func begin_attack_jump(direction: Vector2, plant_time := 0.36, jump_height := 0.0, tempo := 1.0) -> void:
+	if chase_late_sets and setter.has_meta("approach_velocity"):
+		capture_ground_stride()
 	super.begin_attack_jump(direction,plant_time,jump_height,tempo)
 	if run_into_plant and jump.active:
 		setter.animator.speed_scale = 1.0
@@ -67,9 +69,34 @@ func configure_for_match(actor: Node3D, readout: Label) -> void:
 	set_ball_audio_muted(true)
 
 var entry_velocity := Vector3.ZERO
+var stride_pose := {}
+var stride_age := 0.
+const STRIDE_BLEND := .14
+
+func capture_ground_stride() -> void:
+	stride_pose.clear()
+	stride_age=0.
+	var rig: Skeleton3D=setter.skeleton
+	for joint in ["pelvis","spine_01","spine_02","thigh_l","thigh_r","calf_l","calf_r","foot_l","foot_r"]:
+		var index := rig.find_bone(joint)
+		if index>=0: stride_pose[index]=rig.get_bone_pose(index)
+
+func blend_ground_stride(delta: float) -> void:
+	if stride_pose.is_empty(): return
+	stride_age+=delta
+	if stride_age>=STRIDE_BLEND:
+		stride_pose.clear()
+		return
+	var rig: Skeleton3D=setter.skeleton
+	var weight := smoothstep(0.,STRIDE_BLEND,stride_age)
+	for index in stride_pose:
+		var previous: Transform3D=stride_pose[index]
+		rig.set_bone_pose(index,previous.interpolate_with(rig.get_bone_pose(index),weight))
 
 func start_set(actor: Node3D, origin: Vector3, velocity: Vector3, target: Vector3, shot: Vector3, age: float, held: bool) -> void:
 	setter = actor
+	stride_pose.clear()
+	if chase_late_sets and actor.has_meta("approach_velocity"): capture_ground_stride()
 	entry_velocity=actor.get_parent_node_3d().global_basis.inverse()*Vector3(actor.get_meta("approach_velocity",Vector3.ZERO))
 	rally_shot="spike"
 	feed_origin=origin
@@ -136,6 +163,7 @@ func tick_attack(delta: float) -> void:
 		if chase_late_sets and not jump.active and not is_finite(swing_started):
 			chase_committed_set(delta)
 	step_jump(delta)
+	blend_ground_stride(delta)
 	clock += delta
 	var age := clock-stage_start
 	if stage == Stage.SET:
@@ -169,7 +197,8 @@ func chase_committed_set(delta: float) -> void:
 		setter.animator.advance(delta)
 		return
 	if gap.length()>2.1:
-		var step := gap.limit_length(4.8*delta)
+		entry_velocity=entry_velocity.move_toward(gap.normalized()*4.8,18.*delta)
+		var step := (entry_velocity*delta).limit_length(gap.length())
 		setter.position+=step
 		setter.play_ground_gait(step.length()/maxf(delta,.001))
 		setter.animator.advance(delta)
