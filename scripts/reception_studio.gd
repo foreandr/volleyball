@@ -1264,7 +1264,7 @@ func bend_for_hand_pass(depth: float) -> void:
 			rig.set_bone_pose(bone,pose[bone])
 
 func select_legs(which: int) -> void:
-	if cell.y==1 and cell_action()==0:
+	if cell.y<2 and (cell_action()==0 or Regions.movement(clips[index])):
 		hand_leg_preview=false
 		forearm_preview=which>=0
 		legs=which
@@ -1600,7 +1600,7 @@ func assigned_action(address: Vector3i,part: int) -> int:
 	if StorySession.game_options.has_section_key("studio_three_rows",key):
 		return int(StorySession.game_options.get_value("studio_three_rows",key))
 	if address.y==2 and address.z==0: return 78
-	if address.y==1 and address.z==1 and address.x!=1: return 21
+	if address.x!=1 and ((address.y==1 and address.z==1) or (address.y==0 and address.z==2)): return 21
 	if address.y==1: return 0
 	var previous := Vector3i(address.x,0 if address.y==0 else 1,address.z)
 	var default_action := 10 if previous==Vector3i(1,1,1) else 0
