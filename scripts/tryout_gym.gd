@@ -122,10 +122,12 @@ func _ready() -> void:
 	probe.intensity = 0.65
 	add_child(probe)
 
-func seat_teammates(create_player: Callable, profile: Callable = Callable()) -> Array:
+func seat_teammates(create_player: Callable, profile: Callable = Callable(), limit := 10, partners := false) -> Array:
 	var occupied := []
 	var seats := [[-1,1,-3.0],[1,0,-.6],[-1,1,0.9],[1,0,1.4],[-1,2,3.3],[1,1,4.2],[-1,0,5.5],[1,2,6.0],[-1,2,8.6],[1,1,8.8]]
-	for i in seats.size():
+	if partners:
+		seats = [[-1,0,2.1],[-1,0,3.1],[1,0,2.1],[1,0,3.1],[-1,1,8.1],[-1,1,9.1],[1,1,8.1],[1,1,9.1],[-1,1,-4.8],[-1,1,-3.8]]
+	for i in mini(limit,seats.size()):
 		var seat: Array = seats[i]
 		var side := int(seat[0])
 		var row := int(seat[1])

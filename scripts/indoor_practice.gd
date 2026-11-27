@@ -210,6 +210,8 @@ var success := false
 var feedback := ""
 var flight_time := 1.0
 
+@export var populated_practice := false
+
 func athlete(at: Vector3,color: String) -> Node3D:
 	var actor := Player.new()
 	actor.team_color = Color(color)
@@ -264,7 +266,7 @@ func _ready() -> void:
 	preload("res://scripts/practice_kit.gd").apply(coach,true)
 	setter.set_meta("school_photo",SchoolHeadshots.request(setter.attributes))
 	coach_motion.dress(coach)
-	if not solo_setting: seat_teammates()
+	if not solo_setting and not populated_practice: seat_teammates()
 	for i in PINS.size():
 		var basket := preload("res://scripts/tryout_target.gd").new()
 		basket.position = PINS[i]
@@ -305,6 +307,10 @@ func _ready() -> void:
 	commands.game = self
 	add_child(commands)
 	start_drill()
+	if populated_practice and not has_meta("live_sampler") and not has_meta("sampling_attack"):
+		var ambience := preload("res://scripts/practice_ambience.gd").new()
+		add_child(ambience)
+		ambience.populate(self)
 
 func finish_intro() -> bool:
 	return true

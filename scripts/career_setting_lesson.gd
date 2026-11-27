@@ -40,7 +40,7 @@ func start_drill() -> void:
 		hoop.beacon.add_child(floor_halo)
 		floor_halo.global_position=Vector3(hoop.global_position.x,.045,hoop.global_position.z)
 	human=setter
-	seat_teammates()
+	if not populated_practice: seat_teammates()
 	demo_actor=athlete(BASE,"e97937")
 	register_student(demo_actor,1)
 	preload("res://scripts/practice_kit.gd").apply(demo_actor,false,1)

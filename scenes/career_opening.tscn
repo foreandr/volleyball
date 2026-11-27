@@ -5,3 +5,4 @@
 
 [node name="CareerOpening" instance=ExtResource("1")]
 script = ExtResource("2")
+populated_practice = true

@@ -70,11 +70,14 @@ func switch_attacker(active:Node3D,waiting:Node3D) -> void:
 	hitter=active
 	jump_height=float(active.attributes.vertical_in)*.0254
 	sideline_actor=waiting
-	if cpu_hitter: active.position=GroundControls.BACK_LEFT
+	active.position=receive_station()
 	waiting.position=GroundControls.BACK_MIDDLE
 	waiting.look_at(Vector3(coach.position.x,waiting.position.y,coach.position.z),Vector3.UP,true)
 	waiting.play_action("idle",0.)
 	waiting.animator.advance(0.)
+
+func receive_station() -> Vector3:
+	return GroundControls.BACK_LEFT if cpu_hitter else GroundControls.BACK_RIGHT
 
 func zone_center() -> Vector3:
 	return Vector3([2.9,0.,-2.9][demo_target if cpu_hitter else makes%3],.065,BallNet.NET_Z+5.8)
@@ -115,7 +118,7 @@ func change_feed_phase(next:String) -> void:
 	if next=="pass" and phase=="feed" and is_instance_valid(hitter):
 		toss_start=ball.position
 		var offsets:=[Vector3(0,1.12,.58),Vector3(-.34,1.55,.54),Vector3(.10,2.05,.42)]
-		receive_point=GroundControls.BACK_LEFT+Vector3(offsets[feed_index%offsets.size()])
+		receive_point=receive_station()+Vector3(offsets[feed_index%offsets.size()])
 		feed_index+=1
 		receive_at=RECEIVE_TIME
 		touched_at=-INF
@@ -156,7 +159,7 @@ func step_attack(delta:float) -> void:
 	super.step_attack(delta)
 	if not motion.is_empty(): reception.pose_origin.position+=(hitter.position-before_step).slide(Vector3.UP)
 	if phase in ["cart","feed"]:
-		GroundControls.face(coach,GroundControls.BACK_LEFT-coach.position,delta)
+		GroundControls.face(coach,receive_station()-coach.position,delta)
 	elif phase=="receive_toss":
 		var previous:=ball.position
 		ball.position=feed_point(elapsed)

@@ -263,3 +263,4 @@ Drill entry shows a clockwise progress ring around the bound button. The target 
 
 Career hitting starts each session at set height 2 independently of the free practice setting. The demonstration and human use the same set flight and attack controller.
 Court feedback: career hitting uses the actual zone-five toss trajectory to predict untouched floor contact from release, then switches the floor ring to the pass, set and attack. The shared court-boundary effect flashes green for in and red for out on the landing half in match scoring, indoor practice attack/drop floor contacts and the serve-reception verdict. Verify the career sequence with tools/check_court_feedback.gd.
+Career hitting demo Reyes receives in five. On hold-to-enter, place the human attacker in one and Reyes in six. Feed the human in one and preserve manual movement between reps.
