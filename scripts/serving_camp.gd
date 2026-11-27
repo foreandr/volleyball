@@ -1,5 +1,9 @@
 extends "res://scripts/attacking_camp.gd"
 
+const CoverageRead = preload("res://scripts/coverage_read.gd")
+var receive_read := CoverageRead.new()
+var defense_read := CoverageRead.new()
+
 const TECHNIQUES := [preload("res://scripts/spin_serve.gd"),preload("res://scripts/jump_float_serve.gd"),preload("res://scripts/standing_float_serve.gd"),preload("res://scripts/underhand_serve.gd")]
 const FACE := [JOY_BUTTON_A,JOY_BUTTON_B,JOY_BUTTON_X,JOY_BUTTON_Y]
 const LABELS := ["Spin toss","Jump float toss","Standing toss","Underhand toss"]
@@ -396,7 +400,7 @@ func next_serve() -> void:
 	ball.show()
 	for platform in receptions: platform.reset()
 	for i in passers.size():
-		passers[i].position=HOMES[i]
+		passers[i].position=receive_read.position_for(HOMES[i])
 		passers[i].play_action("idle")
 	receiving_jump.active=false
 	receiving_setter.position=SETTER_HOME
@@ -725,7 +729,9 @@ func _process(delta: float) -> void:
 				roll_time=-1.
 				flight_age=0.
 				phase="serve_miss"
-				if surface.normal.y>.8 and ball.position.y<.26 and on_receiving_court(ball.position): show_service_ace()
+				if surface.normal.y>.8 and ball.position.y<.26 and on_receiving_court(ball.position):
+					receive_read.beaten(ball.position)
+					show_service_ace()
 				trace("serve_gym_contact",{"normal":str(surface.normal),"point":str(ball.position)})
 				return
 			if ball.position.z>BallNet.NET_Z or shot.net_hit.is_empty():
@@ -813,6 +819,7 @@ func step_serve_reception(shot,previous: Vector3,delta: float) -> void:
 	begin_offense(passer,platform)
 
 func begin_offense(passer: Node3D,platform: Reception) -> void:
+	if phase=="serve_flight": receive_read.covered()
 	pass_start=platform.release_point if platform.hand_setting else platform.touch
 	var velocity := platform.outgoing
 	var height: float=second_contact_player().height_cm*.0118
@@ -1201,6 +1208,7 @@ func block_on_flight_segment(previous: Vector3) -> bool:
 		sample_defensive_contact(platform,start,dt,until_floor,path)
 		if not is_finite(platform.touch_time): continue
 		dig_sound.play()
+		defense_read.covered()
 		last_digger=defender
 		dig_incoming=drop_velocity
 		ball.position=platform.touch
@@ -1239,6 +1247,7 @@ func attack_surface_contact(point: Vector3,floor_hit: bool) -> void:
 	trace("serve_return_surface",{"floor":floor_hit,"position":str(point),"block_touch":return_touched,"net_contact":not drop_net_hit.is_empty()})
 	var outside := absf(point.x)>4.5 or absf(point.z-BallNet.NET_Z)>9. or not floor_hit
 	var scored := return_touched if outside else point.z<BallNet.NET_Z
+	if floor_hit and not outside and point.z<BallNet.NET_Z: defense_read.beaten(point)
 	if last_shot_slot>=0:
 		for i in attack_results.size(): attack_results[i]*=.88
 		attack_results[last_shot_slot]+=1. if scored else -.55
@@ -1389,7 +1398,7 @@ func step_serve_wall(delta: float) -> void:
 			var far_pin := 2 if pass_end.x<0. else 0
 			if i==far_pin and not wall_committed[i] and absf(actor.position.x-pass_end.x)>3.6*maxf(0.,set_duration-pass_clock-.40)+1.35: off_blocker=i
 		if i==off_blocker and phase in ["serve_attack","serve_return"]:
-			var cover := Vector3((i-1)*2.15,.04,BallNet.NET_Z-2.4)
+			var cover := defense_read.position_for(Vector3((i-1)*2.15,.04,BallNet.NET_Z-2.4))
 			if phase=="serve_return" and ball.position.z<=BallNet.NET_Z+.3:
 				var ahead := minf(.6,preload("res://scripts/pass_flight.gd").landing_time(ball.position,drop_velocity))
 				cover=ball.position+drop_velocity*ahead

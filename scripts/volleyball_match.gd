@@ -431,6 +431,8 @@ func reset_match() -> void:
 func set_player_blocks(value: bool) -> void:
 	player_blocks = value
 
+var serve_coverage := [preload("res://scripts/coverage_read.gd").new(),preload("res://scripts/coverage_read.gd").new()]
+
 func begin_point() -> void:
 	receive_prepared = false
 	cpu_policy.begin_point()
@@ -453,6 +455,8 @@ func begin_point() -> void:
 		var actor := players[index]
 		var slot := index%team_size
 		actor.position = Vector3(2.1*starting_lane(index),0.04,0.70 if slot >= 3 or (team_size == 3 and slot == 2) else -2.6)
+		if team(index)!=service_team and not is_human(index):
+			actor.position=serve_coverage[team(index)].position_for(actor.position)
 		actor.rotation.y = 0.0
 		actor.model.rotation.y = 0.0
 		actor.play_action("idle",0.0)
@@ -1135,6 +1139,7 @@ func cpu_set_apex(index: int, point: Vector3, pin: Vector3, pace: float) -> floa
 	return maxf(point.y+0.18,apex+0.32*adjustment)
 
 func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, technique: int) -> void:
+	if flight_kind=="serve": serve_coverage[team(index)].covered()
 	if frames[team(index)].to_local(world_point).z > Net.NET_Z+0.07: return
 	var transition := defensive_ball()
 	if not can_touch(index): return
@@ -2674,6 +2679,8 @@ func check_floor(previous: float) -> void:
 	if in_bounds:
 		var court_side := 0 if point.z < Net.NET_Z else 1
 		var reason := "Into the net" if not net_hit.is_empty() and not net_hit.rollover else "Ball down"
+		if reason=="Ball down" and flight_kind=="serve" and court_side!=service_team:
+			serve_coverage[court_side].beaten(frames[court_side].to_local(point))
 		if reason == "Ball down" and flight_kind == "spike" and last_player >= 0 and court_side != team(last_player):
 			record_uncovered_shot(court_side,point)
 		award(1-court_side,reason)

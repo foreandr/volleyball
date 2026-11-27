@@ -3,6 +3,8 @@ extends "res://scripts/serving_camp.gd"
 const Map = preload("res://scripts/mapped_reception.gd")
 var map := Map.new()
 var stance_points: Array[Vector3]=[]
+var active_stances: Array[Vector3]=[]
+var routed_zone := ""
 var boxes: Array[Dictionary]=[]
 var recipe := {}
 var anchor := Node3D.new()
@@ -47,7 +49,10 @@ func next_serve() -> void:
 		map.player=null
 	recipe={}
 	super.next_serve()
-	for i in passers.size(): passers[i].position=stance_points[i]
+	active_stances.clear()
+	for i in passers.size():
+		active_stances.append(receive_read.position_for(stance_points[i]))
+		passers[i].position=active_stances[i]
 	receiving_setter.position=Vector3(map.pass_goal.x,.04,maxf(map.pass_goal.z,BallNet.NET_Z+.25))
 
 func stage_attacker(_actor: Node3D,_slot: int,_delta: float) -> void:
@@ -60,6 +65,7 @@ func move_libero_to_cover(_delta: float) -> void:
 	pass
 
 func plan_serve_reception(shot) -> void:
+	routed_zone=""
 	received_spin_rps=shot.reception_spin_rps()
 	var finish: float=shot.planned_duration
 	leave_serve=reads_serve_out(shot.flight_point(finish),passers[0].effective_rating("Forearm reception"),randf_range(-1.,1.))
@@ -73,8 +79,8 @@ func plan_serve_reception(shot) -> void:
 			var best := {}
 			var nearest := INF
 			for i in 3:
-				var local_start := (previous-stance_points[i]).rotated(Vector3.UP,PI)
-				var local_end := (point-stance_points[i]).rotated(Vector3.UP,PI)
+				var local_start := (previous-active_stances[i]).rotated(Vector3.UP,PI)
+				var local_end := (point-active_stances[i]).rotated(Vector3.UP,PI)
 				if AABB(map.MAP_ORIGIN,map.CELL_SIZE*3.).grow(.01).intersects_segment(local_start,local_end)==null: continue
 				for box in boxes:
 					var span := map.zone_interval(local_start,local_end,box.bounds)
@@ -91,6 +97,7 @@ func plan_serve_reception(shot) -> void:
 				map.set_intercept=shot.flight_point(receive_at)
 				map.incoming_lead_seconds=receive_at
 				map.feed_kmh=shot.velocity.length()*3.6
+				routed_zone=map.region_number(best.cell,best.part)
 				map.index=int(best.id)-1
 				map.legs=map.index
 				recipe=map.reception_recipe(map.clips[map.index],best.cell,best.part)
@@ -103,7 +110,7 @@ func plan_serve_reception(shot) -> void:
 						recipe.step_legs=0 if audition<0 else map.clips[audition].id
 						recipe.audition=true
 				map.posed_lead_foot=map.lead_foot(best.cell,best.part)
-				anchor.position=stance_points[receiver]
+				anchor.position=active_stances[receiver]
 				anchor.basis=Basis(Vector3.UP,atan2(serve_station.x-anchor.position.x,serve_station.z-anchor.position.z))
 				var flipped: bool=StorySession.game_options.get_value("studio_mirror",key,map.default_mirror(best.cell,best.part,recipe))
 				anchor.scale=Vector3(-1. if flipped else 1.,1.,1.)
@@ -139,6 +146,7 @@ func step_serve_reception(_shot,previous: Vector3,_delta: float) -> void:
 				touched=true
 				break
 	if not touched: return
+	receive_read.covered()
 	pass_start=ball.position
 	pass_end=map.pass_goal
 	pass_end.y=receiving_setter.height_cm*.0118
@@ -180,14 +188,19 @@ func _process(delta: float) -> void:
 		if not settings.visible and not get_tree().paused and not replay_inspector.active: step_reception_rally(delta)
 	else: super(delta)
 
+func show_service_ace() -> void:
+	super.show_service_ace()
+	var reason := "judged out" if leave_serve else ("no assigned zone crossed" if routed_zone.is_empty() else "platform missed")
+	trace("reception_test_miss",{"reason":reason,"zone":routed_zone,"receiver":receiver if not routed_zone.is_empty() else -1,"landing":str(ball.position)})
+
 func _input(event: InputEvent) -> void:
 	if phase=="serve_ready" and not settings.visible and not get_tree().paused and not replay_inspector.active:
 		if event is InputEventMouseButton and event.button_index==MOUSE_BUTTON_LEFT:
 			if event.pressed:
 				var closest := 24.
 				for i in passers.size():
-					var foot := camera.unproject_position(stance_points[i])
-					var head := camera.unproject_position(stance_points[i]+Vector3.UP*1.8)
+					var foot := camera.unproject_position(active_stances[i])
+					var head := camera.unproject_position(active_stances[i]+Vector3.UP*1.8)
 					var gap: float=event.position.distance_to(Geometry2D.get_closest_point_to_segment(event.position,foot,head))
 					if gap<closest:
 						closest=gap
@@ -201,6 +214,7 @@ func _input(event: InputEvent) -> void:
 			var hit=Plane(Vector3.UP,.052).intersects_ray(camera.project_ray_origin(event.position),camera.project_ray_normal(event.position))
 			if hit!=null:
 				stance_points[dragged]=Vector3(clampf(hit.x,-4.5,4.5),.052,clampf(hit.z,4.1,13.))
-				passers[dragged].position=stance_points[dragged]
+				active_stances[dragged]=stance_points[dragged]
+				passers[dragged].position=active_stances[dragged]
 		if dragged>=0: return
 	super(event)
