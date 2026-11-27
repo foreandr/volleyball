@@ -22,6 +22,14 @@ func start_drill() -> void:
 	for child in get_children():
 		if child is Control: child.hide()
 	for target in targets: target.hide()
+	for cart in rotation_drill.bins+[rotation_drill.basket]: cart.hide()
+	for stored in rotation_drill.stock: stored.hide()
+	for worker in rotation_drill.workers:
+		worker.actor.play_action("base/Idle",0.)
+		worker.actor.animator.advance(.2)
+	for student in rotation_drill.roster:
+		student.play_action("idle",0.)
+		student.animator.advance(.15)
 	ball.hide()
 	partner=rotation_drill.roster[1]
 	for i in rotation_drill.roster.size():
@@ -118,6 +126,7 @@ func begin_run() -> void:
 	camera.position=Vector3(0,7.1,-13.8)
 	camera.look_at(Vector3(0,.5,-.7))
 	ball.hide()
+	for i in rotation_drill.workers.size(): rotation_drill.workers[i].actor.position=Vector3(-5.65,.04,-3.5+i*1.05)
 	coach.position=Vector3(5.35,.04,-.3)
 	for i in range(1,rotation_drill.roster.size()):
 		rotation_drill.roster[i].position=Vector3(5.5,.04,1.+i)
@@ -182,6 +191,8 @@ func finish_pepper() -> void:
 
 func _process(delta:float) -> void:
 	elapsed+=delta
+	if phase!="montage":
+		for seat in seats_in_use: seat.update()
 	if phase=="footwork":
 		var stick:=Vector2(axis(JOY_AXIS_LEFT_X),axis(JOY_AXIS_LEFT_Y))
 		if stick.length()<.15: stick=Vector2.ZERO
