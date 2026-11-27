@@ -45,7 +45,7 @@ func bind_contact_motion(mapper: Map,root: Node3D,actor: Node3D,home: Vector3,so
 	var platform: Vector3=mapper.HandPass.contact_center(actor) if motion.kind=="overhead" else (Contact.joint(actor,"hand_l")+Contact.joint(actor,"hand_r"))*.5
 	if motion.kind!="overhead":
 		platform=platform.lerp((Contact.joint(actor,"lowerarm_l")+Contact.joint(actor,"lowerarm_r"))*.5,.3)
-	var body_depth := Contact.joint(actor,"spine_02").dot(incoming_axis)
+	var body_depth := Contact.joint(actor,"Head").dot(incoming_axis)-.09
 	platform_depth=minf(platform.dot(incoming_axis),body_depth)
 	receive_at=clampf(receive_at+(platform_depth-mapper.set_intercept.dot(incoming_axis))/incoming_speed,0.,shot.planned_duration)
 	pass_timing_ready=true
@@ -55,8 +55,10 @@ func pass_meter(point := Vector3.INF) -> Dictionary:
 	if not reception_release.is_empty(): return reception_release
 	if not point.is_finite(): point=ball.global_position
 	var depth := point.dot(incoming_axis)
-	var behind := depth-Contact.joint(passers[1],"spine_02").dot(incoming_axis)
-	var distance := depth-platform_depth
+	var face_depth := Contact.joint(passers[1],"Head").dot(incoming_axis)-.09
+	var behind := depth-face_depth
+	var platform_gap := depth-minf(platform_depth,face_depth-.13)
+	var distance := platform_gap+incoming_speed*PASS_RELEASE_LEAD
 	var offset := distance/incoming_speed
 	var green := .12
 	var late_distance := maxf(.001,BODY_CUSHION-behind+distance)
@@ -68,9 +70,9 @@ func pass_meter(point := Vector3.INF) -> Dictionary:
 		cursor=remap(distance,-green,green_end,.33,.67)
 	else:
 		cursor=remap(distance,green_end,late_distance,.67,.90)
-	var expired := behind>BODY_CUSHION
+	var expired := behind>BODY_CUSHION or (platform_gap>.12 and not is_finite(touched_at) and not mapped_touch(map,recipe,point-incoming_axis*.001))
 	if expired: cursor=1.
-	var grade := "Past receiver" if expired else ("Early" if distance< -green else ("Perfect" if distance<=green_end else "Late"))
+	var grade := ("Past receiver" if behind>BODY_CUSHION else "Out of reach") if expired else ("Early" if distance< -green else ("Perfect" if distance<=green_end else "Late"))
 	return {"value":clampf(cursor,0.,1.),"offset":offset,"grade":grade,"playable":not expired and offset>=-RECEIVE_EARLY}
 
 const RECEIVE_EARLY := .21
@@ -191,7 +193,9 @@ func step_serve_reception(shot,previous: Vector3,delta: float) -> void:
 
 func record_receive_release() -> void:
 	if not reception_release.is_empty() or not is_finite(released_at) or not pass_timing_ready: return
-	reception_release=pass_meter(serves[flight_style()].flight_point(released_at))
+	reception_release=pass_meter(ball.global_position)
+	reception_release.point=ball.global_position
+	reception_release.buffered_touch=is_finite(touched_at) or (not recipe.is_empty() and mapped_touch(map,recipe,ball.position-incoming_axis*.001))
 	var offset: float=reception_release.offset
 	var grade: String=reception_release.grade
 	var ms := roundi(offset*1000.)
@@ -218,13 +222,16 @@ func show_service_ace() -> void:
 func accept_reception(previous: Vector3) -> bool:
 	if control_digger: return super.accept_reception(previous)
 	if not pass_timing_ready: return false
-	var body := Contact.joint(passers[1],"spine_02")
-	if (ball.position-body).dot(incoming_axis)>BODY_CUSHION: return false
-	if not mapped_touch(map,recipe,previous): return false
-	touched_at=flight_age
-	if not is_finite(touched_at) or not is_finite(released_at): return false
+	var face_depth := Contact.joint(passers[1],"Head").dot(incoming_axis)-.09
+	var within := ball.position.dot(incoming_axis)-face_depth<=BODY_CUSHION
+	var touch := within and mapped_touch(map,recipe,previous)
+	if touch: touched_at=flight_age
+	if not is_finite(released_at): return false
 	record_receive_release()
-	if reception_release.get("playable",false):
+	if not reception_release.get("playable",false): return false
+	var late: bool=reception_release.grade=="Late"
+	if touch or (late and reception_release.buffered_touch):
+		if late and reception_release.buffered_touch: ball.position=reception_release.point
 		reception_result="Pass"
 		return true
 	return false

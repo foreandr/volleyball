@@ -11,6 +11,7 @@ var first_dig_touch := -INF
 var dig_feedback := Label.new()
 var feedback_tween: Tween
 var feedback_rally := -1
+const PASS_RELEASE_LEAD := .050
 const DIG_WINDOW := .125
 const DIG_PERFECT := .055
 var dig_reach := .12
@@ -354,19 +355,25 @@ func block_on_flight_segment(previous: Vector3) -> bool:
 		if is_finite(defense_contact): dig_platforms[dig_defender()].queue_bump(dig_clock)
 	else: update_dig_feedback()
 	var release: float=dig_platforms[dig_defender()].pressed_at
-	if not is_finite(defense_contact) or not is_finite(release) or minf(absf(release-defense_at),absf(release-defense_contact))>DIG_WINDOW or absf(defense_contact-dig_clock)>DIG_WINDOW: return false
+	if not is_finite(defense_contact) or not is_finite(release) or minf(absf(release-defense_at+PASS_RELEASE_LEAD),absf(release-defense_contact+PASS_RELEASE_LEAD))>DIG_WINDOW or absf(defense_contact-dig_clock)>DIG_WINDOW: return false
 	last_digger=dig_defender()
 	dig_incoming=drop_velocity
+	var timing_error := clampf(absf(release-defense_at+PASS_RELEASE_LEAD)/DIG_WINDOW,0.,1.)
+	var pressure := smoothstep(35.,110.,drop_velocity.length()*3.6)
+	var spread := .45+1.1*pressure+1.6*timing_error
+	var goal := defense_map.pass_goal
+	goal.x+=randf_range(-spread,spread)
+	goal.z=clampf(goal.z+randf_range(-spread,spread),BallNet.NET_Z-8.8,BallNet.NET_Z-.35)
 	var apex := ball.position.y+3.4
-	var flight := sqrt(2.*(apex-ball.position.y)/9.81)+sqrt(2.*(apex-defense_map.pass_goal.y)/9.81)
-	drop_velocity=(defense_map.pass_goal-ball.position)/flight+Vector3.UP*4.905*flight
+	var flight := sqrt(2.*(apex-ball.position.y)/9.81)+sqrt(2.*(apex-goal.y)/9.81)
+	drop_velocity=(goal-ball.position)/flight+Vector3.UP*4.905*flight
 	drop_net_hit.clear()
 	hard_spike_floor_pending=false
 	floor_linger=0.
 	phase="server_dig"
 	dig_sound.play()
 	message.text="Dig"
-	trace("mapped_dig",{"contact":defense_contact,"prediction":defense_at,"release":release,"apex":apex})
+	trace("mapped_dig",{"contact":defense_contact,"prediction":defense_at,"release":release,"apex":apex,"landing_target":str(goal)})
 	return true
 
 func update_dig_feedback() -> void:
@@ -374,7 +381,7 @@ func update_dig_feedback() -> void:
 	if not is_finite(release) or not is_finite(defense_at): return
 	var measured := is_finite(first_dig_touch)
 	var reference := first_dig_touch if measured else defense_at
-	show_release_feedback(release-reference,measured)
+	show_release_feedback(release-reference+PASS_RELEASE_LEAD,measured,DIG_PERFECT)
 
 func show_release_feedback(offset: float,measured: bool,perfect_window := 0.) -> void:
 	var ms := roundi(offset*1000.)

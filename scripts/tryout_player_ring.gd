@@ -70,7 +70,7 @@ func _draw() -> void:
 			draw_player(defender,true)
 			if game.phase=="serve_return" and is_finite(game.defense_at):
 				var release: float=game.dig_platforms[defender].pressed_at
-				var offset: float=(release if is_finite(release) else game.dig_clock)-game.defense_at
+				var offset: float=(release if is_finite(release) else game.dig_clock)-game.defense_at+game.PASS_RELEASE_LEAD
 				timing_arc(defender,clampf(.5+offset/.5,0.,1.),.39,.61,Vector2(.25,.75),Color("14191d"),is_finite(release))
 			return
 		var passer: Node3D=game.passers[1]
@@ -162,7 +162,7 @@ func draw_player(actor: Node3D,human: bool) -> void:
 			timing_arc(actor,game.serve_meter_position(game.serve_meter_error()),game.serve_meter_position(-game.SERVE_PERFECT),game.serve_meter_position(game.SERVE_PERFECT),contact,Color("14191d"),is_finite(game.release_time))
 		if is_setter and "defense_at" in game and game.phase in ["serve_pass","serve_attack","serve_return","server_dig"]:
 			var release: float=game.dig_platforms[actor].pressed_at
-			var elapsed: float=(release if is_finite(release) else game.dig_clock)-game.defense_at
+			var elapsed: float=(release if is_finite(release) else game.dig_clock)-game.defense_at+game.PASS_RELEASE_LEAD
 			timing_arc(actor,clampf(.5+elapsed/.5,0.,1.),.5-game.DIG_PERFECT/.5,.5+game.DIG_PERFECT/.5,Vector2(.5-game.DIG_WINDOW/.5,.5+game.DIG_WINDOW/.5),Color("14191d"),is_finite(release))
 		if extra_jumps.has(actor) and not game.cpu_hitter and game.manual_shot>=0 and (game.phase in ["cart","feed","pass","set_contact","set"] or (game.phase=="spike" and game.elapsed<.45)):
 			var cursor: float=game.attack_meter_position(game.attack_meter_error())

@@ -205,3 +205,6 @@ Receive CPU Serves freezes the signed pass-release grade in the replay at releas
 Manual serve reception buffers early releases until a fresh swept platform contact. Early and late touches lose accuracy. The late band ends 20 cm behind the animated torso along the incoming horizontal flight direction.
 
 Mapped digs in the serve-reception drills play through contact, then blend back to ready over the next 0.85 seconds. Starting another serve also clears any remaining mapped dig pose.
+
+The late receive window ends at the earlier of a missed platform and 20 cm behind the face. Replay samples the meter with the ball. Dig landing scatter increases with attack speed and timing error.
+Manual pass and mapped dig release targets lead the intended contact by 50 ms. The ball still travels to the platform before the pass starts.
