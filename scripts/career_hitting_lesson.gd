@@ -7,6 +7,14 @@ const SIDELINE:=Vector3(5.4,.04,.65)
 var career_hitter:Node3D
 var sideline_actor:Node3D
 var makes:=0
+var demo_target:=0
+var demo_hit:=false
+var platform_held:=false
+var receive_release:=INF
+var platform:=preload("res://scripts/bump_setting.gd").new()
+var toss_start:=Vector3.ZERO
+var receive_point:=Vector3.ZERO
+const RECEIVE_TIME:=1.65
 
 func saved_set_percent() -> float:
 	return SET_HEIGHTS[2]
@@ -34,6 +42,8 @@ func start_drill() -> void:
 	world.add_child(mark)
 	super.start_drill()
 	if not CareerSession.profile().is_empty(): hitter.apply_profile(CareerSession.profile())
+	world.add_child(platform)
+	platform.hide()
 	career_hitter=hitter
 	var teammate:=athlete(hitter.position,"e97937")
 	register_student(teammate,1)
@@ -46,6 +56,9 @@ func switch_attacker(active:Node3D,waiting:Node3D) -> void:
 	rings.extra_jumps.erase(waiting)
 	rings.extra_jumps[active]=attack_jump
 	hitter=active
+	platform.setter=hitter
+	if platform.cone==null: platform.configure(hitter,preload("res://assets/animations/straight_pass_02.res"))
+	else: platform.set_receive_clip(preload("res://assets/animations/straight_pass_02.res"))
 	jump_height=float(active.attributes.vertical_in)*.0254
 	sideline_actor=waiting
 	waiting.position=SIDELINE
@@ -54,12 +67,26 @@ func switch_attacker(active:Node3D,waiting:Node3D) -> void:
 	waiting.animator.advance(0.)
 
 func zone_center() -> Vector3:
-	return Vector3([2.9,0.,-2.9][makes%3],.065,BallNet.NET_Z+5.8)
+	return Vector3([2.9,0.,-2.9][demo_target if cpu_hitter else makes%3],.065,BallNet.NET_Z+5.8)
+
+func shot_landing(origin:Vector3) -> Vector3:
+	if not cpu_hitter: return super.shot_landing(origin)
+	var target:=zone_center()
+	target.y=Contact.BALL_RADIUS
+	return target
+
+func begin(next:String) -> void:
+	if cpu_hitter and next=="spike": demo_hit=true
+	super.begin(next)
 
 func camp_title() -> String:
+	if cpu_hitter: return "Hitting   /   Reyes to zone %d" % ZONES[demo_target]
 	return "Hitting   /   %s to zone %d   /   Set height %d   /   %d of 9 correct"%[POSITIONS[mini(2,makes/3)],ZONES[makes%3],height_preset(),makes]
 
 func reset_feed() -> void:
+	if cpu_hitter and demo_hit: demo_target=(demo_target+1)%ZONES.size()
+	demo_hit=false
+	coach_station=Vector3(-.58,0,BallNet.NET_Z+2.6)
 	attack_lane=mini(2,makes/3)
 	next_set=Vector3([3.65,0.,-3.65][attack_lane],2.65,3.)
 	super.reset_feed()
@@ -67,12 +94,68 @@ func reset_feed() -> void:
 	panel.show()
 	title.text=camp_title()
 
+func change_feed_phase(next:String) -> void:
+	if next=="pass" and phase=="feed" and is_instance_valid(hitter):
+		toss_start=ball.position
+		hitter.look_at(Vector3(coach.position.x,hitter.position.y,coach.position.z),Vector3.UP,true)
+		platform.apply_pose(platform.contact_frame,1.)
+		receive_point=platform.platform_center()
+		hitter.play_action("idle")
+		hitter.animator.advance(0.)
+		platform_held=false
+		receive_release=INF
+		super.change_feed_phase("receive_toss")
+		return
+	super.change_feed_phase(next)
+
+func step_attack(delta:float) -> void:
+	super.step_attack(delta)
+	if phase=="feed":
+		coach.look_at(Vector3(hitter.position.x,coach.position.y,hitter.position.z),Vector3.UP,true)
+	elif phase=="receive_toss":
+		var t:=minf(elapsed,RECEIVE_TIME)
+		platform.apply_pose(maxf(0.,platform.contact_frame+t-RECEIVE_TIME),smoothstep(RECEIVE_TIME-.65,RECEIVE_TIME-.18,t))
+		ball.position=toss_start.lerp(receive_point,t/RECEIVE_TIME)+Vector3.UP*4.905*t*(RECEIVE_TIME-t)
+		message.text="Coach toss"
+		if elapsed>=RECEIVE_TIME and (cpu_hitter or is_finite(receive_release) or elapsed>=RECEIVE_TIME+.16):
+			if not cpu_hitter and (absf(receive_release-RECEIVE_TIME)>.16 or platform.platform_center().distance_to(ball.position)>.5):
+				attack_floor_pending=true
+				drop_velocity=(receive_point-toss_start)/RECEIVE_TIME+Vector3.DOWN*4.905*RECEIVE_TIME
+				message.text="Missed reception"
+				begin("drop")
+				return
+			if not cpu_hitter: ContactTiming.scored("Reception",receive_release-RECEIVE_TIME,absf(receive_release-RECEIVE_TIME)<.05,true)
+			source=platform.platform_center()
+			ball.position=source
+			var apex:=maxf(5.8,catch_point.y+.5)
+			var rise:=sqrt(2.*(apex-source.y)/9.81)
+			forehead_arrival=rise+sqrt(2.*(apex-forehead_target.y)/9.81)
+			contact_time=rise+sqrt(2.*(apex-catch_point.y)/9.81)
+			super.change_feed_phase("pass")
+	elif phase=="pass":
+		if elapsed<.35: platform.apply_pose(platform.contact_frame+elapsed,1.-smoothstep(.05,.35,elapsed))
+		message.text="Pass to setter"
+
+func attacking_receive_meter() -> Dictionary:
+	if phase!="receive_toss" or cpu_hitter or (not platform_held and not is_finite(receive_release)): return {}
+	var offset := (receive_release if is_finite(receive_release) else elapsed)-RECEIVE_TIME
+	return {"value":clampf(.5+offset/.4,0.,1.),"released":is_finite(receive_release)}
+
 func update_prompts(next:String) -> void:
 	if cpu_hitter: entry_widget=EntryPrompt.mount(controls_row,"Enter")
+	elif next=="receive_toss": Xbox.prompts(controls_row,[["A","Hold / release to receive"]])
 	else:
 		Xbox.prompts(controls_row,[["LS","Move / aim"],["LT","Lock on"],["RT","Sprint"],[JOY_BUTTON_X,"Hold left"],[JOY_BUTTON_Y,"Hold middle"],[JOY_BUTTON_B,"Hold right"],[JOY_BUTTON_LEFT_SHOULDER,"Roll"],[JOY_BUTTON_RIGHT_SHOULDER,"Tip"]])
 
 func _input(event:InputEvent) -> void:
+	if phase=="receive_toss" and not cpu_hitter and not settings.visible and not get_tree().paused and not event.is_echo():
+		if (event is InputEventJoypadButton and event.button_index==Xbox.physical(JOY_BUTTON_A)) or (event is InputEventKey and event.physical_keycode==KEY_SPACE):
+			if event.is_pressed(): platform_held=true
+			elif platform_held and not is_finite(receive_release):
+				receive_release=elapsed
+				platform_held=false
+			get_viewport().set_input_as_handled()
+			return
 	if not settings.visible and (event is InputEventJoypadButton and event.button_index==Xbox.physical(JOY_BUTTON_BACK) or event is InputEventKey and event.physical_keycode==KEY_TAB): return
 	super._input(event)
 

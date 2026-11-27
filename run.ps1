@@ -1,9 +1,10 @@
-param([switch]$Cinematic)
+param([switch]$Cinematic, [string]$Scene)
 $ErrorActionPreference = 'Stop'
 $enginePath = Join-Path $PSScriptRoot '..\game\tools\Godot_v4.6-stable_win64.exe'
 if (!(Test-Path -LiteralPath $enginePath)) { throw 'Godot 4.6 is missing from the shared game tools.' }
 $gameArgs = @('--path',('"'+$PSScriptRoot+'"'),'--maximized')
 
+if ($Scene) { $gameArgs += $Scene }
 if ($Cinematic) { $gameArgs += @('--rendering-method','forward_plus') }
 # Give Windows a stable, game-specific audio session when running from source.
 $runtimeDir = Join-Path $PSScriptRoot '.godot\runtime'

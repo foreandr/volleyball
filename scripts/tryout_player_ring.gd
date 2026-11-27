@@ -149,6 +149,9 @@ func draw_player(actor: Node3D,human: bool) -> void:
 	var radius := Vector2(clampf(at.distance_to(camera.unproject_position(foot+camera.global_basis.x*.67)),25,77),0)
 	radius.y=radius.x*.35
 	position_floor_ring(actor)
+	if game and game.has_method("attacking_receive_meter") and actor==game.hitter:
+		var reception:Dictionary=game.attacking_receive_meter()
+		if not reception.is_empty(): timing_arc(actor,reception.value,.375,.625,Vector2(.1,.9),Color("14191d"),reception.released,reception.released)
 	if match_meter.is_valid() and actor==participants[0]:
 		var state:Dictionary=match_meter.call()
 		if not state.is_empty():
