@@ -23,7 +23,7 @@ var receive_point:=Vector3.ZERO
 const RECEIVE_TIME:=1.65
 
 func saved_set_percent() -> float:
-	return SET_HEIGHTS[2]
+	return SET_HEIGHTS[3]
 
 func save_set_height(value:float) -> void:
 	set_arc_percent=value
