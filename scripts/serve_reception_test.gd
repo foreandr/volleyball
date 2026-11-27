@@ -76,7 +76,7 @@ func release_dig_pose() -> void:
 	if actor==null: return
 	var facing := defense_anchor.rotation.y
 	actor.reparent(world,true)
-	actor.basis=Basis(Vector3.UP,facing)
+	actor.global_basis=Basis(Vector3.UP,facing)*Basis.from_scale(defense_map.athlete_scale)
 	actor.position.y=.04
 	for bone in defense_map.ready_pose.size():
 		actor.skeleton.set_bone_pose(bone,defense_map.ready_pose[bone])
@@ -111,7 +111,7 @@ func next_serve() -> void:
 	first_dig_touch=-INF
 	if map.player!=null:
 		map.player.reparent(world,true)
-		map.player.basis=Basis.IDENTITY
+		map.player.global_basis=Basis.from_scale(map.athlete_scale)
 		for modifier in map.player.skeleton.get_children():
 			if modifier is SkeletonModifier3D: modifier.active=true
 		map.player=null

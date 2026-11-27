@@ -55,6 +55,8 @@ var pass_rise := 1.5
 var feed_kmh := 100.
 
 # Match players stay in their team frame. Studio players are children of the pose anchor.
+var athlete_scale:=Vector3.ONE
+var athlete_bone_scales:=PackedVector3Array()
 var pose_origin: Node3D
 var pose_position: Vector3:
 	get:
@@ -68,7 +70,7 @@ var pose_yaw: float:
 		var axis:Vector3=pose_origin.global_basis.inverse()*player.global_basis.z
 		return atan2(axis.x,axis.z)
 	set(value):
-		if pose_origin: player.global_basis=pose_origin.global_basis*Basis(Vector3.UP,value)
+		if pose_origin: player.global_basis=pose_origin.global_basis.orthonormalized()*Basis(Vector3.UP,value)*Basis.from_scale(athlete_scale)
 		else: player.rotation.y=value
 
 func reception_recipe(c: Dictionary,address: Vector3i,part: int) -> Dictionary:
@@ -126,6 +128,7 @@ func sample_receiver(c: Dictionary,f: float,active := true,motion_legs := -2) ->
 			rig.set_bone_pose(bone,entry_pose[bone].interpolate_with(rig.get_bone_pose(bone),blend))
 		pose_position=entry_position.lerp(pose_position,blend)
 		pose_yaw=lerp_angle(entry_yaw,pose_yaw,blend)
+	for bone in athlete_bone_scales.size(): rig.set_bone_pose_scale(bone,athlete_bone_scales[bone])
 	var lift := 0.
 	for joint in ["foot_l","foot_r","ball_l","ball_r","calf_l","calf_r","pelvis","hand_l","hand_r","Head"]:
 		var bone := rig.find_bone(joint)
@@ -699,6 +702,9 @@ func assigned_boxes() -> Array[Dictionary]:
 	return result
 
 func begin_mapped_motion(root:Node3D,actor:Node3D,home:Vector3,source:Vector3,best:Dictionary,reach_assist:float) -> Dictionary:
+	athlete_scale=actor.global_basis.get_scale().abs()
+	athlete_bone_scales.clear()
+	for bone in actor.skeleton.get_bone_count(): athlete_bone_scales.append(actor.skeleton.get_bone_pose_scale(bone))
 	index=int(best.id)-1
 	legs=index
 	var recipe := reception_recipe(clips[index],best.cell,best.part)
@@ -727,13 +733,13 @@ func begin_mapped_motion(root:Node3D,actor:Node3D,home:Vector3,source:Vector3,be
 	player=actor
 	if pose_origin==null:
 		player.reparent(root,false)
-		player.transform=Transform3D.IDENTITY
+		player.transform=Transform3D(Basis.from_scale(athlete_scale),Vector3.ZERO)
 	else:
 		pose_position=Vector3.ZERO
 		pose_yaw=0.
 	player.animator.pause()
 	for modifier in player.skeleton.get_children():
-		if modifier is SkeletonModifier3D: modifier.active=false
+		if modifier is SkeletonModifier3D and modifier.get_script()!=preload("res://scripts/athlete_measurements.gd"): modifier.active=false
 	bind_receiver(player)
 	intercept_shift=Vector3.ZERO
 	shift_frame=recipe.contact

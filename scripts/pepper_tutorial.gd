@@ -216,7 +216,7 @@ func start_human_turn() -> void:
 		human.global_position=pair.home.origin
 		human.rotation.y=atan2(pair.feeder.position.x-human.position.x,pair.feeder.position.z-human.position.z)
 		pair.home=human.global_transform
-		demo.global_basis=Basis(Vector3.UP,PI*.5)
+		demo.global_basis=Basis(Vector3.UP,PI*.5)*Basis.from_scale(demo.global_basis.get_scale().abs())
 		demo.position=Vector3(-game.gym.FRONT_BENCH_X,.04,-2.9)
 		for modifier in demo.skeleton.get_children():
 			if modifier is SkeletonModifier3D: modifier.active=true

@@ -32,7 +32,7 @@ func stop_pose() -> void:
 	if not motion.is_empty():
 		var actor:Node3D=mapper.player
 		var facing:=anchor.global_basis.z
-		actor.global_basis=Basis(Vector3.UP,atan2(facing.x,facing.z))
+		actor.global_basis=Basis(Vector3.UP,atan2(facing.x,facing.z))*Basis.from_scale(mapper.athlete_scale)
 		if actor.position.y>.05:
 			landing_actor=actor
 			fall_speed=0.
