@@ -77,8 +77,8 @@ static func apply(actor: Node3D,coach: bool,variant := 0,vary_build := true) -> 
 			actor.jersey_origin=actor.global_position
 			actor.jersey_materials.append(kit)
 			kit.set_shader_parameter("phase",variant*1.79)
-			kit.set_shader_parameter("fabric",Color("223d3c") if coach else Color("ac4029"))
-			kit.set_shader_parameter("trim",Color("cad4bf") if coach else Color("55302c"))
+			kit.set_shader_parameter("fabric",Color("672031") if coach else Color("a4293c"))
+			kit.set_shader_parameter("trim",Color("cad4bf") if coach else Color("591a29"))
 			kit.set_shader_parameter("lettering",print_texture)
 			kit.set_shader_parameter("captain",not coach and variant==SCHOOL_CAPTAIN_VARIANT)
 			kit.set_shader_parameter("team_crest",preload("res://assets/gym/falcon.svg"))

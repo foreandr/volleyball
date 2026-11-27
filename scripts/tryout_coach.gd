@@ -81,7 +81,7 @@ func dress(actor: Node3D) -> void:
 		fit*=envelope*1.025
 	hat.transform=rig.get_bone_global_rest(head).affine_inverse()*Transform3D(Basis.IDENTITY.scaled(fit),center)
 	var cloth := StandardMaterial3D.new()
-	cloth.albedo_color=Color("244c3d")
+	cloth.albedo_color=Color("812638")
 	cloth.roughness=.94
 	cloth.vertex_color_use_as_albedo=true
 	cloth.cull_mode=BaseMaterial3D.CULL_DISABLED
@@ -154,7 +154,7 @@ func dress(actor: Node3D) -> void:
 	var stitching := MeshInstance3D.new()
 	stitching.mesh=thread
 	var seam := StandardMaterial3D.new()
-	seam.albedo_color=Color("516859")
+	seam.albedo_color=Color("a34755")
 	stitching.material_override=seam
 	hat.add_child(stitching)
 	# Fabric-covered button caps the six panel seams. Embroidered eyelets

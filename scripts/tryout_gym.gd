@@ -37,7 +37,7 @@ func _ready() -> void:
 	for i in 30: get_node("Floorboard%d" % i).material_override = maple
 	var block := ShaderMaterial.new()
 	block.shader = preload("res://assets/gym/masonry.gdshader")
-	var paint := material("385545")
+	var paint := material("a12b40")
 	var wood := ShaderMaterial.new()
 	wood.shader=preload("res://assets/gym/bleacher_wood.gdshader")
 	var steel := material("535951")
@@ -82,10 +82,10 @@ func _ready() -> void:
 			box("Fluorescent bank",Vector3(2.8,0.1,0.32),Vector3(x,8.38,z),material("fff3cc"))
 
 
-	var padding := material("314e41")
+	var padding := material("822737")
 	for i in 12:
 		box("Wall pad",Vector3(0.88,1.95,0.16),Vector3((i-5.5)*0.92,1.0,19.43),padding)
-	box("Scoreboard",Vector3(3.8,1.45,0.18),Vector3(0,3.85,19.41),material("26352e"))
+	box("Scoreboard",Vector3(3.8,1.45,0.18),Vector3(0,3.85,19.41),material("35262a"))
 	wall_text("SETS       GOAL",Vector3(0,4.19,19.29),0.003,Color.FLORAL_WHITE)
 	for x in [1.11,.70,-.70,-1.11]: add_digit(float(x))
 	update_board(0)
@@ -112,7 +112,7 @@ func _ready() -> void:
 		crest.rotation.y = -side*PI*.5
 		crest.shaded = true
 		add_child(crest)
-	wall_text("F A L C O N S",Vector3(0,7.47,19.45),.010,Color("264939"))
+	wall_text("F A L C O N S",Vector3(0,7.47,19.45),.010,Color("8b2035"))
 	var probe := ReflectionProbe.new()
 	probe.position = Vector3(0,3,2)
 	probe.size = Vector3(33,11,38+rear_extension)
@@ -128,7 +128,7 @@ func seat_teammates(create_player: Callable, profile: Callable = Callable()) -> 
 		var seat: Array = seats[i]
 		var side := int(seat[0])
 		var row := int(seat[1])
-		var athlete_: Node3D = create_player.call(Vector3(side*(FRONT_BENCH_X+row*.69),0,float(seat[2])),["245447","a34d31","334357"][i%3])
+		var athlete_: Node3D = create_player.call(Vector3(side*(FRONT_BENCH_X+row*.69),0,float(seat[2])),["892b3b","a34d31","334357"][i%3])
 		if profile.is_valid(): profile.call(athlete_,20+i)
 		athlete_.set_height_cm(172+(i*7)%29)
 		preload("res://scripts/practice_kit.gd").apply(athlete_,false,20+i)

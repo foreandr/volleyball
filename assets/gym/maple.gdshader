@@ -27,7 +27,7 @@ void fragment(){
 	vec2 bounds=abs(p-vec2(0.,4.))-vec2(4.5,9.);
 	float outer=max(bounds.x,bounds.y);
 	float band=smoothstep(.04,.06,outer)*(1.-smoothstep(.43,.45,outer));
-	ALBEDO=mix(ALBEDO,vec3(.038,.128,.10)*(1.+grain*.1),band);
+	ALBEDO=mix(ALBEDO,vec3(.31,.022,.040)*(1.+grain*.1),band);
 	float scuff=noise2(p*vec2(8.,85.))*noise2(p*1.8);
 	// Dust collects along the bleacher bases; pivoting shoes leave broken rubber arcs.
 	float dust=smoothstep(5.6,8.0,abs(p.x))*smoothstep(.26,.73,noise2(p*1.7))*(.45+.55*noise2(p*42.));
