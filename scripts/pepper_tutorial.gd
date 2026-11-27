@@ -3,8 +3,7 @@ extends RefCounted
 # All pairs face across the court, on the same side of the net as their partner.
 const CENTERS := [Vector3(1.6,.04,-2.9),Vector3(-1.6,.04,1.1),Vector3(-1.6,.04,6.9),Vector3(1.6,.04,10.9)]
 const FEED := .72
-const ARRIVAL := 1.82
-const RESET := 3.75
+const TOSS_BANDS := [Vector2(.8,1.15),Vector2(1.4,1.95),Vector2(2.3,3.1)]
 const Physics=preload("res://scripts/gym_physics.gd")
 const Map=preload("res://scripts/mapped_reception.gd")
 var released:Dictionary={}
@@ -59,10 +58,21 @@ func configure(host,readout:Label,completed:int) -> void:
 		mapper.clips=studio
 		if zones.is_empty(): zones=mapper.assigned_boxes()
 		var outcomes:=preload("res://scripts/demo_outcomes.gd").new()
-		pairs.append({"rise":randf_range(2.35,3.05),"outcomes":outcomes,"cpu_misses":outcomes.next_misses(),"receiver":receiver,"feeder":feeder,"ball":orb,"age":-i*.21,"caught":false,"platform":receiver.global_position+Vector3.UP,"home":receiver.global_transform,"mapper":mapper,"zone_step":i,"motion":{},"flying":false,"hit":false,"swing":false,"origin":hands(feeder)})
+		pairs.append({"bands":[],"last_band":-1,"rise":randf_range(2.35,3.05),"outcomes":outcomes,"cpu_misses":outcomes.next_misses(),"receiver":receiver,"feeder":feeder,"ball":orb,"age":-i*.21,"caught":false,"platform":receiver.global_position+Vector3.UP,"home":receiver.global_transform,"mapper":mapper,"zone_step":i,"motion":{},"flying":false,"hit":false,"swing":false,"origin":hands(feeder)})
+		choose_toss(pairs.back())
 	athletes[8].position=Vector3(-5.3,.04,2.)
 	feedback.text="%d / 5 passes"%score
 	if score==5: complete()
+
+func choose_toss(pair:Dictionary) -> void:
+	if pair.bands.is_empty():
+		pair.bands.assign([0,1,2])
+		pair.bands.shuffle()
+		if pair.bands.back()==pair.last_band: pair.bands.reverse()
+	pair.last_band=pair.bands.pop_back()
+	var band:Vector2=TOSS_BANDS[pair.last_band]
+	pair.toss_rise=randf_range(band.x,band.y)
+	pair.flight_time=sqrt(8.*pair.toss_rise/9.81)
 
 func plan_reception(pair:Dictionary) -> void:
 	var mapper:Map=pair.mapper
@@ -83,10 +93,10 @@ func plan_reception(pair:Dictionary) -> void:
 	var bounds:AABB=best.bounds
 	var local:=aim.clamp(bounds.position+Vector3.ONE*.001,bounds.end-Vector3.ONE*.001)
 	mapper.set_intercept=receiver.to_global(local)
-	mapper.incoming_lead_seconds=ARRIVAL-FEED
+	mapper.incoming_lead_seconds=float(pair.flight_time)
 	mapper.pass_goal=pair.feeder.global_position
 	mapper.pass_rise=pair.rise
-	mapper.feed_kmh=3.6*pair.origin.distance_to(mapper.set_intercept)/(ARRIVAL-FEED)
+	mapper.feed_kmh=3.6*pair.origin.distance_to(mapper.set_intercept)/(float(pair.flight_time))
 	pair.motion=mapper.begin_mapped_motion(mapper.pose_origin,receiver,receiver.global_position,pair.origin,best,0.)
 	mapper.sample_receiver(pair.motion,pair.motion.contact,true,mapper.legs)
 	pair.platform=mapper.platform_center(pair.motion)
@@ -127,7 +137,7 @@ func hands(actor:Node3D) -> Vector3:
 func release_state() -> Dictionary:
 	var pair:=pairs[0]
 	var axis:Vector3=(pair.platform-pair.origin).slide(Vector3.UP).normalized()
-	var speed:=maxf(1.,absf((pair.platform-pair.origin).dot(axis))/(ARRIVAL-FEED))
+	var speed:=maxf(1.,absf((pair.platform-pair.origin).dot(axis))/(float(pair.flight_time)))
 	return Map.release_grade(pair.ball.position.dot(axis),Physics.joint(pair.receiver,"Head").dot(axis)-.09,pair.platform.dot(axis),speed,pair.age-touched_at<=.095)
 
 func meter() -> Dictionary:
@@ -149,6 +159,7 @@ func tick(delta:float) -> void:
 		var pair:=pairs[i]
 		pair.age+=delta
 		var t:float=pair.age
+		var arrival:float=FEED+pair.flight_time
 		var orb:MeshInstance3D=pair.ball
 		var receiver:Node3D=pair.receiver
 		var feeder:Node3D=pair.feeder
@@ -164,19 +175,19 @@ func tick(delta:float) -> void:
 				pair.origin=game.coach_motion.toss(feeder,1.)
 				plan_reception(pair)
 			if t<FEED+.16: game.coach_motion.toss(feeder,1.)
-			elif t<ARRIVAL:
+			elif t<arrival:
 				feeder.play_action("base/Idle",.18)
 				feeder.animator.advance(delta)
 			if not pair.caught:
-				var u:float=(t-FEED)/(ARRIVAL-FEED)
-				orb.position=pair.origin.lerp(pair.platform,u)+Vector3.UP*4.*1.4*u*(1.-u)
+				var u:float=(t-FEED)/(float(pair.flight_time))
+				orb.position=pair.origin.lerp(pair.platform,u)+Vector3.UP*4.*float(pair.toss_rise)*u*(1.-u)
 			var mapper:Map=pair.mapper
-			var frame:=clampf(pair.motion.contact+60.*(t-ARRIVAL),0.,pair.motion.frames)
+			var frame:=clampf(pair.motion.contact+60.*(t-arrival),0.,pair.motion.frames)
 			if active: pair.swing=true
 			if pair.swing: mapper.sample_receiver(pair.motion,frame,true,mapper.legs)
 			if human and active and not pair.caught and mapper.segment_touch(pair.motion,previous,orb.position): touched_at=t
 			var human_hit:=human and not released.is_empty() and bool(released.playable) and t-touched_at<=.095
-			if not pair.caught and (human_hit or t>=ARRIVAL+(.14 if human else 0.)):
+			if not pair.caught and (human_hit or t>=arrival+(.14 if human else 0.)):
 				if human: active=human_hit
 				pair.contact_age=t
 				pair.contact_point=orb.position
@@ -199,7 +210,8 @@ func tick(delta:float) -> void:
 				else:
 					orb.position=pair.contact_point.lerp(receiver.position+receiver.basis.z*-.42+Vector3.UP*.105,minf(1.,u*2.))
 		if not pair.flying: receiver.animator.advance(delta)
-		if t>=RESET:
+		if t>=arrival+1.93:
+			choose_toss(pair)
 			pair.rise=randf_range(2.35,3.05)
 			if human:
 				released.clear()
