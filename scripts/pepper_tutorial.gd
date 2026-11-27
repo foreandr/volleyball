@@ -13,6 +13,9 @@ var zones:Array[Dictionary]=[]
 var pairs:Array[Dictionary]=[]
 var game
 var score:=0
+var attempts:=0
+var turn_makes:=0
+var waiting:Array[Node3D]=[]
 var holding:=false
 var needs_release:=false
 var pressed_at:=INF
@@ -21,8 +24,10 @@ var finished:=false
 var demonstrating:=false
 var moving:=false
 # From the near baseline, positive X is left. Five is the left backcourt.
-const FIVE_MIN:=Vector2(1.5,-4.7)
-const FIVE_MAX:=Vector2(4.2,-.5)
+const FIVE_MIN:=Vector2(.65,-2.45)
+const FIVE_MAX:=Vector2(3.85,1.45)
+const FIVE_CENTER:=(FIVE_MIN+FIVE_MAX)*.5
+var cart_service:=preload("res://scripts/reception_cart_service.gd").new()
 const SETTER_TWO_AND_HALF:=Vector3(-1.5,.04,2.85)
 var pass_target:Node3D
 var base:=Vector3.ZERO
@@ -46,6 +51,7 @@ func configure(host,readout:Label,completed:int) -> void:
 		pass_target.position=SETTER_TWO_AND_HALF
 		pass_target.rotation.y=PI
 		for slot in range(2,8):
+			waiting.append(athletes[slot])
 			athletes[slot].position=Vector3(5.65,.04,-4.+slot*.86)
 			athletes[slot].rotation.y=-PI*.5
 	for i in (1 if moving else 4):
@@ -57,10 +63,18 @@ func configure(host,readout:Label,completed:int) -> void:
 		receiver.rotation.y=atan2(direction.x,direction.z)
 		feeder.rotation.y=receiver.rotation.y+PI
 		if moving:
-			receiver.position=Vector3(2.85,.04,-2.65)
+			receiver.position=Vector3(FIVE_CENTER.x,.04,FIVE_CENTER.y)
 			feeder.position=Vector3(2.7,.04,10.8)
 			receiver.look_at(feeder.position,Vector3.UP,true)
 			feeder.look_at(receiver.position,Vector3.UP,true)
+			var cart:Node3D=host.rotation_drill.basket
+			cart.rotation.y=feeder.rotation.y
+			cart.position=feeder.to_global(Vector3(.90,0.,.13))
+			cart.show()
+			for stored in host.rotation_drill.stock:
+				stored.position=host.rotation_drill.cart_slot(cart,stored.get_meta("cart_slot"))
+				stored.show()
+			cart_service.configure(host.rotation_drill,pass_target,feeder)
 			base=receiver.position
 			steps=preload("res://scripts/directional_footwork.gd").new(receiver)
 		# The coach toss is authored from the relaxed standing idle.
@@ -85,9 +99,19 @@ func configure(host,readout:Label,completed:int) -> void:
 		var outcomes:=preload("res://scripts/demo_outcomes.gd").new(25)
 		pairs.append({"bands":[],"last_band":-1,"rise":randf_range(2.35,3.05),"outcomes":outcomes,"cpu_misses":outcomes.next_misses(),"receiver":receiver,"feeder":feeder,"ball":orb,"age":-i*.21,"caught":false,"platform":receiver.global_position+Vector3.UP,"home":receiver.global_transform,"mapper":mapper,"zone_step":i,"motion":{},"flying":false,"hit":false,"swing":false,"origin":hands(feeder)})
 		choose_toss(pairs.back())
+		choose_return(pairs.back(),demonstrating or i!=0)
 	athletes[8].position=Vector3(-5.3,.04,2.)
 	feedback.text="%d / 5 passes"%score
 	if score==5: complete()
+
+func choose_return(pair:Dictionary,cpu:bool) -> void:
+	if not cpu: pair.rise=randf_range(2.35,3.05)
+	else:
+		var previous:int=pair.get("return_band",-1)
+		var band:=randi_range(0,2) if previous<0 else (previous+randi_range(1,2))%3
+		pair.return_band=band
+		var limits:Vector2=[Vector2(1.55,2.1),Vector2(2.4,3.15),Vector2(3.55,4.45)][band]
+		pair.rise=randf_range(limits.x,limits.y)
 
 func choose_toss(pair:Dictionary) -> void:
 	if pair.bands.is_empty():
@@ -105,7 +129,7 @@ func plan_reception(pair:Dictionary) -> void:
 	var receiver:Node3D=pair.receiver
 	receiver.global_transform=pair.home
 	# Work through center, side, low and high feeds in receiver-local space.
-	var lanes:=[Vector3(0,1.05,.55),Vector3(.62,.9,.55),Vector3(-.65,.42,.75),Vector3(0,1.85,.42),Vector3(-.68,1.15,.45),Vector3(.68,.45,.7)]
+	var lanes:=[Vector3(0,1.05,.55),Vector3(.08,2.17,.67),Vector3(-.65,.42,.75),Vector3(-.08,1.98,.68),Vector3(-.68,1.15,.45),Vector3(.68,.45,.7)]
 	var aim:Vector3=lanes[int(pair.zone_step)%lanes.size()]
 	pair.zone_step+=1
 	var best:Dictionary={}
@@ -129,10 +153,20 @@ func plan_reception(pair:Dictionary) -> void:
 	mapper.sample_receiver(pair.motion,0.,false,mapper.legs)
 	if moving:
 		# Lock the feed at release; moving the passer only moves the pose anchor.
-		var angle:=randf()*TAU
-		var landing:=base+Vector3(cos(angle),0,sin(angle))*randf_range(.8,1.85)
-		landing.x=clampf(landing.x,FIVE_MIN.x,FIVE_MAX.x)
-		landing.z=clampf(landing.z,FIVE_MIN.y,FIVE_MAX.y)
+		# Constrain the untouched ball's floor landing as well as its playable contact.
+		var curve:float=4.*pair.toss_rise
+		var slope:float=pair.platform.y-pair.origin.y+curve
+		var floor_u:float=(slope+sqrt(slope*slope+4.*curve*(pair.origin.y-.15)))/(2.*curve)
+		var source_xz:=Vector2(pair.origin.x,pair.origin.z)
+		var low:=FIVE_MIN.max(source_xz.lerp(Vector2(-4.30,-4.80),1./floor_u))
+		var high:=FIVE_MAX.min(source_xz.lerp(Vector2(4.30,3.80),1./floor_u))
+		var landing:=Vector3(clampf(base.x,low.x,high.x),base.y,clampf(base.z,low.y,high.y))
+		for attempt in 32:
+			var candidate:=Vector3(randf_range(low.x,high.x),base.y,randf_range(low.y,high.y))
+			if candidate.distance_to(base)<=1.85:
+				landing=candidate
+				break
+		pair.floor_u=floor_u
 		chase=base+(landing-Vector3(pair.platform.x,base.y,pair.platform.z))
 		pair.platform.x=landing.x
 		pair.platform.z=landing.z
@@ -142,7 +176,10 @@ func plan_reception(pair:Dictionary) -> void:
 
 func start_human_turn() -> void:
 	demonstrating=false
+	attempts=clampi(int(CareerSession.data.get_value(CareerSession.key(),"moving_attempts",score)),score,4) if moving else 0
+	turn_makes=score
 	var pair:=pairs[0]
+	choose_return(pair,false)
 	var demo:Node3D=pair.receiver
 	var human:Node3D=game.setter
 	human.global_position=pair.home.origin
@@ -225,6 +262,12 @@ func tick(delta:float) -> void:
 	for i in pairs.size():
 		var pair:=pairs[i]
 		if moving:
+			var cart=game.rotation_drill
+			if cart_service.busy(delta): continue
+			if not pair.flying and not cart.issued:
+				pair.ball.hide()
+				cart.prepare_next_ball(delta)
+				if not cart.take_ball(): continue
 			var facing:=move_passer(pair,delta)
 			if not demonstrating and not pair.flying and not focus_cued:
 				game.moving_prompt(true)
@@ -247,7 +290,7 @@ func tick(delta:float) -> void:
 		var feeder:Node3D=pair.feeder
 		var human:=i==0 and not demonstrating
 		var previous:=orb.position
-		var active:bool=not pair.cpu_misses if demonstrating or i!=0 else (holding or not released.is_empty()) and not needs_release
+		var active:bool=(moving or not pair.cpu_misses) if demonstrating or i!=0 else (holding or not released.is_empty()) and not needs_release
 		if t<FEED:
 			pair.origin=game.coach_motion.toss(feeder,clampf((t-FEED+.30)/.30,0.,1.))
 			orb.position=pair.origin
@@ -267,18 +310,27 @@ func tick(delta:float) -> void:
 			var mapper:Map=pair.mapper
 			var frame:=clampf(pair.motion.contact+60.*(t-arrival),0.,pair.motion.frames)
 			if active: pair.swing=true
-			if pair.swing: mapper.sample_receiver(pair.motion,frame,true,mapper.legs)
-			if human and active and not pair.caught and mapper.segment_touch(pair.motion,previous,orb.position): touched_at=t
+			if pair.swing and (not pair.caught or t<float(pair.contact_age)+.45): mapper.sample_receiver(pair.motion,frame,true,mapper.legs)
+			elif pair.swing:
+				receiver.global_transform=receiver.global_transform.interpolate_with(pair.home,1.-exp(-delta*12.))
+				receiver.play_action("idle",.18)
+				receiver.animator.advance(delta)
+			if active and not pair.caught and mapper.segment_touch(pair.motion,previous,orb.position): touched_at=t
 			var human_hit:=human and not released.is_empty() and bool(released.playable) and t-touched_at<=.095
-			if not pair.caught and (human_hit or t>=arrival+(.14 if human else 0.)):
+			var cpu_touch:=not human and moving and touched_at==t
+			if not pair.caught and (human_hit or cpu_touch or t>=arrival+(.14 if human or moving else 0.)):
 				if human: active=human_hit
+				elif moving: active=cpu_touch
 				pair.contact_age=t
 				pair.contact_point=orb.position
 				pair.caught=true
 				pair.hit=active
-				if i==0 and demonstrating: game.coach_react("praise" if active else "miss")
+				if i==0:
+					attempts+=1
+					if moving and human: CareerSession.data.set_value(CareerSession.key(),"moving_attempts",attempts)
+					if active: turn_makes+=1
+					else: game.coach_react("miss")
 				if i==0 and not demonstrating:
-					game.coach_react("praise" if active else "miss")
 					if active:
 						score+=1
 						var grade:String=released.grade
@@ -290,18 +342,51 @@ func tick(delta:float) -> void:
 				if pair.hit:
 					var catch_at:Vector3=game.coach_motion.toss(pass_target if moving else feeder,0.)
 					orb.position=game.arc(pair.contact_point,catch_at,u,pair.rise)
+				elif moving:
+					var fall:float=minf(pair.floor_u,(t-FEED)/pair.flight_time)
+					orb.position=pair.origin.lerp(pair.platform,fall)+Vector3.UP*4.*float(pair.toss_rise)*fall*(1.-fall)
 				else:
 					orb.position=pair.contact_point.lerp(receiver.position+receiver.basis.z*-.42+Vector3.UP*.105,minf(1.,u*2.))
 		if not pair.flying: receiver.animator.advance(delta)
-		if t>=arrival+1.93:
+		if t>=arrival+maxf(1.93,sqrt(8.*float(pair.rise)/9.81)+.25):
+			if moving and game.rotation_drill.issued:
+				cart_service.receive(game.rotation_drill.issued,pair.ball.position,pair.hit)
+				pair.ball.hide()
+				game.rotation_drill.issued=null
 			choose_toss(pair)
-			pair.rise=randf_range(2.35,3.05)
+			choose_return(pair,not human)
 			if human:
 				focus_cued=false
 				released.clear()
 				touched_at=-INF
 			if demonstrating or i!=0: pair.cpu_misses=pair.outcomes.next_misses()
-			if i==0 and score>=5:
+			if moving and attempts==5:
+				if turn_makes==5: game.coach_react("praise")
+				if human:
+					CareerSession.data.erase_section_key(CareerSession.key(),"moving_attempts")
+					CareerSession.checkpoint("moving_reception_complete",score)
+					feedback.text="Moving reception complete   /   %d of 5"%score
+					game.finish_pepper()
+				var next:Node3D=waiting.pop_front()
+				var sideline:=next.global_position
+				receiver.global_position=sideline
+				for modifier in receiver.skeleton.get_children():
+					if modifier is SkeletonModifier3D: modifier.active=true
+				receiver.play_action("idle",.16)
+				waiting.append(receiver)
+				pair.receiver=next
+				receiver=next
+				base=Vector3(FIVE_CENTER.x,.04,FIVE_CENTER.y)
+				receiver.position=base
+				receiver.look_at(pair.feeder.position,Vector3.UP,true)
+				pair.home=receiver.global_transform
+				steps=preload("res://scripts/directional_footwork.gd").new(receiver)
+				demonstrating=true
+				attempts=0
+				turn_makes=0
+				touched_at=-INF
+			if not moving and i==0 and score>=5:
+				game.coach_react("praise")
 				complete()
 				return
 			pair.age=0.

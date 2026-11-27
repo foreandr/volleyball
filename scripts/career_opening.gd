@@ -436,7 +436,7 @@ func _process(delta:float) -> void:
 		if stick.length()<.15: stick=Vector2.ZERO
 		stick+=Vector2(float(Input.is_physical_key_pressed(KEY_D))-float(Input.is_physical_key_pressed(KEY_A)),float(Input.is_physical_key_pressed(KEY_S))-float(Input.is_physical_key_pressed(KEY_W)))
 		run_step(delta,Vector3(-stick.x,0,-stick.y),GroundControls.focus(axis),GroundControls.sprint(axis))
-	elif phase in ["pepper","demo"]:
+	elif phase in ["pepper","demo"] or (phase=="pepper_complete" and pepper.moving):
 		GroundControls.face(coach,pepper.pairs[0].receiver.position-coach.position,delta,3.)
 		pepper.tick(delta)
 	if coach and coach.has_meta("coach_face"):
