@@ -2,6 +2,13 @@ extends "res://scripts/serving_camp.gd"
 
 const Map = preload("res://scripts/mapped_reception.gd")
 var map := Map.new()
+var defense_map := Map.new()
+var defense_anchor := Node3D.new()
+var defense_recipe := {}
+var defense_at := INF
+var defense_contact := -INF
+const DIG_WINDOW := .095
+const DIG_PERFECT := .045
 var stance_points: Array[Vector3]=[]
 var active_stances: Array[Vector3]=[]
 var routed_zone := ""
@@ -21,9 +28,14 @@ func start_drill() -> void:
 	build_boundary()
 	world.add_child(map)
 	world.add_child(anchor)
+	world.add_child(defense_map)
+	world.add_child(defense_anchor)
+	defense_map.defenders.append(defense_anchor)
 	map.defenders.append(anchor)
 	map.clips=JSON.parse_string(FileAccess.get_file_as_string("res://assets/reception_studio.json"))
 	map.pass_rise=StorySession.game_options.get_value("reception_studio","pass_arc",3.05)
+	defense_map.clips=map.clips
+	defense_map.pass_goal=Vector3(0.,.15,BallNet.NET_Z-1.5)
 	map.pass_goal=SETTER_BASE
 	for i in 3:
 		stance_points.append(across(StorySession.game_options.get_value("reception_studio",Map.HOME_KEYS[i],Map.DEFAULT_STANCES[i])))
@@ -44,6 +56,15 @@ func build_rally_sliders() -> void:
 	add_rally_sliders("serving",[["Serve speed","serve_kmh",0,300,0," km/h"]])
 
 func next_serve() -> void:
+	if defense_map.player!=null:
+		hitter.reparent(world,true)
+		hitter.basis=Basis.IDENTITY
+		for modifier in hitter.skeleton.get_children():
+			if modifier is SkeletonModifier3D: modifier.active=true
+		defense_map.player=null
+	defense_recipe={}
+	defense_at=INF
+	defense_contact=-INF
 	if map.player!=null:
 		map.player.reparent(world,true)
 		map.player.basis=Basis.IDENTITY
@@ -101,54 +122,47 @@ func plan_serve_reception(shot) -> void:
 				map.incoming_lead_seconds=receive_at
 				map.feed_kmh=shot.velocity.length()*3.6
 				routed_zone=map.region_number(best.cell,best.part)
-				map.index=int(best.id)-1
-				map.legs=map.index
-				recipe=map.reception_recipe(map.clips[map.index],best.cell,best.part)
-				var key := map.assignment_key(best.cell,best.part)
-				if recipe.kind=="overhead":
-					var audition: int=StorySession.game_options.get_value("studio_hand_legs",key,-2)
-					if audition>=-1 and audition<map.clips.size():
-						recipe=recipe.duplicate()
-						map.legs=audition
-						recipe.step_legs=0 if audition<0 else map.clips[audition].id
-						recipe.audition=true
-				map.posed_lead_foot=map.lead_foot(best.cell,best.part)
-				anchor.position=active_stances[receiver]
-				anchor.basis=Basis(Vector3.UP,atan2(serve_station.x-anchor.position.x,serve_station.z-anchor.position.z))
-				var flipped: bool=StorySession.game_options.get_value("studio_mirror",key,map.default_mirror(best.cell,best.part,recipe))
-				anchor.scale=Vector3(-1. if flipped else 1.,1.,1.)
-				if flipped and map.posed_lead_foot!="Auto": map.posed_lead_foot="Left" if map.posed_lead_foot=="Right" else "Right"
-				map.player=passers[receiver]
-				map.player.reparent(anchor,false)
-				map.player.transform=Transform3D.IDENTITY
-				map.player.animator.pause()
-				for modifier in map.player.skeleton.get_children():
-					if modifier is SkeletonModifier3D: modifier.active=false
-				map.bind_receiver(map.player)
-				map.intercept_shift=Vector3.ZERO
-				map.shift_frame=recipe.contact
-				map.sample_receiver(recipe,recipe.contact,true,map.legs)
-				var center: Vector3=map.HandPass.contact_center(map.player) if recipe.kind=="overhead" else map.player.skeleton.to_global(map.player.skeleton.get_bone_global_pose(map.player.skeleton.find_bone("hand_l")).origin)
-				map.intercept_shift=(map.set_intercept-center).slide(Vector3.UP).limit_length(.75)
+				recipe=bind_contact_motion(map,anchor,passers[receiver],active_stances[receiver],serve_station,best)
 				return
 		previous=point
+
+func bind_contact_motion(mapper: Map,root: Node3D,actor: Node3D,home: Vector3,source: Vector3,best: Dictionary) -> Dictionary:
+	mapper.index=int(best.id)-1
+	mapper.legs=mapper.index
+	var recipe := mapper.reception_recipe(mapper.clips[mapper.index],best.cell,best.part)
+	var key := mapper.assignment_key(best.cell,best.part)
+	if recipe.kind=="overhead":
+		var audition: int=StorySession.game_options.get_value("studio_hand_legs",key,-2)
+		if audition>=-1 and audition<mapper.clips.size():
+			recipe=recipe.duplicate()
+			mapper.legs=audition
+			recipe.step_legs=0 if audition<0 else mapper.clips[audition].id
+			recipe.audition=true
+	mapper.posed_lead_foot=mapper.lead_foot(best.cell,best.part)
+	root.position=home
+	root.basis=Basis(Vector3.UP,atan2(source.x-root.position.x,source.z-root.position.z))
+	var flipped: bool=StorySession.game_options.get_value("studio_mirror",key,mapper.default_mirror(best.cell,best.part,recipe))
+	root.scale=Vector3(-1. if flipped else 1.,1.,1.)
+	if flipped and mapper.posed_lead_foot!="Auto": mapper.posed_lead_foot="Left" if mapper.posed_lead_foot=="Right" else "Right"
+	mapper.player=actor
+	mapper.player.reparent(root,false)
+	mapper.player.transform=Transform3D.IDENTITY
+	mapper.player.animator.pause()
+	for modifier in mapper.player.skeleton.get_children():
+		if modifier is SkeletonModifier3D: modifier.active=false
+	mapper.bind_receiver(mapper.player)
+	mapper.intercept_shift=Vector3.ZERO
+	mapper.shift_frame=recipe.contact
+	mapper.sample_receiver(recipe,recipe.contact,true,mapper.legs)
+	var center: Vector3=mapper.HandPass.contact_center(mapper.player) if recipe.kind=="overhead" else mapper.player.skeleton.to_global(mapper.player.skeleton.get_bone_global_pose(mapper.player.skeleton.find_bone("hand_l")).origin)
+	mapper.intercept_shift=(mapper.set_intercept-center).slide(Vector3.UP).limit_length(.75)
+	return recipe
 
 func step_serve_reception(_shot,previous: Vector3,_delta: float) -> void:
 	if recipe.is_empty(): return
 	map.sample_receiver(recipe,clampf(recipe.contact+(flight_age-receive_at)*60.,0.,recipe.frames),true,map.legs)
 	if absf(flight_age-receive_at)>.24: return
-	var touched := false
-	if recipe.kind=="overhead":
-		var hands := map.HandPass.contact_center(map.player)
-		touched=hands.distance_to(Geometry3D.get_closest_point_to_segment(hands,previous,ball.position))<=map.HAND_RADIUS
-	else:
-		for shape in map.RECEPTION_CAPSULES:
-			var seg := map.reception_segment(map.player.skeleton,shape)
-			var points := Geometry3D.get_closest_points_between_segments(previous,ball.position,seg[0],seg[1])
-			if points[0].distance_to(points[1])<=map.BALL_RADIUS+float(shape[2])+map.FOREARM_CONTACT_GRACE:
-				touched=true
-				break
-	if not touched: return
+	if not mapped_touch(map,recipe,previous): return
 	receive_read.covered()
 	pass_start=ball.position
 	pass_end=map.pass_goal
@@ -161,6 +175,67 @@ func step_serve_reception(_shot,previous: Vector3,_delta: float) -> void:
 	phase="serve_pass"
 	if recipe.kind!="overhead": dig_sound.play()
 	message.text="Pass"
+
+func mapped_touch(mapper: Map,motion: Dictionary,previous: Vector3) -> bool:
+	var touched := false
+	if motion.kind=="overhead":
+		var hands := mapper.HandPass.contact_center(mapper.player)
+		touched=hands.distance_to(Geometry3D.get_closest_point_to_segment(hands,previous,ball.position))<=mapper.HAND_RADIUS
+	else:
+		for shape in mapper.RECEPTION_CAPSULES:
+			var seg := mapper.reception_segment(mapper.player.skeleton,shape)
+			var points := Geometry3D.get_closest_points_between_segments(previous,ball.position,seg[0],seg[1])
+			if points[0].distance_to(points[1])<=mapper.BALL_RADIUS+float(shape[2])+mapper.FOREARM_CONTACT_GRACE:
+				touched=true
+				break
+	return touched
+
+func walk_server(delta: float,defending := false) -> void:
+	if defending and defense_map.player!=null:
+		defense_map.sample_receiver(defense_recipe,clampf(defense_recipe.contact+(dig_clock-defense_at)*60.,0.,defense_recipe.frames),true,defense_map.legs)
+		return
+	super.walk_server(delta,defending)
+
+func block_on_flight_segment(previous: Vector3) -> bool:
+	if phase!="serve_return" or not attack_floor_pending: return false
+	var dt := previous.distance_to(ball.position)/maxf(.01,drop_velocity.length())
+	dig_clock+=dt
+	if defense_recipe.is_empty():
+		var ahead := minf(.32,preload("res://scripts/pass_flight.gd").landing_time(ball.position,drop_velocity))
+		var source := pin_hitter.global_position
+		var yaw := atan2(source.x-hitter.position.x,source.z-hitter.position.z)
+		var start := (previous-hitter.position).rotated(Vector3.UP,-yaw)
+		var predicted := ball.position+drop_velocity*ahead+Vector3.DOWN*4.905*ahead*ahead
+		var end := (predicted-hitter.position).rotated(Vector3.UP,-yaw)
+		var first := INF
+		var best := {}
+		for box in boxes:
+			var span := map.zone_interval(start,end,box.bounds)
+			if span.y>span.x and span.x<first:
+				first=span.x
+				best=box
+		if best.is_empty(): return false
+		var lead := maxf(0.,(ahead+dt)*first-dt)
+		defense_at=dig_clock+lead
+		defense_map.set_intercept=ball.position+drop_velocity*lead+Vector3.DOWN*4.905*lead*lead
+		defense_map.incoming_lead_seconds=lead
+		defense_map.feed_kmh=drop_velocity.length()*3.6
+		defense_recipe=bind_contact_motion(defense_map,defense_anchor,hitter,hitter.position,source,best)
+	defense_map.sample_receiver(defense_recipe,clampf(defense_recipe.contact+(dig_clock-defense_at)*60.,0.,defense_recipe.frames),true,defense_map.legs)
+	if not is_finite(defense_contact) and mapped_touch(defense_map,defense_recipe,previous): defense_contact=dig_clock
+	var release: float=dig_platforms[hitter].pressed_at
+	if not is_finite(defense_contact) or not is_finite(release) or absf(release-defense_at)>DIG_WINDOW or absf(defense_contact-dig_clock)>DIG_WINDOW: return false
+	last_digger=hitter
+	dig_incoming=drop_velocity
+	var flight := 1.4
+	drop_velocity=(defense_map.pass_goal-ball.position)/flight+Vector3.UP*4.905*flight
+	drop_net_hit.clear()
+	hard_spike_floor_pending=false
+	floor_linger=0.
+	phase="server_dig"
+	dig_sound.play()
+	message.text="Dig"
+	return true
 
 func step_reception_rally(delta: float) -> void:
 	super.step_reception_rally(delta)
