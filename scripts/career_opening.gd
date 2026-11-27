@@ -372,6 +372,10 @@ func moving_prompt(waiting:bool) -> void:
 	else:
 		training_prompt([["LT","Focus"],["Move","Shuffle"],[JOY_BUTTON_A,"Hold, release at contact"]],"Ctrl to focus / WASD to shuffle / Hold Space, release at contact")
 
+func start_setting_lesson() -> void:
+	if CareerSession.checkpoint("setting_lesson",0):
+		MenuPresentation.load_scene("res://scenes/career_setting_lesson.tscn")
+
 func finish_pepper() -> void:
 	phase="pepper_complete"
 	training_prompt([[JOY_BUTTON_A,"Continue"]],"Enter to continue")
@@ -460,7 +464,7 @@ func _process(delta:float) -> void:
 
 func opening_checkpoint() -> String:
 	if pepper.moving:
-		var done:=phase=="pepper_complete" or (not pepper.demonstrating and pepper.attempts>=5)
+		var done:=phase=="pepper_complete" or (not pepper.demonstrating and pepper.score>=5)
 		return "moving_reception_complete" if done else "moving_reception"
 	if not pepper.pairs.is_empty(): return "pepper_complete" if phase=="pepper_complete" else "pepper"
 	if phase in ["footwork","footwork_demo"] or phase=="handoff": return "footwork"

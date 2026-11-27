@@ -230,7 +230,8 @@ func confirm_delete(id: String,athlete_name: String) -> void:
 func resume() -> void:
 	match CareerSession.stage():
 		"origin","welcome","footwork","pepper","pepper_complete","moving_reception": origin()
-		"moving_reception_complete": position_menu()
+		"moving_reception_complete","setting_lesson": MenuPresentation.load_scene("res://scenes/career_setting_lesson.tscn")
+		"setting_lesson_complete": position_menu()
 		"position": position_menu()
 		"after_tryout": after_tryout()
 		_: MenuPresentation.load_scene(CareerSession.CHAPTER)

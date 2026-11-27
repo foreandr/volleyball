@@ -222,7 +222,7 @@ func progress() -> int:
 
 func checkpoint(at: String, rep: int) -> bool:
 	var completed:Array=data.get_value(key(),"completed_opening_drills",[])
-	var cleared_drill:={"pepper":"footwork","pepper_complete":"pepper","moving_reception":"pepper","moving_reception_complete":"moving_reception"}
+	var cleared_drill:={"setting_lesson":"moving_reception","setting_lesson_complete":"setting_lesson","pepper":"footwork","pepper_complete":"pepper","moving_reception":"pepper","moving_reception_complete":"moving_reception"}
 	if at in cleared_drill and cleared_drill[at] not in completed:
 		completed.append(cleared_drill[at])
 		data.set_value(key(),"completed_opening_drills",completed)

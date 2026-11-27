@@ -27,8 +27,10 @@ var moving:=false
 const FIVE_MIN:=Vector2(.65,-2.45)
 const FIVE_MAX:=Vector2(3.85,1.45)
 const FIVE_HOME:=preload("res://scripts/player_ground_controls.gd").BACK_LEFT
+var final_deposit:=false
 var cart_service:=preload("res://scripts/reception_cart_service.gd").new()
 const SETTER_TWO_AND_HALF:=Vector3(-1.5,.04,2.85)
+var pin_collector:Node3D
 var pass_target:Node3D
 var base:=Vector3.ZERO
 var chase:=Vector3.ZERO
@@ -51,7 +53,10 @@ func configure(host,readout:Label,completed:int) -> void:
 		pass_target=athletes[1]
 		pass_target.position=SETTER_TWO_AND_HALF
 		pass_target.rotation.y=PI
-		for slot in range(2,8):
+		pin_collector=athletes[2]
+		pin_collector.position=Vector3(4.1,.04,2.5)
+		pin_collector.look_at(pass_target.position,Vector3.UP,true)
+		for slot in range(3,8):
 			waiting.append(athletes[slot])
 			athletes[slot].position=Vector3(5.65,.04,-4.+slot*.86)
 			athletes[slot].rotation.y=-PI*.5
@@ -75,7 +80,9 @@ func configure(host,readout:Label,completed:int) -> void:
 			for stored in host.rotation_drill.stock:
 				stored.position=host.rotation_drill.cart_slot(cart,stored.get_meta("cart_slot"))
 				stored.show()
-			cart_service.configure(host.rotation_drill,pass_target,feeder)
+			cart_service.configure(host.rotation_drill,pin_collector,feeder)
+			cart_service.home_dock=pin_collector.position+Vector3(.95,0,0)
+			host.rotation_drill.bins[0].position=cart_service.home_dock
 			base=receiver.position
 			steps=preload("res://scripts/directional_footwork.gd").new(receiver)
 		# The coach toss is authored from the relaxed standing idle.
@@ -106,9 +113,13 @@ func configure(host,readout:Label,completed:int) -> void:
 		choose_return(pairs.back(),demonstrating or i!=0)
 	athletes[8].position=Vector3(-5.3,.04,2.)
 	feedback.text="%d / 5 passes"%score
-	if score==5: complete()
+	if score==5:
+		if moving: host.call_deferred("start_setting_lesson")
+		else: complete()
 
 func projected_landing(pair:Dictionary) -> Vector3:
+	if pair.has("pin_end"):
+		return preload("res://scripts/ball_landing_marker.gd").parabola(pair.return_end,pair.pin_end,1.15,1.65)
 	if not pair.flying or pair.ball.position.y<=.15: return Vector3.INF
 	var marker=preload("res://scripts/ball_landing_marker.gd")
 	if not pair.caught or not pair.hit:
@@ -127,7 +138,7 @@ func pass_skill(pair:Dictionary) -> float:
 	return pair.receiver.effective_rating("Hand reception" if pair.motion.get("kind","")=="overhead" else "Forearm reception")
 
 func plan_return(pair:Dictionary,timing:float) -> void:
-	var target:Vector3=game.coach_motion.toss(pass_target if moving else pair.feeder,0.)
+	var target:Vector3=Physics.joint(pass_target,"Head")+Vector3.UP*.21 if moving else game.coach_motion.toss(pair.feeder,0.)
 	var spread:=Accuracy.spread(timing,pair.mapper.feed_kmh/3.6,0.,pass_skill(pair),false)
 	var miss:=Accuracy.sample_offset(spread)
 	pair.return_end=target+miss.slide(Vector3.UP)
@@ -202,7 +213,7 @@ func plan_reception(pair:Dictionary) -> void:
 
 func start_human_turn() -> void:
 	demonstrating=false
-	attempts=clampi(int(CareerSession.data.get_value(CareerSession.key(),"moving_attempts",score)),score,4) if moving else 0
+	attempts=maxi(int(CareerSession.data.get_value(CareerSession.key(),"moving_attempts",score)),score) if moving else 0
 	turn_makes=score
 	var pair:=pairs[0]
 	choose_return(pair,false)
@@ -393,6 +404,12 @@ func tick(delta:float) -> void:
 	if finished: return
 	for i in pairs.size():
 		var pair:=pairs[i]
+		if final_deposit:
+			move_off_turn(delta)
+			if cart_service.busy(delta): return
+			finished=true
+			game.start_setting_lesson()
+			return
 		var facing:=true
 		if moving:
 			if pair.receiver==game.setter: facing=move_passer(pair,delta)
@@ -427,6 +444,11 @@ func tick(delta:float) -> void:
 			if cart_service.busy(delta):
 				if pair.receiver!=game.setter: pair.receiver.animator.advance(delta)
 				continue
+			if not pair.flying and pass_target.position.distance_to(SETTER_TWO_AND_HALF)>.04:
+				var home_velocity:Vector3=pass_target.position.direction_to(SETTER_TWO_AND_HALF)*2.8
+				pass_target.play_travel_gait(home_velocity)
+				pass_target.animator.advance(delta)
+				pass_target.position=pass_target.position.move_toward(SETTER_TWO_AND_HALF,2.8*delta)
 			if not pair.flying and not cart.issued:
 				pair.ball.hide()
 				cart.prepare_next_ball(delta)
@@ -520,15 +542,30 @@ func tick(delta:float) -> void:
 			if pair.caught:
 				var u:=clampf((t-float(pair.contact_age))/sqrt(8.*float(pair.rise)/9.81),0.,1.)
 				if pair.hit:
-					if moving: cart_service.walk_to(pair.catch_stance,delta)
 					orb.position=game.arc(pair.contact_point,pair.return_end,u,pair.rise)
+					if moving:
+						var dt_set:float=t-pair.contact_age-sqrt(8.*float(pair.rise)/9.81)
+						var catch_spot:Vector3=pair.catch_stance
+						if pass_target.position.distance_to(catch_spot)>.04:
+							var velocity:=pass_target.position.direction_to(catch_spot)*2.8
+							pass_target.play_travel_gait(velocity)
+							pass_target.animator.advance(delta)
+							pass_target.position=pass_target.position.move_toward(catch_spot,delta*2.8)
+						var pin:Vector3=hands(pin_collector)
+						Ground.face(pass_target,pin-pass_target.position,delta)
+						if dt_set>-.35:
+							game.Hands.standing_set(pass_target,pair.return_end,pin-pair.return_end,(pin-pair.return_end+Vector3.UP*7.).normalized(),dt_set,smoothstep(-.35,0.,dt_set))
+						if dt_set>=0.:
+							if not pair.has("pin_end"): pair.pin_end=pin
+							orb.position=game.arc(pair.return_end,pair.pin_end,clampf(dt_set/1.15,0.,1.),1.65)
 				elif moving:
 					var fall:float=minf(pair.floor_u,(t-FEED)/pair.flight_time)
 					orb.position=pair.origin.lerp(pair.platform,fall)+Vector3.UP*4.*float(pair.toss_rise)*fall*(1.-fall)
 				else:
 					orb.position=pair.contact_point.lerp(receiver.position+receiver.basis.z*-.42+Vector3.UP*.105,minf(1.,u*2.))
 		if not moving and not pair.flying: receiver.animator.advance(delta)
-		if t>=arrival+maxf(1.93,sqrt(8.*float(pair.rise)/9.81)+.25):
+		var settled:bool=pair.caught and t>=pair.contact_age+sqrt(8.*float(pair.rise)/9.81)+(1.2 if moving and pair.hit else .25)
+		if settled and t>=arrival+1.93:
 			if moving and game.rotation_drill.issued:
 				cart_service.receive(game.rotation_drill.issued,pair.ball.position,pair.hit)
 				pair.ball.hide()
@@ -540,14 +577,13 @@ func tick(delta:float) -> void:
 				released.clear()
 				touched_at=-INF
 			if demonstrating or i!=0: pair.cpu_misses=pair.outcomes.next_misses()
-			if moving and attempts==5:
+			if moving and human and score>=5:
+				CareerSession.data.erase_section_key(CareerSession.key(),"moving_attempts")
+				game.coach_react("praise")
+				final_deposit=true
+				return
+			if moving and not human and attempts>=5:
 				if turn_makes==5: game.coach_react("praise")
-				if human:
-					CareerSession.data.erase_section_key(CareerSession.key(),"moving_attempts")
-					CareerSession.checkpoint("moving_reception_complete",score)
-					feedback.text="Moving reception complete   /   %d of 5"%score
-					game.finish_pepper()
-					game.fade_receiver_exit()
 				var next:Node3D=waiting.pop_front()
 				var sideline:=next.global_position
 				pair.outgoing=receiver
@@ -575,6 +611,7 @@ func tick(delta:float) -> void:
 			pair.caught=false
 			pair.swing=false
 			pair.flying=false
+			pair.erase("pin_end")
 			pair.erase("follow_heading")
 			pair.erase("release_pose")
 			if moving and demonstrating and not pair.has("outgoing"): pair.reset_to_five=true
