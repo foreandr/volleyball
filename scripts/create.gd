@@ -98,6 +98,10 @@ func _ready() -> void:
 	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	preview.add_child(viewport)
 	build_preview(viewport)
+	if not has_ball_controls():
+		play_toggle=button("Pause",func(): pause_preview(not preview_paused))
+		preview.add_child(play_toggle)
+		play_toggle.position=Vector2(12,12)
 	if has_ball_controls():
 		right_panel = panel()
 		right_panel.name = "BallPanel"
@@ -139,16 +143,16 @@ func initial_profile() -> Dictionary:
 	return StorySession.draft.duplicate(true) if StorySession.creating_story else Profile.load_profile()
 
 const STEPS := ["Athlete","Wardrobe","Attributes"]
-const SLOTS := {
-	"Chest":["Jersey length","Jersey fit","Underlayer"], "Legs":["Shorts design","Leg sleeves","Knee support"],
-	"Feet":["Shoe cut","Shoe design","Shoe color","Sock height","Sock color","Ankle support"],
-	"Hands":["Finger tape"], "Head":["Headwear","Sunglasses"]
-}
+const SLOTS := {"Head":["Headwear","Sunglasses"],"Chest":["Jersey length","Jersey fit","Underlayer"],"Left shoulder":["Left shoulder"],"Right shoulder":["Right shoulder"],"Hands":["Finger tape"],"Shorts":["Shorts design","Leg sleeves"],"Left knee":["Left knee"],"Right knee":["Right knee"],"Ankles":["Sock height","Sock color","Ankle support"],"Shoes":["Shoe cut","Shoe design","Shoe color"]}
+const SLOT_BONES := ["Head","spine_03","upperarm_l","upperarm_r","hand_l","pelvis","calf_l","calf_r","foot_l","ball_r"]
 var step := 0
 var wardrobe_slot := "Chest"
 var creator_controls: VBoxContainer
 var measurement_sliders:Dictionary={}
 var pad_keyboard:ConfirmationDialog
+var preview_paused:=false
+var play_toggle:Button
+var hotspots:Array[Button]=[]
 var grooming:=""
 var body_view:Dictionary={}
 var camera_blend:Tween
@@ -166,6 +170,18 @@ func render_step() -> void:
 	for child in controls.get_children():
 		controls.remove_child(child)
 		child.queue_free()
+	for marker in hotspots:
+		preview.remove_child(marker)
+		marker.queue_free()
+	hotspots.clear()
+	if step==1 and grooming.is_empty():
+		for region in SLOTS:
+			var marker:=button(region,change_slot.bind(region))
+			preview.add_child(marker)
+			marker.custom_minimum_size=Vector2.ZERO
+			marker.add_theme_font_size_override("font_size",13)
+			marker.size=marker.get_combined_minimum_size()
+			hotspots.append(marker)
 	measurement_sliders.clear()
 	name_field=null
 	budget_label=null
@@ -173,7 +189,7 @@ func render_step() -> void:
 	if not grooming.is_empty():
 		render_grooming(controls)
 		return
-	var progress := label("ATHLETE CREATION    /    %d OF 3" % (step+1),13)
+	var progress := label("ATHLETE CREATION    /    %d OF 4" % ([1,3,4][step]),13)
 	progress.modulate=Color("73e1d2")
 	controls.add_child(progress)
 	controls.add_child(label(STEPS[step],28))
@@ -189,37 +205,54 @@ func render_step() -> void:
 			for caption in Profile.MEASUREMENTS:
 				var field: Array=Profile.MEASUREMENTS[caption]
 				add_attribute(controls,caption,field[0],field[1],field[2],profile[field[0]])
-			add_choice(controls,"Natural position","position",Profile.POSITIONS)
+			if not CareerSession.creating: add_choice(controls,"Natural position","position",Profile.POSITIONS)
 			add_choice(controls,"Handedness","handedness",["Right","Left"])
-			controls.add_child(button("Hair and face",open_grooming))
+			pass
 		1:
-			add_attribute(controls,"Jersey number","jersey_number",0,99,profile.jersey_number)
-			var slots := GridContainer.new()
-			slots.columns=2
-			controls.add_child(slots)
-			for slot in SLOTS:
-				var item := button(slot,change_slot.bind(slot))
-				item.toggle_mode=true
-				item.button_pressed=slot==wardrobe_slot
-				slots.add_child(item)
-				if item.button_pressed: item.grab_focus()
-			controls.add_child(HSeparator.new())
-			for key in SLOTS[wardrobe_slot]: add_choice(controls,key,key,Profile.KIT_CHOICES[key])
+			add_attribute(controls,"Jersey number","jersey_number",-1,99,profile.jersey_number)
+			controls.add_child(label(wardrobe_slot,22))
+			for key in SLOTS[wardrobe_slot]:
+				controls.add_child(label(key,16))
+				var grid:=GridContainer.new()
+				grid.columns=2
+				controls.add_child(grid)
+				for choice in Profile.KIT_CHOICES[key]:
+					var owned:=CareerSession.inventory() if CareerSession.outfitting else []
+					var cost:=CareerSession.gear_price(key,choice,owned) if CareerSession.creating or CareerSession.outfitting else 0
+					var item:=button(str(choice)+("   %d VP"%cost if cost else ""),func():
+						profile[key]=choice
+						update_profile()
+						render_step()
+						for tile in controls.find_children("*","Button",true,false):
+							if tile.get_meta("choice","")==str(key)+"/"+str(choice): tile.grab_focus())
+					item.set_meta("choice",str(key)+"/"+str(choice))
+					item.toggle_mode=true
+					item.set_pressed_no_signal(profile[key]==choice)
+					item.disabled=cost>remaining_points()+CareerSession.gear_price(key,profile[key],owned) and (CareerSession.creating or CareerSession.outfitting)
+					grid.add_child(item)
+
 		2:
 			add_attribute(controls,"Vertical jump (in)","vertical_in",30,60,profile.vertical_in)
 			var rules:=Profile.build_rules(profile)
 			for rating in Profile.RATINGS:
 				add_attribute(controls,"Arm swing speed" if rating=="Arm swing" else rating,rating,40 if CareerSession.creating else 0,Profile.training_limit(rules.get(rating,Vector2i(100,0))),profile[rating])
-	var advance := button("Equip wardrobe" if CareerSession.outfitting else "Create athlete" if step==2 else "Next   /   "+STEPS[step+1],advance_step)
+	var advance := button("Equip wardrobe" if CareerSession.outfitting else "Create athlete" if step==2 else "Next   /   Hair and face" if step==0 else "Next   /   Attributes",advance_step)
 	controls.add_child(advance)
 	save_button=advance
 	save_button.disabled=str(profile.name).strip_edges().is_empty() or ((CareerSession.creating or CareerSession.outfitting) and remaining_points()<0)
 	if step==0: name_field.grab_focus()
-	if step==2: controls.find_children("*","HSlider",false,false)[0].grab_focus()
+	if step==1 and not hotspots.is_empty(): hotspots[0].grab_focus()
+	if step==2: controls.find_children("*","Button",true,false)[0].grab_focus()
+
+func pause_preview(paused:bool) -> void:
+	preview_paused=paused
+	preview_player.animator.speed_scale=0. if paused else 1.
+	if play_toggle: play_toggle.text="Play" if paused else "Pause"
 
 func open_grooming() -> void:
 	body_view={"focus":view_focus,"distance":view_distance,"yaw":orbit_yaw,"pitch":orbit_pitch}
 	grooming="Hair"
+	pause_preview(true)
 	var rig:Skeleton3D=preview_player.skeleton
 	var head:=rig.to_global(rig.get_bone_global_pose(rig.find_bone("Head")).origin)
 	shift_camera(head+Vector3.UP*.09,.76,.13,.04)
@@ -244,10 +277,11 @@ func close_grooming() -> void:
 
 func render_grooming(controls:VBoxContainer) -> void:
 	controls.add_child(label("Hair and face",27))
+	controls.add_child(button("Next   /   Wardrobe",func(): step=1; close_grooming()))
 	var categories:=GridContainer.new()
 	categories.columns=2
 	controls.add_child(categories)
-	for category in ["Hair","Hair color","Eyebrows","Facial hair"]:
+	for category in ["Hair","Hair color","Eyebrows","Eyebrow color","Beard","Moustache","Facial hair color"]:
 		var tab:=button(category,func():
 			grooming=category
 			render_step())
@@ -256,9 +290,9 @@ func render_grooming(controls:VBoxContainer) -> void:
 		categories.add_child(tab)
 	controls.add_child(HSeparator.new())
 	var grid:=GridContainer.new()
-	grid.columns=2
+	grid.columns=1 if grooming=="Hair" else 2
 	controls.add_child(grid)
-	var choices:Array=Profile.HAIRSTYLES if grooming=="Hair" else (Profile.HAIR_COLORS.keys() if grooming=="Hair color" else Profile.KIT_CHOICES[grooming])
+	var choices:Array=Profile.HAIRSTYLES if grooming=="Hair" else (Profile.HAIR_COLORS.keys() if grooming.ends_with("color") else Profile.KIT_CHOICES[grooming])
 	var group:=ButtonGroup.new()
 	for choice in choices:
 		var tile:=button(str(choice),func():
@@ -274,21 +308,23 @@ func render_grooming(controls:VBoxContainer) -> void:
 		tile.button_group=group
 		tile.toggle_mode=true
 		tile.custom_minimum_size.y=43
-		if grooming=="Hair color":
+		if grooming.ends_with("color"):
 			tile.icon=MenuPresentation.color_chip(Profile.HAIR_COLORS[choice])
 		grid.add_child(tile)
 		tile.set_pressed_no_signal(choice==profile[grooming])
 		if tile.button_pressed: tile.grab_focus()
-	controls.add_child(button("Done",close_grooming))
 
 func change_slot(slot: String) -> void:
 	wardrobe_slot=slot
 	render_step()
+	for tile in creator_controls.find_children("*","Button",true,false):
+		if tile.has_meta("choice"): tile.grab_focus(); break
 
 func advance_step() -> void:
 	if CareerSession.outfitting:
 		if CareerSession.equip(profile): open_menu()
-	elif step==2: save_player()
+	elif step==0: open_grooming()
+	elif step==2: confirm_save()
 	else:
 		step+=1
 		render_step()
@@ -327,6 +363,7 @@ func add_choice(host: VBoxContainer,caption: String,key: String,choices: Array) 
 			for i in choices.size(): picker.set_item_disabled(i,CareerSession.gear_price(key,choices[i],owned)>budget))
 
 func measurement(caption: String,key: String,value: int) -> String:
+	if key=="jersey_number" and value==-1: return "Jersey number   00"
 	if key=="height_cm": return "Height   %d in   (%d ft %d in)" % [value,value/12,value%12]
 	if key in Profile.RATINGS:
 		var rule:Vector2i=Profile.build_rules(profile).get(key,Vector2i(100,0))
@@ -334,6 +371,33 @@ func measurement(caption: String,key: String,value: int) -> String:
 	return "%s   %d" % [caption,value]
 
 func add_attribute(parent: VBoxContainer, caption: String, key: String, minimum: int, maximum: int, initial: float) -> void:
+	if key in Profile.RATINGS or key=="vertical_in":
+		var unit:=.25 if key=="vertical_in" else 1.
+		var row:=HBoxContainer.new()
+		parent.add_child(row)
+		var heading:=label("",16)
+		heading.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+		row.add_child(heading)
+		var meter:=Range.new()
+		meter.visible=false
+		meter.max_value=maximum
+		meter.step=unit
+		parent.add_child(meter)
+		MenuPresentation.rating_bar(parent,meter)
+		var refresh:=func():
+			var value:float=profile[key]
+			meter.value=value
+			heading.text=("%s   %.2f in"%[caption,value] if key=="vertical_in" else measurement(caption,key,int(value)))+"   ·   %d VP"%CareerSession.price(key,value)
+		for sign_ in [-1,1]:
+			var change:=button("−" if sign_<0 else "+",func():
+				if sign_>0 and CareerSession.creating and remaining_points()<CareerSession.price(key,profile[key]): return
+				profile[key]=clampf(profile[key]+sign_*unit,minimum,maximum)
+				refresh.call()
+				update_profile())
+			row.add_child(change)
+			MenuPresentation.stat_help(change,heading,caption,Profile.RATING_HELP.get(key,"Jump height on serves, attacks and blocks."))
+		refresh.call()
+		return
 	var heading := label(measurement(caption,key,roundi(initial)),16)
 	parent.add_child(heading)
 	var slider := HSlider.new()
@@ -345,16 +409,7 @@ func add_attribute(parent: VBoxContainer, caption: String, key: String, minimum:
 	measurement_sliders[key]=slider
 	if Profile.BUILD_HELP.has(key):
 		MenuPresentation.stat_help(slider,heading,caption,func(): return Profile.build_note(key,profile),false)
-	if key=="vertical_in":
-		MenuPresentation.rating_bar(parent,slider)
-		MenuPresentation.stat_help(slider,heading,caption,"Jump height on serves, attacks and blocks. Each inch costs one volleyball point.")
-	if key in Profile.RATING_HELP:
-		MenuPresentation.rating_bar(parent,slider)
-		MenuPresentation.stat_help(slider,heading,caption,Profile.RATING_HELP[key])
 	slider.value_changed.connect(func(value: float):
-		if CareerSession.creating and (key in Profile.RATINGS or key=="vertical_in"):
-			value=minf(value,float(profile[key])+remaining_points())
-			slider.set_value_no_signal(value)
 		heading.text=measurement(caption,key,int(value))
 		var old_inches:=float(profile.height_cm)/2.54
 		var follow_mass:=absf(profile.weight_lb-Profile.natural_weight(old_inches))<.51
@@ -366,6 +421,20 @@ func add_attribute(parent: VBoxContainer, caption: String, key: String, minimum:
 		if key in ["height_cm","wingspan_in"] and follow_reach and measurement_sliders.has("reach_in"):
 			measurement_sliders.reach_in.value=Profile.natural_reach(profile.height_cm/2.54,profile.wingspan_in)
 		update_profile())
+
+func confirm_save() -> void:
+	if not CareerSession.creating or remaining_points()<=0:
+		save_player()
+		return
+	var dialog:=ConfirmationDialog.new()
+	dialog.title="Unspent volleyball points"
+	dialog.dialog_text="Keep %d VP for later and create this athlete?"%remaining_points()
+	dialog.ok_button_text="Create athlete"
+	add_child(dialog)
+	dialog.confirmed.connect(save_player)
+	dialog.canceled.connect(dialog.queue_free)
+	dialog.popup_centered()
+	dialog.get_cancel_button().grab_focus()
 
 func save_player() -> void:
 	SchoolHeadshots.request(profile)
@@ -432,7 +501,7 @@ func handle_preview_input(event: InputEvent) -> void:
 		handle_keyboard(event)
 		return
 	if event is InputEventMouseButton:
-		if event.button_index in [MOUSE_BUTTON_LEFT,MOUSE_BUTTON_MIDDLE]: dragging = event.pressed
+		if event.button_index==MOUSE_BUTTON_LEFT: dragging=event.pressed
 		if event.button_index == MOUSE_BUTTON_RIGHT: panning = event.pressed
 		if event.pressed:
 			preview.grab_focus()
@@ -440,7 +509,9 @@ func handle_preview_input(event: InputEvent) -> void:
 			elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN: zoom_view(1.1)
 		preview.accept_event()
 	if event is InputEventMouseMotion:
-		if panning:
+		if event.button_mask & MOUSE_BUTTON_MASK_MIDDLE:
+			zoom_view(exp(event.relative.y*.012))
+		elif panning:
 			pan_view(event.relative)
 		elif dragging:
 			orbit_yaw -= event.relative.x*0.008
@@ -449,6 +520,13 @@ func handle_preview_input(event: InputEvent) -> void:
 		if panning or dragging: preview.accept_event()
 
 func _process(delta: float) -> void:
+	for i in hotspots.size():
+		var rig:Skeleton3D=preview_player.skeleton
+		var idx:=rig.find_bone(SLOT_BONES[i])
+		if idx<0: continue
+		var marker:=hotspots[i]
+		var pt:=preview_camera.unproject_position(rig.to_global(rig.get_bone_global_pose(idx).origin))
+		marker.position=pt-marker.size*.5+Vector2(0,-10 if i==8 else 14 if i==9 else 0)
 	if camera_blend and camera_blend.is_running(): update_camera()
 	if player_controls!=null:
 		player_controls.step(delta)
@@ -484,7 +562,7 @@ func pan_view(pixels: Vector2) -> void:
 	update_camera()
 
 func zoom_view(factor: float) -> void:
-	view_distance = clampf(view_distance*factor,1.4,max_view_distance)
+	view_distance = clampf(view_distance*factor,.22,max_view_distance)
 	update_camera()
 
 func set_view(yaw: float) -> void:
@@ -543,6 +621,10 @@ func open_menu() -> void:
 	if CareerSession.outfitting:
 		CareerSession.outfitting=false
 		MenuPresentation.load_scene("res://scenes/story.tscn")
+		return
+	if creator_controls and step==1:
+		step=0
+		open_grooming()
 		return
 	if creator_controls and step>0:
 		step-=1
@@ -627,6 +709,12 @@ func edit_with_controller(field:LineEdit) -> void:
 		key.text=caption
 		actions.add_child(key)
 		key.pressed.connect(edit_draft.bind(caption,draft,letters,field.max_length))
+	for i in letters.size():
+		var below:=letters[i+10] if i+10<letters.size() else actions.get_child(mini(i%10*4/10,3)) as Button
+		letters[i].focus_neighbor_bottom=letters[i].get_path_to(below)
+	for key in actions.get_children():
+		key.focus_neighbor_bottom=key.get_path_to(dialog.get_ok_button())
+	dialog.get_ok_button().focus_neighbor_top=dialog.get_ok_button().get_path_to(actions.get_child(0))
 	dialog.confirmed.connect(func():
 		field.text=draft.text
 		field.text_changed.emit(field.text))

@@ -185,7 +185,7 @@ func apply_profile(profile: Dictionary) -> void:
 	attributes = values.duplicate()
 	var rules:=Profile.build_rules(values)
 	for stat in rules: attributes[stat]=Profile.effective_skill(values,stat,rules)
-	if body_skin: body_skin.normal_scale=lerpf(.12,.85,smoothstep(30.,95.,float(values.Athleticism)))
+	if body_skin: body_skin.normal_scale=lerpf(.055,.85,smoothstep(30.,95.,float(values.Athleticism)))
 	stamina.set_ratings(values.Stamina,values.Endurance,values.Willpower)
 	refresh_kit()
 	display_name = values.name
@@ -198,7 +198,9 @@ func refresh_kit() -> void:
 		preload("res://scripts/practice_kit.gd").style_hair(self,get_meta("kit_scalp"),get_meta("kit_variant",0))
 		preload("res://scripts/player_kit_choices.gd").apply(self)
 	if beard_material:
-		beard_material.set_shader_parameter("beard_style",Profile.KIT_CHOICES["Facial hair"].find(attributes["Facial hair"]))
+		beard_material.set_shader_parameter("beard_style",[0,1,3,4][Profile.KIT_CHOICES.Beard.find(attributes.Beard)])
+		beard_material.set_shader_parameter("stache",Profile.KIT_CHOICES.Moustache.find(attributes.Moustache))
+		beard_material.set_shader_parameter("beard_tone",Profile.HAIR_COLORS[attributes["Facial hair color"]])
 	if shirt_fabric and attributes.has("jersey_number") and attributes.jersey_number!=get_meta("school_jersey_number",-1):
 		set_meta("school_jersey_number",attributes.jersey_number)
 		var print_number := preload("res://scripts/practice_kit.gd").number_texture(attributes.jersey_number)
@@ -228,7 +230,7 @@ func apply_measurements() -> void:
 		skeleton.add_child(shape)
 		skeleton.move_child(shape,0)
 	var build := clampf(pow(float(attributes.weight_lb)/165.,.30),.84,1.18)
-	var muscle:=lerpf(.89,1.04,smoothstep(30.,95.,float(attributes.Athleticism)))
+	var muscle:=lerpf(.83,1.04,smoothstep(30.,95.,float(attributes.Athleticism)))
 	model.scale=model_rest_scale*Vector3(build*muscle,1.,build*muscle)
 	shape.configure(attributes)
 

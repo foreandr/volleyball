@@ -83,11 +83,12 @@ func section_prompts(random:bool) -> void:
 			prompts.remove_child(c)
 			c.queue_free()
 		var label:=Label.new()
-		label.text="Enter   Select       Esc   Back       PgUp / PgDn   Sections"+("       R   Random" if random else "")
+		label.text="Enter   Select       Esc   Back       "+("       R   Random" if random else "")
 		prompts.add_child(label)
 	else:
 		var actions: Array=[[JOY_BUTTON_A,"Select"],[JOY_BUTTON_B,"Back"],["LT","Previous"],["RT","Next"]]
 		if random: actions.append([JOY_BUTTON_Y,"Random"])
+		if route=="Match setup": actions=actions.filter(func(item): return item[0] not in ["LT","RT"])
 		Xbox.prompts(prompts,actions)
 
 func show_settings() -> void:
@@ -280,7 +281,7 @@ func _input(event:InputEvent) -> void:
 func change_section(direction:int) -> bool:
 	if is_instance_valid(MenuPresentation.loading_screen): return false
 	if route=="Settings": select_tab(tab_index+direction)
-	elif route=="Match setup": setup.set_page(setup.section+direction)
+	elif route=="Match setup": return false
 	else: return false
 	return true
 

@@ -392,7 +392,7 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		float width=mix(.0035,.0075,bend);
 		return max(1.-smoothstep(.0015,width,line),.72*(1.-smoothstep(.001,width*.8,lower_line)));
 	}
-	uniform int ankle_support; uniform int knee_support; uniform float tights_hem = 2.; uniform vec4 sock_color:source_color;
+	uniform int ankle_support; uniform int knee_support; uniform ivec2 knee_override=ivec2(0); varying flat int knee_kind; uniform float tights_hem = 2.; uniform vec4 sock_color:source_color;
 	uniform float sock_top; uniform vec4 sock_trim:source_color; uniform float striped;
 	uniform vec4 pad_color:source_color;
 	varying vec3 anatomy;
@@ -410,7 +410,9 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		y=UV2.y;
 		float flex=UV2.x>0.?knee_flex.x:knee_flex.y;
 		float k=y-knee_height;
-		float enabled=knee_support==0 ? (UV2.x>0.?padded.x:padded.y) : 0.;
+		int selected_knee=UV2.x>0.?knee_override.x:knee_override.y;
+		knee_kind=selected_knee==0?knee_support:max(0,selected_knee-2);
+		float enabled=selected_knee>0 ? (selected_knee==2?1.:0.) : knee_support==0 ? (UV2.x>0.?padded.x:padded.y) : 0.;
 		enabled_side=enabled;
 		pad=enabled*(1.-smoothstep(.087,.094,abs(k)));
 		float lateral=abs(UV2.x)-knee_center;
@@ -424,7 +426,7 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		float inside_shoe=1.-smoothstep(.064,.117,y);
 		float rolled_edge=pad*smoothstep(.073,.079,abs(k))*(1.-smoothstep(.083,.091,abs(k)));
 		float ankle_shell=ankle_support==2 ? .0045*(1.-smoothstep(.043,.061,abs(y-.148))) : 0.;
-		float knee_shell=knee_support==2 ? .006*(1.-smoothstep(.078,.099,abs(k))) : 0.;
+		float knee_shell=knee_kind==2 ? .006*(1.-smoothstep(.078,.099,abs(k))) : 0.;
 		VERTEX+=NORMAL*(ankle_shell+knee_shell+pad*.005+rolled_edge*.003+foam*.018+sock*.002-inside_shoe*.012);
 		anatomy=vec3(abs(UV2.x),y,COLOR.r);
 		loads=vec2(flex,UV2.x>0.?calf_load.x:calf_load.y);
@@ -487,7 +489,7 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		ALBEDO=mix(ALBEDO,pad_color.rgb*cover,pad_mask);
 		float support=0.;
 		for(int joint=0;joint<2;joint++){
-			int kind=joint==0?ankle_support:knee_support;
+			int kind=joint==0?ankle_support:knee_kind;
 			if(kind==0) continue;
 			float t=(y-(joint==0?.148:knee_height))/(joint==0?.056:.094);
 			float wrap=abs(t+.25*cos(angle));
@@ -553,7 +555,7 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 	source.free()
 
 static func number_texture(number: int) -> Texture2D:
-	var digits := str(number)
+	var digits := "00" if number==-1 else str(number)
 	var sheet := preload("res://assets/gym/jersey_digits.png").get_image()
 	var img := Image.create(96*digits.length(),144,false,Image.FORMAT_RGBA8)
 	for i in digits.length():
@@ -660,7 +662,7 @@ static func face_hair(rig: Skeleton3D,body: MeshInstance3D,mesh: ArrayMesh,coach
 	part.skeleton=part.get_path_to(rig)
 	var shader := Shader.new()
 	shader.code="""shader_type spatial;
-	uniform bool gray; uniform float shout; uniform int beard_style; uniform float temple_recess;
+	uniform bool gray; uniform float shout; uniform int beard_style; uniform int stache=-1; uniform vec4 beard_tone:source_color; uniform float temple_recess;
 	uniform vec4 tone:source_color;
 	varying vec3 p;
 	void vertex(){p=vec3(UV2,COLOR.r*.6-.3);VERTEX+=NORMAL*.002;}
@@ -696,7 +698,8 @@ static func face_hair(rig: Skeleton3D,body: MeshInstance3D,mesh: ArrayMesh,coach
 			if(beard_style==2) density=moustache;
 			if(beard_style==3) density=max(moustache,density*(1.-smoothstep(.024,.039,abs(p.x))));
 		}
-		bool jaw=(gray || beard_style>0) && abs(p.x)<.092 && density>grain;
+		if(stache>=0 && !gray){density=beard_style==0 ? 0. : density*(1.-smoothstep(1.628,1.635,p.y)); density=max(density,moustache*float(stache)*.5);}
+		bool jaw=(gray || beard_style>0 || stache>0) && abs(p.x)<.092 && density>grain;
 		vec2 mouth=vec2(p.x/.028,(p.y-1.625+.010*shout)/(.002+.014*shout));
 		bool open_mouth=gray && shout>.035 && p.z>.04 && dot(mouth,mouth)<1.;
 		if(!scalp && !jaw && !open_mouth) discard;
@@ -715,6 +718,7 @@ static func face_hair(rig: Skeleton3D,body: MeshInstance3D,mesh: ArrayMesh,coach
 			}
 		}
 		if(jaw){
+			if(stache>=0 && !gray) ALBEDO=beard_tone.rgb*(.72+.47*grain);
 			float whisker=p.y*1850.+abs(p.x)*mix(820.,350.,moustache)+p.z*460.;
 			float fiber=cos(whisker)*(1.-smoothstep(.7,2.8,fwidth(whisker)));
 			ALBEDO*= (.70+.30*strand)*(.92+.20*fiber-.19*moustache);
@@ -753,7 +757,7 @@ static func style_hair(actor:Node3D,scalp:Node3D,variant:int) -> void:
 	if actor.beard_material: actor.beard_material.set_shader_parameter("tone",color)
 	actor.hair_anchors.clear()
 	var selected:=preload("res://scripts/player_profile.gd").HAIRSTYLES.find(choice)
-	haircut(cut,color,variant if selected<=0 else selected-1,actor)
+	haircut(cut,color,variant if selected<=0 else selected+5 if selected>=9 else selected-1,actor)
 
 static func haircut(scalp: Node3D,color: Color,variant: int,actor: Node3D) -> void:
 	var style := variant%7
@@ -763,6 +767,7 @@ static func haircut(scalp: Node3D,color: Color,variant: int,actor: Node3D) -> vo
 	var rng := RandomNumberGenerator.new()
 	rng.seed=217+variant
 	actor.hair_length=.022+.009*style
+	var family:=clampi(variant/7-1,1,8)
 	var waved_crop := style==0 and variant>=7
 	var lock_count := 3600 if style==1 or waved_crop else 1080
 	for i in lock_count:
@@ -803,6 +808,10 @@ static func haircut(scalp: Node3D,color: Color,variant: int,actor: Node3D) -> vo
 				comb=(tie-root).normalized()
 				length_factor=.38+.34*smoothstep(-.8,.65,normal.z)
 			6: length_factor=.62+.68*crown
+		if variant>=7:
+			var side_length:float=[1.,.45,.7,.84,.24,.55,.19,.77,1.25][family]
+			length_factor*=lerpf(side_length,.85+.105*family,crown)
+			comb.x+=.25*sin(float(family)*1.7)*(1.-crown)
 		# Let the crown grow out of a whorl before it joins the combed sides.
 		var crown_axis := Vector3(parting*.62,.95,-.28).normalized()
 		var outward := (normal-crown_axis).slide(normal)

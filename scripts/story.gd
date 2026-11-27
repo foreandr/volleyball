@@ -107,15 +107,16 @@ func development(selected := "") -> void:
 	var active: Button
 	for rating in ["vertical_in"]+CareerSession.Profile.RATINGS:
 		var athlete := CareerSession.Profile.clean(CareerSession.profile())
-		var value := int(athlete[rating])
+		var value := float(athlete[rating])
+		var cost:=CareerSession.price(rating,value)
 		var rule:Vector2i=CareerSession.Profile.build_rules(athlete).get(rating,Vector2i(100,0))
 		var vertical:bool=rating=="vertical_in"
 		var title:String="Vertical jump" if vertical else str(rating)
-		var upgrade := add_button("%s   %d%s" % [title,value if vertical else CareerSession.Profile.effective_skill(athlete,rating,{rating:rule})," in" if vertical else " / "+str(rule.x)],func():
-			if value>=(60 if vertical else CareerSession.Profile.training_limit(rule)) or points<=0: return
-			athlete[rating] = value+1
+		var upgrade := add_button("%s   %s%s    %d VP" % [title,value if vertical else CareerSession.Profile.effective_skill(athlete,rating,{rating:rule})," in" if vertical else " / "+str(rule.x),cost],func():
+			if value>=(60 if vertical else CareerSession.Profile.training_limit(rule)) or points<cost: return
+			athlete[rating] = value+(.25 if vertical else 1.)
 			CareerSession.data.set_value("athletes",id,athlete)
-			CareerSession.data.set_value("points",id,points-1)
+			CareerSession.data.set_value("points",id,points-cost)
 			CareerSession.persist()
 			development(rating))
 		MenuPresentation.rating_bar(column,null,value)

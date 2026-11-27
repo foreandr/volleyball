@@ -4,7 +4,7 @@ const Profile = preload("res://scripts/player_profile.gd")
 const Ball = preload("res://scripts/animation_ball_preview.gd")
 const Venue = preload("res://scripts/match_venue.gd")
 const Xbox = preload("res://scripts/xbox_controls.gd")
-const PAGES := ["Teams", "Ball", "Arena", "Rules"]
+const PAGES := ["Squads", "Arena", "Ball", "Rules", "Choose sides"]
 const COLORS := [Color("287fda"),Color("d9874e"),Color("983c48"),Color("387765"),Color("ebdeb7"),Color("514781")]
 const OFFENSE := ["Spike placement","Arm swing","Strength","Hand setting","Spin serve"]
 const DEFENSE := ["Forearm reception","Forearm defense","Hand defense","Blocking","Reflexes"]
@@ -61,7 +61,7 @@ func configure(launch: Callable, exit_page: Callable) -> void:
 	for i in athletes.size(): athletes[i]=Profile.clean(athletes[i])
 	if lineups[0].is_empty() or lineups[1].is_empty():
 		lineups=[range(6),range(6,12)]
-	render("Start")
+	render("Count0Next")
 
 func persist() -> void:
 	StorySession.save_match_preference("exhibition",{"athletes":athletes,"lineups":lineups,"sizes":sizes,"venue":venue,"crowd":attendance,"points":points,"controller":controller,"colors":StorySession.kit_colors})
@@ -105,28 +105,27 @@ func render(focus_id: String) -> void:
 	for child in get_children():
 		remove_child(child)
 		child.queue_free()
-	var tabs:=strip(self)
-	for i in PAGES.size():
-		var tab:=action(tabs,PAGES[i],set_page.bind(i),"Tab%d"%i)
-		tab.toggle_mode=true
-		tab.set_pressed_no_signal(i==section)
-		tab.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	MenuPresentation.section_label(self,"%d / %d     %s"%[section+1,PAGES.size(),PAGES[section]])
 	match section:
 		0:
 			if kit_side>=0: kit_board()
 			elif slot<0: team_board()
 			else: player_board()
-		1: equipment_board()
-		2: venue_board()
+		2: equipment_board()
+		1: venue_board()
 		3: rules_board()
+		4: controller_board()
 	var footer:=strip(self)
-	var start:=action(footer,"Start match   ·   %dv%d   ·   First to %d"%[sizes[0],sizes[1],points],launch,"Start")
-	start.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	if kit_side<0 and slot<0:
+		var next:=action(footer,"Start match" if section==4 else "Continue to "+str(PAGES[section+1]),launch if section==4 else set_page.bind(section+1),"Start" if section==4 else "Continue")
+		next.custom_minimum_size=Vector2(220,46)
 	var random_button:=action(footer,"Random",randomize_selection,"Random")
 	random_button.add_theme_constant_override("icon_max_width",30)
 	if not Xbox.keyboard_prompts(): random_button.icon=Xbox.glyph(JOY_BUTTON_Y)
-	action(footer,"Back",go_back)
+	random_button.visible=section<4
+	action(footer,"Back",go_back).custom_minimum_size.x=92
 	var focus_target:=find_child(focus_id,true,false) as Control
+	if not focus_target: focus_target=find_next_valid_focus()
 	if focus_target: focus_target.grab_focus()
 	MenuPresentation.reveal(self)
 
@@ -134,7 +133,7 @@ func set_page(index: int) -> void:
 	kit_side=-1
 	section=posmod(index,PAGES.size())
 	slot=-1
-	render("Tab%d"%section)
+	render(["Count0Next","Venue%d"%venue,brand,"PointsNext","Controller%d"%(controller+1)][section])
 
 func go_back() -> void:
 	if kit_side>=0:
@@ -145,6 +144,7 @@ func go_back() -> void:
 		var target:="Player%d_%d"%[side,slot]
 		slot=-1
 		render(target)
+	elif section>0: set_page(section-1)
 	else: back.call()
 
 func stepper(parent: Container, caption: String, value: String, fn: Callable, id: String) -> void:
@@ -182,6 +182,8 @@ func team_board() -> void:
 		show_ratings(idx,0)
 		var kit:=action(col,"Change kit",open_kit.bind(idx),"Kit%d"%idx)
 		kit.self_modulate=StorySession.kit_colors[idx].lightened(.40)
+
+func controller_board() -> void:
 	MenuPresentation.section_label(self,"Controller assignment")
 	var sides:=strip(self)
 	for choice in [0,-1,1]:
@@ -452,8 +454,8 @@ func randomize_selection() -> void:
 				lineups=[ids.slice(0,6),ids.slice(6,12)]
 				persist()
 				render("Random")
-		1: pick_ball(Ball.BALL_PALETTES.keys().pick_random())
-		2: pick_venue(randi_range(0,Venue.NAMES.size()-1))
+		2: pick_ball(Ball.BALL_PALETTES.keys().pick_random())
+		1: pick_venue(randi_range(0,Venue.NAMES.size()-1))
 		3:
 			points=POINTS.pick_random()
 			persist()

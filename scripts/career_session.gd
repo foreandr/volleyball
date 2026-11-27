@@ -104,20 +104,31 @@ func run_command() -> void:
 func base_profile() -> Dictionary:
 	var values := Profile.clean({"height_cm":74*2.54})
 	values.name=""
+	values.position="Unassigned"
 	values.jersey_number=7
 	for rating in Profile.RATINGS: values[rating] = 40
 	return values
 
-func spent(values: Dictionary) -> int:
-	var total := maxi(0,roundi(values.get("vertical_in",30))-30)
-	for rating in Profile.RATINGS: total += maxi(0,int(values.get(rating,40))-40)
+const PRICES := {"Charisma":1,"Spike placement":3,"Arm swing":3,"Athleticism":3,"Strength":3,"Stamina":3,"Endurance":3,"Speed":6,"vertical_in":5}
+
+func price(key:String,value:float) -> int:
+	var levels:=maxf(0.,(value-30.)*4. if key=="vertical_in" else value-40.)
+	return int(PRICES.get(key,2))*(1+floori(levels/15.))
+
+func spent(values:Dictionary) -> int:
+	var total:=0
+	for key in ["vertical_in"]+Profile.RATINGS:
+		var base:=30. if key=="vertical_in" else 40.
+		var unit:=.25 if key=="vertical_in" else 1.
+		for i in maxi(0,roundi((float(values.get(key,base))-base)/unit)):
+			total+=price(key,base+i*unit)
 	return total
 
 func balance() -> int:
 	return data.get_value("points",athlete_id,0)
 
 func gear_price(key: String,item: String,owned: Array) -> int:
-	if key in ["Eyebrows","Facial hair"] or item in ["None","Team"] or item==Profile.KIT_CHOICES[key][0] or key+"/"+item in owned: return 0
+	if key in ["Eyebrows","Facial hair","Beard","Moustache"] or item in ["None","Team"] or item==Profile.KIT_CHOICES[key][0] or key+"/"+item in owned: return 0
 	return 4 if key in ["Underlayer","Shoe design","Headwear","Sunglasses"] else 2
 
 func inventory() -> Array:
