@@ -220,14 +220,14 @@ func apply(hitter: Node3D,attack_jump: Jump,phase: String,swing_time: float,cont
 			# Near full extension the elbow solver can choose opposite shoulder twists on adjacent frames.
 			if phase=="spike" and since_hit>PALM_CONTACT and last_shoulder_time>=0.:
 				var gap := last_shoulder.angle_to(rotation)
-				var budget := deg_to_rad(660.)*clampf(speed_factor,1.,1.7)*maxf(0.,swing_time-last_shoulder_time)
+				var budget := deg_to_rad(660.)*clampf(speed_factor,1.,2.55)*maxf(0.,swing_time-last_shoulder_time)
 				if gap>budget: rotation=last_shoulder.slerp(rotation,budget/gap)
 			last_shoulder=rotation
 			last_shoulder_time=swing_time
 		if joint=="lowerarm_r":
 			if phase=="spike" and since_hit>PALM_CONTACT:
 				var gap := last_elbow.angle_to(rotation)
-				var budget := deg_to_rad(840.)*clampf(speed_factor,1.,1.7)*arm_dt
+				var budget := deg_to_rad(840.)*clampf(speed_factor,1.,2.55)*arm_dt
 				if gap>budget: rotation=last_elbow.slerp(rotation,budget/gap)
 			last_elbow=rotation
 		rig.set_bone_pose_rotation(id,rotation)
