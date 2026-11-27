@@ -202,7 +202,10 @@ var rally_hitter := -1
 var deep_defenders := [-1,-1]
 var support_lanes := [0.0,0.0]
 
+var held_input := preload("res://scripts/held_input_hud.gd").new()
+
 func configure(actor: Node3D, board: Label, status: Label, build := "", players_per_team := 2, learn_from_demo := false, mirror_blue_right := true) -> void:
+	if held_input.get_parent()==null: add_child(held_input)
 	team_size = clampi(players_per_team,2,6)
 	roster_active = not spectator and StorySession.offline_roster.size() == team_size*2
 	key_until.resize(team_size*2)

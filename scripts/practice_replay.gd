@@ -149,9 +149,11 @@ func capture(rendered := false) -> Dictionary:
 			var actor: Node3D=game.passers[1]
 			timing[actor]={"position":Vector3(actor.global_position.x,.055,actor.global_position.z),"value":meter.value,"perfect":Vector2(.33,.67),"contact":Vector2(.08,.90),"miss":Color("14191d"),"highlight":not game.reception_release.is_empty(),"black_cursor":not game.receive_held,"stamina":actor.stamina.fraction()}
 		if game.reception_result!="": verdict+=("  /  " if verdict!="" else "")+game.reception_result
-	return {"release_verdict":verdict,"timing":timing,"boundary":game.get_meta("serve_boundary",0),"impact":game.get_meta("block_impact_segment",Vector2i(-999,-1)),"rally":game.get("replay_rally"),"armed":armed,"arms":arms,"floor_count":game.floor_sound_count,"floor_db":game.floor_impact.volume_db,"spike_count":game.spike_sound_count if "spike_sound_count" in game else 0,"block_sound_count":game.block_sound_count if "block_sound_count" in game else 0,"objects":objects,"poses":poses,"whistle_count":game.coach_motion.whistle_cue.play_count,"floor_stream":game.floor_impact.stream,"whistle_height":game.coach_motion.whistle_cue.raised}
+	return {"held_buttons":game.held_input.read_buttons(),"landing":game.projected_landing(),"release_verdict":verdict,"timing":timing,"boundary":game.get_meta("serve_boundary",0),"impact":game.get_meta("block_impact_segment",Vector2i(-999,-1)),"rally":game.get("replay_rally"),"armed":armed,"arms":arms,"floor_count":game.floor_sound_count,"floor_db":game.floor_impact.volume_db,"spike_count":game.spike_sound_count if "spike_sound_count" in game else 0,"block_sound_count":game.block_sound_count if "block_sound_count" in game else 0,"objects":objects,"poses":poses,"whistle_count":game.coach_motion.whistle_cue.play_count,"floor_stream":game.floor_impact.stream,"whistle_height":game.coach_motion.whistle_cue.raised}
 
 func apply(sample: Dictionary) -> void:
+	game.held_input.display(sample.get("held_buttons",-1))
+	game.landing_ring.place(sample.get("landing",Vector3.INF))
 	game.rings.replay_timing(sample.timing)
 	if game.has_method("display_boundary"): game.display_boundary(sample.get("boundary",0))
 	game.coach_motion.whistle_cue.raised = sample.whistle_height
@@ -244,6 +246,7 @@ func toggle() -> void:
 		for mesh in boxes: mesh.hide()
 		apply(live)
 		active = false
+		game.held_input.reviewing=false
 		playing = false
 		replay_hand.stop()
 		replay_floor.stop()
@@ -277,6 +280,7 @@ func toggle() -> void:
 	camera.make_current()
 	get_tree().paused = true
 	active = true
+	game.held_input.reviewing=true
 	slider.max_value = (history.size()-1)*SUB
 	slider.set_value_no_signal(slider.max_value)
 	display_frame(slider.value)

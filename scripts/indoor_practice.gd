@@ -233,7 +233,11 @@ var attack_floor_pending := false
 var hard_spike_floor_pending := false
 var floor_impact := AudioStreamPlayer.new()
 
+var landing_ring: MeshInstance3D
+var held_input := preload("res://scripts/held_input_hud.gd").new()
+
 func _ready() -> void:
+	if held_input.get_parent()==null: add_child(held_input)
 	floor_impact.stream=preload("res://assets/audio/floor_impacts.tres")
 	floor_impact.bus=StorySession.IMPACT_BUS
 	add_child(floor_impact)
@@ -283,7 +287,7 @@ func _ready() -> void:
 	leather.shader = cover
 	ball.material_override = leather
 	world.add_child(ball)
-	LandingMarker.attach(ball,projected_landing)
+	landing_ring=LandingMarker.attach(ball,projected_landing)
 	rotation_drill.configure(self)
 	add_child(replay_inspector)
 	for a in rotation_drill.roster: energy[a]=a.stamina

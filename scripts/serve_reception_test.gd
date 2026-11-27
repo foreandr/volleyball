@@ -247,6 +247,12 @@ func bind_contact_motion(mapper: Map,root: Node3D,actor: Node3D,home: Vector3,so
 	var flipped: bool=StorySession.game_options.get_value("studio_mirror",key,mapper.default_mirror(best.cell,best.part,recipe))
 	root.scale=Vector3(-1. if flipped else 1.,1.,1.)
 	if flipped and mapper.posed_lead_foot!="Auto": mapper.posed_lead_foot="Left" if mapper.posed_lead_foot=="Right" else "Right"
+	var before := actor.global_position
+	mapper.entry_pose.clear()
+	for bone in actor.skeleton.get_bone_count(): mapper.entry_pose.append(actor.skeleton.get_bone_pose(bone))
+	mapper.entry_position=root.to_local(before)
+	mapper.entry_frame=maxf(0.,recipe.contact-mapper.incoming_lead_seconds*60.)
+	mapper.entry_duration=clampf(recipe.contact-mapper.entry_frame,0.01,15.)
 	mapper.player=actor
 	mapper.player.reparent(root,false)
 	mapper.player.transform=Transform3D.IDENTITY
@@ -261,6 +267,7 @@ func bind_contact_motion(mapper: Map,root: Node3D,actor: Node3D,home: Vector3,so
 	var offset := mapper.set_intercept-center
 	mapper.intercept_shift=offset.slide(Vector3.UP).limit_length(.75)
 	if mapper==defense_map: mapper.intercept_shift+=(offset-mapper.intercept_shift).limit_length(dig_reach)
+	mapper.sample_receiver(recipe,mapper.entry_frame,true,mapper.legs)
 	return recipe
 
 func step_serve_reception(_shot,previous: Vector3,_delta: float) -> void:

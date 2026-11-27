@@ -81,7 +81,7 @@ var platform_depth := 0.
 var pass_timing_ready := false
 
 func bind_contact_motion(mapper: Map,root: Node3D,actor: Node3D,home: Vector3,source: Vector3,best: Dictionary) -> Dictionary:
-	if mapper==map and not control_digger and mapper.incoming_lead_seconds>.40:
+	if mapper==map and not control_digger and mapper.incoming_lead_seconds>.65:
 		return {}
 	var motion := super.bind_contact_motion(mapper,root,actor,home,source,best)
 	if mapper!=map or control_digger or actor!=passers[1]: return motion
@@ -96,8 +96,12 @@ func bind_contact_motion(mapper: Map,root: Node3D,actor: Node3D,home: Vector3,so
 		platform=platform.lerp((Contact.joint(actor,"lowerarm_l")+Contact.joint(actor,"lowerarm_r"))*.5,.3)
 	var body_depth := Contact.joint(actor,"Head").dot(incoming_axis)-.09
 	platform_depth=minf(platform.dot(incoming_axis),body_depth)
+	var original_contact := receive_at
 	receive_at=clampf(receive_at+(platform_depth-mapper.set_intercept.dot(incoming_axis))/incoming_speed,0.,shot.planned_duration)
 	pass_timing_ready=true
+	mapper.entry_frame=maxf(0.,motion.contact-maxf(0.,mapper.incoming_lead_seconds+receive_at-original_contact)*60.)
+	mapper.entry_duration=clampf(motion.contact-mapper.entry_frame,.01,15.)
+	mapper.sample_receiver(motion,mapper.entry_frame,true,mapper.legs)
 	return motion
 
 func pass_meter(point := Vector3.INF) -> Dictionary:

@@ -36,6 +36,10 @@ var posed_lead_foot := "Auto"
 const Dive = preload("res://scripts/forward_reception_dive.gd")
 const Save = preload("res://scripts/player_reception_save.gd")
 var player
+var entry_pose: Array[Transform3D]=[]
+var entry_frame := 0.
+var entry_duration := 0.
+var entry_position := Vector3.ZERO
 var ready_pose: Array[Transform3D]=[]
 var clasp: Array[Transform3D]=[]
 var clips: Array=[]
@@ -106,6 +110,12 @@ func sample_receiver(c: Dictionary,f: float,active := true,motion_legs := -2) ->
 		var height := rig.to_global(rig.get_bone_global_pose(bone).origin).y
 		lift=maxf(lift,.04+radius-height)
 	player.global_position.y+=lift
+
+	if not entry_pose.is_empty() and f<entry_frame+entry_duration:
+		var blend := smoothstep(entry_frame,entry_frame+entry_duration,f)
+		for bone in entry_pose.size():
+			rig.set_bone_pose(bone,entry_pose[bone].interpolate_with(rig.get_bone_pose(bone),blend))
+		player.position=entry_position.lerp(player.position,blend)
 
 func pose_receiver(c: Dictionary,f: float,active: bool,motion_legs: int) -> void:
 	sample_receiver_base(c,f,active,motion_legs)

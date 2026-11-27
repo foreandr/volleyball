@@ -3,10 +3,11 @@ extends MeshInstance3D
 const Flight = preload("res://scripts/pass_flight.gd")
 var location: Callable
 
-static func attach(ball: Node3D, prediction: Callable) -> void:
+static func attach(ball: Node3D, prediction: Callable) -> MeshInstance3D:
 	var marker := new()
 	marker.location=prediction
 	ball.add_child(marker)
+	return marker
 
 static func ballistic(origin: Vector3, velocity: Vector3, gravity := 9.81) -> Vector3:
 	return origin+velocity*Flight.landing_time(origin,velocity,gravity)
@@ -20,8 +21,8 @@ func _ready() -> void:
 	top_level=true
 	process_priority=50
 	var ring := TorusMesh.new()
-	ring.inner_radius=.27
-	ring.outer_radius=.34
+	ring.inner_radius=.34
+	ring.outer_radius=.43
 	ring.rings=40
 	ring.ring_segments=6
 	mesh=ring
@@ -34,6 +35,8 @@ func _ready() -> void:
 	hide()
 
 func _process(_delta: float) -> void:
-	var target: Vector3=location.call()
+	place(location.call())
+
+func place(target: Vector3) -> void:
 	visible=target.is_finite() and get_parent().is_visible_in_tree()
-	if visible: global_position=Vector3(target.x,.045,target.z)
+	if visible: global_position=Vector3(target.x,.078,target.z)

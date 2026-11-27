@@ -216,3 +216,5 @@ Holding A arms manual reception while the player moves. A predicted ball enterin
 Serve receivers reset to neutral home spots. On the toss CPU passers walk toward the coverage read from previous points. A manual receiver keeps control of their feet.
 Manual reception keeps stick steering during the mapped reach and throughout the rally after contact. A teammate and the controlled receiver may both attempt a serve. The first playable contact resolves the pass.
 Receive CPU Serves resets the human receiver and digger to their neutral zone-six homes. Deep zone-six attacks travel into the defender's lane. CPU defenders close ground on the predicted dig point and can lunge or dive on uncovered low balls. Serve passes and digs use centered reception scatter based on skill, speed, spin and timing.
+
+Serve reception blends from the current movement pose and position into the assigned pass. Practice and match replay samples record held controller buttons. Practice replay also records the predicted landing point.
