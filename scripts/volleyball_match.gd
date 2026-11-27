@@ -1183,14 +1183,8 @@ func pass_support_receiver(index: int) -> int:
 
 func cpu_pass_target(index: int) -> Vector3:
 	if drill_pass_target.is_finite(): return frames[team(index)].to_local(drill_pass_target)
-	var passer := players[index].position
-	var teammate := players[pass_support_receiver(index)].position
-	var x := lerpf(passer.x,teammate.x,0.82)
-	var forward := maxf(1.05,absf(x-passer.x)*tan(deg_to_rad(40.0)))
-	if not is_human(index):
-		var depth := cpu_policy.choose(team(index),"pass depth",[0,-1,1],0)
-		forward += depth*0.38
-	return Vector3(x,0.065,clampf(passer.z+forward,-3.4,2.95))
+	return players[setter_for_pass(index)].position
+
 
 func aim_receive(index: int) -> void:
 	var bump := platforms[index]
@@ -1210,12 +1204,9 @@ func aim_receive(index: int) -> void:
 	elif side == possession_team and (touches >= 2 or (cpu_dump and index == cpu_choice)): destination = choose_shot(index)
 	bump.set_follow_target = set_pin_for(index) if cpu_is_setting(index) and not cpu_dump else Vector3.INF
 	bump.destination = Vector2(clampf(destination.x,-6.5,6.5),clampf(destination.z,-6.0,13.0))
-	var variety := float(posmod(flight_number+index*3,7))/6.0
-	var difficulty := smoothstep(7.0,25.0,velocity.length())
-	var pass_apex := lerpf(3.65,6.35,clampf(variety*0.78+difficulty*0.22,0.0,1.0))
-	if not is_human(index):
-		pass_apex += cpu_policy.choose(side,"pass height",[0,-1,1],0)*0.36
-	bump.height = pass_height if is_human(index) else (3.65 if cpu_dump and index == cpu_choice else pass_apex)
+	bump.height = pass_height if is_human(index) else (3.65 if cpu_dump and index == cpu_choice else Bump.Accuracy.IDEAL_APEX)
+	bump.receive_target_y=players[setter_for_pass(index)].height_cm*.0118 if not is_human(index) and not cpu_is_setting(index) and destination==cpu_pass_target(index) else Flight.FLOOR
+
 
 func cpu_set_apex(index: int, point: Vector3, pin: Vector3, pace: float) -> float:
 	var hitter := players[hitter_for_set(index)]

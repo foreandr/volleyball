@@ -68,7 +68,7 @@ func eligible(g) -> bool:
 func meter(g,point:Vector3) -> Dictionary:
 	if not grade.is_empty(): return grade
 	var face:=Contact.joint(g.human,"Head").dot(axis)-.09
-	return Map.release_grade(point.dot(axis),face,mapper.set_intercept.dot(axis),speed,mapper.segment_touch(motion,point-axis*.001,point))
+	return Map.release_grade(point.dot(axis),face,mapper.set_intercept.dot(axis),speed,mapper.segment_touch(motion,point-axis*.001,point),mapper.player.effective_rating("Hand reception" if motion.get("kind","")=="overhead" else "Forearm reception"))
 
 func plan(g,previous:float) -> void:
 	var actor:Node3D=g.human

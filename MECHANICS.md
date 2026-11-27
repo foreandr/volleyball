@@ -251,3 +251,5 @@ Career practice opens with a four-leg footwork circuit. Use the left stick to ru
 
 Moving and stationary pepper display the shared ball landing marker for the incoming toss and outgoing pass. Moving receivers recover to ready at the end of the pass. Between five-feed turns, the two athletes run between the receiving spot and the sideline.
 Moving receivers use LT directional footwork while tracking a feed. The contact animation takes over for the final approach. Demo receivers run back to neutral and face the coach before the next toss.
+CPU reception targets the setter with a 6.5 m apex. At skill ratings 0 to 100 the green timing allowance grows from 25 to 90 ms on either side of ideal contact. Outside green, timing error drives lateral, depth and height variation.
+During moving-reception follow-through the focused passer briefly tracks the departing ball, then eases back toward the coach before the next feed.

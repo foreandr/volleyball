@@ -117,14 +117,23 @@ func projected_landing(pair:Dictionary) -> Vector3:
 	if pair.age>=pair.contact_age+duration: return Vector3.INF
 	return marker.parabola(pair.contact_point,pair.return_end,duration,pair.rise)
 
-func choose_return(pair:Dictionary,cpu:bool) -> void:
-	if not cpu: pair.rise=randf_range(2.35,3.05)
-	else:
-		var previous:int=pair.get("return_band",-1)
-		var band:=randi_range(0,2) if previous<0 else (previous+randi_range(1,2))%3
-		pair.return_band=band
-		var limits:Vector2=[Vector2(1.55,2.1),Vector2(2.4,3.15),Vector2(3.55,4.45)][band]
-		pair.rise=randf_range(limits.x,limits.y)
+const Accuracy=preload("res://scripts/reception_accuracy.gd")
+
+func choose_return(pair:Dictionary,_cpu:bool) -> void:
+	pair.rise=Accuracy.IDEAL_APEX-1.5
+
+func pass_skill(pair:Dictionary) -> float:
+	return pair.receiver.effective_rating("Hand reception" if pair.motion.get("kind","")=="overhead" else "Forearm reception")
+
+func plan_return(pair:Dictionary,timing:float) -> void:
+	var target:Vector3=game.coach_motion.toss(pass_target if moving else pair.feeder,0.)
+	var spread:=Accuracy.spread(timing,pair.mapper.feed_kmh/3.6,0.,pass_skill(pair),false)
+	var miss:=Accuracy.sample_offset(spread)
+	pair.return_end=target+miss.slide(Vector3.UP)
+	if moving: pair.catch_stance=pass_target.position+miss.slide(Vector3.UP)
+	var peak:=maxf(maxf(pair.contact_point.y,target.y)+.15,Accuracy.IDEAL_APEX+miss.y)
+	var duration:=sqrt(2.*(peak-pair.contact_point.y)/9.81)+sqrt(2.*(peak-target.y)/9.81)
+	pair.rise=9.81*duration*duration/8.
 
 func choose_toss(pair:Dictionary) -> void:
 	if pair.bands.is_empty():
@@ -227,6 +236,7 @@ func start_human_turn() -> void:
 		game.seats_in_use.append(seat)
 	pair.receiver=human
 	pair.erase("reset_to_five")
+	pair.erase("follow_heading")
 	pair.erase("release_pose")
 	pair.motion={}
 	pair.zone_step=0
@@ -245,7 +255,7 @@ func release_state() -> Dictionary:
 	var pair:=pairs[0]
 	var axis:Vector3=(pair.platform-pair.origin).slide(Vector3.UP).normalized()
 	var speed:=maxf(1.,absf((pair.platform-pair.origin).dot(axis))/(float(pair.flight_time)))
-	return Map.release_grade(pair.ball.position.dot(axis),Physics.joint(pair.receiver,"Head").dot(axis)-.09,pair.platform.dot(axis),speed,pair.age-touched_at<=.095)
+	return Map.release_grade(pair.ball.position.dot(axis),Physics.joint(pair.receiver,"Head").dot(axis)-.09,pair.platform.dot(axis),speed,pair.age-touched_at<=.095,pass_skill(pair))
 
 func meter() -> Dictionary:
 	if finished or demonstrating or pairs.is_empty() or (not holding and released.is_empty()): return {}
@@ -303,10 +313,21 @@ func recover_receiver(pair:Dictionary,dt:float) -> void:
 			pair.home.origin=base
 		actor.play_action("idle",0.)
 	pair.recovery_age+=dt
-	var blend:=smoothstep(0.,.55,float(pair.recovery_age))
+	var blend:=smoothstep(0.,.70,float(pair.recovery_age))
 	actor.animator.advance(dt)
 	# Interpolating opposite-handed bases drives all three scale axes through zero.
 	var start_root:Transform3D=pair.release_root
+	if moving and (demonstrating or Ground.focus(game.axis)):
+		# Follow the departing pass briefly, then ease the gaze back to the feeder.
+		var age:float=pair.recovery_age
+		var to_ball:Vector3=pair.ball.position-actor.position
+		var to_coach:Vector3=pair.feeder.position-actor.position
+		var desired:=lerp_angle(atan2(to_ball.x,to_ball.z),atan2(to_coach.x,to_coach.z),smoothstep(.08,.70,age))
+		var heading:float=pair.get("follow_heading",atan2(start_root.basis.z.x,start_root.basis.z.z))
+		var turn:=angle_difference(heading,desired)
+		heading+=clampf(turn*(1.-exp(-dt*6.)),-2.4*dt,2.4*dt)
+		pair.follow_heading=heading
+		pair.home.basis=Basis(Vector3.UP,heading)*Basis.from_scale(pair.home.basis.get_scale().abs())
 	var end_root:Transform3D=pair.home
 	if start_root.basis.determinant()*end_root.basis.determinant()<0.:
 		end_root.basis.x=-end_root.basis.x
@@ -319,7 +340,9 @@ func recover_receiver(pair:Dictionary,dt:float) -> void:
 
 func square_up(actor:Node3D,target:Vector3,dt:float) -> bool:
 	var direction:=(target-actor.position).slide(Vector3.UP).normalized()
-	Ground.face(actor,direction,dt)
+	var yaw:=atan2(direction.x,direction.z)
+	var difference:=angle_difference(actor.rotation.y,yaw)
+	actor.rotation.y+=clampf(difference*(1.-exp(-dt*7.)),-2.8*dt,2.8*dt)
 	return actor.global_basis.z.normalized().dot(direction)>.995
 
 func walk_rotation(actor:Node3D,destination:Vector3,dt:float) -> bool:
@@ -445,6 +468,10 @@ func tick(delta:float) -> void:
 				pair.contact_point=orb.position
 				pair.caught=true
 				pair.hit=active
+				if active:
+					var timing:=absf(t-arrival)/.21
+					if human: timing=0. if released.grade=="Perfect" else absf(float(released.offset))/.21
+					plan_return(pair,timing)
 				if i==0:
 					attempts+=1
 					if moving and human: CareerSession.data.set_value(CareerSession.key(),"moving_attempts",attempts)
@@ -460,9 +487,8 @@ func tick(delta:float) -> void:
 			if pair.caught:
 				var u:=clampf((t-float(pair.contact_age))/sqrt(8.*float(pair.rise)/9.81),0.,1.)
 				if pair.hit:
-					var catch_at:Vector3=game.coach_motion.toss(pass_target if moving else feeder,0.)
-					pair.return_end=catch_at
-					orb.position=game.arc(pair.contact_point,catch_at,u,pair.rise)
+					if moving: cart_service.walk_to(pair.catch_stance,delta)
+					orb.position=game.arc(pair.contact_point,pair.return_end,u,pair.rise)
 				elif moving:
 					var fall:float=minf(pair.floor_u,(t-FEED)/pair.flight_time)
 					orb.position=pair.origin.lerp(pair.platform,fall)+Vector3.UP*4.*float(pair.toss_rise)*fall*(1.-fall)
@@ -516,6 +542,7 @@ func tick(delta:float) -> void:
 			pair.caught=false
 			pair.swing=false
 			pair.flying=false
+			pair.erase("follow_heading")
 			pair.erase("release_pose")
 			if moving and demonstrating and not pair.has("outgoing"): pair.reset_to_five=true
 			receiver.play_action("idle",.16)

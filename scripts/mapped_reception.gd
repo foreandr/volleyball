@@ -803,12 +803,12 @@ func segment_touch(motion:Dictionary,previous:Vector3,end:Vector3) -> bool:
 				break
 	return touched
 
-static func release_grade(depth:float,face_depth:float,platform_depth:float,incoming_speed:float,touching:bool) -> Dictionary:
+static func release_grade(depth:float,face_depth:float,platform_depth:float,incoming_speed:float,touching:bool,skill:=65.) -> Dictionary:
 	var behind := depth-face_depth
 	var platform_gap := depth-minf(platform_depth,face_depth-.13)
 	var distance := platform_gap+incoming_speed*.050
 	var offset := distance/incoming_speed
-	var green := .12
+	var green := maxf(.01,incoming_speed*preload("res://scripts/reception_accuracy.gd").green_seconds(skill))
 	var late_distance := maxf(.001,.20-behind+distance)
 	var green_end := minf(green,late_distance*.5)
 	var cursor: float

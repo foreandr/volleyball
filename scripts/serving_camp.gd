@@ -876,7 +876,8 @@ func plan_serve_reception(shot) -> void:
 	platform.quick_hand_receive=platform.hand_setting
 	platform.passing_skill_override=passer.attributes.get("Hand reception" if platform.hand_setting else "Forearm reception",65)
 	platform.destination=Vector2(SETTER_BASE.x,SETTER_BASE.z)
-	platform.height=4.1
+	platform.height=preload("res://scripts/reception_accuracy.gd").IDEAL_APEX
+	platform.receive_target_y=receiving_setter.height_cm*.0118
 	platform.quick_low_save=true
 	platform.green_forearm_allowance=.30
 	platform.green_hand_allowance=.18

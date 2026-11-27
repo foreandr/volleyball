@@ -250,7 +250,8 @@ func complete_reception() -> void:
 	pass_start=ball.position
 	pass_end=reception_pass_target()
 	pass_end.y=receiving_setter.height_cm*.0118
-	pass_duration=sqrt(2.*map.pass_rise/9.81)+sqrt(2.*maxf(.05,pass_start.y+map.pass_rise-pass_end.y)/9.81)
+	var return_lift:=maxf(.15,PassAccuracy.IDEAL_APEX+return_height_error-pass_start.y)
+	pass_duration=sqrt(2.*return_lift/9.81)+sqrt(2.*maxf(.05,pass_start.y+return_lift-pass_end.y)/9.81)
 	pass_clock=0.
 	attack_slot=2
 	set_at=pass_duration
@@ -260,12 +261,15 @@ func complete_reception() -> void:
 	message.text="Pass"
 
 func pass_timing_penalty() -> float:
-	return 0.
+	return absf(flight_age-receive_at)/.21
+
+var return_height_error:=0.
 
 func reception_pass_target() -> Vector3:
-	var bounds := PassAccuracy.spread(pass_timing_penalty(),map.feed_kmh/3.6,received_spin_rps,passers[receiver].effective_rating("Forearm reception"),false)
+	var bounds := PassAccuracy.spread(pass_timing_penalty(),map.feed_kmh/3.6,received_spin_rps,passers[receiver].effective_rating("Hand reception" if recipe.get("kind","")=="overhead" else "Forearm reception"),false)
 	var miss: Vector3=PassAccuracy.sample_offset(bounds)
-	return map.pass_goal+miss.slide(Vector3.UP)
+	return_height_error=miss.y
+	return receiving_setter.position+miss.slide(Vector3.UP)
 
 func accept_reception(previous: Vector3) -> bool:
 	return absf(flight_age-receive_at)<=.24 and mapped_touch(map,recipe,previous)

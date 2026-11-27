@@ -29,8 +29,10 @@ func receive(ball:RigidBody3D,at:Vector3,caught:bool) -> void:
 	ball.show()
 	if caught:
 		cargo.append(ball)
-		carts.begin_unload(setter,0,cargo)
-		stage="deposit"
+		if setter.position.distance_to(station)>.15: stage="carry"
+		else:
+			carts.begin_unload(setter,0,cargo)
+			stage="deposit"
 	else:
 		loose=ball
 		stage="retrieve"
@@ -69,9 +71,10 @@ func busy(dt:float) -> bool:
 			if cargo.is_empty(): stage="reset"
 		"reset":
 			if walk_to(station,dt):
-				setter.rotation.y=PI
-				setter.play_action("idle",.16)
-				stage="ready"
+				setter.rotation.y=lerp_angle(setter.rotation.y,PI,1.-exp(-dt*5.))
+				setter.play_action("idle",.24)
+				setter.animator.advance(dt)
+				if absf(angle_difference(setter.rotation.y,PI))<.025: stage="ready"
 		"grip":
 			var grip:=pushing.to_global(Vector3(0,0,-.75))
 			grip.y=station.y

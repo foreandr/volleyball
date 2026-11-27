@@ -1,6 +1,11 @@
 extends RefCounted
 
 const Flight = preload("res://scripts/pass_flight.gd")
+const IDEAL_APEX := 6.5 # Two antenna-tip heights above the court.
+
+static func green_seconds(skill:float) -> float:
+	return lerpf(.025,.090,clampf(skill/100.,0.,1.))
+
 const SET_WIDTH_FRACTION := 0.20
 const SET_TIGHT_FRACTION := 0.16
 
@@ -17,7 +22,8 @@ static func spread(timing: float, speed: float, spin_rps: float, skill: float, s
 	if setting:
 		return gap*(Vector2(2.8,3.15)+Vector2(0.65,0.9)*timing+Vector2(0.40,0.60)*pace+Vector2(0.20,0.30)*spin)
 	var difficulty := pace*0.72+spin*0.32
-	return Vector2(0.11,0.09)+Vector2(1.4,1.15)*difficulty+Vector2(2.15,1.75)*gap+Vector2(1.65,1.55)*timing*(1.0+difficulty*0.52)
+	var outside:=maxf(0.,timing-green_seconds(skill)/.21)
+	return Vector2(2.8,1.95)*minf(1.5,outside)*(1.+difficulty*.52)
 
 static func sample_offset(bounds: Vector2) -> Vector3:
 	var horizontal := Vector2.from_angle(randf()*TAU)*bounds.x*sqrt(randf_range(0.0001,1.0))
@@ -38,4 +44,4 @@ static func pass_velocity(touch: Vector3, target: Dictionary, angle: float, boun
 	var destination: Vector2 = target.position+Vector2(offset.x,offset.z)
 	var peak := touch.y+ideal.y*ideal.y/(2.0*Flight.GRAVITY)
 	var minimum := float(target.get("minimum_height",touch.y+0.05))
-	return Flight.target_velocity(touch,{"position":destination,"fit":"height","height":maxf(minimum,peak+offset.y)},angle)
+	return Flight.target_velocity(touch,{"position":destination,"fit":"height","height":maxf(minimum,peak+offset.y),"end_y":target.get("end_y",Flight.FLOOR)},angle)

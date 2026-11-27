@@ -147,7 +147,7 @@ func pass_meter(point := Vector3.INF) -> Dictionary:
 	var depth := point.dot(incoming_axis)
 	var face_depth := Contact.joint(controlled_passer(),"Head").dot(incoming_axis)-.09
 	var touching := is_finite(touched_at) or mapped_touch(defense_map if control_digger else map,defense_recipe if control_digger else recipe,point-incoming_axis*.001)
-	return Map.release_grade(depth,face_depth,platform_depth,incoming_speed,touching)
+	return Map.release_grade(depth,face_depth,platform_depth,incoming_speed,touching,controlled_passer().effective_rating("Hand reception" if (defense_recipe if control_digger else recipe).get("kind","")=="overhead" else "Forearm reception"))
 
 const RECEIVE_EARLY := .21
 
@@ -437,7 +437,7 @@ func first_platform_contact(start: Vector3,end: Vector3,mapper: Map,motion: Dict
 	return high
 
 func pass_timing_penalty() -> float:
-	if control_digger or receiver!=1: return 0.
+	if control_digger or receiver!=1: return super.pass_timing_penalty()
 	return manual_timing_penalty()
 
 func manual_timing_penalty() -> float:

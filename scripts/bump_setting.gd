@@ -268,8 +268,10 @@ func track_hand_dig(path: Callable, time: float, end: float, delta: float) -> Ve
 	tracked_hand_dig = tracked_hand_dig.lerp(offset,1.0-exp(-delta*34.0))
 	return to_local(origin+facing*tracked_hand_dig)
 
+var receive_target_y:=Flight.FLOOR
+
 func aim_velocity(origin: Vector3, spread := Vector2.ZERO) -> Vector3:
-	return Accuracy.pass_velocity(origin,{"position":destination,"fit":"height","height":height},45.0,spread,uses_set_accuracy())
+	return Accuracy.pass_velocity(origin,{"position":destination,"fit":"height","height":height,"end_y":receive_target_y},45.0,spread,uses_set_accuracy())
 
 func uses_set_accuracy() -> bool:
 	return not defensive_hand_dig and (forearm_setting or (hand_setting and not quick_hand_receive))
@@ -281,6 +283,7 @@ func accuracy_bounds(error: float, incoming: Vector3, spin_rps: float) -> Vector
 	if override >= 0.0: skill = override
 	if is_instance_valid(setter): skill*=setter.stamina.effectiveness()
 	var bounds := Accuracy.spread(error,incoming.length(),spin_rps,skill,setting)
+	if not setting and bounds.is_zero_approx(): return bounds
 	if hand_setting and defensive_hand_dig: bounds = bounds*1.32+Vector2(0.30,0.25)
 	if hard_dig:
 		var pace := smoothstep(4.0,38.0,incoming.length())
@@ -649,6 +652,13 @@ func update_attempt(time: float, previous: float, end: float, path: Callable, in
 				if assisted and not guided_pass: reach_platform(point-center,1.0,0.26,false,true)
 				grade = Timing.Grade.LATE if timing < green_start else (Timing.Grade.EARLY if timing > green_end else Timing.Grade.PERFECT)
 				var error := timing_error(timing)*(Timing.PANCAKE_ERROR_SCALE if pancake else 1.0)
+				if not uses_set_accuracy():
+					var rating:=passing_skill_override if passing_skill_override>=0. else (StorySession.hand_reception_skill if hand_setting else StorySession.forearm_reception_skill)
+					if is_instance_valid(setter): rating*=setter.stamina.effectiveness()
+					var offset:=timing-lerpf(green_start,green_end,.4)
+					var window:=Accuracy.green_seconds(rating)
+					grade=Timing.Grade.PERFECT if absf(offset)<=window else (Timing.Grade.EARLY if offset>0. else Timing.Grade.LATE)
+					error=absf(offset)/.21
 				contact_spread = accuracy_bounds(error,incoming,spin_rps)
 				contact_destination = destination
 				if face_dig:
