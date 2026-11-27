@@ -891,14 +891,15 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 				return miss_attack()
 			hard_spike_floor_pending=not tip_shot and not roll_shot and attack_speed()*attack_jump.spike_power_factor()>=Contact.HARD_SPIKE_SPEED
 			attack_floor_pending=true
-			if not has_meta("live_sampler") and not has_meta("sampling_attack"):
-				hand_impact.stream=preload("res://assets/audio/set_touch.wav") if tip_shot else preload("res://assets/audio/hand_impacts.tres")
-				hand_impact.volume_db=-2. if hard_spike_floor_pending else (-10. if roll_shot else -6.)
-				hand_impact.play()
-				spike_sound_count+=1
 			contact_swing_time=swing_time
 			ball.position=nearest
 			strike_point=ball.position
+			if not has_meta("live_sampler") and not has_meta("sampling_attack"):
+				# The contact pose and its crack share the same physics tick.
+				hand_impact.stream=preload("res://assets/audio/set_touch.wav") if tip_shot else preload("res://assets/audio/hand_gym_01.wav")
+				hand_impact.volume_db=0. if hard_spike_floor_pending else (-10. if roll_shot else -6.)
+				hand_impact.play()
+				spike_sound_count+=1
 			strike_shoulder_offset=hitter.skeleton.to_local(strike_point)-hitter.skeleton.get_bone_global_pose(hitter.skeleton.find_bone("upperarm_r")).origin
 			spikes+=1
 			success=true
