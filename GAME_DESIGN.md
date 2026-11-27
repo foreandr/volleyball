@@ -333,3 +333,5 @@ Human reception, dig, attack, set and serve release feedback is shared across ca
 Career hitting follows twelve setting makes. Attack a highlighted zone in 1, 6 and 5 from left, middle and right. Only a human spike landing in the called square earns credit. Serving and butterfly instruction follow in a future chapter.
 
 Drill entry shows a clockwise progress ring around the bound button. The target button above the net stays static while the athlete times a set. A full entry hold fades directly from the demonstration to the human turn. Entering the career setting lesson from its demo starts a fresh human sequence at position four, standing, zero of two. In the career setting lesson the called target drives the floor halo, rim, binding and scoring until two correct sets using the called technique land.
+
+Career hitting opens with a teammate attacking preset 2 sets while the career athlete waits at the sideline. Holding the entry button brings the career athlete in. Future feature: increasing Hand setting skill unlocks progressively faster set tempos.

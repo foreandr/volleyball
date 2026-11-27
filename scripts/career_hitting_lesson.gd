@@ -3,7 +3,19 @@ extends "res://scripts/attacking_camp.gd"
 const POSITIONS:=["Left (4)","Middle (3)","Right (2)"]
 const ZONES:=[1,6,5]
 const HALF_ZONE:=1.35
+const SIDELINE:=Vector3(5.4,.04,.65)
+var career_hitter:Node3D
+var sideline_actor:Node3D
 var makes:=0
+
+func saved_set_percent() -> float:
+	return SET_HEIGHTS[2]
+
+func save_set_height(value:float) -> void:
+	set_arc_percent=value
+	title.text=camp_title()
+	update_prompts(phase)
+
 var join_time:=0.
 var entry_widget:Control
 var mark:=MeshInstance3D.new()
@@ -22,13 +34,29 @@ func start_drill() -> void:
 	world.add_child(mark)
 	super.start_drill()
 	if not CareerSession.profile().is_empty(): hitter.apply_profile(CareerSession.profile())
+	career_hitter=hitter
+	var teammate:=athlete(hitter.position,"e97937")
+	register_student(teammate,1)
+	preload("res://scripts/practice_kit.gd").apply(teammate,false,1)
+	energy[teammate]=teammate.stamina
+	switch_attacker(teammate,career_hitter)
 	say(coach,"Watch the approach. Then hit the highlighted zone from each position.",4.)
+
+func switch_attacker(active:Node3D,waiting:Node3D) -> void:
+	rings.extra_jumps.erase(waiting)
+	rings.extra_jumps[active]=attack_jump
+	hitter=active
+	sideline_actor=waiting
+	waiting.position=SIDELINE
+	waiting.look_at(Vector3(0,SIDELINE.y,3),Vector3.UP,true)
+	waiting.play_action("idle",0.)
+	waiting.animator.advance(0.)
 
 func zone_center() -> Vector3:
 	return Vector3([2.9,0.,-2.9][makes%3],.065,BallNet.NET_Z+5.8)
 
 func camp_title() -> String:
-	return "Hitting   /   %s to zone %d   /   %d of 9 correct"%[POSITIONS[mini(2,makes/3)],ZONES[makes%3],makes]
+	return "Hitting   /   %s to zone %d   /   Set height %d   /   %d of 9 correct"%[POSITIONS[mini(2,makes/3)],ZONES[makes%3],height_preset(),makes]
 
 func reset_feed() -> void:
 	attack_lane=mini(2,makes/3)
@@ -49,6 +77,7 @@ func _input(event:InputEvent) -> void:
 
 func _process(delta:float) -> void:
 	if closing: return
+	if sideline_actor and not settings.visible: sideline_actor.animator.advance(delta)
 	if cpu_hitter and not changing_turn and not settings.visible and not get_tree().paused:
 		var down:=Input.is_key_pressed(KEY_ENTER) or (pad()>=0 and Input.is_joy_button_pressed(pad(),Xbox.physical(JOY_BUTTON_A)))
 		join_time=join_time+delta if down else 0.
@@ -58,6 +87,7 @@ func _process(delta:float) -> void:
 
 func enter_hitting_turn() -> void:
 	cpu_hitter=false
+	switch_attacker(career_hitter,hitter)
 	if rotation_drill.issued: rotation_drill.free_ball(Vector3.ZERO)
 	coach_motion.whistle_cue.signal_drill(coach)
 	reset_feed()
