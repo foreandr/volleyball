@@ -194,7 +194,7 @@ func confirm_delete(id: String,athlete_name: String) -> void:
 
 func resume() -> void:
 	match CareerSession.stage():
-		"origin","welcome","pepper": origin()
+		"origin","welcome","footwork","pepper","pepper_complete": origin()
 		"position": position_menu()
 		"after_tryout": after_tryout()
 		_: MenuPresentation.load_scene(CareerSession.CHAPTER)

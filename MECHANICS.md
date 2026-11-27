@@ -246,3 +246,5 @@ New career athletes start at 74 inches with equal wingspan. Height-linked wingsp
 Offline match setup advances through Squads, Arena, Ball, Rules and Choose sides using Continue. Move the controller left or right on Choose sides, or leave it centered for CPU play. Start match appears here.
 
 Career Hair and face supports right-stick and middle-drag orbit and wheel zoom toward the face. Xbox Menu confirms the on-screen keyboard. Wardrobe basics are free and support independent hand, shoulder, quad, knee, calf and ankle equipment. Attack, block and serve jump technique scale the athlete’s vertical in matches. CPU confidence affects pace after a lost point. During a dead ball, the offline match pause menu offers two simulated 30-second team timeouts per match. Both teams recover based on Endurance.
+
+Career practice opens with a four-leg footwork circuit. Use the left stick to run forward and backpedal. Hold LT while moving laterally along the net and baseline. Completing the lap starts partner pepper. Hold A through the toss to return it automatically. Timing feedback measures when platform preparation began. Five successful passes complete the drill.
