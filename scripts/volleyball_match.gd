@@ -192,7 +192,7 @@ var drill_spike_pace := 1.0
 var drill_set_apex := INF
 var drill_feed_acceleration := Vector3.INF
 var attack_lift_lean := 66.0
-var spike_strength := 0.70
+var spike_strength := 1.0
 var serve_pending := false
 var crossed_net := false
 var next_touch_cue := INF
@@ -560,6 +560,7 @@ func prepare_serve(style: int, station := Vector3.INF) -> void:
 		aim.x = randf_range(-3.35,3.35)
 		if placement != 0: aim.x = clampf(aim.x*0.35+placement*2.45,-3.35,3.35)
 		aim.z = randf_range(9.2,12.4)
+	serve.test_speed_mps=preload("res://scripts/swing_speed.gd").kmh(players[index])*pow(preload("res://scripts/serving_camp.gd").TOSS_POWER_STEP,3-style)/3.6
 	serve.aim(aim)
 	serve.aim_ring.visible = is_human(index)
 	serve.path_preview.visible = is_human(index)
@@ -960,8 +961,7 @@ func controlled_spike_motion(contact: Vector3, motion: Vector3, target: Vector3,
 func set_cpu_swing_power(hitter: int) -> void:
 	var side := team(hitter)
 	var effort := cpu_policy.choose(side,"attack effort",[0,1,2],0) if not is_human(hitter) else 0
-	var power:=1.
-	if roster_active and exhibition: power=lerpf(.82,1.12,float(players[hitter].attributes.Strength)/100.)
+	var power := preload("res://scripts/swing_speed.gd").kmh(players[hitter])/(3.6*27.)
 	attackers[side].spike_strength = spike_strength*(1.0-0.075*effort)*power
 
 func on_spike(actor: Node3D, point: Vector3, motion: Vector3, spin_rate: float) -> void:

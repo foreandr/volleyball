@@ -277,7 +277,7 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 		super.pose_bow_draw(delta,weight,contact,extension,follow,draw_progress,arm_lift,frame)
 		return
 	var speed := drill_speed_mps if drill_speed_mps>0. else 25.
-	var factor := pow(speed/14.,.48)*(1.+(float(setter.attributes.get("Arm swing",65))-65.)*.004)
+	var factor := pow(speed/14.,.48)*lerpf(.70,1.20,preload("res://scripts/swing_speed.gd").arm(setter))
 	var hit := stage==Stage.HIT
 	var swing_age := contact_phase+clock-stage_start if hit else clock-stage_start-pin_arrival+.13/factor
 	if not hit:

@@ -340,3 +340,4 @@ Falcons team branding uses crimson and dark red with cream and gold crest detail
 
 Displayed vertical stays in profile inches. On-court jump displacement uses four thirds of the rated height before fatigue and jump loading.
 When specifying an athlete's vertical in inches, use the stated number as the profile rating. For example, 42 inches means 42 on the stat sheet and a 56-inch full-strength on-court target. Apply the conversion once in gameplay.
+Hard swing baseline in km/h is 20 + 0.75 times arm swing + 0.25 times strength. Both ratings retain 85 to 100 percent effectiveness according to current stamina. Spin serves use full baseline, with lower multipliers for other toss styles. Approach bonuses and contact geometry are separate.

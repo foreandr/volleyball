@@ -88,7 +88,7 @@ func error() -> float:
 
 func prepare_curve(g,origin:Vector3):
 	var shot=curve()
-	Camp.configure_serve_curve(shot,origin,Camp.AUTO_SERVE_MAX_KMH,3-g.serve_style,spin,clearance,arc)
+	Camp.configure_serve_curve(shot,origin,Camp.SwingSpeed.kmh(g.human),3-g.serve_style,spin,clearance,arc)
 	shot.target=target
 	return shot
 

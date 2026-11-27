@@ -17,7 +17,7 @@ func flight_duration(start: Vector3) -> float:
 	return sqrt(maxf(.01,2.*rise/(Flight.GRAVITY*u*(1.-u))))
 
 func minimum_aim_duration(start: Vector3) -> float:
-	return flight_duration(start) if tape_clearance>=0. else 0.
+	return flight_duration(start) if tape_clearance>=0. else super.minimum_aim_duration(start)
 
 func launch_velocity(start: Vector3,duration: float) -> Vector3:
 	if tape_clearance<0.: return super.launch_velocity(start,duration)

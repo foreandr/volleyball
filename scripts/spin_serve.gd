@@ -26,6 +26,7 @@ var forward_lean_degrees := DEFAULT_FORWARD_LEAN
 var active_forward_lean_degrees := 0.0
 var released_sidespin := 0.0
 const MAX_SPIN_ARC := .16
+const POWER_TOPSPIN_ACCEL := 16.
 var approach := SetterJump.new()
 var spike_pose_driver := MatchAttack.new()
 var approach_positions: PackedVector3Array = []
@@ -141,7 +142,7 @@ func toss_curve_height() -> float:
 	return Flight.GRAVITY*air_time*air_time/8.0
 
 func serve_swing_rate(_launch_speed: float) -> float:
-	return 1.0
+	return lerpf(.78,1.14,preload("res://scripts/swing_speed.gd").arm(player))
 
 func reset() -> void:
 	if active_jump_height != jump_height or active_jump_carry != jump_carry_enabled or active_forward_lean_degrees != forward_lean_degrees or approach_sample_forward != forward:
@@ -286,8 +287,8 @@ func preview_lane_count() -> int:
 func flight_duration(start: Vector3) -> float:
 	return super.flight_duration(start)*0.65/serve_speed
 
-func minimum_aim_duration(_start: Vector3) -> float:
-	return 0.
+func minimum_aim_duration(start: Vector3) -> float:
+	return super.minimum_aim_duration(start)*sqrt(Flight.GRAVITY/(Flight.GRAVITY+POWER_TOPSPIN_ACCEL))
 
 func clear_net_launch(start: Vector3,launch: Vector3) -> Vector3:
 	if absf(launch.z)<.01: return launch
@@ -298,7 +299,8 @@ func clear_net_launch(start: Vector3,launch: Vector3) -> Vector3:
 	return launch
 
 func aimed_velocity(start: Vector3,pace := 1.) -> Vector3:
-	return clear_net_launch(start,super.aimed_velocity(start,pace))
+	var launch := super.aimed_velocity(start,pace)
+	return launch if test_speed_mps>0. else clear_net_launch(start,launch)
 
 func launch_velocity(start: Vector3, duration: float) -> Vector3:
 	return clear_net_launch(start,(target-start)/duration+Vector3.UP*(0.5*Flight.GRAVITY*duration))
@@ -319,7 +321,8 @@ func serve_curve_offset(time: float, duration: float) -> Vector3:
 func spin_offset(progress: float, launch: Vector3, curve: float, duration: float) -> Vector3:
 	var side := Vector3.UP.cross(launch.slide(Vector3.UP).normalized())
 	var envelope := 4.0*progress*(1.0-progress)
-	return -side*curve*1.15*envelope+Vector3.UP*minf(MAX_SPIN_ARC,.15*duration*duration)*envelope
+	var bend := POWER_TOPSPIN_ACCEL*duration*duration/8. if test_speed_mps>0. else minf(MAX_SPIN_ARC,.15*duration*duration)
+	return (-side*curve*1.15+Vector3.UP*bend)*envelope
 
 
 func reception_spin_rps() -> float:

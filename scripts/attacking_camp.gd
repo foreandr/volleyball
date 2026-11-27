@@ -806,8 +806,7 @@ func arm_speed_factor() -> float:
 	if roll_shot:
 		return lerpf(.84,1.08,roll_reach_fraction())
 	var effort := float(review_setup.get("power",drill_hit_speed))
-	var rating := float(hitter.attributes.get("Arm swing",65))
-	return pow(effort/14.,.48)*(1.+(rating-65.)*.004)
+	return pow(effort/14.,.48)*lerpf(.70,1.20,preload("res://scripts/swing_speed.gd").arm(hitter))
 
 func requested_set_arc() -> float:
 	return super.requested_set_arc()*rep_set_percent()*.01
@@ -816,9 +815,8 @@ func effective_attack_height() -> float:
 	return attack_jump.assisted_height*attack_jump.takeoff_effectiveness if attack_jump.active else jump_height*hitter.stamina.effectiveness()
 
 func attack_speed() -> float:
-	var strength := float(hitter.attributes.get("Strength",65))
 	var effort := float(review_setup.get("power",drill_hit_speed))
-	return sqrt(14.*effort)*arm_speed_factor()*(1.+(strength-65.)*.005)
+	return preload("res://scripts/swing_speed.gd").kmh(hitter)/3.6*(effort/14.)
 
 static func soft_shot_duration(origin: Vector3, landing: Vector3, tip_shot: bool) -> float:
 	var horizontal := (landing-origin).slide(Vector3.UP).length()
@@ -831,7 +829,14 @@ static func soft_shot_duration(origin: Vector3, landing: Vector3, tip_shot: bool
 
 func attack_flight_time(origin: Vector3, landing: Vector3) -> float:
 	if roll_shot or tip_shot: return soft_shot_duration(origin,landing,tip_shot)
-	return maxf(.05,origin.distance_to(landing)/(attack_speed()*attack_jump.spike_power_factor()))
+	var flight := maxf(.05,origin.distance_to(landing)/(attack_speed()*attack_jump.spike_power_factor()))
+	if landing.z>BallNet.NET_Z and origin.z<BallNet.NET_Z:
+		var fraction := (BallNet.NET_Z-origin.z)/(landing.z-origin.z)
+		var rise := BallNet.NET_TOP+Contact.BALL_RADIUS+.04-lerpf(origin.y,landing.y,fraction)
+		if rise>0.:
+			var gravity := 9.81-shot_spin_force(origin,landing,flight).y
+			flight=maxf(flight,sqrt(2.*rise/(gravity*fraction*(1.-fraction))))
+	return flight
 
 func swing_can_contact() -> bool:
 	return swing_time>=.055 and swing_time<=.30

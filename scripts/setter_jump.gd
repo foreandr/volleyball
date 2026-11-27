@@ -226,7 +226,7 @@ func spike_power_factor() -> float:
 	var approach_speed := maxf(attack_entry_speed,ground_distance/maxf(.01,load_duration()))
 	var drive := smoothstep(.8,3.5,approach_speed)
 	var lift := clampf(sqrt(maxf(0.,height)/1.27),0.,1.)
-	return (.60+.40*drive)*(.82+.18*lift)
+	return (1.+.12*drive)*(.98+.02*lift)
 
 func horizontal_velocity() -> Vector3:
 	return carry_velocity+air_velocity+heading*(stride*AIR_TRAVEL_FRACTION/air_time+attack_glide*glide_speed())

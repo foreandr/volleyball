@@ -7,7 +7,7 @@ var defense_read := CoverageRead.new()
 const TECHNIQUES := [preload("res://scripts/spin_serve.gd"),preload("res://scripts/jump_float_serve.gd"),preload("res://scripts/standing_float_serve.gd"),preload("res://scripts/underhand_serve.gd")]
 const FACE := [JOY_BUTTON_A,JOY_BUTTON_B,JOY_BUTTON_X,JOY_BUTTON_Y]
 const LABELS := ["Spin toss","Jump float toss","Standing toss","Underhand toss"]
-const AUTO_SERVE_MAX_KMH := 100.0
+const SwingSpeed = preload("res://scripts/swing_speed.gd")
 const TOSS_POWER_STEP := 0.75
 const SPIN_LABELS := ["Topspin","Left spin","Right spin","Float"]
 const Backcourt=preload("res://scripts/player_ground_controls.gd")
@@ -312,7 +312,7 @@ func apply_camera() -> void:
 	place_practice_camera(Vector3(0,1.5,-4.4),distance*.48+2.)
 
 func configure_flight(shot,origin: Vector3) -> void:
-	var maximum := serve_test_kmh if serve_test_kmh>0. else AUTO_SERVE_MAX_KMH
+	var maximum := serve_test_kmh if serve_test_kmh>0. else SwingSpeed.kmh(shot.player)
 	configure_serve_curve(shot,origin,maximum,toss_style,spin_selection,float_clearance,serve_arc_offset)
 
 static func configure_serve_curve(shot,origin:Vector3,maximum:float,toss:int,spin_mode:int,clearance:float,arc_offset:float) -> void:

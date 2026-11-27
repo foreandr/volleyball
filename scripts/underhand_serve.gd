@@ -164,8 +164,11 @@ func aimed_velocity(start: Vector3, pace := 1.0) -> Vector3:
 	var velocity_to_target := Vector3(target.x-start.x,Flight.FLOOR-start.y,target.z-start.z)/duration+Vector3.UP*.5*Flight.GRAVITY*duration
 	return velocity_to_target.limit_length(test_speed_mps) if test_speed_mps>0. else velocity_to_target
 
-func minimum_aim_duration(_start: Vector3) -> float:
-	return 0.0
+func minimum_aim_duration(start: Vector3) -> float:
+	if start.z>=Net.NET_Z or target.z<=Net.NET_Z: return 0.
+	var fraction := (Net.NET_Z-start.z)/(target.z-start.z)
+	var rise := Net.NET_TOP+Net.RADIUS+.12-lerpf(start.y,Flight.FLOOR,fraction)
+	return sqrt(2.*maxf(0.,rise)/(Flight.GRAVITY*fraction*(1.-fraction)))
 
 func flight_duration(start: Vector3) -> float:
 	return (sqrt(2.0*Flight.GRAVITY*(apex-start.y))+sqrt(2.0*Flight.GRAVITY*(apex-Flight.FLOOR)))/Flight.GRAVITY
@@ -234,7 +237,7 @@ func step(delta: float) -> void:
 		landing_time = flight_duration(origin)
 		planned_duration = landing_time
 		launch_target = target
-		velocity = launch_velocity(origin,landing_time)
+		velocity = aimed_velocity(origin) if test_speed_mps>0. else launch_velocity(origin,landing_time)
 		planned_duration=Flight.landing_time(origin,velocity)
 		landing_time=planned_duration
 		begin_serve_curve()
