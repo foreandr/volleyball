@@ -253,3 +253,4 @@ Moving and stationary pepper display the shared ball landing marker for the inco
 Moving receivers use LT directional footwork while tracking a feed. The contact animation takes over for the final approach. Demo receivers run back to neutral and face the coach before the next toss.
 CPU reception targets the setter with a 6.5 m apex. At skill ratings 0 to 100 the green timing allowance grows from 25 to 90 ms on either side of ideal contact. Outside green, timing error drives lateral, depth and height variation.
 During moving-reception follow-through the focused passer briefly tracks the departing ball, then eases back toward the coach before the next feed.
+Moving reception reads the human left stick independently of the active receiver and cart state. Walk into zone five and focus to request a feed. Start opens Resume, Restart and Save and leave during opening drills.

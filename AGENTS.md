@@ -27,3 +27,4 @@ Before every change, consult GAME_DESIGN.md and MECHANICS.md. Check every affect
 Persist player-adjustable drill settings in user data and restore them across launches and build iterations. Use new defaults only when a saved value is absent.
 
 For every new career, tournament, match, or drill scene, consult the shared court behavior in GAME_DESIGN.md. A change to a shared feature applies to every mode that uses it. Check those callers, including CPU demos and human play. Reuse the implementation and saved options. Document any intentional mode-specific exception.
+Before every change, read the applicable GAME_DESIGN.md baseline and MECHANICS.md entries. When the user specifies an enduring rule (always, usually, whenever, or equivalent), record its scope, defaults and exceptions in GAME_DESIGN.md in the same change. Update the existing rule when refined. Validate new modes against it.

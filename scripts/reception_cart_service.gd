@@ -1,6 +1,7 @@
 extends RefCounted
 
 var carts
+var receiver:Node3D
 var setter:Node3D
 var coach:Node3D
 var station:Vector3
@@ -40,6 +41,13 @@ func receive(ball:RigidBody3D,at:Vector3,caught:bool) -> void:
 func walk_to(point:Vector3,dt:float) -> bool:
 	var direction:=point-setter.position
 	if direction.length()<.06: return true
+	if is_instance_valid(receiver) and receiver.position.distance_to(point)>.75:
+		var close:=Geometry3D.get_closest_point_to_segment(receiver.position,setter.position,point)
+		if close.distance_to(receiver.position)<.72 and setter.position.distance_to(close)<1.5:
+			var side:=direction.cross(Vector3.UP).normalized()
+			if (setter.position-receiver.position).dot(side)<0.: side=-side
+			point=receiver.position+side*.95
+			direction=point-setter.position
 	setter.rotation.y=lerp_angle(setter.rotation.y,atan2(direction.x,direction.z),1.-exp(-9.*dt))
 	setter.play_action("base/Walk",.15)
 	setter.position=setter.position.move_toward(point,dt*2.4)

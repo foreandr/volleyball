@@ -32,6 +32,7 @@ const SETTER_TWO_AND_HALF:=Vector3(-1.5,.04,2.85)
 var pass_target:Node3D
 var base:=Vector3.ZERO
 var chase:=Vector3.ZERO
+var human_steps:RefCounted
 var focus_cued:=false
 var steps:RefCounted
 const Ground=preload("res://scripts/player_ground_controls.gd")
@@ -218,7 +219,8 @@ func start_human_turn() -> void:
 		pair.exit_lane=Vector3(human.position.x+.8,human.position.y,demo.position.z-1.)
 		for modifier in demo.skeleton.get_children():
 			if modifier is SkeletonModifier3D: modifier.active=true
-		base=FIVE_HOME
+		base=human.position
+		pair.home=human.global_transform
 		steps=preload("res://scripts/directional_footwork.gd").new(human)
 		focus_cued=false
 	else:
@@ -270,19 +272,46 @@ func button(down:bool) -> void:
 	if down and not holding: pressed_at=pairs[0].age
 	holding=down
 
-func move_passer(pair:Dictionary,dt:float) -> bool:
-	var actor:Node3D=pair.receiver
-	var focused:bool=demonstrating or Ground.focus(game.axis)
+func human_velocity(focused:bool) -> Vector3:
 	var stick:=Vector2(game.axis(JOY_AXIS_LEFT_X),game.axis(JOY_AXIS_LEFT_Y))
 	if stick.length()<.15: stick=Vector2.ZERO
 	stick+=Input.get_vector("ui_left","ui_right","ui_up","ui_down")
 	stick+=Vector2(float(Input.is_physical_key_pressed(KEY_D))-float(Input.is_physical_key_pressed(KEY_A)),float(Input.is_physical_key_pressed(KEY_S))-float(Input.is_physical_key_pressed(KEY_W)))
-	var velocity:=Vector3(-stick.x,0,-stick.y).limit_length(1.)*Ground.speed(focused,false)
+	return Vector3(-stick.x,0,-stick.y).limit_length(1.)*Ground.speed(focused,Ground.sprint(game.axis))
+
+func move_off_turn(dt:float) -> void:
+	var actor:Node3D=game.setter
+	if human_steps==null: human_steps=preload("res://scripts/directional_footwork.gd").new(actor)
+	var focused:=Ground.focus(game.axis)
+	var velocity:=human_velocity(focused)
+	actor.position=human_bounds(actor.position+velocity*dt)
+	if focused: Ground.face(actor,game.coach.position-actor.position,dt)
+	elif velocity.length()>.1: Ground.face(actor,velocity,dt)
+	if focused: actor.play_action("idle",.14)
+	else: actor.play_travel_gait(velocity)
+	actor.animator.advance(dt)
+	Ground.shuffle(actor,human_steps,velocity,focused,dt)
+
+func human_bounds(point:Vector3) -> Vector3:
+	return Vector3(clampf(point.x,-6.,6.),point.y,clampf(point.z,-5.8,3.65))
+
+func move_passer(pair:Dictionary,dt:float) -> bool:
+	var actor:Node3D=pair.receiver
+	var focused:bool=demonstrating or Ground.focus(game.axis)
+	var velocity:=human_velocity(focused)
 	if demonstrating:
 		velocity=(chase-base).limit_length(dt*2.9)/maxf(.001,dt) if pair.flying and not pair.caught else Vector3.ZERO
 	base+=velocity*dt
-	base.x=clampf(base.x,-4.4,4.4)
-	base.z=clampf(base.z,-4.9,3.)
+	if demonstrating:
+		base.x=clampf(base.x,-4.4,4.4)
+		base.z=clampf(base.z,-4.9,3.)
+	else:
+		base=human_bounds(base)
+		if pair.has("release_pose"):
+			var shift:Vector3=base-pair.home.origin
+			var recovery_root:Transform3D=pair.release_root
+			recovery_root.origin+=shift
+			pair.release_root=recovery_root
 	pair.home.origin=base
 	if not pair.swing:
 		actor.global_position=base
@@ -364,7 +393,10 @@ func tick(delta:float) -> void:
 	if finished: return
 	for i in pairs.size():
 		var pair:=pairs[i]
+		var facing:=true
 		if moving:
+			if pair.receiver==game.setter: facing=move_passer(pair,delta)
+			else: move_off_turn(delta)
 			for teammate in waiting:
 				if teammate!=pair.get("outgoing"): Ground.face(teammate,pair.receiver.position-teammate.position,delta)
 			var cart=game.rotation_drill
@@ -375,11 +407,11 @@ func tick(delta:float) -> void:
 					exit_goal=pair.exit_lane
 					if walk_rotation(old,exit_goal,delta): pair.erase("exit_lane")
 				var outgoing_done:=false
-				if not pair.has("exit_lane"): outgoing_done=walk_rotation(old,pair.sideline,delta)
-				var incoming_done:=walk_rotation(pair.receiver,base,delta)
+				if not pair.has("exit_lane"): outgoing_done=old==game.setter or walk_rotation(old,pair.sideline,delta)
+				var incoming_done:bool=pair.receiver==game.setter or walk_rotation(pair.receiver,base,delta)
 				if outgoing_done and incoming_done:
-					if not square_up(pair.receiver,pair.feeder.position,delta): continue
-					Ground.face(old,pair.receiver.position-old.position,delta)
+					if pair.receiver!=game.setter and not square_up(pair.receiver,pair.feeder.position,delta): continue
+					if old!=game.setter: Ground.face(old,pair.receiver.position-old.position,delta)
 					pair.home=pair.receiver.global_transform
 					pair.erase("outgoing")
 					if pair.erase("deferred_entry"): start_human_turn()
@@ -387,20 +419,21 @@ func tick(delta:float) -> void:
 			if pair.get("reset_to_five",false):
 				var ready_spot:=FIVE_HOME
 				if not walk_rotation(pair.receiver,ready_spot,delta): continue
-				if not square_up(pair.receiver,pair.feeder.position,delta): continue
+				if pair.receiver!=game.setter and not square_up(pair.receiver,pair.feeder.position,delta): continue
 				base=ready_spot
 				pair.home=pair.receiver.global_transform
 				pair.erase("reset_to_five")
+			cart_service.receiver=pair.receiver
 			if cart_service.busy(delta):
-				pair.receiver.animator.advance(delta)
+				if pair.receiver!=game.setter: pair.receiver.animator.advance(delta)
 				continue
 			if not pair.flying and not cart.issued:
 				pair.ball.hide()
 				cart.prepare_next_ball(delta)
 				if not cart.take_ball():
-					pair.receiver.animator.advance(delta)
+					if pair.receiver!=game.setter: pair.receiver.animator.advance(delta)
 					continue
-			var facing:=move_passer(pair,delta)
+			if pair.receiver!=game.setter: facing=move_passer(pair,delta)
 			if not demonstrating and not pair.flying and not focus_cued:
 				game.moving_prompt(true)
 				focus_cued=true
@@ -519,11 +552,11 @@ func tick(delta:float) -> void:
 				var sideline:=next.global_position
 				pair.outgoing=receiver
 				pair.sideline=sideline
-				pair.exit_lane=Vector3(sideline.x-.8,sideline.y,receiver.position.z-1.)
+				if not human: pair.exit_lane=Vector3(sideline.x-.8,sideline.y,receiver.position.z-1.)
 				for modifier in receiver.skeleton.get_children():
 					if modifier is SkeletonModifier3D: modifier.active=true
 				receiver.play_action("idle",.16)
-				waiting.append(receiver)
+				if not human: waiting.append(receiver)
 				pair.receiver=next
 				receiver=next
 				base=FIVE_HOME

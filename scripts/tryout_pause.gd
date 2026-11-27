@@ -66,7 +66,7 @@ func configure(host: Node, layer: Node = null) -> void:
 			hide()
 			game.toggle_practice_replay())
 	bar(home,"Restart",restart)
-	var quit_button := bar(home,"Quit",quit_gameplay)
+	var quit_button := bar(home,"Save and leave" if game.has_method("save_and_leave_drill") else "Quit",quit_gameplay)
 	primary.focus_neighbor_top=primary.get_path_to(quit_button)
 	quit_button.focus_neighbor_bottom=quit_button.get_path_to(primary)
 	options.custom_minimum_size.x = 400
@@ -259,6 +259,9 @@ func restart() -> void:
 
 func quit_gameplay() -> void:
 	hide()
+	if game.has_method("save_and_leave_drill"):
+		game.save_and_leave_drill()
+		return
 	if not StorySession.career_lesson.is_empty():
 		MenuPresentation.load_scene("res://scenes/story.tscn")
 		return

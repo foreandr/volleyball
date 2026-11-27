@@ -426,6 +426,7 @@ func receive_down() -> bool:
 
 func _process(delta:float) -> void:
 	elapsed+=delta
+	if phase=="handoff" and pepper and pepper.moving: pepper.move_off_turn(delta)
 	if phase in ["demo","footwork_demo"]:
 		enter_time=enter_time+delta if receive_down() else 0.
 		enter_meter.value=enter_time
@@ -457,7 +458,34 @@ func _process(delta:float) -> void:
 		phase="ready"
 		training_prompt([[JOY_BUTTON_A,"Start practice"]],"Enter to start practice")
 
+func opening_checkpoint() -> String:
+	if pepper.moving:
+		var done:=phase=="pepper_complete" or (not pepper.demonstrating and pepper.attempts>=5)
+		return "moving_reception_complete" if done else "moving_reception"
+	if not pepper.pairs.is_empty(): return "pepper_complete" if phase=="pepper_complete" else "pepper"
+	if phase in ["footwork","footwork_demo"] or phase=="handoff": return "footwork"
+	return "origin" if phase=="montage" else "welcome"
+
+func save_and_leave_drill() -> void:
+	var stage:=opening_checkpoint()
+	if CareerSession.checkpoint(stage,pepper.score if not pepper.pairs.is_empty() else 0):
+		MenuPresentation.load_scene("res://scenes/main.tscn")
+
+func reset_drill() -> void:
+	var stage:=opening_checkpoint().trim_suffix("_complete")
+	if stage=="moving_reception":
+		CareerSession.data.set_value(CareerSession.key(),"moving_attempts",0)
+	if CareerSession.checkpoint(stage,0): MenuPresentation.load_scene(scene_file_path)
+
 func _input(event:InputEvent) -> void:
+	if get_tree().paused or settings.visible: return
+	if event is InputEventJoypadButton and event.pressed: active_pad=event.device
+	var start:bool=event is InputEventJoypadButton and event.button_index==Xbox.physical(JOY_BUTTON_START)
+	var escape:bool=event is InputEventKey and event.keycode==KEY_ESCAPE and not event.echo
+	if (start or escape) and event.is_pressed():
+		settings.show()
+		get_viewport().set_input_as_handled()
+		return
 	if event.is_action_pressed("ui_accept") and phase=="ready":
 		get_viewport().set_input_as_handled()
 		if CareerSession.checkpoint("footwork",0): begin_run()
@@ -474,6 +502,6 @@ func _input(event:InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		if CareerSession.checkpoint("moving_reception",0): MenuPresentation.load_scene("res://scenes/career_opening.tscn")
 		return
-	if (phase=="pepper_complete" and event.is_action_pressed("ui_accept")) or (phase in ["footwork","pepper","pepper_complete"] and event.is_action_pressed("ui_cancel")):
+	if phase=="pepper_complete" and event.is_action_pressed("ui_accept"):
 		get_viewport().set_input_as_handled()
 		MenuPresentation.load_scene("res://scenes/story.tscn")
