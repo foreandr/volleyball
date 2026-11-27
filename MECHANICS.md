@@ -173,3 +173,4 @@ Reception Studio saves a lead-foot choice per region. Animation 72 leads right i
 Every Reception Studio forearm leg movement can swing the joined platform toward the intercept. The reaching shoulder drops with lateral error, up to 20 degrees, unless the clip specifies its own drop.
 Reception Studio leg movement 33 can use the spike approach right plant and closing left step during the simulated hold. Distance depends on the projected contact and available time, with up to 32 cm of travel before the lunge.
 14 is mapped to 22-23.top.left.near and its mirror 24.top.near. Its chin tucks and the shoulder dip increases with lateral reach.
+Reception Studio zones 13 and 15 use opposite orientations of Legs 21 for lateral forearm passes.

@@ -954,13 +954,19 @@ func pose_receiver(c: Dictionary,f: float,active: bool,motion_legs: int) -> void
 			# Target the final shoulder slope, accounting for the lean already in the lunge.
 			var slope := asin(clampf(shoulder_line.normalized().y,-1.,1.))
 			drop=rad_to_deg(slope)-float(c.reach_shoulder_drop_deg)*smoothstep(.15,.85,lateral)
+		if c.has("inside_shoulder_drop_deg"):
+			var neutral_line := rig.get_bone_global_rest(rig.find_bone("upperarm_l")).origin-rig.get_bone_global_rest(rig.find_bone("upperarm_r")).origin
+			var leftward := (rig.global_basis*neutral_line).slide(Vector3.UP).normalized()
+			var reach := (set_intercept-defenders[receiving].global_position).dot(leftward)
+			var desired_slope := signf(reach)*float(c.inside_shoulder_drop_deg)*smoothstep(.12,.85,absf(reach))
+			drop=rad_to_deg(asin(clampf(shoulder_line.normalized().y,-1.,1.)))-desired_slope
 		var roll_axis := shoulder_line.cross(Vector3.DOWN).normalized()
 		var local_axis := (rig.get_bone_global_pose(chest_id).basis.inverse()*roll_axis).normalized()
 		rig.set_bone_pose_rotation(chest_id,rig.get_bone_pose_rotation(chest_id)*Quaternion(local_axis,deg_to_rad(drop)*blend))
-	if c.has("chin_tuck_deg"):
+	if Regions.movement(c):
 		var head := rig.find_bone("Head")
 		var parent := rig.get_bone_global_pose(rig.get_bone_parent(head)).basis.orthonormalized()
-		var forward_head := Basis(Vector3.RIGHT,deg_to_rad(float(c.chin_tuck_deg)))*rig.get_bone_global_rest(head).basis.orthonormalized()
+		var forward_head := Basis(Vector3.RIGHT,deg_to_rad(float(c.get("chin_tuck_deg",12.))))*rig.get_bone_global_rest(head).basis.orthonormalized()
 		var target := (parent.inverse()*forward_head).get_rotation_quaternion()
 		rig.set_bone_pose_rotation(head,rig.get_bone_pose_rotation(head).slerp(target,blend))
 	if Regions.movement(c):
@@ -1571,6 +1577,7 @@ func assigned_action(address: Vector3i,part: int) -> int:
 		if address==REGION_22:
 			if part in [2,7]: return 72
 			if part==4: return 14
+			if part in [0,3]: return 21
 			var parent_suffix := ".top" if part in [0,4,5,6] else (".bottom.left" if part in [1,3] else ".bottom.right")
 			return int(StorySession.game_options.get_value("studio_three_rows",Regions.key(address)+parent_suffix,72 if part==1 else 0))
 		if address==REGION_24:
@@ -1593,6 +1600,7 @@ func assigned_action(address: Vector3i,part: int) -> int:
 	if StorySession.game_options.has_section_key("studio_three_rows",key):
 		return int(StorySession.game_options.get_value("studio_three_rows",key))
 	if address.y==2 and address.z==0: return 78
+	if address.y==1 and address.z==1 and address.x!=1: return 21
 	if address.y==1: return 0
 	var previous := Vector3i(address.x,0 if address.y==0 else 1,address.z)
 	var default_action := 10 if previous==Vector3i(1,1,1) else 0
