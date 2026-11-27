@@ -76,9 +76,9 @@ func apply_drill_slider(key: String,value: float) -> void:
 
 func next_serve() -> void:
 	if defense_map.player!=null:
-		hitter.reparent(world,true)
-		hitter.basis=Basis.IDENTITY
-		for modifier in hitter.skeleton.get_children():
+		defense_map.player.reparent(world,true)
+		defense_map.player.basis=Basis.IDENTITY
+		for modifier in defense_map.player.skeleton.get_children():
 			if modifier is SkeletonModifier3D: modifier.active=true
 		defense_map.player=null
 	defense_recipe={}
@@ -284,6 +284,12 @@ func walk_server(delta: float,defending := false) -> void:
 		return
 	super.walk_server(delta,defending)
 
+func dig_defender() -> Node3D:
+	return hitter
+
+func cpu_dig() -> bool:
+	return false
+
 func block_on_flight_segment(previous: Vector3) -> bool:
 	if phase!="serve_return" or not attack_floor_pending: return false
 	var dt := previous.distance_to(ball.position)/maxf(.01,drop_velocity.length())
@@ -291,10 +297,10 @@ func block_on_flight_segment(previous: Vector3) -> bool:
 	if defense_recipe.is_empty():
 		var ahead := minf(.32,preload("res://scripts/pass_flight.gd").landing_time(ball.position,drop_velocity))
 		var source := pin_hitter.global_position
-		var yaw := atan2(source.x-hitter.position.x,source.z-hitter.position.z)
-		var start := (previous-hitter.position).rotated(Vector3.UP,-yaw)
+		var yaw := atan2(source.x-dig_defender().position.x,source.z-dig_defender().position.z)
+		var start := (previous-dig_defender().position).rotated(Vector3.UP,-yaw)
 		var predicted := ball.position+drop_velocity*ahead+Vector3.DOWN*4.905*ahead*ahead
-		var end := (predicted-hitter.position).rotated(Vector3.UP,-yaw)
+		var end := (predicted-dig_defender().position).rotated(Vector3.UP,-yaw)
 		var first := INF
 		var best := {}
 		for box in boxes:
@@ -308,15 +314,17 @@ func block_on_flight_segment(previous: Vector3) -> bool:
 		defense_map.set_intercept=ball.position+drop_velocity*lead+Vector3.DOWN*4.905*lead*lead
 		defense_map.incoming_lead_seconds=lead
 		defense_map.feed_kmh=drop_velocity.length()*3.6
-		defense_recipe=bind_contact_motion(defense_map,defense_anchor,hitter,hitter.position,source,best)
+		defense_recipe=bind_contact_motion(defense_map,defense_anchor,dig_defender(),dig_defender().position,source,best)
 	sample_attack_dig()
 	if mapped_touch(defense_map,defense_recipe,previous):
 		defense_contact=dig_clock
 		if not is_finite(first_dig_touch): first_dig_touch=dig_clock
-	update_dig_feedback()
-	var release: float=dig_platforms[hitter].pressed_at
+	if cpu_dig():
+		if is_finite(defense_contact): dig_platforms[dig_defender()].queue_bump(dig_clock)
+	else: update_dig_feedback()
+	var release: float=dig_platforms[dig_defender()].pressed_at
 	if not is_finite(defense_contact) or not is_finite(release) or minf(absf(release-defense_at),absf(release-defense_contact))>DIG_WINDOW or absf(defense_contact-dig_clock)>DIG_WINDOW: return false
-	last_digger=hitter
+	last_digger=dig_defender()
 	dig_incoming=drop_velocity
 	var apex := ball.position.y+3.4
 	var flight := sqrt(2.*(apex-ball.position.y)/9.81)+sqrt(2.*(apex-defense_map.pass_goal.y)/9.81)
@@ -331,19 +339,20 @@ func block_on_flight_segment(previous: Vector3) -> bool:
 	return true
 
 func update_dig_feedback() -> void:
-	var release: float=dig_platforms[hitter].pressed_at
+	var release: float=dig_platforms[dig_defender()].pressed_at
 	if not is_finite(release) or not is_finite(defense_at): return
 	var measured := is_finite(first_dig_touch)
 	var reference := first_dig_touch if measured else defense_at
 	show_release_feedback(release-reference,measured)
 
-func show_release_feedback(offset: float,measured: bool) -> void:
+func show_release_feedback(offset: float,measured: bool,perfect_window := 0.) -> void:
 	var ms := roundi(offset*1000.)
 	var direction := "Early" if ms<0 else ("Late" if ms>0 else "On time")
+	if perfect_window>0. and absf(offset)<=perfect_window: direction="Perfect"
 	var label := "%s  %d ms" % [direction,absi(ms)]
 	if not measured: label+=" (estimated)"
 	dig_feedback.text=label
-	dig_feedback.add_theme_color_override("font_color",Color("ffd36b") if ms<0 else (Color("ff9086") if ms>0 else Color("78e1ad")))
+	dig_feedback.add_theme_color_override("font_color",Color("78e1ad") if direction=="Perfect" else Color("ffd36b") if ms<0 else (Color("ff9086") if ms>0 else Color("78e1ad")))
 	if feedback_rally==replay_rally: return
 	feedback_rally=replay_rally
 	if feedback_tween: feedback_tween.kill()
@@ -358,7 +367,7 @@ func show_release_feedback(offset: float,measured: bool) -> void:
 
 func attack_surface_contact(point: Vector3,floor_hit: bool) -> void:
 	if phase=="serve_return" and attack_floor_pending and floor_hit:
-		trace("mapped_dig_miss",{"assigned":not defense_recipe.is_empty(),"pose_contact":str(defense_contact),"prediction":str(defense_at),"release":str(dig_platforms[hitter].pressed_at),"floor":str(point)})
+		trace("mapped_dig_miss",{"assigned":not defense_recipe.is_empty(),"pose_contact":str(defense_contact),"prediction":str(defense_at),"release":str(dig_platforms[dig_defender()].pressed_at),"floor":str(point)})
 	super.attack_surface_contact(point,floor_hit)
 
 func step_reception_rally(delta: float) -> void:

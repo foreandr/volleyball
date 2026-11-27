@@ -616,10 +616,11 @@ func _process(delta: float) -> void:
 		var release: float=serves[toss_style].toss_release_time() if serves[toss_style].has_method("toss_release_time") else .18
 		var ready_weight := 1. if phase=="serve_ready" else 1.-smoothstep(release,release+.22,serve_clock)
 		for actor in receiving_team:
-			if actor!=receiving_setter and actor!=receiving_middle: face_receive_ball(actor,hitter.global_position if phase=="serve_ready" else ball.global_position,delta)
+			if not manually_moving(actor) and actor!=receiving_setter and actor!=receiving_middle: face_receive_ball(actor,hitter.global_position if phase=="serve_ready" else ball.global_position,delta)
 		if ready_weight>.001:
 			for i in passers.size():
 				var actor := passers[i]
+				if manually_moving(actor): continue
 				actor.animator.seek(0.,true)
 				receptions[i].knee_bend_depth=.14*ready_weight
 				receptions[i].apply_knee_bend()
@@ -1018,6 +1019,9 @@ func clear_ground_step(actor: Node3D,step: Vector3) -> Vector3:
 				break
 		if safe: return actor.get_parent_node_3d().global_basis.inverse()*candidate
 	return Vector3.ZERO
+
+func manually_moving(_actor: Node3D) -> bool:
+	return false
 
 func move_receiver(actor: Node3D,goal: Vector3,delta: float,face_direction := Vector3.ZERO,pace := 4.8,focused := false) -> void:
 	var travel := (goal-actor.position).slide(Vector3.UP)

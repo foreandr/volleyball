@@ -62,6 +62,14 @@ func _draw() -> void:
 		return
 	if not game.is_node_ready() or game.settings.visible or game.phase in ["intro","net_guide","complete"]: return
 	if "receive_held" in game and not game.passers.is_empty():
+		if game.control_digger:
+			var defender: Node3D=game.dig_defender()
+			draw_player(defender,true)
+			if game.phase=="serve_return" and is_finite(game.defense_at):
+				var release: float=game.dig_platforms[defender].pressed_at
+				var offset: float=(release if is_finite(release) else game.dig_clock)-game.defense_at
+				timing_arc(defender,clampf(.5+offset/.5,0.,1.),.39,.61,Vector2(.25,.75),Color("14191d"),is_finite(release))
+			return
 		var passer: Node3D=game.passers[1]
 		draw_player(passer,true)
 		if game.phase=="serve_flight" and not game.recipe.is_empty():
