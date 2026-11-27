@@ -10,7 +10,8 @@ static func attach(ball: Node3D, prediction: Callable) -> MeshInstance3D:
 	return marker
 
 static func ballistic(origin: Vector3, velocity: Vector3, gravity := 9.81) -> Vector3:
-	return origin+velocity*Flight.landing_time(origin,velocity,gravity)
+	var time:=Flight.landing_time(origin,velocity,gravity)
+	return origin+velocity*time+Vector3.DOWN*.5*gravity*time*time
 
 static func parabola(start: Vector3,end: Vector3,duration: float,height: float) -> Vector3:
 	if duration<=0. or height<=0.: return Vector3.INF
@@ -32,6 +33,20 @@ func _ready() -> void:
 	ink.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED
 	ink.albedo_color=Color("ffd278")
 	material_override=ink
+	var edge:=MeshInstance3D.new()
+	var backing:=TorusMesh.new()
+	backing.inner_radius=.315
+	backing.outer_radius=.455
+	backing.rings=40
+	backing.ring_segments=6
+	edge.mesh=backing
+	edge.position.y=-.060
+	edge.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var dark:=StandardMaterial3D.new()
+	dark.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED
+	dark.albedo_color=Color("402c18")
+	edge.material_override=dark
+	add_child(edge)
 	hide()
 
 func _process(_delta: float) -> void:

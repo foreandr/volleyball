@@ -24,16 +24,11 @@ var boxes: Array[Dictionary]=[]
 var recipe := {}
 var anchor := Node3D.new()
 var dragged := -1
-var boundary := Node3D.new()
-var boundary_ink := StandardMaterial3D.new()
-var boundary_timer := Timer.new()
-
 func across(point: Vector3) -> Vector3:
 	return Vector3(-point.x,point.y,2.*BallNet.NET_Z-point.z)
 
 func start_drill() -> void:
 	AudioServer.set_bus_mute(0,StorySession.game_options.get_value("audio","muted",false))
-	build_boundary()
 	world.add_child(map)
 	world.add_child(anchor)
 	world.add_child(defense_map)
@@ -391,32 +386,8 @@ func choose_rally_attack(origin: Vector3) -> void:
 	pin_attack.rally_shot="spike"
 	pin_attack.swing_aim=pin_frame.to_local(scoring_target(origin))
 
-func build_boundary() -> void:
-	world.add_child(boundary)
-	boundary_ink.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED
-	for i in 4:
-		var edge := MeshInstance3D.new()
-		var strip := BoxMesh.new()
-		var sign_side := -1. if i%2==0 else 1.
-		strip.size=Vector3(.065,.004,9.) if i<2 else Vector3(9.,.004,.065)
-		edge.mesh=strip
-		edge.material_override=boundary_ink
-		edge.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		boundary.add_child(edge)
-		edge.position=Vector3(sign_side*4.475,.063,BallNet.NET_Z+4.5) if i<2 else Vector3(0,.063,BallNet.NET_Z+4.5+sign_side*4.475)
-	boundary.hide()
-	add_child(boundary_timer)
-	boundary_timer.one_shot=true
-	boundary_timer.timeout.connect(display_boundary.bind(0))
-
-func flash_boundary(ace: bool) -> void:
-	display_boundary(1 if ace else -1)
-	boundary_timer.start(1.)
-
-func display_boundary(call_value: int) -> void:
-	set_meta("serve_boundary",call_value)
-	boundary_ink.albedo_color=Color("#30ee76") if call_value==1 else Color("#ff394b")
-	boundary.visible=call_value!=0
+func flash_boundary(ace:bool) -> void:
+	court_boundary.flash(Vector3(0.,0.,BallNet.NET_Z+4.5),ace)
 
 func serve_out() -> void:
 	flash_boundary(false)

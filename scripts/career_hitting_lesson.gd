@@ -177,9 +177,10 @@ func step_attack(delta:float) -> void:
 			contact_time=rise+sqrt(2.*(apex-catch_point.y)/9.81)
 			super.change_feed_phase("pass")
 		elif ball.position.y<=Contact.BALL_RADIUS:
+			ball.position=feed_point(LandingMarker.Flight.landing_time(toss_start,feed_velocity()))
 			finish_reception()
 			attack_floor_pending=true
-			drop_velocity=(receive_point-toss_start)/RECEIVE_TIME+Vector3.UP*9.81*(RECEIVE_TIME*.5-elapsed)
+			drop_velocity=feed_velocity()+Vector3.DOWN*9.81*elapsed
 			message.text="Missed reception"
 			begin("drop")
 	elif phase=="pass":
@@ -189,8 +190,16 @@ func step_attack(delta:float) -> void:
 			else: finish_reception()
 		message.text="Pass to setter"
 
+func projected_landing() -> Vector3:
+	if phase=="receive_toss" and not replay_inspector.active:
+		return feed_point(LandingMarker.Flight.landing_time(toss_start,feed_velocity()))
+	return super.projected_landing()
+
+func feed_velocity() -> Vector3:
+	return (receive_point-toss_start)/RECEIVE_TIME+Vector3.UP*4.905*RECEIVE_TIME
+
 func feed_point(t:float) -> Vector3:
-	return toss_start.lerp(receive_point,t/RECEIVE_TIME)+Vector3.UP*4.905*t*(RECEIVE_TIME-t)
+	return toss_start+feed_velocity()*t+Vector3.DOWN*4.905*t*t
 
 func bind_reception() -> void:
 	var home:=hitter.position
@@ -278,9 +287,11 @@ func enter_hitting_turn() -> void:
 func attack_surface_contact(point:Vector3,floor_hit:bool) -> void:
 	var first_contact:=not attack_decided
 	super.attack_surface_contact(point,floor_hit)
-	if cpu_hitter or not first_contact or not attack_decided or not floor_hit or not drop_net_hit.is_empty(): return
+	if not first_contact or not attack_decided or not floor_hit or not drop_net_hit.is_empty(): return
 	var error:=point-zone_center()
 	if absf(error.x)>HALF_ZONE or absf(error.z)>HALF_ZONE: return
+	coach_react("praise")
+	if cpu_hitter: return
 	makes+=1
 	if makes==9:
 		closing=true

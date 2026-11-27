@@ -192,6 +192,7 @@ var drill_spike_pace := 1.0
 var drill_set_apex := INF
 var drill_feed_acceleration := Vector3.INF
 var attack_lift_lean := 66.0
+var court_boundary:=preload("res://scripts/court_boundary_flash.gd").new()
 var spike_strength := 1.0
 var serve_pending := false
 var crossed_net := false
@@ -301,6 +302,7 @@ func configure(actor: Node3D, board: Label, status: Label, build := "", players_
 	material.vertex_color_use_as_albedo = true
 	ball.material_override = material
 	add_child(ball)
+	add_child(court_boundary)
 	preload("res://scripts/ball_landing_marker.gd").attach(ball,func(): return path_point(flight_end()) if phase==Phase.LIVE and not replay.active else Vector3.INF)
 	for avatar in players: avatar.watch_ball(ball)
 	aim_ring = MeshInstance3D.new()
@@ -2820,6 +2822,7 @@ func check_floor(previous: float) -> void:
 	begin_ball_bounce()
 	var point := bounce_origin
 	var in_bounds := absf(point.x) <= 4.53 and point.z >= -5.03 and point.z <= 13.03
+	court_boundary.flash(point,in_bounds)
 	if in_bounds:
 		var court_side := 0 if point.z < Net.NET_Z else 1
 		var reason := "Into the net" if not net_hit.is_empty() and not net_hit.rollover else "Ball down"

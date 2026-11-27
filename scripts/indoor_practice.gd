@@ -233,6 +233,7 @@ var attack_floor_pending := false
 var hard_spike_floor_pending := false
 var floor_impact := AudioStreamPlayer.new()
 
+var court_boundary:=preload("res://scripts/court_boundary_flash.gd").new()
 var landing_ring: MeshInstance3D
 var held_input := preload("res://scripts/held_input_hud.gd").new()
 
@@ -287,6 +288,7 @@ func _ready() -> void:
 	leather.shader = cover
 	ball.material_override = leather
 	world.add_child(ball)
+	world.add_child(court_boundary)
 	landing_ring=LandingMarker.attach(ball,projected_landing)
 	rotation_drill.configure(self)
 	add_child(replay_inspector)
@@ -1648,6 +1650,7 @@ func advance_missed_ball(delta: float, rebound_floor := false) -> void:
 			drop_net_time-=unused
 			continue
 		if roll_time<0. and ((not hit.is_empty() and hit.normal.y>.8 and ball.position.y<.25) or ball.position.y<=Contact.BALL_RADIUS+.004):
+			if attack_floor_pending: court_boundary.flash(ball.position,absf(ball.position.x)<=4.5 and absf(ball.position.z-BallNet.NET_Z)<=9.)
 			attack_surface_contact(ball.position,true)
 			var hard_landing: bool = hard_spike_floor_pending and (drop_velocity.length()>=Contact.HARD_SPIKE_SPEED or get_meta("blocked_attack",false))
 			set_meta("blocked_attack",false)
