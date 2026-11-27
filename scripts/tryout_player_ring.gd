@@ -13,7 +13,7 @@ func make_ring_mesh() -> void:
 	material.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.vertex_color_use_as_albedo=true
 	material.cull_mode=BaseMaterial3D.CULL_DISABLED
-	for band in [[.625,.646,Color("10171d")],[.646,.671,Color.WHITE],[.671,.693,Color("10171d")]]:
+	for band in [[.561,.582,Color("10171d")],[.582,.622,Color.WHITE],[.622,.644,Color("10171d")]]:
 		ring_mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLE_STRIP,material)
 		ring_mesh.surface_set_color(band[2])
 		for i in 65:
