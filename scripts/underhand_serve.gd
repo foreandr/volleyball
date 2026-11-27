@@ -131,17 +131,22 @@ func preview_lane_count() -> int:
 func preview_lane_offset(_lane: int, _progress: float, _launch: Vector3) -> Vector3:
 	return Vector3.ZERO
 
+var preview_landing:=Vector3.ZERO
+
 func update_path_preview() -> void:
 	var count := PREVIEW_DOTS*preview_lane_count()
 	if path_preview.multimesh.instance_count!=count: path_preview.multimesh.instance_count=count
 	var launch := aimed_velocity(preview_origin)
 	var duration := Flight.landing_time(preview_origin,launch)
+	preview_landing=Vector3.ZERO
 	for lane in preview_lane_count():
 		for i in PREVIEW_DOTS:
 			var progress := (i+1)/float(PREVIEW_DOTS)
 			var time := duration*progress
 			var point := preview_origin+launch*time+Vector3.DOWN*0.5*Flight.GRAVITY*time*time+preview_lane_offset(lane,progress,launch)
 			path_preview.multimesh.set_instance_transform(lane*PREVIEW_DOTS+i,Transform3D(Basis.IDENTITY,point))
+			if i==PREVIEW_DOTS-1: preview_landing+=point/preview_lane_count()
+	if is_instance_valid(aim_ring): aim_ring.position=Vector3(preview_landing.x,.062,preview_landing.z)
 
 func aimed_velocity(start: Vector3, pace := 1.0) -> Vector3:
 	var duration := flight_duration(start)

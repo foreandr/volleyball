@@ -22,7 +22,7 @@ var attack_landing := Vector3.ZERO
 func start_drill() -> void:
 	for recipe in JSON.parse_string(FileAccess.get_file_as_string("res://assets/reception_studio.json")):
 		if Regions.movement(recipe): movement_recipes[int(recipe.id)]=recipe
-	cpu_defense=true
+	cpu_defense=StorySession.career_lesson!="digging_camp"
 	for i in homes.size():
 		homes[i]=StorySession.game_options.get_value("digging","defender_home_"+str(i),homes[i])
 	floor_target=StorySession.game_options.get_value("digging","floor_target",floor_target)

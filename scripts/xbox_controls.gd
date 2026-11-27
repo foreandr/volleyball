@@ -42,6 +42,16 @@ static func trigger(left: bool) -> JoyAxis:
 	var swapped := bool(StorySession.game_options.get_value("xbox","swap_triggers",false))
 	return JOY_AXIS_TRIGGER_LEFT if left!=swapped else JOY_AXIS_TRIGGER_RIGHT
 
+static var dpad_icons:Dictionary={}
+
+static func dpad_icon(direction:int) -> Texture2D:
+	if dpad_icons.has(direction): return dpad_icons[direction]
+	var degrees:int={JOY_BUTTON_DPAD_UP:0,JOY_BUTTON_DPAD_RIGHT:90,JOY_BUTTON_DPAD_DOWN:180,JOY_BUTTON_DPAD_LEFT:270}[direction]
+	var picture:=Image.new()
+	picture.load_svg_from_string('<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36"><path d="M12 2h12v10h10v12H24v10H12V24H2V12h10z" fill="#303b44" stroke="#dfe9eb"/><path d="m18 4 5 6H13z" fill="#fff" transform="rotate(%d 18 18)"/></svg>'%degrees)
+	dpad_icons[direction]=ImageTexture.create_from_image(picture)
+	return dpad_icons[direction]
+
 static var view_icon: Texture2D
 static var dpad_horizontal_icon: Texture2D
 static var dpad_vertical_icon: Texture2D
@@ -66,6 +76,7 @@ static func glyph(control: Variant) -> Texture2D:
 			view_icon=ImageTexture.create_from_image(icon)
 		return view_icon
 	var key: String
+	if control is int and control in [JOY_BUTTON_DPAD_UP,JOY_BUTTON_DPAD_DOWN,JOY_BUTTON_DPAD_LEFT,JOY_BUTTON_DPAD_RIGHT]: return dpad_icon(control)
 	if control is int: key = NAMES[physical(control)]
 	elif control in ["LT","RT"]: key = "LT" if trigger(control=="LT")==JOY_AXIS_TRIGGER_LEFT else "RT"
 	else: key = control

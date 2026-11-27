@@ -110,7 +110,7 @@ static func apply(actor: Node3D,coach: bool,variant := 0,vary_build := true) -> 
 			if not coach and variant%3==2: compression(rig,node,skin_surface)
 			var grooming := face_hair(rig,node,skin_surface,coach,variant)
 			if coach: actor.set_meta("coach_face",grooming)
-			if not coach and variant==0:
+			if not coach:
 				actor.beard_material=grooming
 				actor.refresh_kit()
 			if not coach and variant%4==1 and variant%5!=4:
@@ -195,11 +195,10 @@ static func apply(actor: Node3D,coach: bool,variant := 0,vary_build := true) -> 
 		mount.add_child(scalp)
 		var rest := rig.get_bone_global_rest(head)
 		scalp.transform=rest.affine_inverse()*Transform3D(Basis.IDENTITY,rest.origin)
-		var hair := Color.from_hsv(.065+.004*variant,.42,.13+.065*(variant%6))
-		haircut(scalp,hair,variant,actor)
 		for side in ["l","r"]:
 			tape_hand(rig,side,1+variant%3)
 		actor.set_meta("kit_scalp",scalp)
+		style_hair(actor,scalp,variant)
 		preload("res://scripts/player_kit_choices.gd").apply(actor)
 
 	reshape_build(rig,coach,variant)
@@ -736,6 +735,25 @@ static func face_hair(rig: Skeleton3D,body: MeshInstance3D,mesh: ArrayMesh,coach
 	mat.set_shader_parameter("tone",Color("929087") if coach else Color.from_hsv(.065+.004*variant,.42,.13+.065*(variant%6)))
 	part.material_override=mat
 	return mat
+
+static func style_hair(actor:Node3D,scalp:Node3D,variant:int) -> void:
+	var choice:String=actor.attributes.get("Hair","Natural")
+	var tone:String=actor.attributes.get("Hair color","Natural")
+	var id:=choice+"/"+tone
+	if scalp.get_meta("groom","")==id: return
+	scalp.set_meta("groom",id)
+	var cut:=scalp.get_node_or_null("Haircut")
+	if cut:
+		scalp.remove_child(cut)
+		cut.queue_free()
+	cut=Node3D.new()
+	cut.name="Haircut"
+	scalp.add_child(cut)
+	var color:=Color.from_hsv(.065+.004*variant,.42,.13+.065*(variant%6)) if tone=="Natural" else Color(preload("res://scripts/player_profile.gd").HAIR_COLORS[tone])
+	if actor.beard_material: actor.beard_material.set_shader_parameter("tone",color)
+	actor.hair_anchors.clear()
+	var selected:=preload("res://scripts/player_profile.gd").HAIRSTYLES.find(choice)
+	haircut(cut,color,variant if selected<=0 else selected-1,actor)
 
 static func haircut(scalp: Node3D,color: Color,variant: int,actor: Node3D) -> void:
 	var style := variant%7

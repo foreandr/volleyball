@@ -8,6 +8,9 @@ func _ready() -> void:
 	if CareerSession.defense_finished:
 		CareerSession.defense_finished=false
 		defense_score()
+	elif not StorySession.career_lesson.is_empty():
+		StorySession.career_lesson=""
+		controls_tutorial()
 	elif CareerSession.enter_origin:
 		CareerSession.enter_origin = false
 		origin()
@@ -55,6 +58,7 @@ func show_home() -> void:
 		nameplate.add_theme_font_size_override("font_size",25)
 		facts.add_child(nameplate)
 		add_button("Continue career",resume).grab_focus()
+		add_button("Controls tutorial",controls_tutorial)
 		add_button("Play scrimmage",scrimmage)
 		add_button("Defense evaluation",defense_tryout)
 		add_button("Player development",development)
@@ -69,7 +73,19 @@ func show_home() -> void:
 	if not StorySession.saved_stories().is_empty(): add_button("Legacy careers",show_load)
 	add_button("Back",open_menu)
 
-func scrimmage() -> void:
+func controls_tutorial() -> void:
+	clear_menu("CONTROLS TUTORIAL")
+	var lessons:Dictionary={"Serving":"serving_camp","Serve receive":"receive_cpu_serves","Setting":"setting_camp","Attacking":"attacking_camp","Blocking":"blocking_camp","Digging":"digging_camp"}
+	for title in lessons:
+		var entry:=add_button(title,func():
+			StorySession.career_lesson=lessons[title]
+			MenuPresentation.load_scene("res://scenes/"+StorySession.career_lesson+".tscn"))
+		if title=="Setting": entry.grab_focus()
+	add_button("Guided scrimmage",scrimmage.bind(true))
+	add_button("My Career",show_home)
+
+func scrimmage(guided:=false) -> void:
+	StorySession.guided_scrimmage=guided
 	StorySession.career_scrimmage=true
 	StorySession.offline_controller=0
 	StorySession.offline_size=3
@@ -89,11 +105,14 @@ func development(selected := "") -> void:
 	if not badges.is_empty(): info.text+="    /    "+", ".join(badges)
 	column.add_child(info)
 	var active: Button
-	for rating in CareerSession.Profile.RATINGS:
+	for rating in ["vertical_in"]+CareerSession.Profile.RATINGS:
 		var athlete := CareerSession.Profile.clean(CareerSession.profile())
 		var value := int(athlete[rating])
-		var upgrade := add_button("%s   %d" % [rating,value],func():
-			if value>=100 or points<=0: return
+		var rule:Vector2i=CareerSession.Profile.build_rules(athlete).get(rating,Vector2i(100,0))
+		var vertical:bool=rating=="vertical_in"
+		var title:String="Vertical jump" if vertical else str(rating)
+		var upgrade := add_button("%s   %d%s" % [title,value if vertical else CareerSession.Profile.effective_skill(athlete,rating,{rating:rule})," in" if vertical else " / "+str(rule.x)],func():
+			if value>=(60 if vertical else CareerSession.Profile.training_limit(rule)) or points<=0: return
 			athlete[rating] = value+1
 			CareerSession.data.set_value("athletes",id,athlete)
 			CareerSession.data.set_value("points",id,points-1)
@@ -101,7 +120,7 @@ func development(selected := "") -> void:
 			development(rating))
 		MenuPresentation.rating_bar(column,null,value)
 		if rating==selected or active==null: active=upgrade
-		MenuPresentation.stat_help(upgrade,upgrade,rating,CareerSession.Profile.RATING_HELP[rating])
+		MenuPresentation.stat_help(upgrade,upgrade,title,"Jump height on serves, attacks and blocks." if vertical else CareerSession.Profile.RATING_HELP[rating])
 	add_button("Back",show_home)
 	if active: active.grab_focus()
 
@@ -181,6 +200,7 @@ func origin() -> void:
 	opening.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	opening.text="Monday, 6:40 a.m. Your name is on the Falcons tryout sheet. The starting setter graduated in June. Coach Ellis rolls a cart to the net and points to the basket at the pin. “Show me a ball your hitter can use.”"
 	column.add_child(opening)
+	add_button("Controls tutorial",controls_tutorial)
 	add_button("Indoor",func():
 		if CareerSession.checkpoint("position",0): position_menu()).grab_focus()
 	add_button("Beach",func(): pass).disabled = true

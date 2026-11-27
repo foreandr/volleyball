@@ -107,12 +107,12 @@ func aim(g,dt:float) -> void:
 			target.z=clampf(target.z-stick.y*5.*dt,Net.NET_Z+.2,Net.NET_Z+10.5)
 	var driver=g.serve
 	var origin:Vector3=endpoint if airborne else driver.preview_origin
-	if g.serve_style>=2 and not airborne: origin=station+Vector3(0,g.human.height_cm*.0118+g.serve_vertical*.0254,2.15)
+	if g.serve_style>=2 and not airborne: origin=station+Vector3(0,g.human.height_cm*.0118+g.jump_inches(0,g.serve_vertical)*.0254,2.15)
 	var shot=prepare_curve(g,origin)
 	shot.preview_origin=origin
 	shot.path_preview=driver.path_preview
 	shot.update_path_preview()
-	driver.aim_ring.position=target
+	driver.aim_ring.position=Vector3(shot.preview_landing.x,.062,shot.preview_landing.z)
 
 func ready_step(g,controls,dt:float,can_toss:=true) -> void:
 	controls.read_pace_input()
@@ -174,7 +174,7 @@ func step(g,dt:float) -> void:
 			driver.pose(toss)
 			toss_origin=driver.ball.position
 			endpoint=g.human.position+Vector3.BACK*2.15
-			var height:float=g.serve_vertical*.0254*g.human.stamina.effectiveness()
+			var height:float=g.jump_inches(0,g.serve_vertical)*.0254*g.human.stamina.effectiveness()
 			endpoint.y=.04+g.human.height_cm*.0118+height
 			var apex:=maxf(Camp.JUMP_TOSS_APEX[3-g.serve_style],endpoint.y+.1)
 			toss_time=sqrt(2.*(apex-toss_origin.y)/9.81)+sqrt(2.*(apex-endpoint.y)/9.81)
@@ -183,7 +183,7 @@ func step(g,dt:float) -> void:
 		var t:=clock-toss
 		driver.ball.position=toss_origin.lerp(endpoint,t/toss_time)+Vector3.UP*4.905*t*(toss_time-t)
 		var remaining:=contact_time-clock
-		var height:float=g.serve_vertical*.0254
+		var height:float=g.jump_inches(0,g.serve_vertical)*.0254
 		if not plant.active and swing_age<0. and remaining<=plant.flight_duration(height*g.human.stamina.effectiveness(),true)*.48+.94*(plant.LEAD_STEP_TIME+.30)+.025:
 			var stance:=Vector3(endpoint.x+.09,.04,endpoint.z-.09)
 			var heading:Vector3=(stance-g.human.position).slide(Vector3.UP).normalized()

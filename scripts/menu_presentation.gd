@@ -74,7 +74,7 @@ func set_navigation_level(percent: float) -> void:
 func set_music_level(percent: float) -> void:
 	music.volume_db = -10.0 + linear_to_db(percent/100.)
 
-func stat_help(control: Control,heading_control: Control,title: String,description: String) -> void:
+func stat_help(control: Control,heading_control: Control,title: String,description: Variant,show_perks:=true) -> void:
 	var card := PanelContainer.new()
 	card.hide()
 	card.z_index=100
@@ -90,9 +90,15 @@ func stat_help(control: Control,heading_control: Control,title: String,descripti
 	body.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	body.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	body.custom_minimum_size.x=250
-	body.text=title+"\n"+description+"\n\nPERKS    /    "+preload("res://scripts/player_profile.gd").perk_text(title)
+	var refresh:=func():
+		var copy:String=description.call() if description is Callable else str(description)
+		body.text=title+"\n"+copy
+		if show_perks: body.text+="\n\nPERKS    /    "+preload("res://scripts/player_profile.gd").perk_text(title)
+	refresh.call()
+	if control is Range: control.value_changed.connect(func(_v): refresh.call_deferred())
 	card.add_child(body)
 	var show_help := func():
+		refresh.call()
 		if is_instance_valid(current_help): current_help.hide()
 		current_help=card
 		card.reset_size()
@@ -175,23 +181,43 @@ func audio_options(host: Container) -> void:
 
 func attach_highlights(parent: Control) -> void:
 	var film := TextureRect.new()
+	film.add_to_group("menu_reel_surface")
 	film.texture=reel_view.get_texture()
 	film.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
 	film.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	film.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	film.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	parent.add_child(film)
+	film.visibility_changed.connect(func():
+		var visible_now:=film.is_visible_in_tree()
+		if visible_now==bool(film.get_meta("counted",true)): return
+		film.set_meta("counted",visible_now)
+		if visible_now:
+			reel_surfaces+=1
+			reel_view.render_target_update_mode=SubViewport.UPDATE_WHEN_VISIBLE
+			highlights.activate(true)
+		else: release_highlights())
 	reel_surfaces+=1
 	if reel_surfaces==1:
 		reel_view.render_target_update_mode=SubViewport.UPDATE_WHEN_VISIBLE
 		highlights.activate(true)
-	film.tree_exiting.connect(release_highlights, CONNECT_ONE_SHOT)
+	film.tree_exiting.connect(func():
+		if film.get_meta("counted",true): release_highlights(),CONNECT_ONE_SHOT)
 
 func release_highlights() -> void:
 	reel_surfaces -= 1
 	if reel_surfaces == 0:
 		highlights.activate(false)
 		reel_view.render_target_update_mode = SubViewport.UPDATE_DISABLED
+
+static func color_chip(color:Color) -> Texture2D:
+	var sample:=Gradient.new()
+	sample.colors=PackedColorArray([color,color])
+	var chip:=GradientTexture2D.new()
+	chip.gradient=sample
+	chip.width=22
+	chip.height=22
+	return chip
 
 func backdrop(parent: Control, hero: bool) -> void:
 	parent.theme = skin

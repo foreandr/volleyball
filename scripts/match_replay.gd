@@ -60,6 +60,7 @@ func toggle(match_: Node3D, current_finished: bool, rep_frames: Array[Dictionary
 		match_.serve.ball.visible = restore.serve_visible
 		match_.aim_ring.visible = restore.aim
 		match_.trajectory_node.visible = restore.guide
+		match_.update_flight_guide()
 		restore.clear()
 		frames = []
 		return
@@ -68,6 +69,7 @@ func toggle(match_: Node3D, current_finished: bool, rep_frames: Array[Dictionary
 	restore = capture(match_)
 	index = 0
 	active = true
+	match_.flight_guide.hide()
 	playing = true
 	match_.serve.ball.hide()
 	match_.aim_ring.hide()

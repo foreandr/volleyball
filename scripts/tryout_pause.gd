@@ -5,7 +5,7 @@ var game
 var body := VBoxContainer.new()
 var categories := HBoxContainer.new()
 var home := VBoxContainer.new()
-var attack_setup := VBoxContainer.new()
+var attack_setup:VBoxContainer
 var options := VBoxContainer.new()
 var primary: Button
 var options_button: Button
@@ -38,6 +38,7 @@ func configure(host: Node, layer: Node = null) -> void:
 	if practice and game.scene_file_path.ends_with("_camp.tscn") and "solo_setting" in game and game.solo_setting:
 		bar(home,"Sliders",open_sliders)
 		if game.has_method("edit_approach_frames") and not game.has_method("frame_editor_blocker"):
+			attack_setup=VBoxContainer.new()
 			dock.add_child(attack_setup)
 			attack_setup.hide()
 			var map := preload("res://scripts/attack_setup_map.gd").new()
@@ -114,7 +115,7 @@ func bar(parent: Container, caption: String, action: Callable) -> Button:
 	return button
 
 func show_home() -> void:
-	attack_setup.hide()
+	if attack_setup: attack_setup.hide()
 	options.hide()
 	home.show()
 	primary.grab_focus()
@@ -255,6 +256,9 @@ func restart() -> void:
 
 func quit_gameplay() -> void:
 	hide()
+	if not StorySession.career_lesson.is_empty():
+		MenuPresentation.load_scene("res://scenes/story.tscn")
+		return
 	if game.has_method("leave_match"):
 		game.leave_match()
 		return
@@ -280,7 +284,7 @@ func _input(event: InputEvent) -> void:
 	var escape: bool = event is InputEventKey and event.keycode == KEY_ESCAPE and event.pressed
 	if visible:
 		if menu or event.is_action_pressed("ui_cancel"):
-			if (options.visible or attack_setup.is_visible_in_tree()) and not menu: show_home()
+			if (options.visible or (attack_setup and attack_setup.is_visible_in_tree())) and not menu: show_home()
 			else: hide()
 			get_viewport().set_input_as_handled()
 	elif not practice and not get_tree().paused and (menu or escape):
@@ -326,6 +330,15 @@ func show_section(caption: String) -> void:
 		tuning_controls()
 		return
 	if caption=="Controls":
+		if game.has_method("toggle_match_replay") and "game" in game:
+			var path_toggle:=CheckButton.new()
+			path_toggle.text="Show pass trajectory"
+			path_toggle.button_pressed=game.game.show_pass_trajectory
+			body.add_child(path_toggle)
+			path_toggle.toggled.connect(func(enabled):
+				game.game.show_pass_trajectory=enabled
+				StorySession.game_options.set_value("match","pass_trajectory",enabled)
+				StorySession.save_options())
 		Xbox.settings(body,show_section.bind(caption))
 		return
 	if caption=="Audio": MenuPresentation.audio_options(body)

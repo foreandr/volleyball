@@ -306,3 +306,5 @@ Future feature: Create several fictional athletic brands with distinct, original
 On incoming serves, check the flight segment up to the first gym surface for a reception before awarding the floor result.
 
 The playable exhibition and My Career scrimmage use the same rally controller. The receiver may move before service and while preparing with A. Selection of a physical reception animation, early and late grading, serve spin and power, and block contact geometry are shared with their respective drills. Career setting and defense evaluations keep their drill objectives. A scrimmage uses the career athlete and leaves evaluation progress intact.
+
+Offline roster cards show a player portrait, overall and natural position. The roster stops the highlight reel during selection. Career offers individual controls lessons and a guided scrimmage. Regular matches show serve spin choices at the baseline and tactical calls during play.

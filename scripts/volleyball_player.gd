@@ -15,6 +15,7 @@ var pose_author: RefCounted
 @export var team_color := Color("2c8fe5")
 @export var player_number := 1
 var display_name := "Player"
+var body_skin:StandardMaterial3D
 var height_cm: float = Profile.DEFAULTS.height_cm
 var handedness := "Right"
 var mirror_animation := false
@@ -69,6 +70,7 @@ func _ready() -> void:
 			if skin.resource_name.begins_with("MI_Superhero"):
 				skin.normal_enabled=true
 				skin.normal_texture=preload("res://assets/characters/base/T_Superhero_Male_Normal.png")
+				body_skin=skin
 				skin.normal_scale=.65
 				skin.roughness_texture=preload("res://assets/characters/base/T_Superhero_Male_Roughness.png")
 				skin.roughness=.83
@@ -180,7 +182,10 @@ func install_custom(resource: Resource, slot := "idle", save := true) -> bool:
 
 func apply_profile(profile: Dictionary) -> void:
 	var values := Profile.clean(profile)
-	attributes = values
+	attributes = values.duplicate()
+	var rules:=Profile.build_rules(values)
+	for stat in rules: attributes[stat]=Profile.effective_skill(values,stat,rules)
+	if body_skin: body_skin.normal_scale=lerpf(.12,.85,smoothstep(30.,95.,float(values.Athleticism)))
 	stamina.set_ratings(values.Stamina,values.Endurance,values.Willpower)
 	refresh_kit()
 	display_name = values.name
@@ -189,7 +194,9 @@ func apply_profile(profile: Dictionary) -> void:
 	handedness = values.handedness
 
 func refresh_kit() -> void:
-	if has_meta("kit_scalp"): preload("res://scripts/player_kit_choices.gd").apply(self)
+	if has_meta("kit_scalp"):
+		preload("res://scripts/practice_kit.gd").style_hair(self,get_meta("kit_scalp"),get_meta("kit_variant",0))
+		preload("res://scripts/player_kit_choices.gd").apply(self)
 	if beard_material:
 		beard_material.set_shader_parameter("beard_style",Profile.KIT_CHOICES["Facial hair"].find(attributes["Facial hair"]))
 	if shirt_fabric and attributes.has("jersey_number") and attributes.jersey_number!=get_meta("school_jersey_number",-1):
@@ -221,7 +228,8 @@ func apply_measurements() -> void:
 		skeleton.add_child(shape)
 		skeleton.move_child(shape,0)
 	var build := clampf(pow(float(attributes.weight_lb)/165.,.30),.84,1.18)
-	model.scale=model_rest_scale*Vector3(build,1.,build)
+	var muscle:=lerpf(.89,1.04,smoothstep(30.,95.,float(attributes.Athleticism)))
+	model.scale=model_rest_scale*Vector3(build*muscle,1.,build*muscle)
 	shape.configure(attributes)
 
 func get_pose_author() -> RefCounted:

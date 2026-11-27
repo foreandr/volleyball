@@ -102,14 +102,14 @@ func run_command() -> void:
 	MenuPresentation.load_scene.call_deferred(CHAPTER)
 
 func base_profile() -> Dictionary:
-	var values := Profile.clean({})
+	var values := Profile.clean({"height_cm":74*2.54})
 	values.name=""
 	values.jersey_number=7
 	for rating in Profile.RATINGS: values[rating] = 40
 	return values
 
 func spent(values: Dictionary) -> int:
-	var total := 0
+	var total := maxi(0,roundi(values.get("vertical_in",30))-30)
 	for rating in Profile.RATINGS: total += maxi(0,int(values.get(rating,40))-40)
 	return total
 

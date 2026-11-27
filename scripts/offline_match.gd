@@ -145,6 +145,7 @@ func restart_activity() -> void:
 func leave_match() -> void:
 	if StorySession.career_scrimmage:
 		StorySession.career_scrimmage=false
+		StorySession.guided_scrimmage=false
 		MenuPresentation.load_scene("res://scenes/story.tscn")
 		return
 	MenuPresentation.return_page="Match setup"
@@ -183,6 +184,25 @@ func refresh_prompts() -> void:
 			_:
 				entries=[["View","Replay"],[JOY_BUTTON_START,"Pause"]]
 				keys="R  Replay     Esc  Pause"
+	if not game.replay.active and not game.spectator:
+		if game.manual.context()=="serve":
+			var spins:Array=[[JOY_BUTTON_DPAD_UP,"Topspin"],[JOY_BUTTON_DPAD_LEFT,"Left spin"],[JOY_BUTTON_DPAD_RIGHT,"Right spin"],[JOY_BUTTON_DPAD_DOWN,"Float"]]
+			if not StorySession.guided_scrimmage:
+				entries=spins
+				keys="↑  Topspin     ←  Left spin     →  Right spin     ↓  Float"
+			elif not game.serve_pending:
+				entries=[[JOY_BUTTON_A,"Spin toss"],[JOY_BUTTON_B,"Jump float"],[JOY_BUTTON_X,"Standing"],[JOY_BUTTON_Y,"Underhand"]]+spins
+				keys="Hold Space / L / J / I for toss  ·  Release at contact  ·  Arrows select spin"
+		elif not StorySession.guided_scrimmage:
+			entries=[]
+			keys=""
+		elif game.manual.context()=="block":
+			entries.append_array([[JOY_BUTTON_DPAD_LEFT,"Left shoulder"],[JOY_BUTTON_DPAD_RIGHT,"Right shoulder"],[JOY_BUTTON_DPAD_UP,"Commit"],[JOY_BUTTON_DPAD_DOWN,"No block"]])
+			keys+="     Arrows  Left / right shoulder, commit / no block"
+	elif game.spectator and not game.replay.active:
+		entries=[]
+		keys=""
+	footer.get_parent().visible=not keys.is_empty()
 	var token:=keys+str(game.serve_style)+str(Xbox.keyboard_prompts())
 	if token==last_prompt: return
 	last_prompt=token
@@ -218,10 +238,16 @@ func _process(delta:float) -> void:
 	elif game.manual and game.match_clock<game.manual.feedback_until:
 		banner.text=game.manual.feedback_text
 		banner.show()
+	elif game.manual and game.match_clock<game.manual.call_until:
+		banner.text=game.manual.call_notice
+		banner.show()
 	elif game.phase!=game.Phase.READY or game.serve_pending: banner.hide()
 	if game.manual and authorized and game.phase==game.Phase.READY and not game.serve_pending and game.is_human(game.server_index()) and not game.replay.active:
 		status.text="%s  /  %s"%[game.manual.service.Camp.LABELS[3-game.serve_style],game.manual.service.Camp.SPIN_LABELS[game.manual.service.spin]]
-	status.visible=authorized or game.replay.active
+	if StorySession.guided_scrimmage and game.manual and not game.replay.active:
+		if game.manual.context()=="set": status.text="Move under the pass. Hold a target and release as the ball meets your hands."
+		elif game.manual.context()=="serve" and not game.serve_pending: status.text+="   /   Hold a toss button, then release at contact."
+	status.visible=game.replay.active or (authorized and (game.phase!=game.Phase.LIVE or StorySession.guided_scrimmage))
 	if game.phase==game.Phase.FINISHED and not game.replay.active and not rally_end_menu.visible:
 		rally_end_menu.show()
 		rally_end_menu.get_child(0).grab_focus()

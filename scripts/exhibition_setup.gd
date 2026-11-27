@@ -10,6 +10,8 @@ const OFFENSE := ["Spike placement","Arm swing","Strength","Hand setting","Spin 
 const DEFENSE := ["Forearm reception","Forearm defense","Hand defense","Blocking","Reflexes"]
 const POINTS := [7,11,15,21,25]
 const CROWDS := [0,16,48,96]
+const COLOR_NAMES := ["Azure","Copper","Crimson","Pine","Ivory","Violet"]
+var kit_side:=-1
 var section := 0
 var athletes: Array = []
 var lineups: Array = [[],[]]
@@ -56,6 +58,7 @@ func configure(launch: Callable, exit_page: Callable) -> void:
 			used_names.append(p.name)
 			p.jersey_number=athletes.size()+1
 			athletes.append(p)
+	for i in athletes.size(): athletes[i]=Profile.clean(athletes[i])
 	if lineups[0].is_empty() or lineups[1].is_empty():
 		lineups=[range(6),range(6,12)]
 	render("Start")
@@ -66,6 +69,7 @@ func persist() -> void:
 
 func launch() -> void:
 	StorySession.career_scrimmage=false
+	StorySession.guided_scrimmage=false
 	persist()
 	StorySession.offline_controller=controller
 	StorySession.offline_size=sizes[0]
@@ -109,7 +113,8 @@ func render(focus_id: String) -> void:
 		tab.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 	match section:
 		0:
-			if slot<0: team_board()
+			if kit_side>=0: kit_board()
+			elif slot<0: team_board()
 			else: player_board()
 		1: equipment_board()
 		2: venue_board()
@@ -126,12 +131,17 @@ func render(focus_id: String) -> void:
 	MenuPresentation.reveal(self)
 
 func set_page(index: int) -> void:
+	kit_side=-1
 	section=posmod(index,PAGES.size())
 	slot=-1
 	render("Tab%d"%section)
 
 func go_back() -> void:
-	if slot>=0:
+	if kit_side>=0:
+		var team:=kit_side
+		kit_side=-1
+		render("Kit%d"%team)
+	elif slot>=0:
 		var target:="Player%d_%d"%[side,slot]
 		slot=-1
 		render(target)
@@ -170,7 +180,7 @@ func team_board() -> void:
 		scouting_labels[idx]=scouting
 		scouting.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 		show_ratings(idx,0)
-		var kit:=action(col,"Change kit",cycle_kit.bind(idx),"Kit%d"%idx)
+		var kit:=action(col,"Change kit",open_kit.bind(idx),"Kit%d"%idx)
 		kit.self_modulate=StorySession.kit_colors[idx].lightened(.40)
 	MenuPresentation.section_label(self,"Controller assignment")
 	var sides:=strip(self)
@@ -211,14 +221,28 @@ func change_size(direction:int,idx:int) -> void:
 	persist()
 	render("Count%d%s"%[idx,"Next" if direction>0 else "Prev"])
 
-func cycle_kit(idx:int) -> void:
-	StorySession.kit_colors[idx]=COLORS[(COLORS.find(StorySession.kit_colors[idx])+1)%COLORS.size()]
+func open_kit(idx:int) -> void:
+	kit_side=idx
+	render("Swatch%d"%maxi(0,COLORS.find(StorySession.kit_colors[idx])))
+
+func kit_board() -> void:
+	MenuPresentation.section_label(self,("Home" if kit_side==0 else "Away")+" kit")
+	var row:=strip(self)
+	for i in COLORS.size():
+		var swatch:=action(row,COLOR_NAMES[i],pick_color.bind(i),"Swatch%d"%i)
+		swatch.toggle_mode=true
+		swatch.set_pressed_no_signal(StorySession.kit_colors[kit_side]==COLORS[i])
+		swatch.icon=MenuPresentation.color_chip(COLORS[i])
+
+func pick_color(index:int) -> void:
+	StorySession.kit_colors[kit_side]=COLORS[index]
 	persist()
-	render("Kit%d"%idx)
+	render("Swatch%d"%index)
 
 static func average(profile:Dictionary, fields:Array) -> int:
 	var sum:=0.
-	for field in fields: sum+=float(profile.get(field,65))
+	var rules:=Profile.build_rules(profile)
+	for field in fields: sum+=Profile.effective_skill(profile,field,rules)
 	return roundi(sum/fields.size())
 
 func athlete_card(parent: Container, profile: Dictionary, idx:int, member:int, large:bool) -> Button:
@@ -238,6 +262,8 @@ func athlete_card(parent: Container, profile: Dictionary, idx:int, member:int, l
 	var number:=txt(col,"%d OVR"%average(profile,Profile.RATINGS),14)
 	number.modulate=Color("f5cc78")
 	number.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+	var role:=txt(col,Profile.natural_position(profile),14)
+	role.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 	var art:=TextureRect.new()
 	art.texture=SchoolHeadshots.request(profile,idx*6+member,StorySession.kit_colors[idx],true)
 	art.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
@@ -263,10 +289,12 @@ func open_player(idx:int,member:int) -> void:
 
 func player_board() -> void:
 	var chosen:Dictionary=athletes[lineups[side][slot]]
-	MenuPresentation.section_label(self,"%s   /   Player %d"%["Home" if side==0 else "Away",slot+1])
-	var inches:=roundi(chosen.height_cm/2.54)
+	MenuPresentation.section_label(self,("Home" if side==0 else "Away")+"   /   Replace "+str(chosen.name))
 	txt(self,"%s     %d OVR     %d OFF     %d DEF"%[chosen.name,average(chosen,Profile.RATINGS),average(chosen,OFFENSE),average(chosen,DEFENSE)],23)
-	stepper(self,"Player height","%d′ %d″"%[inches/12,inches%12],change_height,"Height")
+
+	var height:=roundi(chosen.height_cm/2.54)
+	var height_button:=action(self,"Height   %d ft %d in"%[height/12,height%12],edit_height,"EditHeight")
+	height_button.size_flags_horizontal=Control.SIZE_SHRINK_BEGIN
 	var row:=strip(self)
 	for i in range(sheet*6,mini(sheet*6+6,athletes.size())):
 		var card:=athlete_card(row,athletes[i],side,slot,true)
@@ -274,17 +302,50 @@ func player_board() -> void:
 		card.toggle_mode=true
 		card.set_pressed_no_signal(i==lineups[side][slot])
 		card.pressed.connect(pick_player.bind(i))
+		card.gui_input.connect(page_edge.bind(card,i))
 	stepper(self,"Roster page","%d / %d"%[sheet+1,ceili(athletes.size()/6.)],change_sheet,"Sheet")
+
+func edit_height() -> void:
+	var profile:Dictionary=athletes[lineups[side][slot]]
+	var dialog:=ConfirmationDialog.new()
+	dialog.title=str(profile.name)+" / Height"
+	add_child(dialog)
+	var form:=VBoxContainer.new()
+	dialog.add_child(form)
+	var value:=txt(form,"",19)
+	var slider:=HSlider.new()
+	slider.custom_minimum_size.x=260
+	slider.min_value=60
+	slider.max_value=84
+	slider.step=1
+	form.add_child(slider)
+	var units:=func(inches:float): value.text="%d ft %d in"%[int(inches)/12,int(inches)%12]
+	slider.value=roundi(profile.height_cm/2.54)
+	units.call(slider.value)
+	slider.value_changed.connect(units)
+	dialog.confirmed.connect(func():
+		profile.height_cm=slider.value*2.54
+		persist()
+		render("EditHeight"))
+	dialog.close_requested.connect(dialog.queue_free)
+	dialog.canceled.connect(dialog.queue_free)
+	dialog.popup_centered()
+	slider.grab_focus()
+
+func page_edge(event:InputEvent,card:Button,index:int) -> void:
+	var last:=mini(sheet*6+5,athletes.size()-1)
+	var direction:=0
+	if event.is_action_pressed("ui_right") and index==last: direction=1
+	if event.is_action_pressed("ui_left") and index==sheet*6: direction=-1
+	if direction==0 or athletes.size()<=6: return
+	card.accept_event()
+	sheet=posmod(sheet+direction,ceili(athletes.size()/6.))
+	var destination:=sheet*6 if direction==1 else mini(sheet*6+5,athletes.size()-1)
+	render("Candidate%d"%destination)
 
 func change_sheet(direction:int) -> void:
 	sheet=posmod(sheet+direction,ceili(athletes.size()/6.))
 	render("SheetNext" if direction>0 else "SheetPrev")
-
-func change_height(direction:int) -> void:
-	var p:Dictionary=athletes[lineups[side][slot]]
-	p.height_cm=clampi(roundi(p.height_cm/2.54)+direction,60,84)*2.54
-	persist()
-	render("HeightNext" if direction>0 else "HeightPrev")
 
 func pick_player(id:int) -> void:
 	var old:int=lineups[side][slot]
@@ -380,7 +441,8 @@ func change_points(direction:int) -> void:
 func randomize_selection() -> void:
 	match section:
 		0:
-			if slot>=0: pick_player(randi_range(0,athletes.size()-1))
+			if kit_side>=0: pick_color(randi_range(0,COLORS.size()-1))
+			elif slot>=0: pick_player(randi_range(0,athletes.size()-1))
 			elif picker>=0 and picker<sizes[side]:
 				slot=picker
 				pick_player(randi_range(0,athletes.size()-1))

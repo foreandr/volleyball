@@ -43,6 +43,8 @@ func open_page(target: String) -> void:
 
 func page(title: String, current: String) -> void:
 	route=current
+	for film in get_tree().get_nodes_in_group("menu_reel_surface"):
+		if is_ancestor_of(film): film.visible=(current!="Match setup")
 	MenuPresentation.return_page=current
 	for child in column.get_children():
 		column.remove_child(child)

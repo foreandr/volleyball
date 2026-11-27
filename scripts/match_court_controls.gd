@@ -11,6 +11,36 @@ var service:=preload("res://scripts/match_manual_serve.gd").new()
 var reception:=preload("res://scripts/match_manual_reception.gd").new()
 var load_block:=preload("res://scripts/tryout_squat.gd").new()
 var block_buffer:=-1.
+enum BlockCall { AUTO, LEFT, RIGHT, COMMIT, OFF }
+var block_call:=BlockCall.AUTO
+var middle_blocker:=-1
+var committed_flight:=-1
+var call_notice:=""
+var call_until:=-INF
+
+func call_block(button:int) -> void:
+	block_call={JOY_BUTTON_DPAD_LEFT:BlockCall.LEFT,JOY_BUTTON_DPAD_RIGHT:BlockCall.RIGHT,JOY_BUTTON_DPAD_UP:BlockCall.COMMIT,JOY_BUTTON_DPAD_DOWN:BlockCall.OFF}[button]
+	g.block_lane_flight[0]=-1
+	call_notice=["","Block left shoulder","Block right shoulder","Middle commit","No block"][block_call]
+	call_until=g.match_clock+1.
+
+func called_line(attacker_x:float) -> bool:
+	return (attacker_x<=0.)==(block_call==BlockCall.RIGHT)
+
+func middle_for_call() -> int:
+	if middle_blocker>=0: return middle_blocker
+	var best:=INF
+	for i in range(1,g.team_size):
+		var actor=g.players[i]
+		var position:String=preload("res://scripts/player_profile.gd").natural_position(actor.attributes)
+		var cost:=absf(actor.position.x)+.5*absf(3.42-actor.position.z)
+		if position in ["M1","M2"]: cost-=12.
+		if position=="Libero": cost+=15.
+		if cost<best:
+			best=cost
+			middle_blocker=i
+	return middle_blocker
+
 var owners:={}
 var modifiers:Array[int]=[]
 var lane:=-1
@@ -52,6 +82,10 @@ func clear_input() -> void:
 	set_jump=false
 
 func new_point() -> void:
+	block_call=BlockCall.AUTO
+	call_until=-INF
+	middle_blocker=-1
+	committed_flight=-1
 	clear_input()
 	reception.landing_actor=null
 	service.reset(g)
@@ -94,6 +128,9 @@ func handle(event:InputEvent) -> bool:
 	var mode:=context() if down else str(owners.get(button,""))
 	if down: owners[button]=mode
 	else: owners.erase(button)
+	if g.phase==g.Phase.LIVE and button in [JOY_BUTTON_DPAD_LEFT,JOY_BUTTON_DPAD_RIGHT,JOY_BUTTON_DPAD_UP,JOY_BUTTON_DPAD_DOWN]:
+		if down: call_block(button)
+		return true
 	if mode=="serve":
 		var face:=service.Camp.FACE.find(button)
 		if face>=0:
