@@ -211,3 +211,4 @@ Manual pass and mapped dig release targets lead the intended contact by 50 ms. T
 Receive CPU Serves shuffles jump topspin, jump float and both spin/float hybrids across each four-serve rotation.
 
 Manual ground movement ignores centered-stick drift and leaves long reception chases to CPU players. Hard-driven digs can shank outside the court.
+In Receive CPU Serves, topspin and hybrid serves seek gaps across the backcourt behind the attack line. The hitter picks one lateral and depth target inside zone six for each rally.

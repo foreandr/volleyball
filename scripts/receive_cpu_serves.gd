@@ -22,6 +22,7 @@ func switch_role() -> void:
 
 var serve_bag: Array[int]=[]
 const CPU_SERVES := [[0,0],[1,3],[0,3],[1,0]]
+var spike_target := Vector3.ZERO
 var cpu_serve := -1
 var cpu_style := -1
 var cpu_wait := 0.
@@ -85,7 +86,7 @@ func can_chase_reception() -> bool:
 	return control_digger
 
 func receiver_candidates() -> Array:
-	return [1]
+	return super.receiver_candidates() if control_digger else [1]
 
 func start_drill() -> void:
 	super.start_drill()
@@ -104,6 +105,7 @@ func next_serve() -> void:
 	receiver=1
 	receive_committed=false
 	cpu_wait=1.25
+	spike_target=Vector3(randf_range(-1.5,1.5),BallNet.RADIUS,BallNet.NET_Z-randf_range(3.7,8.85))
 	receive_held=false
 	pass_timing_ready=false
 	reception_release={}
@@ -118,6 +120,24 @@ func next_serve() -> void:
 	cpu_style=CPU_SERVES[cpu_serve][0]
 	spin_selection=CPU_SERVES[cpu_serve][1]
 	message.text="Ready"
+
+func scoring_target(_origin: Vector3) -> Vector3:
+	return spike_target
+
+func cpu_serve_target() -> Vector3:
+	var best := Vector3.ZERO
+	var best_space := -1.
+	# Spin serves and hybrids compare several landing lanes for open court.
+	var candidates := 1 if cpu_serve==1 else 4
+	for i in candidates:
+		var target := Vector3(randf_range(-4.45,4.45),.145,BallNet.NET_Z+randf_range(3.05,8.95))
+		var space := INF
+		for passer in passers:
+			space=minf(space,(target-passer.global_position).slide(Vector3.UP).length_squared())
+		if space>best_space:
+			best=target
+			best_space=space
+	return best
 
 func update_prompts(_next: String) -> void:
 	if prompt_phase=="receive": return
@@ -164,8 +184,7 @@ func _process(delta: float) -> void:
 		if phase=="serve_ready":
 			cpu_wait-=delta
 			if cpu_wait<=0. and pending_serve<0:
-				destination=active_stances[1]+Vector3(randf_range(-.45,.45),0.,1.)
-				destination.y=.145
+				destination=cpu_serve_target()
 				handle_serve_button(cpu_style,true)
 		elif phase=="serve_toss" and not is_finite(release_time) and serve_meter_error()>=-.01:
 			handle_serve_button(cpu_style,false)
