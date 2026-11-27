@@ -189,3 +189,4 @@ Before a serve in Serving Camp and Reception Test, LB and RB rotate the held bal
 In Reception Test the left pin walks into the approach during the pass and attacks deep zone six. The server can move into defense, hold A and release near platform contact to dig.
 During serve receive, hitters shuffle to a setup spot that varies each rep, then walk forward with the pass and carry their stride into the plant. In Reception Test, the incoming attack selects the defender’s assigned reception motion. The floor timing arc tracks the A release against the predicted contact.
 In Reception Test, attack speed scales the defender's preparation up to 1.8x. The assigned pose reaches its contact frame early and holds through the predicted arrival.
+In Reception Test, a serve outside all stationary contact maps triggers a ball-facing sprint shuffle toward a reachable assigned motion, including forward and backward coverage.

@@ -849,7 +849,7 @@ func step_serve_reception(shot,previous: Vector3,delta: float) -> void:
 		return
 	var incoming := (ball.position-previous)/maxf(.001,delta)
 	if flight_age<receive_at-.31:
-		move_receiver(passer,Vector3(predicted.x,.04,predicted.z+.52),delta)
+		move_receiver(passer,Vector3(predicted.x,.04,predicted.z+.52),delta,ball.global_position-passer.global_position,GroundControls.speed(true,true),true)
 		face_receive_ball(passer,ball.global_position,delta)
 		return
 	if not is_finite(platform.pressed_at):

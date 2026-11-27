@@ -10,6 +10,8 @@ var defense_contact := -INF
 const DIG_WINDOW := .095
 const DIG_PERFECT := .045
 var stance_points: Array[Vector3]=[]
+var chase_box := {}
+var chase_goal := Vector3.ZERO
 var active_stances: Array[Vector3]=[]
 var routed_zone := ""
 var boxes: Array[Dictionary]=[]
@@ -89,6 +91,7 @@ func move_libero_to_cover(_delta: float) -> void:
 	pass
 
 func plan_serve_reception(shot) -> void:
+	chase_box={}
 	routed_zone=""
 	received_spin_rps=shot.reception_spin_rps()
 	var finish: float=shot.planned_duration
@@ -126,6 +129,38 @@ func plan_serve_reception(shot) -> void:
 				return
 		previous=point
 
+	# The flight missed every stationary platform. Find the least travel needed
+	# to bring an assigned motion into the descending ball's path.
+	var best_cost := INF
+	for tick in range(1,steps+1):
+		var t := finish*tick/steps
+		var point: Vector3=shot.flight_point(t)
+		if point.z<=BallNet.NET_Z or point.y<.25: continue
+		for i in passers.size():
+			var home: Vector3=passers[i].global_position
+			var yaw := atan2(serve_station.x-home.x,serve_station.z-home.z)
+			var local := (point-home).rotated(Vector3.UP,-yaw)
+			for box in boxes:
+				var bounds: AABB=box.bounds
+				if local.y<bounds.position.y or local.y>bounds.end.y: continue
+				var center := bounds.get_center()
+				var offset := Vector3(local.x-center.x,0.,local.z-center.z)
+				var goal := home+offset.rotated(Vector3.UP,yaw)
+				if goal.z<BallNet.NET_Z+.20: continue
+				var travel := offset.length()
+				var spare: float= t-passers[i].reaction_seconds()-travel/GroundControls.speed(true,true)
+				var cost := travel+.5*absf(local.y-center.y)+12.*maxf(0.,.20-spare)
+				if cost>=best_cost: continue
+				best_cost=cost
+				chase_box=box
+				chase_goal=goal
+				receiver=i
+				receive_at=t
+	if not chase_box.is_empty():
+		map.set_intercept=shot.flight_point(receive_at)
+		map.feed_kmh=shot.velocity.length()*3.6
+
+
 func bind_contact_motion(mapper: Map,root: Node3D,actor: Node3D,home: Vector3,source: Vector3,best: Dictionary) -> Dictionary:
 	mapper.index=int(best.id)-1
 	mapper.legs=mapper.index
@@ -159,6 +194,18 @@ func bind_contact_motion(mapper: Map,root: Node3D,actor: Node3D,home: Vector3,so
 	return recipe
 
 func step_serve_reception(_shot,previous: Vector3,_delta: float) -> void:
+	if not chase_box.is_empty():
+		var actor := passers[receiver]
+		if flight_age<actor.reaction_seconds(): return
+		var parent := actor.get_parent_node_3d()
+		var before := actor.global_position
+		move_receiver(actor,parent.to_local(chase_goal),_delta,parent.to_local(ball.position)-actor.position,GroundControls.speed(true,true),true)
+		if before.distance_to(actor.global_position)>2.35*_delta: actor.stamina.spend(_delta*actor.stamina.SPRINT_DRAIN,"Sprint")
+		if actor.global_position.distance_to(chase_goal)>.14 or flight_age>receive_at+.10: return
+		map.incoming_lead_seconds=maxf(0.,receive_at-flight_age)
+		routed_zone=map.region_number(chase_box.cell,chase_box.part)
+		recipe=bind_contact_motion(map,anchor,actor,actor.global_position,serve_station,chase_box)
+		chase_box={}
 	if recipe.is_empty(): return
 	map.sample_receiver(recipe,clampf(recipe.contact+(flight_age-receive_at)*60.,0.,recipe.frames),true,map.legs)
 	if absf(flight_age-receive_at)>.24: return
