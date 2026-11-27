@@ -43,13 +43,13 @@ func apply(hitter: Node3D,attack_jump: Jump,phase: String,swing_time: float,cont
 	var airborne := smoothstep(0.,.12,attack_jump.elapsed-attack_jump.load_duration()) if attack_jump.active else 0.
 	var air_age := attack_jump.elapsed-attack_jump.load_duration()
 	var apex_offset := air_age-attack_jump.flight_duration(height,true)*.48
-	var drive := 0.0 if tip_shot or roll_shot else smoothstep(12.,32.,speed)
-	var turn_phase := apex_offset*lerpf(1.,1.65,drive)+.035*drive
+	var hardness := 0.0 if tip_shot or roll_shot else smoothstep(12.,32.,speed)
+	var turn_phase := apex_offset*lerpf(1.,1.65,hardness)+.035*hardness
 	var load_weight := airborne*(1.-smoothstep(-.14,.14,turn_phase))
 	var toward_feed := (source-hitter.global_position).slide(Vector3.UP).normalized()
 	var feed_local := hitter.global_basis.inverse()*toward_feed
 	# A right-handed hitter draws the striking shoulder back on either pin.
-	var opening := -deg_to_rad(lerpf(78.,34.,smoothstep(-.8,.8,feed_local.x)))*load_weight*lerpf(1.,1.12,drive)
+	var opening := -deg_to_rad(lerpf(78.,34.,smoothstep(-.8,.8,feed_local.x)))*load_weight*lerpf(1.,1.12,hardness)
 	var hip_turn := opening*.28
 	var twist := opening-hip_turn
 	var shot_origin := strike_point if phase=="spike" else endpoint
@@ -62,13 +62,13 @@ func apply(hitter: Node3D,attack_jump: Jump,phase: String,swing_time: float,cont
 		var carry := smoothstep(PALM_CONTACT,.27,swing_time-contact_swing_time)
 		if tip_shot: carry*=.18
 		if roll_shot: carry*=lerpf(.4,.65,roll_reach)
-		hip_turn+=heading*.30*carry
-		twist+=heading*.13*carry
+		hip_turn+=(heading*.30+deg_to_rad(24.)*hardness)*carry
+		twist+=(heading*.13+deg_to_rad(12.)*hardness)*carry
 	# Load the chest through the draw, then release the arch into the strike.
 	var draw_load := smoothstep(.055,attack_jump.flight_duration(height,true)*.48-.11,air_age)
 	draw_load *= 1.-smoothstep(-.11,.045,apex_offset)
 	var arch := (deg_to_rad(9.)*load_weight+deg_to_rad(11.)*draw_load)*spike_pike_scale
-	twist-=deg_to_rad(lerpf(18.,25.,drive))*draw_load
+	twist-=deg_to_rad(lerpf(18.,25.,hardness))*draw_load
 	author.rotate_world(pose,"spine_01",Vector3.RIGHT,-arch*.45)
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,-arch*.55)
 	author.rotate_world(pose,"spine_01",Vector3.UP,twist*.45)
@@ -89,13 +89,13 @@ func apply(hitter: Node3D,attack_jump: Jump,phase: String,swing_time: float,cont
 	var reach_length := float(hitter.height_cm)*.006
 	var net_angle := asin(clampf(clearance/reach_length,0.,1.))
 	var drive := smoothstep(9.,40.,speed) if not (roll_shot or tip_shot) else .12
-	var intensity := lerpf(.13,1.,drive)
+	var intensity := lerpf(.13,1.,maxf(drive,hardness))
 	var peak_time := lerpf(.235,.175,drive*(.55+.45*athleticism))
 	var pike := smoothstep(.015,peak_time,since_hit)*(1.-smoothstep(peak_time,.38,since_hit))
-	var chest_fold := minf(deg_to_rad(lerpf(26.,60.,athleticism))*spike_pike_scale,net_angle)*intensity*pike
+	var chest_fold := minf(deg_to_rad((lerpf(26.,60.,athleticism)+15.*hardness))*spike_pike_scale,net_angle)*intensity*pike
 	author.rotate_world(pose,"spine_01",Vector3.RIGHT,chest_fold*.65)
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,chest_fold*.35)
-	var leg_angle := minf(deg_to_rad(lerpf(24.,53.,athleticism))*spike_pike_scale,net_angle)*minf(1.,intensity*spike_pike_scale)
+	var leg_angle := minf(deg_to_rad((lerpf(24.,53.,athleticism)+12.*hardness))*spike_pike_scale,net_angle)*minf(1.,intensity*spike_pike_scale)
 	var heel_rise := smoothstep(2./60.,16./60.,air_age)
 	var knee_load := leg_weight*(1.-extension)
 	var lift_pose := knee_load
