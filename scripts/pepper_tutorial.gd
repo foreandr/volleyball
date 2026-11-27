@@ -22,6 +22,10 @@ func configure(host,readout:Label,completed:int) -> void:
 	score=clampi(completed,0,5)
 	var athletes:Array=host.rotation_drill.roster.duplicate()
 	for worker in host.rotation_drill.workers: athletes.append(worker.actor)
+	if demonstrating:
+		var human=athletes[0]
+		athletes[0]=athletes[8]
+		athletes[8]=human
 	for i in 4:
 		var receiver:Node3D=athletes[2*i]
 		var feeder:Node3D=athletes[2*i+1]
@@ -45,6 +49,26 @@ func configure(host,readout:Label,completed:int) -> void:
 	athletes[8].position=Vector3(-5.3,.04,2.)
 	feedback.text="%d / 5 passes"%score
 	if score==5: complete()
+
+func start_human_turn() -> void:
+	demonstrating=false
+	var pair:=pairs[0]
+	var demo:Node3D=pair.receiver
+	var human:Node3D=game.setter
+	var waiting:=human.position
+	human.transform=demo.transform
+	demo.position=waiting
+	demo.play_action("idle")
+	pair.receiver=human
+	human.play_action("forearm",0.)
+	human.animator.seek(CONTACT_POSE,true)
+	pair.platform=hands(human)
+	human.play_action("idle",.1)
+	pair.age=0.
+	pair.hit=false
+	pair.caught=false
+	pair.swing=false
+	pair.flying=false
 
 func hands(actor:Node3D) -> Vector3:
 	var physics=preload("res://scripts/gym_physics.gd")

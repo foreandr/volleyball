@@ -1,16 +1,18 @@
 extends "res://scripts/indoor_practice.gd"
 
 const MOMENTS := [preload("res://assets/menu/highlights/serve.ogv"),preload("res://assets/menu/highlights/dig.ogv"),preload("res://assets/menu/highlights/spike.ogv"),preload("res://assets/menu/highlights/block.ogv")]
-const WELCOME := "Welcome to tryouts. Around here, the first job is keeping the ball alive for somebody else. Start on the baseline. Find the left baseline marker. Hold focus and shuffle two complete laps around the net. After that, grab a partner for pepper."
+const WELCOME := "Welcome to tryouts. Around here, the first job is keeping the ball alive for somebody else. Start on the baseline. Watch the first runner. Run to the net, shuffle across, backpedal, then shuffle home. Twice. After that, grab a partner for pepper."
 var film:=VideoStreamPlayer.new()
 var shot:=0
 var captions:=VBoxContainer.new()
 var prompt:=HBoxContainer.new()
 var curtain:=ColorRect.new()
 var partner:Node3D
-const ROUTE := [Vector3(5.5,.04,-4.5),Vector3(-5.5,.04,-4.5),Vector3(-5.5,.04,5.3),Vector3(5.5,.04,5.3)]
+const ROUTE := [Vector3(4.35,.04,-4.5),Vector3(4.35,.04,3.4),Vector3(-4.35,.04,3.4),Vector3(-4.35,.04,-4.5)]
 var leg:=0
-var route_state:="approach"
+var queued:=false
+var watchers:Array=[]
+var idle_heads:Dictionary={}
 var marker:=MeshInstance3D.new()
 var pepper:=preload("res://scripts/pepper_tutorial.gd").new()
 var workout_label:Label
@@ -115,7 +117,7 @@ func training_prompt(entries:Array,keyboard:String) -> void:
 	else: Xbox.prompts(prompt,entries)
 
 func begin_run() -> void:
-	phase="footwork"
+	phase="footwork_demo"
 	film.hide()
 	captions.show()
 	leg=0
@@ -127,64 +129,98 @@ func begin_run() -> void:
 	camera.position=Vector3(0,6.,-10.)
 	camera.look_at(Vector3(0,.5,-.7))
 	ball.hide()
-	for i in rotation_drill.workers.size(): rotation_drill.workers[i].actor.position=Vector3(-6.7,.04,-3.5+i*1.05)
-	coach.position=Vector3(6.6,.04,-.3)
-	for i in range(1,rotation_drill.roster.size()):
-		rotation_drill.roster[i].position=Vector3(6.6,.04,1.+i)
-	var ring:=TorusMesh.new()
-	ring.inner_radius=.42
-	ring.outer_radius=.52
-	marker.mesh=ring
+	watchers=rotation_drill.roster.duplicate()
+	for worker in rotation_drill.workers: watchers.append(worker.actor)
+	for i in watchers.size():
+		var actor:Node3D=watchers[i]
+		actor.position=Vector3(4.35-i*1.05,.04,-5.55)
+		actor.rotation.y=atan2(-actor.position.x,5.)
+		actor.play_action("idle",0.)
+		actor.animator.advance(.1)
+		var rig:Skeleton3D=actor.skeleton
+		idle_heads[actor]=rig.get_bone_pose_rotation(rig.find_bone("Head"))
+	coach.position=Vector3(5.7,.04,.3)
+	partner.position=ROUTE[0]
+	partner.rotation.y=0.
+	var square:=BoxMesh.new()
+	square.size=Vector3(.98,.018,.98)
 	var mat:=StandardMaterial3D.new()
-	mat.albedo_color=Color("ffd364")
-	ring.material=mat
+	mat.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color=Color("48ff69")
+	square.material=mat
+	marker.mesh=square
 	world.add_child(marker)
-	if not shuffle_steps.has(setter): shuffle_steps[setter]=preload("res://scripts/directional_footwork.gd").new(setter)
+	for actor in [partner,setter]:
+		if not shuffle_steps.has(actor): shuffle_steps[actor]=preload("res://scripts/directional_footwork.gd").new(actor)
+	captions.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+	captions.offset_left=-360
+	captions.offset_right=360
+	captions.offset_top=34
+	workout_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+	prompt.alignment=BoxContainer.ALIGNMENT_CENTER
 	run_prompt()
 
 func run_prompt() -> void:
-	marker.position=ROUTE[(leg+1)%4] if route_state=="laps" else ROUTE[0]
-	workout_label.add_theme_font_size_override("font_size",28)
-	workout_label.text="Run to the left baseline marker"
-	match route_state:
-		"retry": workout_label.text="Lap broken   -   Return to the start"
-		"focus","back":
-			workout_label.text="KEEP HOLDING FOCUS" if route_state=="back" else "HOLD TO SHUFFLE"
-			training_prompt([["LT","Keep holding"],["View","Press Back / View"]] if route_state=="back" else [["LT","Hold to shuffle"]],"Hold Ctrl + press Backspace" if route_state=="back" else "Hold Ctrl")
-			return
-		"laps": workout_label.text="Lap %d of 2   -   %s"%[1+floori(leg/4.),["Shuffle across the baseline","Round the right post","Shuffle across the net","Return past the left post"][leg%4]]
-	training_prompt([["LT","Keep holding"]] if route_state=="laps" else [[JOY_BUTTON_LEFT_STICK,"Move"]],"Hold Ctrl" if route_state=="laps" else "WASD to move")
+	var segment:=leg%4
+	marker.position=ROUTE[(segment+1)%4]
+	workout_label.add_theme_font_size_override("font_size",30)
+	var heading:="Watch the runner" if phase=="footwork_demo" else "Lap %d of 2"%[1+floori(leg/4.)]
+	var cue:String=["Run here","Shuffle right along the net","Run backwards to the baseline","Shuffle left to the start"][segment]
+	workout_label.text=heading+"   /   "+cue
+	var hints:Array=[]
+	var keys:=""
+	if segment%2==1:
+		hints.append(["LT","Hold to shuffle"])
+		keys="Hold Ctrl to shuffle"
+	if phase=="footwork_demo":
+		if queued: workout_label.text+="   /   You're next"
+		else:
+			hints.append([JOY_BUTTON_A,"Go next"])
+			keys+="   Enter to go next"
+	training_prompt(hints,keys)
 
 func run_step(delta:float,direction:Vector3,focus:bool,sprinting:bool) -> void:
+	var demo:=phase=="footwork_demo"
+	var runner:Node3D=partner if demo else setter
 	var velocity:=direction.limit_length(1.)*GroundControls.speed(focus,sprinting)
-	setter.position+=velocity*delta
-	setter.position.x=clampf(setter.position.x,-6.,6.)
-	setter.position.z=clampf(setter.position.z,-5.,6.)
-	if focus: setter.play_action("idle",.14)
-	else: setter.play_travel_gait(velocity)
-	setter.animator.advance(delta)
-	GroundControls.shuffle(setter,shuffle_steps[setter],velocity,focus,delta)
-	if sprinting and velocity.length()>.1: setter.stamina.spend(delta*setter.stamina.SPRINT_DRAIN,"Sprint")
-	else: setter.stamina.recover(delta)
-	if route_state=="laps":
-		var closest:=Geometry3D.get_closest_point_to_segment(setter.position,ROUTE[leg%4],marker.position)
-		if (not focus and velocity.length()>.1) or setter.position.distance_to(closest)>.55:
+	runner.position+=velocity*delta
+	runner.position.x=clampf(runner.position.x,-4.65,4.65)
+	runner.position.z=clampf(runner.position.z,-4.9,3.65)
+	if focus: runner.play_action("idle",.14)
+	else: runner.play_travel_gait(velocity)
+	runner.animator.advance(delta)
+	GroundControls.shuffle(runner,shuffle_steps[runner],velocity,focus,delta)
+	if sprinting and velocity.length()>.1: runner.stamina.spend(delta*runner.stamina.SPRINT_DRAIN,"Sprint")
+	else: runner.stamina.recover(delta)
+	for actor:Node3D in watchers:
+		if actor==runner: continue
+		var local:=actor.to_local(runner.position)
+		var rig:Skeleton3D=actor.skeleton
+		var id:=rig.find_bone("Head")
+		var parent:=rig.get_bone_global_pose(rig.get_bone_parent(id)).basis.orthonormalized()
+		var turn:=Quaternion(parent.inverse()*Vector3.UP,clampf(atan2(local.x,local.z),-.92,.92))
+		rig.set_bone_pose_rotation(id,rig.get_bone_pose_rotation(id).slerp(turn*idle_heads[actor],1.-exp(-5.*delta)))
+	var line:=Geometry3D.get_closest_point_to_segment(runner.position,ROUTE[leg%4],marker.position)
+	if not demo and ((focus!=(leg%2==1) and velocity.length()>.1) or runner.position.distance_to(line)>.7):
+		leg=0
+		runner.position=ROUTE[0]
+	elif runner.position.distance_to(marker.position)<.3:
+		leg+=1
+		if demo and leg==4:
 			leg=0
-			route_state="retry"
-		elif setter.position.distance_to(marker.position)<.28:
-			leg+=1
-			if leg==8:
-				CareerSession.data.set_value(CareerSession.key(),"footwork_done",true)
-				CareerSession.checkpoint("pepper",0)
-				reception_brief()
-				return
-		else: return
-	else:
-		var next:=route_state
-		if setter.position.distance_to(ROUTE[0])<.38: next="back" if focus else "focus"
-		elif route_state in ["back","focus"]: next="approach"
-		if next==route_state: return
-		route_state=next
+			if queued:
+				partner.position=setter.position
+				partner.play_action("idle",.1)
+				setter.position=ROUTE[0]
+				setter.rotation.y=0.
+				phase="footwork"
+				coach_motion.whistle_cue.signal_drill(coach)
+		elif leg==8:
+			CareerSession.data.set_value(CareerSession.key(),"footwork_done",true)
+			CareerSession.checkpoint("pepper",0)
+			reception_brief()
+			return
+	else: return
 	run_prompt()
 
 func reception_brief() -> void:
@@ -213,11 +249,7 @@ func reception_brief() -> void:
 	fade.tween_property(curtain,"modulate:a",0.,.45)
 	fade.tween_interval(5.)
 	fade.tween_property(curtain,"modulate:a",1.,.4)
-	fade.tween_callback(func():
-		pair_up()
-		phase="demo"
-		pepper.demonstrating=true
-		workout_label.text="Reception demo   -   Watch the forearms meet the ball")
+	fade.tween_callback(pair_up)
 	fade.tween_property(curtain,"modulate:a",0.,.5)
 	fade.tween_callback(curtain.hide)
 
@@ -232,7 +264,14 @@ func pair_up() -> void:
 	camera.position=Vector3(0,5.8,-10.)
 	camera.look_at(Vector3(.7,1.,-.45))
 	training_prompt([[JOY_BUTTON_A,"Hold to receive"]],"Hold Space to receive")
+	pepper.demonstrating=CareerSession.progress()<5
 	pepper.configure(self,workout_label,CareerSession.progress())
+	if pepper.demonstrating:
+		phase="demo"
+		queued=false
+		prompt.show()
+		workout_label.text="Reception demo"
+		training_prompt([[JOY_BUTTON_A,"Go next"]],"Enter to go next")
 
 func finish_pepper() -> void:
 	phase="pepper_complete"
@@ -242,19 +281,25 @@ func _process(delta:float) -> void:
 	elapsed+=delta
 	if phase!="montage":
 		for seat in seats_in_use: seat.update()
-	if phase=="footwork":
+	if coach and coach_motion.whistle_cue.signal_time>=0.: coach_motion.whistle_cue.step_whistle(coach,delta)
+	if phase in ["footwork","footwork_demo"]:
+		marker.mesh.material.albedo_color=Color("168239").lerp(Color("73ff78"),.5+.5*cos(elapsed*5.))
+	if phase=="footwork_demo":
+		run_step(delta,partner.position.direction_to(marker.position),leg%2==1,false)
+	elif phase=="footwork":
 		var stick:=Vector2(axis(JOY_AXIS_LEFT_X),axis(JOY_AXIS_LEFT_Y))
 		if stick.length()<.15: stick=Vector2.ZERO
 		stick+=Vector2(float(Input.is_physical_key_pressed(KEY_D))-float(Input.is_physical_key_pressed(KEY_A)),float(Input.is_physical_key_pressed(KEY_S))-float(Input.is_physical_key_pressed(KEY_W)))
 		run_step(delta,Vector3(-stick.x,0,-stick.y),GroundControls.focus(axis),GroundControls.sprint(axis))
 	elif phase in ["pepper","demo"]:
 		pepper.tick(delta)
-		if phase=="demo" and pepper.pairs[0].caught and pepper.pairs[0].age>=2.95:
-			phase="demo_ready"
+		if phase=="demo" and queued and pepper.pairs[0].age>=2.95:
+			pepper.start_human_turn()
+			phase="pepper"
 			prompt.show()
-			training_prompt([[JOY_BUTTON_A,"Play"]],"Enter to play")
-	if phase=="footwork":
-		workout_label.modulate=Color.WHITE.lerp(Color("ffcc58"),.5+.5*sin(elapsed*5.)) if route_state in ["focus","back"] else Color.WHITE
+			coach_motion.whistle_cue.signal_drill(coach)
+			workout_label.text="%d / 5 passes"%pepper.score
+			training_prompt([[JOY_BUTTON_A,"Hold to receive"]],"Hold Space to receive")
 	if coach and coach.has_meta("coach_face"):
 		var talking:=(phase=="welcome" and elapsed<8.) or phase=="gather"
 		coach.get_meta("coach_face").set_shader_parameter("shout",(.24+.18*sin(elapsed*19.)) if talking else 0.)
@@ -264,21 +309,12 @@ func _process(delta:float) -> void:
 		training_prompt([[JOY_BUTTON_A,"Start practice"]],"Enter to start practice")
 
 func _input(event:InputEvent) -> void:
-	if phase=="footwork" and route_state=="back" and GroundControls.focus(axis) and ((event is InputEventJoypadButton and event.button_index==JOY_BUTTON_BACK and event.pressed) or (event is InputEventKey and event.keycode==KEY_BACKSPACE and event.pressed)):
-		route_state="laps"
-		run_prompt()
-		get_viewport().set_input_as_handled()
-	elif phase=="demo_ready" and event.is_action_pressed("ui_accept"):
-		pepper.demonstrating=false
-		var pair:Dictionary=pepper.pairs[0]
-		pair.age=0.
-		pair.caught=false
-		pair.hit=false
-		pair.swing=false
-		pair.flying=false
-		phase="pepper"
-		workout_label.text="0 / 5 passes"
-		training_prompt([[JOY_BUTTON_A,"Hold to receive"]],"Hold Space to receive")
+	if phase in ["footwork_demo","demo"] and event.is_action_pressed("ui_accept"):
+		queued=true
+		if phase=="footwork_demo": run_prompt()
+		else:
+			workout_label.text="Reception   /   You're next"
+			prompt.hide()
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("ui_accept") and phase=="ready":
 		get_viewport().set_input_as_handled()
