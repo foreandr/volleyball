@@ -27,6 +27,9 @@ var moving:=false
 const FIVE_MIN:=Vector2(.65,-2.45)
 const FIVE_MAX:=Vector2(3.85,1.45)
 const FIVE_HOME:=preload("res://scripts/player_ground_controls.gd").BACK_LEFT
+var support_jump:=preload("res://scripts/setter_jump.gd").new()
+const PIN_DURATION:=1.25*sqrt(.70)
+const PIN_RISE:=9.81*PIN_DURATION*PIN_DURATION/8.
 var final_deposit:=false
 var cart_service:=preload("res://scripts/reception_cart_service.gd").new()
 const SETTER_TWO_AND_HALF:=Vector3(-1.5,.04,2.85)
@@ -119,9 +122,11 @@ func configure(host,readout:Label,completed:int) -> void:
 
 func projected_landing(pair:Dictionary) -> Vector3:
 	if pair.has("pin_end"):
-		return preload("res://scripts/ball_landing_marker.gd").parabola(pair.return_end,pair.pin_end,1.15,1.65)
+		return preload("res://scripts/ball_landing_marker.gd").parabola(pair.return_end,pair.pin_end,PIN_DURATION,PIN_RISE)
 	if not pair.flying or pair.ball.position.y<=.15: return Vector3.INF
 	var marker=preload("res://scripts/ball_landing_marker.gd")
+	if moving and (not pair.caught or not pair.hit):
+		return pair.origin.lerp(pair.platform,float(pair.floor_u))
 	if not pair.caught or not pair.hit:
 		return marker.parabola(pair.origin,pair.platform,pair.flight_time,pair.toss_rise)
 	if not pair.has("return_end"): return Vector3.INF
@@ -142,7 +147,10 @@ func plan_return(pair:Dictionary,timing:float) -> void:
 	var spread:=Accuracy.spread(timing,pair.mapper.feed_kmh/3.6,0.,pass_skill(pair),false)
 	var miss:=Accuracy.sample_offset(spread)
 	pair.return_end=target+miss.slide(Vector3.UP)
-	if moving: pair.catch_stance=pass_target.position+miss.slide(Vector3.UP)
+	if moving:
+		pair.return_end.y+=.50
+		target.y+=.50
+		pair.catch_stance=pass_target.position+miss.slide(Vector3.UP)
 	var peak:=maxf(maxf(pair.contact_point.y,target.y)+.15,Accuracy.IDEAL_APEX+miss.y)
 	var duration:=sqrt(2.*(peak-pair.contact_point.y)/9.81)+sqrt(2.*(peak-target.y)/9.81)
 	pair.rise=9.81*duration*duration/8.
@@ -403,6 +411,9 @@ func walk_rotation(actor:Node3D,destination:Vector3,dt:float) -> bool:
 	return false
 
 func advance_support_setter(pair:Dictionary,delta:float) -> void:
+	if support_jump.active:
+		support_jump.step(pass_target,delta,Vector2.ZERO)
+		return
 	var goal:=pass_target.position
 	if not pair.flying:
 		goal=SETTER_TWO_AND_HALF
@@ -424,7 +435,7 @@ func tick(delta:float) -> void:
 		if moving: advance_support_setter(pair,delta)
 		if final_deposit:
 			move_off_turn(delta)
-			if cart_service.busy(delta): return
+			if cart_service.stage=="deposit" and cart_service.busy(delta): return
 			finished=true
 			game.start_setting_lesson()
 			return
@@ -561,11 +572,15 @@ func tick(delta:float) -> void:
 						var dt_set:float=t-pair.contact_age-sqrt(8.*float(pair.rise)/9.81)
 						var pin:Vector3=hands(pin_collector)
 						Ground.face(pass_target,pin-pass_target.position,delta)
+						if dt_set>=-.39 and dt_set<0. and not pair.has("jumped"):
+							pair.jumped=true
+							support_jump.begin_set_jump(pass_target,.10,.50)
+							support_jump.release()
 						if dt_set>-.35:
 							game.Hands.standing_set(pass_target,pair.return_end,pin-pair.return_end,(pin-pair.return_end+Vector3.UP*7.).normalized(),dt_set,smoothstep(-.35,0.,dt_set))
 						if dt_set>=0.:
 							if not pair.has("pin_end"): pair.pin_end=pin
-							orb.position=game.arc(pair.return_end,pair.pin_end,clampf(dt_set/1.15,0.,1.),1.65)
+							orb.position=game.arc(pair.return_end,pair.pin_end,clampf(dt_set/PIN_DURATION,0.,1.),PIN_RISE)
 				elif moving:
 					var fall:float=minf(pair.floor_u,(t-FEED)/pair.flight_time)
 					orb.position=pair.origin.lerp(pair.platform,fall)+Vector3.UP*4.*float(pair.toss_rise)*fall*(1.-fall)
@@ -620,6 +635,7 @@ func tick(delta:float) -> void:
 			pair.swing=false
 			pair.flying=false
 			pair.erase("pin_end")
+			pair.erase("jumped")
 			pair.erase("follow_heading")
 			pair.erase("release_pose")
 			if moving and demonstrating and not pair.has("outgoing"): pair.reset_to_five=true

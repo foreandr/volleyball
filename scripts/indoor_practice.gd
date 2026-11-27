@@ -1763,7 +1763,13 @@ func late_contact_limit() -> float:
 
 func toss_in_reach() -> bool:
 	if first_contact>=0 or automatic_setter(): return true
-	if elapsed>contact_time and ball.position.y<extended_receive_point().y-.10: return false
+	# A descending ball can already be below the extended fingertips on the
+	# frame of a green release. Test the swept path past the moving pocket.
+	var pocket:=catch_pocket()
+	var previous:=toss_at(maxf(0.,elapsed-.12))
+	var nearest_ball:=Geometry3D.get_closest_point_to_segment(pocket,previous,ball.position) if not previous.is_equal_approx(ball.position) else ball.position
+	if absf(release_offset())<=timing_window() and nearest_ball.distance_to(pocket)<=.78: return true
+	if elapsed>contact_time and ball.position.y<pocket.y-.28: return false
 	var arrival := toss_at(contact_time)
 	var head := Contact.joint(setter,"Head")
 	if jump.active: head+=jump.horizontal_velocity()*clampf(contact_time-elapsed,0.,.24)

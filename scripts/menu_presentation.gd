@@ -633,4 +633,4 @@ func load_scene(path: String) -> void:
 		push_error("Could not open "+path+": "+error_string(error))
 		loading_detail.text = "Could not open this destination"
 		await get_tree().create_timer(1.5).timeout
-	close_loading(key != "offline_match")
+	close_loading(key not in ["offline_match","career_setting_lesson","career_hitting_lesson"])
