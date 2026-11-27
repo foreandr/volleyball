@@ -12,7 +12,7 @@
   {"id": 11, "kind": "dive", "side": 0.26, "drop": 0.4, "forward": 0.65, "lean": 30, "contact": 42, "frames": 122},
   {"id": 12, "kind": "wide_dive", "side": 0.78, "drop": 0.4, "forward": 0.56, "lean": 29, "contact": 42, "frames": 122},
   {"id": 13, "kind": "pancake", "side": 0.15, "drop": 0.5, "forward": 0.86, "lean": 37, "contact": 42, "frames": 122},
-  {"id": 14, "kind": "lunge", "side": 0.46, "drop": 0.264, "forward": 0.494, "lean": 39, "contact": 49, "frames": 141},
+  {"id": 14, "kind": "lunge", "reach_shoulder_drop_deg": 22, "chin_tuck_deg": 14, "side": 0.46, "drop": 0.264, "forward": 0.494, "lean": 39, "contact": 49, "frames": 141},
   {"id": 15, "kind": "wide", "side": 0.499, "drop": 0.224, "forward": 0.356, "lean": 30, "contact": 49, "frames": 141},
   {"id": 16, "kind": "knee", "side": 0.172, "drop": 0.376, "forward": 0.333, "lean": 36, "contact": 49, "frames": 141},
   {"id": 17, "kind": "straight", "side": 0.039, "drop": 0.096, "forward": 0.081, "lean": 14, "contact": 49, "frames": 141},

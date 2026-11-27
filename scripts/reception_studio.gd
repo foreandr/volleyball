@@ -949,6 +949,9 @@ func pose_receiver(c: Dictionary,f: float,active: bool,motion_legs: int) -> void
 		var world_across := (rig.global_basis*shoulder_line).normalized()
 		var offset := (set_intercept-rig.to_global(mid)).dot(world_across)
 		var drop := float(c.get("left_shoulder_drop_deg",signf(offset)*20.*smoothstep(.04,.50,absf(offset))))
+		if c.has("reach_shoulder_drop_deg"):
+			var lateral := absf(defenders[receiving].to_local(set_intercept).x)
+			drop=float(c.reach_shoulder_drop_deg)*smoothstep(.15,.85,lateral)
 		var roll_axis := shoulder_line.cross(Vector3.DOWN).normalized()
 		var local_axis := (rig.get_bone_global_pose(chest_id).basis.inverse()*roll_axis).normalized()
 		rig.set_bone_pose_rotation(chest_id,rig.get_bone_pose_rotation(chest_id)*Quaternion(local_axis,deg_to_rad(drop)*blend))
@@ -1486,7 +1489,7 @@ func save_selection() -> void:
 	StorySession.save_options()
 
 func region_parts(address: Vector3i) -> int:
-	if address==REGION_24: return 3
+	if address==REGION_24: return 4
 	if address==REGION_22: return 8
 	if address==REGION_23: return 0
 	if halves_only(address): return 2
@@ -1517,7 +1520,7 @@ func depth_split(address: Vector3i) -> bool:
 	return address==Vector3i(1,1,1) or address==Vector3i(1,2,2)
 
 func region_suffix(address: Vector3i,part: int) -> String:
-	if address==REGION_24: return [".top",".bottom.near",".bottom.far"][part]
+	if address==REGION_24: return [".top.near",".bottom.near",".bottom.far",".top.far"][part]
 	if address==REGION_22: return [".top.left.far",".bottom.left.near",".bottom.right.left",".bottom.left.far",".top.left.near",".top.right.left",".top.right.right",".bottom.right.right"][part]
 	if address==REGION_23: return [".back.top",".front.top",".back.bottom",".front.bottom"][part]
 	if depth_split(address):
@@ -1530,7 +1533,7 @@ func region_number(address: Vector3i,part: int) -> String:
 
 func region_size(address: Vector3i,part: int) -> Vector3:
 	if address==REGION_22: return CELL_SIZE*Vector3(.5,.5,1.)
-	if address==REGION_24: return CELL_SIZE*Vector3(1. if part==0 else .5,.5,1.)
+	if address==REGION_24: return CELL_SIZE*Vector3(.5,.5,1.)
 	if address==REGION_23: return CELL_SIZE*Vector3(1.,.5,.5)
 	if halves_only(address): return CELL_SIZE*Vector3(1.,.5,1.)
 	if depth_split(address): return CELL_SIZE*Vector3(.5,.5,.5)
@@ -1544,8 +1547,8 @@ func region_center(address: Vector3i,part: int,subdivide := true) -> Vector3:
 			center.y+=(.25 if part in [0,4,5,6] else -.25)*CELL_SIZE.y
 			center.x+=[-.75,-.25,.25,-.75,-.25,.25,.75,.75][part]*CELL_SIZE.x
 	elif address==REGION_24 and subdivide:
-		center.y+=(.25 if part==0 else -.25)*CELL_SIZE.y
-		center.x+=[0.,-.25,.25][part]*CELL_SIZE.x
+		center.y+=(.25 if part in [0,3] else -.25)*CELL_SIZE.y
+		center.x+=(-.25 if part in [0,1] else .25)*CELL_SIZE.x
 	elif halves_only(address) and subdivide:
 		center.y+=(.25 if part==0 else -.25)*CELL_SIZE.y
 	elif is_subdivided(address) and subdivide:
@@ -1565,11 +1568,12 @@ func assigned_action(address: Vector3i,part: int) -> int:
 			return int(StorySession.game_options.get_value("studio_three_rows",child_key))
 		if address==REGION_22:
 			if part in [2,7]: return 72
+			if part==4: return 14
 			var parent_suffix := ".top" if part in [0,4,5,6] else (".bottom.left" if part in [1,3] else ".bottom.right")
 			return int(StorySession.game_options.get_value("studio_three_rows",Regions.key(address)+parent_suffix,72 if part==1 else 0))
 		if address==REGION_24:
 			if part in [1,2]: return assigned_action(REGION_22,1 if part==1 else 3)
-			return int(StorySession.game_options.get_value("studio_three_rows",Regions.key(address),0))
+			return int(StorySession.game_options.get_value("studio_three_rows",Regions.key(address)+".top",assigned_action(REGION_22,4 if part==0 else 0)))
 		if address==Vector3i(1,2,2):
 			if part<2: return 79
 			var parent_key := Regions.key(address)+"."+str(part%4+1)
