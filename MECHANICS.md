@@ -181,3 +181,4 @@ Zones 10 and 12 use mirrored Legs 21 forearm passes. The receiver reads an earli
 Both upper-right sections of the combined 22-23 zone use Legs 04 for forearm reception.
 Zone 14 uses Legs 04 with the early forearm intercept on both depth halves. Upper quadrants 14.1 and 14.2 add a grounded backward two-step with a lower hand target. Lower quadrants 14.3 and 14.4 meet the ball from the ground.
 Jump floats load the legs and torso before contact and pike through the follow-through with a firm striking wrist.
+Reception Test and Reception Studio share region assignments, mirrored poses, lead feet and saved receiver positions. Zones 1 through 6 have no default assignment. In the test the first assigned region on the serve path wins, with the closer receiver taking simultaneous overlaps. The three receivers use the studio forearm and overhead motions.

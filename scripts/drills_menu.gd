@@ -6,7 +6,7 @@ const CATEGORIES := {
 	"Passing": [{"title":"Pass to Target","scene":"res://scenes/story_animations.tscn"}],
 	"Setting": [{"title":"Set to Target","scene":"res://scenes/setting_camp.tscn"}],
 	"Attacking": [{"title":"Approach and Spike","scene":"res://scenes/attacking_camp.tscn"},{"title":"Butterfly"}],
-	"Serving": [{"title":"Serve and Receive","scene":"res://scenes/serving_camp.tscn"},{"title":"Spin Serve"}],
+	"Serving": [{"title":"Reception Test","scene":"res://scenes/serve_reception_test.tscn"},{"title":"Serve and Receive","scene":"res://scenes/serving_camp.tscn"},{"title":"Spin Serve"}],
 	"Digging": [{"title":"Dig from Five","scene":"res://scenes/digging_camp.tscn"},{"title":"Reception Animation Studio","scene":"res://scenes/reception_studio.tscn"}],
 	"Blocking": [{"title":"Block at the Net","scene":"res://scenes/blocking_camp.tscn"}],
 }
