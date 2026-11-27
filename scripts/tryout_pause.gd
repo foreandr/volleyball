@@ -34,6 +34,9 @@ func configure(host: Node, layer: Node = null) -> void:
 	MenuPresentation.section_label(home,"Paused")
 	home.add_theme_constant_override("separation",8)
 	primary = bar(home,"Resume",hide)
+	if game.has_method("can_take_timeout"):
+		var timeout_button:=bar(home,"Team timeout   /   30 sec",func(): game.take_timeout(); hide())
+		visibility_changed.connect(func(): if visible: timeout_button.disabled=not game.can_take_timeout())
 	options_button = bar(home,"Options",open_options)
 	if practice and game.scene_file_path.ends_with("_camp.tscn") and "solo_setting" in game and game.solo_setting:
 		bar(home,"Sliders",open_sliders)

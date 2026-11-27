@@ -201,6 +201,7 @@ static func apply(actor: Node3D,coach: bool,variant := 0,vary_build := true) -> 
 		style_hair(actor,scalp,variant)
 		preload("res://scripts/player_kit_choices.gd").apply(actor)
 
+	if not coach: actor.refresh_kit()
 	reshape_build(rig,coach,variant)
 	if outer_shirt: actor.dressed_surface.configure(outer_shirt,rig)
 
@@ -369,7 +370,7 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 	var skin := ShaderMaterial.new()
 	var cut := Shader.new()
 	cut.code = """shader_type spatial;
-	uniform sampler2D muscles:hint_normal; uniform sampler2D roughness_map; uniform float hem_y; uniform sampler2D skin_map:source_color; varying float y;
+	uniform vec4 skin_tint:source_color=vec4(1.); uniform sampler2D muscles:hint_normal; uniform sampler2D roughness_map; uniform float hem_y; uniform sampler2D skin_map:source_color; varying float y;
 	uniform vec2 knee_flex;
 	uniform vec2 calf_load;
 	uniform vec2 padded;
@@ -392,7 +393,7 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		float width=mix(.0035,.0075,bend);
 		return max(1.-smoothstep(.0015,width,line),.72*(1.-smoothstep(.001,width*.8,lower_line)));
 	}
-	uniform int ankle_support; uniform int knee_support; uniform ivec2 knee_override=ivec2(0); varying flat int knee_kind; uniform float tights_hem = 2.; uniform vec4 sock_color:source_color;
+	uniform int ankle_support; uniform int knee_support; uniform ivec2 ankle_options; uniform ivec2 calf_options; uniform ivec2 quad_options; varying flat int ankle_kind; varying flat int calf_kind; varying flat int quad_kind; uniform ivec2 knee_override=ivec2(0); varying flat int knee_kind; uniform float tights_hem = 2.; uniform vec4 sock_color:source_color;
 	uniform float sock_top; uniform vec4 sock_trim:source_color; uniform float striped;
 	uniform vec4 pad_color:source_color;
 	varying vec3 anatomy;
@@ -410,6 +411,7 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		y=UV2.y;
 		float flex=UV2.x>0.?knee_flex.x:knee_flex.y;
 		float k=y-knee_height;
+		int ankle=UV2.x>0.?ankle_options.x:ankle_options.y; ankle_kind=ankle==0?ankle_support:ankle-1; calf_kind=UV2.x>0.?calf_options.x:calf_options.y; quad_kind=UV2.x>0.?quad_options.x:quad_options.y;
 		int selected_knee=UV2.x>0.?knee_override.x:knee_override.y;
 		knee_kind=selected_knee==0?knee_support:max(0,selected_knee-2);
 		float enabled=selected_knee>0 ? (selected_knee==2?1.:0.) : knee_support==0 ? (UV2.x>0.?padded.x:padded.y) : 0.;
@@ -425,15 +427,16 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		// Compress the sock inside the heel cup and release it above the collar.
 		float inside_shoe=1.-smoothstep(.064,.117,y);
 		float rolled_edge=pad*smoothstep(.073,.079,abs(k))*(1.-smoothstep(.083,.091,abs(k)));
-		float ankle_shell=ankle_support==2 ? .0045*(1.-smoothstep(.043,.061,abs(y-.148))) : 0.;
+		float ankle_shell=ankle_kind==2 ? .0045*(1.-smoothstep(.043,.061,abs(y-.148))) : 0.;
 		float knee_shell=knee_kind==2 ? .006*(1.-smoothstep(.078,.099,abs(k))) : 0.;
 		VERTEX+=NORMAL*(ankle_shell+knee_shell+pad*.005+rolled_edge*.003+foam*.018+sock*.002-inside_shoe*.012);
 		anatomy=vec3(abs(UV2.x),y,COLOR.r);
 		loads=vec2(flex,UV2.x>0.?calf_load.x:calf_load.y);
 	}
-	void fragment(){if(y>hem_y+.055 || y<.070)discard; ALBEDO=texture(skin_map,UV).rgb; NORMAL_MAP=texture(muscles,UV).rgb; NORMAL_MAP_DEPTH=.68; ROUGHNESS=mix(.42,.86,texture(roughness_map,UV).r);
+	void fragment(){if(y>hem_y+.055 || y<.070)discard; ALBEDO=texture(skin_map,UV).rgb*skin_tint.rgb; NORMAL_MAP=texture(muscles,UV).rgb; NORMAL_MAP_DEPTH=.68; ROUGHNESS=mix(.42,.86,texture(roughness_map,UV).r);
 		float yarn=.5+.5*cos(y*1250.)*(1.-smoothstep(.0007,.003,fwidth(y)));
 		float tights=smoothstep(tights_hem,tights_hem+.004,y);
+		int segment=y>knee_height?quad_kind:calf_kind; if(segment>0) tights=segment==2?smoothstep(.14,.16,y):0.;
 		if(tights>.0){ ALBEDO=mix(ALBEDO,vec3(.032,.040,.052)*(.96+.04*yarn)*(1.-.18*(1.-smoothstep(.004,.010,y-tights_hem))),tights); NORMAL_MAP_DEPTH=.12; ROUGHNESS=.87; }
 		float sock_mask=1.-smoothstep(sock_top,sock_top+.003,y);
 		float pad_mask=enabled_side*(1.-smoothstep(.087,.091,abs(y-knee_height)));
@@ -489,7 +492,7 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		ALBEDO=mix(ALBEDO,pad_color.rgb*cover,pad_mask);
 		float support=0.;
 		for(int joint=0;joint<2;joint++){
-			int kind=joint==0?ankle_support:knee_kind;
+			int kind=joint==0?ankle_kind:knee_kind;
 			if(kind==0) continue;
 			float t=(y-(joint==0?.148:knee_height))/(joint==0?.056:.094);
 			float wrap=abs(t+.25*cos(angle));
@@ -681,7 +684,7 @@ static func face_hair(rig: Skeleton3D,body: MeshInstance3D,mesh: ArrayMesh,coach
 		float fibers=cos(comb)*(1.-smoothstep(.9,3.,fwidth(comb)));
 		float edge_height=p.y-line+.0028*fibers;
 		float growth=smoothstep(-.006,.020,edge_height);
-		bool scalp=growth>grain;
+		bool scalp=gray && growth>grain;
 		float edge=1.632+.020*smoothstep(.04,.078,abs(p.x));
 		float cheek=smoothstep(-.005,.009,edge-p.y);
 		float taper=smoothstep(1.551,1.566,p.y)*smoothstep(.005,.018,p.z);
@@ -759,7 +762,26 @@ static func style_hair(actor:Node3D,scalp:Node3D,variant:int) -> void:
 	var selected:=preload("res://scripts/player_profile.gd").HAIRSTYLES.find(choice)
 	haircut(cut,color,variant if selected<=0 else selected+5 if selected>=9 else selected-1,actor)
 
+static var skull_surface:TriangleMesh
+
+static func scalp_surface() -> TriangleMesh:
+	if skull_surface==null:
+		var faces:=preload("res://assets/characters/volleyball/body.res").get_faces()
+		var crown:=PackedVector3Array()
+		for i in range(0,faces.size(),3):
+			if minf(faces[i].y,minf(faces[i+1].y,faces[i+2].y))>1.66:
+				crown.append(faces[i])
+				crown.append(faces[i+1])
+				crown.append(faces[i+2])
+		skull_surface=TriangleMesh.new()
+		skull_surface.create_from_faces(crown)
+	return skull_surface
+
 static func haircut(scalp: Node3D,color: Color,variant: int,actor: Node3D) -> void:
+	var surface:=scalp_surface()
+	var rig:Skeleton3D=actor.skeleton
+	var head:=rig.get_bone_global_rest(rig.find_bone("Head")).origin
+	var skull_center:=head+Vector3(0,.13,-.012)
 	var style := variant%7
 	var parting := sin(variant*2.39996)*.46
 	var tool := SurfaceTool.new()
@@ -775,7 +797,9 @@ static func haircut(scalp: Node3D,color: Color,variant: int,actor: Node3D) -> vo
 		var a := rng.randf()*TAU
 		var radial := sqrt(1.-y*y)
 		var normal := Vector3(radial*cos(a),y,radial*sin(a))
-		var root := Vector3(.084*normal.x,.134+.074*y,-.013+.093*normal.z)
+		var root := Vector3(.081*normal.x,.130+.071*y,-.012+.089*normal.z)
+		var contact:=surface.intersect_segment(skull_center+normal*.16,skull_center)
+		if not contact.is_empty(): root=Vector3(contact.position)-head-normal*.003
 		var comb := Vector3(parting,-.35,-.95)
 		var length_factor := 1.
 		var crown := smoothstep(.22,.86,y)

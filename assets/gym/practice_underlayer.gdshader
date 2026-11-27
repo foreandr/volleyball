@@ -2,6 +2,7 @@ shader_type spatial;
 render_mode cull_disabled;
 uniform sampler2D skin_map : source_color;
 uniform sampler2D skin_normal : hint_normal;
+uniform vec4 skin_tint:source_color=vec4(1.);
 uniform float sleeve_end;
 uniform vec2 shoulder_ends=vec2(-1.);
 varying vec3 bind;
@@ -21,7 +22,7 @@ void fragment(){
 		ALBEDO=mix(vec3(.032,.042,.048),vec3(.017,.023,.030),cuff)*(.98+.035*rib);
 		ROUGHNESS=.81;
 	}else{
-		ALBEDO=texture(skin_map,UV).rgb;
+		ALBEDO=texture(skin_map,UV).rgb*skin_tint.rgb;
 		NORMAL_MAP=texture(skin_normal,UV).rgb;
 		NORMAL_MAP_DEPTH=.65;
 		ROUGHNESS=.83;

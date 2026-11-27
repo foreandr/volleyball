@@ -184,7 +184,7 @@ func apply_profile(profile: Dictionary) -> void:
 	var values := Profile.clean(profile)
 	attributes = values.duplicate()
 	var rules:=Profile.build_rules(values)
-	for stat in rules: attributes[stat]=Profile.effective_skill(values,stat,rules)
+	for stat in Profile.RATINGS: attributes[stat]=Profile.effective_skill(values,stat,rules)
 	if body_skin: body_skin.normal_scale=lerpf(.055,.85,smoothstep(30.,95.,float(values.Athleticism)))
 	stamina.set_ratings(values.Stamina,values.Endurance,values.Willpower)
 	refresh_kit()
@@ -194,6 +194,10 @@ func apply_profile(profile: Dictionary) -> void:
 	handedness = values.handedness
 
 func refresh_kit() -> void:
+	var tint:Color=Profile.SKIN_TONES[attributes.get("Skin tone","Light")]
+	if body_skin: body_skin.albedo_color=tint
+	if leg_skin: leg_skin.set_shader_parameter("skin_tint",tint)
+	if has_meta("underlayer_material"): get_meta("underlayer_material").set_shader_parameter("skin_tint",tint)
 	if has_meta("kit_scalp"):
 		preload("res://scripts/practice_kit.gd").style_hair(self,get_meta("kit_scalp"),get_meta("kit_variant",0))
 		preload("res://scripts/player_kit_choices.gd").apply(self)

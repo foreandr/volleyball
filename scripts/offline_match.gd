@@ -28,6 +28,7 @@ func _ready() -> void:
 	var config:Dictionary=StorySession.match_preference("exhibition",{})
 	add_child(world)
 	var where:=clampi(config.get("venue",0),0,2)
+	if StorySession.career_scrimmage and CareerSession.EVENTS.has(CareerSession.tournament): where=CareerSession.EVENTS[CareerSession.tournament][1]
 	var court=Venue.build(world,where,clampi(config.get("crowd",16),0,96))
 	build_officials(court)
 	world.add_child(camera)
@@ -142,8 +143,19 @@ func build_hud() -> void:
 func restart_activity() -> void:
 	MenuPresentation.load_scene(scene_file_path)
 
+var timeouts_left:=2
+
+func can_take_timeout() -> bool:
+	return authorized and timeouts_left>0 and game.phase in [game.Phase.READY,game.Phase.DEAD] and not game.replay.active
+
+func take_timeout() -> void:
+	if not can_take_timeout(): return
+	timeouts_left-=1
+	for athlete in game.players: athlete.stamina.recover(30.)
+
 func leave_match() -> void:
 	if StorySession.career_scrimmage:
+		CareerSession.tournament=""
 		StorySession.career_scrimmage=false
 		StorySession.guided_scrimmage=false
 		MenuPresentation.load_scene("res://scenes/story.tscn")

@@ -2,6 +2,7 @@ extends "res://scripts/preview_court.gd"
 
 const NAMES := ["Falcons Gym", "Grass Park", "City Stadium"]
 const Gym = preload("res://scripts/tryout_gym.gd")
+var sand:=false
 var stadium := false
 
 static func build(world: Node3D, venue: int, attendance: int) -> Node3D:
@@ -11,6 +12,7 @@ static func build(world: Node3D, venue: int, attendance: int) -> Node3D:
 		court = Gym.new()
 	else:
 		court = new()
+		court.sand=venue==3
 		court.stadium = venue == 2
 		add_preview_lighting(world)
 		var env: WorldEnvironment
@@ -21,8 +23,8 @@ static func build(world: Node3D, venue: int, attendance: int) -> Node3D:
 		if env:
 			var sky := Sky.new()
 			var palette := ProceduralSkyMaterial.new()
-			palette.sky_top_color = Color("527fa9") if venue == 1 else Color("162744")
-			palette.sky_horizon_color = Color("c8dacf") if venue == 1 else Color("748ca6")
+			palette.sky_top_color = Color("527fa9") if venue != 2 else Color("162744")
+			palette.sky_horizon_color = Color("c8dacf") if venue != 2 else Color("748ca6")
 			sky.sky_material = palette
 			env.environment.sky = sky
 			env.environment.background_mode = Environment.BG_SKY
@@ -32,11 +34,11 @@ static func build(world: Node3D, venue: int, attendance: int) -> Node3D:
 	return court
 
 func build_enclosure() -> void:
-	var grass := material("688c49")
+	var grass := material("d9bd86" if sand else "688c49")
 	if not stadium:
-		box("Park grounds",Vector3(350,.08,350),Vector3(0,-.22,4),material("628249"))
+		box("Park grounds",Vector3(350,.08,350),Vector3(0,-.22,4),material("dbca9e" if sand else "628249"))
 	var surface := material("348087") if stadium else grass
-	get_node("Runoff").material_override = material("364956") if stadium else material("608047")
+	get_node("Runoff").material_override = material("364956") if stadium else material("c7ae7a" if sand else "608047")
 	for i in 30: get_node("Floorboard%d" % i).material_override = surface
 	var seat := material("385770") if stadium else material("80654c")
 	for side in [-1,1]:

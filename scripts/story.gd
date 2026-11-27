@@ -59,6 +59,7 @@ func show_home() -> void:
 		facts.add_child(nameplate)
 		add_button("Continue career",resume).grab_focus()
 		add_button("Controls tutorial",controls_tutorial)
+		add_button("Tournament circuit",circuit)
 		add_button("Play scrimmage",scrimmage)
 		add_button("Defense evaluation",defense_tryout)
 		add_button("Player development",development)
@@ -84,14 +85,30 @@ func controls_tutorial() -> void:
 	add_button("Guided scrimmage",scrimmage.bind(true))
 	add_button("My Career",show_home)
 
-func scrimmage(guided:=false) -> void:
+func circuit() -> void:
+	clear_menu("TOURNAMENT CIRCUIT")
+	var record:=CareerSession.circuit_record()
+	for event in CareerSession.EVENTS:
+		var wins:=int(record.get(event,0))
+		var entry:=add_button("%s    /    %s    /    Round %d"%[event,CareerSession.LEAGUES[mini(2,wins/3)],wins%3+1],scrimmage.bind(false,event))
+		if event=="Grass doubles": entry.grab_focus()
+	add_button("Back",show_home)
+
+func scrimmage(guided:=false,event:="") -> void:
+	CareerSession.tournament=event
+	var count:=int(CareerSession.EVENTS.get(event,[3,0])[0])
 	StorySession.guided_scrimmage=guided
 	StorySession.career_scrimmage=true
 	StorySession.offline_controller=0
-	StorySession.offline_size=3
-	StorySession.offline_away_size=3
+	StorySession.offline_size=count
+	StorySession.offline_away_size=count
 	StorySession.offline_roster.assign([CareerSession.profile()])
-	for i in 5: StorySession.offline_roster.append(CareerSession.Profile.generate())
+	for i in 2*count-1:
+		var profile:=CareerSession.Profile.generate()
+		if not event.is_empty():
+			var tier:=mini(2,int(CareerSession.circuit_record().get(event,0))/3)
+			for skill in CareerSession.Profile.RATINGS: profile[skill]=randi_range(48,67)+(14*tier if i>=count-1 else 6*tier)
+		StorySession.offline_roster.append(profile)
 	MenuPresentation.load_scene("res://scenes/offline_match.tscn")
 
 func development(selected := "") -> void:
@@ -103,27 +120,49 @@ func development(selected := "") -> void:
 	MenuPresentation.wallet(column,points)
 	info.text="%d fans    /    Team chemistry %d" % [CareerSession.fans(),CareerSession.team_chemistry()]
 	if not badges.is_empty(): info.text+="    /    "+", ".join(badges)
+	info.text+="    /    %d perk XP"%int(CareerSession.data.get_value("perk_xp",id,0))
 	column.add_child(info)
 	var active: Button
-	for rating in ["vertical_in"]+CareerSession.Profile.RATINGS:
+	for rating in CareerSession.Profile.ordered_ratings():
 		var athlete := CareerSession.Profile.clean(CareerSession.profile())
 		var value := float(athlete[rating])
 		var cost:=CareerSession.price(rating,value)
 		var rule:Vector2i=CareerSession.Profile.build_rules(athlete).get(rating,Vector2i(100,0))
 		var vertical:bool=rating=="vertical_in"
 		var title:String="Vertical jump" if vertical else str(rating)
+		var rank:=int(athlete.prestige[rating])
+		var ceiling:float=(60 if vertical else CareerSession.Profile.training_limit(rule))+rank*2
 		var upgrade := add_button("%s   %s%s    %d VP" % [title,value if vertical else CareerSession.Profile.effective_skill(athlete,rating,{rating:rule})," in" if vertical else " / "+str(rule.x),cost],func():
-			if value>=(60 if vertical else CareerSession.Profile.training_limit(rule)) or points<cost: return
+			if value>=ceiling or points<cost: return
 			athlete[rating] = value+(.25 if vertical else 1.)
 			CareerSession.data.set_value("athletes",id,athlete)
 			CareerSession.data.set_value("points",id,points-cost)
 			CareerSession.persist()
 			development(rating))
 		MenuPresentation.rating_bar(column,null,value)
+		if value>=ceiling:
+			var tier:=int(athlete.perk_tiers[rating])
+			if tier<4:
+				var perk:=add_button("%s perk   %s   %d XP"%[title,["Bronze","Silver","Gold","Platinum"][tier],4+2*tier],func():
+					if CareerSession.train_mastery(rating,false): development(rating))
+				perk.disabled=int(CareerSession.data.get_value("perk_xp",id,0))<4+2*tier
+			if rank<5: add_button("Prestige "+title,func(): confirm_prestige(rating,title))
 		if rating==selected or active==null: active=upgrade
 		MenuPresentation.stat_help(upgrade,upgrade,title,"Jump height on serves, attacks and blocks." if vertical else CareerSession.Profile.RATING_HELP[rating])
 	add_button("Back",show_home)
 	if active: active.grab_focus()
+
+func confirm_prestige(skill:String,title:String) -> void:
+	var dialog:=ConfirmationDialog.new()
+	dialog.title="Prestige "+title
+	dialog.dialog_text="Reset this skill to zero and raise its ceiling by two?"
+	add_child(dialog)
+	dialog.confirmed.connect(func():
+		if CareerSession.train_mastery(skill,true): development(skill)
+		dialog.queue_free())
+	dialog.canceled.connect(dialog.queue_free)
+	dialog.popup_centered()
+	dialog.get_cancel_button().grab_focus()
 
 func choose_athlete() -> void:
 	clear_menu("ATHLETES")
@@ -155,7 +194,7 @@ func confirm_delete(id: String,athlete_name: String) -> void:
 
 func resume() -> void:
 	match CareerSession.stage():
-		"origin": origin()
+		"origin","welcome","pepper": origin()
 		"position": position_menu()
 		"after_tryout": after_tryout()
 		_: MenuPresentation.load_scene(CareerSession.CHAPTER)
@@ -196,16 +235,7 @@ func defense_score() -> void:
 	add_button("Run it again",defense_tryout)
 
 func origin() -> void:
-	clear_menu("TRYOUT WEEK")
-	var opening := Label.new()
-	opening.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
-	opening.text="Monday, 6:40 a.m. Your name is on the Falcons tryout sheet. The starting setter graduated in June. Coach Ellis rolls a cart to the net and points to the basket at the pin. “Show me a ball your hitter can use.”"
-	column.add_child(opening)
-	add_button("Controls tutorial",controls_tutorial)
-	add_button("Indoor",func():
-		if CareerSession.checkpoint("position",0): position_menu()).grab_focus()
-	add_button("Beach",func(): pass).disabled = true
-	add_button("Back",show_home)
+	MenuPresentation.load_scene("res://scenes/career_opening.tscn")
 
 func position_menu() -> void:
 	clear_menu("INDOOR  /  POSITION")

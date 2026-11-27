@@ -25,9 +25,9 @@ func fraction() -> float:
 
 func set_ratings(pool: float, recovery: float, reserve: float) -> void:
 	var previous := capacity()
-	rating=clampf(pool,0.,100.)
-	endurance=clampf(recovery,0.,100.)
-	willpower=clampf(reserve,0.,100.)
+	rating=clampf(pool,0.,114.)
+	endurance=clampf(recovery,0.,114.)
+	willpower=clampf(reserve,0.,114.)
 	rested_capacity=clampf(rested_capacity/previous,0.,1.)*capacity()
 	value=clampf(value/previous*capacity() if value>=0. else value,-willpower,rested_capacity)
 	exhausted=value<=-willpower

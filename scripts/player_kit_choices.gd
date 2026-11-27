@@ -21,7 +21,13 @@ static func apply(actor: Node3D) -> void:
 		for item in rig.get_children():
 			if item.is_in_group("finger_tape_"+side):
 				item.visible=(v%5!=4 and side==("l" if v%2==0 else "r")) if tape=="Team" else (tape=="Both" or tape==("Left" if side=="l" else "Right"))
+		var hand_key:="Left hand" if side=="l" else "Right hand"
+		if actor.attributes[hand_key]!="Team":
+			for item in rig.get_children():
+				if item.is_in_group("finger_tape_"+side): item.visible=actor.attributes[hand_key]=="Tape"
 	if actor.leg_skin:
+		for region in ["ankle","calf","quad"]:
+			actor.leg_skin.set_shader_parameter(region+"_options",Vector2i(pick(actor,"Left "+region),pick(actor,"Right "+region)))
 		actor.leg_skin.set_shader_parameter("knee_override",Vector2i(pick(actor,"Left knee"),pick(actor,"Right knee")))
 		var height := pick(actor,"Sock height")
 		actor.leg_skin.set_shader_parameter("sock_top",[.32,.12,.21,.42,.17,.28,.48][v%7] if height==0 else [.12,.21,.32,.48][height-1])

@@ -103,6 +103,9 @@ func run_command() -> void:
 
 func base_profile() -> Dictionary:
 	var values := Profile.clean({"height_cm":74*2.54})
+	values.age=17
+	values.hometown="London"
+	values.country="CA"
 	values.name=""
 	values.position="Unassigned"
 	values.jersey_number=7
@@ -127,9 +130,8 @@ func spent(values:Dictionary) -> int:
 func balance() -> int:
 	return data.get_value("points",athlete_id,0)
 
-func gear_price(key: String,item: String,owned: Array) -> int:
-	if key in ["Eyebrows","Facial hair","Beard","Moustache"] or item in ["None","Team"] or item==Profile.KIT_CHOICES[key][0] or key+"/"+item in owned: return 0
-	return 4 if key in ["Underlayer","Shoe design","Headwear","Sunglasses"] else 2
+func gear_price(_key:String,_item:String,_owned:Array) -> int:
+	return 0
 
 func inventory() -> Array:
 	return data.get_value("gear",athlete_id,[]).duplicate()
@@ -283,6 +285,60 @@ func record_defense(did_dig: bool) -> bool:
 	if persist():
 		defense_finished=reps==5
 		return true
+	data.clear()
+	data.parse(before)
+	return false
+
+const EVENTS := {"Grass doubles":[2,1],"Grass triples":[3,1],"Grass fours":[4,1],"Beach doubles":[2,3],"Indoor sixes":[6,0]}
+const LEAGUES := ["Local","Regional","Elite"]
+var tournament:=""
+
+func circuit_record() -> Dictionary:
+	return data.get_value("circuits",athlete_id,{}).duplicate(true)
+
+func match_reward(won:bool,rallies:int,seconds:float,grade:float) -> int:
+	if athlete_id.is_empty(): return 0
+	var minutes:=minf(seconds/60.,rallies*.65)
+	var award:=maxi(1,roundi(minutes*(12.+6.*grade+(3. if won else 0.))))
+	var before:=data.encode_to_text()
+	if EVENTS.has(tournament):
+		var record:=circuit_record()
+		var wins:=int(record.get(tournament,0))
+		award=roundi(award*(1.+.1*mini(2,wins/3)))
+		if won: record[tournament]=wins+1
+		data.set_value("circuits",athlete_id,record)
+	data.set_value("points",athlete_id,balance()+award)
+	var athlete:=Profile.clean(profile())
+	var rules:=Profile.build_rules(athlete)
+	var mastered:=0
+	for skill in Profile.ordered_ratings():
+		var cap:=60 if skill=="vertical_in" else Profile.training_limit(rules.get(skill,Vector2i(100,0)))
+		if athlete[skill]>=cap or athlete.prestige[skill]>0: mastered+=1
+	var xp:float=data.get_value("perk_xp",athlete_id,0.)
+	data.set_value("perk_xp",athlete_id,xp+minutes*mastered/(Profile.RATINGS.size()+1.))
+	if persist(): return award
+	data.clear()
+	data.parse(before)
+	return 0
+
+func train_mastery(key_name:String,reset:bool) -> bool:
+	var p:=Profile.clean(profile())
+	var rank:=int(p.prestige[key_name])
+	var ceiling:float=(60 if key_name=="vertical_in" else Profile.training_limit(Profile.build_rules(p).get(key_name,Vector2i(100,0))))+2*rank
+	var tier:=int(p.perk_tiers[key_name])
+	var xp:=float(data.get_value("perk_xp",athlete_id,0.))
+	var cost:=4+2*tier
+	var before:=data.encode_to_text()
+	if reset:
+		if rank>=5 or p[key_name]<ceiling: return false
+		p.prestige[key_name]=rank+1
+		p[key_name]=0
+	else:
+		if tier>=4 or p[key_name]<ceiling or xp<cost: return false
+		data.set_value("perk_xp",athlete_id,xp-cost)
+		p.perk_tiers[key_name]=tier+1
+	data.set_value("athletes",athlete_id,p)
+	if persist(): return true
 	data.clear()
 	data.parse(before)
 	return false

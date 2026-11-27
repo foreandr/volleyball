@@ -2,7 +2,7 @@ extends RefCounted
 const PATH := "user://player.cfg"
 const DEFAULTS := {"name":"Player","height_cm":195.58,"handedness":"Right"}
 
-const KIT_CHOICES := {"Left shoulder":["Team","Bare","Short sleeve","Long sleeve"],"Right shoulder":["Team","Bare","Short sleeve","Long sleeve"],"Left knee":["Team","None","Pad","Tape","Brace"],"Right knee":["Team","None","Pad","Tape","Brace"],"Beard":["None","Stubble","Goatee","Short beard"],"Moustache":["None","Trimmed","Full"],"Eyebrows":["Natural","Fine","Full"],"Facial hair":["Clean-shaven","Stubble","Moustache","Goatee","Short beard"],"Jersey length":["Standard","Short","Long"],"Jersey fit":["Untucked","Tucked"],"Ankle support":["None","Tape","Brace"],"Knee support":["None","Tape","Brace"],
+const KIT_CHOICES := {"Left hand": ["Team", "Bare", "Tape"], "Left quad": ["Team", "Bare", "Compression"], "Left calf": ["Team", "Bare", "Compression"], "Left ankle": ["Team", "None", "Tape", "Brace"], "Right hand": ["Team", "Bare", "Tape"], "Right quad": ["Team", "Bare", "Compression"], "Right calf": ["Team", "Bare", "Compression"], "Right ankle": ["Team", "None", "Tape", "Brace"],"Left shoulder":["Team","Bare","Short sleeve","Long sleeve"],"Right shoulder":["Team","Bare","Short sleeve","Long sleeve"],"Left knee":["Team","None","Pad","Tape","Brace"],"Right knee":["Team","None","Pad","Tape","Brace"],"Beard":["None","Stubble","Goatee","Short beard"],"Moustache":["None","Trimmed","Full"],"Eyebrows":["Natural","Fine","Full"],"Facial hair":["Clean-shaven","Stubble","Moustache","Goatee","Short beard"],"Jersey length":["Standard","Short","Long"],"Jersey fit":["Untucked","Tucked"],"Ankle support":["None","Tape","Brace"],"Knee support":["None","Tape","Brace"],
 	"Shoe cut":["Team","Low","Mid","High"],"Shoe design":["Team","Stripe","Twin stripe","Wave","Split"],
 	"Shoe color":["Team","White","Black","Navy","Red","Gold","Teal"],"Sock height":["Team","Ankle","Below calf","Calf","Knee"],
 	"Sock color":["Team","White","Black","Navy","Red","Gold","Teal"],"Leg sleeves":["Team","None","Three-quarter","Full"],
@@ -11,6 +11,7 @@ const KIT_CHOICES := {"Left shoulder":["Team","Bare","Short sleeve","Long sleeve
 	"Shorts design":["Team","Solid","Side panels","Double stripe","Diagonal trim"]}
 
 const HAIRSTYLES := ["Natural","Crop","Side swept","High top","Curtains","Faux hawk","Top knot","Long crop","Waves","Crop \u00b7 Low taper","Sweep \u00b7 Low taper","High top \u00b7 Low taper","Curtains \u00b7 Low taper","Faux hawk \u00b7 Low taper","Knot \u00b7 Low taper","Long crop \u00b7 Low taper","Crop \u00b7 Soft taper","Sweep \u00b7 Soft taper","High top \u00b7 Soft taper","Curtains \u00b7 Soft taper","Faux hawk \u00b7 Soft taper","Knot \u00b7 Soft taper","Long crop \u00b7 Soft taper","Crop \u00b7 Deep part","Sweep \u00b7 Deep part","High top \u00b7 Deep part","Curtains \u00b7 Deep part","Faux hawk \u00b7 Deep part","Knot \u00b7 Deep part","Long crop \u00b7 Deep part","Crop \u00b7 Close sides","Sweep \u00b7 Close sides","High top \u00b7 Close sides","Curtains \u00b7 Close sides","Faux hawk \u00b7 Close sides","Knot \u00b7 Close sides","Long crop \u00b7 Close sides","Crop \u00b7 Long crown","Sweep \u00b7 Long crown","High top \u00b7 Long crown","Curtains \u00b7 Long crown","Faux hawk \u00b7 Long crown","Knot \u00b7 Long crown","Long crop \u00b7 Long crown","Crop \u00b7 High fade","Sweep \u00b7 High fade","High top \u00b7 High fade","Curtains \u00b7 High fade","Faux hawk \u00b7 High fade","Knot \u00b7 High fade","Long crop \u00b7 High fade","Crop \u00b7 Textured","Sweep \u00b7 Textured","High top \u00b7 Textured","Curtains \u00b7 Textured","Faux hawk \u00b7 Textured","Knot \u00b7 Textured","Long crop \u00b7 Textured","Crop \u00b7 Full volume","Sweep \u00b7 Full volume","High top \u00b7 Full volume","Curtains \u00b7 Full volume","Faux hawk \u00b7 Full volume","Knot \u00b7 Full volume","Long crop \u00b7 Full volume"]
+const SKIN_TONES := {"Porcelain":Color("fff9f4"),"Light":Color.WHITE,"Peach":Color("ffdfce"),"Golden":Color("edcc9f"),"Olive":Color("d0bf9b"),"Tan":Color("cfaa89"),"Copper":Color("bc906e"),"Brown":Color("9c7863"),"Deep brown":Color("795b50"),"Espresso":Color("5d453e")}
 const HAIR_COLORS := {"Natural":Color("503d31"),"Black":Color("211c1d"),"Dark brown":Color("4f3328"),"Chestnut":Color("754c38"),"Auburn":Color("994c37"),"Blond":Color("c19a64"),"Platinum":Color("e1d6bd")}
 const MEASUREMENTS := {
 	"Weight (lb)":["weight_lb",90,300,165], "Standing reach (in)":["reach_in",65,120,96],
@@ -52,7 +53,7 @@ static func build_rules(p:Dictionary) -> Dictionary:
 
 static func effective_skill(p:Dictionary,rating:String,rules:Dictionary) -> int:
 	var rule:Vector2i=rules.get(rating,Vector2i(100,0))
-	return clampi(int(p.get(rating,65))+rule.y,0,rule.x)
+	return clampi(int(p.get(rating,65))+rule.y+int(p.get("perk_tiers",{}).get(rating,0)),0,rule.x+2*int(p.get("prestige",{}).get(rating,0))+int(p.get("perk_tiers",{}).get(rating,0)))
 
 static func training_limit(rule:Vector2i) -> int:
 	return mini(100,rule.x-rule.y)
@@ -68,6 +69,10 @@ static func build_note(field:String,p:Dictionary) -> String:
 	return BUILD_HELP[field]+"\n\n"+ "\n".join(lines)
 
 const RATING_HELP := {
+	"Attack jump":"Approach technique increases spike jump height.",
+	"Block jump":"Improves jump height from a blocking stance.",
+	"Serve jump":"Improves takeoff on airborne serves.",
+	"Confidence":"Helps CPU hitters keep swinging under pressure after a lost point.",
 	"Charisma":"A teammate is more likely to honor your call for a set. Earn more fans at tryouts and attract better offers.",
 	"Forearm reception":"Control a serve with your platform and keep the first pass near the setter.",
 	"Forearm setting":"Deliver a bump set to an attacker when the ball is too low for your hands.",
@@ -83,7 +88,7 @@ const RATING_HELP := {
 	"Strength":"Drive a harder attack and push a set farther across the court.",
 	"Speed":"Cover ground to get behind a pass or close a gap at the net.",
 	"Stamina":"Increase the energy available for repeated sprints, jumps and dives.",
-	"Endurance":"Recover spent stamina faster between efforts.",
+	"Endurance":"Recover stamina between efforts and during team timeouts.",
 	"Willpower":"Keep working on reserve when your normal stamina is exhausted.",
 	"Underhand serve":"Control the placement of a serve struck below the waist.",
 	"Standing float":"Deliver a low-spin serve from a planted stance.",
@@ -103,7 +108,13 @@ static func natural_position(profile:Dictionary) -> String:
 	var weights:=[profile.get("Hand setting",65),profile.get("Forearm reception",65),profile.get("Blocking",65),profile.get("Forearm defense",65),profile.get("Arm swing",65)]
 	return ["Setter","P1" if number%2==0 else "P2","M1" if number%2==0 else "M2","Libero","Opposite"][weights.find(weights.max())]
 
-const RATINGS := ["Charisma", "Forearm reception", "Forearm setting", "Forearm defense", "Hand setting", "Hand reception", "Hand defense", "Blocking", "Spike placement", "Arm swing", "Athleticism", "Reflexes", "Strength", "Speed", "Stamina", "Endurance", "Willpower", "Underhand serve", "Standing float", "Jump float", "Spin serve", "Hybrid spin to float", "Hybrid float to spin", "Sky ball"]
+static func ordered_ratings() -> Array:
+	var keys:=RATINGS.duplicate()
+	keys.append("vertical_in")
+	keys.sort_custom(func(a,b): return str(a).to_lower()<str(b).to_lower())
+	return keys
+
+const RATINGS := ["Attack jump","Block jump","Serve jump","Confidence","Charisma", "Forearm reception", "Forearm setting", "Forearm defense", "Hand setting", "Hand reception", "Hand defense", "Blocking", "Spike placement", "Arm swing", "Athleticism", "Reflexes", "Strength", "Speed", "Stamina", "Endurance", "Willpower", "Underhand serve", "Standing float", "Jump float", "Spin serve", "Hybrid spin to float", "Hybrid float to spin", "Sky ball"]
 
 static func generate() -> Dictionary:
 	var values := {"name":"%s %s" % [["Kai","Maya","Noor","Luca","Sam","Imani","Rin","Alex","Jules","Ari","Leah","Sol"].pick_random(), ["Reyes","Park","Diallo","Costa","Singh","Chen","Silva","Ito","Martin","Aziz","Kim","Rivera"].pick_random()], "height_cm":randf_range(152.4,213.36), "vertical_in":randi_range(30,60), "wingspan_in":randi_range(58,90), "handedness":["Right","Left"].pick_random()}
@@ -124,6 +135,14 @@ static func load_profile() -> Dictionary:
 
 static func clean(profile: Dictionary) -> Dictionary:
 	var result := {"name":str(profile.get("name",DEFAULTS.name)).strip_edges().left(32),"height_cm":clampf(float(profile.get("height_cm",DEFAULTS.height_cm)),152.4,213.36),"handedness":"Left" if profile.get("handedness","Right") == "Left" else "Right"}
+	result["Skin tone"]=profile.get("Skin tone","Light") if SKIN_TONES.has(profile.get("Skin tone","Light")) else "Light"
+	result.heritage=str(profile.get("heritage","")).left(64)
+	result.country=str(profile.get("country","")).to_upper().left(2)
+	result.prestige={}
+	result.perk_tiers={}
+	for key in RATINGS+["vertical_in"]:
+		result.prestige[key]=clampi(int(profile.get("prestige",{}).get(key,0)),0,5)
+		result.perk_tiers[key]=clampi(int(profile.get("perk_tiers",{}).get(key,0)),0,4)
 	result.age = clampi(int(profile.get("age",16)),14,18)
 	result.hometown = str(profile.get("hometown","Riverside")).strip_edges().left(64)
 	if result.hometown.is_empty(): result.hometown = "Riverside"
@@ -142,10 +161,10 @@ static func clean(profile: Dictionary) -> Dictionary:
 	if not profile.has("weight_lb"): result.weight_lb=natural_weight(result.height_cm/2.54)
 	if not profile.has("reach_in"): result.reach_in=natural_reach(result.height_cm/2.54,profile.get("wingspan_in",result.height_cm/2.54))
 	result.position=natural_position(profile)
-	result.vertical_in = clampf(float(profile.get("vertical_in",30)),30,60)
+	result.vertical_in = clampf(float(profile.get("vertical_in",30)),0 if result.prestige.vertical_in else 30,60+2*int(result.prestige.vertical_in))
 	result.wingspan_in = clampf(float(profile.get("wingspan_in",result.height_cm / 2.54)),48,96)
 	for rating in RATINGS:
-		result[rating] = clampi(int(profile.get(rating,65)),0,100)
+		result[rating] = clampi(int(profile.get(rating,65)),0,100+2*int(result.prestige[rating]))
 	return result
 
 static func save_profile(profile: Dictionary) -> Error:

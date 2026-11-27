@@ -443,6 +443,9 @@ func starting_lane(index: int) -> float:
 	return -lane if team(index) == 0 else lane
 
 func reset_match() -> void:
+	career_involvement=0
+	career_errors=0
+	career_contributed=false
 	court_velocities.clear()
 	movement_times.clear()
 	if replay.active: toggle_replay()
@@ -544,8 +547,12 @@ func prepare_serve(style: int, station := Vector3.INF) -> void:
 	var x := 1.6*starting_lane(index)
 	serve.configure(players[index],station if station.is_finite() else Vector3(x,0.04,SERVICE_START[style]))
 	serve.ball.mesh = ball.mesh
-	if style == TOPSPIN_SERVE: serve.set_serve_speed(1.12)
-	if serve.has_method("set_jump_height"): serve.set_jump_height(jump_inches(index,serve_vertical)*0.0254)
+	if style == TOPSPIN_SERVE:
+		var pace:=1.12
+		if not is_human(index) and last_point.get("flight","")=="serve" and int(last_point.get("winner",side))!=side:
+			pace*=lerpf(.84,1.,float(players[index].attributes.get("Confidence",65))/100.)
+		serve.set_serve_speed(pace)
+	if serve.has_method("set_jump_height"): serve.set_jump_height(jump_inches(index,serve_vertical,"Serve jump")*0.0254)
 	var aim := Vector3(0.0,Flight.FLOOR,10.7)
 	if not is_human(index):
 		var placement := cpu_policy.choose(side,"serve lane",[0,-1,1],0)
@@ -558,8 +565,11 @@ func prepare_serve(style: int, station := Vector3.INF) -> void:
 	serve_pending = false
 	info.text = "Your serve" if is_human(index) else str(side_names[side])+" serving"
 
-func jump_inches(index:int,fallback:float) -> float:
-	return float(players[index].attributes.vertical_in) if exhibition and roster_active else fallback
+func jump_inches(index:int,fallback:float,skill:="") -> float:
+	if not exhibition or not roster_active: return fallback
+	var stats:Dictionary=players[index].attributes
+	var factor:=lerpf(.88,1.,clampf((float(stats.get(skill,100))-40.)/60.,0.,1.25))
+	return (float(stats.vertical_in)+.25*int(stats.get("perk_tiers",{}).get("vertical_in",0)))*factor
 
 func set_attack_vertical(inches: float) -> void:
 	attack_vertical = inches
@@ -664,8 +674,15 @@ func update_score() -> void:
 		displayed_stamina=roundi(players[0].stamina.value)
 		if not exhibition: score_label.text+="   |   Stamina %d/%d" % [displayed_stamina,roundi(players[0].stamina.capacity())]
 
+var career_involvement:=0
+var career_errors:=0
+var career_contributed:=false
+
 func award(side: int, reason: String) -> void:
 	if phase != Phase.LIVE: return
+	if career_contributed: career_involvement+=1
+	if side!=0 and last_player==0: career_errors+=1
+	career_contributed=false
 	score[side] += 1
 	cpu_policy.finish_point(side)
 	if side != service_team:
@@ -691,6 +708,10 @@ func award(side: int, reason: String) -> void:
 			trace.write("demo_learning_saved",match_clock,{"error":error},true)
 			if error != OK: push_warning("Could not save Demo Match learning: "+error_string(error))
 		var winner := str(side_names[side])+" wins"
+		if exhibition and StorySession.career_scrimmage and not spectator and not StorySession.guided_scrimmage:
+			var grade:=clampf(.60+.40*float(career_involvement)/maxi(1,rallies)-.50*float(career_errors)/maxi(1,rallies),0.,1.)
+			var earned:=CareerSession.match_reward(side==0,rallies,match_clock,grade)
+			winner+="   |   Teammate %d/100   +%d VP"%[roundi(grade*100.),earned]
 		info.text = winner if exhibition else winner+("\nRematch starting soon" if auto_rematch and spectator else "\nUse Reset Match to play again")
 	else:
 		phase = Phase.DEAD
@@ -721,6 +742,7 @@ func launch(point: Vector3, motion: Vector3, kind: String, from: int, spin_rate 
 	for index in players.size():
 		var save: RefCounted = platforms[index].low_save
 		if save.active and not save.finished(elapsed): begin_recovery(index)
+	if from==0 and kind!="serve": career_contributed=true
 	if from>=0 and from<players.size():
 		var athlete := players[from]
 		if kind in ["serve","spike","dump","block"]:
@@ -774,7 +796,7 @@ func launch(point: Vector3, motion: Vector3, kind: String, from: int, spin_rate 
 		if drill_spike_target.is_finite():
 			attackers[side].spike_strength = drill_spike_pace
 		else: set_cpu_swing_power(hitter)
-		if exhibition and roster_active: attackers[side].jump.max_height=jump_inches(hitter,attack_vertical)*.0254
+		if exhibition and roster_active: attackers[side].jump.max_height=jump_inches(hitter,attack_vertical,"Attack jump")*.0254
 		attackers[side].timed_human=manual!=null and is_human(hitter)
 		attackers[side].start_set(players[hitter],frame.to_local(origin),frame.global_basis.inverse()*velocity,frame.to_local(set_pin),shot,0.0,is_human(hitter) and (manual.attack_lane>=0 if manual else space_held))
 	ball.global_position = point
@@ -1003,6 +1025,8 @@ func choose_contact_attack(index: int, contact: Vector3, preferred: Vector3, mot
 				continue
 		defenders.append(position)
 	var speed := motion.slide(Vector3.UP).length()
+	if int(last_point.get("winner",side))!=side:
+		speed*=lerpf(.84,1.,float(players[index].attributes.get("Confidence",65))/100.)
 	return CpuShots.plan(contact,preferred,speed,spin_rate,defenders,walls)
 
 func shot_read_zone(local_x: float) -> int:
@@ -2198,7 +2222,7 @@ func start_block(index: int, remaining := INF, reads_second := false, overpass_s
 	elif serve.player == actor and not serve.can_run_after_contact(): return
 	if (not manual or not is_human(index)) and (actor.position.z < 2.25 or actor.position.z > 3.45): return
 	var block := Block.new()
-	block.jump_height = jump_inches(index,block_vertical)*0.0254
+	block.jump_height = jump_inches(index,block_vertical,"Block jump")*0.0254
 	block.landing_recovery = 0.43 if reads_second else 0.13
 	block.overpass_swing = overpass_swing
 	block.aggressive_press = not is_human(index) and not overpass_swing
