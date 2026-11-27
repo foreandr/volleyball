@@ -199,3 +199,5 @@ Receive CPU Serves leaves the libero mobile until A is held. It maps the remaini
 Receive CPU Serves continues a pass through the setter and left-side attacker to a zone-six digger. Control digger switches the player to defense and gives reception to the CPU. Manual serve reception grades release against the same contact time shown on the ground ring, with green within 85 ms.
 
 Practice replay records the displayed ground timing arc, its cursor, timing bands and release highlight for each sampled frame.
+
+Receive CPU Serves freezes the signed pass-release grade in the replay at release and reports the contact outcome separately.

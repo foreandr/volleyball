@@ -748,6 +748,7 @@ func _process(delta: float) -> void:
 				flight_age=0.
 				phase="serve_flight"
 				message.text=("Perfect" if absf(error)<=SERVE_PERFECT else ("Early" if error<0. else "Late"))+" / "+SPIN_LABELS[spin_selection]
+				if "receive_held" in self: message.text="CPU serve / "+SPIN_LABELS[spin_selection]
 				if toss_style>=2:
 					hand_sound.play()
 					spike_sound_count+=1

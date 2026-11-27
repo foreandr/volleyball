@@ -140,7 +140,15 @@ func capture(rendered := false) -> Dictionary:
 					var key: int = -1-slot*2-side
 					arms[key]=jump.body_chains[side]
 					armed[key]=true
-	return {"timing":game.rings.displayed_timing.duplicate(),"boundary":game.get_meta("serve_boundary",0),"impact":game.get_meta("block_impact_segment",Vector2i(-999,-1)),"rally":game.get("replay_rally"),"armed":armed,"arms":arms,"floor_count":game.floor_sound_count,"floor_db":game.floor_impact.volume_db,"spike_count":game.spike_sound_count if "spike_sound_count" in game else 0,"block_sound_count":game.block_sound_count if "block_sound_count" in game else 0,"objects":objects,"poses":poses,"whistle_count":game.coach_motion.whistle_cue.play_count,"floor_stream":game.floor_impact.stream,"whistle_height":game.coach_motion.whistle_cue.raised}
+	var timing: Dictionary=game.rings.displayed_timing.duplicate()
+	var verdict := ""
+	if "reception_release" in game and not game.control_digger:
+		if not game.reception_release.is_empty():
+			verdict=game.reception_release.label
+			var actor: Node3D=game.passers[1]
+			timing[actor]={"position":Vector3(actor.global_position.x,.055,actor.global_position.z),"value":clampf(.5+float(game.reception_release.offset)/.5,0.,1.),"perfect":Vector2(.5-game.RECEIVE_PERFECT/.5,.5+game.RECEIVE_PERFECT/.5),"contact":Vector2(.5-game.RECEIVE_EARLY/.5,.5+game.RECEIVE_LATE/.5),"miss":Color("14191d"),"highlight":true,"stamina":actor.stamina.fraction()}
+		if game.reception_result!="": verdict+=("  /  " if verdict!="" else "")+game.reception_result
+	return {"release_verdict":verdict,"timing":timing,"boundary":game.get_meta("serve_boundary",0),"impact":game.get_meta("block_impact_segment",Vector2i(-999,-1)),"rally":game.get("replay_rally"),"armed":armed,"arms":arms,"floor_count":game.floor_sound_count,"floor_db":game.floor_impact.volume_db,"spike_count":game.spike_sound_count if "spike_sound_count" in game else 0,"block_sound_count":game.block_sound_count if "block_sound_count" in game else 0,"objects":objects,"poses":poses,"whistle_count":game.coach_motion.whistle_cue.play_count,"floor_stream":game.floor_impact.stream,"whistle_height":game.coach_motion.whistle_cue.raised}
 
 func apply(sample: Dictionary) -> void:
 	game.rings.replay_timing(sample.timing)
@@ -170,6 +178,7 @@ func display_frame(value: float) -> void:
 	var first := mini(int(value)/SUB,history.size()-1)
 	frame_number.text="Frame %d / %d" % [first+1,history.size()]
 	var a := history[first]
+	if a.release_verdict!="": frame_number.text+="    "+a.release_verdict
 	var b := history[mini(first+1,history.size()-1)]
 	var t := fmod(value,SUB)/SUB
 	apply(a)

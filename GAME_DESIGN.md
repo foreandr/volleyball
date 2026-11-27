@@ -295,3 +295,5 @@ Players level individual volleyball skills by using them. Simulated drills award
 Track the best level achieved manually for each drill. A player can simulate that drill at any level they have earned, including the highest level after a perfect manual run. The simulated result earns the XP for that level, with the extra manual-play bonus reserved for playing it again.
 Future feature: Players can get the crowd involved with chants such as Let's go, da da, let's go. Crowd involvement builds team momentum and boosts jump height, strength and willpower.
 Training Camp / Serving / Reception Test uses the controller serving drill and the three draggable Reception Studio stances. The receivers pass to position 2.5 for a jump set and a hard attack from the left pin.
+
+Future feature: Create several fictional athletic brands with distinct, original logos for shoes, apparel and equipment.

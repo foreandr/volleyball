@@ -25,6 +25,9 @@ var receive_held := false
 var released_at := INF
 var touched_at := INF
 var receive_committed := false
+var reception_release := {}
+var reception_result := ""
+const RECEIVE_PERFECT := .085
 const RECEIVE_EARLY := .21
 const RECEIVE_LATE := .15
 
@@ -49,6 +52,8 @@ func next_serve() -> void:
 	receive_committed=false
 	cpu_wait=1.25
 	receive_held=false
+	reception_release={}
+	reception_result=""
 	released_at=INF
 	touched_at=INF
 	spin_selection=3
@@ -119,9 +124,9 @@ func _input(event: InputEvent) -> void:
 					plan_remaining_reception(serves[flight_style()],flight_age)
 			elif receive_held:
 				receive_held=false
-				if phase=="serve_flight":
+				if phase=="serve_flight" and not is_finite(released_at):
 					released_at=flight_age
-					if not recipe.is_empty(): show_release_feedback(released_at-receive_at,true,.085)
+					record_receive_release()
 			get_viewport().set_input_as_handled()
 			return
 		if event is InputEventJoypadButton and event.button_index!=Xbox.physical(JOY_BUTTON_START): return
@@ -139,8 +144,34 @@ func step_serve_reception(shot,previous: Vector3,delta: float) -> void:
 		plan_remaining_reception(shot,maxf(0.,flight_age-delta))
 	super.step_serve_reception(shot,previous,delta)
 
+func record_receive_release() -> void:
+	if not reception_release.is_empty() or not is_finite(released_at) or (recipe.is_empty() and chase_box.is_empty()): return
+	var offset := released_at-receive_at
+	var grade := "Perfect" if absf(offset)<=RECEIVE_PERFECT else ("Early" if offset<0. else "Late")
+	var ms := roundi(offset*1000.)
+	var label := "Pass release  /  %s  (%+d ms)" % [grade,ms]
+	reception_release={"label":label,"offset":offset,"playable":offset>=-RECEIVE_EARLY and offset<=RECEIVE_LATE}
+	show_release_feedback(offset,true,RECEIVE_PERFECT)
+	dig_feedback.text=label
+	trace("pass_release",{"zone":routed_zone,"release_s":released_at,"target_s":receive_at,"offset_ms":ms,"grade":grade})
+
+func show_service_ace() -> void:
+	super.show_service_ace()
+	if control_digger: return
+	if reception_release.is_empty():
+		reception_result="No timed release"
+	elif not reception_release.playable:
+		reception_result="Outside timing window"
+	else:
+		reception_result="No platform contact"
+	trace("manual_pass_miss",{"result":reception_result,"release":reception_release,"platform_contact_s":str(touched_at)})
+
 func accept_reception(previous: Vector3) -> bool:
 	if control_digger: return super.accept_reception(previous)
 	if mapped_touch(map,recipe,previous) and not is_finite(touched_at): touched_at=flight_age
 	if not is_finite(touched_at) or not is_finite(released_at): return false
-	return released_at>=receive_at-RECEIVE_EARLY and released_at<=receive_at+RECEIVE_LATE
+	record_receive_release()
+	if reception_release.get("playable",false):
+		reception_result="Pass"
+		return true
+	return false
