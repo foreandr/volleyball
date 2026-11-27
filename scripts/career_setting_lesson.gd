@@ -148,6 +148,13 @@ func aim_bump(stick:Vector2) -> void:
 func switch_camp_control() -> void:
 	if not watching: return
 	watching=false
+	credit=0
+	completed_slots=0
+	CareerSession.data.set_value(CareerSession.key(),"setting_slots",0)
+	CareerSession.checkpoint("setting_lesson",0)
+	target=called()
+	held=-1
+	rep=0
 	performed=-1
 	if rotation_drill.issued: rotation_drill.free_ball(Vector3.ZERO)
 	clearing_demo=true
