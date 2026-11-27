@@ -74,13 +74,41 @@ func build_rally_sliders() -> void:
 func apply_drill_slider(key: String,value: float) -> void:
 	if key=="dig_reach_cm": dig_reach=value*.01
 
+var dig_recovery_age := 0.
+
+func release_dig_pose() -> void:
+	var actor=defense_map.player
+	if actor==null: return
+	var facing := defense_anchor.rotation.y
+	actor.reparent(world,true)
+	actor.basis=Basis(Vector3.UP,facing)
+	actor.position.y=.04
+	for bone in defense_map.ready_pose.size():
+		actor.skeleton.set_bone_pose(bone,defense_map.ready_pose[bone])
+	for modifier in actor.skeleton.get_children():
+		if modifier is SkeletonModifier3D: modifier.active=true
+	actor.play_action("idle",0.)
+	actor.animator.seek(0.,true)
+	defense_map.player=null
+
+func recover_digger(delta: float) -> bool:
+	if defense_recipe.is_empty(): return super.recover_digger(delta)
+	if defense_map.player==null:
+		last_digger.animator.advance(delta)
+		return false
+	dig_recovery_age+=delta
+	sample_attack_dig()
+	var blend := smoothstep(.12,.85,dig_recovery_age)
+	var rig: Skeleton3D=last_digger.skeleton
+	for bone in defense_map.ready_pose.size():
+		rig.set_bone_pose(bone,rig.get_bone_pose(bone).interpolate_with(defense_map.ready_pose[bone],blend))
+	last_digger.position.y=lerpf(last_digger.position.y,0.,blend)
+	if dig_recovery_age>=.85: release_dig_pose()
+	return false
+
 func next_serve() -> void:
-	if defense_map.player!=null:
-		defense_map.player.reparent(world,true)
-		defense_map.player.basis=Basis.IDENTITY
-		for modifier in defense_map.player.skeleton.get_children():
-			if modifier is SkeletonModifier3D: modifier.active=true
-		defense_map.player=null
+	release_dig_pose()
+	dig_recovery_age=0.
 	defense_recipe={}
 	defense_at=INF
 	defense_contact=-INF

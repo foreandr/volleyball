@@ -662,14 +662,7 @@ func _process(delta: float) -> void:
 	step_serve_wall(delta)
 	if phase=="server_dig":
 		dig_clock+=delta
-		var platform: Reception=dig_platforms[last_digger]
-		var diving := platform.low_save.active and not platform.low_save.finished(dig_clock)
-		if not diving and platform.low_save.active: platform.low_save.active=false
-		if last_digger!=hitter or not diving: walk_server(delta,true)
-		if diving:
-			platform.low_save.sample(last_digger,dig_clock,platform.touch_time)
-		else:
-			platform.follow_forearm(dig_clock,dig_incoming)
+		var diving := recover_digger(delta)
 		advance_missed_ball(delta,true)
 		if not attack_floor_pending: floor_linger+=delta
 		if floor_linger>.75 and not diving: next_serve()
@@ -1023,6 +1016,17 @@ func clear_ground_step(actor: Node3D,step: Vector3) -> Vector3:
 
 func manually_moving(_actor: Node3D) -> bool:
 	return false
+
+func recover_digger(delta: float) -> bool:
+	var platform: Reception=dig_platforms[last_digger]
+	var diving := platform.low_save.active and not platform.low_save.finished(dig_clock)
+	if not diving and platform.low_save.active: platform.low_save.active=false
+	if last_digger!=hitter or not diving: walk_server(delta,true)
+	if diving:
+		platform.low_save.sample(last_digger,dig_clock,platform.touch_time)
+	else:
+		platform.follow_forearm(dig_clock,dig_incoming)
+	return diving
 
 func move_receiver(actor: Node3D,goal: Vector3,delta: float,face_direction := Vector3.ZERO,pace := 4.8,focused := false) -> void:
 	var travel := (goal-actor.position).slide(Vector3.UP)

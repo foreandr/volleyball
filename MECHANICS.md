@@ -203,3 +203,5 @@ Practice replay records the displayed ground timing arc, its cursor, timing band
 Receive CPU Serves freezes the signed pass-release grade in the replay at release and reports the contact outcome separately.
 
 Manual serve reception buffers early releases until a fresh swept platform contact. Early and late touches lose accuracy. The late band ends 20 cm behind the animated torso along the incoming horizontal flight direction.
+
+Mapped digs in the serve-reception drills play through contact, then blend back to ready over the next 0.85 seconds. Starting another serve also clears any remaining mapped dig pose.
