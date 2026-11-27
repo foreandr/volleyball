@@ -185,3 +185,5 @@ Reception Test and Reception Studio share region assignments, mirrored poses, le
 Serve receive shades toward in-bounds aces in Reception Test, Serve and Receive, and CPU match reception. Nearby repeated landings strengthen the read; successful first contacts reduce it. The off-blocker in Serve and Receive also learns from uncovered attack landings. Tactical offsets apply to the saved base formation for the current session.
 Reception Test flashes the receiving court perimeter green for an ace or red for a serve fault at the surface for one second; review preserves the call. Practice replay records spike-serve hand contact, attack contact and the serve landing.
 Before a serve in Serving Camp and Reception Test, LB and RB rotate the held ball in opposite directions. A tap turns five degrees; a hold turns continuously. The chosen panel orientation starts each toss and persists between serves and launches.
+
+In Reception Test the left pin walks into the approach during the pass and attacks deep zone six. The server can move into defense, hold A and release near platform contact to dig.

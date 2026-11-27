@@ -144,6 +144,7 @@ var dig_clock := 0.
 var off_blocker := -1
 var last_digger: Node3D
 var dig_incoming := Vector3.ZERO
+var server_dig_held := false
 var server_dig_buffer := 0.
 
 var platform_clips: Array[Animation]=[]
@@ -298,7 +299,7 @@ func update_prompts(_next: String) -> void:
 	if _next=="defend":
 		if prompt_phase!="defend":
 			prompt_phase="defend"
-			Xbox.prompts(controls_row,[["LS","Move"],["LT","Shuffle"],["RT","Sprint"],["X","Dig"]])
+			Xbox.prompts(controls_row,[["LS","Move"],["LT","Shuffle"],["RT","Sprint"],["A","Release to dig"]])
 		return
 	if prompt_phase=="serving": return
 	prompt_phase="serving"
@@ -369,6 +370,7 @@ func _exit_tree() -> void:
 func next_serve() -> void:
 	first_pass_dropping=false
 	off_blocker=-1
+	server_dig_held=false
 	server_dig_buffer=0.
 	last_digger=null
 	dig_clock=0.
@@ -433,11 +435,12 @@ func next_serve() -> void:
 func _input(event: InputEvent) -> void:
 	if get_tree().paused or replay_inspector.active: return
 	if not settings.visible and phase in ["serve_pass","serve_attack","serve_return"]:
-		var dig_input: bool= (event is InputEventKey and event.keycode==KEY_Q and not event.echo) or (event is InputEventJoypadButton and event.button_index==StorySession.pad_bindings[1])
+		var dig_input: bool= (event is InputEventKey and event.keycode==KEY_Q and not event.echo) or (event is InputEventJoypadButton and event.button_index==StorySession.pad_bindings[0])
 		if dig_input:
-			if not event.pressed:
-				server_dig_buffer=.55
+			if not event.pressed and server_dig_held:
+				server_dig_buffer=.12
 				if phase=="serve_return": dig_platforms[hitter].queue_bump(dig_clock)
+			server_dig_held=event.pressed
 			get_viewport().set_input_as_handled()
 			return
 	if not settings.visible and event is InputEventJoypadButton:
@@ -559,6 +562,8 @@ func walk_server(delta: float, defending := false) -> void:
 	hitter.animator.advance(delta)
 	if not shuffle_steps.has(hitter): shuffle_steps[hitter]=preload("res://scripts/directional_footwork.gd").new(hitter)
 	GroundControls.shuffle(hitter,shuffle_steps[hitter],velocity,focus,delta)
+	if defending and server_dig_held:
+		dig_platforms[hitter].Drive.request_platform(hitter)
 	if not defending: ball.position=Contact.palm(hitter,"l")+Vector3.UP*.10
 
 func _process(delta: float) -> void:
@@ -1268,7 +1273,9 @@ func block_on_flight_segment(previous: Vector3) -> bool:
 	return false
 
 func sample_defensive_contact(platform: Reception,start: float,dt: float,until_floor: float,path: Callable) -> void:
-	platform.update_attempt(dig_clock,start,dig_clock+until_floor,path,drop_velocity,dt,dig_clock+until_floor)
+	if platform.setter==hitter and dig_clock-platform.pressed_at>.12: return
+	var ahead := clampf((platform.setter.to_global(Vector3(0.,1.,.55))-path.call(start)).slide(Vector3.UP).dot(drop_velocity.slide(Vector3.UP))/maxf(.01,drop_velocity.slide(Vector3.UP).length_squared()),0.,until_floor)
+	platform.update_attempt(dig_clock,start,dig_clock+until_floor,path,drop_velocity,dt,start+ahead)
 
 func on_receiving_court(point: Vector3) -> bool:
 	return absf(point.x)<=4.5 and point.z>=BallNet.NET_Z and point.z<=BallNet.NET_Z+9.
