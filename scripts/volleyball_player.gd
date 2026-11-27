@@ -391,6 +391,8 @@ var exertion_total := 0.0
 var exertion_sample := 0.0
 var dampness := 0.0
 @export var fabric_airflow := Vector3(.48,0,.15)
+var fabric_interval := 0.
+var fabric_elapsed := 0.
 var fabric_time := 0.
 var cloth_offset := Vector3.ZERO
 var cloth_velocity := Vector3.ZERO
@@ -417,6 +419,10 @@ func _process(dt: float) -> void:
 			rotation.y=rotate_toward(last_live_yaw,turn_goal,MAX_LIVE_TURN*minf(dt,1./30.))
 			last_live_yaw=rotation.y
 	if jersey_materials.is_empty() or dt<=0.: return
+	fabric_elapsed+=dt
+	if fabric_elapsed<fabric_interval: return
+	dt=fabric_elapsed
+	fabric_elapsed=0.
 	fabric_time+=dt
 	var gust := .77+.23*sin(fabric_time*1.7+global_position.x*.6)
 	var air := fabric_airflow*gust

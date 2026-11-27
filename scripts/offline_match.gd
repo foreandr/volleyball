@@ -67,7 +67,6 @@ func build_officials(court:Node3D) -> void:
 			court.box("Platform leg",Vector3(.06,1.26,.06),Vector3(x,.64,z),stand)
 	ref=official(Vector3(5.66,1.36,4),-PI/2)
 	whistle.fit_whistle(ref.skeleton)
-	whistle.sound.unit_size=22.
 	whistle.sound.volume_db=0.
 	official(Vector3(-5.7,.045,4),PI/2)
 	for pos in [Vector3(-4.95,.045,-5.6),Vector3(4.95,.045,13.6)]:

@@ -12,6 +12,7 @@ var participants: Array[Node3D] = []
 var coaches: Array[Node3D] = []
 var partners: Array[Node3D] = []
 var seats: Array = []
+var seat_elapsed := PackedFloat32Array()
 var orb := MeshInstance3D.new()
 var speaker_clock := 0.
 var holder := 0
@@ -44,6 +45,10 @@ func populate(host) -> void:
 	for i in 2:
 		coaches[i].look_at(coaches[1-i].global_position,Vector3.UP,true)
 	seats = game.gym.seat_teammates(game.athlete,game.register_student,mini(10,remaining-6),true)
+	seat_elapsed.resize(seats.size())
+	for i in seats.size():
+		seat_elapsed[i]=float(i)/maxi(1,seats.size())/24.
+		seats[i].actor.fabric_interval=1./24.
 	talk_to_player = randf()<.5
 	print("Practice gym: ",participants.size()+6+seats.size()," people, including ",seats.size()," seated teammates.")
 
@@ -74,10 +79,14 @@ func _process(delta: float) -> void:
 	if partners.is_empty() or game.settings.visible: return
 	speaker_clock += delta
 	for i in seats.size():
+		seat_elapsed[i]+=delta
+		if seat_elapsed[i]<1./24.: continue
+		var step:=float(seat_elapsed[i])
+		seat_elapsed[i]=0.
 		var seat = seats[i]
-		seat.actor.animator.advance(delta)
+		seat.actor.animator.advance(step)
 		seat.update()
-		seat.watch(seats[i^1].actor.position+Vector3.UP if (i^1)<seats.size() else game.coach.position,delta)
+		seat.watch(seats[i^1].actor.position+Vector3.UP if (i^1)<seats.size() else game.coach.position,step)
 	for i in coaches.size():
 		var adult := coaches[i]
 		adult.animator.advance(delta)

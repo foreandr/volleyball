@@ -206,7 +206,7 @@ static func light_gym(world: Node3D) -> void:
 		env.ssil_radius = 2.2
 		env.ssil_intensity = 0.7
 		env.ssr_enabled = true
-		env.ssr_max_steps = 128
+		env.ssr_max_steps = 48
 		env.glow_enabled = true
 		env.glow_intensity = 0.38
 		env.glow_strength = 0.7
@@ -227,7 +227,7 @@ static func light_gym(world: Node3D) -> void:
 			lamp.omni_attenuation = 1.35
 			lamp.light_energy = 2.8
 			lamp.light_size=.22
-			lamp.shadow_enabled = true
+			lamp.shadow_enabled = z==4.0 and x==-5.0
 			world.add_child(lamp)
 	var bounce := OmniLight3D.new()
 	bounce.position = Vector3(0,3.1,-4)

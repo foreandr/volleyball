@@ -185,6 +185,14 @@ func audio_options(host: Container) -> void:
 		StorySession.save_options()
 		navigation.play())
 	host.add_child(output)
+	var sample := AudioStreamPlayer.new()
+	sample.bus=StorySession.IMPACT_BUS
+	sample.stream=preload("res://assets/audio/hand_impacts.tres")
+	host.add_child(sample)
+	var test := Button.new()
+	test.text="Test spike sound"
+	test.pressed.connect(sample.play.bind(0.))
+	host.add_child(test)
 
 func attach_highlights(parent: Control) -> void:
 	var film := TextureRect.new()

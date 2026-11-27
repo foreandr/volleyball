@@ -130,22 +130,84 @@ func finish() -> void:
 	index.clear()
 	last_jpeg.clear()
 
+# Keep readbacks and JPEG conversions ordered without blocking court simulation.
+# Four slots cover the rendering device's buffered frames at the 20 Hz capture rate.
+class Capture:
+	var timestamp: int
+	var worker := -1
+	var jpeg := PackedByteArray()
+	var unsupported := false
+
+	func read_gpu(texture: RID) -> void:
+		var rd := RenderingServer.get_rendering_device()
+		var handle := RenderingServer.texture_get_rd_texture(texture)
+		if not handle.is_valid():
+			fallback.call_deferred()
+			return
+		var fmt := rd.texture_get_format(handle)
+		if fmt.format not in [RenderingDevice.DATA_FORMAT_R8G8B8A8_UNORM,RenderingDevice.DATA_FORMAT_R8G8B8A8_SRGB]:
+			fallback.call_deferred()
+			return
+		if rd.texture_get_data_async(handle,0,receive.bind(fmt.width,fmt.height))!=OK:
+			fallback.call_deferred()
+
+	func fallback() -> void:
+		unsupported=true
+
+	func receive(data:PackedByteArray,width:int,height:int) -> void:
+		if data.size()!=width*height*4:
+			fallback.call_deferred()
+			return
+		start.call_deferred(Image.create_from_data(width,height,false,Image.FORMAT_RGBA8,data))
+
+	func start(image:Image) -> void:
+		worker=WorkerThreadPool.add_task(encode.bind(image))
+
+	func encode(image:Image) -> void:
+		image.resize(SIZE.x,SIZE.y,Image.INTERPOLATE_BILINEAR)
+		jpeg=image.save_jpg_to_buffer(.77)
+
+var jobs:Array[Capture]=[]
+var fallback_read := false
+var next_request := 0
+
 func _process(_dt: float) -> void:
 	var now := Time.get_ticks_msec()
-	if now<next_frame: return
-	var tenth := int(Time.get_unix_time_from_system()*10.)%10
-	clock_label.text="%s.%d   %d FPS"%[Time.get_time_string_from_system(),tenth,Engine.get_frames_per_second()]
+	if now>=next_request:
+		var tenth := int(Time.get_unix_time_from_system()*10.)%10
+		clock_label.text="%s.%d   %d FPS"%[Time.get_time_string_from_system(),tenth,Engine.get_frames_per_second()]
+	while not jobs.is_empty():
+		var job := jobs[0]
+		if job.unsupported:
+			fallback_read=true
+			jobs.pop_front()
+			continue
+		if job.worker<0 or not WorkerThreadPool.is_task_completed(job.worker): break
+		WorkerThreadPool.wait_for_task_completion(job.worker)
+		jobs.pop_front()
+		if not job.jpeg.is_empty(): store_frame(job.jpeg,job.timestamp)
 	if now>=cleanup_at:
 		prune()
 		cleanup_at=now+30000
-	if clip and now-started>=SEGMENT*1000: finish()
-	if not clip:
+	if now<next_request or jobs.size()>=4: return
+	if not clip or now-started>=SEGMENT*1000:
+		if not jobs.is_empty(): return
+		finish()
 		begin_clip()
 		if not clip: return
-	var frame := get_viewport().get_texture().get_image()
-	if not frame or frame.is_empty(): return
-	frame.resize(SIZE.x,SIZE.y,Image.INTERPOLATE_BILINEAR)
-	var jpeg := frame.save_jpg_to_buffer(.77)
+	var frame:=Capture.new()
+	frame.timestamp=now
+	var texture:=get_viewport().get_texture()
+	if fallback_read or not RenderingServer.get_rendering_device():
+		var image:=texture.get_image()
+		if not image or image.is_empty(): return
+		frame.start(image)
+	else:
+		RenderingServer.call_on_render_thread(frame.read_gpu.bind(texture.get_rid()))
+	jobs.append(frame)
+	next_request=now+1000/FPS
+
+func store_frame(jpeg: PackedByteArray,now:int) -> void:
 	while next_frame+1000/FPS<=now and not last_jpeg.is_empty():
 		append_frame(last_jpeg)
 		next_frame+=1000/FPS
@@ -154,4 +216,8 @@ func _process(_dt: float) -> void:
 	next_frame+=1000/FPS
 
 func _exit_tree() -> void:
+	for job in jobs:
+		if job.worker>=0:
+			WorkerThreadPool.wait_for_task_completion(job.worker)
+			if clip and not job.jpeg.is_empty(): store_frame(job.jpeg,job.timestamp)
 	finish()

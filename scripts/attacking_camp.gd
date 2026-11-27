@@ -822,7 +822,8 @@ func arm_speed_factor() -> float:
 	if roll_shot:
 		return lerpf(.84,1.08,roll_reach_fraction())
 	var effort := float(review_setup.get("power",drill_hit_speed))
-	return pow(effort/14.,.48)*lerpf(.70,1.20,preload("res://scripts/swing_speed.gd").arm(hitter))
+	var pace := lerpf(1.,1.70,smoothstep(12.,32.,attack_speed()))
+	return pace*pow(effort/14.,.48)*lerpf(.70,1.20,preload("res://scripts/swing_speed.gd").arm(hitter))
 
 func requested_set_arc() -> float:
 	return super.requested_set_arc()*rep_set_percent()*.01

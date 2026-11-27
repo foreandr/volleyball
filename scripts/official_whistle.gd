@@ -2,7 +2,7 @@ extends RefCounted
 
 var whistle := Node3D.new()
 var cord: Array[MeshInstance3D] = []
-var sound := AudioStreamPlayer3D.new()
+var sound := AudioStreamPlayer.new()
 var signal_time := -1.0
 var play_count := 0
 var raised := 0.0

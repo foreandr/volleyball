@@ -251,8 +251,8 @@ func _ready() -> void:
 	add_child(world)
 	world.add_child(gym)
 	preload("res://scripts/tryout_gym.gd").light_gym(world)
-	get_viewport().msaa_3d = Viewport.MSAA_8X
-	get_viewport().scaling_3d_scale=1.35
+	get_viewport().msaa_3d = Viewport.MSAA_2X
+	get_viewport().scaling_3d_scale=.90 if get_viewport().get_window().size.y>900 else 1.0
 	camera.fov = 52
 	world.add_child(camera)
 	camera.current = true
