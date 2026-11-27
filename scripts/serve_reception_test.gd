@@ -77,7 +77,7 @@ func next_serve() -> void:
 	super.next_serve()
 	active_stances.clear()
 	for i in passers.size():
-		active_stances.append(receive_read.position_for(stance_points[i]))
+		active_stances.append(receive_read.position_for(stance_points[i],i==1))
 		passers[i].position=active_stances[i]
 	receiving_setter.position=Vector3(map.pass_goal.x,.04,maxf(map.pass_goal.z,BallNet.NET_Z+.25))
 
@@ -150,6 +150,7 @@ func plan_serve_reception(shot) -> void:
 				var travel := offset.length()
 				var spare: float= t-passers[i].reaction_seconds()-travel/GroundControls.speed(true,true)
 				var cost := travel+.5*absf(local.y-center.y)+12.*maxf(0.,.20-spare)
+				if i==1 and spare>.12: cost-=.55
 				if cost>=best_cost: continue
 				best_cost=cost
 				chase_box=box
@@ -280,12 +281,13 @@ func block_on_flight_segment(previous: Vector3) -> bool:
 		defense_map.feed_kmh=drop_velocity.length()*3.6
 		defense_recipe=bind_contact_motion(defense_map,defense_anchor,hitter,hitter.position,source,best)
 	sample_attack_dig()
-	if not is_finite(defense_contact) and mapped_touch(defense_map,defense_recipe,previous): defense_contact=dig_clock
+	if mapped_touch(defense_map,defense_recipe,previous): defense_contact=dig_clock
 	var release: float=dig_platforms[hitter].pressed_at
-	if not is_finite(defense_contact) or not is_finite(release) or absf(release-defense_at)>DIG_WINDOW or absf(defense_contact-dig_clock)>DIG_WINDOW: return false
+	if not is_finite(defense_contact) or not is_finite(release) or minf(absf(release-defense_at),absf(release-defense_contact))>DIG_WINDOW or absf(defense_contact-dig_clock)>DIG_WINDOW: return false
 	last_digger=hitter
 	dig_incoming=drop_velocity
-	var flight := 1.4
+	var apex := ball.position.y+3.4
+	var flight := sqrt(2.*(apex-ball.position.y)/9.81)+sqrt(2.*(apex-defense_map.pass_goal.y)/9.81)
 	drop_velocity=(defense_map.pass_goal-ball.position)/flight+Vector3.UP*4.905*flight
 	drop_net_hit.clear()
 	hard_spike_floor_pending=false
@@ -293,7 +295,13 @@ func block_on_flight_segment(previous: Vector3) -> bool:
 	phase="server_dig"
 	dig_sound.play()
 	message.text="Dig"
+	trace("mapped_dig",{"contact":defense_contact,"prediction":defense_at,"release":release,"apex":apex})
 	return true
+
+func attack_surface_contact(point: Vector3,floor_hit: bool) -> void:
+	if phase=="serve_return" and attack_floor_pending and floor_hit:
+		trace("mapped_dig_miss",{"assigned":not defense_recipe.is_empty(),"pose_contact":str(defense_contact),"prediction":str(defense_at),"release":str(dig_platforms[hitter].pressed_at),"floor":str(point)})
+	super.attack_surface_contact(point,floor_hit)
 
 func step_reception_rally(delta: float) -> void:
 	super.step_reception_rally(delta)

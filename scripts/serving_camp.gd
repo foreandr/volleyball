@@ -425,7 +425,7 @@ func next_serve() -> void:
 	ball.show()
 	for platform in receptions: platform.reset()
 	for i in passers.size():
-		passers[i].position=receive_read.position_for(HOMES[i])
+		passers[i].position=receive_read.position_for(HOMES[i],i==1)
 		passers[i].play_action("idle")
 	receiving_jump.active=false
 	receiving_setter.position=SETTER_HOME

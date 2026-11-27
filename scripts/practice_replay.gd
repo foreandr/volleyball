@@ -101,6 +101,8 @@ func capture(rendered := false) -> Dictionary:
 	if "receiving_team" in game:
 		for actor in game.receiving_team:
 			if actor.get_parent()!=game.world: candidates.append(actor)
+	if "defense_anchor" in game and game.hitter.get_parent()==game.defense_anchor:
+		candidates.append(game.hitter)
 	for obj in candidates:
 		if obj is not Node3D: continue
 		if "skeleton" in obj and obj.skeleton is Skeleton3D:

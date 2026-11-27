@@ -13,9 +13,9 @@ func beaten(point: Vector3) -> void:
 func covered() -> void:
 	confidence*=.82
 
-func position_for(home: Vector3) -> Vector3:
+func position_for(home: Vector3, libero := false) -> Vector3:
 	var gap := pressure-Vector2(home.x,home.z)
 	# The nearest lane takes a full step; adjoining lanes shift less to cover the seam.
 	var support := lerpf(1.,.16,smoothstep(1.3,6.5,absf(gap.x)))
-	var shift := Vector2(clampf(gap.x,-1.35,1.35),clampf(gap.y,-1.35,1.35))*confidence*support
+	var shift := Vector2(clampf(gap.x,-1.35,1.35)*support,clampf(gap.y,-2.,2.) if libero else clampf(gap.y,-1.35,1.35)*support)*confidence
 	return Vector3(clampf(home.x+shift.x,-4.35,4.35),home.y,home.z+shift.y)
