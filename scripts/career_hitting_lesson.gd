@@ -131,10 +131,26 @@ func team_controls_approach() -> bool:
 func step_attack(delta:float) -> void:
 	if phase=="return_to_five":
 		super.step_attack(delta)
-		if rotation_drill.walk(hitter,GroundControls.BACK_LEFT,delta,5.2):
+		var goal:=GroundControls.BACK_LEFT
+		var remaining:=(goal-hitter.position).slide(Vector3.UP)
+		GroundControls.face(hitter,coach.position-hitter.position,delta)
+		hitter.play_action("idle",.18)
+		if not shuffle_steps.has(hitter):
+			shuffle_steps[hitter]=preload("res://scripts/directional_footwork.gd").new(hitter)
+		if remaining.length()<=.09:
 			prep_velocity=Vector3.ZERO
-			hitter.look_at(Vector3(coach.position.x,hitter.position.y,coach.position.z),Vector3.UP,true)
+			GroundControls.shuffle(hitter,shuffle_steps[hitter],Vector3.ZERO,false,delta)
 			begin(feed_after_return)
+		else:
+			var waypoint:=rotation_drill.routes.waypoint(hitter,goal,delta)
+			var direction:=(waypoint-hitter.position).slide(Vector3.UP).normalized()
+			var pace:=minf(3.3,sqrt(14.*remaining.length()))
+			prep_velocity=prep_velocity.move_toward(direction*pace,9.*delta)
+			var before:=hitter.position
+			hitter.position=rotation_drill.move_actor(hitter,(prep_velocity*delta).limit_length(remaining.length()))
+			var actual:=(hitter.position-before)/maxf(delta,.001)
+			if actual.length()<prep_velocity.length()*.35: rotation_drill.routes.reroute(hitter,goal)
+			GroundControls.shuffle(hitter,shuffle_steps[hitter],actual,true,delta)
 		return
 	var before_step:=hitter.position
 	super.step_attack(delta)
