@@ -279,6 +279,9 @@ func step_serve_reception(_shot,previous: Vector3,_delta: float) -> void:
 	map.sample_receiver(recipe,clampf(recipe.contact+(flight_age-receive_at)*60.,0.,recipe.frames),true,map.legs)
 	if absf(flight_age-receive_at)>.24: return
 	if not accept_reception(previous): return
+	complete_reception()
+
+func complete_reception() -> void:
 	receive_read.covered()
 	pass_start=ball.position
 	pass_end=reception_pass_target()
@@ -428,7 +431,7 @@ func attack_surface_contact(point: Vector3,floor_hit: bool) -> void:
 
 func step_reception_rally(delta: float) -> void:
 	super.step_reception_rally(delta)
-	if phase=="serve_pass":
+	if phase=="serve_pass" and map.player!=null:
 		map.sample_receiver(recipe,minf(recipe.frames,recipe.contact+60.*(flight_age-receive_at+pass_clock)),true,map.legs)
 
 func scoring_target(_origin: Vector3) -> Vector3:

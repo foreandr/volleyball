@@ -1,6 +1,42 @@
 extends "res://scripts/serve_reception_test.gd"
 
 var control_digger := false
+var other_map := Map.new()
+var other_anchor := Node3D.new()
+var other_motion := {}
+var other_time := 0.
+var other_slot := -1
+
+func exchange_passers() -> void:
+	var mapper := map
+	map=other_map
+	other_map=mapper
+	var root := anchor
+	anchor=other_anchor
+	other_anchor=root
+	var motion := recipe
+	recipe=other_motion
+	other_motion=motion
+	var when := receive_at
+	receive_at=other_time
+	other_time=when
+	var slot := receiver
+	receiver=other_slot
+	other_slot=slot
+
+func release_passer(mapper: Map) -> void:
+	var actor=mapper.player
+	if actor==null: return
+	var yaw: float=actor.get_parent_node_3d().rotation.y
+	actor.reparent(world,true)
+	actor.basis=Basis(Vector3.UP,yaw)
+	actor.position.y=.04
+	for bone in mapper.ready_pose.size(): actor.skeleton.set_bone_pose(bone,mapper.ready_pose[bone])
+	for modifier in actor.skeleton.get_children():
+		if modifier is SkeletonModifier3D: modifier.active=true
+	actor.play_action("idle",.12)
+	mapper.player=null
+
 var moving_last_tick := false
 var moving_passer := false
 var checking_human_lane := false
@@ -98,6 +134,12 @@ func receiver_candidates() -> Array:
 
 func start_drill() -> void:
 	super.start_drill()
+	world.add_child(other_map)
+	world.add_child(other_anchor)
+	other_map.defenders.append(other_anchor)
+	other_map.clips=map.clips
+	other_map.pass_goal=map.pass_goal
+	other_map.pass_rise=map.pass_rise
 	dig_defender().show()
 	role_button.text="Control digger"
 	controls_row.get_parent().add_child(role_button)
@@ -108,6 +150,9 @@ func build_rally_sliders() -> void:
 	add_rally_sliders("serving",[["Serve speed","serve_kmh",0,300,0," km/h"]])
 
 func next_serve() -> void:
+	release_passer(other_map)
+	other_motion={}
+	other_slot=-1
 	super.next_serve()
 	dig_defender().position=Vector3(0.,.04,BallNet.NET_Z-7.5)
 	receiver=1
@@ -183,7 +228,7 @@ func update_serve_aim(_delta: float) -> void:
 func _process(delta: float) -> void:
 	moving_passer=false
 	if not settings.visible and not get_tree().paused and not replay_inspector.active:
-		if (control_digger and defense_map.player==null) or (not control_digger and phase in ["serve_ready","serve_toss","serve_flight"] and map.player!=passers[1]):
+		if (control_digger and defense_map.player==null) or not control_digger:
 			var actor := dig_defender() if control_digger else passers[1]
 			var stick := Vector2(axis(JOY_AXIS_LEFT_X),axis(JOY_AXIS_LEFT_Y))
 			if stick.length()<.22: stick=Vector2.ZERO
@@ -191,19 +236,25 @@ func _process(delta: float) -> void:
 			var right := camera.global_basis.x.slide(Vector3.UP).normalized()
 			var travel := (right*stick.x+right.cross(Vector3.UP)*stick.y).limit_length(1.)
 			var pace := GroundControls.speed(GroundControls.focus(axis),GroundControls.sprint(axis))
-			var goal := actor.position+travel*pace*delta
+			if not control_digger and map.player==actor and phase!="serve_flight" and (not travel.is_zero_approx() or phase!="serve_pass" or pass_clock>.4):
+				release_passer(map)
+			var goal := actor.global_position+travel*pace*delta
 			goal.x=clampf(goal.x,-5.,5.)
 			goal.z=clampf(goal.z,BallNet.NET_Z+.4,BallNet.NET_Z+10.)
 			if control_digger: goal.z=clampf(actor.position.z+travel.z*pace*delta,BallNet.NET_Z-10.,BallNet.NET_Z-.4)
-			if travel.is_zero_approx(): goal=actor.position
+			if travel.is_zero_approx(): goal=actor.global_position
 			var focused := GroundControls.focus(axis)
 			var source := pin_hitter.global_position if control_digger else serve_station
-			if not travel.is_zero_approx() or moving_last_tick:
+			if not control_digger and map.player==actor:
+				var shift := (goal-actor.global_position).slide(Vector3.UP)
+				anchor.position+=shift
+				platform_depth+=shift.dot(incoming_axis)
+			elif not travel.is_zero_approx() or moving_last_tick:
 				move_receiver(actor,goal,delta,source-actor.position if focused else travel,pace,focused)
 			moving_last_tick=not travel.is_zero_approx()
 			if not control_digger:
 				moving_passer=travel.length_squared()>.001
-				active_stances[1]=actor.position
+				active_stances[1]=actor.global_position
 		if phase=="serve_ready":
 			cpu_wait-=delta
 			if cpu_wait<=0. and pending_serve<0:
@@ -250,11 +301,29 @@ func plan_serve_reception(shot) -> void:
 	next_route_check=.06
 
 func step_serve_reception(shot,previous: Vector3,delta: float) -> void:
+	if not control_digger and receive_held and map.player!=null and map.player!=passers[1] and flight_age>=next_route_check:
+		next_route_check=flight_age+.04
+		var cpu_zone := routed_zone
+		exchange_passers()
+		checking_human_lane=true
+		plan_remaining_reception(shot,maxf(0.,flight_age-delta))
+		if map.player==null:
+			exchange_passers()
+			routed_zone=cpu_zone
+			checking_human_lane=false
+	if other_map.player!=null:
+		other_map.sample_receiver(other_motion,clampf(other_motion.contact+(flight_age-other_time)*60.,0.,other_motion.frames),true,other_map.legs)
 	if map.player==null and flight_age>=next_route_check:
 		next_route_check=flight_age+.06
 		if checking_human_lane or (receive_held and not control_digger) or chase_box.is_empty():
 			route_reception(shot,maxf(0.,flight_age-delta))
 	super.step_serve_reception(shot,previous,delta)
+	if other_map.player!=null:
+		if phase=="serve_flight" and absf(flight_age-other_time)<=.24 and mapped_touch(other_map,other_motion,previous):
+			exchange_passers()
+			pass_timing_ready=false
+			complete_reception()
+		if phase!="serve_flight": release_passer(other_map)
 
 func record_receive_release() -> void:
 	if not reception_release.is_empty() or not is_finite(released_at) or not pass_timing_ready: return
@@ -303,6 +372,6 @@ func accept_reception(previous: Vector3) -> bool:
 
 func reception_pass_target() -> Vector3:
 	var target := super.reception_pass_target()
-	if control_digger or reception_release.get("grade","Perfect")=="Perfect": return target
+	if control_digger or receiver!=1 or reception_release.get("grade","Perfect")=="Perfect": return target
 	var error := clampf(absf(float(reception_release.offset))/RECEIVE_EARLY,.12,1.)
 	return target+Vector3(randf_range(-.8,.8),0.,randf_range(-.65,.65))*error
