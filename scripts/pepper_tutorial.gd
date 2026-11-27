@@ -20,6 +20,10 @@ var feedback:Label
 var finished:=false
 var demonstrating:=false
 var moving:=false
+# From the near baseline, positive X is left. Five is the left backcourt.
+const FIVE_MIN:=Vector2(1.5,-4.7)
+const FIVE_MAX:=Vector2(4.2,-.5)
+const SETTER_TWO_AND_HALF:=Vector3(-1.5,.04,2.85)
 var pass_target:Node3D
 var base:=Vector3.ZERO
 var chase:=Vector3.ZERO
@@ -39,7 +43,7 @@ func configure(host,readout:Label,completed:int) -> void:
 		athletes[8]=human
 	if moving:
 		pass_target=athletes[1]
-		pass_target.position=Vector3(.9,.04,2.85)
+		pass_target.position=SETTER_TWO_AND_HALF
 		pass_target.rotation.y=PI
 		for slot in range(2,8):
 			athletes[slot].position=Vector3(5.65,.04,-4.+slot*.86)
@@ -53,7 +57,7 @@ func configure(host,readout:Label,completed:int) -> void:
 		receiver.rotation.y=atan2(direction.x,direction.z)
 		feeder.rotation.y=receiver.rotation.y+PI
 		if moving:
-			receiver.position=Vector3(-2.75,.04,-2.65)
+			receiver.position=Vector3(2.85,.04,-2.65)
 			feeder.position=Vector3(2.7,.04,10.8)
 			receiver.look_at(feeder.position,Vector3.UP,true)
 			feeder.look_at(receiver.position,Vector3.UP,true)
@@ -127,8 +131,8 @@ func plan_reception(pair:Dictionary) -> void:
 		# Lock the feed at release; moving the passer only moves the pose anchor.
 		var angle:=randf()*TAU
 		var landing:=base+Vector3(cos(angle),0,sin(angle))*randf_range(.8,1.85)
-		landing.x=clampf(landing.x,-4.2,4.2)
-		landing.z=clampf(landing.z,-4.7,2.7)
+		landing.x=clampf(landing.x,FIVE_MIN.x,FIVE_MAX.x)
+		landing.z=clampf(landing.z,FIVE_MIN.y,FIVE_MAX.y)
 		chase=base+(landing-Vector3(pair.platform.x,base.y,pair.platform.z))
 		pair.platform.x=landing.x
 		pair.platform.z=landing.z
@@ -225,7 +229,13 @@ func tick(delta:float) -> void:
 			if not demonstrating and not pair.flying and not focus_cued:
 				game.moving_prompt(true)
 				focus_cued=true
-			if not facing and not pair.flying and not demonstrating:
+			var position_xz:=Vector2(base.x,base.z)
+			var in_range:=position_xz.distance_to(position_xz.clamp(FIVE_MIN,FIVE_MAX))<=.6
+			if not demonstrating and not pair.flying and not in_range:
+				feedback.text="Return to zone 5 to receive"
+			elif not demonstrating and not pair.flying:
+				feedback.text="%d / 5 passes to setter"%score
+			if (not facing or not in_range) and not pair.flying and not demonstrating:
 				pair.age=0.
 				pair.ball.position=game.coach_motion.toss(pair.feeder,0.)
 				continue
