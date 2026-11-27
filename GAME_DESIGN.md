@@ -339,3 +339,4 @@ Career hitting opens with a teammate attacking preset 2 sets while the career at
 Falcons team branding uses crimson and dark red with cream and gold crest details on the uniforms and home court.
 
 Displayed vertical stays in profile inches. On-court jump displacement uses four thirds of the rated height before fatigue and jump loading.
+When specifying an athlete's vertical in inches, use the stated number as the profile rating. For example, 42 inches means 42 on the stat sheet and a 56-inch full-strength on-court target. Apply the conversion once in gameplay.
