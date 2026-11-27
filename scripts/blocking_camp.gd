@@ -354,7 +354,7 @@ func begin_block(slot: int,loaded := 0.,manual := false) -> void:
 				if gap>.85: return
 			else: jump.kong_direction=signf(offset)
 	jump.jump_height=block_vertical*.0254*stamina.effectiveness()
-	if manual: jump.jump_height=maxf(.10,jump.jump_height)
+	if manual: jump.jump_height=Block.loaded_height(maxf(.10,jump.jump_height),loaded)
 	stamina.spend(5,"Block jump")
 	trace("block_takeoff",{"slot":slot,"vertical_m":jump.jump_height,"stamina":stamina.value})
 	jump.net_heading=PI
@@ -467,6 +467,12 @@ func step_attack(delta: float) -> void:
 			trace("blockers_home",{"positions":str([blockers[0].position,blockers[1].position,blockers[2].position])})
 	super.step_attack(delta)
 
+# The pin sets the edge. Keep the middle on the inside even on a wide 31.
+func block_lane_x(slot:int, desired:float) -> float:
+	var low := -4.5 if slot==0 else blockers[slot-1].position.x+.61
+	var high := 4.5 if slot==2 else blockers[slot+1].position.x-.61
+	return clampf(desired,low,high)
+
 func step_blocker(slot: int,delta: float) -> void:
 	var actor := blockers[slot]
 	var jump: RefCounted = jumps[slot]
@@ -511,6 +517,7 @@ func step_blocker(slot: int,delta: float) -> void:
 			if jump.age>=Block.START and jump.age<Block.START+Block.AIR:
 				jump.base.x+=jump.close_direction*minf(maxf(0.,room),.64*delta)
 			jump.lean_input=jump.close_direction*.65
+		jump.base.x=block_lane_x(slot,jump.base.x)
 		if not jump.step(delta,ball.global_position):
 			jumps[slot]=null
 			if slot==MANUAL_SLOT and not automatic_block:
@@ -564,17 +571,12 @@ func step_blocker(slot: int,delta: float) -> void:
 	var fast_close: bool = cpu and read_set and phase=="set" and closing[slot] and absf(goal-previous)>.65
 	var pace := GroundControls.speed(focused,sprinting or fast_close)
 	var desired := clampf((goal-previous)*4.,-pace,pace) if cpu else axis(JOY_AXIS_LEFT_X)*camera.global_basis.x.x*pace
+	if not cpu and block_held: desired*=Block.lateral_scale(block_load.seconds)
 	lateral_speed[slot]=move_toward(lateral_speed[slot],desired,(14. if fast_close else 8.)*delta)
-	var low := -4.5 if slot==0 else blockers[slot-1].position.x+.61
-	var high := 4.5 if slot==2 else blockers[slot+1].position.x-.61
-	if not cpu:
-		low=-4.5
-		high=4.5
-	elif slot==1 and not automatic_block and manual_window:
-		high=4.5
 	var depth_speed := (depth_goal-actor.position.z)*4. if cpu else axis(JOY_AXIS_LEFT_Y)*camera.global_basis.z.z*pace
 	var motion := Vector2(lateral_speed[slot],depth_speed).limit_length(pace)*delta
-	actor.position.x=clampf(previous+motion.x,low,high)
+	actor.position.x=block_lane_x(slot,previous+motion.x)
+	if absf(actor.position.x-(previous+motion.x))>.00001: lateral_speed[slot]=0.
 	actor.position.z=clampf(actor.position.z+motion.y,BallNet.NET_Z+.28,BallNet.NET_Z+9.)
 	actor.animator.advance(delta)
 	if not shuffle_steps.has(actor):

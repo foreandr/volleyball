@@ -2994,6 +2994,8 @@ func step_match(delta: float, controls: RefCounted) -> void:
 	if (not manual or manual.reception.motion.is_empty()) and not spectator and not blocks.has(0) and not player_attacking and not serving_human and not set_jumps[0].active and not diving and not recoveries.has(0):
 		controls.read_pace_input()
 		var motion: Vector2 = controls.movement_input()
+		if manual and manual.load_block.charging:
+			motion.x*=Block.lateral_scale(manual.load_block.seconds)
 		if serve.player == human:
 			if motion.length() > 0.05: serve.moved_after_contact = true
 			if serve.moved_after_contact:

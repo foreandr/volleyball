@@ -2,6 +2,13 @@ extends RefCounted
 
 const HandPose = preload("res://scripts/hand_setting_pose.gd")
 const STUFF_SPEED_RETENTION := 0.60
+static func loaded_height(full_height: float, depth: float) -> float:
+	return full_height*lerpf(.60,1.,clampf(depth,0.,1.))
+
+static func lateral_scale(seconds: float) -> float:
+	var depth := clampf(seconds/preload("res://scripts/tryout_squat.gd").FULL_LOAD,0.,1.)
+	return lerpf(.78,.42,depth)
+
 const START := 0.16
 const CPU_LEAD := .035
 const AIR := 0.74
