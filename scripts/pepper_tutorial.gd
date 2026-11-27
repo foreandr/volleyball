@@ -400,10 +400,26 @@ func walk_rotation(actor:Node3D,destination:Vector3,dt:float) -> bool:
 	actor.position=actor.position.move_toward(destination,velocity.length()*dt)
 	return false
 
+func advance_support_setter(pair:Dictionary,delta:float) -> void:
+	var goal:=pass_target.position
+	if not pair.flying:
+		goal=SETTER_TWO_AND_HALF
+	elif pair.caught and pair.hit:
+		goal=pair.catch_stance
+	var travel:=goal-pass_target.position
+	if travel.length()>.04:
+		pass_target.play_travel_gait(travel.normalized()*2.8)
+		pass_target.position=pass_target.position.move_toward(goal,2.8*delta)
+	else:
+		pass_target.play_action("idle",.18)
+	# Sample the underlying skeleton before overlaying this frame's set.
+	pass_target.animator.advance(delta)
+
 func tick(delta:float) -> void:
 	if finished: return
 	for i in pairs.size():
 		var pair:=pairs[i]
+		if moving: advance_support_setter(pair,delta)
 		if final_deposit:
 			move_off_turn(delta)
 			if cart_service.busy(delta): return
@@ -444,11 +460,6 @@ func tick(delta:float) -> void:
 			if cart_service.busy(delta):
 				if pair.receiver!=game.setter: pair.receiver.animator.advance(delta)
 				continue
-			if not pair.flying and pass_target.position.distance_to(SETTER_TWO_AND_HALF)>.04:
-				var home_velocity:Vector3=pass_target.position.direction_to(SETTER_TWO_AND_HALF)*2.8
-				pass_target.play_travel_gait(home_velocity)
-				pass_target.animator.advance(delta)
-				pass_target.position=pass_target.position.move_toward(SETTER_TWO_AND_HALF,2.8*delta)
 			if not pair.flying and not cart.issued:
 				pair.ball.hide()
 				cart.prepare_next_ball(delta)
@@ -545,12 +556,6 @@ func tick(delta:float) -> void:
 					orb.position=game.arc(pair.contact_point,pair.return_end,u,pair.rise)
 					if moving:
 						var dt_set:float=t-pair.contact_age-sqrt(8.*float(pair.rise)/9.81)
-						var catch_spot:Vector3=pair.catch_stance
-						if pass_target.position.distance_to(catch_spot)>.04:
-							var velocity:=pass_target.position.direction_to(catch_spot)*2.8
-							pass_target.play_travel_gait(velocity)
-							pass_target.animator.advance(delta)
-							pass_target.position=pass_target.position.move_toward(catch_spot,delta*2.8)
 						var pin:Vector3=hands(pin_collector)
 						Ground.face(pass_target,pin-pass_target.position,delta)
 						if dt_set>-.35:
