@@ -109,7 +109,7 @@ func attack_meter_error() -> float:
 
 func attack_contact_height() -> float:
 	# Match the open palm in the authored spike pose at jump apex.
-	return START.y+hitter.height_cm*.0118+effective_attack_height()*preload("res://scripts/setter_jump.gd").COURT_VERTICAL_SCALE
+	return START.y+hitter.height_cm*.0109+effective_attack_height()*preload("res://scripts/setter_jump.gd").COURT_VERTICAL_SCALE
 
 func planned_attack_contact_height() -> float:
 	# A setter who underreads fatigue can leave a tired hitter reaching slightly high.
@@ -875,7 +875,7 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 		if contact_open:
 			closest_spike_gap=minf(closest_spike_gap,nearest.distance_to(palm))
 		var at_set_target := has_meta("sampling_attack") or (ball.position-endpoint).slide(Vector3.UP).length()<=.25
-		if at_set_target and contact_open and nearest.distance_to(palm)<=ATTACK_CONTACT_RADIUS:
+		if at_set_target and contact_open and nearest.distance_to(palm)<=Contact.BALL_RADIUS+.006:
 			if not is_finite(first_palm_at): first_palm_at=clock
 			var grade := release_grade+GRADE_ADVANCE
 			var valid_release := manual_shot>=0 and is_finite(release_at) and grade>=EARLY_LIMIT and grade<=LATE_LIMIT
@@ -897,6 +897,7 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 				hand_impact.play()
 				spike_sound_count+=1
 			contact_swing_time=swing_time
+			ball.position=nearest
 			strike_point=ball.position
 			strike_shoulder_offset=hitter.skeleton.to_local(strike_point)-hitter.skeleton.get_bone_global_pose(hitter.skeleton.find_bone("upperarm_r")).origin
 			spikes+=1
@@ -1070,7 +1071,7 @@ func apply_attack_swing() -> void:
 	var origin := strike_point if phase=="spike" else ball.position
 	camp_swing.apply(hitter,attack_jump,phase,swing_time,contact_swing_time,ball.global_position,source,endpoint,strike_point,
 		shot_landing(origin),strike_shoulder_offset,effective_attack_height(),arm_speed_factor(),attack_speed(),
-		spike_pike_scale,int(review_setup.get("spin",0)),net_clear_time,roll_shot,tip_shot,roll_reach_fraction() if roll_shot else 0.)
+		spike_pike_scale,int(review_setup.get("spin",0)),net_clear_time,roll_shot,tip_shot,roll_reach_fraction() if roll_shot else 0.,true)
 
 func frame_editor_attacker() -> Node3D:
 	return hitter
