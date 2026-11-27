@@ -11,7 +11,7 @@ var partner:Node3D
 const ROUTE := [Vector3(4.35,.04,-4.5),Vector3(4.35,.04,3.4),Vector3(-4.35,.04,3.4),Vector3(-4.35,.04,-4.5)]
 var leg:=0
 var enter_time:=0.
-var enter_meter:=ProgressBar.new()
+var enter_meter:Control
 const COACH_SIDELINE:=Vector3(5.65,.04,4.)
 var runner_line:Array=[]
 var demo_outcomes:=preload("res://scripts/demo_outcomes.gd").new()
@@ -68,12 +68,7 @@ func start_drill() -> void:
 	line.add_theme_constant_override("outline_size",5)
 	captions.add_child(line)
 	captions.add_child(prompt)
-	captions.add_child(enter_meter)
-	enter_meter.custom_minimum_size=Vector2(92,5)
-	enter_meter.size_flags_horizontal=Control.SIZE_SHRINK_CENTER
-	enter_meter.show_percentage=false
-	enter_meter.max_value=1.
-	enter_meter.hide()
+
 	captions.hide()
 	add_child(film)
 	film.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -215,7 +210,7 @@ func run_prompt() -> void:
 func show_demo_prompt() -> void:
 	workout_label.hide()
 	prompt.show()
-	training_prompt([[JOY_BUTTON_A,"Hold to enter the drill"]],"Hold Enter to enter the drill")
+	enter_meter=EntryPrompt.mount(prompt,"Enter")
 
 func move_in_line(actor:Node3D,goal:Vector3,dt:float) -> bool:
 	var previous:=actor.position
@@ -394,7 +389,7 @@ func enter_drill() -> void:
 	var was_footwork:=phase=="footwork_demo"
 	phase="handoff"
 	enter_time=0.
-	enter_meter.hide()
+	if is_instance_valid(enter_meter): enter_meter.hide()
 	prompt.hide()
 	curtain.show()
 	curtain.z_index=20
@@ -433,8 +428,7 @@ func _process(delta:float) -> void:
 	if phase=="handoff" and pepper and pepper.moving: pepper.move_off_turn(delta)
 	if phase in ["demo","footwork_demo"]:
 		enter_time=enter_time+delta if receive_down() else 0.
-		enter_meter.value=enter_time
-		enter_meter.visible=enter_time>0.
+		if is_instance_valid(enter_meter): enter_meter.set_fraction(enter_time)
 		if enter_time>=1.: enter_drill()
 	update_speech(delta)
 	if phase!="montage":

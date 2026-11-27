@@ -116,6 +116,10 @@ func _draw() -> void:
 				draw_string(font,left+Vector2(33,0),"[" + OS.get_keycode_string(game.KEYS[called]) + "]",HORIZONTAL_ALIGNMENT_CENTER,27,16)
 			else:
 				draw_texture_rect(icon,Rect2(left+Vector2(33,-19),Vector2(27,24)),false)
+			if game.held==called and not game.automatic_setter() and game.phase=="pass":
+				var fill:float=game.set_fill()
+				if fill>0.:
+					draw_arc(left+Vector2(46,-7),15.,-PI/2.,-PI/2.+TAU*fill,48,Color("72efba"),2.5,true)
 			draw_string(font,left+Vector2(62,0),game.TARGETS[called],HORIZONTAL_ALIGNMENT_LEFT,-1,16)
 
 

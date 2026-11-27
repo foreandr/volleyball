@@ -54,8 +54,6 @@ var drop_net_hit := {}
 var drop_net_time := 0.
 var clock := 0.0
 var spectator_prompt := PanelContainer.new()
-var spectator_text := Label.new()
-var spectator_icon := TextureRect.new()
 var timing_actor: Node3D
 const TIMING_LABEL_SECONDS := 1.45
 var timing_note := Label.new()
@@ -81,7 +79,8 @@ var pending_release := false
 var input_hold := 0.0
 var contact_local := Vector3.ZERO
 var measured_release := false
-var spectator_progress := ProgressBar.new()
+const EntryPrompt=preload("res://scripts/drill_entry_prompt.gd")
+var spectator_progress=EntryPrompt.new()
 var skip_time := 0.0
 var camera_lead := Vector3.ZERO
 var rings := preload("res://scripts/tryout_player_ring.gd").new()
@@ -386,26 +385,12 @@ func build_hud() -> void:
 	spectator_prompt.add_theme_stylebox_override("panel",MenuPresentation.box(Color("112534f5"),Color("6de4d1"),3))
 	var skip_column := VBoxContainer.new()
 	spectator_prompt.add_child(skip_column)
-	spectator_text.add_theme_font_size_override("font_size",20)
-	var row := HBoxContainer.new()
-	skip_column.add_child(row)
-	var hold := Label.new()
-	hold.text = "Hold"
-	hold.add_theme_font_size_override("font_size",20)
-	row.add_child(hold)
-	spectator_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	spectator_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	spectator_icon.custom_minimum_size = Vector2(42,34)
-	row.add_child(spectator_icon)
-	row.add_child(spectator_text)
+	spectator_progress.key_name="Space"
 	add_child(timing_note)
 	timing_note.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	timing_note.add_theme_font_size_override("font_size",20)
 	timing_note.add_theme_constant_override("outline_size",5)
 	timing_note.hide()
-	spectator_progress.custom_minimum_size.y = 5
-	spectator_progress.show_percentage = false
-	spectator_progress.max_value = 1
 	skip_column.add_child(spectator_progress)
 	spectator_prompt.hide()
 	skip.hide()
@@ -763,6 +748,23 @@ func cpu_aims_inside(id: int) -> bool:
 			if entry.made: needed -= 1
 	return remaining > 0 and rotation_drill.random.randi_range(1,remaining) <= needed
 
+func fade_into_drill(handoff:Callable) -> void:
+	if changing_turn: return
+	changing_turn=true
+	var shade:=ColorRect.new()
+	shade.color=Color.BLACK
+	shade.modulate.a=0.
+	shade.z_index=99
+	add_child(shade)
+	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var fade:=create_tween().set_ignore_time_scale(true)
+	fade.tween_property(shade,"modulate:a",1.,.22)
+	fade.tween_callback(handoff)
+	fade.tween_property(shade,"modulate:a",0.,.28)
+	fade.tween_callback(func():
+		shade.queue_free()
+		changing_turn=false)
+
 func change_setter(skipping: bool) -> void:
 	changing_turn = true
 	skip.hide()
@@ -818,10 +820,7 @@ func _process(delta: float) -> void:
 	if rotation_drill.turn == 1 and phase != "intro" and not demonstration:
 		var holding := Input.is_key_pressed(KEY_SPACE) or (pad() >= 0 and Input.is_joy_button_pressed(pad(),Xbox.physical(JOY_BUTTON_A)))
 		skip_time = minf(1,skip_time + delta) if holding else 0.0
-		spectator_icon.visible = not Xbox.keyboard_prompts()
-		if spectator_icon.visible: spectator_icon.texture = Xbox.glyph(JOY_BUTTON_A)
-		spectator_text.text = "to start your turn" if spectator_icon.visible else "[Space] to start your turn"
-		spectator_progress.value = skip_time
+		spectator_progress.set_fraction(skip_time)
 		if skip_time >= 1:
 			change_setter(true)
 			return

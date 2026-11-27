@@ -258,3 +258,5 @@ Moving reception reads the human left stick independently of the active receiver
 Career setting follows moving reception. Hold X, Y or B for left, middle or right and release at hand contact. Add LB for a jump set. Hold LT to square up. Complete two standing sets each to left, middle and right, then two jump sets each to left, middle and right. Good timed releases sweep for close balls passing the hand pocket. Hitting requires landing the spike in zones 1, 6 and 5 from all three positions.
 
 Human reception, dig, attack, set and serve release feedback is shared across career drills, training and matches. Fade the result in and out at the top center with the signed millisecond offset and timing grade. Use the action-specific green and playable windows. Identify estimates and never invent a release time when no button was released.
+
+Drill entry shows a clockwise progress ring around the bound button. A full hold fades directly from the demonstration to the human turn. In the career setting lesson the called target drives the floor halo, rim, binding and scoring until two correct sets using the called technique land.

@@ -7,6 +7,7 @@ var completed_slots:=0
 var performed:=-1
 var watching:=true
 var join_hold:=0.
+var entry_widget:Control
 var human:Node3D
 var demo_actor:Node3D
 var closing:=false
@@ -31,6 +32,13 @@ func start_drill() -> void:
 	if credit==12:
 		enter_hitting()
 		return
+	for hoop in targets:
+		var floor_halo:=MeshInstance3D.new()
+		floor_halo.mesh=hoop.beacon.mesh
+		floor_halo.material_override=hoop.beacon.material_override
+		floor_halo.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		hoop.beacon.add_child(floor_halo)
+		floor_halo.global_position=Vector3(hoop.global_position.x,.045,hoop.global_position.z)
 	human=setter
 	seat_teammates()
 	demo_actor=athlete(BASE,"e97937")
@@ -117,7 +125,10 @@ func update_prompts(next:String) -> void:
 	if key==prompt_phase: return
 	prompt_phase=key
 	var entries:Array=[]
-	if watching: entries=[[JOY_BUTTON_A,"Hold to enter the drill"]]
+	if watching:
+		entry_widget=EntryPrompt.mount(controls_row,"Space")
+		hint.hide()
+		return
 	elif next=="ground": entries=[[JOY_BUTTON_LEFT_SHOULDER,"Next toss"]]
 	else:
 		entries.append(["LT","Square up to the selected target"])
@@ -151,6 +162,18 @@ func _input(event:InputEvent) -> void:
 	if watching and event is InputEventJoypadButton and event.button_index in [Xbox.physical(JOY_BUTTON_BACK),Xbox.physical(JOY_BUTTON_RIGHT_STICK)]:
 		return
 	if watching and event is InputEventKey and event.physical_keycode==KEY_TAB: return
+	# Free practice lets a face button choose the call. Career keeps the call
+	# fixed until this athlete lands two sets using the requested technique.
+	if not watching and not settings.visible and not changing_turn and phase in ["cart","feed","pass"]:
+		var choice:=-1
+		if event is InputEventJoypadButton:
+			for i in BUTTONS.size():
+				if event.button_index==Xbox.physical(BUTTONS[i]): choice=i
+		elif event is InputEventKey: choice=KEYS.find(event.keycode)
+		if choice>=0 and choice!=called():
+			if event.is_pressed(): message.text="Called target: "+LANES[called()]
+			get_viewport().set_input_as_handled()
+			return
 	super._input(event)
 	if not watching and is_instance_valid(panel):
 		for i in targets.size(): targets[i].beacon.visible=i==called()
@@ -168,14 +191,15 @@ func _process(dt:float) -> void:
 			demo_actor.play_action("idle",.2)
 			clearing_demo=false
 		demo_actor.animator.advance(dt)
-	if watching:
+	if watching and not changing_turn and not settings.visible:
 		move_setter(dt,human,true)
 		human.animator.advance(dt)
 		var down:=Input.is_key_pressed(KEY_SPACE) or (pad()>=0 and Input.is_joy_button_pressed(pad(),Xbox.physical(JOY_BUTTON_A)))
 		join_hold=join_hold+dt if down else 0.
-		if join_hold>=1.: switch_camp_control()
+		if is_instance_valid(entry_widget): entry_widget.set_fraction(join_hold)
+		if join_hold>=1.: fade_into_drill(switch_camp_control)
 	super._process(dt)
-	if Xbox.keyboard_prompts(): hint.show()
+	if Xbox.keyboard_prompts() and not watching: hint.show()
 
 func reset_drill() -> void:
 	if CareerSession.checkpoint("setting_lesson",0): MenuPresentation.load_scene(scene_file_path)

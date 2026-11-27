@@ -331,3 +331,5 @@ The next career drill teaches setting at left, middle, then right. Complete two 
 Human reception, dig, attack, set and serve release feedback is shared across career drills, training and matches. Fade the result in and out at the top center with the signed millisecond offset and timing grade. Use the action-specific green and playable windows. Identify estimates and never invent a release time when no button was released.
 
 Career hitting follows twelve setting makes. Attack a highlighted zone in 1, 6 and 5 from left, middle and right. Only a human spike landing in the called square earns credit. Serving and butterfly instruction follow in a future chapter.
+
+Drill entry shows a clockwise progress ring around the bound button. A full hold fades directly from the demonstration to the human turn. In the career setting lesson the called target drives the floor halo, rim, binding and scoring until two correct sets using the called technique land.
