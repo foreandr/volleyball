@@ -27,6 +27,12 @@ func check() -> void:
 	var resumed:bool=room.flight_time>=0.
 	print("Population %d; background rally launched %s, caught and waited %s, resumed %s."%[count,launched,waited,resumed])
 	current_scene.enter_hitting_turn()
-	var handed_off:bool=current_scene.hitter.position.distance_to(Vector3(-2.6,.04,-2.8))<.1 and current_scene.sideline_actor.position.distance_to(Vector3(0.,.04,-2.8))<.1
-	print("Handoff to one and six: ",handed_off)
-	quit(0 if handed_off and count>=15 and count<=20 and launched and waited and resumed else 1)
+	var handed_off:bool=current_scene.hitter.position.distance_to(Vector3(2.6,.04,-2.8))<.1 and current_scene.sideline_actor.position.distance_to(Vector3(0.,.04,-2.8))<.1
+	print("Handoff to five and six: ",handed_off)
+	for frame in 1200:
+		await process_frame
+		if current_scene.phase=="receive_toss": break
+	var target:Vector3=current_scene.receive_point
+	var feed_in_five:bool=current_scene.phase=="receive_toss" and Vector2(target.x-2.6,target.z+2.8).length()<1.
+	print("Coach target in five: ",feed_in_five," at ",target)
+	quit(0 if feed_in_five and handed_off and count>=15 and count<=20 and launched and waited and resumed else 1)
