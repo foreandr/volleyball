@@ -3,7 +3,7 @@ extends Control
 const Replay = preload("res://scripts/match_replay.gd")
 
 const CATEGORIES := {
-	"Passing": [{"title":"Pass to Target","scene":"res://scenes/story_animations.tscn"}],
+	"Passing": [{"title":"Receive CPU Serves","scene":"res://scenes/receive_cpu_serves.tscn"},{"title":"Pass to Target","scene":"res://scenes/story_animations.tscn"}],
 	"Setting": [{"title":"Set to Target","scene":"res://scenes/setting_camp.tscn"}],
 	"Attacking": [{"title":"Approach and Spike","scene":"res://scenes/attacking_camp.tscn"},{"title":"Butterfly"}],
 	"Serving": [{"title":"Reception Test","scene":"res://scenes/serve_reception_test.tscn"},{"title":"Serve and Receive","scene":"res://scenes/serving_camp.tscn"},{"title":"Spin Serve"}],

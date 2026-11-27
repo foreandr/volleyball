@@ -61,6 +61,13 @@ func _draw() -> void:
 			if is_instance_valid(actor) and actor.is_visible_in_tree(): draw_player(actor,true)
 		return
 	if not game.is_node_ready() or game.settings.visible or game.phase in ["intro","net_guide","complete"]: return
+	if "receive_held" in game and not game.passers.is_empty():
+		var passer: Node3D=game.passers[1]
+		draw_player(passer,true)
+		if game.phase=="serve_flight" and not game.recipe.is_empty():
+			var t: float=(game.released_at if is_finite(game.released_at) else game.flight_age)-game.receive_at
+			timing_arc(passer,clampf(.5+t/.5,0.,1.),.33,.67,Vector2(.2,.8),Color("14191d"),is_finite(game.released_at))
+		return
 	var human: Node3D=game.rotation_drill.roster[0]
 	if "automatic_block" in game:
 		if not game.automatic_block and game.blockers.size()>game.MANUAL_SLOT:

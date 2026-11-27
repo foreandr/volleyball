@@ -11,8 +11,9 @@ var first_dig_touch := -INF
 var dig_feedback := Label.new()
 var feedback_tween: Tween
 var feedback_rally := -1
-const DIG_WINDOW := .095
-const DIG_PERFECT := .045
+const DIG_WINDOW := .125
+const DIG_PERFECT := .055
+var dig_reach := .12
 var stance_points: Array[Vector3]=[]
 var chase_box := {}
 var chase_goal := Vector3.ZERO
@@ -68,7 +69,10 @@ func start_drill() -> void:
 	for actor in wall+[receiving_middle]: actor.hide()
 
 func build_rally_sliders() -> void:
-	add_rally_sliders("serving",[["Serve speed","serve_kmh",0,300,0," km/h"]])
+	add_rally_sliders("serving",[["Serve speed","serve_kmh",0,300,0," km/h"],["Dig reach assist","dig_reach_cm",0,25,12," cm"]])
+
+func apply_drill_slider(key: String,value: float) -> void:
+	if key=="dig_reach_cm": dig_reach=value*.01
 
 func next_serve() -> void:
 	if defense_map.player!=null:
@@ -104,6 +108,9 @@ func step_serve_wall(_delta: float) -> void:
 func move_libero_to_cover(_delta: float) -> void:
 	pass
 
+func receiver_candidates() -> Array:
+	return [0,1,2]
+
 func plan_serve_reception(shot) -> void:
 	chase_box={}
 	routed_zone=""
@@ -119,7 +126,7 @@ func plan_serve_reception(shot) -> void:
 			var earliest := INF
 			var best := {}
 			var nearest := INF
-			for i in 3:
+			for i in receiver_candidates():
 				var local_start := (previous-active_stances[i]).rotated(Vector3.UP,PI)
 				var local_end := (point-active_stances[i]).rotated(Vector3.UP,PI)
 				if AABB(map.MAP_ORIGIN,map.CELL_SIZE*3.).grow(.01).intersects_segment(local_start,local_end)==null: continue
@@ -150,7 +157,7 @@ func plan_serve_reception(shot) -> void:
 		var t := finish*tick/steps
 		var point: Vector3=shot.flight_point(t)
 		if point.z<=BallNet.NET_Z or point.y<.25: continue
-		for i in passers.size():
+		for i in receiver_candidates():
 			var home: Vector3=passers[i].global_position
 			var yaw := atan2(serve_station.x-home.x,serve_station.z-home.z)
 			var local := (point-home).rotated(Vector3.UP,-yaw)
@@ -205,7 +212,9 @@ func bind_contact_motion(mapper: Map,root: Node3D,actor: Node3D,home: Vector3,so
 	mapper.shift_frame=recipe.contact
 	mapper.sample_receiver(recipe,recipe.contact,true,mapper.legs)
 	var center: Vector3=mapper.HandPass.contact_center(mapper.player) if recipe.kind=="overhead" else mapper.player.skeleton.to_global(mapper.player.skeleton.get_bone_global_pose(mapper.player.skeleton.find_bone("hand_l")).origin)
-	mapper.intercept_shift=(mapper.set_intercept-center).slide(Vector3.UP).limit_length(.75)
+	var offset := mapper.set_intercept-center
+	mapper.intercept_shift=offset.slide(Vector3.UP).limit_length(.75)
+	if mapper==defense_map: mapper.intercept_shift+=(offset-mapper.intercept_shift).limit_length(dig_reach)
 	return recipe
 
 func step_serve_reception(_shot,previous: Vector3,_delta: float) -> void:
@@ -224,7 +233,7 @@ func step_serve_reception(_shot,previous: Vector3,_delta: float) -> void:
 	if recipe.is_empty(): return
 	map.sample_receiver(recipe,clampf(recipe.contact+(flight_age-receive_at)*60.,0.,recipe.frames),true,map.legs)
 	if absf(flight_age-receive_at)>.24: return
-	if not mapped_touch(map,recipe,previous): return
+	if not accept_reception(previous): return
 	receive_read.covered()
 	pass_start=ball.position
 	pass_end=map.pass_goal
@@ -237,6 +246,9 @@ func step_serve_reception(_shot,previous: Vector3,_delta: float) -> void:
 	phase="serve_pass"
 	if recipe.kind!="overhead": dig_sound.play()
 	message.text="Pass"
+
+func accept_reception(previous: Vector3) -> bool:
+	return mapped_touch(map,recipe,previous)
 
 func mapped_touch(mapper: Map,motion: Dictionary,previous: Vector3) -> bool:
 	var touched := false
@@ -320,7 +332,10 @@ func update_dig_feedback() -> void:
 	if not is_finite(release) or not is_finite(defense_at): return
 	var measured := is_finite(first_dig_touch)
 	var reference := first_dig_touch if measured else defense_at
-	var ms := roundi((release-reference)*1000.)
+	show_release_feedback(release-reference,measured)
+
+func show_release_feedback(offset: float,measured: bool) -> void:
+	var ms := roundi(offset*1000.)
 	var direction := "Early" if ms<0 else ("Late" if ms>0 else "On time")
 	var label := "%s  %d ms" % [direction,absi(ms)]
 	if not measured: label+=" (estimated)"
