@@ -134,8 +134,9 @@ func handle(event:InputEvent) -> bool:
 	if mode=="serve":
 		var face:=service.Camp.FACE.find(button)
 		if face>=0:
+			var previous_release:float=service.release_at
 			service.button(g,3-face,down)
-			if is_finite(service.release_at) and not down and is_finite(service.contact_time):
+			if not is_finite(previous_release) and is_finite(service.release_at) and not down and is_finite(service.contact_time):
 				var error:=service.error()
 				report("Serve",error,window_meter(error,service.Camp.SERVE_EARLY,service.Camp.SERVE_LATE,service.Camp.SERVE_PERFECT,true))
 		var spin:=[JOY_BUTTON_DPAD_UP,JOY_BUTTON_DPAD_LEFT,JOY_BUTTON_DPAD_RIGHT,JOY_BUTTON_DPAD_DOWN].find(button)
@@ -187,6 +188,10 @@ func handle(event:InputEvent) -> bool:
 	return true
 
 func report(label:String,error:float,state:Dictionary) -> void:
+	if state.get("released",false):
+		var band:Vector2=state.contact
+		var value:float=state.value
+		ContactTiming.scored(label,error,state.grade=="Perfect",state.get("playable",value>=band.x and value<=band.y))
 	feedback=state.duplicate()
 	feedback_until=g.match_clock+.7
 	feedback_text="%s  /  %s  (%+d ms)"%[label,state.get("grade","Early" if error<0. else "Late"),roundi(error*1000.)]

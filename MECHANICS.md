@@ -256,3 +256,5 @@ During moving-reception follow-through the focused passer briefly tracks the dep
 Moving reception reads the human left stick independently of the active receiver and cart state. Walk into zone five and focus to request a feed. Start opens Resume, Restart and Save and leave during opening drills.
 
 Career setting follows moving reception. Hold X, Y or B for left, middle or right and release at hand contact. Add LB for a jump set. For a bump set hold RS left, up or right and release the stick to center at forearm contact. Each target requires two makes of each technique.
+
+Human reception, dig, attack, set and serve release feedback is shared across career drills, training and matches. Fade the result in and out at the top center with the signed millisecond offset and timing grade. Use the action-specific green and playable windows. Identify estimates and never invent a release time when no button was released.

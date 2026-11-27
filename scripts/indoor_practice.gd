@@ -1017,6 +1017,7 @@ func aim_bump(stick: Vector2) -> void:
 		if not bump_armed and not bump_aim.is_zero_approx() and not bump_released:
 			if phase=="pass":
 				bump_offset=release_offset()
+				if not automatic_setter(): ContactTiming.window("Bump set",bump_offset,-timing_window()-.065,late_contact_limit(),-BUMP_ON_TIME,BUMP_ON_TIME)
 				show_timing(signf(bump_offset)*maxf(0.,absf(bump_offset)-BUMP_ON_TIME))
 				trace("bump_release",{"offset_ms":roundi(bump_offset*1000.),"early_limit_ms":roundi(-(timing_window()+.065)*1000.),"setter":str(setter.position),"ball":str(ball.position)})
 				graded_fill=set_fill()
@@ -1791,6 +1792,7 @@ func release(index: int) -> void:
 		set_error = raw_offset
 		input_hold=clock-pressed_at
 		if not automatic_setter():
+			ContactTiming.window("Set",raw_offset,-timing_window()-.065,late_contact_limit(),-ON_TIME,ON_TIME)
 			set_error = signf(raw_offset)*maxf(0.,absf(raw_offset)-ON_TIME)
 			trace("set_button_up",{"raw_offset_s":raw_offset,"held_s":input_hold,"ball":str(ball.position),"head":str(Contact.joint(setter,"Head"))})
 		if not automatic_setter() and raw_offset < -(timing_window()+.065):

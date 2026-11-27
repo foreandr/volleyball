@@ -1385,7 +1385,10 @@ func _process(delta: float) -> void:
 				hit = ball_preview.try_pancake(previous,preview_clock,player_controls.receive_elapsed)
 			elif player_controls.receive_pose_elapsed > 0.0:
 				hit = ball_preview.try_practice_pass(previous,preview_clock,player_controls.receive_elapsed)
-			if hit: drill_status.text = BallTimingRing.result_text(ball_preview.practice_grade,"pass")
+			if hit:
+				var offset:float=(ball_preview.GREEN_START+ball_preview.GREEN_END)*.5-player_controls.receive_elapsed
+				ContactTiming.scored("Reception",offset,ball_preview.practice_grade==ball_preview.Grade.PERFECT,true)
+				drill_status.text = BallTimingRing.result_text(ball_preview.practice_grade,"pass")
 			var floor_time: float = ball_preview.contact_time+ball_preview.practice_floor_time
 			if ball_preview.practice_early_attempt and ball_preview.crossed(preview_clock,floor_time):
 				ball_preview.finish_practice_serve()

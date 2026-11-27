@@ -92,7 +92,13 @@ func _input(event: InputEvent) -> void:
 			if event.pressed and not dig_held:
 				chosen_cell=Vector3i(-1,-1,-1)
 				release_window=0.
-			if not event.pressed and dig_held and phase=="serve_return": release_window=.18
+			if not event.pressed and dig_held and phase=="serve_return":
+				release_window=.18
+				var travel:=drop_velocity.slide(Vector3.UP)
+				if travel.length_squared()>.01:
+					var platform_goal:Vector3=hitter.to_global(Vector3(0,1.04,.62))
+					var offset:float=(ball.position-platform_goal).dot(travel)/travel.length_squared()
+					ContactTiming.window("Dig",offset,-.18,.18,-.055,.055,true)
 			dig_held=event.pressed
 			update_prompts("")
 			get_viewport().set_input_as_handled()

@@ -202,7 +202,6 @@ func step(g,dt:float) -> void:
 	if grade<Camp.SERVE_EARLY or grade>Camp.SERVE_LATE or not is_finite(release_at):
 		fault(g)
 		return
-	g.manual.report("Serve",grade,g.manual.window_meter(grade,Camp.SERVE_EARLY,Camp.SERVE_LATE,Camp.SERVE_PERFECT,true))
 	var hit:Vector3=Contact.palm(g.human,"r") if airborne else driver.ball.position
 	var shot=prepare_curve(g,hit)
 	Camp.strike_serve(shot,hit,target,grade,g.serve_style==3,true)

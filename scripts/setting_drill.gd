@@ -371,6 +371,10 @@ func step_bump(time: float, previous: float, delta: float) -> void:
 	if old_move != setter_move_name():
 		trace.write("setter_move",clock,trace_snapshot(time),true)
 	if old_grade != bump.grade:
+		if is_finite(bump.pressed_at):
+			var arrival:float=bump.touch_time if bump.low_save.active and is_finite(bump.touch_time) else timing_arrival
+			var offset:float=bump.pressed_at+(bump.green_start+bump.green_end)*.5-arrival
+			ContactTiming.scored("Set",offset,bump.grade==BallPreview.Grade.PERFECT,is_finite(bump.touch_time))
 		trace.write("set_result",clock,{
 			"snapshot":trace_snapshot(time),"closest_check":trace.closest_check,
 			"contact_time":bump.touch_time,"contact_point":bump.touch if is_finite(bump.touch_time) else null,

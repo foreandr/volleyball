@@ -540,6 +540,8 @@ func handle_serve_button(style: int,pressed: bool) -> void:
 	elif phase=="serve_toss":
 		if not pressed and style==toss_style and not is_finite(release_time):
 			release_time=serve_clock
+			var target_time:float=serves[toss_style].contact_time() if not toss_airborne else serves[toss_style].toss_release_time()+flight_time
+			ContactTiming.window("Serve",release_time-(target_time-SERVE_LATE),SERVE_EARLY,SERVE_LATE,-SERVE_PERFECT,SERVE_PERFECT)
 			trace("serve_release",{"toss":toss_style,"spin":SPIN_LABELS[spin_selection],"timing_ms":roundi(serve_meter_error()*1000.)})
 
 func serve_meter_position(error: float) -> float:

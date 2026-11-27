@@ -277,7 +277,9 @@ func meter() -> Dictionary:
 
 func button(down:bool) -> void:
 	if finished or demonstrating: return
-	if not down and holding and not needs_release and not pairs[0].caught and released.is_empty(): released=release_state()
+	if not down and holding and not needs_release and not pairs[0].caught and released.is_empty() and pairs[0].flying:
+		released=release_state()
+		ContactTiming.scored("Reception",released.offset,released.grade=="Perfect",released.playable)
 
 	if not down: needs_release=false
 	if down and not holding: pressed_at=pairs[0].age
@@ -528,6 +530,7 @@ func tick(delta:float) -> void:
 			var human_hit:=human and not released.is_empty() and bool(released.playable) and t-touched_at<=.095
 			var cpu_touch:=not human and moving and touched_at==t
 			if not pair.caught and (human_hit or cpu_touch or t>=arrival+(.14 if human or moving else 0.)):
+				if human and released.is_empty(): ContactTiming.display("Reception   No release",Color("ff998a"))
 				if human: active=human_hit
 				elif moving: active=cpu_touch
 				pair.contact_age=t

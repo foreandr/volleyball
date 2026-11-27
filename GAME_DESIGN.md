@@ -327,3 +327,5 @@ Every new drill, career chapter, and match starts with the established left-stic
 Xbox Menu (Start) opens the pause menu during every live career-opening drill and demonstration. Resume preserves the current rep. Restart starts that drill over. Save and leave records the active story node and credited reps; a partially played toss is replayed. Previously completed drills stay recorded when practicing one again. New chapters should use the same career checkpoint and shared pause menu.
 
 The next career drill teaches setting at left, middle, then right. At each target complete two standing hand sets, two jump hand sets and two forearm bump sets. Demonstrate the current assignment before entry, teach the hold and release, and save each credited set.
+
+Human reception, dig, attack, set and serve release feedback is shared across career drills, training and matches. Fade the result in and out at the top center with the signed millisecond offset and timing grade. Use the action-specific green and playable windows. Identify estimates and never invent a release time when no button was released.

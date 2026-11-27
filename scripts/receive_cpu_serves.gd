@@ -383,9 +383,7 @@ func record_receive_release() -> void:
 	var ms := roundi(offset*1000.)
 	var label := "%s release  /  %s  (%+d ms)" % ["Dig" if control_digger else "Pass",grade,ms]
 	reception_release.label=label
-	show_release_feedback(offset,true)
-	dig_feedback.add_theme_color_override("font_color",Color("78e1ad") if grade=="Perfect" else (Color("ffd36b") if grade=="Early" else Color("ff9086")))
-	dig_feedback.text=label
+	ContactTiming.scored("Dig" if control_digger else "Reception",offset,grade=="Perfect",reception_release.playable)
 	trace("dig_release" if control_digger else "pass_release",{"zone":routed_zone,"release_s":released_at,"target_s":defense_at if control_digger else receive_at,"offset_ms":ms,"grade":grade})
 
 func show_service_ace() -> void:

@@ -753,7 +753,12 @@ func play_serve(time: float, previous: float, delta: float) -> void:
 	var sample_start := maxf(0.0,time-0.001)
 	var sample_end := time+0.001
 	var incoming_ball: Vector3 = (path.call(sample_end)-path.call(sample_start))/(sample_end-sample_start)
+	var awaiting_touch:=not is_finite(bump.touch_time)
 	bump.update_attempt(time,previous,end,path,incoming_ball,delta,cue,incoming_serve_spin())
+	if awaiting_touch and is_finite(bump.touch_time) and is_finite(bump.pressed_at):
+		var reference:float=bump.touch_time if bump.low_save.active else cue
+		var offset:float=bump.pressed_at+lerpf(bump.green_start,bump.green_end,.4)-reference
+		ContactTiming.scored("Reception",offset,bump.grade==BallPreview.Grade.PERFECT,true)
 	if is_finite(bump.touch_time):
 		if bump.hand_setting and not is_finite(bump.release_time):
 			ball.position = bump.touch.lerp(bump.platform_center(),smoothstep(0.0,0.05,time-bump.touch_time))
@@ -999,6 +1004,8 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 			if uses_assisted_approach() and fraction < 0.0 and leaving_reach:
 				fraction = hand_contact_fraction(before,after,spike_assist_radius())
 			if fraction >= 0.0:
+				var contact_error:=lerpf(previous,time,fraction)-pin_arrival
+				ContactTiming.scored("Attack",contact_error,absf(contact_error)<=.055,true)
 				swing_contact_extension = extension
 				var contact_charge := approach_hold_charge(clock-(time-previous)*(1.0-fraction)) if uses_assisted_approach() else charge
 				hit_spike(contact_charge,previous_ball.lerp(ball.position,fraction),palm_gap)

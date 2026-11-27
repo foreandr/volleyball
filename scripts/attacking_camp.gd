@@ -564,6 +564,7 @@ func attack_button(index: int, pressed: bool) -> void:
 	elif manual_shot==index:
 		release_grade=button_timing_error()
 		release_at=clock
+		ContactTiming.window("Attack",attack_meter_error(),EARLY_LIMIT,LATE_LIMIT,-CLEAN_EARLY,CLEAN_LATE)
 		show_attack_timing(attack_meter_error())
 		trace("attack_release",{"shot":index,"meter_error_ms":roundi(attack_meter_error()*1000.),"button_ms":roundi(release_grade*1000.),"approach_delay_ms":roundi(approach_delay*1000.),"approach":approach_started})
 		if not approach_started and (phase!="set" or attack_meter_error()<EARLY_LIMIT or attack_meter_error()>LATE_LIMIT): manual_shot=-1
