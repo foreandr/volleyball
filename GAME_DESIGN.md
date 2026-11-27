@@ -297,3 +297,4 @@ Future feature: Players can get the crowd involved with chants such as Let's go,
 Training Camp / Serving / Reception Test uses the controller serving drill and the three draggable Reception Studio stances. The receivers pass to position 2.5 for a jump set and a hard attack from the left pin.
 
 Future feature: Create several fictional athletic brands with distinct, original logos for shoes, apparel and equipment.
+On incoming serves, check the flight segment up to the first gym surface for a reception before awarding the floor result.

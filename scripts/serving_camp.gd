@@ -800,6 +800,11 @@ func _process(delta: float) -> void:
 			if surface.is_empty() and flight_age>=landing_time:
 				surface={"normal":Vector3.UP,"fraction":1.}
 			if not surface.is_empty():
+				ball.position=previous+motion_step*float(surface.fraction)
+			if ball.position.z>BallNet.NET_Z or shot.net_hit.is_empty():
+				step_serve_reception(shot,previous,delta)
+				if phase!="serve_flight": return
+			if not surface.is_empty():
 				ball.position=previous+motion_step*float(surface.fraction)+Vector3(surface.normal)*.004
 				var incoming := motion_step/maxf(delta,.001)
 				floor_impact.stream=preload("res://assets/audio/ball_floor.wav")
@@ -818,8 +823,6 @@ func _process(delta: float) -> void:
 				else: serve_out()
 				trace("serve_gym_contact",{"normal":str(surface.normal),"point":str(ball.position)})
 				return
-			if ball.position.z>BallNet.NET_Z or shot.net_hit.is_empty():
-				step_serve_reception(shot,previous,delta)
 			if phase=="serve_flight" and flight_age>shot.planned_duration+.45: next_serve()
 
 func receive_arrival(shot,height: float) -> float:

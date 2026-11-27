@@ -218,3 +218,4 @@ Manual reception keeps stick steering during the mapped reach and throughout the
 Receive CPU Serves resets the human receiver and digger to their neutral zone-six homes. Deep zone-six attacks travel into the defender's lane. CPU defenders close ground on the predicted dig point and can lunge or dive on uncovered low balls. Serve passes and digs use centered reception scatter based on skill, speed, spin and timing.
 
 Serve reception blends from the current movement pose and position into the assigned pass. Practice and match replay samples record held controller buttons. Practice replay also records the predicted landing point.
+In Receive CPU Serves the controlled receiver can steer while preparing. The pass targets a timed point on the incoming 3D flight. An early playable release carries through to physical contact. A platform hit while A is still held produces a less accurate pass and records Held at contact.

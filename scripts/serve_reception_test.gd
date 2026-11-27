@@ -250,6 +250,8 @@ func bind_contact_motion(mapper: Map,root: Node3D,actor: Node3D,home: Vector3,so
 	var before := actor.global_position
 	mapper.entry_pose.clear()
 	for bone in actor.skeleton.get_bone_count(): mapper.entry_pose.append(actor.skeleton.get_bone_pose(bone))
+	var entry_forward := root.global_basis.inverse()*actor.global_basis.z
+	mapper.entry_yaw=atan2(entry_forward.x,entry_forward.z)
 	mapper.entry_position=root.to_local(before)
 	mapper.entry_frame=maxf(0.,recipe.contact-mapper.incoming_lead_seconds*60.)
 	mapper.entry_duration=clampf(recipe.contact-mapper.entry_frame,0.01,15.)
@@ -284,10 +286,12 @@ func step_serve_reception(_shot,previous: Vector3,_delta: float) -> void:
 		recipe=bind_contact_motion(map,anchor,actor,actor.global_position,serve_station,chase_box)
 		chase_box={}
 	if recipe.is_empty(): return
-	map.sample_receiver(recipe,clampf(recipe.contact+(flight_age-receive_at)*60.,0.,recipe.frames),true,map.legs)
-	if absf(flight_age-receive_at)>.24: return
+	map.sample_receiver(recipe,reception_frame(),true,map.legs)
 	if not accept_reception(previous): return
 	complete_reception()
+
+func reception_frame() -> float:
+	return clampf(recipe.contact+(flight_age-receive_at)*60.,0.,recipe.frames)
 
 func complete_reception() -> void:
 	receive_read.covered()
@@ -312,21 +316,24 @@ func reception_pass_target() -> Vector3:
 	return map.pass_goal+miss.slide(Vector3.UP)
 
 func accept_reception(previous: Vector3) -> bool:
-	return mapped_touch(map,recipe,previous)
+	return absf(flight_age-receive_at)<=.24 and mapped_touch(map,recipe,previous)
 
 func mapped_touch(mapper: Map,motion: Dictionary,previous: Vector3) -> bool:
+	return mapped_segment_touch(mapper,motion,previous,ball.position)
+
+func mapped_segment_touch(mapper: Map,motion: Dictionary,previous: Vector3,end: Vector3) -> bool:
 	var touched := false
 	if motion.kind=="overhead":
 		var hands := mapper.HandPass.contact_center(mapper.player)
-		if hands.distance_to(Geometry3D.get_closest_point_to_segment(hands,previous,ball.position))<=mapper.HAND_RADIUS+mapper.BALL_RADIUS: return true
+		if hands.distance_to(Geometry3D.get_closest_point_to_segment(hands,previous,end))<=mapper.HAND_RADIUS+mapper.BALL_RADIUS: return true
 		for side in ["l","r"]:
 			var center := Contact.palm(mapper.player,side)
-			if center.distance_to(Geometry3D.get_closest_point_to_segment(center,previous,ball.position))<=.09+mapper.BALL_RADIUS:
+			if center.distance_to(Geometry3D.get_closest_point_to_segment(center,previous,end))<=.09+mapper.BALL_RADIUS:
 				return true
 	else:
 		for shape in mapper.RECEPTION_CAPSULES:
 			var seg := mapper.reception_segment(mapper.player.skeleton,shape)
-			var points := Geometry3D.get_closest_points_between_segments(previous,ball.position,seg[0],seg[1])
+			var points := Geometry3D.get_closest_points_between_segments(previous,end,seg[0],seg[1])
 			if points[0].distance_to(points[1])<=mapper.BALL_RADIUS+float(shape[2])+mapper.FOREARM_CONTACT_GRACE:
 				touched=true
 				break

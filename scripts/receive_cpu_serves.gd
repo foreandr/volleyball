@@ -37,6 +37,7 @@ func release_passer(mapper: Map) -> void:
 	actor.play_action("idle",.12)
 	mapper.player=null
 
+var prepare_weight := 0.
 var moving_last_tick := false
 var moving_passer := false
 var checking_human_lane := false
@@ -87,22 +88,56 @@ func bind_contact_motion(mapper: Map,root: Node3D,actor: Node3D,home: Vector3,so
 	if mapper!=map or control_digger or actor!=passers[1]: return motion
 	mapper.sample_receiver(motion,motion.contact,true,mapper.legs)
 	var shot=serves[flight_style()]
-	var velocity: Vector3=(shot.flight_point(receive_at+.005)-shot.flight_point(receive_at))/.005
-	var horizontal := velocity.slide(Vector3.UP)
+	var route_time := receive_at
+	var bind_time := maxf(0.,route_time-mapper.incoming_lead_seconds)
+	var platform := contact_platform(mapper,motion,actor)
+	# Find the point of closest approach on the descending flight in three dimensions.
+	var first := maxf(bind_time,route_time-.25)
+	var last := minf(shot.planned_duration,route_time+.25)
+	var best_gap := INF
+	var start: Vector3=shot.flight_point(first)
+	for segment in range(1,25):
+		var end: Vector3=shot.flight_point(lerpf(first,last,segment/24.))
+		var step := end-start
+		var fraction := clampf((platform-start).dot(step)/maxf(.000001,step.length_squared()),0.,1.)
+		var point := start+step*fraction
+		var gap := point.distance_squared_to(platform)
+		if gap<best_gap:
+			best_gap=gap
+			receive_at=lerpf(first,last,(segment-1.+fraction)/24.)
+			mapper.set_intercept=point
+		start=end
+	mapper.sample_receiver(motion,motion.contact,true,mapper.legs)
+	var correction := mapper.set_intercept-contact_platform(mapper,motion,actor)
+	mapper.intercept_shift+=correction.slide(Vector3.UP).limit_length(.32)
+	var horizontal: Vector3=(shot.flight_point(receive_at+.005)-shot.flight_point(receive_at)).slide(Vector3.UP)/.005
 	incoming_speed=maxf(.1,horizontal.length())
 	incoming_axis=horizontal.normalized()
-	var platform: Vector3=mapper.HandPass.contact_center(actor) if motion.kind=="overhead" else (Contact.joint(actor,"hand_l")+Contact.joint(actor,"hand_r"))*.5
-	if motion.kind!="overhead":
-		platform=platform.lerp((Contact.joint(actor,"lowerarm_l")+Contact.joint(actor,"lowerarm_r"))*.5,.3)
-	var body_depth := Contact.joint(actor,"Head").dot(incoming_axis)-.09
-	platform_depth=minf(platform.dot(incoming_axis),body_depth)
-	var original_contact := receive_at
-	receive_at=clampf(receive_at+(platform_depth-mapper.set_intercept.dot(incoming_axis))/incoming_speed,0.,shot.planned_duration)
+	platform_depth=mapper.set_intercept.dot(incoming_axis)
 	pass_timing_ready=true
-	mapper.entry_frame=maxf(0.,motion.contact-maxf(0.,mapper.incoming_lead_seconds+receive_at-original_contact)*60.)
-	mapper.entry_duration=clampf(motion.contact-mapper.entry_frame,.01,15.)
+	initial_reach_shift=mapper.intercept_shift
+	steering_shift=Vector3.ZERO
+	pass_entry_time=bind_time
+	mapper.entry_frame=clampf(motion.contact-(receive_at-bind_time)*60.,minf(6.,motion.contact),motion.contact)
+	mapper.entry_duration=clampf(motion.contact-mapper.entry_frame,.01,12.)
 	mapper.sample_receiver(motion,mapper.entry_frame,true,mapper.legs)
 	return motion
+
+var initial_reach_shift := Vector3.ZERO
+var steering_shift := Vector3.ZERO
+var pass_entry_time := 0.
+
+func contact_platform(mapper: Map,motion: Dictionary,actor: Node3D) -> Vector3:
+	if motion.kind=="overhead": return mapper.HandPass.contact_center(actor)
+	var wrists := (Contact.joint(actor,"hand_l")+Contact.joint(actor,"hand_r"))*.5
+	var elbows := (Contact.joint(actor,"lowerarm_l")+Contact.joint(actor,"lowerarm_r"))*.5
+	return wrists.lerp(elbows,.3)
+
+func reception_frame() -> float:
+	if not control_digger and receiver==1 and pass_timing_ready and flight_age<receive_at:
+		var progress := clampf((flight_age-pass_entry_time)/maxf(.001,receive_at-pass_entry_time),0.,1.)
+		return lerpf(map.entry_frame,recipe.contact,progress)
+	return super.reception_frame()
 
 func pass_meter(point := Vector3.INF) -> Dictionary:
 	if not reception_release.is_empty(): return reception_release
@@ -166,6 +201,7 @@ func next_serve() -> void:
 	receiver=1
 	receive_committed=false
 	checking_human_lane=false
+	prepare_weight=0.
 	next_route_check=0.
 	cpu_wait=1.25
 	spike_target=Vector3(randf_range(-1.5,1.5),BallNet.RADIUS,BallNet.NET_Z-randf_range(7.25,8.9))
@@ -251,14 +287,21 @@ func _process(delta: float) -> void:
 			goal.z=clampf(goal.z,BallNet.NET_Z+.4,BallNet.NET_Z+10.)
 			if control_digger: goal.z=clampf(actor.position.z+travel.z*pace*delta,BallNet.NET_Z-10.,BallNet.NET_Z-.4)
 			if travel.is_zero_approx(): goal=actor.global_position
+			var preparing := receive_held and not control_digger and phase=="serve_flight"
+			prepare_weight=move_toward(prepare_weight,1. if preparing else 0.,delta*5.)
 			var focused := GroundControls.focus(axis)
 			var source := pin_hitter.global_position if control_digger else serve_station
 			if not control_digger and map.player==actor:
 				var shift := (goal-actor.global_position).slide(Vector3.UP)
 				anchor.position+=shift
-				platform_depth+=shift.dot(incoming_axis)
-			elif not travel.is_zero_approx() or moving_last_tick:
+				steering_shift+=shift
+				map.intercept_shift=initial_reach_shift-steering_shift.limit_length(.45)
+			elif not travel.is_zero_approx() or moving_last_tick or (prepare_weight>0. and phase=="serve_flight"):
 				move_receiver(actor,goal,delta,source-actor.position if focused else travel,pace,focused)
+				if prepare_weight>0. and not control_digger and phase=="serve_flight":
+					receptions[1].knee_bend_depth=.12*prepare_weight
+					receptions[1].apply_knee_bend()
+					receptions[1].knee_bend_depth=0.
 			moving_last_tick=not travel.is_zero_approx()
 			if not control_digger:
 				moving_passer=travel.length_squared()>.001
@@ -365,19 +408,35 @@ func accept_reception(previous: Vector3) -> bool:
 	if control_digger or receiver!=1: return super.accept_reception(previous)
 	if not pass_timing_ready: return false
 	var face_depth := Contact.joint(passers[1],"Head").dot(incoming_axis)-.09
-	var within := ball.position.dot(incoming_axis)-face_depth<=BODY_CUSHION
-	var touch := within and mapped_touch(map,recipe,previous)
+	var depth_limit := face_depth+BODY_CUSHION
+	var end := ball.position
+	var advance := (end-previous).dot(incoming_axis)
+	if advance>0. and end.dot(incoming_axis)>depth_limit:
+		end=previous.lerp(end,clampf((depth_limit-previous.dot(incoming_axis))/advance,0.,1.))
+	var touch := previous.dot(incoming_axis)<=depth_limit and mapped_segment_touch(map,recipe,previous,end)
 	if touch: touched_at=flight_age
-	if not is_finite(released_at): return false
+	if not is_finite(released_at):
+		if not receive_held or not touch: return false
+		ball.position=first_platform_contact(previous,end)
+		reception_result="Held at contact"
+		return true
 	record_receive_release()
 	if not reception_release.get("playable",false): return false
-	var late: bool=reception_release.grade=="Late"
-	if touch or (late and reception_release.buffered_touch):
-		if late and reception_release.buffered_touch: ball.position=reception_release.point
-		reception_result="Pass"
-		return true
-	return false
+	if not touch: return false
+	ball.position=first_platform_contact(previous,end)
+	reception_result="Pass"
+	return true
+
+func first_platform_contact(start: Vector3,end: Vector3) -> Vector3:
+	var low := start
+	var high := end
+	for step in 7:
+		var mid := low.lerp(high,.5)
+		if mapped_segment_touch(map,recipe,start,mid): high=mid
+		else: low=mid
+	return high
 
 func pass_timing_penalty() -> float:
 	if control_digger or receiver!=1: return 0.
+	if reception_result=="Held at contact": return .8
 	return clampf(absf(float(reception_release.get("offset",0.)))/RECEIVE_EARLY,0.,1.)
