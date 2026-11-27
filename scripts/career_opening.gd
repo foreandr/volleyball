@@ -89,6 +89,9 @@ func start_drill() -> void:
 	elif CareerSession.stage()=="pepper" and not CareerSession.data.get_value(CareerSession.key(),"footwork_done",false):
 		CareerSession.checkpoint("footwork",0)
 		begin_run()
+	elif CareerSession.stage() in ["moving_reception","moving_reception_complete"]:
+		pepper.moving=true
+		pair_up()
 	elif CareerSession.stage() in ["pepper","pepper_complete"]: pair_up()
 	elif CareerSession.stage()=="welcome": welcome()
 	else:
@@ -357,6 +360,17 @@ func pair_up() -> void:
 	if pepper.demonstrating:
 		phase="demo"
 		show_demo_prompt()
+		if pepper.moving:
+			workout_label.show()
+			workout_label.text="Moving reception   /   Watch the pass to the setter"
+			say(coach,"Focus on me before every toss. Shuffle under the ball and pass to the setter.",5.)
+
+func moving_prompt(waiting:bool) -> void:
+	workout_label.text="%d / 5 passes to setter"%pepper.score
+	if waiting:
+		training_prompt([["LT","Face coach for the toss"]],"Hold Ctrl to face coach")
+	else:
+		training_prompt([["LT","Focus"],["Move","Shuffle"],[JOY_BUTTON_A,"Hold, release at contact"]],"Ctrl to focus / WASD to shuffle / Hold Space, release at contact")
 
 func finish_pepper() -> void:
 	phase="pepper_complete"
@@ -446,6 +460,10 @@ func _input(event:InputEvent) -> void:
 			pepper.button(event.pressed)
 			get_viewport().set_input_as_handled()
 			return
+	if phase=="pepper_complete" and event.is_action_pressed("ui_accept") and not pepper.moving:
+		get_viewport().set_input_as_handled()
+		if CareerSession.checkpoint("moving_reception",0): MenuPresentation.load_scene("res://scenes/career_opening.tscn")
+		return
 	if (phase=="pepper_complete" and event.is_action_pressed("ui_accept")) or (phase in ["footwork","pepper","pepper_complete"] and event.is_action_pressed("ui_cancel")):
 		get_viewport().set_input_as_handled()
 		MenuPresentation.load_scene("res://scenes/story.tscn")
