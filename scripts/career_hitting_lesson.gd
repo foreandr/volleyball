@@ -3,7 +3,7 @@ extends "res://scripts/attacking_camp.gd"
 const POSITIONS:=["Left (4)","Middle (3)","Right (2)"]
 const ZONES:=[1,6,5]
 const HALF_ZONE:=1.35
-const SIDELINE:=Vector3(5.4,.04,.65)
+var feed_after_return:=""
 var career_hitter:Node3D
 var sideline_actor:Node3D
 var makes:=0
@@ -30,6 +30,7 @@ var mark:=MeshInstance3D.new()
 var closing:=false
 
 func start_drill() -> void:
+	coach_only_feeds=true
 	makes=clampi(CareerSession.progress() if CareerSession.stage()=="hitting_lesson" else 0,0,8)
 	var surface:=PlaneMesh.new()
 	surface.size=Vector2.ONE*HALF_ZONE*2.
@@ -61,8 +62,9 @@ func switch_attacker(active:Node3D,waiting:Node3D) -> void:
 	else: platform.set_receive_clip(preload("res://assets/animations/straight_pass_02.res"))
 	jump_height=float(active.attributes.vertical_in)*.0254
 	sideline_actor=waiting
-	waiting.position=SIDELINE
-	waiting.look_at(Vector3(0,SIDELINE.y,3),Vector3.UP,true)
+	active.position=GroundControls.BACK_LEFT
+	waiting.position=GroundControls.BACK_MIDDLE
+	waiting.look_at(Vector3(coach.position.x,waiting.position.y,coach.position.z),Vector3.UP,true)
 	waiting.play_action("idle",0.)
 	waiting.animator.advance(0.)
 
@@ -89,7 +91,13 @@ func reset_feed() -> void:
 	coach_station=Vector3(-.58,0,BallNet.NET_Z+2.6)
 	attack_lane=mini(2,makes/3)
 	next_set=Vector3([3.65,0.,-3.65][attack_lane],2.65,3.)
+	var previous:=hitter.position
 	super.reset_feed()
+	hitter.position=Vector3(previous.x,START.y,previous.z)
+	prep_velocity=Vector3.ZERO
+	if phase in ["cart","walk"]:
+		feed_after_return=phase
+		begin("return_to_five")
 	mark.position=zone_center()
 	panel.show()
 	title.text=camp_title()
@@ -108,10 +116,21 @@ func change_feed_phase(next:String) -> void:
 		return
 	super.change_feed_phase(next)
 
+func team_controls_approach() -> bool:
+	return phase in ["return_to_five","cart","walk","feed","between","drop","spike"]
+
 func step_attack(delta:float) -> void:
+	if phase=="return_to_five":
+		var steering:=not cpu_hitter and Vector2(axis(JOY_AXIS_LEFT_X),axis(JOY_AXIS_LEFT_Y)).length()>.16
+		super.step_attack(delta)
+		if not steering and rotation_drill.walk(hitter,GroundControls.BACK_LEFT,delta,5.2):
+			prep_velocity=Vector3.ZERO
+			hitter.look_at(Vector3(coach.position.x,hitter.position.y,coach.position.z),Vector3.UP,true)
+			begin(feed_after_return)
+		return
 	super.step_attack(delta)
-	if phase=="feed":
-		coach.look_at(Vector3(hitter.position.x,coach.position.y,hitter.position.z),Vector3.UP,true)
+	if phase in ["cart","feed"]:
+		GroundControls.face(coach,GroundControls.BACK_LEFT-coach.position,delta)
 	elif phase=="receive_toss":
 		var t:=minf(elapsed,RECEIVE_TIME)
 		platform.apply_pose(maxf(0.,platform.contact_frame+t-RECEIVE_TIME),smoothstep(RECEIVE_TIME-.65,RECEIVE_TIME-.18,t))

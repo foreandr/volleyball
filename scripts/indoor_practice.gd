@@ -40,6 +40,7 @@ var contact_time := 1.0
 const DURATION := [1.25,1.62]
 const APEX := [1.92,3.22]
 const LINES := ["Welcome to the team, %s. IÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢m Coach Ellis.","YouÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢re trying out at setter. Watch the three targets. IÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ll toss the first ones right to you.","Three calls from each coach station. Keep your spot. IÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ll toss above your forehead, including on the jump sets."]
+var coach_only_feeds := false
 var coach_motion := preload("res://scripts/tryout_coach.gd").new()
 var last_toss := -10.0
 var next_release := 0.0
@@ -556,7 +557,7 @@ func reset_feed() -> void:
 		setter.play_action("idle")
 	catch_point = BASE + Vector3.UP*(1.93*setter.height_cm/180.0 + (preload("res://scripts/setter_jump.gd").COURT_VERTICAL_SCALE*(camp_jump_height if solo_setting else .52)*setter.stamina.effectiveness() if jump_rep() else 0.0))
 	coach.show()
-	coach.rotation.y = atan2(catch_point.x-coach.position.x,catch_point.z-coach.position.z)
+	if not coach_only_feeds: coach.rotation.y = atan2(catch_point.x-coach.position.x,catch_point.z-coach.position.z)
 	ball.visible = demonstration or rotation_drill.issued!=null
 	apply_camera()
 	if demonstration: title.text="COACH DEMO   /   %d OF 3" % (demo_index+1)
@@ -831,7 +832,7 @@ func _process(delta: float) -> void:
 		before[actor]=actor.rotation.y
 	focus_headings.clear()
 	step_practice(delta)
-	if phase in ["pass","set","set_contact","result","drop"]:
+	if not coach_only_feeds and phase in ["pass","set","set_contact","result","drop"]:
 		var active:Node3D=setter
 		if "hitter" in self and get("hitter")!=null: active=get("hitter")
 		if "automatic_block" in self and get("blockers").size()>2: active=call("frame_editor_blocker")
@@ -1246,7 +1247,7 @@ func step_practice(delta: float) -> void:
 			if coach_ready and incoming_ready and rotation_drill.floor_clear() and rotation_drill.take_ball():
 				setter.rotation.y = atan2(coach.position.x-setter.position.x,coach.position.z-setter.position.z)
 				change_feed_phase("feed")
-				coach.rotation.y = atan2(catch_point.x-coach.position.x,catch_point.z-coach.position.z)
+				if not coach_only_feeds: coach.rotation.y = atan2(catch_point.x-coach.position.x,catch_point.z-coach.position.z)
 		"walk":
 			var step := coach_goal-coach.position
 			if step.length()>0.05:
@@ -1255,7 +1256,7 @@ func step_practice(delta: float) -> void:
 				coach.position = coach.position.move_toward(coach_goal,delta*1.9)
 				ball.position = coach.position+Vector3.UP*1.12+coach.basis.z*0.28
 			else:
-				coach.rotation.y = atan2(catch_point.x-coach.position.x,catch_point.z-coach.position.z)
+				if not coach_only_feeds: coach.rotation.y = atan2(catch_point.x-coach.position.x,catch_point.z-coach.position.z)
 				coach.play_action("idle")
 				change_feed_phase("feed")
 		"feed":
@@ -1369,7 +1370,7 @@ func step_practice(delta: float) -> void:
 					drop_velocity.y=0.
 					ball.position.y+=.004
 				return
-			if elapsed<0.16: coach_motion.toss(coach,1.0)
+			if not coach_only_feeds and elapsed<0.16: coach_motion.toss(coach,1.0)
 			ball.position.y = maxf(0.15,ball.position.y)
 			if cpu_forearm:
 				play_bump(previous,incoming,delta)
@@ -1580,6 +1581,7 @@ func step_practice(delta: float) -> void:
 				rotation_drill.advance_turn()
 				reset_feed()
 
+	if coach_only_feeds and phase!="cart": return
 	rotation_drill.prepare_next_ball(delta)
 	if solo_setting and rotation_drill.waiting_ball and rotation_drill.fetch_time>=.74:
 		if (phase=="set" and elapsed>=flight_time-.30) or phase in ["rim","result","between","cart"] and coach_windup>0.:
