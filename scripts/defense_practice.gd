@@ -192,8 +192,15 @@ func play_spike(time: float, delta: float) -> void:
 		ball.global_position = Net.after_hit(dig.net_hit,age)
 	else:
 		ball.global_position = flight_point(origin,dig.outgoing,minf(age,dig.floor_time))
-	if age >= dig.floor_time and age-delta < dig.floor_time: play_floor_sound()
+	if age >= dig.floor_time and age-delta < dig.floor_time: play_floor_sound((dig.outgoing+Vector3.DOWN*Flight.GRAVITY*dig.floor_time).length())
 	if age >= dig.floor_time+0.55 and not jump.active: reset_feed()
+
+func projected_landing() -> Vector3:
+	if is_instance_valid(dig) and is_finite(dig.touch_time) and ball.global_position.y>.15:
+		if not dig.net_hit.is_empty(): return Net.after_hit(dig.net_hit,dig.net_hit.end_time)
+		if dig.hand_setting and not is_finite(dig.release_time): return Vector3.INF
+		return flight_point(dig.release_point if dig.hand_setting else dig.touch,dig.outgoing,dig.floor_time)
+	return super.projected_landing()
 
 func trace_snapshot(time: float) -> Dictionary:
 	var snapshot := super.trace_snapshot(time)

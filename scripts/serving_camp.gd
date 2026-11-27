@@ -316,6 +316,24 @@ func configure_flight(shot,origin: Vector3) -> void:
 	if flight_style() in [1,2]: shot.tape_clearance=float_clearance
 	shot.apex=maxf(origin.y+.03,(4.3 if flight_style()==0 else 4.9)+serve_arc_offset)
 
+func projected_landing() -> Vector3:
+	if replay_inspector.active or ball.position.y<=.15: return Vector3.INF
+	match phase:
+		"serve_flight":
+			var shot=serves[flight_style()]
+			return shot.flight_point(shot.planned_duration) if shot.net_hit.is_empty() else BallNet.after_hit(shot.net_hit,shot.net_hit.end_time)
+		"serve_pass": return LandingMarker.parabola(pass_start,pass_end,pass_duration,4.905*pass_duration*pass_duration*.25)
+		"serve_attack": return LandingMarker.parabola(pass_start,pass_end,set_duration,4.905*set_duration*set_duration*.25)
+		"serve_toss":
+			if toss_airborne: return LandingMarker.parabola(source,endpoint,flight_time,set_arc_height)
+			var motion=serves[toss_style]
+			if toss_style>=2 and motion.has_method("toss_curve_height") and serve_clock>motion.toss_release_time():
+				return LandingMarker.parabola(motion.toss_origin,motion.preview_origin,motion.contact_time()-motion.toss_release_time(),motion.toss_curve_height())
+		"serve_return","server_dig","serve_miss":
+			if not drop_net_hit.is_empty(): return BallNet.after_hit(drop_net_hit,drop_net_hit.end_time)
+			if roll_time<0.: return LandingMarker.ballistic(ball.position,drop_velocity)
+	return super.projected_landing()
+
 func update_serve_aim(delta: float) -> void:
 	var before := phase=="serve_ready"
 	var stick := Vector2(axis(JOY_AXIS_RIGHT_X),axis(JOY_AXIS_RIGHT_Y)) if before else Vector2(axis(JOY_AXIS_LEFT_X),axis(JOY_AXIS_LEFT_Y))

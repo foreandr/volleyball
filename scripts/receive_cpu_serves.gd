@@ -4,6 +4,9 @@ var cpu_wait := 0.
 var receive_held := false
 var released_at := INF
 var touched_at := INF
+var receive_committed := false
+const RECEIVE_EARLY := .21
+const RECEIVE_LATE := .15
 
 func receiver_candidates() -> Array:
 	return [1]
@@ -17,6 +20,8 @@ func build_rally_sliders() -> void:
 
 func next_serve() -> void:
 	super.next_serve()
+	receiver=1
+	receive_committed=false
 	cpu_wait=1.25
 	receive_held=false
 	released_at=INF
@@ -39,10 +44,11 @@ func walk_server(_delta: float,_defending := false) -> void:
 
 func update_serve_aim(_delta: float) -> void:
 	super.update_serve_aim(0.)
+	for driver in serves: driver.path_preview.hide()
 
 func _process(delta: float) -> void:
 	if not settings.visible and not get_tree().paused and not replay_inspector.active:
-		if phase in ["serve_ready","serve_toss"]:
+		if phase in ["serve_ready","serve_toss","serve_flight"] and not receive_committed and not receive_held:
 			var actor := passers[1]
 			var stick := Vector2(axis(JOY_AXIS_LEFT_X),axis(JOY_AXIS_LEFT_Y))
 			stick+=Vector2(Input.get_axis("ui_left","ui_right"),Input.get_axis("ui_up","ui_down"))
@@ -67,7 +73,11 @@ func _process(delta: float) -> void:
 func _input(event: InputEvent) -> void:
 	if not settings.visible and not get_tree().paused and not replay_inspector.active:
 		if event is InputEventJoypadButton and event.button_index==Xbox.physical(JOY_BUTTON_A) or event is InputEventKey and event.keycode==KEY_Q and not event.echo:
-			if event.pressed: receive_held=true
+			if event.pressed:
+				receive_held=true
+				if phase=="serve_flight" and not receive_committed:
+					receive_committed=true
+					plan_remaining_reception(serves[flight_style()],flight_age)
 			elif receive_held:
 				receive_held=false
 				if phase=="serve_flight":
@@ -78,11 +88,23 @@ func _input(event: InputEvent) -> void:
 		if event is InputEventJoypadButton and event.button_index!=Xbox.physical(JOY_BUTTON_START): return
 	super._input(event)
 
+func plan_serve_reception(shot) -> void:
+	if receive_held:
+		receive_committed=true
+		plan_remaining_reception(shot,0.)
+
+func step_serve_reception(shot,previous: Vector3,delta: float) -> void:
+	if not receive_committed:
+		if not receive_held: return
+		receive_committed=true
+		plan_remaining_reception(shot,maxf(0.,flight_age-delta))
+	super.step_serve_reception(shot,previous,delta)
+
 func accept_reception(previous: Vector3) -> bool:
 	if mapped_touch(map,recipe,previous) and not is_finite(touched_at): touched_at=flight_age
 	if not is_finite(touched_at) or not is_finite(released_at): return false
 	show_release_feedback(released_at-touched_at,true)
-	return absf(released_at-touched_at)<=.15
+	return released_at>=touched_at-RECEIVE_EARLY and released_at<=touched_at+RECEIVE_LATE
 
 func step_reception_rally(delta: float) -> void:
 	pass_clock+=delta

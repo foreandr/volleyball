@@ -46,6 +46,7 @@ var feed_fraction := 1.
 var ball_trail := MeshInstance3D.new()
 var trail_mesh := ImmediateMesh.new()
 var trail_ink := StandardMaterial3D.new()
+var floor_hint := Vector3.INF
 var incoming_floor_fraction := 1.
 var pass_end_frame := 0.
 var reachable := false
@@ -288,6 +289,7 @@ func configure_feed() -> void:
 	feed.configure(server,serve_from,PI)
 	feed.aim_ring.hide()
 	feed.path_preview.hide()
+	preload("res://scripts/ball_landing_marker.gd").attach(feed.ball,func(): return floor_hint)
 
 func save_feed() -> void:
 	seek.min_value=0.
@@ -762,6 +764,8 @@ func draw_pose() -> void:
 	feed.ball.rotation=Vector3.ZERO
 	if reachable and seconds>0.:
 		preload("res://scripts/pass_flight.gd").rotate_reception_ball(feed.ball,(pass_marker.position-target)/landing,seconds,feed.reception_spin_rps(),c.kind=="overhead")
+	floor_hint=pass_marker.position if reachable and seconds>0. else launch.lerp(aim,incoming_floor_fraction)
+	if point.y<=.15 or seconds<=-duration: floor_hint=Vector3.INF
 	feed.ball.position=point
 	feed.ball.visible=point.y>=.144
 	if ball_trail.visible and seconds > -duration:

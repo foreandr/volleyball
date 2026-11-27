@@ -70,6 +70,7 @@ func _ready() -> void:
 	style.cull_mode = BaseMaterial3D.CULL_DISABLED
 	ball.material_override = style
 	add_child(ball)
+	preload("res://scripts/ball_landing_marker.gd").attach(ball,projected_landing)
 	audio = AudioStreamPlayer.new()
 	audio.stream = AudioStreamWAV.load_from_file("res://assets/audio/pass_contact.wav")
 	audio.volume_db = -7
@@ -601,6 +602,18 @@ func position_at(elapsed: float) -> Vector3:
 	if elapsed<0.0: return Flight.position(feed_info,aim_point,elapsed)
 	if not outgoing_net.is_empty() and elapsed>=outgoing_net.time: return Net.after_hit(outgoing_net,elapsed)
 	return flight_position(elapsed)
+
+func projected_landing() -> Vector3:
+	if not active or not has_last_time or ball.global_position.y<=.15: return Vector3.INF
+	var time := last_time-contact_time
+	if not recovery.is_empty() and time>=recovery.time: return position_at(recovery_net.end_time if not recovery_net.is_empty() else recovery.end_time)
+	if not incoming_net.is_empty(): return Net.after_hit(incoming_net,incoming_net.end_time)
+	if practice_mode or time<0.:
+		if feed_info.is_empty(): return Vector3.INF
+		var gravity := maxf(1.,-float(feed_info.acceleration.y))
+		var end := Flight.landing_time(aim_point,incoming,gravity)
+		return aim_point+incoming*end+feed_info.acceleration*.5*end*end
+	return Net.after_hit(outgoing_net,outgoing_net.end_time) if not outgoing_net.is_empty() else flight_position(flight_duration)
 
 func flight_position(elapsed: float) -> Vector3:
 	var age := clampf(elapsed,0,flight_duration)

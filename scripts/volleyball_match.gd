@@ -285,6 +285,7 @@ func configure(actor: Node3D, board: Label, status: Label, build := "", players_
 	material.vertex_color_use_as_albedo = true
 	ball.material_override = material
 	add_child(ball)
+	preload("res://scripts/ball_landing_marker.gd").attach(ball,func(): return path_point(flight_end()) if phase==Phase.LIVE and not replay.active else Vector3.INF)
 	for avatar in players: avatar.watch_ball(ball)
 	aim_ring = MeshInstance3D.new()
 	var ring := TorusMesh.new()
@@ -510,6 +511,7 @@ func prepare_serve(style: int) -> void:
 		aim.z = randf_range(9.2,12.4)
 	serve.aim(aim)
 	serve.aim_ring.visible = is_human(index)
+	serve.path_preview.visible = is_human(index)
 	serve.path_preview.visible = is_human(index)
 	serve_pending = false
 	info.text = ("Blue serving" if side == 0 else "Orange serving") if spectator else ["Your serve Ãƒâ€šÃ‚Â· Space","Teammate serving","Opponents serving"][0 if index == 0 else (1 if side == 0 else 2)]
@@ -2592,40 +2594,9 @@ func update_player_guide() -> void:
 	player_label.global_position = human.global_position+Vector3.UP*2.17
 	player_label.visible = not spectator
 	update_action_labels()
-	var show_guide := not spectator and (phase == Phase.LIVE or (phase == Phase.READY and server_index() != 0))
-	trajectory_node.visible = show_guide
-	aim_ring.visible = show_guide
-	if not show_guide: return
-	var bump := platforms[0]
-	aim_receive(0)
-	var start: Vector3 = frames[0].to_global(bump.ready_contact())
-	var target := Vector3(bump.destination.x,Flight.FLOOR,bump.destination.y)
-	var launch: Vector3
-	if expected_hitter == 0 and flight_kind == "set":
-		var driver := attackers[0]
-		var contact_at: float = driver.descending_time(origin,velocity,driver.set_contact_height())
-		start = flight_point(clampf(contact_at,0.0,duration))
-		target = driver.swing_aim
-		var travel := target-start
-		var air_time := maxf(0.1,travel.slide(Vector3.UP).length()/24.0)
-		launch = travel/air_time+Vector3.UP*0.5*Flight.GRAVITY*air_time
-	elif receiving_team == 0 and possession_team == 0 and touches == 1 and human_can_set():
-		target = set_pin_for(0)
-		launch = attackers[0].set_toward_pin(start,target,maxf(maxf(3.60,start.y+0.18),pass_height),attackers[0].set_contact_height())
-	else:
-		launch = Flight.target_velocity(start,{"position":Vector2(target.x,target.z),"fit":"height","height":pass_height},45.0)
-	aim_ring.global_position = Vector3(target.x,0.066,target.z)
-	if start.distance_squared_to(preview_origin) < 0.0004 and launch.distance_squared_to(preview_velocity) < 0.0004: return
-	preview_origin = start
-	preview_velocity = launch
-	var end := Flight.landing_time(start,launch)
-	trajectory.clear_surfaces()
-	trajectory.surface_begin(Mesh.PRIMITIVE_LINES,trajectory_style)
-	for segment in 36:
-		for fraction in [0.0,0.50]:
-			var time: float = end*(segment+fraction)/36.0
-			trajectory.surface_add_vertex(to_local(start+launch*time+Vector3.DOWN*0.5*Flight.GRAVITY*time*time))
-	trajectory.surface_end()
+	trajectory_node.hide()
+	aim_ring.hide()
+	if not spectator and phase==Phase.LIVE: aim_receive(0)
 
 func hand_over_overpass(side: int) -> void:
 	var driver := attackers[team(last_player)]

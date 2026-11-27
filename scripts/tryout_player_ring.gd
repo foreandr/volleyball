@@ -66,7 +66,7 @@ func _draw() -> void:
 		draw_player(passer,true)
 		if game.phase=="serve_flight" and not game.recipe.is_empty():
 			var t: float=(game.released_at if is_finite(game.released_at) else game.flight_age)-game.receive_at
-			timing_arc(passer,clampf(.5+t/.5,0.,1.),.33,.67,Vector2(.2,.8),Color("14191d"),is_finite(game.released_at))
+			timing_arc(passer,clampf(.5+t/.5,0.,1.),.33,.67,Vector2(.5-game.RECEIVE_EARLY/.5,.5+game.RECEIVE_LATE/.5),Color("14191d"),is_finite(game.released_at))
 		return
 	var human: Node3D=game.rotation_drill.roster[0]
 	if "automatic_block" in game:
@@ -90,7 +90,6 @@ func _draw() -> void:
 			draw_polyline(points,tint,2.5,true)
 			draw_circle(game.camera.unproject_position(center),3.,tint)
 		return
-	if game.phase=="pass": draw_incoming_toss()
 	if not game.bump_aim.is_zero_approx() and game.phase in ["feed","pass"]:
 		var aim: Vector3=game.bump_destination()
 		if not game.camera.is_position_behind(aim):
@@ -115,19 +114,6 @@ func _draw() -> void:
 				draw_texture_rect(icon,Rect2(left+Vector2(33,-19),Vector2(27,24)),false)
 			draw_string(font,left+Vector2(62,0),game.TARGETS[called],HORIZONTAL_ALIGNMENT_LEFT,-1,16)
 
-
-func draw_incoming_toss() -> void:
-	var time: float=game.forehead_arrival
-	var vy: float=(game.forehead_target.y-game.source.y)/time+4.905*time
-	var floor_y := .15
-	var landing_time := (vy+sqrt(vy*vy+19.62*maxf(0.,game.source.y-floor_y)))/9.81
-	var landing: Vector3=game.toss_at(landing_time)
-	landing.y=.055
-	var camera: Camera3D=game.camera
-	if camera.is_position_behind(landing): return
-	var point := camera.unproject_position(landing)
-	draw_circle(point,4.5,Color.WHITE,true,-1,true)
-	draw_circle(point,3.,Color("15191e"),true,-1,true)
 
 func draw_set_path(actor: Node3D) -> void:
 	var active: bool=actor==game.setter

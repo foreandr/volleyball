@@ -194,3 +194,4 @@ In Reception Test, recorded digs include the defender's mapped pose. Dig release
 Reception Test displays dig release timing in milliseconds, using measured platform contact when available and labeling predicted timing as estimated.
 The shared practice floor ring shows remaining stamina as a white arc over black. Dig release feedback fades in and out at screen center.
 Reception Test accepts dig releases within 125 ms either side of contact and offers a saved 0-25 cm body reach assist (12 cm by default). Passing / Receive CPU Serves feeds the controlled libero standing floats, uses the assigned reception motion and scores the A release against physical contact.
+Receive CPU Serves leaves the libero mobile until A is held. It maps the remaining flight from the current stance and accepts releases 210 ms early or 150 ms late. A floor ring forecasts the airborne ball's landing and updates when a new touch changes its flight.

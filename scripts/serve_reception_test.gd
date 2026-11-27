@@ -112,16 +112,19 @@ func receiver_candidates() -> Array:
 	return [0,1,2]
 
 func plan_serve_reception(shot) -> void:
+	plan_remaining_reception(shot,0.)
+
+func plan_remaining_reception(shot,from_time: float) -> void:
 	chase_box={}
 	routed_zone=""
 	received_spin_rps=shot.reception_spin_rps()
 	var finish: float=shot.planned_duration
 	leave_serve=reads_serve_out(shot.flight_point(finish),passers[0].effective_rating("Forearm reception"),randf_range(-1.,1.))
 	if leave_serve or not shot.net_hit.is_empty(): return
-	var previous: Vector3=shot.origin
-	var steps := maxi(1,ceili(finish*90.))
+	var previous: Vector3=shot.flight_point(from_time)
+	var steps := maxi(1,ceili((finish-from_time)*90.))
 	for tick in range(1,steps+1):
-		var point: Vector3=shot.flight_point(finish*tick/steps)
+		var point: Vector3=shot.flight_point(lerpf(from_time,finish,float(tick)/steps))
 		if point.z>BallNet.NET_Z:
 			var earliest := INF
 			var best := {}
@@ -140,10 +143,10 @@ func plan_serve_reception(shot) -> void:
 						receiver=i
 						best=box
 			if not best.is_empty():
-				receive_at=finish*(tick-1+earliest)/steps
-				if map.early_platform(best.cell): receive_at=maxf(0.,receive_at-.55/maxf(1.,shot.velocity.slide(Vector3.UP).length()))
+				receive_at=lerpf(from_time,finish,(tick-1+earliest)/steps)
+				if map.early_platform(best.cell): receive_at=maxf(from_time,receive_at-.55/maxf(1.,shot.velocity.slide(Vector3.UP).length()))
 				map.set_intercept=shot.flight_point(receive_at)
-				map.incoming_lead_seconds=receive_at
+				map.incoming_lead_seconds=receive_at-from_time
 				map.feed_kmh=shot.velocity.length()*3.6
 				routed_zone=map.region_number(best.cell,best.part)
 				recipe=bind_contact_motion(map,anchor,passers[receiver],active_stances[receiver],serve_station,best)
@@ -154,7 +157,7 @@ func plan_serve_reception(shot) -> void:
 	# to bring an assigned motion into the descending ball's path.
 	var best_cost := INF
 	for tick in range(1,steps+1):
-		var t := finish*tick/steps
+		var t := lerpf(from_time,finish,float(tick)/steps)
 		var point: Vector3=shot.flight_point(t)
 		if point.z<=BallNet.NET_Z or point.y<.25: continue
 		for i in receiver_candidates():
@@ -169,7 +172,7 @@ func plan_serve_reception(shot) -> void:
 				var goal := home+offset.rotated(Vector3.UP,yaw)
 				if goal.z<BallNet.NET_Z+.20: continue
 				var travel := offset.length()
-				var spare: float= t-passers[i].reaction_seconds()-travel/GroundControls.speed(true,true)
+				var spare: float=t-from_time-passers[i].reaction_seconds()-travel/GroundControls.speed(true,true)
 				var cost := travel+.5*absf(local.y-center.y)+12.*maxf(0.,.20-spare)
 				if i==1 and spare>.12: cost-=.55
 				if cost>=best_cost: continue

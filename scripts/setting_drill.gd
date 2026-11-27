@@ -109,6 +109,7 @@ func configure(player: Node3D, readout: Label, use_bump: bool, build := "") -> v
 	ball_style.cull_mode = BaseMaterial3D.CULL_DISABLED
 	ball.material_override = ball_style
 	add_child(ball)
+	preload("res://scripts/ball_landing_marker.gd").attach(ball,projected_landing)
 	region = MeshInstance3D.new()
 	var ring := TorusMesh.new()
 	ring.inner_radius = REGION_RADIUS-0.045
@@ -327,6 +328,15 @@ func step(delta: float) -> void:
 	if previous < 0.0:
 		trace.write("cpu_contact",clock,{"point":contact,"outgoing_velocity":pass_velocity,"move":receiver_move_name()},true)
 	step_bump(after_pass,maxf(0.0,previous),delta)
+
+func projected_landing() -> Vector3:
+	if not is_visible_in_tree() or clock<.45 or ball.position.y<=.15: return Vector3.INF
+	if clock<.45+SERVE_TIME: return to_global(flight_point(SOURCE,serve_velocity,Flight.landing_time(SOURCE,serve_velocity)))
+	if is_finite(bump.touch_time):
+		if not bump_enabled and not is_finite(bump.release_time): return Vector3.INF
+		if not bump.net_hit.is_empty(): return to_global(Net.after_hit(bump.net_hit,bump.net_hit.end_time))
+		return to_global(flight_point(bump.touch if bump_enabled else bump.release_point,bump.outgoing,bump.floor_time))
+	return to_global(flight_point(contact,pass_velocity,landing))
 
 func step_bump(time: float, previous: float, delta: float) -> void:
 	var path := func(t): return flight_point(contact,pass_velocity,minf(t,landing))

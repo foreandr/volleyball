@@ -929,6 +929,12 @@ func attack_spin_axis(direction: Vector3, spin: int) -> Vector3:
 func advance_missed_ball(delta: float,rebound_floor := false) -> void:
 	super.advance_missed_ball(delta,rebound_floor or phase=="drop")
 
+func projected_landing() -> Vector3:
+	if phase=="spike" and launched_attack and roll_time<0. and drop_net_hit.is_empty() and not replay_inspector.active and ball.position.y>.15:
+		var flight := preload("res://scripts/pass_flight.gd").landing_time(ball.position,drop_velocity,maxf(.1,9.81-spin_acceleration.y))
+		return ball.position+drop_velocity*flight+spin_acceleration*.5*flight*flight
+	return super.projected_landing()
+
 func advance_spike(delta: float) -> void:
 	var age := swing_time-contact_swing_time
 	if age<=PALM_CONTACT+.00001:

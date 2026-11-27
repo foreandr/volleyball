@@ -1086,6 +1086,16 @@ func hit_spike(charge: float, point: Vector3, palm_gap := 0.0) -> void:
 	status.text = "Spike  |  %d%% power" % roundi(charge*100.0)
 	trace.write("spike",clock,{"point":swing_contact,"aim":swing_aim,"velocity":pass_motion,"power":charge,"palm_gap":palm_gap,"swing":SpikeArm.SWING_NAME,"palm_speed":swing_impact_speed,"peak_palm_speed":swing_hand_speed,"topspin_rps":spike_topspin_rps,"net":not swing_net_hit.is_empty()},true)
 
+func projected_landing() -> Vector3:
+	if not is_visible_in_tree() or ball.position.y<=.15: return Vector3.INF
+	match stage:
+		Stage.SERVE: return to_global(serve_flight_point(Flight.landing_time(serve_origin,serve_velocity)))
+		Stage.HIT:
+			if not swing_net_hit.is_empty(): return to_global(Net.after_hit(swing_net_hit,swing_net_hit.end_time))
+			return to_global(spike_flight_point(flight_end))
+		Stage.PASS,Stage.SET,Stage.SHANK: return to_global(flight_point(pass_origin,pass_motion,Flight.landing_time(pass_origin,pass_motion)))
+	return Vector3.INF
+
 func spike_flight_point(time: float) -> Vector3:
 	return pass_origin+pass_motion*time+Vector3.DOWN*0.5*Flight.spike_gravity(spike_topspin_rps)*time*time
 

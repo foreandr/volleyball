@@ -157,6 +157,7 @@ var meter := ProgressBar.new()
 
 var coach: Node3D
 
+const LandingMarker = preload("res://scripts/ball_landing_marker.gd")
 var ball := MeshInstance3D.new()
 var panel := PanelContainer.new()
 var title := Label.new()
@@ -281,6 +282,7 @@ func _ready() -> void:
 	leather.shader = cover
 	ball.material_override = leather
 	world.add_child(ball)
+	LandingMarker.attach(ball,projected_landing)
 	rotation_drill.configure(self)
 	add_child(replay_inspector)
 	for a in rotation_drill.roster: energy[a]=a.stamina
@@ -593,6 +595,17 @@ func place_practice_camera(pivot: Vector3, arm_length: float) -> void:
 func build_settings() -> void:
 	settings.configure(self)
 	settings.visibility_changed.connect(func(): rotation_drill.pause_balls(settings.visible))
+
+func projected_landing() -> Vector3:
+	if replay_inspector.active or ball.position.y<=.15: return Vector3.INF
+	match phase:
+		"pass":
+			if forehead_arrival>.001: return LandingMarker.ballistic(source,(forehead_target-source)/forehead_arrival+Vector3.UP*4.905*forehead_arrival)
+		"set": return LandingMarker.parabola(source,endpoint,flight_time,set_arc_height)
+		"drop","spike","rim":
+			if not drop_net_hit.is_empty(): return BallNet.after_hit(drop_net_hit,drop_net_hit.end_time)
+			if roll_time<0.: return LandingMarker.ballistic(ball.position,drop_velocity)
+	return Vector3.INF
 
 func arc(a: Vector3,b: Vector3,t: float,height: float) -> Vector3:
 	var u := clampf(t,0,1)

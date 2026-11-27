@@ -489,6 +489,11 @@ func hit_spike(charge: float, point: Vector3, palm_gap := 0.0) -> void:
 	flight_end = Flight.landing_time(pass_origin,pass_motion,gravity)
 	swing_net_hit = Net.first_hit(spike_flight_point,0.0,flight_end)
 
+func projected_landing() -> Vector3:
+	if is_visible_in_tree() and stage==Stage.HIT and is_finite(block_contact_at) and ball.position.y>.15:
+		return to_global(flight_point(block_contact,block_velocity,Flight.landing_time(block_contact,block_velocity)))
+	return super.projected_landing()
+
 func play_spike(time: float, delta: float) -> void:
 	if is_finite(block_contact_at):
 		var elapsed := time-block_contact_at
@@ -497,7 +502,7 @@ func play_spike(time: float, delta: float) -> void:
 		if time < SWING_FOLLOW_TIME:
 			var follow := 1.0-pow(1.0-clampf(time/0.19,0.0,1.0),2.0)
 			pose_bow_draw(delta,1.0-smoothstep(0.19,SWING_FOLLOW_TIME,time),swing_contact,swing_contact_extension,follow)
-		if elapsed >= end and elapsed-delta < end: play_floor_sound()
+		if elapsed >= end and elapsed-delta < end: play_floor_sound((block_velocity+Vector3.DOWN*Flight.GRAVITY*end).length())
 		if elapsed >= end+0.40 and not jump.active: reset_feed()
 		return
 	if time <= flight_end and (swing_net_hit.is_empty() or time-delta < swing_net_hit.time):
