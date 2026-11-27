@@ -666,11 +666,12 @@ func draw_pose() -> void:
 		touch_frame=duration*60.
 		c=c.duplicate()
 		c.platform_front_m=.60
+		if address==REGION_14: c.grounded_platform=true
 		if address==REGION_14 and region.w%4<2:
-			c.backward_hop=true
-			c.entry_plant_m=.24
+			c.backward_step=true
+			c.entry_plant_m=.52
 			c.entry_time=.18
-			c.entry_speed=1.8
+			c.entry_speed=2.9
 	if c.id==21 and address.y==0 and address.z==2:
 		c=c.duplicate()
 		c.side*=1.20
@@ -752,6 +753,9 @@ func draw_pose() -> void:
 						# Lower the hips over the planted foot rather than translating the feet below the court.
 						reach_adjustment.y+=correction.y
 						correction.y=0.
+					if c.get("grounded_platform",false):
+						if correction.y<0.: reach_adjustment.y+=correction.y
+						correction.y=0.
 					intercept_shift+=correction
 					sample_receiver(c,shift_frame,true,motion_legs)
 					best_gap=INF
@@ -763,7 +767,7 @@ func draw_pose() -> void:
 							best_gap=gap
 							correction=(contact_point-p).normalized()*(maxf(0.,gap)+.018)
 					reachable=best_gap<=FOREARM_CONTACT_GRACE
-					if reachable or not c.get("stack_knee",false): break
+					if reachable or not (c.get("stack_knee",false) or c.get("grounded_platform",false)): break
 			closest_surface_gap=best_gap
 	if active and c.kind!="overhead":
 		feed_fraction=actual_fraction
@@ -1013,6 +1017,10 @@ func pose_receiver(c: Dictionary,f: float,active: bool,motion_legs: int) -> void
 			var forward := (rig.global_basis.inverse()*defenders[receiving].global_basis.z).normalized()
 			var margin := float(c.platform_front_m)-(platform_goal-(a+b)*.5).dot(forward)
 			platform_goal+=forward*maxf(0.,margin)
+		if c.get("grounded_platform",false):
+			var world_goal := rig.to_global(platform_goal)
+			world_goal.y=minf(world_goal.y,rig.to_global((a+b)*.5).y-.32)
+			platform_goal=rig.to_local(world_goal)
 		var desired := (platform_goal-(a+b)*.5).slide(hinge)
 		if current.length_squared()>.000001 and desired.length_squared()>.000001:
 			var swing := clampf(current.signed_angle_to(desired,hinge),-PI/3.,PI/3.)*blend
@@ -1071,7 +1079,7 @@ func sample_receiver_base(c: Dictionary,f: float,active: bool,motion_legs: int) 
 	if max_shift>0.:
 		var goal: Vector3=defenders[receiving].to_local(set_intercept).slide(Vector3.UP)
 		var gap := goal-Vector3.BACK*.48
-		if c.get("backward_hop",false): gap=Vector3(clampf(goal.x,-.18,.18),0.,-.60)
+		if c.get("backward_step",false): gap=Vector3(clampf(goal.x,-.18,.18),0.,minf(-.54,goal.z-.95))
 		var available := minf(float(c.contact)/60.,incoming_lead_seconds)
 		var window := clampf(available-.20,0.,float(c.get("entry_time",approach_plant.APPROACH_LOAD_TIME)))
 		var distance := minf(max_shift,minf(maxf(0.,gap.length()-.30),window*float(c.get("entry_speed",1.35))))
@@ -1086,9 +1094,6 @@ func sample_receiver_base(c: Dictionary,f: float,active: bool,motion_legs: int) 
 		player.position+=shift*smoothstep(0.,1.,progress)
 		if progress>0. and progress<1.:
 			sample_approach_plant(shift,(progress-1.)*approach_plant.APPROACH_LOAD_TIME)
-	if c.get("backward_hop",false):
-		var age := (f-float(c.contact))/60.
-		player.position.y+=maxf(0.,.12-4.905*age*age)
 	var contact := float(FOREARM.get_meta("contact_time"))
 	var time := remap(f,0.,c.contact,0.,contact) if f<=c.contact else remap(f,c.contact,c.get("source_end",c.frames),contact,FOREARM.length)
 	var key := roundi(time*60.)
