@@ -25,6 +25,9 @@ var release_time := INF
 const SERVE_HOLD_SECONDS := .25
 var pending_serve := -1
 var held_seconds := 0.0
+var grip_angle := 0.0
+var grip_hold_time := 0.0
+var grip_dirty := false
 var serve_clock := 0.
 var flight_age := 0.
 var destination := Vector3(0,.065,10.)
@@ -153,6 +156,7 @@ func _ready() -> void:
 	super()
 
 func start_drill() -> void:
+	grip_angle=StorySession.game_options.get_value("serving","grip_angle",0.)
 	spike_pike_scale=1.45
 	jump_height=JUMP_SERVE_VERTICAL
 	hitter=setter
@@ -298,7 +302,7 @@ func update_prompts(_next: String) -> void:
 		return
 	if prompt_phase=="serving": return
 	prompt_phase="serving"
-	Xbox.prompts(controls_row,[["A","Spin toss"],["B","Float toss"],["X","Standing toss"],["Y","Underhand"],["RS","Pre-aim / hold for height"],["LS","Toss aim / hold for height"],["D-pad Up/Down","Topspin / float"],["D-pad Left/Right","Sidespin"]])
+	Xbox.prompts(controls_row,[["A","Spin toss"],["B","Float toss"],["X","Standing toss"],["Y","Underhand"],[JOY_BUTTON_LEFT_SHOULDER,"Turn ball left"],[JOY_BUTTON_RIGHT_SHOULDER,"Turn ball right"],["RS","Pre-aim / hold for height"],["LS","Toss aim / hold for height"],["D-pad Up/Down","Topspin / float"],["D-pad Left/Right","Sidespin"]])
 
 func apply_camera() -> void:
 	place_practice_camera(Vector3(0,1.5,-4.4),distance*.48+2.)
@@ -346,6 +350,21 @@ func swing_can_contact() -> bool:
 
 func contact_deadline() -> float:
 	return flight_time+.12
+
+func turn_held_ball(angle: float) -> void:
+	grip_angle=wrapf(grip_angle+angle,-PI,PI)
+	ball.basis=Basis(Vector3.UP,grip_angle)
+	grip_dirty=true
+
+func save_grip() -> void:
+	if not grip_dirty: return
+	StorySession.game_options.set_value("serving","grip_angle",grip_angle)
+	StorySession.save_options()
+	grip_dirty=false
+
+func _exit_tree() -> void:
+	save_grip()
+	super()
 
 func next_serve() -> void:
 	first_pass_dropping=false
@@ -397,6 +416,8 @@ func next_serve() -> void:
 	ready.serve_start=serve_station
 	ready.reset()
 	ball.position=ready.ball.position
+	ball.basis=Basis(Vector3.UP,grip_angle)
+	grip_hold_time=0.
 	ball.show()
 	for platform in receptions: platform.reset()
 	for i in passers.size():
@@ -420,6 +441,15 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			return
 	if not settings.visible and event is InputEventJoypadButton:
+		if phase=="serve_ready" and event.button_index in [Xbox.physical(JOY_BUTTON_LEFT_SHOULDER),Xbox.physical(JOY_BUTTON_RIGHT_SHOULDER)]:
+			active_pad=event.device
+			grip_hold_time=0.
+			if event.pressed:
+				var direction := 1. if event.button_index==Xbox.physical(JOY_BUTTON_LEFT_SHOULDER) else -1.
+				turn_held_ball(direction*deg_to_rad(5.))
+			save_grip()
+			get_viewport().set_input_as_handled()
+			return
 		var directions := [JOY_BUTTON_DPAD_UP,JOY_BUTTON_DPAD_LEFT,JOY_BUTTON_DPAD_RIGHT,JOY_BUTTON_DPAD_DOWN]
 		if phase in ["serve_ready","serve_toss"] and event.button_index in directions and event.pressed:
 			spin_selection=directions.find(event.button_index)
@@ -632,6 +662,15 @@ func _process(delta: float) -> void:
 		return
 	if phase=="serve_ready":
 		walk_server(delta)
+		var device := pad()
+		if device>=0:
+			var direction := int(Input.is_joy_button_pressed(device,Xbox.physical(JOY_BUTTON_LEFT_SHOULDER)))-int(Input.is_joy_button_pressed(device,Xbox.physical(JOY_BUTTON_RIGHT_SHOULDER)))
+			if direction!=0:
+				grip_hold_time+=delta
+				if grip_hold_time>.18: turn_held_ball(direction*deg_to_rad(100.)*delta)
+			else:
+				grip_hold_time=0.
+				save_grip()
 		update_serve_aim(delta)
 		if pending_serve>=0:
 			held_seconds+=delta
@@ -639,6 +678,8 @@ func _process(delta: float) -> void:
 				pending_serve=-1
 				serves[toss_style].serve_start=serve_station
 				serves[toss_style].reset()
+				serves[toss_style].ball.basis=ball.basis
+				save_grip()
 				phase="serve_toss"
 				message.text=LABELS[toss_style]
 		return
