@@ -169,19 +169,16 @@ func start_drill() -> void:
 	attack_jump.back_limit=-10.5
 	attack_jump.load_lead_arm_clip()
 	world.add_child(hand_impact)
-	hand_impact.bus=StorySession.IMPACT_BUS
-	hand_impact.stream=preload("res://assets/audio/hand_impacts.tres")
+	hand_impact.stream=preload("res://assets/audio/hand_gym_01.wav")
 	for prop in [coach,rotation_drill.basket]+rotation_drill.stock+targets:
 		prop.hide()
 		if prop is CollisionObject3D: prop.collision_layer=0
 		for body in prop.find_children("*","CollisionObject3D",true,false):
 			body.collision_layer=0
 	score_strip.hide()
-	hand_sound.bus=StorySession.IMPACT_BUS
-	hand_sound.stream=preload("res://assets/audio/hand_impacts.tres")
+	hand_sound.stream=preload("res://assets/audio/hand_gym_01.wav")
 	add_child(hand_sound)
 	dig_sound.stream=preload("res://assets/audio/pass_contact.wav")
-	dig_sound.bus=StorySession.IMPACT_BUS
 	add_child(dig_sound)
 	for file in ResourceLoader.list_directory("res://assets/animations"):
 		if file.begins_with("straight_pass_") and file.get_extension() in ["res","tres"]:

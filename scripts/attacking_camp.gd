@@ -410,9 +410,8 @@ func start_drill() -> void:
 	next_set=positions.get("target",next_set)
 	attack_lane=0 if next_set.x>1.5 else (2 if next_set.x < -1.5 else 1)
 	hitter_start=positions.get("hitter_start",Vector3(START.x*[1.,0.,-1.][attack_lane],START.y,START.z))
-	hand_impact.stream=preload("res://assets/audio/hand_impacts.tres")
+	hand_impact.stream=preload("res://assets/audio/hand_gym_01.wav")
 	hand_impact.max_polyphony=2
-	hand_impact.bus=StorySession.IMPACT_BUS
 	add_child(hand_impact)
 	hitter=athlete(START,"e97937")
 	hitter.apply_profile(setter.attributes.duplicate())
@@ -896,9 +895,8 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 			strike_point=ball.position
 			if not has_meta("live_sampler") and not has_meta("sampling_attack"):
 				# The contact pose and its crack share the same physics tick.
-				hand_impact.stream=preload("res://assets/audio/set_touch.wav") if tip_shot else preload("res://assets/audio/hand_gym_01.wav")
-				hand_impact.volume_db=0. if hard_spike_floor_pending else (-10. if roll_shot else -6.)
-				hand_impact.play()
+				var sound := preload("res://assets/audio/set_touch.wav") if tip_shot else StorySession.SPIKE_SOUND
+				StorySession.play_hand_contact(sound,0. if hard_spike_floor_pending else (-10. if roll_shot else -6.))
 				spike_sound_count+=1
 			strike_shoulder_offset=hitter.skeleton.to_local(strike_point)-hitter.skeleton.get_bone_global_pose(hitter.skeleton.find_bone("upperarm_r")).origin
 			spikes+=1
@@ -1207,7 +1205,7 @@ func resolve_block_contact(previous: Vector3,block_jumps: Array, attack_directio
 	set_meta("block_impact_segment",Vector2i(key,segment))
 	spin_acceleration = Vector3.ZERO
 	set_meta("blocked_attack",true)
-	hand_impact.stream=preload("res://assets/audio/hand_impacts.tres")
+	hand_impact.stream=preload("res://assets/audio/hand_gym_01.wav")
 	hand_impact.volume_db=-2.
 	hand_impact.play()
 	block_sound_count+=1

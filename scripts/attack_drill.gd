@@ -141,10 +141,8 @@ func _ready() -> void:
 	dynamic_net = get_parent().get_node_or_null("VolleyballCourt/DynamicNet")
 	net_audio = Net.contact_sound()
 	add_child(net_audio)
-	spike_audio = create_ball_sound(preload("res://assets/audio/hand_impacts.tres"),-6.0)
+	spike_audio = create_ball_sound(preload("res://assets/audio/hand_gym_01.wav"),-6.0)
 	floor_audio = create_ball_sound(preload("res://assets/audio/floor_impacts.tres"),-9.0)
-	spike_audio.bus=StorySession.IMPACT_BUS
-	floor_audio.bus=StorySession.IMPACT_BUS
 	load_practice_target()
 	jump.load_lead_arm_clip()
 	build_approach_rings()

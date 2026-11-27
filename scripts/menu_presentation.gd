@@ -172,26 +172,9 @@ func audio_options(host: Container) -> void:
 		StorySession.save_options()
 		if not enabled or reel_surfaces>0: set_music(true))
 	host.add_child(soundtrack)
-	var caption := Label.new()
-	caption.text="Output device"
-	host.add_child(caption)
-	var output := OptionButton.new()
-	for device in AudioServer.get_output_device_list(): output.add_item(device)
-	for i in output.item_count:
-		if output.get_item_text(i)==AudioServer.output_device: output.select(i)
-	output.item_selected.connect(func(i):
-		AudioServer.output_device=output.get_item_text(i)
-		StorySession.game_options.set_value("audio","device",AudioServer.output_device)
-		StorySession.save_options()
-		navigation.play())
-	host.add_child(output)
-	var sample := AudioStreamPlayer.new()
-	sample.bus=StorySession.IMPACT_BUS
-	sample.stream=preload("res://assets/audio/hand_impacts.tres")
-	host.add_child(sample)
 	var test := Button.new()
 	test.text="Test spike sound"
-	test.pressed.connect(sample.play.bind(0.))
+	test.pressed.connect(StorySession.play_hand_contact)
 	host.add_child(test)
 
 func attach_highlights(parent: Control) -> void:

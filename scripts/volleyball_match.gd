@@ -24,7 +24,7 @@ var court_velocities := {}
 var movement_times := {}
 const Footwork = preload("res://scripts/directional_footwork.gd")
 const CONTACT_SOUND = preload("res://assets/audio/pass_contact.wav")
-const SPIKE_SOUND = preload("res://assets/audio/hand_impacts.tres")
+const SPIKE_SOUND = preload("res://assets/audio/hand_gym_01.wav")
 const SET_ZONES := [-3.75,-2.50,-1.25,0.0,1.25,2.50,3.75]
 const SERVES := [
 	preload("res://scripts/underhand_serve.gd"),
@@ -355,8 +355,6 @@ func configure(actor: Node3D, board: Label, status: Label, build := "", players_
 	set_audio = make_ball_audio(preload("res://assets/audio/set_touch.wav"),3.5)
 	spike_audio = make_ball_audio(SPIKE_SOUND,2.0)
 	floor_audio = make_ball_audio(preload("res://assets/audio/floor_impacts.tres"),1.5)
-	spike_audio.bus=StorySession.IMPACT_BUS
-	floor_audio.bus=StorySession.IMPACT_BUS
 	net_audio = Net.contact_sound()
 	add_child(net_audio)
 	if exhibition and not spectator:

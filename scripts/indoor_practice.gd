@@ -243,7 +243,6 @@ var held_input := preload("res://scripts/held_input_hud.gd").new()
 func _ready() -> void:
 	if held_input.get_parent()==null: add_child(held_input)
 	floor_impact.stream=preload("res://assets/audio/floor_impacts.tres")
-	floor_impact.bus=StorySession.IMPACT_BUS
 	add_child(floor_impact)
 	original_render_scale=get_viewport().scaling_3d_scale
 	original_msaa=get_viewport().msaa_3d

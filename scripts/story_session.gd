@@ -133,14 +133,18 @@ var pad_bindings := [JOY_BUTTON_A,JOY_BUTTON_X,JOY_BUTTON_Y,JOY_BUTTON_B]
 var game_options := ConfigFile.new()
 const OPTIONS := "user://game_options.cfg"
 
-var master_volume := 20.
-var master_gain := AudioEffectAmplify.new()
+const SPIKE_SOUND := preload("res://assets/audio/hand_gym_01.wav")
+var master_volume := 100.
+var impact_player := AudioStreamPlayer.new()
+
+func play_hand_contact(stream: AudioStream = SPIKE_SOUND, volume_db := 0.) -> void:
+	impact_player.stream=stream
+	impact_player.volume_db=volume_db
+	impact_player.play()
 
 func set_master_volume(value: float) -> void:
 	master_volume=clampf(value,0.,100.)
-	# Below 20 attenuate after limiting, preserving the old low-volume response.
-	AudioServer.set_bus_volume_db(0,linear_to_db(minf(master_volume/20.,1.)))
-	master_gain.volume_db=6.+linear_to_db(maxf(1.,master_volume/20.))
+	AudioServer.set_bus_volume_db(0,linear_to_db(master_volume/100.))
 
 func save_options() -> void:
 	game_options.set_value("match","buttons",pad_bindings)
@@ -157,29 +161,17 @@ var demo_launch_consumed := false
 var iteration_run := preload("res://scripts/iteration_run.gd").new()
 const PREVIEW_FIELDS := ["pass_start","pass_distance","pass_output_angle","incoming_speed","incoming_angle","feed_spot","incoming_spin","spin_rate","float_strength","source_height","feed_fit","receive_direction","receive_distance_tier","ball_tab","pass_destination","pass_apex","destination_fit","preview_camera"]
 
-const IMPACT_BUS := "Ball impacts"
-
 func _ready() -> void:
-	master_gain.volume_db=6.
-	AudioServer.add_bus_effect(0,master_gain)
-	AudioServer.add_bus_effect(0,AudioEffectHardLimiter.new())
-	AudioServer.add_bus()
-	var impact_bus := AudioServer.bus_count-1
-	AudioServer.set_bus_name(impact_bus,IMPACT_BUS)
-	var boost := AudioEffectAmplify.new()
-	boost.volume_db=20.
-	AudioServer.add_bus_effect(impact_bus,boost)
-	AudioServer.add_bus_effect(impact_bus,AudioEffectHardLimiter.new())
+	impact_player.process_mode=Node.PROCESS_MODE_ALWAYS
+	add_child(impact_player)
 	if game_options.load(OPTIONS) == OK:
 		pad_bindings = game_options.get_value("match","buttons",pad_bindings)
-		var previous := db_to_linear(float(game_options.get_value("audio","volume_db",0.0)))*20.
+		var previous := db_to_linear(float(game_options.get_value("audio","volume_db",0.0)))*100.
 		set_master_volume(game_options.get_value("audio","master_percent",previous))
 	if DisplayServer.get_name() != "headless":
 		Engine.max_fps = 60
 		apply_video_options()
 	match_preferences.load(MATCH_SETTINGS_PATH)
-	var device: String=game_options.get_value("audio","device","Default")
-	if device in AudioServer.get_output_device_list(): AudioServer.output_device=device
 	AudioServer.set_bus_mute(0,game_options.get_value("audio","muted",false))
 	var config := ConfigFile.new()
 	if config.load(preview_path)==OK:

@@ -1,6 +1,9 @@
 """Measure a live hitting demo through Windows Core Audio and WASAPI loopback.
 Requires pycaw and PyAudioWPatch. Run while the normal Windows build is playing.
 """
+from ctypes import POINTER, c_float, c_uint
+from comtypes import COMMETHOD, GUID, HRESULT, IUnknown
+
 import array
 import math
 import time
@@ -10,9 +13,26 @@ from pycaw.api.endpointvolume import IAudioMeterInformation
 from pycaw.pycaw import AudioUtilities
 
 
+class IChannelAudioVolume(IUnknown):
+    _iid_ = GUID("{1C158861-B533-4B30-B1CF-E853E51C59B8}")
+    _methods_ = [
+        COMMETHOD([], HRESULT, "GetChannelCount", (["out"], POINTER(c_uint), "count")),
+        COMMETHOD([], HRESULT, "SetChannelVolume", (["in"], c_uint, "channel"),
+                  (["in"], c_float, "gain"), (["in"], POINTER(GUID), "context")),
+        COMMETHOD([], HRESULT, "GetChannelVolume", (["in"], c_uint, "channel"),
+                  (["out"], POINTER(c_float), "gain")),
+    ]
+
+
 def measure(seconds=25):
     session = next(s for s in AudioUtilities.GetAllSessions()
-                   if s.Process and s.Process.name() == "VolleyballPractice.exe")
+                   if s.State == 1 and s.Process and s.Process.name() == "VolleyballPractice.exe")
+    channels = session._ctl.QueryInterface(IChannelAudioVolume)
+    gains = [channels.GetChannelVolume(i) for i in range(channels.GetChannelCount())]
+    print("Windows game channel gains:", gains)
+    if max(gains, default=0.) < .001:
+        print("Game channel levels are below -60 dB in Windows.")
+        return False
     meter = session._ctl.QueryInterface(IAudioMeterInformation)
     print("Game mute:", session.SimpleAudioVolume.GetMute(),
           "game volume:", session.SimpleAudioVolume.GetMasterVolume())

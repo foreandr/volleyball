@@ -18,7 +18,6 @@ var review_controls: HBoxContainer
 var listen_controls: HBoxContainer
 var comparison_audio: AudioStreamPlayer
 var audio_previews: Array[AudioStreamWAV] = []
-var restore_master_mute := false
 var frame_size := Vector2i(320,180)
 var skipped := {}
 var next_id := ""
@@ -213,16 +212,11 @@ func clear_comparison() -> void:
 func listen_to_comparison(side: int) -> void:
 	if audio_previews.size() != 2 or review_pid > 0: return
 	stop_comparison_audio()
-	restore_master_mute = AudioServer.is_bus_mute(0)
-	if restore_master_mute: AudioServer.set_bus_mute(0,false)
 	comparison_audio.stream = audio_previews[side]
 	comparison_audio.play()
 
 func stop_comparison_audio() -> void:
 	if is_instance_valid(comparison_audio): comparison_audio.stop()
-	if restore_master_mute:
-		AudioServer.set_bus_mute(0,true)
-		restore_master_mute = false
 
 func _exit_tree() -> void:
 	stop_comparison_audio()

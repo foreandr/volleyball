@@ -28,7 +28,6 @@ func across(point: Vector3) -> Vector3:
 	return Vector3(-point.x,point.y,2.*BallNet.NET_Z-point.z)
 
 func start_drill() -> void:
-	AudioServer.set_bus_mute(0,StorySession.game_options.get_value("audio","muted",false))
 	world.add_child(map)
 	world.add_child(anchor)
 	world.add_child(defense_map)

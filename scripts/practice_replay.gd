@@ -32,10 +32,9 @@ var modifiers := []
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	process_priority = 100
-	replay_hand.stream=preload("res://assets/audio/hand_impacts.tres")
+	replay_hand.stream=preload("res://assets/audio/hand_gym_01.wav")
 	replay_floor.stream=preload("res://assets/audio/floor_impacts.tres")
 	for player in [replay_hand,replay_floor,replay_whistle]:
-		player.bus=StorySession.IMPACT_BUS
 		player.max_polyphony=3
 		add_child(player)
 	if "practice_blockers" in game:
