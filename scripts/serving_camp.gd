@@ -588,6 +588,7 @@ func self_set_step(motion, previous_time: float,delta: float) -> bool:
 	var hit := phase=="spike"
 	phase="serve_toss"
 	if finished and not hit:
+		coach_react("miss")
 		phase="serve_miss"
 		roll_time=-1.
 		drop_net_hit.clear()
@@ -625,6 +626,9 @@ func _process(delta: float) -> void:
 		pending_serve=-1
 		return
 	if serves.is_empty(): return
+	update_speech(delta)
+	var active:Node3D=call("controlled_passer") if has_method("controlled_passer") and not passers.is_empty() else hitter
+	if active: GroundControls.face(coach,active.position-coach.position,delta)
 	for i in passers.size():
 		passers[i].stamina.recover(delta)
 		if pin_attack.enabled and pin_attack.setter==passers[i]: continue
@@ -753,6 +757,7 @@ func _process(delta: float) -> void:
 		if hit:
 			var error := serve_meter_error() if is_finite(release_time) else INF
 			if error<SERVE_EARLY or error>SERVE_LATE:
+				coach_react("miss")
 				phase="serve_miss"
 				message.text="Late" if error>0. else "Early"
 				drop_velocity=Vector3.ZERO
@@ -824,6 +829,7 @@ func _process(delta: float) -> void:
 				drop_net_time=0.
 				roll_time=-1.
 				flight_age=0.
+				coach_react("miss")
 				phase="serve_miss"
 				if surface.normal.y>.8 and ball.position.y<.26 and on_receiving_court(ball.position):
 					receive_read.beaten(ball.position)
@@ -923,6 +929,7 @@ func begin_offense(passer: Node3D,platform: Reception) -> void:
 		first_pass_dropping=last_shot_slot<0
 		ball.position=pass_start
 		drop_velocity=velocity
+		coach_react("miss")
 		phase="serve_miss"
 		flight_age=0.
 		roll_time=-1.
@@ -1169,6 +1176,7 @@ func step_reception_rally(delta: float) -> void:
 				trace("serve_set_miss",{"jumped":receiving_jump.active,"ball":str(ball.position),"setter":str(second_contact_player().position)})
 				var t := pass_clock/pass_duration
 				drop_velocity=(pass_end-pass_start+Vector3.UP*arc_term*(1.-2.*t))/pass_duration
+				coach_react("miss")
 				phase="serve_miss"
 				flight_age=0.
 				roll_time=-1.

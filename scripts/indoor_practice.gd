@@ -830,6 +830,11 @@ func _process(delta: float) -> void:
 		before[actor]=actor.rotation.y
 	focus_headings.clear()
 	step_practice(delta)
+	if phase in ["pass","set","set_contact","result","drop"]:
+		var active:Node3D=setter
+		if "hitter" in self and get("hitter")!=null: active=get("hitter")
+		if "automatic_block" in self and get("blockers").size()>2: active=call("frame_editor_blocker")
+		GroundControls.face(coach,active.position-coach.position,delta)
 	# Compose all AI, input and animation requests first. Enforce a single
 	# turn budget per actor even when several actions change in one frame.
 	var dt := minf(delta,.05)
@@ -1668,6 +1673,7 @@ func advance_missed_ball(delta: float, rebound_floor := false) -> void:
 	if not drop_net_hit.is_empty() and not has_meta("live_sampler"): gym.get_node("DynamicNet").sample(drop_net_hit,drop_net_time)
 
 func finish_set() -> void:
+	if not demonstration: coach_react("praise" if success else "miss")
 	if success and not demonstration:
 		if rotation_drill.turn==0:
 			gym.update_board(rep+1)
@@ -1683,6 +1689,7 @@ func finish_set() -> void:
 	if not success and measured_release: show_timing(set_error)
 
 func miss(reason: String) -> void:
+	if not demonstration: coach_react("miss")
 	success = false
 	if measured_release and not pending_release and not is_zero_approx(set_error): show_timing(set_error)
 	trace("miss",{"reason":reason})
@@ -1854,6 +1861,9 @@ var words := Label.new()
 var speaker: Node3D
 var speech_left := 0.0
 var intro_line := -1
+
+func coach_react(event:String) -> void:
+	say(coach,preload("res://scripts/coach_reactions.gd").line(event),2.6)
 
 func say(actor: Node3D, speech: String, seconds: float) -> void:
 	speaker = actor

@@ -11,6 +11,13 @@ var partner:Node3D
 const ROUTE := [Vector3(4.35,.04,-4.5),Vector3(4.35,.04,3.4),Vector3(-4.35,.04,3.4),Vector3(-4.35,.04,-4.5)]
 var leg:=0
 var queued:=false
+var runner_line:Array=[]
+var demo_turn:=0
+var bot_misses_shuffle:=false
+var entering_lane:=false
+var exits:Dictionary={}
+var corner_grace:=0.
+const CORNER_GRACE:=.85
 var watchers:Array=[]
 var idle_heads:Dictionary={}
 var marker:=MeshInstance3D.new()
@@ -139,6 +146,13 @@ func begin_run() -> void:
 		actor.animator.advance(.1)
 		var rig:Skeleton3D=actor.skeleton
 		idle_heads[actor]=rig.get_bone_pose_rotation(rig.find_bone("Head"))
+	runner_line=watchers.duplicate()
+	for athlete_:Node3D in watchers:
+		if athlete_!=setter and int(athlete_.get_meta("school_jersey_number",0))==504:
+			partner=athlete_
+			break
+	runner_line.erase(partner)
+	runner_line.erase(setter)
 	coach.position=Vector3(5.7,.04,.3)
 	partner.position=ROUTE[0]
 	partner.rotation.y=0.
@@ -150,7 +164,7 @@ func begin_run() -> void:
 	square.material=mat
 	marker.mesh=square
 	world.add_child(marker)
-	for actor in [partner,setter]:
+	for actor in watchers:
 		if not shuffle_steps.has(actor): shuffle_steps[actor]=preload("res://scripts/directional_footwork.gd").new(actor)
 	captions.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
 	captions.offset_left=-360
@@ -169,7 +183,7 @@ func run_prompt() -> void:
 	workout_label.text=heading+"   /   "+cue
 	var hints:Array=[]
 	var keys:=""
-	if segment%2==1:
+	if segment%2==1 and phase=="footwork":
 		hints.append(["LT","Hold to shuffle"])
 		keys="Hold Ctrl to shuffle"
 	if phase=="footwork_demo":
@@ -179,9 +193,46 @@ func run_prompt() -> void:
 			keys+="   Enter to go next"
 	training_prompt(hints,keys)
 
+func move_in_line(actor:Node3D,goal:Vector3,dt:float) -> bool:
+	var previous:=actor.position
+	actor.position=previous.move_toward(goal,dt*3.4)
+	var velocity:Vector3=(actor.position-previous)/maxf(dt,.001)
+	if velocity.length()>.05:
+		GroundControls.face(actor,velocity,dt,5.)
+		actor.play_travel_gait(velocity)
+	else:
+		GroundControls.face(actor,Vector3(0,0,1.)-actor.position,dt,2.)
+		actor.play_action("idle",.18)
+	actor.animator.advance(dt)
+	return actor.position.distance_to(goal)<.02
+
+func advance_line(dt:float) -> void:
+	for i in runner_line.size():
+		var actor:Node3D=runner_line[i]
+		var slot:=Vector3(3.3-i*1.05,.04,-5.65)
+		if exits.has(actor):
+			var path:Array=exits[actor]
+			if move_in_line(actor,path[0],dt):
+				path.pop_front()
+				if path.is_empty(): exits.erase(actor)
+		else: move_in_line(actor,slot,dt)
+
 func run_step(delta:float,direction:Vector3,focus:bool,sprinting:bool) -> void:
 	var demo:=phase=="footwork_demo"
 	var runner:Node3D=partner if demo else setter
+	advance_line(delta)
+	GroundControls.face(coach,runner.position-coach.position,delta,3.)
+	if entering_lane:
+		if move_in_line(runner,ROUTE[0],delta):
+			entering_lane=false
+			runner.rotation.y=0.
+		return
+	# Spend the corner allowance only while the stick is still moving.
+	# Keep the foot planted until the new gait engages.
+	if runner.position.distance_to(ROUTE[leg%4])>.75: corner_grace=0.
+	if not demo and focus!=(leg%2==1) and corner_grace>0.:
+		if direction.length()>.1: corner_grace=maxf(0.,corner_grace-delta)
+		return
 	var velocity:=direction.limit_length(1.)*GroundControls.speed(focus,sprinting)
 	runner.position+=velocity*delta
 	runner.position.x=clampf(runner.position.x,-4.65,4.65)
@@ -194,6 +245,7 @@ func run_step(delta:float,direction:Vector3,focus:bool,sprinting:bool) -> void:
 	else: runner.stamina.recover(delta)
 	for actor:Node3D in watchers:
 		if actor==runner: continue
+		if exits.has(actor): continue
 		var local:=actor.to_local(runner.position)
 		var rig:Skeleton3D=actor.skeleton
 		var id:=rig.find_bone("Head")
@@ -201,26 +253,44 @@ func run_step(delta:float,direction:Vector3,focus:bool,sprinting:bool) -> void:
 		var turn:=Quaternion(parent.inverse()*Vector3.UP,clampf(atan2(local.x,local.z),-.92,.92))
 		rig.set_bone_pose_rotation(id,rig.get_bone_pose_rotation(id).slerp(turn*idle_heads[actor],1.-exp(-5.*delta)))
 	var line:=Geometry3D.get_closest_point_to_segment(runner.position,ROUTE[leg%4],marker.position)
-	if not demo and ((focus!=(leg%2==1) and velocity.length()>.1) or runner.position.distance_to(line)>.7):
+	if demo and bot_misses_shuffle and leg==1 and runner.position.distance_to(ROUTE[1])>.95:
+		finish_demo_lap(false)
+		return
+	if not demo and ((focus!=(leg%2==1) and velocity.length()>.1 and runner.position.distance_to(marker.position)>.55) or runner.position.distance_to(line)>.7):
+		coach_react("lane" if runner.position.distance_to(line)>.7 else ("shuffle" if leg%2==1 else "run"))
 		leg=0
+		corner_grace=CORNER_GRACE
 		runner.position=ROUTE[0]
 	elif runner.position.distance_to(marker.position)<.3:
 		leg+=1
+		corner_grace=CORNER_GRACE
 		if demo and leg==4:
-			leg=0
-			if queued:
-				partner.position=setter.position
-				partner.play_action("idle",.1)
-				setter.position=ROUTE[0]
-				setter.rotation.y=0.
-				phase="footwork"
-				coach_motion.whistle_cue.signal_drill(coach)
+			finish_demo_lap(true)
+		elif not demo and leg==4: coach_react("praise")
 		elif leg==8:
 			CareerSession.data.set_value(CareerSession.key(),"footwork_done",true)
 			CareerSession.checkpoint("pepper",0)
 			reception_brief()
 			return
 	else: return
+	run_prompt()
+
+func finish_demo_lap(passed:bool) -> void:
+	coach_react("praise" if passed else "dismiss")
+	demo_turn+=1
+	bot_misses_shuffle=demo_turn==1 or (demo_turn>1 and randf()<.28)
+	leg=0
+	runner_line.append(partner)
+	var tail_x:=3.3-(runner_line.size()-1)*1.05
+	exits[partner]=[Vector3(5.15,.04,partner.position.z),Vector3(5.15,.04,-6.6),Vector3(tail_x,.04,-6.6)]
+	if queued:
+		setter.position=ROUTE[0]
+		setter.rotation.y=0.
+		phase="footwork"
+		coach_motion.whistle_cue.signal_drill(coach)
+	else:
+		partner=runner_line.pop_front()
+		entering_lane=true
 	run_prompt()
 
 func reception_brief() -> void:
@@ -279,19 +349,21 @@ func finish_pepper() -> void:
 
 func _process(delta:float) -> void:
 	elapsed+=delta
+	update_speech(delta)
 	if phase!="montage":
 		for seat in seats_in_use: seat.update()
 	if coach and coach_motion.whistle_cue.signal_time>=0.: coach_motion.whistle_cue.step_whistle(coach,delta)
 	if phase in ["footwork","footwork_demo"]:
 		marker.mesh.material.albedo_color=Color("168239").lerp(Color("73ff78"),.5+.5*cos(elapsed*5.))
 	if phase=="footwork_demo":
-		run_step(delta,partner.position.direction_to(marker.position),leg%2==1,false)
+		run_step(delta,partner.position.direction_to(marker.position),leg%2==1 and not (bot_misses_shuffle and leg==1),false)
 	elif phase=="footwork":
 		var stick:=Vector2(axis(JOY_AXIS_LEFT_X),axis(JOY_AXIS_LEFT_Y))
 		if stick.length()<.15: stick=Vector2.ZERO
 		stick+=Vector2(float(Input.is_physical_key_pressed(KEY_D))-float(Input.is_physical_key_pressed(KEY_A)),float(Input.is_physical_key_pressed(KEY_S))-float(Input.is_physical_key_pressed(KEY_W)))
 		run_step(delta,Vector3(-stick.x,0,-stick.y),GroundControls.focus(axis),GroundControls.sprint(axis))
 	elif phase in ["pepper","demo"]:
+		GroundControls.face(coach,pepper.pairs[0].receiver.position-coach.position,delta,3.)
 		pepper.tick(delta)
 		if phase=="demo" and queued and pepper.pairs[0].age>=2.95:
 			pepper.start_human_turn()
@@ -301,7 +373,7 @@ func _process(delta:float) -> void:
 			workout_label.text="%d / 5 passes"%pepper.score
 			training_prompt([[JOY_BUTTON_A,"Hold to receive"]],"Hold Space to receive")
 	if coach and coach.has_meta("coach_face"):
-		var talking:=(phase=="welcome" and elapsed<8.) or phase=="gather"
+		var talking:=(phase=="welcome" and elapsed<8.) or phase=="gather" or (speaker==coach and speech_left>0.)
 		coach.get_meta("coach_face").set_shader_parameter("shout",(.24+.18*sin(elapsed*19.)) if talking else 0.)
 	if phase=="montage" and elapsed>=2.4: next_shot()
 	if phase=="welcome" and elapsed>=7.5 and (not DisplayServer.has_feature(DisplayServer.FEATURE_TEXT_TO_SPEECH) or not DisplayServer.tts_is_speaking() or elapsed>=18.):

@@ -896,6 +896,7 @@ func contact_deadline() -> float:
 	return flight_time
 
 func miss_attack() -> bool:
+	coach_react("miss")
 	trace("spike_miss",{"cpu_hitter":cpu_hitter,"stamina":hitter.stamina.value,"set_height_percent":set_arc_percent,"planned_contact":str(planned_contact),"closest_palm_gap_m":closest_spike_gap if is_finite(closest_spike_gap) else -1.,"ball":str(ball.position),"palm":str(Contact.palm(hitter,"r"))})
 	feedback="Missed spike"
 	if not cpu_hitter:

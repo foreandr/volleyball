@@ -107,6 +107,7 @@ func tick(delta:float) -> void:
 				pair.caught=true
 				pair.hit=active
 				if i==0 and not demonstrating:
+					game.coach_react("praise" if active else "miss")
 					if active:
 						score+=1
 						var offset:=roundi((pressed_at-(ARRIVAL-CONTACT_POSE))*1000.)
