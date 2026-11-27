@@ -219,3 +219,4 @@ Receive CPU Serves resets the human receiver and digger to their neutral zone-si
 
 Serve reception blends from the current movement pose and position into the assigned pass. Practice and match replay samples record held controller buttons. Practice replay also records the predicted landing point.
 In Receive CPU Serves the controlled receiver can steer while preparing. The pass targets a timed point on the incoming 3D flight. An early playable release carries through to physical contact. A platform hit while A is still held produces a less accurate pass and records Held at contact.
+Receive CPU Serves lets the player switch between reception and zone-six defense with Xbox Y or the role button. Switching starts a new rep. Both roles use the assigned contact zone, stick steering, A preparation, physical contact, graded release, and the same live and replay timing arc. Attack velocity and defensive skill affect dig accuracy.

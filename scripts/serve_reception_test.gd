@@ -367,6 +367,7 @@ func block_on_flight_segment(previous: Vector3) -> bool:
 	var dt := previous.distance_to(ball.position)/maxf(.01,drop_velocity.length())
 	dig_clock+=dt
 	if defense_recipe.is_empty():
+		if not dig_armed(): return false
 		var ahead := minf(.32,preload("res://scripts/pass_flight.gd").landing_time(ball.position,drop_velocity))
 		var source := pin_hitter.global_position
 		var actor := dig_defender()
@@ -401,17 +402,10 @@ func block_on_flight_segment(previous: Vector3) -> bool:
 		defense_map.feed_kmh=drop_velocity.length()*3.6
 		defense_recipe=bind_contact_motion(defense_map,defense_anchor,dig_defender(),dig_defender().position,source,best)
 	sample_attack_dig()
-	if mapped_touch(defense_map,defense_recipe,previous):
-		defense_contact=dig_clock
-		if not is_finite(first_dig_touch): first_dig_touch=dig_clock
-	if cpu_dig():
-		if is_finite(defense_contact): dig_platforms[dig_defender()].queue_bump(dig_clock)
-	else: update_dig_feedback()
-	var release: float=dig_platforms[dig_defender()].pressed_at
-	if not is_finite(defense_contact) or not is_finite(release) or minf(absf(release-defense_at+PASS_RELEASE_LEAD),absf(release-defense_contact+PASS_RELEASE_LEAD))>DIG_WINDOW or absf(defense_contact-dig_clock)>DIG_WINDOW: return false
+	var timing_error := dig_contact_error(previous)
+	if timing_error<0.: return false
 	last_digger=dig_defender()
 	dig_incoming=drop_velocity
-	var timing_error := clampf(absf(release-defense_at+PASS_RELEASE_LEAD)/DIG_WINDOW,0.,1.)
 	var bounds: Vector2=PassAccuracy.spread(timing_error,drop_velocity.length(),received_spin_rps,last_digger.effective_rating("Forearm reception"),false)
 	var miss: Vector3=PassAccuracy.sample_offset(bounds)
 	var goal := defense_map.pass_goal+miss.slide(Vector3.UP)
@@ -424,8 +418,22 @@ func block_on_flight_segment(previous: Vector3) -> bool:
 	phase="server_dig"
 	dig_sound.play()
 	message.text="Dig"
-	trace("mapped_dig",{"contact":defense_contact,"prediction":defense_at,"release":release,"apex":apex,"landing_target":str(goal)})
+	trace("mapped_dig",{"contact":defense_contact,"prediction":defense_at,"release":str(dig_platforms[last_digger].pressed_at),"apex":apex,"landing_target":str(goal)})
 	return true
+
+func dig_armed() -> bool:
+	return true
+
+func dig_contact_error(previous: Vector3) -> float:
+	if mapped_touch(defense_map,defense_recipe,previous):
+		defense_contact=dig_clock
+		if not is_finite(first_dig_touch): first_dig_touch=dig_clock
+	if cpu_dig():
+		if is_finite(defense_contact): dig_platforms[dig_defender()].queue_bump(dig_clock)
+	else: update_dig_feedback()
+	var release: float=dig_platforms[dig_defender()].pressed_at
+	if not is_finite(defense_contact) or not is_finite(release) or minf(absf(release-defense_at+PASS_RELEASE_LEAD),absf(release-defense_contact+PASS_RELEASE_LEAD))>DIG_WINDOW or absf(defense_contact-dig_clock)>DIG_WINDOW: return -1.
+	return clampf(absf(release-defense_at+PASS_RELEASE_LEAD)/DIG_WINDOW,0.,1.)
 
 func update_dig_feedback() -> void:
 	var release: float=dig_platforms[dig_defender()].pressed_at

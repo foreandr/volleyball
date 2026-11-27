@@ -142,11 +142,11 @@ func capture(rendered := false) -> Dictionary:
 					armed[key]=true
 	var timing: Dictionary=game.rings.displayed_timing.duplicate()
 	var verdict := ""
-	if "reception_release" in game and not game.control_digger:
-		if game.pass_timing_ready and (game.phase=="serve_flight" or not game.reception_release.is_empty()):
+	if "reception_release" in game:
+		if game.pass_timing_ready and (game.phase==("serve_return" if game.control_digger else "serve_flight") or not game.reception_release.is_empty()):
 			var meter: Dictionary=game.pass_meter()
 			verdict=game.reception_release.get("label","")
-			var actor: Node3D=game.passers[1]
+			var actor: Node3D=game.controlled_passer()
 			timing[actor]={"position":Vector3(actor.global_position.x,.055,actor.global_position.z),"value":meter.value,"perfect":Vector2(.33,.67),"contact":Vector2(.08,.90),"miss":Color("14191d"),"highlight":not game.reception_release.is_empty(),"black_cursor":not game.receive_held,"stamina":actor.stamina.fraction()}
 		if game.reception_result!="": verdict+=("  /  " if verdict!="" else "")+game.reception_result
 	return {"held_buttons":game.held_input.read_buttons(),"landing":game.projected_landing(),"release_verdict":verdict,"timing":timing,"boundary":game.get_meta("serve_boundary",0),"impact":game.get_meta("block_impact_segment",Vector2i(-999,-1)),"rally":game.get("replay_rally"),"armed":armed,"arms":arms,"floor_count":game.floor_sound_count,"floor_db":game.floor_impact.volume_db,"spike_count":game.spike_sound_count if "spike_sound_count" in game else 0,"block_sound_count":game.block_sound_count if "block_sound_count" in game else 0,"objects":objects,"poses":poses,"whistle_count":game.coach_motion.whistle_cue.play_count,"floor_stream":game.floor_impact.stream,"whistle_height":game.coach_motion.whistle_cue.raised}

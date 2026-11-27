@@ -58,6 +58,8 @@ func cpu_positions_passer(slot: int) -> bool:
 
 func switch_role() -> void:
 	control_digger=not control_digger
+	StorySession.game_options.set_value("receive_cpu_serves","control_digger",control_digger)
+	StorySession.save_options()
 	role_button.text="Control receiver" if control_digger else "Control digger"
 	prompt_phase=""
 	next_serve()
@@ -85,32 +87,47 @@ func bind_contact_motion(mapper: Map,root: Node3D,actor: Node3D,home: Vector3,so
 	if mapper==map and not control_digger and mapper.incoming_lead_seconds>.65:
 		return {}
 	var motion := super.bind_contact_motion(mapper,root,actor,home,source,best)
-	if mapper!=map or control_digger or actor!=passers[1]: return motion
+	var digging := control_digger and mapper==defense_map
+	if not digging and (mapper!=map or control_digger or actor!=passers[1]): return motion
 	mapper.sample_receiver(motion,motion.contact,true,mapper.legs)
 	var shot=serves[flight_style()]
-	var route_time := receive_at
+	var route_time := defense_at if digging else receive_at
+	var path: Callable=shot.flight_point
+	var floor_time: float=shot.planned_duration
+	if digging:
+		var origin := ball.position
+		var velocity := drop_velocity
+		var now := dig_clock
+		path=func(t: float) -> Vector3:
+			var dt := t-now
+			return origin+velocity*dt+Vector3.DOWN*4.905*dt*dt
+		floor_time=now+preload("res://scripts/pass_flight.gd").landing_time(origin,velocity)
+	var contact_time := route_time
 	var bind_time := maxf(0.,route_time-mapper.incoming_lead_seconds)
 	var platform := contact_platform(mapper,motion,actor)
 	# Find the point of closest approach on the descending flight in three dimensions.
 	var first := maxf(bind_time,route_time-.25)
-	var last := minf(shot.planned_duration,route_time+.25)
+	var last := minf(floor_time,route_time+.25)
 	var best_gap := INF
-	var start: Vector3=shot.flight_point(first)
+	var start: Vector3=path.call(first)
 	for segment in range(1,25):
-		var end: Vector3=shot.flight_point(lerpf(first,last,segment/24.))
+		var end: Vector3=path.call(lerpf(first,last,segment/24.))
 		var step := end-start
 		var fraction := clampf((platform-start).dot(step)/maxf(.000001,step.length_squared()),0.,1.)
 		var point := start+step*fraction
 		var gap := point.distance_squared_to(platform)
 		if gap<best_gap:
 			best_gap=gap
-			receive_at=lerpf(first,last,(segment-1.+fraction)/24.)
+			contact_time=lerpf(first,last,(segment-1.+fraction)/24.)
 			mapper.set_intercept=point
 		start=end
 	mapper.sample_receiver(motion,motion.contact,true,mapper.legs)
 	var correction := mapper.set_intercept-contact_platform(mapper,motion,actor)
 	mapper.intercept_shift+=correction.slide(Vector3.UP).limit_length(.32)
-	var horizontal: Vector3=(shot.flight_point(receive_at+.005)-shot.flight_point(receive_at)).slide(Vector3.UP)/.005
+	if digging: defense_at=contact_time
+	else: receive_at=contact_time
+	var velocity_at_contact: Vector3=(path.call(contact_time+.005)-path.call(contact_time))/.005
+	var horizontal := velocity_at_contact.slide(Vector3.UP)
 	incoming_speed=maxf(.1,horizontal.length())
 	incoming_axis=horizontal.normalized()
 	platform_depth=mapper.set_intercept.dot(incoming_axis)
@@ -118,7 +135,7 @@ func bind_contact_motion(mapper: Map,root: Node3D,actor: Node3D,home: Vector3,so
 	initial_reach_shift=mapper.intercept_shift
 	steering_shift=Vector3.ZERO
 	pass_entry_time=bind_time
-	mapper.entry_frame=clampf(motion.contact-(receive_at-bind_time)*60.,minf(6.,motion.contact),motion.contact)
+	mapper.entry_frame=clampf(motion.contact-(contact_time-bind_time)*60.,minf(6.,motion.contact),motion.contact)
 	mapper.entry_duration=clampf(motion.contact-mapper.entry_frame,.01,12.)
 	mapper.sample_receiver(motion,mapper.entry_frame,true,mapper.legs)
 	return motion
@@ -139,11 +156,23 @@ func reception_frame() -> float:
 		return lerpf(map.entry_frame,recipe.contact,progress)
 	return super.reception_frame()
 
+func controlled_passer() -> Node3D:
+	return dig_defender() if control_digger else passers[1]
+
+func dig_armed() -> bool:
+	return not control_digger or receive_held
+
+func dig_contact_error(previous: Vector3) -> float:
+	if not control_digger: return super.dig_contact_error(previous)
+	if not accept_manual_contact(previous,defense_map,defense_recipe,dig_clock): return -1.
+	defense_contact=dig_clock
+	return manual_timing_penalty()
+
 func pass_meter(point := Vector3.INF) -> Dictionary:
 	if not reception_release.is_empty(): return reception_release
 	if not point.is_finite(): point=ball.global_position
 	var depth := point.dot(incoming_axis)
-	var face_depth := Contact.joint(passers[1],"Head").dot(incoming_axis)-.09
+	var face_depth := Contact.joint(controlled_passer(),"Head").dot(incoming_axis)-.09
 	var behind := depth-face_depth
 	var platform_gap := depth-minf(platform_depth,face_depth-.13)
 	var distance := platform_gap+incoming_speed*PASS_RELEASE_LEAD
@@ -158,7 +187,7 @@ func pass_meter(point := Vector3.INF) -> Dictionary:
 		cursor=remap(distance,-green,green_end,.33,.67)
 	else:
 		cursor=remap(distance,green_end,late_distance,.67,.90)
-	var expired := behind>BODY_CUSHION or (platform_gap>.12 and not is_finite(touched_at) and not mapped_touch(map,recipe,point-incoming_axis*.001))
+	var expired := behind>BODY_CUSHION or (platform_gap>.12 and not is_finite(touched_at) and not mapped_touch(defense_map if control_digger else map,defense_recipe if control_digger else recipe,point-incoming_axis*.001))
 	if expired: cursor=1.
 	var grade := ("Past receiver" if behind>BODY_CUSHION else "Out of reach") if expired else ("Early" if distance< -green else ("Perfect" if distance<=green_end else "Late"))
 	return {"value":clampf(cursor,0.,1.),"offset":offset,"grade":grade,"playable":not expired and offset>=-RECEIVE_EARLY}
@@ -172,6 +201,7 @@ func receiver_candidates() -> Array:
 	return super.receiver_candidates() if control_digger else ([1] if checking_human_lane else [0,2])
 
 func start_drill() -> void:
+	control_digger=StorySession.game_options.get_value("receive_cpu_serves","control_digger",false) or "--defender" in OS.get_cmdline_user_args()
 	super.start_drill()
 	world.add_child(other_map)
 	world.add_child(other_anchor)
@@ -180,7 +210,7 @@ func start_drill() -> void:
 	other_map.pass_goal=map.pass_goal
 	other_map.pass_rise=map.pass_rise
 	dig_defender().show()
-	role_button.text="Control digger"
+	role_button.text="Control receiver" if control_digger else "Control digger"
 	controls_row.get_parent().add_child(role_button)
 	role_button.pressed.connect(switch_role)
 	title.text="PASSING  /  RECEIVE CPU SERVES"
@@ -241,7 +271,7 @@ func cpu_serve_target() -> Vector3:
 func update_prompts(_next: String) -> void:
 	if prompt_phase=="receive": return
 	prompt_phase="receive"
-	Xbox.prompts(controls_row,[["LS","Move"],["LT","Shuffle"],["RT","Sprint"],["A","Release to dig" if control_digger else "Release to pass"]])
+	Xbox.prompts(controls_row,[["LS","Move"],["LT","Shuffle"],["RT","Sprint"],["A","Release to dig" if control_digger else "Release to pass"],["Y","Switch role"]])
 
 func apply_camera() -> void:
 	if control_digger:
@@ -272,7 +302,7 @@ func update_serve_aim(_delta: float) -> void:
 func _process(delta: float) -> void:
 	moving_passer=false
 	if not settings.visible and not get_tree().paused and not replay_inspector.active:
-		if (control_digger and defense_map.player==null) or not control_digger:
+		if not control_digger or defense_map.player==null or phase=="serve_return":
 			var actor := dig_defender() if control_digger else passers[1]
 			var stick := Vector2(axis(JOY_AXIS_LEFT_X),axis(JOY_AXIS_LEFT_Y))
 			if stick.length()<.22: stick=Vector2.ZERO
@@ -285,23 +315,26 @@ func _process(delta: float) -> void:
 			var goal := actor.global_position+travel*pace*delta
 			goal.x=clampf(goal.x,-5.,5.)
 			goal.z=clampf(goal.z,BallNet.NET_Z+.4,BallNet.NET_Z+10.)
-			if control_digger: goal.z=clampf(actor.position.z+travel.z*pace*delta,BallNet.NET_Z-10.,BallNet.NET_Z-.4)
+			if control_digger: goal.z=clampf(actor.global_position.z+travel.z*pace*delta,BallNet.NET_Z-10.,BallNet.NET_Z-.4)
 			if travel.is_zero_approx(): goal=actor.global_position
-			var preparing := receive_held and not control_digger and phase=="serve_flight"
+			var preparing := receive_held and phase==("serve_return" if control_digger else "serve_flight")
 			prepare_weight=move_toward(prepare_weight,1. if preparing else 0.,delta*5.)
 			var focused := GroundControls.focus(axis)
 			var source := pin_hitter.global_position if control_digger else serve_station
-			if not control_digger and map.player==actor:
+			if (control_digger and defense_map.player==actor) or (not control_digger and map.player==actor):
 				var shift := (goal-actor.global_position).slide(Vector3.UP)
-				anchor.position+=shift
+				var root := defense_anchor if control_digger else anchor
+				var active_map := defense_map if control_digger else map
+				root.position+=shift
 				steering_shift+=shift
-				map.intercept_shift=initial_reach_shift-steering_shift.limit_length(.45)
-			elif not travel.is_zero_approx() or moving_last_tick or (prepare_weight>0. and phase=="serve_flight"):
+				active_map.intercept_shift=initial_reach_shift-steering_shift.limit_length(.45)
+			elif not travel.is_zero_approx() or moving_last_tick or prepare_weight>0.:
 				move_receiver(actor,goal,delta,source-actor.position if focused else travel,pace,focused)
-				if prepare_weight>0. and not control_digger and phase=="serve_flight":
-					receptions[1].knee_bend_depth=.12*prepare_weight
-					receptions[1].apply_knee_bend()
-					receptions[1].knee_bend_depth=0.
+				if prepare_weight>0.:
+					var platform=receptions[1] if not control_digger else dig_platforms[actor]
+					platform.knee_bend_depth=.12*prepare_weight
+					platform.apply_knee_bend()
+					platform.knee_bend_depth=0.
 			moving_last_tick=not travel.is_zero_approx()
 			if not control_digger:
 				moving_passer=travel.length_squared()>.001
@@ -317,9 +350,16 @@ func _process(delta: float) -> void:
 
 func _input(event: InputEvent) -> void:
 	if not settings.visible and not get_tree().paused and not replay_inspector.active:
+		if event is InputEventJoypadButton and event.button_index==Xbox.physical(JOY_BUTTON_Y) and event.pressed:
+			switch_role()
+			get_viewport().set_input_as_handled()
+			return
 		if event is InputEventJoypadButton and event.button_index==Xbox.physical(JOY_BUTTON_A) or event is InputEventKey and event.keycode==KEY_Q and not event.echo:
 			if control_digger:
-				if not event.pressed and receive_held and phase=="serve_return": dig_platforms[dig_defender()].queue_bump(dig_clock)
+				if not event.pressed and receive_held and phase=="serve_return" and pass_timing_ready and not is_finite(released_at):
+					released_at=dig_clock
+					dig_platforms[dig_defender()].queue_bump(dig_clock)
+					record_receive_release()
 				receive_held=event.pressed
 				get_viewport().set_input_as_handled()
 				return
@@ -380,16 +420,16 @@ func record_receive_release() -> void:
 	if not reception_release.is_empty() or not is_finite(released_at) or not pass_timing_ready: return
 	reception_release=pass_meter(ball.global_position)
 	reception_release.point=ball.global_position
-	reception_release.buffered_touch=is_finite(touched_at) or (not recipe.is_empty() and mapped_touch(map,recipe,ball.position-incoming_axis*.001))
+	reception_release.buffered_touch=is_finite(touched_at)
 	var offset: float=reception_release.offset
 	var grade: String=reception_release.grade
 	var ms := roundi(offset*1000.)
-	var label := "Pass release  /  %s  (%+d ms)" % [grade,ms]
+	var label := "%s release  /  %s  (%+d ms)" % ["Dig" if control_digger else "Pass",grade,ms]
 	reception_release.label=label
 	show_release_feedback(offset,true)
 	dig_feedback.add_theme_color_override("font_color",Color("78e1ad") if grade=="Perfect" else (Color("ffd36b") if grade=="Early" else Color("ff9086")))
 	dig_feedback.text=label
-	trace("pass_release",{"zone":routed_zone,"release_s":released_at,"target_s":receive_at,"offset_ms":ms,"grade":grade})
+	trace("dig_release" if control_digger else "pass_release",{"zone":routed_zone,"release_s":released_at,"target_s":defense_at if control_digger else receive_at,"offset_ms":ms,"grade":grade})
 
 func show_service_ace() -> void:
 	super.show_service_ace()
@@ -406,37 +446,43 @@ func show_service_ace() -> void:
 
 func accept_reception(previous: Vector3) -> bool:
 	if control_digger or receiver!=1: return super.accept_reception(previous)
+	return accept_manual_contact(previous,map,recipe,flight_age)
+
+func accept_manual_contact(previous: Vector3,mapper: Map,motion: Dictionary,clock: float) -> bool:
 	if not pass_timing_ready: return false
-	var face_depth := Contact.joint(passers[1],"Head").dot(incoming_axis)-.09
+	var face_depth := Contact.joint(controlled_passer(),"Head").dot(incoming_axis)-.09
 	var depth_limit := face_depth+BODY_CUSHION
 	var end := ball.position
 	var advance := (end-previous).dot(incoming_axis)
 	if advance>0. and end.dot(incoming_axis)>depth_limit:
 		end=previous.lerp(end,clampf((depth_limit-previous.dot(incoming_axis))/advance,0.,1.))
-	var touch := previous.dot(incoming_axis)<=depth_limit and mapped_segment_touch(map,recipe,previous,end)
-	if touch: touched_at=flight_age
+	var touch := previous.dot(incoming_axis)<=depth_limit and mapped_segment_touch(mapper,motion,previous,end)
+	if touch: touched_at=clock
 	if not is_finite(released_at):
 		if not receive_held or not touch: return false
-		ball.position=first_platform_contact(previous,end)
+		ball.position=first_platform_contact(previous,end,mapper,motion)
 		reception_result="Held at contact"
 		return true
 	record_receive_release()
 	if not reception_release.get("playable",false): return false
 	if not touch: return false
-	ball.position=first_platform_contact(previous,end)
-	reception_result="Pass"
+	ball.position=first_platform_contact(previous,end,mapper,motion)
+	reception_result="Dig" if control_digger else "Pass"
 	return true
 
-func first_platform_contact(start: Vector3,end: Vector3) -> Vector3:
+func first_platform_contact(start: Vector3,end: Vector3,mapper: Map,motion: Dictionary) -> Vector3:
 	var low := start
 	var high := end
 	for step in 7:
 		var mid := low.lerp(high,.5)
-		if mapped_segment_touch(map,recipe,start,mid): high=mid
+		if mapped_segment_touch(mapper,motion,start,mid): high=mid
 		else: low=mid
 	return high
 
 func pass_timing_penalty() -> float:
 	if control_digger or receiver!=1: return 0.
+	return manual_timing_penalty()
+
+func manual_timing_penalty() -> float:
 	if reception_result=="Held at contact": return .8
 	return clampf(absf(float(reception_release.get("offset",0.)))/RECEIVE_EARLY,0.,1.)
