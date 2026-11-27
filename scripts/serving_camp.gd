@@ -683,7 +683,9 @@ func _process(delta: float) -> void:
 				flight_age=0.
 				phase="serve_flight"
 				message.text=("Perfect" if absf(error)<=SERVE_PERFECT else ("Early" if error<0. else "Late"))+" / "+SPIN_LABELS[spin_selection]
-				hand_sound.play()
+				if toss_style>=2:
+					hand_sound.play()
+					spike_sound_count+=1
 	elif phase in ["serve_flight","serve_pass","serve_attack","serve_miss"]:
 		serves[flight_style()].hide()
 		serve_clock+=delta
@@ -723,6 +725,7 @@ func _process(delta: float) -> void:
 				floor_impact.stream=preload("res://assets/audio/ball_floor.wav")
 				floor_impact.volume_db=linear_to_db(clampf(absf(incoming.dot(surface.normal))/12.,.06,.88))
 				floor_impact.play()
+				floor_sound_count+=1
 				drop_velocity=incoming.bounce(surface.normal)*(.70 if surface.normal.y>.8 else .45)
 				drop_net_hit.clear()
 				drop_net_time=0.
@@ -732,6 +735,7 @@ func _process(delta: float) -> void:
 				if surface.normal.y>.8 and ball.position.y<.26 and on_receiving_court(ball.position):
 					receive_read.beaten(ball.position)
 					show_service_ace()
+				else: serve_out()
 				trace("serve_gym_contact",{"normal":str(surface.normal),"point":str(ball.position)})
 				return
 			if ball.position.z>BallNet.NET_Z or shot.net_hit.is_empty():
@@ -1228,6 +1232,9 @@ func sample_defensive_contact(platform: Reception,start: float,dt: float,until_f
 func on_receiving_court(point: Vector3) -> bool:
 	return absf(point.x)<=4.5 and point.z>=BallNet.NET_Z and point.z<=BallNet.NET_Z+9.
 
+func serve_out() -> void:
+	pass
+
 func show_service_ace() -> void:
 	message.text="Service ace"
 	trace("service_ace",{"point":str(ball.position)})
@@ -1370,7 +1377,9 @@ func return_struck(_actor: Node3D,point: Vector3,velocity: Vector3,_spin: float)
 	floor_linger=0.
 	attack_floor_pending=true
 	hard_spike_floor_pending=pin_attack.rally_shot not in ["tip","roll"]
-	if pin_attack.rally_shot!="tip": hand_impact.play()
+	if pin_attack.rally_shot!="tip":
+		hand_impact.play()
+		spike_sound_count+=1
 	dig_clock=0.
 	for defender in dig_platforms:
 		var platform: Reception=dig_platforms[defender]
