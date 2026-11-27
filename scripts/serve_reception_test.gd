@@ -1,5 +1,6 @@
 extends "res://scripts/serving_camp.gd"
 
+const PassAccuracy = preload("res://scripts/reception_accuracy.gd")
 const Map = preload("res://scripts/mapped_reception.gd")
 var map := Map.new()
 var defense_map := Map.new()
@@ -126,7 +127,7 @@ func next_serve() -> void:
 	super.next_serve()
 	active_stances.clear()
 	for i in passers.size():
-		active_stances.append(stance_points[i])
+		active_stances.append(reception_home(i))
 		passers[i].position=active_stances[i]
 	receiving_setter.position=Vector3(map.pass_goal.x,.04,maxf(map.pass_goal.z,BallNet.NET_Z+.25))
 
@@ -295,8 +296,13 @@ func complete_reception() -> void:
 	if recipe.kind!="overhead": dig_sound.play()
 	message.text="Pass"
 
+func pass_timing_penalty() -> float:
+	return 0.
+
 func reception_pass_target() -> Vector3:
-	return map.pass_goal
+	var bounds := PassAccuracy.spread(pass_timing_penalty(),map.feed_kmh/3.6,received_spin_rps,passers[receiver].effective_rating("Forearm reception"),false)
+	var miss: Vector3=PassAccuracy.sample_offset(bounds)
+	return map.pass_goal+miss.slide(Vector3.UP)
 
 func accept_reception(previous: Vector3) -> bool:
 	return mapped_touch(map,recipe,previous)
@@ -349,7 +355,15 @@ func block_on_flight_segment(previous: Vector3) -> bool:
 	if defense_recipe.is_empty():
 		var ahead := minf(.32,preload("res://scripts/pass_flight.gd").landing_time(ball.position,drop_velocity))
 		var source := pin_hitter.global_position
-		var yaw := atan2(source.x-dig_defender().position.x,source.z-dig_defender().position.z)
+		var actor := dig_defender()
+		var fall := preload("res://scripts/pass_flight.gd").landing_time(ball.position-Vector3.UP*.72,drop_velocity)
+		var intercept := ball.position+drop_velocity*fall+Vector3.DOWN*4.905*fall*fall
+		if cpu_dig():
+			var facing := (source-actor.position).slide(Vector3.UP).normalized()
+			var stance := intercept.slide(Vector3.UP)-facing*.52+Vector3.UP*actor.position.y
+			if stance.distance_to(actor.position)>.22:
+				move_receiver(actor,stance,dt,source-actor.position,GroundControls.speed(true,true),true)
+		var yaw := atan2(source.x-actor.position.x,source.z-actor.position.z)
 		var start := (previous-dig_defender().position).rotated(Vector3.UP,-yaw)
 		var predicted := ball.position+drop_velocity*ahead+Vector3.DOWN*4.905*ahead*ahead
 		var end := (predicted-dig_defender().position).rotated(Vector3.UP,-yaw)
@@ -360,8 +374,13 @@ func block_on_flight_segment(previous: Vector3) -> bool:
 			if span.y>span.x and span.x<first:
 				first=span.x
 				best=box
-		if best.is_empty(): return false
 		var lead := maxf(0.,(ahead+dt)*first-dt)
+		if best.is_empty():
+			var gap := (intercept-actor.position).slide(Vector3.UP).length()
+			if not cpu_dig() or fall>.20 or gap>1.75: return false
+			var local := (intercept-actor.position).rotated(Vector3.UP,-yaw)
+			best={"id":11 if gap>1. else 21,"cell":Vector3i(0 if local.x<0. else 2,0,2),"part":0}
+			lead=fall
 		defense_at=dig_clock+lead
 		defense_map.set_intercept=ball.position+drop_velocity*lead+Vector3.DOWN*4.905*lead*lead
 		defense_map.incoming_lead_seconds=lead
@@ -379,13 +398,10 @@ func block_on_flight_segment(previous: Vector3) -> bool:
 	last_digger=dig_defender()
 	dig_incoming=drop_velocity
 	var timing_error := clampf(absf(release-defense_at+PASS_RELEASE_LEAD)/DIG_WINDOW,0.,1.)
-	var pressure := smoothstep(35.,110.,drop_velocity.length()*3.6)
-	var spread := .65+3.8*pressure+2.4*timing_error
-	var goal := defense_map.pass_goal
-	var scatter := Vector2.from_angle(randf()*TAU)*sqrt(randf())*spread
-	goal.x+=scatter.x
-	goal.z+=scatter.y-pressure*1.2
-	var apex := ball.position.y+3.4
+	var bounds: Vector2=PassAccuracy.spread(timing_error,drop_velocity.length(),received_spin_rps,last_digger.effective_rating("Forearm reception"),false)
+	var miss: Vector3=PassAccuracy.sample_offset(bounds)
+	var goal := defense_map.pass_goal+miss.slide(Vector3.UP)
+	var apex := ball.position.y+maxf(1.,3.4+miss.y)
 	var flight := sqrt(2.*(apex-ball.position.y)/9.81)+sqrt(2.*(apex-goal.y)/9.81)
 	drop_velocity=(goal-ball.position)/flight+Vector3.UP*4.905*flight
 	drop_net_hit.clear()

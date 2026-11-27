@@ -149,18 +149,22 @@ func start_drill() -> void:
 func build_rally_sliders() -> void:
 	add_rally_sliders("serving",[["Serve speed","serve_kmh",0,300,0," km/h"]])
 
+func reception_home(slot: int) -> Vector3:
+	if slot==1 and not control_digger: return HOMES[slot]
+	return super.reception_home(slot)
+
 func next_serve() -> void:
 	release_passer(other_map)
 	other_motion={}
 	other_slot=-1
 	super.next_serve()
-	dig_defender().position=Vector3(0.,.04,BallNet.NET_Z-7.5)
+	dig_defender().position=Vector3(0.,.04,BallNet.NET_Z-6.)
 	receiver=1
 	receive_committed=false
 	checking_human_lane=false
 	next_route_check=0.
 	cpu_wait=1.25
-	spike_target=Vector3(randf_range(-1.5,1.5),BallNet.RADIUS,BallNet.NET_Z-randf_range(3.7,8.85))
+	spike_target=Vector3(randf_range(-1.5,1.5),BallNet.RADIUS,BallNet.NET_Z-randf_range(7.25,8.9))
 	receive_held=false
 	pass_timing_ready=false
 	reception_release={}
@@ -370,8 +374,6 @@ func accept_reception(previous: Vector3) -> bool:
 		return true
 	return false
 
-func reception_pass_target() -> Vector3:
-	var target := super.reception_pass_target()
-	if control_digger or receiver!=1 or reception_release.get("grade","Perfect")=="Perfect": return target
-	var error := clampf(absf(float(reception_release.offset))/RECEIVE_EARLY,.12,1.)
-	return target+Vector3(randf_range(-.8,.8),0.,randf_range(-.65,.65))*error
+func pass_timing_penalty() -> float:
+	if control_digger or receiver!=1: return 0.
+	return clampf(absf(float(reception_release.get("offset",0.)))/RECEIVE_EARLY,0.,1.)
