@@ -224,6 +224,7 @@ func athlete(at: Vector3,color: String) -> Node3D:
 	turn_steps.actor=actor
 	actor.skeleton.add_child(turn_steps)
 	actor.skeleton.add_child(preload("res://scripts/practice_joint_limits.gd").new())
+	actor.limit_live_turns(replay_inspector)
 	actor.watch_ball(ball)
 	return actor
 

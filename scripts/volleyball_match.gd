@@ -304,7 +304,9 @@ func configure(actor: Node3D, board: Label, status: Label, build := "", players_
 	add_child(ball)
 	add_child(court_boundary)
 	preload("res://scripts/ball_landing_marker.gd").attach(ball,func(): return path_point(flight_end()) if phase==Phase.LIVE and not replay.active else Vector3.INF)
-	for avatar in players: avatar.watch_ball(ball)
+	for avatar in players:
+		avatar.limit_live_turns(replay)
+		avatar.watch_ball(ball)
 	aim_ring = MeshInstance3D.new()
 	var ring := TorusMesh.new()
 	ring.inner_radius = 0.31

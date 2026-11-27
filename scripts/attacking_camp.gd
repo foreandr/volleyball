@@ -121,7 +121,10 @@ func rep_set_percent() -> float:
 	return set_arc_percent
 
 func attack_set_duration(height_index: int) -> float:
-	var ratio := rep_set_percent()*.01
+	return set_seconds(height_index,rep_set_percent())
+
+func set_seconds(height_index:int, percent:float) -> float:
+	var ratio := percent*.01
 	# Quick tempos spend less time travelling to the same hand-contact point.
 	var quick := smoothstep(.15,.60,ratio)
 	return float(DURATION[height_index])*sqrt(ratio)*lerpf(.66,1.,quick)
@@ -511,6 +514,17 @@ func set_destination(origin: Vector3, aim: Vector3, height_index: int) -> Vector
 	contact.y=planned_attack_contact_height()
 	return contact
 
+var height_preview: Control
+func show_height_preview(index:int) -> void:
+	if not is_instance_valid(height_preview):
+		height_preview=preload("res://scripts/attack_height_preview.gd").new()
+		add_child(height_preview)
+		height_preview.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var seconds := set_seconds(chosen_tempo(),SET_HEIGHTS[index])
+	var start := Hands.contact_center(setter) if phase=="set_contact" else Vector3(setter.position.x,2.55,setter.position.z)
+	var end := Vector3(active_set.x,planned_attack_contact_height(),active_set.z)
+	height_preview.show_arc(camera,start,end,seconds,index)
+
 func select_attack_touch() -> void:
 	var bumper := -1 if held_bumpers.is_empty() else int(held_bumpers.back())
 	roll_shot=bumper==JOY_BUTTON_LEFT_SHOULDER
@@ -522,6 +536,7 @@ func _input(event: InputEvent) -> void:
 			var direction := 1 if event.button_index==JOY_BUTTON_DPAD_UP else -1
 			var next_height := clampi(height_preset()+direction,0,SET_HEIGHTS.size()-1)
 			save_set_height(SET_HEIGHTS[next_height])
+			show_height_preview(next_height)
 			trace("set_height_change",{"button":event.button_index,"preset":height_preset()})
 		get_viewport().set_input_as_handled()
 		return
@@ -564,7 +579,6 @@ func attack_button(index: int, pressed: bool) -> void:
 	elif manual_shot==index:
 		release_grade=button_timing_error()
 		release_at=clock
-		ContactTiming.window("Attack",attack_meter_error(),EARLY_LIMIT,LATE_LIMIT,-CLEAN_EARLY,CLEAN_LATE)
 		show_attack_timing(attack_meter_error())
 		trace("attack_release",{"shot":index,"meter_error_ms":roundi(attack_meter_error()*1000.),"button_ms":roundi(release_grade*1000.),"approach_delay_ms":roundi(approach_delay*1000.),"approach":approach_started})
 		if not approach_started and (phase!="set" or attack_meter_error()<EARLY_LIMIT or attack_meter_error()>LATE_LIMIT): manual_shot=-1
@@ -704,8 +718,10 @@ func step_attack(delta: float) -> void:
 			var direction := (right*stick.x+right.cross(Vector3.UP)*stick.y).normalized()
 			var sprinting: bool=steering and GroundControls.sprint(axis) and hitter.stamina.can_sprint()
 			var desired := direction*amount*GroundControls.speed(lock_on,sprinting)
+			var before_move:=hitter.position
 			prep_velocity=prep_velocity.move_toward(desired,18.*delta)
 			hitter.position=rotation_drill.move_actor(hitter,prep_velocity*delta)
+			var actual_velocity:Vector3=(hitter.position-before_move)/maxf(delta,.00001)
 			if steering:
 				manual_route=Vector3.ZERO
 			if lock_on:
@@ -716,7 +732,7 @@ func step_attack(delta: float) -> void:
 			if lock_on: hitter.play_action("idle",.22)
 			else: hitter.play_ground_gait(prep_velocity.length())
 			if not shuffle_steps.has(hitter): shuffle_steps[hitter]=preload("res://scripts/directional_footwork.gd").new(hitter)
-			GroundControls.shuffle(hitter,shuffle_steps[hitter],prep_velocity,lock_on,delta)
+			GroundControls.shuffle(hitter,shuffle_steps[hitter],actual_velocity,lock_on,delta)
 	if phase=="spike":
 		elapsed+=delta
 		swing_time+=delta
@@ -863,6 +879,7 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 			var valid_release := manual_shot>=0 and is_finite(release_at) and grade>=EARLY_LIMIT and grade<=LATE_LIMIT
 			if valid_release:
 				contact_grade=grade
+				ContactTiming.window("Attack",grade,EARLY_LIMIT,LATE_LIMIT,-CLEAN_EARLY,CLEAN_LATE)
 				show_attack_timing(grade)
 				placement_offset=Vector2.from_angle(rotation_drill.random.randf()*TAU)*sqrt(rotation_drill.random.randf())*aim_radius()
 				var severity := smoothstep(CLEAN_LATE if grade>0. else CLEAN_EARLY,LATE_LIMIT if grade>0. else -EARLY_LIMIT,absf(grade))
@@ -886,11 +903,11 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 			message.text=feedback
 			gym.update_board(spikes)
 			contact_offset=striking_palm_offset()
-			ball.position=palm+contact_offset
 			net_clear_time=-1.
 			var landing := shot_landing(ball.position)
 			var shot_time := attack_flight_time(ball.position,landing)
-			drop_velocity=(landing-ball.position)/shot_time+Vector3.UP*(4.905*shot_time)
+			spin_acceleration=shot_spin_force(ball.position,landing,shot_time)
+			drop_velocity=launch_velocity(ball.position,landing,shot_time,spin_acceleration)
 			roll_time=-1.
 			trace("spike",{"ball_contact":str(strike_point),"intended_contact":str(endpoint),"set_marker":str(active_set),"tip_shot":tip_shot,"roll_shot":roll_shot,"from":str(ball.position),"palm_gap":nearest.distance_to(palm),"contact_grade_ms":roundi(contact_grade*1000.) if is_finite(contact_grade) else null,"approach_delay_ms":roundi(approach_delay*1000.),"button_ms":roundi(release_grade*1000.) if is_finite(release_grade) else null})
 			spend_swing_stamina()
@@ -905,6 +922,12 @@ func contact_deadline() -> float:
 func miss_attack() -> bool:
 	coach_react("miss")
 	trace("spike_miss",{"cpu_hitter":cpu_hitter,"stamina":hitter.stamina.value,"set_height_percent":set_arc_percent,"planned_contact":str(planned_contact),"closest_palm_gap_m":closest_spike_gap if is_finite(closest_spike_gap) else -1.,"ball":str(ball.position),"palm":str(Contact.palm(hitter,"r"))})
+	var timing:=release_grade+GRADE_ADVANCE
+	var reason:="No release"
+	if is_finite(timing):
+		var sign_word:="early" if timing<0. else "late"
+		reason="%s / %s %d ms"%["Out of reach" if timing>=EARLY_LIMIT and timing<=LATE_LIMIT else "Release",sign_word,roundi(absf(timing)*1000.)]
+	ContactTiming.display("Attack   Missed / "+reason,Color("ff998a"))
 	feedback="Missed spike"
 	if not cpu_hitter:
 		if is_finite(release_grade) and (release_grade+GRADE_ADVANCE<EARLY_LIMIT or release_grade+GRADE_ADVANCE>LATE_LIMIT):
@@ -945,14 +968,6 @@ func projected_landing() -> Vector3:
 	return super.projected_landing()
 
 func advance_spike(delta: float) -> void:
-	var age := swing_time-contact_swing_time
-	if age<=PALM_CONTACT+.00001:
-		ball.position=(Contact.joint(hitter,"middle_03_r") if tip_shot else Contact.palm(hitter,"r"))+striking_palm_offset()
-		var landing := shot_landing(strike_point)
-		var flight := attack_flight_time(ball.position,landing)
-		spin_acceleration=shot_spin_force(ball.position,landing,flight)
-		drop_velocity=launch_velocity(ball.position,landing,flight,spin_acceleration)
-		return
 	if not launched_attack:
 		launched_attack=true
 		if drop_velocity.z>.1:

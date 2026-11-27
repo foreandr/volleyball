@@ -2,6 +2,11 @@ extends "res://scripts/attacking_camp.gd"
 
 const POSITIONS:=["Left (4)","Middle (3)","Right (2)"]
 const ZONES:=[1,6,5]
+const FEED_LANES := [Vector3(2.85,.04,-.4),Vector3(0.,.04,-.4),Vector3(-2.85,.04,-.4)]
+const OFF_COURT := Vector3(-5.5,.04,-2.8)
+var demo_aim_error := Vector2.ZERO
+var demo_rep := 0
+var human_height := 130.
 const HALF_ZONE:=1.35
 var feed_after_return:=""
 var career_hitter:Node3D
@@ -26,7 +31,8 @@ func saved_set_percent() -> float:
 	return SET_HEIGHTS[3]
 
 func save_set_height(value:float) -> void:
-	set_arc_percent=value
+	human_height=value
+	if not cpu_hitter: set_arc_percent=value
 	title.text=camp_title()
 	update_prompts(phase)
 
@@ -70,18 +76,30 @@ func switch_attacker(active:Node3D,waiting:Node3D) -> void:
 	hitter=active
 	jump_height=float(active.attributes.vertical_in)*.0254
 	sideline_actor=waiting
-	active.position=GroundControls.BACK_LEFT
-	waiting.position=GroundControls.BACK_MIDDLE
+	active.position=FEED_LANES[attack_lane]
+	waiting.position=GroundControls.BACK_MIDDLE if cpu_hitter else OFF_COURT
 	waiting.look_at(Vector3(coach.position.x,waiting.position.y,coach.position.z),Vector3.UP,true)
 	waiting.play_action("idle",0.)
 	waiting.animator.advance(0.)
 
+func shot_slot() -> int:
+	var slot := demo_target if cpu_hitter else makes%3
+	return 2-slot if attack_lane==2 else slot
+
 func zone_center() -> Vector3:
-	return Vector3([2.9,0.,-2.9][demo_target if cpu_hitter else makes%3],.065,BallNet.NET_Z+5.8)
+	return Vector3([2.9,0.,-2.9][shot_slot()],.065,BallNet.NET_Z+5.8)
+
+func set_destination(origin:Vector3,aim:Vector3,height_index:int) -> Vector3:
+	var destination:=super.set_destination(origin,aim,height_index)
+	if cpu_hitter and height_preset()<=1:
+		# A quick middle is a committed route. Keep practice feeds within a hand-width of that route.
+		var nominal:=super.set_destination(origin,PINS[active_lane],height_index)
+		destination=nominal+(destination-nominal).limit_length(.14)
+	return destination
 
 func shot_landing(origin:Vector3) -> Vector3:
 	if not cpu_hitter: return super.shot_landing(origin)
-	var target:=zone_center()
+	var target:=zone_center()+Vector3(demo_aim_error.x,0.,demo_aim_error.y)
 	target.y=Contact.BALL_RADIUS
 	return target
 
@@ -90,18 +108,25 @@ func begin(next:String) -> void:
 	super.begin(next)
 
 func camp_title() -> String:
-	if cpu_hitter: return "Hitting   /   Reyes to zone %d" % ZONES[demo_target]
-	return "Hitting   /   %s to zone %d   /   Set height %d   /   %d of 9 correct"%[POSITIONS[mini(2,makes/3)],ZONES[makes%3],height_preset(),makes]
+	if cpu_hitter: return "Hitting   /   Reyes to zone %d" % ZONES[shot_slot()]
+	return "Hitting   /   %s to zone %d   /   Set height %d   /   %d of 9 correct"%[POSITIONS[mini(2,makes/3)],ZONES[shot_slot()],height_preset(),makes]
 
 func reset_feed() -> void:
 	finish_reception()
-	if cpu_hitter and demo_hit: demo_target=(demo_target+1)%ZONES.size()
+	if cpu_hitter and demo_hit: demo_rep=(demo_rep+1)%9
+	demo_target=demo_rep%3
+	if cpu_hitter:
+		var spread:=lerpf(1.05,.52,placement_skill())
+		demo_aim_error=Vector2(randfn(0.,spread),randfn(0.,spread*1.15))
+	set_arc_percent=SET_HEIGHTS[2-demo_rep%2] if cpu_hitter else human_height
 	demo_hit=false
 	coach_station=Vector3(-.58,0,BallNet.NET_Z+2.6)
-	attack_lane=mini(2,makes/3)
+	attack_lane=mini(2,(demo_rep if cpu_hitter else makes)/3)
 	next_set=Vector3([3.65,0.,-3.65][attack_lane],2.65,3.)
 	var previous:=hitter.position
+	var previous_yaw:=hitter.rotation.y
 	super.reset_feed()
+	hitter.rotation.y=previous_yaw
 	hitter.position=Vector3(previous.x,START.y,previous.z)
 	prep_velocity=Vector3.ZERO
 	if cpu_hitter and phase in ["cart","walk"]:
@@ -115,7 +140,7 @@ func change_feed_phase(next:String) -> void:
 	if next=="pass" and phase=="feed" and is_instance_valid(hitter):
 		toss_start=ball.position
 		var offsets:=[Vector3(0,1.12,.58),Vector3(-.34,1.55,.54),Vector3(.10,2.05,.42)]
-		receive_point=GroundControls.BACK_LEFT+Vector3(offsets[feed_index%offsets.size()])
+		receive_point=FEED_LANES[active_lane]+Vector3(offsets[feed_index%offsets.size()])
 		feed_index+=1
 		receive_at=RECEIVE_TIME
 		touched_at=-INF
@@ -131,7 +156,7 @@ func team_controls_approach() -> bool:
 func step_attack(delta:float) -> void:
 	if phase=="return_to_five":
 		super.step_attack(delta)
-		var goal:=GroundControls.BACK_LEFT
+		var goal:Vector3=FEED_LANES[active_lane]
 		var remaining:=(goal-hitter.position).slide(Vector3.UP)
 		GroundControls.face(hitter,coach.position-hitter.position,delta)
 		hitter.play_action("idle",.18)
@@ -156,7 +181,7 @@ func step_attack(delta:float) -> void:
 	super.step_attack(delta)
 	if not motion.is_empty(): reception.pose_origin.position+=(hitter.position-before_step).slide(Vector3.UP)
 	if phase in ["cart","feed"]:
-		GroundControls.face(coach,GroundControls.BACK_LEFT-coach.position,delta)
+		GroundControls.face(coach,Vector3(FEED_LANES[active_lane])-coach.position,delta)
 	elif phase=="receive_toss":
 		var previous:=ball.position
 		ball.position=feed_point(elapsed)
@@ -182,6 +207,11 @@ func step_attack(delta:float) -> void:
 			attack_floor_pending=true
 			drop_velocity=feed_velocity()+Vector3.DOWN*9.81*elapsed
 			message.text="Missed reception"
+			if not cpu_hitter:
+				if is_finite(receive_release):
+					var offset:=receive_release-receive_at
+					ContactTiming.display("Reception   Missed / %s %d ms"%["Early" if offset<0. else "Late",roundi(absf(offset)*1000.)],Color("ff998a"))
+				else: ContactTiming.display("Reception   Missed",Color("ff998a"))
 			begin("drop")
 	elif phase=="pass":
 		if not motion.is_empty():
@@ -278,6 +308,7 @@ func _process(delta:float) -> void:
 
 func enter_hitting_turn() -> void:
 	cpu_hitter=false
+	attack_lane=mini(2,makes/3)
 	switch_attacker(career_hitter,hitter)
 	if rotation_drill.issued: rotation_drill.free_ball(Vector3.ZERO)
 	coach_motion.whistle_cue.signal_drill(coach)

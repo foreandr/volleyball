@@ -395,7 +395,27 @@ var fabric_time := 0.
 var cloth_offset := Vector3.ZERO
 var cloth_velocity := Vector3.ZERO
 
+const MAX_LIVE_TURN := 5.24 # radians per second (300 degrees)
+var turn_replay: Object
+var last_live_yaw := INF
+var turn_goal := 0.
+
+func limit_live_turns(replay_controller: Object) -> void:
+	turn_replay=replay_controller
+	process_priority=49 # after gameplay steering, before replay capture
+
 func _process(dt: float) -> void:
+	if is_instance_valid(turn_replay):
+		if turn_replay.active or not is_visible_in_tree():
+			last_live_yaw=INF
+		elif not is_finite(last_live_yaw):
+			last_live_yaw=rotation.y
+			turn_goal=last_live_yaw
+		else:
+			if absf(angle_difference(last_live_yaw,rotation.y))>.00001:
+				turn_goal=rotation.y
+			rotation.y=rotate_toward(last_live_yaw,turn_goal,MAX_LIVE_TURN*minf(dt,1./30.))
+			last_live_yaw=rotation.y
 	if jersey_materials.is_empty() or dt<=0.: return
 	fabric_time+=dt
 	var gust := .77+.23*sin(fabric_time*1.7+global_position.x*.6)

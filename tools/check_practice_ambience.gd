@@ -27,12 +27,28 @@ func check() -> void:
 	var resumed:bool=room.flight_time>=0.
 	print("Population %d; background rally launched %s, caught and waited %s, resumed %s."%[count,launched,waited,resumed])
 	current_scene.enter_hitting_turn()
-	var handed_off:bool=current_scene.hitter.position.distance_to(Vector3(2.6,.04,-2.8))<.1 and current_scene.sideline_actor.position.distance_to(Vector3(0.,.04,-2.8))<.1
-	print("Handoff to five and six: ",handed_off)
-	for frame in 1200:
-		await process_frame
-		if current_scene.phase=="receive_toss": break
-	var target:Vector3=current_scene.receive_point
-	var feed_in_five:bool=current_scene.phase=="receive_toss" and Vector2(target.x-2.6,target.z+2.8).length()<1.
-	print("Coach target in five: ",feed_in_five," at ",target)
-	quit(0 if feed_in_five and handed_off and count>=15 and count<=20 and launched and waited and resumed else 1)
+	var handed_off:bool=current_scene.hitter.position.distance_to(current_scene.FEED_LANES[current_scene.active_lane])<.1 and absf(current_scene.sideline_actor.position.x)>4.5
+	print("Handoff positions ",current_scene.hitter.position," and ",current_scene.sideline_actor.position,"; active lane ",current_scene.active_lane)
+	var lanes_ok:=true
+	var cpu_offsets:Array[Vector3]=[]
+	for demo in [false,true]:
+		current_scene.cpu_hitter=demo
+		for i in 9:
+			current_scene.makes=i
+			current_scene.demo_rep=i
+			current_scene.demo_hit=false
+			current_scene.reset_feed()
+			current_scene.phase="feed"
+			current_scene.change_feed_phase("pass")
+			var target:Vector3=current_scene.receive_point
+			if demo:
+				var hit:Vector3=current_scene.shot_landing(Vector3.ZERO)
+				lanes_ok=lanes_ok and hit==current_scene.shot_landing(Vector3.ZERO)
+				cpu_offsets.append(hit-current_scene.zone_center())
+			var center:Vector3=current_scene.FEED_LANES[i/3]
+			lanes_ok=lanes_ok and current_scene.active_lane==i/3 and (target-center).slide(Vector3.UP).length()<1.
+			lanes_ok=lanes_ok and (current_scene.height_preset() in [1,2] if demo else current_scene.height_preset()==3)
+	lanes_ok=lanes_ok and cpu_offsets[0].x!=cpu_offsets[1].x and cpu_offsets[0].z!=cpu_offsets[1].z
+	current_scene.show_height_preview(2)
+	print("Separate handoff: ",handed_off,", all nine feed assignments and heights for both roles: ",lanes_ok)
+	quit(0 if lanes_ok and handed_off and count>=15 and count<=20 and launched and waited and resumed else 1)
