@@ -7,6 +7,8 @@ var defense_anchor := Node3D.new()
 var defense_recipe := {}
 var defense_at := INF
 var defense_contact := -INF
+var first_dig_touch := -INF
+var dig_feedback := Label.new()
 const DIG_WINDOW := .095
 const DIG_PERFECT := .045
 var stance_points: Array[Vector3]=[]
@@ -52,6 +54,9 @@ func start_drill() -> void:
 					boxes.append({"cell":cell,"part":part,"id":id,"bounds":AABB(map.region_center(cell,part)-size*.5,size)})
 	super.start_drill()
 	title.text="SERVING  /  RECEPTION TEST"
+	message.get_parent().add_child(dig_feedback)
+	message.get_parent().move_child(dig_feedback,message.get_index()+1)
+	dig_feedback.hide()
 	for actor in wall+[receiving_middle]: actor.hide()
 
 func build_rally_sliders() -> void:
@@ -67,6 +72,7 @@ func next_serve() -> void:
 	defense_recipe={}
 	defense_at=INF
 	defense_contact=-INF
+	first_dig_touch=-INF
 	if map.player!=null:
 		map.player.reparent(world,true)
 		map.player.basis=Basis.IDENTITY
@@ -281,7 +287,10 @@ func block_on_flight_segment(previous: Vector3) -> bool:
 		defense_map.feed_kmh=drop_velocity.length()*3.6
 		defense_recipe=bind_contact_motion(defense_map,defense_anchor,hitter,hitter.position,source,best)
 	sample_attack_dig()
-	if mapped_touch(defense_map,defense_recipe,previous): defense_contact=dig_clock
+	if mapped_touch(defense_map,defense_recipe,previous):
+		defense_contact=dig_clock
+		if not is_finite(first_dig_touch): first_dig_touch=dig_clock
+	update_dig_feedback()
 	var release: float=dig_platforms[hitter].pressed_at
 	if not is_finite(defense_contact) or not is_finite(release) or minf(absf(release-defense_at),absf(release-defense_contact))>DIG_WINDOW or absf(defense_contact-dig_clock)>DIG_WINDOW: return false
 	last_digger=hitter
@@ -297,6 +306,19 @@ func block_on_flight_segment(previous: Vector3) -> bool:
 	message.text="Dig"
 	trace("mapped_dig",{"contact":defense_contact,"prediction":defense_at,"release":release,"apex":apex})
 	return true
+
+func update_dig_feedback() -> void:
+	var release: float=dig_platforms[hitter].pressed_at
+	if not is_finite(release) or not is_finite(defense_at): return
+	var measured := is_finite(first_dig_touch)
+	var reference := first_dig_touch if measured else defense_at
+	var ms := roundi((release-reference)*1000.)
+	var label := "Dig  %d ms" % absi(ms)
+	if ms!=0: label+=" early" if ms<0 else " late"
+	else: label+=" on time"
+	if not measured: label+=" (estimated)"
+	dig_feedback.text=label
+	dig_feedback.show()
 
 func attack_surface_contact(point: Vector3,floor_hit: bool) -> void:
 	if phase=="serve_return" and attack_floor_pending and floor_hit:
@@ -376,3 +398,4 @@ func _input(event: InputEvent) -> void:
 				passers[dragged].position=active_stances[dragged]
 		if dragged>=0: return
 	super(event)
+	if phase=="serve_return": update_dig_feedback()
