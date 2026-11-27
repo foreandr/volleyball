@@ -228,6 +228,8 @@ func step(delta: float) -> void:
 		planned_duration = landing_time
 		launch_target = target
 		velocity = launch_velocity(origin,landing_time)
+		planned_duration=Flight.landing_time(origin,velocity)
+		landing_time=planned_duration
 		begin_serve_curve()
 		net_hit = Net.first_hit(flight_point,0.0,landing_time)
 		if not net_hit.is_empty(): landing_time = net_hit.end_time

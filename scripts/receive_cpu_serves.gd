@@ -1,7 +1,10 @@
 extends "res://scripts/serve_reception_test.gd"
 
 var control_digger := false
+var moving_last_tick := false
 var moving_passer := false
+var checking_human_lane := false
+var next_route_check := 0.
 var role_button := Button.new()
 
 func dig_defender() -> Node3D:
@@ -11,7 +14,10 @@ func cpu_dig() -> bool:
 	return not control_digger
 
 func manually_moving(actor: Node3D) -> bool:
-	return moving_passer and actor==passers[1]
+	return (moving_passer and actor==passers[1]) or super.manually_moving(actor)
+
+func cpu_positions_passer(slot: int) -> bool:
+	return control_digger or slot!=1
 
 func switch_role() -> void:
 	control_digger=not control_digger
@@ -39,8 +45,10 @@ var platform_depth := 0.
 var pass_timing_ready := false
 
 func bind_contact_motion(mapper: Map,root: Node3D,actor: Node3D,home: Vector3,source: Vector3,best: Dictionary) -> Dictionary:
+	if mapper==map and not control_digger and mapper.incoming_lead_seconds>.40:
+		return {}
 	var motion := super.bind_contact_motion(mapper,root,actor,home,source,best)
-	if mapper!=map or control_digger: return motion
+	if mapper!=map or control_digger or actor!=passers[1]: return motion
 	mapper.sample_receiver(motion,motion.contact,true,mapper.legs)
 	var shot=serves[flight_style()]
 	var velocity: Vector3=(shot.flight_point(receive_at+.005)-shot.flight_point(receive_at))/.005
@@ -83,10 +91,10 @@ func pass_meter(point := Vector3.INF) -> Dictionary:
 const RECEIVE_EARLY := .21
 
 func can_chase_reception() -> bool:
-	return control_digger
+	return not checking_human_lane
 
 func receiver_candidates() -> Array:
-	return super.receiver_candidates() if control_digger else [1]
+	return super.receiver_candidates() if control_digger else ([1] if checking_human_lane else [0,2])
 
 func start_drill() -> void:
 	super.start_drill()
@@ -104,6 +112,8 @@ func next_serve() -> void:
 	dig_defender().position=Vector3(0.,.04,BallNet.NET_Z-7.5)
 	receiver=1
 	receive_committed=false
+	checking_human_lane=false
+	next_route_check=0.
 	cpu_wait=1.25
 	spike_target=Vector3(randf_range(-1.5,1.5),BallNet.RADIUS,BallNet.NET_Z-randf_range(3.7,8.85))
 	receive_held=false
@@ -155,6 +165,17 @@ func apply_camera() -> void:
 func walk_server(_delta: float,_defending := false) -> void:
 	if phase=="serve_ready": ball.position=Contact.palm(hitter,"l")+Vector3.UP*.10
 
+func configure_flight(shot,origin: Vector3) -> void:
+	super.configure_flight(shot,origin)
+	if shot!=serves[0] or destination.z<=BallNet.NET_Z or origin.z>=BallNet.NET_Z: return
+	var displacement := Vector3(destination.x-origin.x,BallNet.RADIUS-origin.y,destination.z-origin.z)
+	var fraction := (BallNet.NET_Z-origin.z)/displacement.z
+	var rise := BallNet.NET_TOP+BallNet.RADIUS+.12-(origin.y+fraction*displacement.y)
+	if rise<=0. or fraction>=1.: return
+	var duration := sqrt(2.*rise/(9.81*fraction*(1.-fraction)))
+	var feasible := displacement/duration+Vector3.UP*4.905*duration
+	shot.test_speed_mps=minf(shot.test_speed_mps,feasible.length())
+
 func update_serve_aim(_delta: float) -> void:
 	super.update_serve_aim(0.)
 	for driver in serves: driver.path_preview.hide()
@@ -162,7 +183,7 @@ func update_serve_aim(_delta: float) -> void:
 func _process(delta: float) -> void:
 	moving_passer=false
 	if not settings.visible and not get_tree().paused and not replay_inspector.active:
-		if (control_digger and defense_map.player==null) or (not control_digger and phase in ["serve_ready","serve_toss","serve_flight"] and not receive_committed and not receive_held):
+		if (control_digger and defense_map.player==null) or (not control_digger and phase in ["serve_ready","serve_toss","serve_flight"] and map.player!=passers[1]):
 			var actor := dig_defender() if control_digger else passers[1]
 			var stick := Vector2(axis(JOY_AXIS_LEFT_X),axis(JOY_AXIS_LEFT_Y))
 			if stick.length()<.22: stick=Vector2.ZERO
@@ -177,7 +198,9 @@ func _process(delta: float) -> void:
 			if travel.is_zero_approx(): goal=actor.position
 			var focused := GroundControls.focus(axis)
 			var source := pin_hitter.global_position if control_digger else serve_station
-			move_receiver(actor,goal,delta,source-actor.position if focused else travel,pace,focused)
+			if not travel.is_zero_approx() or moving_last_tick:
+				move_receiver(actor,goal,delta,source-actor.position if focused else travel,pace,focused)
+			moving_last_tick=not travel.is_zero_approx()
 			if not control_digger:
 				moving_passer=travel.length_squared()>.001
 				active_stances[1]=actor.position
@@ -200,9 +223,7 @@ func _input(event: InputEvent) -> void:
 				return
 			if event.pressed:
 				receive_held=true
-				if phase=="serve_flight" and not receive_committed:
-					receive_committed=true
-					plan_remaining_reception(serves[flight_style()],flight_age)
+				next_route_check=0.
 			elif receive_held:
 				receive_held=false
 				if phase=="serve_flight" and not is_finite(released_at):
@@ -213,16 +234,26 @@ func _input(event: InputEvent) -> void:
 		if event is InputEventJoypadButton and event.button_index!=Xbox.physical(JOY_BUTTON_START): return
 	super._input(event)
 
+func route_reception(shot,age: float) -> void:
+	if not control_digger and receive_held:
+		checking_human_lane=true
+		plan_remaining_reception(shot,age)
+		if not routed_zone.is_empty():
+			receive_committed=not recipe.is_empty()
+			return
+	checking_human_lane=false
+	plan_remaining_reception(shot,age)
+	receive_committed=not recipe.is_empty()
+
 func plan_serve_reception(shot) -> void:
-	if control_digger or receive_held:
-		receive_committed=true
-		plan_remaining_reception(shot,0.)
+	route_reception(shot,0.)
+	next_route_check=.06
 
 func step_serve_reception(shot,previous: Vector3,delta: float) -> void:
-	if not receive_committed:
-		if not receive_held: return
-		receive_committed=true
-		plan_remaining_reception(shot,maxf(0.,flight_age-delta))
+	if map.player==null and flight_age>=next_route_check:
+		next_route_check=flight_age+.06
+		if checking_human_lane or (receive_held and not control_digger) or chase_box.is_empty():
+			route_reception(shot,maxf(0.,flight_age-delta))
 	super.step_serve_reception(shot,previous,delta)
 
 func record_receive_release() -> void:
@@ -254,7 +285,7 @@ func show_service_ace() -> void:
 	trace("manual_pass_miss",{"result":reception_result,"release":reception_release,"platform_contact_s":str(touched_at)})
 
 func accept_reception(previous: Vector3) -> bool:
-	if control_digger: return super.accept_reception(previous)
+	if control_digger or receiver!=1: return super.accept_reception(previous)
 	if not pass_timing_ready: return false
 	var face_depth := Contact.joint(passers[1],"Head").dot(incoming_axis)-.09
 	var within := ball.position.dot(incoming_axis)-face_depth<=BODY_CUSHION

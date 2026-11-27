@@ -75,9 +75,9 @@ func _draw() -> void:
 			return
 		var passer: Node3D=game.passers[1]
 		draw_player(passer,true)
-		if not game.reception_release.is_empty() or (game.phase=="serve_flight" and not game.recipe.is_empty()):
+		if not game.reception_release.is_empty() or (game.phase=="serve_flight" and game.pass_timing_ready):
 			var meter: Dictionary=game.pass_meter()
-			timing_arc(passer,meter.value,.33,.67,Vector2(.08,.90),Color("14191d"),not game.reception_release.is_empty())
+			timing_arc(passer,meter.value,.33,.67,Vector2(.08,.90),Color("14191d"),not game.reception_release.is_empty(),not game.receive_held)
 		return
 	var human: Node3D=game.rotation_drill.roster[0]
 	if "automatic_block" in game:
@@ -187,9 +187,9 @@ func draw_player(actor: Node3D,human: bool) -> void:
 	draw_string_outline(ThemeDB.fallback_font,origin,label,HORIZONTAL_ALIGNMENT_CENTER,160,14,4,Color("10191f"))
 	draw_string(ThemeDB.fallback_font,origin,label,HORIZONTAL_ALIGNMENT_CENTER,160,14,Color("ffce75") if is_setter else Color.WHITE)
 
-func timing_arc(actor: Node3D,value: float,low: float,high: float,contact := Vector2(0,1),miss_color := Color("778088"),highlight_release := false) -> void:
-	displayed_timing[actor]={"position":floor_rings[actor].global_position,"value":value,"perfect":Vector2(low,high),"contact":contact,"miss":miss_color,"highlight":highlight_release,"stamina":actor.stamina.fraction()}
-	paint_arc(actor,value,low,high,contact,miss_color,highlight_release)
+func timing_arc(actor: Node3D,value: float,low: float,high: float,contact := Vector2(0,1),miss_color := Color("778088"),highlight_release := false,black_cursor := false) -> void:
+	displayed_timing[actor]={"position":floor_rings[actor].global_position,"value":value,"perfect":Vector2(low,high),"contact":contact,"miss":miss_color,"highlight":highlight_release,"black_cursor":black_cursor,"stamina":actor.stamina.fraction()}
+	paint_arc(actor,value,low,high,contact,miss_color,highlight_release,black_cursor)
 
 func replay_timing(sample: Dictionary) -> void:
 	for ring in floor_rings.values(): ring.hide()
@@ -200,9 +200,9 @@ func replay_timing(sample: Dictionary) -> void:
 		var ring: MeshInstance3D=floor_rings[actor]
 		ring.global_position=state.position
 		ring.get_surface_override_material(1).set_shader_parameter("remaining",state.stamina)
-		paint_arc(actor,state.value,state.perfect.x,state.perfect.y,state.contact,state.miss,state.highlight)
+		paint_arc(actor,state.value,state.perfect.x,state.perfect.y,state.contact,state.miss,state.highlight,state.get("black_cursor",false))
 
-func paint_arc(actor: Node3D,value: float,low: float,high: float,contact: Vector2,miss_color: Color,highlight_release: bool) -> void:
+func paint_arc(actor: Node3D,value: float,low: float,high: float,contact: Vector2,miss_color: Color,highlight_release: bool,black_cursor: bool) -> void:
 	var ring: MeshInstance3D=floor_rings[actor]
 	var band: MeshInstance3D
 	if ring.get_child_count()==0:
@@ -225,3 +225,4 @@ func paint_arc(actor: Node3D,value: float,low: float,high: float,contact: Vector
 	material.set_shader_parameter("contact",contact)
 	material.set_shader_parameter("miss",miss_color)
 	material.set_shader_parameter("highlight",highlight_release)
+	material.set_shader_parameter("black_cursor",black_cursor)

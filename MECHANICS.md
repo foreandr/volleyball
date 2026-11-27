@@ -212,3 +212,5 @@ Receive CPU Serves shuffles jump topspin, jump float and both spin/float hybrids
 
 Manual ground movement ignores centered-stick drift and leaves long reception chases to CPU players. Hard-driven digs can shank outside the court.
 In Receive CPU Serves, topspin and hybrid serves seek gaps across the backcourt behind the attack line. The hitter picks one lateral and depth target inside zone six for each rally.
+Holding A arms manual reception while the player moves. A predicted ball entering an assigned region starts its motion within 0.4 seconds of arrival. The other CPU passers pursue uncovered lanes. The reception cursor is white while held and black after release in live play and replay. Topspin serves clear the net through launch angle and pace, with bounded spin curvature.
+Serve receivers reset to neutral home spots. On the toss CPU passers walk toward the coverage read from previous points. A manual receiver keeps control of their feet.

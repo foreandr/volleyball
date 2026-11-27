@@ -386,7 +386,27 @@ func _exit_tree() -> void:
 	save_grip()
 	super()
 
+var walking_to_coverage := {}
+
+func reception_home(slot: int) -> Vector3:
+	return HOMES[slot]
+
+func cpu_positions_passer(_slot: int) -> bool:
+	return true
+
+func walk_to_coverage(delta: float) -> void:
+	for slot in passers.size():
+		if not cpu_positions_passer(slot): continue
+		var actor := passers[slot]
+		var goal := receive_read.position_for(reception_home(slot),slot==1)
+		if actor.position.slide(Vector3.UP).distance_to(goal.slide(Vector3.UP))<.015:
+			if walking_to_coverage.erase(actor): actor.play_action("idle")
+			continue
+		walking_to_coverage[actor]=true
+		move_receiver(actor,goal,delta,goal-actor.position,1.35)
+
 func next_serve() -> void:
+	walking_to_coverage.clear()
 	for i in setup_angles.size(): setup_angles[i]=randf_range(-PI,PI)
 	first_pass_dropping=false
 	off_blocker=-1
@@ -443,7 +463,7 @@ func next_serve() -> void:
 	ball.show()
 	for platform in receptions: platform.reset()
 	for i in passers.size():
-		passers[i].position=receive_read.position_for(HOMES[i],i==1)
+		passers[i].position=reception_home(i)
 		passers[i].play_action("idle")
 	receiving_jump.active=false
 	receiving_setter.position=SETTER_HOME
@@ -613,6 +633,7 @@ func _process(delta: float) -> void:
 	if not pin_attack.enabled or pin_attack.setter!=pin_hitter: pin_hitter.animator.advance(delta)
 	if not middle_decoy.enabled and (not pin_attack.enabled or pin_attack.setter!=receiving_middle): receiving_middle.animator.advance(delta)
 	if phase=="serve_ready" or phase=="serve_toss":
+		if phase=="serve_toss": walk_to_coverage(delta)
 		var release: float=serves[toss_style].toss_release_time() if serves[toss_style].has_method("toss_release_time") else .18
 		var ready_weight := 1. if phase=="serve_ready" else 1.-smoothstep(release,release+.22,serve_clock)
 		for actor in receiving_team:
@@ -1014,8 +1035,8 @@ func clear_ground_step(actor: Node3D,step: Vector3) -> Vector3:
 		if safe: return actor.get_parent_node_3d().global_basis.inverse()*candidate
 	return Vector3.ZERO
 
-func manually_moving(_actor: Node3D) -> bool:
-	return false
+func manually_moving(actor: Node3D) -> bool:
+	return walking_to_coverage.has(actor)
 
 func recover_digger(delta: float) -> bool:
 	var platform: Reception=dig_platforms[last_digger]

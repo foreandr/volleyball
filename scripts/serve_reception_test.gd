@@ -17,6 +17,7 @@ const DIG_PERFECT := .055
 var dig_reach := .12
 var stance_points: Array[Vector3]=[]
 var chase_box := {}
+var line_read_noise := 0.
 var chase_goal := Vector3.ZERO
 var active_stances: Array[Vector3]=[]
 var routed_zone := ""
@@ -108,6 +109,7 @@ func recover_digger(delta: float) -> bool:
 	return false
 
 func next_serve() -> void:
+	line_read_noise=randf_range(-1.,1.)
 	release_dig_pose()
 	dig_recovery_age=0.
 	defense_recipe={}
@@ -124,9 +126,16 @@ func next_serve() -> void:
 	super.next_serve()
 	active_stances.clear()
 	for i in passers.size():
-		active_stances.append(receive_read.position_for(stance_points[i],i==1))
+		active_stances.append(stance_points[i])
 		passers[i].position=active_stances[i]
 	receiving_setter.position=Vector3(map.pass_goal.x,.04,maxf(map.pass_goal.z,BallNet.NET_Z+.25))
+
+func reception_home(slot: int) -> Vector3:
+	return stance_points[slot]
+
+func walk_to_coverage(delta: float) -> void:
+	super.walk_to_coverage(delta)
+	for slot in passers.size(): active_stances[slot]=passers[slot].position
 
 func stage_attacker(actor: Node3D,slot: int,delta: float) -> void:
 	if actor==pin_hitter: super.stage_attacker(actor,slot,delta)
@@ -151,7 +160,7 @@ func plan_remaining_reception(shot,from_time: float) -> void:
 	routed_zone=""
 	received_spin_rps=shot.reception_spin_rps()
 	var finish: float=shot.planned_duration
-	leave_serve=reads_serve_out(shot.flight_point(finish),passers[0].effective_rating("Forearm reception"),randf_range(-1.,1.))
+	leave_serve=reads_serve_out(shot.flight_point(finish),passers[0].effective_rating("Forearm reception"),line_read_noise)
 	if leave_serve or not shot.net_hit.is_empty(): return
 	var previous: Vector3=shot.flight_point(from_time)
 	var steps := maxi(1,ceili((finish-from_time)*90.))
@@ -293,7 +302,11 @@ func mapped_touch(mapper: Map,motion: Dictionary,previous: Vector3) -> bool:
 	var touched := false
 	if motion.kind=="overhead":
 		var hands := mapper.HandPass.contact_center(mapper.player)
-		touched=hands.distance_to(Geometry3D.get_closest_point_to_segment(hands,previous,ball.position))<=mapper.HAND_RADIUS
+		if hands.distance_to(Geometry3D.get_closest_point_to_segment(hands,previous,ball.position))<=mapper.HAND_RADIUS+mapper.BALL_RADIUS: return true
+		for side in ["l","r"]:
+			var center := Contact.palm(mapper.player,side)
+			if center.distance_to(Geometry3D.get_closest_point_to_segment(center,previous,ball.position))<=.09+mapper.BALL_RADIUS:
+				return true
 	else:
 		for shape in mapper.RECEPTION_CAPSULES:
 			var seg := mapper.reception_segment(mapper.player.skeleton,shape)

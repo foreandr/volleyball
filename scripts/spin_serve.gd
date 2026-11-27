@@ -25,7 +25,7 @@ const DEFAULT_FORWARD_LEAN := -15.0
 var forward_lean_degrees := DEFAULT_FORWARD_LEAN
 var active_forward_lean_degrees := 0.0
 var released_sidespin := 0.0
-var released_lift := 0.0
+const MAX_SPIN_ARC := .16
 var approach := SetterJump.new()
 var spike_pose_driver := MatchAttack.new()
 var approach_positions: PackedVector3Array = []
@@ -286,41 +286,41 @@ func preview_lane_count() -> int:
 func flight_duration(start: Vector3) -> float:
 	return super.flight_duration(start)*0.65/serve_speed
 
+func minimum_aim_duration(_start: Vector3) -> float:
+	return 0.
+
+func clear_net_launch(start: Vector3,launch: Vector3) -> Vector3:
+	if absf(launch.z)<.01: return launch
+	var crossing := (Net.NET_Z-start.z)/launch.z
+	if crossing<=0.: return launch
+	var clearance := Net.NET_TOP+BallPreview.RADIUS+.12
+	launch.y=maxf(launch.y,(clearance-start.y)/crossing+.5*Flight.GRAVITY*crossing)
+	return launch
+
+func aimed_velocity(start: Vector3,pace := 1.) -> Vector3:
+	return clear_net_launch(start,super.aimed_velocity(start,pace))
+
 func launch_velocity(start: Vector3, duration: float) -> Vector3:
-	return (target-start)/duration+Vector3.UP*(0.5*Flight.GRAVITY*duration)
+	return clear_net_launch(start,(target-start)/duration+Vector3.UP*(0.5*Flight.GRAVITY*duration))
 
 func preview_lane_offset(_lane: int, progress: float, launch: Vector3) -> Vector3:
 	var duration := Flight.landing_time(preview_origin,launch)
-	return spin_offset(progress,launch,sidespin,spin_lift(preview_origin,launch,duration,sidespin))
+	return spin_offset(progress,launch,sidespin,duration)
 
 func begin_serve_curve() -> void:
 	released_sidespin = sidespin
-	released_lift = spin_lift(origin,velocity,planned_duration,released_sidespin)
 
 func advance_serve_curve(_time: float) -> void:
 	pass
 
 func serve_curve_offset(time: float, duration: float) -> Vector3:
-	return spin_offset(clampf(time/maxf(duration,0.001),0.0,1.0),velocity,released_sidespin,released_lift)
+	return spin_offset(clampf(time/maxf(duration,0.001),0.0,1.0),velocity,released_sidespin,duration)
 
-func spin_offset(progress: float, launch: Vector3, curve: float, lift: float) -> Vector3:
+func spin_offset(progress: float, launch: Vector3, curve: float, duration: float) -> Vector3:
 	var side := Vector3.UP.cross(launch.slide(Vector3.UP).normalized())
 	var envelope := 4.0*progress*(1.0-progress)
-	return -side*curve*1.15*envelope+Vector3.UP*lift*envelope*(0.55+0.45*progress)
+	return -side*curve*1.15*envelope+Vector3.UP*minf(MAX_SPIN_ARC,.15*duration*duration)*envelope
 
-func spin_lift(start: Vector3, launch: Vector3, duration: float, curve: float) -> float:
-	var near := 0.0
-	var far := 1.0
-	for iteration in 10:
-		var progress := (near+far)*0.5
-		var point := start+launch*(duration*progress)+spin_offset(progress,launch,curve,0.0)
-		if point.z < Net.NET_Z: near = progress
-		else: far = progress
-	var crossing := (near+far)*0.5
-	var time := duration*crossing
-	var height := start.y+launch.y*time-0.5*Flight.GRAVITY*time*time
-	var shape := 4.0*crossing*(1.0-crossing)*(0.55+0.45*crossing)
-	return maxf(0.0,(Net.NET_TOP+BallPreview.RADIUS+0.18-height)/maxf(shape,0.02))
 
 func reception_spin_rps() -> float:
 	return 8.0*Vector2(1.0,released_sidespin).length()

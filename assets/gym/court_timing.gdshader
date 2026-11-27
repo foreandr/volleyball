@@ -4,6 +4,7 @@ uniform vec2 contact;
 uniform vec2 perfect;
 uniform float cursor;
 uniform bool highlight;
+uniform bool black_cursor;
 uniform vec4 miss : source_color;
 void fragment() {
 	vec2 p = UV * 2.0 - 1.0;
@@ -20,6 +21,6 @@ void fragment() {
 	ALBEDO=tint*((progress<=cursor || (highlight && start<=cursor)) ? 1.0 : .68);
 	if (r < .722 || r > .965) ALBEDO=vec3(.025);
 	float cursor_distance=abs(progress-cursor);
-	if (cursor_distance < .040) ALBEDO=vec3(.025);
-	if (cursor_distance < .029) ALBEDO=vec3(1.0);
+	if (cursor_distance < .040) ALBEDO=black_cursor ? vec3(.94) : vec3(.025);
+	if (cursor_distance < .029) ALBEDO=black_cursor ? vec3(.015) : vec3(1.0);
 }
