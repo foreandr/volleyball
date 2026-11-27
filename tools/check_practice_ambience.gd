@@ -19,9 +19,23 @@ func check() -> void:
 	room.set_process(false)
 	for i in 80: room._process(1./60.)
 	var launched:bool=room.flight_time>=0.
+	var catches:=0
+	var held_frames:=0
+	var longest_contact:=0
+	for frame in 360:
+		room._process(1./60.)
+		if room.flight_time<0.:
+			held_frames+=1
+		elif held_frames>0:
+			longest_contact=maxi(longest_contact,held_frames)
+			catches+=1
+			held_frames=0
+	var shared_idle:bool=room.coaches.all(func(actor): return actor.animator.current_animation=="base/Idle")
+	var quick_sets:=catches>=3 and longest_contact<=5
+	print("Pepper exchanges ",catches,", longest contact at 60 Hz ",longest_contact," frames; coaches standing idle ",shared_idle)
 	intruder.position=room.partners[0].position
 	for i in 150: room._process(1./60.)
-	var waited:bool=room.flight_time<0. and room.hold_time>1.
+	var waited:bool=room.flight_time<0. and room.clearance_time==0.
 	intruder.position=home
 	for i in 75: room._process(1./60.)
 	var resumed:bool=room.flight_time>=0.
@@ -51,4 +65,4 @@ func check() -> void:
 	lanes_ok=lanes_ok and cpu_offsets[0].x!=cpu_offsets[1].x and cpu_offsets[0].z!=cpu_offsets[1].z
 	current_scene.show_height_preview(2)
 	print("Separate handoff: ",handed_off,", all nine feed assignments and heights for both roles: ",lanes_ok)
-	quit(0 if lanes_ok and handed_off and count>=15 and count<=20 and launched and waited and resumed else 1)
+	quit(0 if shared_idle and quick_sets and lanes_ok and handed_off and count>=15 and count<=20 and launched and waited and resumed else 1)

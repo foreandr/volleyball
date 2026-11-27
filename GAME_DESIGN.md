@@ -348,3 +348,4 @@ In populated tryout gyms, seated teammates converse in pairs and two background 
 
 ### Universal contact timing feedback
 Every timed reception, dig, set, attack and serve shows a brief top-center result that fades in and out, in every drill, career lesson and match. Show the quality (Perfect, Good or Bad) and the signed timing error in milliseconds with Early or Late when applicable. A missed contact still gets feedback, including a release before the ball reaches the hitbox or after it leaves. If the player never attempts the contact, show Missed without inventing a release time. Check early misses, late misses and successful contacts through the playable input path whenever adding a mode.
+Future feature: expand the animation studio so community creators can author and share moves, including spikes. Let the team preview submissions on game athletes and select approved animations for actual gameplay.

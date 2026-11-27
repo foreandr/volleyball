@@ -5,6 +5,7 @@ const Physics = preload("res://scripts/gym_physics.gd")
 const Marker = preload("res://scripts/ball_landing_marker.gd")
 const Kit = preload("res://scripts/practice_kit.gd")
 const FLIGHT := 1.15
+const RELEASE := .065
 
 var game
 var participants: Array[Node3D] = []
@@ -31,7 +32,8 @@ func populate(host) -> void:
 	for i in 2:
 		var adult: Node3D = game.athlete(Vector3(-6.7-i*.95,0,4.3+i*.5),"505957")
 		Kit.apply(adult,true,3+i)
-		adult.play_action("idle",0.)
+		adult.play_action("base/Idle",0.)
+		adult.animator.seek(i*.67,true)
 		coaches.append(adult)
 	make_pair(Vector3(9.2,0,7.),6)
 	var second = get_script().new()
@@ -86,7 +88,7 @@ func _process(delta: float) -> void:
 		var rig: Skeleton3D = adult.skeleton
 		var elbow := rig.find_bone("lowerarm_r")
 		if elbow>=0 and speaking:
-			var rest := rig.get_bone_rest(elbow).basis.get_rotation_quaternion()
+			var rest := rig.get_bone_pose_rotation(elbow)
 			rig.set_bone_pose_rotation(elbow,rest*Quaternion(Vector3.RIGHT,.32+.24*sin(speaker_clock*4.)))
 	var occupied: bool = game.ball.visible and (close_to_pair(game.ball.position) or close_to_pair(game.projected_landing()))
 	for actor in participants:
@@ -98,13 +100,21 @@ func _process(delta: float) -> void:
 		actor.animator.advance(delta)
 		var forward := actor.global_basis.z.normalized()
 		var contact := Physics.joint(actor,"Head")+Vector3.UP*.12+forward*.24
-		var weight := 1. if i==holder and flight_time<0. else smoothstep(.35,1.,flight_time/FLIGHT) if i==receiver else 0.
-		Hands.apply(actor,contact,weight)
+		var offset := partners[1-i].position-actor.position
+		var push := (offset+Vector3.UP*5.).normalized()
+		if i==receiver and flight_time>=0.:
+			Hands.standing_set(actor,contact,offset,push,-1.,smoothstep(FLIGHT-.34,FLIGHT-.04,flight_time))
+		elif i==holder:
+			if flight_time<0.:
+				var follow := hold_time if clearance_time>1. else -1.
+				Hands.standing_set(actor,contact,offset,push,follow,1.)
+			elif flight_time+RELEASE<Hands.CPU_FOLLOW_TIME:
+				Hands.standing_set(actor,origin,offset,push,flight_time+RELEASE,1.)
 		if i==receiver: destination=contact
 	if flight_time<0.:
 		orb.position=Hands.contact_center(partners[holder])
-		hold_time+=delta
-		if clearance_time>1. and hold_time>.24:
+		hold_time=hold_time+delta if clearance_time>1. else 0.
+		if clearance_time>1. and hold_time>=RELEASE:
 			origin=orb.position
 			flight_time=0.
 	else:
