@@ -137,6 +137,9 @@ func step_serve_wall(_delta: float) -> void:
 func move_libero_to_cover(_delta: float) -> void:
 	pass
 
+func can_chase_reception() -> bool:
+	return true
+
 func receiver_candidates() -> Array:
 	return [0,1,2]
 
@@ -184,6 +187,7 @@ func plan_remaining_reception(shot,from_time: float) -> void:
 
 	# The flight missed every stationary platform. Find the least travel needed
 	# to bring an assigned motion into the descending ball's path.
+	if not can_chase_reception(): return
 	var best_cost := INF
 	for tick in range(1,steps+1):
 		var t := lerpf(from_time,finish,float(tick)/steps)
@@ -360,10 +364,11 @@ func block_on_flight_segment(previous: Vector3) -> bool:
 	dig_incoming=drop_velocity
 	var timing_error := clampf(absf(release-defense_at+PASS_RELEASE_LEAD)/DIG_WINDOW,0.,1.)
 	var pressure := smoothstep(35.,110.,drop_velocity.length()*3.6)
-	var spread := .45+1.1*pressure+1.6*timing_error
+	var spread := .65+3.8*pressure+2.4*timing_error
 	var goal := defense_map.pass_goal
-	goal.x+=randf_range(-spread,spread)
-	goal.z=clampf(goal.z+randf_range(-spread,spread),BallNet.NET_Z-8.8,BallNet.NET_Z-.35)
+	var scatter := Vector2.from_angle(randf()*TAU)*sqrt(randf())*spread
+	goal.x+=scatter.x
+	goal.z+=scatter.y-pressure*1.2
 	var apex := ball.position.y+3.4
 	var flight := sqrt(2.*(apex-ball.position.y)/9.81)+sqrt(2.*(apex-goal.y)/9.81)
 	drop_velocity=(goal-ball.position)/flight+Vector3.UP*4.905*flight

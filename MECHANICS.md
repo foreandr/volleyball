@@ -208,3 +208,6 @@ Mapped digs in the serve-reception drills play through contact, then blend back 
 
 The late receive window ends at the earlier of a missed platform and 20 cm behind the face. Replay samples the meter with the ball. Dig landing scatter increases with attack speed and timing error.
 Manual pass and mapped dig release targets lead the intended contact by 50 ms. The ball still travels to the platform before the pass starts.
+Receive CPU Serves shuffles jump topspin, jump float and both spin/float hybrids across each four-serve rotation.
+
+Manual ground movement ignores centered-stick drift and leaves long reception chases to CPU players. Hard-driven digs can shank outside the court.

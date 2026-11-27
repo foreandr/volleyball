@@ -20,6 +20,10 @@ func switch_role() -> void:
 	next_serve()
 	apply_camera()
 
+var serve_bag: Array[int]=[]
+const CPU_SERVES := [[0,0],[1,3],[0,3],[1,0]]
+var cpu_serve := -1
+var cpu_style := -1
 var cpu_wait := 0.
 var receive_held := false
 var released_at := INF
@@ -77,6 +81,9 @@ func pass_meter(point := Vector3.INF) -> Dictionary:
 
 const RECEIVE_EARLY := .21
 
+func can_chase_reception() -> bool:
+	return control_digger
+
 func receiver_candidates() -> Array:
 	return [1]
 
@@ -103,7 +110,13 @@ func next_serve() -> void:
 	reception_result=""
 	released_at=INF
 	touched_at=INF
-	spin_selection=3
+	if serve_bag.is_empty():
+		serve_bag.assign(range(CPU_SERVES.size()))
+		serve_bag.shuffle()
+		if serve_bag.back()==cpu_serve: serve_bag.reverse()
+	cpu_serve=serve_bag.pop_back()
+	cpu_style=CPU_SERVES[cpu_serve][0]
+	spin_selection=CPU_SERVES[cpu_serve][1]
 	message.text="Ready"
 
 func update_prompts(_next: String) -> void:
@@ -132,7 +145,8 @@ func _process(delta: float) -> void:
 		if (control_digger and defense_map.player==null) or (not control_digger and phase in ["serve_ready","serve_toss","serve_flight"] and not receive_committed and not receive_held):
 			var actor := dig_defender() if control_digger else passers[1]
 			var stick := Vector2(axis(JOY_AXIS_LEFT_X),axis(JOY_AXIS_LEFT_Y))
-			stick+=Vector2(Input.get_axis("ui_left","ui_right"),Input.get_axis("ui_up","ui_down"))
+			if stick.length()<.22: stick=Vector2.ZERO
+			stick+=Input.get_vector("ui_left","ui_right","ui_up","ui_down",.22)
 			var right := camera.global_basis.x.slide(Vector3.UP).normalized()
 			var travel := (right*stick.x+right.cross(Vector3.UP)*stick.y).limit_length(1.)
 			var pace := GroundControls.speed(GroundControls.focus(axis),GroundControls.sprint(axis))
@@ -140,6 +154,7 @@ func _process(delta: float) -> void:
 			goal.x=clampf(goal.x,-5.,5.)
 			goal.z=clampf(goal.z,BallNet.NET_Z+.4,BallNet.NET_Z+10.)
 			if control_digger: goal.z=clampf(actor.position.z+travel.z*pace*delta,BallNet.NET_Z-10.,BallNet.NET_Z-.4)
+			if travel.is_zero_approx(): goal=actor.position
 			var focused := GroundControls.focus(axis)
 			var source := pin_hitter.global_position if control_digger else serve_station
 			move_receiver(actor,goal,delta,source-actor.position if focused else travel,pace,focused)
@@ -151,9 +166,9 @@ func _process(delta: float) -> void:
 			if cpu_wait<=0. and pending_serve<0:
 				destination=active_stances[1]+Vector3(randf_range(-.45,.45),0.,1.)
 				destination.y=.145
-				handle_serve_button(2,true)
+				handle_serve_button(cpu_style,true)
 		elif phase=="serve_toss" and not is_finite(release_time) and serve_meter_error()>=-.01:
-			handle_serve_button(2,false)
+			handle_serve_button(cpu_style,false)
 	super._process(delta)
 
 func _input(event: InputEvent) -> void:
