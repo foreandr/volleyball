@@ -10,7 +10,9 @@ var curtain:=ColorRect.new()
 var partner:Node3D
 const ROUTE := [Vector3(4.35,.04,-4.5),Vector3(4.35,.04,3.4),Vector3(-4.35,.04,3.4),Vector3(-4.35,.04,-4.5)]
 var leg:=0
-var queued:=false
+var enter_time:=0.
+var enter_meter:=ProgressBar.new()
+const COACH_SIDELINE:=Vector3(5.65,.04,4.)
 var runner_line:Array=[]
 var demo_outcomes:=preload("res://scripts/demo_outcomes.gd").new()
 var mistake_leg:=-1
@@ -66,6 +68,12 @@ func start_drill() -> void:
 	line.add_theme_constant_override("outline_size",5)
 	captions.add_child(line)
 	captions.add_child(prompt)
+	captions.add_child(enter_meter)
+	enter_meter.custom_minimum_size=Vector2(92,5)
+	enter_meter.size_flags_horizontal=Control.SIZE_SHRINK_CENTER
+	enter_meter.show_percentage=false
+	enter_meter.max_value=1.
+	enter_meter.hide()
 	captions.hide()
 	add_child(film)
 	film.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -163,7 +171,7 @@ func begin_run() -> void:
 			break
 	runner_line.erase(partner)
 	runner_line.erase(setter)
-	coach.position=Vector3(5.7,.04,.3)
+	coach.position=COACH_SIDELINE
 	plan_demo_runner()
 	partner.position=ROUTE[0]
 	partner.rotation.y=0.
@@ -177,13 +185,16 @@ func begin_run() -> void:
 	world.add_child(marker)
 	for actor in watchers:
 		if not shuffle_steps.has(actor): shuffle_steps[actor]=preload("res://scripts/directional_footwork.gd").new(actor)
+	place_drill_captions()
+	run_prompt()
+
+func place_drill_captions() -> void:
 	captions.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
 	captions.offset_left=-360
 	captions.offset_right=360
 	captions.offset_top=34
 	workout_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 	prompt.alignment=BoxContainer.ALIGNMENT_CENTER
-	run_prompt()
 
 func run_prompt() -> void:
 	var segment:=leg%4
@@ -200,8 +211,8 @@ func run_prompt() -> void:
 
 func show_demo_prompt() -> void:
 	workout_label.hide()
-	prompt.visible=not queued
-	if not queued: training_prompt([[JOY_BUTTON_A,"Go next"]],"Enter to go next")
+	prompt.show()
+	training_prompt([[JOY_BUTTON_A,"Hold to enter the drill"]],"Hold Enter to enter the drill")
 
 func move_in_line(actor:Node3D,goal:Vector3,dt:float) -> bool:
 	var previous:=actor.position
@@ -292,14 +303,8 @@ func finish_demo_lap(passed:bool) -> void:
 	runner_line.append(partner)
 	var tail_x:=3.3-(runner_line.size()-1)*1.05
 	exits[partner]=[Vector3(5.15,.04,partner.position.z),Vector3(5.15,.04,-6.6),Vector3(tail_x,.04,-6.6)]
-	if queued:
-		setter.position=ROUTE[0]
-		setter.rotation.y=0.
-		phase="footwork"
-		coach_motion.whistle_cue.signal_drill(coach)
-	else:
-		partner=runner_line.pop_front()
-		entering_lane=true
+	partner=runner_line.pop_front()
+	entering_lane=true
 	run_prompt()
 
 func reception_brief() -> void:
@@ -333,6 +338,10 @@ func reception_brief() -> void:
 	fade.tween_callback(curtain.hide)
 
 func pair_up() -> void:
+	place_drill_captions()
+	coach.position=COACH_SIDELINE
+	rings.participants=[setter]
+	rings.match_meter=pepper.meter
 	film.hide()
 	captions.show()
 	if marker.is_inside_tree(): marker.hide()
@@ -342,20 +351,62 @@ func pair_up() -> void:
 	camera.fov=68.
 	camera.position=Vector3(0,5.8,-10.)
 	camera.look_at(Vector3(.7,1.,-.45))
-	training_prompt([[JOY_BUTTON_A,"Hold to receive"]],"Hold Space to receive")
+	training_prompt([[JOY_BUTTON_A,"Hold, then release at contact"]],"Hold Space, then release at contact")
 	pepper.demonstrating=CareerSession.progress()<5
 	pepper.configure(self,workout_label,CareerSession.progress())
 	if pepper.demonstrating:
 		phase="demo"
-		queued=false
 		show_demo_prompt()
 
 func finish_pepper() -> void:
 	phase="pepper_complete"
 	training_prompt([[JOY_BUTTON_A,"Continue"]],"Enter to continue")
 
+func enter_drill() -> void:
+	var was_footwork:=phase=="footwork_demo"
+	phase="handoff"
+	enter_time=0.
+	enter_meter.hide()
+	prompt.hide()
+	curtain.show()
+	curtain.z_index=20
+	curtain.modulate.a=0.
+	var fade:=create_tween()
+	fade.tween_property(curtain,"modulate:a",1.,.22)
+	fade.tween_callback(func():
+		speech_left=0.
+		if was_footwork:
+			partner.position=setter.position
+			runner_line.append(partner)
+			partner.play_action("idle",0.)
+			leg=0
+			entering_lane=false
+			setter.position=ROUTE[0]
+			setter.rotation.y=0.
+			corner_grace=CORNER_GRACE
+			phase="footwork"
+			run_prompt()
+		else:
+			pepper.start_human_turn()
+			phase="pepper"
+			workout_label.show()
+			prompt.show()
+			workout_label.text="%d / 5 passes"%pepper.score
+			training_prompt([[JOY_BUTTON_A,"Hold, then release at contact"]],"Hold Space, then release at contact")
+		coach_motion.whistle_cue.signal_drill(coach))
+	fade.tween_property(curtain,"modulate:a",0.,.28)
+	fade.tween_callback(curtain.hide)
+
+func receive_down() -> bool:
+	return Input.is_key_pressed(KEY_SPACE) or Input.is_key_pressed(KEY_ENTER) or (pad()>=0 and Input.is_joy_button_pressed(pad(),Xbox.physical(JOY_BUTTON_A)))
+
 func _process(delta:float) -> void:
 	elapsed+=delta
+	if phase in ["demo","footwork_demo"]:
+		enter_time=enter_time+delta if receive_down() else 0.
+		enter_meter.value=enter_time
+		enter_meter.visible=enter_time>0.
+		if enter_time>=1.: enter_drill()
 	update_speech(delta)
 	if phase!="montage":
 		for seat in seats_in_use: seat.update()
@@ -374,14 +425,6 @@ func _process(delta:float) -> void:
 	elif phase in ["pepper","demo"]:
 		GroundControls.face(coach,pepper.pairs[0].receiver.position-coach.position,delta,3.)
 		pepper.tick(delta)
-		if phase=="demo" and queued and pepper.pairs[0].age>=2.95:
-			pepper.start_human_turn()
-			phase="pepper"
-			workout_label.show()
-			prompt.show()
-			coach_motion.whistle_cue.signal_drill(coach)
-			workout_label.text="%d / 5 passes"%pepper.score
-			training_prompt([[JOY_BUTTON_A,"Hold to receive"]],"Hold Space to receive")
 	if coach and coach.has_meta("coach_face"):
 		var talking:=(phase=="welcome" and elapsed<8.) or phase=="gather" or (speaker==coach and speech_left>0.)
 		coach.get_meta("coach_face").set_shader_parameter("shout",(.24+.18*sin(elapsed*19.)) if talking else 0.)
@@ -391,16 +434,18 @@ func _process(delta:float) -> void:
 		training_prompt([[JOY_BUTTON_A,"Start practice"]],"Enter to start practice")
 
 func _input(event:InputEvent) -> void:
-	if phase in ["footwork_demo","demo"] and event.is_action_pressed("ui_accept"):
-		queued=true
-		show_demo_prompt()
-		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed("ui_accept") and phase=="ready":
+	if event.is_action_pressed("ui_accept") and phase=="ready":
 		get_viewport().set_input_as_handled()
 		if CareerSession.checkpoint("footwork",0): begin_run()
-	elif phase=="pepper" and (event.is_action_pressed("ui_accept") or event.is_action_released("ui_accept")):
-		pepper.button(event.is_action_pressed("ui_accept"))
-		get_viewport().set_input_as_handled()
-	elif (phase=="pepper_complete" and event.is_action_pressed("ui_accept")) or (phase in ["footwork","pepper","pepper_complete"] and event.is_action_pressed("ui_cancel")):
+	elif phase=="pepper":
+		if event is InputEventJoypadButton and event.button_index==Xbox.physical(JOY_BUTTON_A):
+			pepper.button(event.pressed)
+			get_viewport().set_input_as_handled()
+			return
+		if event is InputEventKey and event.keycode in [KEY_SPACE,KEY_ENTER] and not event.echo:
+			pepper.button(event.pressed)
+			get_viewport().set_input_as_handled()
+			return
+	if (phase=="pepper_complete" and event.is_action_pressed("ui_accept")) or (phase in ["footwork","pepper","pepper_complete"] and event.is_action_pressed("ui_cancel")):
 		get_viewport().set_input_as_handled()
 		MenuPresentation.load_scene("res://scenes/story.tscn")

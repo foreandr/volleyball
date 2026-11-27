@@ -151,6 +151,13 @@ func set_music(in_menu: bool) -> void:
 		music.stop()
 
 func audio_options(host: Container) -> void:
+	var feedback:=CheckButton.new()
+	feedback.text="Coach feedback"
+	feedback.button_pressed=StorySession.game_options.get_value("presentation","coach_feedback",true)
+	feedback.toggled.connect(func(enabled):
+		StorySession.game_options.set_value("presentation","coach_feedback",enabled)
+		StorySession.save_options())
+	host.add_child(feedback)
 	var mute := CheckButton.new()
 	mute.text="Mute game audio"
 	mute.button_pressed=AudioServer.is_bus_mute(0)

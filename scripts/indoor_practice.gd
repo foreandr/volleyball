@@ -1856,7 +1856,7 @@ func release(index: int) -> void:
 	shape_catch_hands()
 	begin("set_contact")
 
-var bubble := PanelContainer.new()
+var bubble := Panel.new()
 var words := Label.new()
 var speaker: Node3D
 var speech_left := 0.0
@@ -1867,6 +1867,7 @@ var gesture_age:=-1.
 var gesture_keys:Dictionary={}
 
 func coach_react(event:String) -> void:
+	if not StorySession.game_options.get_value("presentation","coach_feedback",true): return
 	if speech_left>0. and speaker!=coach: return
 	if randf()>.75: return
 	var quip:=preload("res://scripts/coach_reactions.gd").line(event)
@@ -1909,9 +1910,14 @@ func step_coach_gesture(delta:float) -> void:
 func say(actor: Node3D, speech: String, seconds: float) -> void:
 	speaker = actor
 	words.text = speech
-	words.custom_minimum_size.x=clampf(words.get_theme_font("font").get_string_size(speech,HORIZONTAL_ALIGNMENT_LEFT,-1,words.get_theme_font_size("font_size")).x+6.,28.,260.)
+	var font:=words.get_theme_font("font")
+	var width:=clampf(ceilf(font.get_string_size(speech,HORIZONTAL_ALIGNMENT_LEFT,-1,14).x)+2.,18.,minf(235.,size.x*.36))
+	var height:=ceilf(font.get_multiline_string_size(speech,HORIZONTAL_ALIGNMENT_LEFT,width,14).y)+4.
+	words.position=Vector2(8,4)
+	words.size=Vector2(width,height)
+	bubble.size=Vector2(width+16.,height+8.)
+	bubble.clip_contents=false
 	speech_left = seconds
-	bubble.reset_size()
 	update_speech(0)
 
 func update_speech(delta: float) -> void:
@@ -1958,7 +1964,7 @@ func build_score_strip() -> void:
 	style.content_margin_left = 12
 	style.content_margin_right = 12
 	bubble.add_theme_stylebox_override("panel",style)
-	words.custom_minimum_size.x = 260
+	words.add_theme_font_size_override("font_size",14)
 	words.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	words.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	words.add_theme_color_override("font_color",Color("172b39"))
