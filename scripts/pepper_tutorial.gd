@@ -1,6 +1,6 @@
 extends RefCounted
 
-# All pairs face lengthwise, on the same side of the net as their partner.
+# All pairs face across the court, on the same side of the net as their partner.
 const CENTERS := [Vector3(1.6,.04,-2.9),Vector3(-1.6,.04,1.1),Vector3(-1.6,.04,6.9),Vector3(1.6,.04,10.9)]
 const FEED := .72
 const ARRIVAL := 1.82
@@ -14,6 +14,7 @@ var needs_release:=false
 var pressed_at:=INF
 var feedback:Label
 var finished:=false
+var demonstrating:=false
 
 func configure(host,readout:Label,completed:int) -> void:
 	game=host
@@ -24,9 +25,9 @@ func configure(host,readout:Label,completed:int) -> void:
 	for i in 4:
 		var receiver:Node3D=athletes[2*i]
 		var feeder:Node3D=athletes[2*i+1]
-		var direction:=Vector3.BACK if i<2 else Vector3.FORWARD
-		receiver.position=CENTERS[i]-direction*1.55
-		feeder.position=CENTERS[i]+direction*1.55
+		var direction:=Vector3.RIGHT if i%2==0 else Vector3.LEFT
+		receiver.position=Vector3(0,.04,CENTERS[i].z)-direction*4.25
+		feeder.position=Vector3(0,.04,CENTERS[i].z)+direction*4.25
 		receiver.rotation.y=atan2(direction.x,direction.z)
 		feeder.rotation.y=receiver.rotation.y+PI
 		var orb:MeshInstance3D=host.ball if i==0 else MeshInstance3D.new()
@@ -63,7 +64,7 @@ func tick(delta:float) -> void:
 		var orb:MeshInstance3D=pair.ball
 		var receiver:Node3D=pair.receiver
 		var feeder:Node3D=pair.feeder
-		var active:=i!=0 or (holding and not needs_release)
+		var active:=demonstrating or i!=0 or (holding and not needs_release)
 		if t<FEED:
 			pair.origin=game.coach_motion.toss(feeder,clampf(t/FEED,0.,1.))
 			orb.position=pair.origin
@@ -81,7 +82,7 @@ func tick(delta:float) -> void:
 			if t>=ARRIVAL and not pair.caught:
 				pair.caught=true
 				pair.hit=active
-				if i==0:
+				if i==0 and not demonstrating:
 					if active:
 						score+=1
 						var offset:=roundi((pressed_at-(ARRIVAL-CONTACT_POSE))*1000.)
