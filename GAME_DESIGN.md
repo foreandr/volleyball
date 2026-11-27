@@ -292,3 +292,4 @@ Reception Studio uses the same seated teammates and four-row sideline bleachers 
 ## Future feature - skill progression through play
 
 Players level individual volleyball skills by using them. Simulated drills award XP to the skills practiced. Completing the same drill manually awards additional skill XP. This replaces allocating stat points for skill growth. XP rates and the manual bonus are to be tuned.
+Track the best level achieved manually for each drill. A player can simulate that drill at any level they have earned, including the highest level after a perfect manual run. The simulated result earns the XP for that level, with the extra manual-play bonus reserved for playing it again.
