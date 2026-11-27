@@ -82,6 +82,14 @@ func shape_float_strike(pose: Array, rig: Skeleton3D, author: RefCounted, time: 
 	if weight <= 0.0: return
 	var extension := smoothstep(STRIKE-0.16,STRIKE,time)
 	var follow := 0.64*smoothstep(STRIKE,STRIKE+0.26,time)
+	var load := smoothstep(TAKEOFF,STRIKE-.15,time)*(1.-extension)
+	var pike := smoothstep(STRIKE-.045,STRIKE+.11,time)*(1.-smoothstep(STRIKE+.15,LAND,time))
+	var fold := deg_to_rad(-12.*load+34.*pike)
+	author.rotate_world(pose,"spine_01",Vector3.RIGHT,fold*.45)
+	author.rotate_world(pose,"spine_02",Vector3.RIGHT,fold*.55)
+	for side in ["l","r"]:
+		author.rotate_world(pose,"thigh_"+side,Vector3.RIGHT,deg_to_rad(12.*load-36.*pike))
+		author.rotate_world(pose,"calf_"+side,Vector3.RIGHT,deg_to_rad(25.*load-8.*pike))
 	var scale_: float = rig.global_basis.y.length()
 	var shoulder: Vector3 = author.point(pose,"upperarm_r")
 	var contact := shoulder+Vector3(-0.04,0.61,0.36+SERVE_CONTACT_LEAD)/scale_
@@ -89,8 +97,7 @@ func shape_float_strike(pose: Array, rig: Skeleton3D, author: RefCounted, time: 
 	SpikeArm.apply(pose,author,contact,weight,extension,follow,1.0,0.80,0.8,0.09,0.0,0.0,shot_direction,0.86,0.14/scale_,true)
 	var guide_drop := smoothstep(STRIKE-0.12,STRIKE+0.12,time)
 	SpikeArm.apply_guide_arm(pose,author,Vector3(0.08,0.39,0.38)/scale_,Vector3(0.35,-0.55,0.18),guide_drop,weight*0.68,163.0)
-	var straighten := smoothstep(STRIKE-0.05,STRIKE+0.21,time)*(1.0-smoothstep(STRIKE+0.24,LAND,time))
-	author.rotate_world(pose,"spine_02",Vector3.RIGHT,-0.17*straighten)
+	SpikeArm.align_wrist_to_forearm(pose,author,.95*weight)
 
 func position_toss_hands(pose: Array, rig: Skeleton3D, author: RefCounted, time: float, weight: float) -> void:
 	var lift := smoothstep(0.08,toss_release_time(),time)
