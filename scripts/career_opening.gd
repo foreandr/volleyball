@@ -12,8 +12,18 @@ const ROUTE := [Vector3(4.35,.04,-4.5),Vector3(4.35,.04,3.4),Vector3(-4.35,.04,3
 var leg:=0
 var queued:=false
 var runner_line:Array=[]
-var demo_turn:=0
-var bot_misses_shuffle:=false
+var demo_outcomes:=preload("res://scripts/demo_outcomes.gd").new()
+var mistake_leg:=-1
+var mistake_distance:=0.
+var previous_mistake_leg:=-1
+
+func plan_demo_runner() -> void:
+	mistake_leg=-1
+	if demo_outcomes.next_misses():
+		mistake_leg=randi_range(0,3) if previous_mistake_leg<0 else (previous_mistake_leg+randi_range(1,3))%4
+		previous_mistake_leg=mistake_leg
+		mistake_distance=randf_range(1.1,6.4)
+
 var entering_lane:=false
 var exits:Dictionary={}
 var corner_grace:=0.
@@ -154,6 +164,7 @@ func begin_run() -> void:
 	runner_line.erase(partner)
 	runner_line.erase(setter)
 	coach.position=Vector3(5.7,.04,.3)
+	plan_demo_runner()
 	partner.position=ROUTE[0]
 	partner.rotation.y=0.
 	var square:=BoxMesh.new()
@@ -252,7 +263,7 @@ func run_step(delta:float,direction:Vector3,focus:bool,sprinting:bool) -> void:
 		var turn:=Quaternion(parent.inverse()*Vector3.UP,clampf(atan2(local.x,local.z),-.92,.92))
 		rig.set_bone_pose_rotation(id,rig.get_bone_pose_rotation(id).slerp(turn*idle_heads[actor],1.-exp(-5.*delta)))
 	var line:=Geometry3D.get_closest_point_to_segment(runner.position,ROUTE[leg%4],marker.position)
-	if demo and bot_misses_shuffle and leg==1 and runner.position.distance_to(ROUTE[1])>.95:
+	if demo and leg==mistake_leg and runner.position.distance_to(ROUTE[leg])>=mistake_distance:
 		finish_demo_lap(false)
 		return
 	if not demo and ((focus!=(leg%2==1) and velocity.length()>.1 and runner.position.distance_to(marker.position)>.55) or runner.position.distance_to(line)>.7):
@@ -276,8 +287,7 @@ func run_step(delta:float,direction:Vector3,focus:bool,sprinting:bool) -> void:
 
 func finish_demo_lap(passed:bool) -> void:
 	coach_react("praise" if passed else "dismiss")
-	demo_turn+=1
-	bot_misses_shuffle=demo_turn==1 or (demo_turn>1 and randf()<.28)
+	plan_demo_runner()
 	leg=0
 	runner_line.append(partner)
 	var tail_x:=3.3-(runner_line.size()-1)*1.05
@@ -353,7 +363,9 @@ func _process(delta:float) -> void:
 	if phase in ["footwork","footwork_demo"]:
 		marker.mesh.material.albedo_color=Color("168239").lerp(Color("73ff78"),.5+.5*cos(elapsed*5.))
 	if phase=="footwork_demo":
-		run_step(delta,partner.position.direction_to(marker.position),leg%2==1 and not (bot_misses_shuffle and leg==1),false)
+		var shuffle:=leg%2==1
+		if leg==mistake_leg and partner.position.distance_to(ROUTE[leg])>mistake_distance-.9: shuffle=not shuffle
+		run_step(delta,partner.position.direction_to(marker.position),shuffle,false)
 	elif phase=="footwork":
 		var stick:=Vector2(axis(JOY_AXIS_LEFT_X),axis(JOY_AXIS_LEFT_Y))
 		if stick.length()<.15: stick=Vector2.ZERO

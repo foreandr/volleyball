@@ -1862,8 +1862,50 @@ var speaker: Node3D
 var speech_left := 0.0
 var intro_line := -1
 
+var coach_comment_delay:=0.
+var gesture_age:=-1.
+var gesture_keys:Dictionary={}
+
 func coach_react(event:String) -> void:
-	say(coach,preload("res://scripts/coach_reactions.gd").line(event),2.6)
+	if coach_comment_delay>0. or speech_left>0.: return
+	if randf()>(.27 if event=="praise" else .58): return
+	var quip:=preload("res://scripts/coach_reactions.gd").line(event)
+	say(coach,quip,clampf(.7+quip.length()*.047,3.,6.))
+	coach_comment_delay=speech_left+randf_range(3.,7.)
+	if phase in ["footwork_demo","footwork","pepper","demo"] and randf()<.55 and coach_motion.whistle_cue.signal_time<0.:
+		begin_coach_gesture(event=="praise")
+
+func begin_coach_gesture(praise:bool) -> void:
+	var rig:Skeleton3D=coach.skeleton
+	var author:RefCounted=coach.get_pose_author()
+	var pose:Array=[]
+	for id in rig.get_bone_count(): pose.append(rig.get_bone_pose(id))
+	gesture_keys.clear()
+	for side in ["l","r"]:
+		var arm:String="upperarm_"+side
+		var elbow:String="lowerarm_"+side
+		var wrist:String="hand_"+side
+		var shoulder:Vector3=author.point(pose,arm)
+		var sign_:=signf(shoulder.x)
+		var reach:=Vector3(sign_*.22,.09,.31) if praise else (Vector3(sign_*.12,.04,.46) if side=="r" else Vector3(sign_*.14,-.18,.17))
+		for bone in [arm,elbow]:
+			var id:=rig.find_bone(bone)
+			gesture_keys[id]=[rig.get_bone_pose_rotation(id)]
+		author.limb(pose,arm,elbow,wrist,shoulder+reach,Vector3(sign_,-.55,0.))
+		for bone in [arm,elbow]:
+			var id:=rig.find_bone(bone)
+			gesture_keys[id].append(pose[id].basis.orthonormalized().get_rotation_quaternion())
+	gesture_age=0.
+
+func step_coach_gesture(delta:float) -> void:
+	if gesture_age<0.: return
+	gesture_age+=delta
+	if coach_motion.whistle_cue.signal_time>=0. or phase not in ["footwork_demo","footwork","pepper","demo"]: gesture_age=1.5
+	var emphasis:=smoothstep(0.,.33,gesture_age)*(1.-smoothstep(.85,1.45,gesture_age))*(.91+.09*cos(gesture_age*11.))
+	for id in gesture_keys:
+		var keys:Array=gesture_keys[id]
+		coach.skeleton.set_bone_pose_rotation(id,keys[0].slerp(keys[1],emphasis))
+	if gesture_age>=1.45: gesture_age=-1.
 
 func say(actor: Node3D, speech: String, seconds: float) -> void:
 	speaker = actor
@@ -1873,6 +1915,8 @@ func say(actor: Node3D, speech: String, seconds: float) -> void:
 	update_speech(0)
 
 func update_speech(delta: float) -> void:
+	coach_comment_delay=maxf(0.,coach_comment_delay-delta)
+	step_coach_gesture(delta)
 	speech_left = maxf(0, speech_left - delta)
 	bubble.visible = speech_left > 0 and not settings.visible
 	if not bubble.visible: return

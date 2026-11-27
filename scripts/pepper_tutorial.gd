@@ -45,7 +45,8 @@ func configure(host,readout:Label,completed:int) -> void:
 		var platform:=hands(receiver)
 		receiver.play_action("idle",0.)
 		receiver.animator.advance(0.)
-		pairs.append({"receiver":receiver,"feeder":feeder,"ball":orb,"age":-i*.21,"caught":false,"platform":platform,"flying":false,"hit":false,"swing":false,"origin":hands(feeder)})
+		var outcomes:=preload("res://scripts/demo_outcomes.gd").new()
+		pairs.append({"outcomes":outcomes,"cpu_misses":outcomes.next_misses(),"receiver":receiver,"feeder":feeder,"ball":orb,"age":-i*.21,"caught":false,"platform":platform,"flying":false,"hit":false,"swing":false,"origin":hands(feeder)})
 	athletes[8].position=Vector3(-5.3,.04,2.)
 	feedback.text="%d / 5 passes"%score
 	if score==5: complete()
@@ -88,7 +89,7 @@ func tick(delta:float) -> void:
 		var orb:MeshInstance3D=pair.ball
 		var receiver:Node3D=pair.receiver
 		var feeder:Node3D=pair.feeder
-		var active:=demonstrating or i!=0 or (holding and not needs_release)
+		var active:bool=not pair.cpu_misses if demonstrating or i!=0 else holding and not needs_release
 		if t<FEED:
 			pair.origin=game.coach_motion.toss(feeder,clampf(t/FEED,0.,1.))
 			orb.position=pair.origin
@@ -106,6 +107,7 @@ func tick(delta:float) -> void:
 			if t>=ARRIVAL and not pair.caught:
 				pair.caught=true
 				pair.hit=active
+				if i==0 and demonstrating: game.coach_react("praise" if active else "miss")
 				if i==0 and not demonstrating:
 					game.coach_react("praise" if active else "miss")
 					if active:
@@ -123,6 +125,7 @@ func tick(delta:float) -> void:
 					orb.position=pair.platform.lerp(receiver.position+receiver.basis.z*-.42+Vector3.UP*.105,minf(1.,u*2.))
 		receiver.animator.advance(delta)
 		if t>=RESET:
+			if demonstrating or i!=0: pair.cpu_misses=pair.outcomes.next_misses()
 			if i==0 and score>=5:
 				complete()
 				return
