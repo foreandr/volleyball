@@ -190,9 +190,20 @@ func mapped_touch(mapper: Map,motion: Dictionary,previous: Vector3) -> bool:
 				break
 	return touched
 
+func sample_attack_dig() -> void:
+	var offset := dig_clock-defense_at
+	var frame := float(defense_recipe.contact)+offset*60.
+	if offset<0.:
+		var pace := smoothstep(40.,110.,defense_map.feed_kmh)
+		var lead := defense_map.incoming_lead_seconds
+		var elapsed := maxf(0.,lead+offset)
+		# Start at the usual entry pose, then form the platform early and hold it through contact.
+		frame=float(defense_recipe.contact)+minf(0.,elapsed*(1.+.8*pace)-lead)*60.
+	defense_map.sample_receiver(defense_recipe,clampf(frame,0.,defense_recipe.frames),true,defense_map.legs)
+
 func walk_server(delta: float,defending := false) -> void:
 	if defending and defense_map.player!=null:
-		defense_map.sample_receiver(defense_recipe,clampf(defense_recipe.contact+(dig_clock-defense_at)*60.,0.,defense_recipe.frames),true,defense_map.legs)
+		sample_attack_dig()
 		return
 	super.walk_server(delta,defending)
 
@@ -221,7 +232,7 @@ func block_on_flight_segment(previous: Vector3) -> bool:
 		defense_map.incoming_lead_seconds=lead
 		defense_map.feed_kmh=drop_velocity.length()*3.6
 		defense_recipe=bind_contact_motion(defense_map,defense_anchor,hitter,hitter.position,source,best)
-	defense_map.sample_receiver(defense_recipe,clampf(defense_recipe.contact+(dig_clock-defense_at)*60.,0.,defense_recipe.frames),true,defense_map.legs)
+	sample_attack_dig()
 	if not is_finite(defense_contact) and mapped_touch(defense_map,defense_recipe,previous): defense_contact=dig_clock
 	var release: float=dig_platforms[hitter].pressed_at
 	if not is_finite(defense_contact) or not is_finite(release) or absf(release-defense_at)>DIG_WINDOW or absf(defense_contact-dig_clock)>DIG_WINDOW: return false
