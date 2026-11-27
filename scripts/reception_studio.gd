@@ -951,7 +951,9 @@ func pose_receiver(c: Dictionary,f: float,active: bool,motion_legs: int) -> void
 		var drop := float(c.get("left_shoulder_drop_deg",signf(offset)*20.*smoothstep(.04,.50,absf(offset))))
 		if c.has("reach_shoulder_drop_deg"):
 			var lateral := absf(defenders[receiving].to_local(set_intercept).x)
-			drop=float(c.reach_shoulder_drop_deg)*smoothstep(.15,.85,lateral)
+			# Target the final shoulder slope, accounting for the lean already in the lunge.
+			var slope := asin(clampf(shoulder_line.normalized().y,-1.,1.))
+			drop=rad_to_deg(slope)-float(c.reach_shoulder_drop_deg)*smoothstep(.15,.85,lateral)
 		var roll_axis := shoulder_line.cross(Vector3.DOWN).normalized()
 		var local_axis := (rig.get_bone_global_pose(chest_id).basis.inverse()*roll_axis).normalized()
 		rig.set_bone_pose_rotation(chest_id,rig.get_bone_pose_rotation(chest_id)*Quaternion(local_axis,deg_to_rad(drop)*blend))

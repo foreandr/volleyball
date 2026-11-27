@@ -288,3 +288,7 @@ Across drills and matches, a received ball should generally leave the receiver w
 CPU receivers signal a leave by spreading both arms as the ball approaches.
 The shared indoor gym has five additional meters of runoff on each side and behind each baseline. The stands and end-wall equipment move with the walls.
 Reception Studio uses the same seated teammates and four-row sideline bleachers as indoor practice.
+
+## Future feature - skill progression through play
+
+Players level individual volleyball skills by using them. Simulated drills award XP to the skills practiced. Completing the same drill manually awards additional skill XP. This replaces allocating stat points for skill growth. XP rates and the manual bonus are to be tuned.
