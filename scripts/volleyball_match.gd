@@ -558,6 +558,8 @@ func change_arc(amount: float) -> void:
 	if phase == Phase.READY and is_human(server_index()) and not serve_pending: serve.change_arc(amount)
 	else: pass_height = clampf(pass_height+amount,2.75,8.5)
 
+var called_this_pass := false
+
 func input_space(pressed: bool) -> void:
 	if spectator: return
 	space_held = pressed
@@ -565,6 +567,9 @@ func input_space(pressed: bool) -> void:
 	if phase == Phase.READY and server_index() == 0 and pressed:
 		start_serve()
 		return
+	if pressed and phase==Phase.LIVE and flight_kind=="pass" and possession_team==0 and touches==1 and team_size>=3 and rally_setter>0 and not called_this_pass:
+		called_this_pass=true
+		if randf()<lerpf(.22,.88,human.effective_rating("Charisma")/100.): rally_hitter=0
 	var driver := attackers[0]
 	if driver.enabled and driver.setter == human and driver.stage == driver.Stage.SET:
 		if pressed:
@@ -706,6 +711,7 @@ func launch(point: Vector3, motion: Vector3, kind: String, from: int, spin_rate 
 	if last_was_block and kind in ["block","free"]:
 		receiving_team = 0 if path_point(flight_end()).z < Net.NET_Z else 1
 	if team_size >= 3 and kind == "pass" and touches == 1 and possession_team == receiving_team:
+		called_this_pass=false
 		rally_setter = nearest_on_team(receiving_team,path_point(arrival(1.92)),from)
 		rally_hitter = -1
 		rally_hitter = hitter_for_set(rally_setter)

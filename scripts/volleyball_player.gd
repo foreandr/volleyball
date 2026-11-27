@@ -18,6 +18,7 @@ var display_name := "Player"
 var height_cm: float = Profile.DEFAULTS.height_cm
 var handedness := "Right"
 var mirror_animation := false
+var model_rest_scale := Vector3.ONE
 var model: Node3D
 var skeleton: Skeleton3D
 var animator: AnimationPlayer
@@ -42,7 +43,9 @@ func _ready() -> void:
 		add_child(reflection)
 		reflection.add_child(model)
 	else: add_child(model)
+	model_rest_scale=model.scale
 	skeleton = model.find_child("Skeleton3D",true,false)
+	apply_measurements()
 	skeleton.add_child(preload("res://scripts/player_arm_clearance.gd").new())
 	for mesh: MeshInstance3D in skeleton.find_children("*","MeshInstance3D",true,false):
 		for surface in mesh.mesh.get_surface_count():
@@ -136,10 +139,11 @@ func effective_rating(skill: String) -> float:
 	return float(attributes.get(skill,65))*stamina.effectiveness()
 
 func reaction_seconds() -> float:
-	return lerpf(.24,.06,clampf(effective_rating("Reflexes")/100.,0.,1.))
+	return lerpf(.24,.06,clampf(effective_rating("Reflexes")/100.,0.,1.))-(.015 if attributes.Reflexes>=70 else 0.)
 
 func reachable_set(origin: Vector3, requested: Vector3, airborne := false, velocity_at_contact := Vector3.ZERO, flight_seconds := 0., range_scale := 1.) -> Vector3:
 	var distance_limit := lerpf(5.,13.,float(attributes.get("Strength",65))/100.)*stamina.effectiveness()
+	if attributes.Strength>=70: distance_limit+=.5*stamina.effectiveness()
 	if airborne: distance_limit*=.77
 	var carry := velocity_at_contact.slide(Vector3.UP)*.22*flight_seconds if airborne else Vector3.ZERO
 	var correction := carry*clampf(effective_rating("Hand setting")/100.,0.,1.)
@@ -181,12 +185,18 @@ func apply_profile(profile: Dictionary) -> void:
 	refresh_kit()
 	display_name = values.name
 	set_height_cm(values.height_cm)
+	apply_measurements()
 	handedness = values.handedness
 
 func refresh_kit() -> void:
 	if has_meta("kit_scalp"): preload("res://scripts/player_kit_choices.gd").apply(self)
 	if beard_material:
 		beard_material.set_shader_parameter("beard_style",Profile.KIT_CHOICES["Facial hair"].find(attributes["Facial hair"]))
+	if shirt_fabric and attributes.has("jersey_number") and attributes.jersey_number!=get_meta("school_jersey_number",-1):
+		set_meta("school_jersey_number",attributes.jersey_number)
+		var print_number := preload("res://scripts/practice_kit.gd").number_texture(attributes.jersey_number)
+		shirt_fabric.set_shader_parameter("lettering",print_number)
+		if shorts_fabric: shorts_fabric.set_shader_parameter("leg_number",print_number)
 	if shirt_fabric:
 		shirt_fabric.set_shader_parameter("hem_shift",{"Short":.052,"Long":-.065}.get(attributes["Jersey length"],0.))
 		shirt_fabric.set_shader_parameter("tucked",attributes["Jersey fit"]=="Tucked")
@@ -197,6 +207,22 @@ func refresh_kit() -> void:
 func set_height_cm(value: float) -> void:
 	height_cm = value
 	scale = Vector3.ONE*(height_cm/180.0)
+
+func apply_measurements() -> void:
+	if skeleton==null: return
+	var shape := skeleton.get_node_or_null("Measurements")
+	if not attributes.has("jersey_number"):
+		if shape: shape.active=false
+		model.scale=model_rest_scale
+		return
+	if shape==null:
+		shape=preload("res://scripts/athlete_measurements.gd").new()
+		shape.name="Measurements"
+		skeleton.add_child(shape)
+		skeleton.move_child(shape,0)
+	var build := clampf(pow(float(attributes.weight_lb)/165.,.30),.84,1.18)
+	model.scale=model_rest_scale*Vector3(build,1.,build)
+	shape.configure(attributes)
 
 func get_pose_author() -> RefCounted:
 	if pose_author == null:

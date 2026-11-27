@@ -282,7 +282,7 @@ func start_demo_match(team_size := 2, learn_from_demo := true, cpu_only := true,
 	preview_player.get_parent().add_child(demo_match)
 	demo_match.configure(preview_player,board,status,build_label,team_size,learn_from_demo,mirror_blue_right)
 	demo_match.review_flagged.connect(show_marker_popup)
-	demo_match.set_ball_sound(not cpu_only)
+	demo_match.set_ball_sound(true)
 	if passing: passing_drill = preload("res://scripts/passing_drill.gd").new(demo_match)
 	show_match_tuning()
 	player_controls.locomotion = ""
@@ -303,7 +303,10 @@ func show_match_tuning() -> void:
 	attack_position_panel.add_child(scroll)
 	var tuning := VBoxContainer.new()
 	tuning.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.follow_focus=true
+	tuning.add_theme_constant_override("separation",8)
 	scroll.add_child(tuning)
+	MenuPresentation.section_label(tuning,"Match settings" if passing_drill==null else "Practice settings")
 	if passing_drill != null:
 		passing_drill.build_controls(self,tuning)
 		add_match_replay_controls(tuning)
@@ -327,9 +330,10 @@ func show_match_tuning() -> void:
 	if match_from_home: add_match_replay_controls(tuning)
 
 func add_match_replay_controls(tuning: VBoxContainer) -> void:
+	MenuPresentation.section_label(tuning,"Replay")
 	match_replay_button = Button.new()
-	match_replay_button.text = "Replay rally (R)" if passing_drill == null else "Review rep (R)"
-	match_replay_button.focus_mode = Control.FOCUS_NONE
+	match_replay_button.text = PromptControls.hint("Replay rally","Replay rally (R)") if passing_drill == null else PromptControls.hint("Review rep","Review rep (R)")
+	match_replay_button.focus_mode = Control.FOCUS_ALL
 	match_replay_button.pressed.connect(toggle_match_replay)
 	tuning.add_child(match_replay_button)
 	tuning.add_child(button("Open latest save",open_latest_saved_rep))
@@ -337,12 +341,12 @@ func add_match_replay_controls(tuning: VBoxContainer) -> void:
 	match_replay_panel.hide()
 	tuning.add_child(match_replay_panel)
 	match_replay_play = Button.new()
-	match_replay_play.focus_mode = Control.FOCUS_NONE
+	match_replay_play.focus_mode = Control.FOCUS_ALL
 	match_replay_play.pressed.connect(toggle_match_replay_playback)
 	match_replay_panel.add_child(match_replay_play)
 	match_replay_seek = HSlider.new()
 	match_replay_seek.step = 1.0
-	match_replay_seek.focus_mode = Control.FOCUS_NONE
+	match_replay_seek.focus_mode = Control.FOCUS_ALL
 	match_replay_seek.drag_started.connect(func(): demo_match.replay.playing = false)
 	match_replay_seek.value_changed.connect(func(value: float):
 		demo_match.replay.playing = false
@@ -365,7 +369,7 @@ func add_match_replay_controls(tuning: VBoxContainer) -> void:
 	match_replay_panel.add_child(frames)
 	for direction in [-1,1]:
 		var frame_button := button("◀ Frame" if direction < 0 else "Frame ▶",step_match_replay.bind(direction))
-		frame_button.focus_mode = Control.FOCUS_NONE
+		frame_button.focus_mode = Control.FOCUS_ALL
 		frame_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		frames.add_child(frame_button)
 	demo_match.replay.speed = StorySession.match_preference("replay_speed",0.50)
@@ -376,7 +380,7 @@ func add_match_replay_controls(tuning: VBoxContainer) -> void:
 	speed.max_value = 1.0
 	speed.step = 0.05
 	speed.value = demo_match.replay.speed
-	speed.focus_mode = Control.FOCUS_NONE
+	speed.focus_mode = Control.FOCUS_ALL
 	speed.value_changed.connect(func(value: float):
 		demo_match.replay.speed = value
 		StorySession.save_match_preference("replay_speed",value)
@@ -450,9 +454,9 @@ func update_match_replay_controls() -> void:
 	var replay = demo_match.replay
 	match_replay_panel.visible = replay.active
 	if passing_drill != null:
-		match_replay_button.text = "Back to drill (R)" if replay.active else "Review rep (R)"
+		match_replay_button.text = PromptControls.hint("Back to drill","Back to drill (R)") if replay.active else PromptControls.hint("Review rep","Review rep (R)")
 	else:
-		match_replay_button.text = "Back to match (R)" if replay.active else "Replay rally (R)"
+		match_replay_button.text = PromptControls.hint("Back to match","Back to match (R)") if replay.active else PromptControls.hint("Replay rally","Replay rally (R)")
 	if not replay.active: return
 	if passing_drill != null:
 		var total: int = passing_drill.review_count()

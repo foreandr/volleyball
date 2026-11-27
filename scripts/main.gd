@@ -41,10 +41,9 @@ func go(scene: String) -> void:
 
 func show_home() -> void:
 	page("Andre Foreman's Volleyball","Home")
-	add_menu_button(column,"Career","My Career",func(): go("story"))
-	add_menu_button(column,"Play","Play",MenuPresentation.load_stage.bind("Play",show_play)).grab_focus()
+	add_menu_button(column,"Career","My Career",func(): go("story")).grab_focus()
+	add_menu_button(column,"Play","Play",MenuPresentation.load_stage.bind("Play",show_play))
 	add_menu_button(column,"Create","Create player",func(): go("create"))
-	add_menu_button(column,"Training","Training camp",func(): go("drills"))
 	add_menu_button(column,"Settings","Settings",MenuPresentation.load_stage.bind("Settings",show_settings))
 	add_menu_button(column,"Quit","Quit",func(): get_tree().quit())
 
@@ -85,7 +84,13 @@ func show_roster() -> void:
 	column.add_child(teams)
 	for side in 2:
 		var slots := VBoxContainer.new()
-		teams.add_child(slots)
+		var panel := PanelContainer.new()
+		panel.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+		var accent: Color=Color("66dfc1") if side==0 else Color("efbc74")
+		panel.add_theme_stylebox_override("panel",MenuPresentation.box(Color("101f2af5"),accent,4))
+		teams.add_child(panel)
+		panel.add_child(slots)
+		MenuPresentation.section_label(slots,"Home" if side==0 else "Away")
 		var color := ColorPickerButton.new()
 		color.text = "Home kit" if side == 0 else "Away kit"
 		color.color = StorySession.kit_colors[side]
@@ -98,13 +103,17 @@ func show_roster() -> void:
 				choice.add_item("%s   %d in" % [candidate.name,roundi(candidate.height_cm/2.54)])
 			choice.select(index)
 			StorySession.offline_roster.append(roster_pool[index].duplicate(true))
-			slots.add_child(choice)
+			var row := HBoxContainer.new()
+			slots.add_child(row)
+			choice.fit_to_longest_item=false
+			choice.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+			row.add_child(choice)
 			var height := SpinBox.new()
 			height.min_value = 60
 			height.max_value = 84
 			height.suffix = "in"
 			height.value = roundi(roster_pool[index].height_cm / 2.54)
-			slots.add_child(height)
+			row.add_child(height)
 			height.value_changed.connect(func(value: float): StorySession.offline_roster[index].height_cm = value*2.54)
 			choice.item_selected.connect(func(selected: int):
 				StorySession.offline_roster[index] = roster_pool[selected].duplicate(true)
@@ -114,32 +123,27 @@ func show_roster() -> void:
 
 func show_settings() -> void:
 	page("SETTINGS","Settings")
+	MenuPresentation.section_label(column,"Audio")
 	var volume := HSlider.new()
 	var caption := Label.new()
-	caption.text = "Master volume"
+	caption.text = "Master volume    %d%%" % StorySession.master_volume
 	column.add_child(caption)
 	volume.max_value = 100
 	volume.value = StorySession.master_volume
 	volume.value_changed.connect(func(value: float):
+		caption.text="Master volume    %d%%" % roundi(value)
 		StorySession.set_master_volume(value)
 		StorySession.save_options())
 	column.add_child(volume)
 	volume.grab_focus()
-	var soundtrack := CheckButton.new()
-	soundtrack.text = "Menu soundtrack"
-	soundtrack.button_pressed = MenuPresentation.music_enabled
-	soundtrack.toggled.connect(MenuPresentation.toggle_music)
-	column.add_child(soundtrack)
+	MenuPresentation.audio_options(column)
+	MenuPresentation.section_label(column,"Controller")
 	preload("res://scripts/xbox_controls.gd").settings(column,show_settings)
-	add_menu_button(column,"AnimationFrames","Animation Frames",func():
-		StorySession.prepare_ready_frame_editor()
-		go("animation_editor"))
-	StorySession.add_saved_frame_picker(column,func(): pass)
-	add_menu_button(column,"IterationLab","Iteration Lab",func(): go("iteration_lab"))
 	add_menu_button(column,"Back","Back",show_home)
 
 func add_menu_button(parent: VBoxContainer, id: String, title: String, action: Callable) -> Button:
 	var item := Button.new()
+	item.add_theme_font_size_override("font_size",23 if route=="Home" else 20)
 	item.name = id
 	item.text = title
 	item.alignment = HORIZONTAL_ALIGNMENT_LEFT

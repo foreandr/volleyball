@@ -60,8 +60,9 @@ static func apply(actor: Node3D,coach: bool,variant := 0,vary_build := true) -> 
 			rig.set_bone_pose_scale(arm,Vector3(.9+.23*build,1,.9+.23*build))
 		var spine := rig.find_bone("spine_01")
 		rig.set_bone_pose_scale(spine,Vector3(1,1.045-.09*build,1))
-	if not coach: actor.set_meta("school_jersey_number",502+variant)
-	var print_texture: Texture2D=preload("res://assets/gym/practice_502.svg") if variant==0 else number_texture(502+variant)
+	var number := int(actor.attributes.get("jersey_number",502+variant))
+	if not coach: actor.set_meta("school_jersey_number",number)
+	var print_texture: Texture2D=preload("res://assets/gym/practice_502.svg") if number==502 else number_texture(number)
 	for side in ["l","r"]: court_shoe(rig,side,coach,variant)
 	for node: MeshInstance3D in rig.find_children("*","MeshInstance3D",true,false):
 		var shirt := node.mesh == preload("res://assets/characters/volleyball/outfit.res")

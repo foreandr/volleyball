@@ -29,16 +29,13 @@ func configure(host: Node, layer: Node = null) -> void:
 	center.add_child(dock)
 	dock.add_child(home)
 	dock.add_child(options)
-	home.custom_minimum_size.x = 310
+	home.custom_minimum_size.x = 370
+	MenuPresentation.section_label(home,"Paused")
 	home.add_theme_constant_override("separation",8)
 	primary = bar(home,"Resume",hide)
 	options_button = bar(home,"Options",open_options)
-	if practice and "solo_setting" in game and game.solo_setting:
+	if practice and game.scene_file_path.ends_with("_camp.tscn") and "solo_setting" in game and game.solo_setting:
 		bar(home,"Sliders",open_sliders)
-		if game.has_method("frame_editor_attacker") or game.has_method("frame_editor_blocker"):
-			bar(home,"Replay",func():
-				hide()
-				game.replay_inspector.toggle())
 		if game.has_method("edit_approach_frames") and not game.has_method("frame_editor_blocker"):
 			dock.add_child(attack_setup)
 			attack_setup.hide()
@@ -55,14 +52,19 @@ func configure(host: Node, layer: Node = null) -> void:
 				play.grab_focus())
 		if game.has_method("frame_editor_blocker") or not game.has_method("frame_editor_attacker"):
 			bar(home,"Edit blocker frames" if game.has_method("frame_editor_blocker") else "Edit set frames",open_frame_editor)
+	if practice and game.has_method("toggle_practice_replay"):
+		bar(home,"Replay",func():
+			hide()
+			game.toggle_practice_replay())
 	bar(home,"Restart",restart)
 	var quit_button := bar(home,"Quit",quit_gameplay)
 	primary.focus_neighbor_top=primary.get_path_to(quit_button)
 	quit_button.focus_neighbor_bottom=quit_button.get_path_to(primary)
 	options.custom_minimum_size.x = 400
+	MenuPresentation.section_label(options,"Options")
 	options.add_child(categories)
 	var sections := ["Camera","Audio","Controls"]
-	if practice and "solo_setting" in game and game.solo_setting: sections.append("Sliders")
+	if practice and game.scene_file_path.ends_with("_camp.tscn") and "solo_setting" in game and game.solo_setting: sections.append("Sliders")
 	for caption in sections:
 		var tab := bar(categories,caption,show_section.bind(caption))
 		tab.toggle_mode = true
@@ -73,7 +75,7 @@ func configure(host: Node, layer: Node = null) -> void:
 	options.add_child(scroll)
 	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(body)
-	if not game.has_method("frame_editor_attacker") or game.has_method("frame_editor_blocker"):
+	if practice and game.scene_file_path.ends_with("_camp.tscn") and (not game.has_method("frame_editor_attacker") or game.has_method("frame_editor_blocker")):
 		bar(options,"Animation Frames",open_frame_editor)
 		StorySession.add_saved_frame_picker(options,leave_for_frame_editor)
 	bar(options,"Back",show_home)
@@ -270,7 +272,7 @@ func active_camera() -> Camera3D:
 	return get_viewport().get_camera_3d()
 
 func fields() -> Array:
-	if not practice: return [["Field of view",35,85,50,"Ã‚Â°"],["Master volume",0,100,80,"%"]]
+	if not practice: return [["Field of view",35,85,50,"\u00b0"],["Master volume",0,100,80,"%"]]
 	return [["Camera orbit",-145,145,12,"\u00b0"],["Elevation",-12,82,18,"\u00b0"],["Distance",2,26,10," m"],["Master volume",0,100,80,"%"]]
 
 func saved(field: Array) -> float:
@@ -304,6 +306,7 @@ func show_section(caption: String) -> void:
 	if caption=="Controls":
 		Xbox.settings(body,show_section.bind(caption))
 		return
+	if caption=="Audio": MenuPresentation.audio_options(body)
 	for field in fields():
 		if (field[0]=="Master volume") != (caption=="Audio"): continue
 		var row := HBoxContainer.new()

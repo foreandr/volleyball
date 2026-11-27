@@ -2,6 +2,10 @@
 
 The following describes the intended full game. A menu route, stored rating or prototype does not establish that a feature is finished.
 
+Use the game’s own court, athletes and equipment for menu art and loading screens. Use in-engine captures, licensed photography or artist-created assets. Avoid AI-generated imagery throughout the game. The home menu and loading screens share a looping reel of a spike, a stuff block, a jump spin serve and a dig. Each shot uses actual gameplay sampled at 120 frames per second and played at 30. Still frames from the spike cover the start of playback.
+
+Planned replay feature: from a replay, mark the start and end of a great play and save it to a personal highlight library. The player can include saved clips in the menu rotation or take them out again.
+
 ## Indoor practice baseline
 
 Dig from Five shares the Serve and Receive camera: 52-degree field of view, pivot (0, 1.5, -4.4), and arm length 0.48 times the saved distance plus 2 metres, with the same orbit, elevation and gym obstruction check. Middle-button drag orbits the live digging camera for the current visit. Reopening the drill restores this opening view. The coach feeds a far-side setter for a zone-four attack against one pin blocker; the near-side defender starts in five.
@@ -30,12 +34,14 @@ A new indoor drill starts with practice already happening in a staffed gym. Inhe
 For a new exercise, change its objective, feed, targets, scoring and progression in the derived controller. The shared scene supplies working setting reps by default. Override `start_drill()` for entry and `save_scorecard()` for drill-specific progress. Keep career checkpoints in the career controller. Verify a new exercise through its menu entry, including a short athlete, an unattended toss, a remapped controller prompt and a loose-ball return during another setter’s turn.
 
 ## Competition and progression
-Home offers Career, Play, Training Camp with performance stars, Create Player, Settings and Quit. Offline standard matches support 2–6 players per side. Online stays disabled. Select both squads and uniforms from a large generated roster, or edit everyone to either height extreme. The 2v2 career progresses through tournament arcs with dialogue explaining opponents’ philosophies. Opponents specialize in blocking, attacking, defense, serving, all-round play, deceptive jump sets and setter dumps, cut shots, roll shots, line attacks, high hands, and early one- or two-contact returns. Start with a small salary. Tournament winnings buy skills, haircuts, footwear, branded garments and accessories.
+Home offers My Career, Play, Create Player, Settings and Quit. The prototype training catalog remains available to development scenes. My Career opens the Falcons high-school tryout story with athlete creation, a layered wardrobe and a 100 Volleyball Point budget shared by gear and ratings. Individual saves retain jersey number, appearance, balance, perks and progress. Career offers the setter target evaluation and a five-attack defense evaluation in zone five. Offline standard matches support 2–6 players per side. Online stays disabled. Select both squads and uniforms from a large generated roster, or edit everyone to either height extreme. The 2v2 career progresses through tournament arcs with dialogue explaining opponents’ philosophies. Opponents specialize in blocking, attacking, defense, serving, all-round play, deceptive jump sets and setter dumps, cut shots, roll shots, line attacks, high hands, and early one- or two-contact returns. Start with a small salary. Tournament winnings buy skills, haircuts, footwear, branded garments and accessories.
 
 ## Rules and techniques
 Short court confines both teams to the three-meter zones and allows normal attacks, back sets and jump sets. Volleys begins with an underhand serve and requires one touch over the net. Singles plays like tennis. Team volleys rotates entrants through the back and eliminates the responsible player on a floor ball or error, down to uneven sides such as 1v6. Support short-court volleys. Arcade supports 1v1 through 10v10 with slow time, fire, ice, stun, super jumps, teleportation and lightning.
 
 Future camera feature: optional ball-follow in the swing preview to watch the landing and rebound.
+
+Planned camera option: play from the controlled athlete’s first-person perspective.
 
 Future arcade spike challenges include two power shots:
 

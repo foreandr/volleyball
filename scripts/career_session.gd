@@ -6,8 +6,11 @@ const CHAPTER := "res://scenes/setter_tryout.tscn"
 const BADGES := ["Pinpoint","Tempo Switch","Four Corners"]
 var data := ConfigFile.new()
 var athlete_id := ""
+const STARTING_VP := 100
+var outfitting := false
 var creating := false
 var enter_origin := false
+var defense_finished := false
 var prompt := AcceptDialog.new()
 var command := LineEdit.new()
 var paused_before := false
@@ -89,14 +92,19 @@ func run_command() -> void:
 		rep = int(parts[2])-1
 		stage = "tutorial"
 	elif stage not in ["intro","tutorial","complete"]: return
-	if athlete_id.is_empty(): create_athlete(base_profile())
+	if athlete_id.is_empty():
+		var draft := base_profile()
+		draft.name="Tryout athlete"
+		if not create_athlete(draft): return
 	creating = false
 	data.set_value(key(),"tryout_scorecard",[])
 	if not checkpoint(stage,32 if stage == "complete" else rep): return
 	MenuPresentation.load_scene.call_deferred(CHAPTER)
 
 func base_profile() -> Dictionary:
-	var values := Profile.load_profile()
+	var values := Profile.clean({})
+	values.name=""
+	values.jersey_number=7
 	for rating in Profile.RATINGS: values[rating] = 40
 	return values
 
@@ -105,14 +113,76 @@ func spent(values: Dictionary) -> int:
 	for rating in Profile.RATINGS: total += maxi(0,int(values.get(rating,40))-40)
 	return total
 
+func balance() -> int:
+	return data.get_value("points",athlete_id,0)
+
+func gear_price(key: String,item: String,owned: Array) -> int:
+	if key in ["Eyebrows","Facial hair"] or item in ["None","Team"] or item==Profile.KIT_CHOICES[key][0] or key+"/"+item in owned: return 0
+	return 4 if key in ["Underlayer","Shoe design","Headwear","Sunglasses"] else 2
+
+func inventory() -> Array:
+	return data.get_value("gear",athlete_id,[]).duplicate()
+
+func gear_cost(values: Dictionary,owned: Array) -> int:
+	var price := 0
+	for field in Profile.KIT_CHOICES: price+=gear_price(field,values[field],owned)
+	return price
+
+func save_gear(values: Dictionary,owned: Array) -> void:
+	for field in Profile.KIT_CHOICES:
+		var item: String=field+"/"+str(values[field])
+		if item not in owned: owned.append(item)
+	data.set_value("gear",athlete_id,owned)
+
+func equip(values: Dictionary) -> bool:
+	var owned := inventory()
+	var price := gear_cost(values,owned)
+	if price>balance(): return false
+	var before := data.encode_to_text()
+	data.set_value("points",athlete_id,balance()-price)
+	data.set_value("athletes",athlete_id,Profile.clean(values))
+	save_gear(values,owned)
+	if persist(): return true
+	data.clear()
+	data.parse(before)
+	return false
+
 func create_athlete(values: Dictionary) -> bool:
-	if spent(values)>100 or str(values.name).strip_edges().is_empty(): return false
-	var id := Crypto.new().generate_random_bytes(12).hex_encode()
-	data.set_value("athletes",id,Profile.clean(values))
-	SchoolHeadshots.request(values)
-	athlete_id = id
-	select(id)
-	return checkpoint("origin",0)
+	values=Profile.clean(values)
+	values.age=clampi(values.age,16,18)
+	var remaining := STARTING_VP-spent(values)-gear_cost(values,[])
+	if remaining<0 or str(values.name).strip_edges().is_empty(): return false
+	var before := data.encode_to_text()
+	var previous := athlete_id
+	athlete_id=Crypto.new().generate_random_bytes(12).hex_encode()
+	data.set_value("athletes",athlete_id,values)
+	data.set_value("selection","athlete",athlete_id)
+	data.set_value("points",athlete_id,remaining)
+	save_gear(values,[])
+	if checkpoint("origin",0):
+		SchoolHeadshots.request(values)
+		return true
+	data.clear()
+	data.parse(before)
+	athlete_id=previous
+	return false
+
+func delete_athlete(id: String) -> bool:
+	if not data.has_section_key("athletes",id): return false
+	var snapshot := data.encode_to_text()
+	var previous := athlete_id
+	for section in ["athletes","badges","points","team_chemistry","gear","fans","signed"]:
+		if data.has_section_key(section,id): data.erase_section_key(section,id)
+	var chapter := "indoor_setter_6v6_"+id
+	if data.has_section(chapter): data.erase_section(chapter)
+	if athlete_id==id:
+		athlete_id=""
+		data.set_value("selection","athlete","")
+	if persist(): return true
+	data.clear()
+	data.parse(snapshot)
+	athlete_id=previous
+	return false
 
 func select(id: String) -> void:
 	athlete_id = id
@@ -146,6 +216,7 @@ func credit(rep: int) -> bool:
 	var cleared: Array = data.get_value(key(),"cleared",[])
 	if rep not in cleared:
 		cleared.append(rep)
+		data.set_value("fans",athlete_id,fans()+1+roundi(float(profile().get("Charisma",40))*.06))
 		if (rep+1)%8 == 0:
 			data.set_value("points",athlete_id,data.get_value("points",athlete_id,0)+3)
 	data.set_value(key(),"cleared",cleared)
@@ -168,4 +239,39 @@ func credit_team_return() -> bool:
 	data.set_value("team_chemistry",athlete_id,previous+1)
 	if persist(): return true
 	data.set_value("team_chemistry",athlete_id,previous)
+	return false
+
+func fans() -> int:
+	return data.get_value("fans",athlete_id,0)
+
+func offer_value() -> int:
+	return 10+fans()/3
+
+func accept_offer() -> bool:
+	if stage()!="after_tryout" or data.get_value("signed",athlete_id,false): return false
+	var previous := balance()
+	data.set_value("points",athlete_id,previous+offer_value())
+	data.set_value("signed",athlete_id,true)
+	if persist(): return true
+	data.set_value("points",athlete_id,previous)
+	data.set_value("signed",athlete_id,false)
+	return false
+
+func record_defense(did_dig: bool) -> bool:
+	if athlete_id.is_empty(): return false
+	var before := data.encode_to_text()
+	var reps := int(data.get_value(key(),"defense_reps",0))+1
+	var score := int(data.get_value(key(),"defense_score",0))+int(did_dig)
+	if reps==5:
+		var best := int(data.get_value(key(),"defense_best",0))
+		data.set_value(key(),"defense_last",score)
+		data.set_value(key(),"defense_best",maxi(score,best))
+		data.set_value("points",athlete_id,balance()+maxi(0,score-best))
+	data.set_value(key(),"defense_reps",reps%5)
+	data.set_value(key(),"defense_score",0 if reps==5 else score)
+	if persist():
+		defense_finished=reps==5
+		return true
+	data.clear()
+	data.parse(before)
 	return false

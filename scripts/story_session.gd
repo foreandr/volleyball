@@ -172,7 +172,9 @@ func _ready() -> void:
 	if DisplayServer.get_name() != "headless":
 		Engine.max_fps = 60
 	match_preferences.load(MATCH_SETTINGS_PATH)
-	AudioServer.set_bus_mute(AudioServer.get_bus_index("Master"),game_options.get_value("audio","muted",false))
+	var device: String=game_options.get_value("audio","device","Default")
+	if device in AudioServer.get_output_device_list(): AudioServer.output_device=device
+	AudioServer.set_bus_mute(0,game_options.get_value("audio","muted",false))
 	var config := ConfigFile.new()
 	if config.load(preview_path)==OK:
 		for field in PREVIEW_FIELDS:
@@ -213,11 +215,13 @@ func _input(event: InputEvent) -> void:
 	if page and page.has_method("toggle_match_replay") and is_instance_valid(page.get("demo_match")): return
 	var focus := get_viewport().gui_get_focus_owner()
 	if focus is LineEdit or focus is TextEdit: return
-	var master := AudioServer.get_bus_index("Master")
-	AudioServer.set_bus_mute(master,not AudioServer.is_bus_mute(master))
-	game_options.set_value("audio","muted",AudioServer.is_bus_mute(master))
-	save_options()
+	set_game_muted(not AudioServer.is_bus_mute(0))
 	get_viewport().set_input_as_handled()
+
+func set_game_muted(muted: bool) -> void:
+	AudioServer.set_bus_mute(0,muted)
+	game_options.set_value("audio","muted",muted)
+	save_options()
 
 func prepare_ready_frame_editor() -> void:
 	edit_entry={"id":"shared_ready","name":"Ready stance","category":"Setting","type":"Overhead"}

@@ -134,84 +134,148 @@ func screen_subtitle() -> String:
 	return ""
 
 func initial_profile() -> Dictionary:
+	if CareerSession.outfitting: return Profile.clean(CareerSession.profile())
 	if CareerSession.creating: return CareerSession.base_profile()
 	return StorySession.draft.duplicate(true) if StorySession.creating_story else Profile.load_profile()
 
+const STEPS := ["Athlete","Wardrobe","Attributes"]
+const SLOTS := {
+	"Chest":["Jersey length","Jersey fit","Underlayer"], "Legs":["Shorts design","Leg sleeves","Knee support"],
+	"Feet":["Shoe cut","Shoe design","Shoe color","Sock height","Sock color","Ankle support"],
+	"Hands":["Finger tape"], "Head":["Headwear","Sunglasses"]
+}
+var step := 0
+var wardrobe_slot := "Chest"
+var creator_controls: VBoxContainer
+
 func build_controls(controls: VBoxContainer) -> void:
-	controls.add_child(label("Name",18))
-	name_field = LineEdit.new()
-	name_field.name = "PlayerName"
-	name_field.max_length = 32
-	name_field.text = profile.name
-	name_field.custom_minimum_size.y = 42
-	name_field.text_changed.connect(func(value): profile.name = value; update_profile())
-	controls.add_child(name_field)
-	profile = Profile.clean(profile)
-	add_attribute(controls,"Age","age",14,18,profile.age)
-	controls.add_child(label("Hometown",18))
-	var town := LineEdit.new()
-	town.text = profile.hometown
-	town.max_length = 64
-	town.text_changed.connect(func(value): profile.hometown = value)
-	controls.add_child(town)
-	add_attribute(controls,"Height (inches)","height_cm",60,84,profile.height_cm / 2.54)
-	add_attribute(controls,"Vertical jump (inches)","vertical_in",30,60,profile.vertical_in)
-	add_attribute(controls,"Wingspan (inches)","wingspan_in",48,96,profile.wingspan_in)
-	if CareerSession.creating:
-		budget_label = Label.new()
-		controls.add_child(budget_label)
-		budget_label.text = "100 attribute points available"
-	for rating in Profile.RATINGS:
-		add_attribute(controls,rating,rating,40 if CareerSession.creating else 0,100,profile[rating])
-	controls.add_child(label("Handedness",18))
-	hand_field = OptionButton.new()
-	hand_field.name = "PlayerHandedness"
-	hand_field.add_item("Right")
-	hand_field.add_item("Left")
-	hand_field.select(1 if profile.handedness == "Left" else 0)
-	hand_field.custom_minimum_size.y = 42
-	hand_field.item_selected.connect(func(index): profile.handedness = "Left" if index == 1 else "Right"; update_profile())
-	controls.add_child(hand_field)
-	for key in Profile.KIT_CHOICES:
-		controls.add_child(label(key,18))
-		var picker := OptionButton.new()
-		for choice in Profile.KIT_CHOICES[key]: picker.add_item(choice)
-		picker.select(Profile.KIT_CHOICES[key].find(profile[key]))
-		picker.item_selected.connect(func(index): profile[key]=Profile.KIT_CHOICES[key][index]; update_profile())
-		controls.add_child(picker)
-	if not CareerSession.creating:
-		controls.add_child(button("Generate player",func():
-			profile = Profile.generate()
-			update_profile()
-			get_tree().reload_current_scene()))
-	var space := Control.new()
-	space.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	controls.add_child(space)
-	save_button = button("Save",save_player)
-	save_button.name = "SavePlayer"
-	save_button.disabled = profile.name.strip_edges().is_empty()
-	controls.add_child(save_button)
+	creator_controls=controls
+	profile=Profile.clean(profile)
+	profile.age=clampi(profile.age,16,18)
+	if not profile.has("jersey_number"): profile.jersey_number=7
+	if CareerSession.outfitting: step=1
+	render_step()
+
+func render_step() -> void:
+	var controls := creator_controls
+	for child in controls.get_children():
+		controls.remove_child(child)
+		child.queue_free()
+	name_field=null
+	budget_label=null
+	save_button=null
+	var progress := label("ATHLETE CREATION    /    %d OF 3" % (step+1),13)
+	progress.modulate=Color("73e1d2")
+	controls.add_child(progress)
+	controls.add_child(label(STEPS[step],28))
+	if step>0 and (CareerSession.creating or CareerSession.outfitting):
+		budget_label=MenuPresentation.wallet(controls,remaining_points())
+	match step:
+		0:
+			name_field=add_text(controls,"Name","name",32)
+			add_attribute(controls,"Age","age",16,18,profile.age)
+			add_text(controls,"Hometown","hometown",64)
+			add_attribute(controls,"Height","height_cm",60,84,profile.height_cm/2.54)
+			add_attribute(controls,"Wingspan (in)","wingspan_in",48,96,profile.wingspan_in)
+			for caption in Profile.MEASUREMENTS:
+				var field: Array=Profile.MEASUREMENTS[caption]
+				add_attribute(controls,caption,field[0],field[1],field[2],profile[field[0]])
+			add_attribute(controls,"Vertical jump (in)","vertical_in",30,60,profile.vertical_in)
+			add_choice(controls,"Handedness","handedness",["Right","Left"])
+			for key in ["Eyebrows","Facial hair"]: add_choice(controls,key,key,Profile.KIT_CHOICES[key])
+		1:
+			add_attribute(controls,"Jersey number","jersey_number",0,99,profile.jersey_number)
+			var slots := GridContainer.new()
+			slots.columns=2
+			controls.add_child(slots)
+			for slot in SLOTS:
+				var item := button(slot,change_slot.bind(slot))
+				item.toggle_mode=true
+				item.button_pressed=slot==wardrobe_slot
+				slots.add_child(item)
+				if item.button_pressed: item.grab_focus()
+			controls.add_child(HSeparator.new())
+			for key in SLOTS[wardrobe_slot]: add_choice(controls,key,key,Profile.KIT_CHOICES[key])
+		2:
+			for rating in Profile.RATINGS:
+				add_attribute(controls,"Arm swing speed" if rating=="Arm swing" else rating,rating,40 if CareerSession.creating else 0,100,profile[rating])
+	var advance := button("Equip wardrobe" if CareerSession.outfitting else "Create athlete" if step==2 else "Next   /   "+STEPS[step+1],advance_step)
+	controls.add_child(advance)
+	save_button=advance
+	save_button.disabled=str(profile.name).strip_edges().is_empty() or ((CareerSession.creating or CareerSession.outfitting) and remaining_points()<0)
+	if step==0: name_field.grab_focus()
+	if step==2: controls.find_children("*","HSlider",false,false)[0].grab_focus()
+
+func change_slot(slot: String) -> void:
+	wardrobe_slot=slot
+	render_step()
+
+func advance_step() -> void:
+	if CareerSession.outfitting:
+		if CareerSession.equip(profile): open_menu()
+	elif step==2: save_player()
+	else:
+		step+=1
+		render_step()
+
+func add_text(host: VBoxContainer,caption: String,key: String,limit: int) -> LineEdit:
+	host.add_child(label(caption,16))
+	var field := LineEdit.new()
+	field.text=profile[key]
+	field.max_length=limit
+	host.add_child(field)
+	field.text_changed.connect(func(value): profile[key]=value; update_profile())
+	return field
+
+func add_choice(host: VBoxContainer,caption: String,key: String,choices: Array) -> void:
+	host.add_child(label(caption,16))
+	var picker := OptionButton.new()
+	for choice in choices:
+		var price := 0
+		if key in Profile.KIT_CHOICES and (CareerSession.creating or CareerSession.outfitting):
+			var owned := CareerSession.inventory() if CareerSession.outfitting else []
+			price=CareerSession.gear_price(key,choice,owned)
+		picker.add_item(str(choice)+("   %d VP" % price if price else ""))
+	picker.select(choices.find(profile[key]))
+	host.add_child(picker)
+	picker.item_selected.connect(func(i):
+		var previous: Variant=profile[key]
+		profile[key]=choices[i]
+		if (CareerSession.creating or CareerSession.outfitting) and remaining_points()<0:
+			profile[key]=previous
+			picker.select(choices.find(previous))
+		update_profile())
+	if key in Profile.KIT_CHOICES and (CareerSession.creating or CareerSession.outfitting):
+		picker.get_popup().about_to_popup.connect(func():
+			var owned := CareerSession.inventory() if CareerSession.outfitting else []
+			var budget := remaining_points()+CareerSession.gear_price(key,profile[key],owned)
+			for i in choices.size(): picker.set_item_disabled(i,CareerSession.gear_price(key,choices[i],owned)>budget))
+
+func measurement(caption: String,key: String,value: int) -> String:
+	if key=="height_cm": return "Height   %d in   (%d ft %d in)" % [value,value/12,value%12]
+	return "%s   %d" % [caption,value]
 
 func add_attribute(parent: VBoxContainer, caption: String, key: String, minimum: int, maximum: int, initial: float) -> void:
-	var heading := label("%s   %d" % [caption,roundi(initial)],16)
+	var heading := label(measurement(caption,key,roundi(initial)),16)
 	parent.add_child(heading)
 	var slider := HSlider.new()
-	slider.min_value = minimum
-	slider.max_value = maximum
-	slider.step = 1
-	slider.value = initial
+	slider.min_value=minimum
+	slider.max_value=maximum
+	slider.step=1
+	slider.value=initial
 	parent.add_child(slider)
+	if key in Profile.RATING_HELP:
+		MenuPresentation.rating_bar(parent,slider)
+		MenuPresentation.stat_help(slider,heading,caption,Profile.RATING_HELP[key])
 	slider.value_changed.connect(func(value: float):
 		if CareerSession.creating and key in Profile.RATINGS:
-			value = minf(value,float(profile[key])+100-CareerSession.spent(profile))
+			value=minf(value,float(profile[key])+remaining_points())
 			slider.set_value_no_signal(value)
-		heading.text = "%s   %d" % [caption,int(value)]
-		profile[key] = value*2.54 if key == "height_cm" else value
+		heading.text=measurement(caption,key,int(value))
+		profile[key]=value*2.54 if key=="height_cm" else value
 		update_profile())
 
 func save_player() -> void:
-	profile.name = name_field.text
-	profile.handedness = "Left" if hand_field.selected == 1 else "Right"
 	SchoolHeadshots.request(profile)
 	if CareerSession.creating:
 		if CareerSession.create_athlete(profile):
@@ -348,11 +412,8 @@ func update_camera() -> void:
 
 func panel() -> PanelContainer:
 	var result := PanelContainer.new()
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color("132a39")
-	style.border_color = Color("345661")
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(8)
+	var style := MenuPresentation.box(Color("122330"),Color("407370"),2)
+	for edge in [SIDE_LEFT,SIDE_TOP,SIDE_RIGHT,SIDE_BOTTOM]: style.set_content_margin(edge,1)
 	result.add_theme_stylebox_override("panel",style)
 	return result
 
@@ -370,14 +431,27 @@ func button(text: String, action: Callable) -> Button:
 	result.pressed.connect(action)
 	return result
 
+func remaining_points() -> int:
+	if CareerSession.outfitting: return CareerSession.balance()-CareerSession.gear_cost(profile,CareerSession.inventory())
+	return CareerSession.STARTING_VP-CareerSession.spent(profile)-CareerSession.gear_cost(profile,[])
+
 func update_profile() -> void:
-	if CareerSession.creating: budget_label.text = "%d attribute points available" % (100-CareerSession.spent(profile))
+	if CareerSession.creating or CareerSession.outfitting:
+		if is_instance_valid(budget_label): budget_label.text=str(remaining_points())
 	elif StorySession.creating_story: StorySession.draft = Profile.clean(profile)
-	else: Profile.save_profile(profile)
-	if is_instance_valid(save_button): save_button.disabled = profile.name.strip_edges().is_empty()
+	elif not creator_controls: Profile.save_profile(profile)
+	if is_instance_valid(save_button): save_button.disabled = profile.name.strip_edges().is_empty() or ((CareerSession.creating or CareerSession.outfitting) and remaining_points()<0)
 	if is_instance_valid(preview_player): preview_player.apply_profile(profile)
 
 func open_menu() -> void:
+	if CareerSession.outfitting:
+		CareerSession.outfitting=false
+		MenuPresentation.load_scene("res://scenes/story.tscn")
+		return
+	if creator_controls and step>0:
+		step-=1
+		render_step()
+		return
 	if CareerSession.creating:
 		CareerSession.creating = false
 		MenuPresentation.load_scene("res://scenes/story.tscn")

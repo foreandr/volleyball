@@ -15,7 +15,7 @@ var stream_length_at := 0
 var next_frame := 0
 var last_jpeg := PackedByteArray()
 var cleanup_at := 0
-var clock_label := Label.new()
+var clock_label: Label
 
 func _ready() -> void:
 	if DisplayServer.get_name()=="headless" or OS.get_cmdline_args().has("-s") or OS.get_cmdline_args().has("--script"):
@@ -25,7 +25,10 @@ func _ready() -> void:
 	var overlay := CanvasLayer.new()
 	overlay.layer=100
 	add_child(overlay)
+	clock_label=Label.new()
 	overlay.add_child(clock_label)
+	get_tree().scene_changed.connect(update_clock_visibility)
+	update_clock_visibility.call_deferred()
 	clock_label.position=Vector2(12,10)
 	clock_label.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	clock_label.add_theme_font_size_override("font_size",19)
@@ -39,6 +42,10 @@ func _ready() -> void:
 	clock_label.add_theme_stylebox_override("normal",plate)
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(FOLDER))
 	prune()
+
+func update_clock_visibility() -> void:
+	var scene := get_tree().current_scene
+	clock_label.visible=scene!=null and scene.scene_file_path not in ["res://scenes/main.tscn","res://scenes/story.tscn","res://scenes/create.tscn"]
 
 func prune() -> void:
 	var now := int(Time.get_unix_time_from_system())

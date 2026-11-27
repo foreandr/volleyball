@@ -5,10 +5,12 @@ var column: VBoxContainer
 func _ready() -> void:
 	column = VBoxContainer.new()
 	MenuPresentation.mount_menu(self,column)
-	if CareerSession.enter_origin:
+	if CareerSession.defense_finished:
+		CareerSession.defense_finished=false
+		defense_score()
+	elif CareerSession.enter_origin:
 		CareerSession.enter_origin = false
 		origin()
-	elif CareerSession.stage()=="after_tryout": after_tryout()
 	else: show_home()
 
 func clear_menu(title: String) -> void:
@@ -16,12 +18,14 @@ func clear_menu(title: String) -> void:
 	for child in column.get_children():
 		column.remove_child(child)
 		child.queue_free()
-	MenuPresentation.heading(column,"Career" if title == "CAREER" else "Load career",title)
+	MenuPresentation.heading(column,"Career" if title == "MY CAREER" else "Load career",title)
 
 func add_button(text: String, action: Callable) -> Button:
 	var result := Button.new()
 	result.name = text.replace(" ","")
 	result.text = text
+	result.alignment=HORIZONTAL_ALIGNMENT_LEFT
+	result.add_theme_font_size_override("font_size",20)
 	result.custom_minimum_size.y = 52
 	result.pressed.connect(action)
 	column.add_child(result)
@@ -30,53 +34,94 @@ func add_button(text: String, action: Callable) -> Button:
 func show_home() -> void:
 	clear_menu("MY CAREER")
 	if not CareerSession.athlete_id.is_empty():
-		add_button("Continue  /  "+str(CareerSession.profile().name),resume).grab_focus()
+		var saved := CareerSession.profile()
+		var plate := PanelContainer.new()
+		column.add_child(plate)
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation",14)
+		plate.add_child(row)
+		var portrait := TextureRect.new()
+		portrait.texture=SchoolHeadshots.request(saved)
+		portrait.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
+		portrait.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		portrait.custom_minimum_size=Vector2(84,84)
+		row.add_child(portrait)
+		var facts := VBoxContainer.new()
+		facts.alignment=BoxContainer.ALIGNMENT_CENTER
+		row.add_child(facts)
+		MenuPresentation.section_label(facts,str(saved.hometown)+"  /  Age "+str(saved.age))
+		var nameplate := Label.new()
+		nameplate.text=str(saved.name)
+		nameplate.add_theme_font_size_override("font_size",25)
+		facts.add_child(nameplate)
+		add_button("Continue career",resume).grab_focus()
+		add_button("Defense evaluation",defense_tryout)
 		add_button("Player development",development)
+		add_button("Wardrobe",func():
+			CareerSession.outfitting=true
+			MenuPresentation.load_scene("res://scenes/create.tscn"))
 	var create := add_button("Create athlete",func():
 		CareerSession.creating = true
 		MenuPresentation.load_scene("res://scenes/create.tscn"))
 	if CareerSession.athlete_id.is_empty(): create.grab_focus()
-	if CareerSession.data.has_section("athletes"): add_button("Select athlete",choose_athlete)
+	if CareerSession.data.has_section("athletes"): add_button("Load athlete",choose_athlete)
 	if not StorySession.saved_stories().is_empty(): add_button("Legacy careers",show_load)
 	add_button("Back",open_menu)
 
-func development() -> void:
+func development(selected := "") -> void:
 	clear_menu("PLAYER DEVELOPMENT")
 	var id := CareerSession.athlete_id
 	var points := int(CareerSession.data.get_value("points",id,0))
 	var info := Label.new()
 	var badges: Array = CareerSession.data.get_value("badges",id,[])
-	info.text = "%d upgrade points   ·   %s" % [points,"No badges yet" if badges.is_empty() else ", ".join(badges)]
-	info.text+="    /    Team Chemistry %d"%CareerSession.team_chemistry()
+	MenuPresentation.wallet(column,points)
+	info.text="%d fans    /    Team chemistry %d" % [CareerSession.fans(),CareerSession.team_chemistry()]
+	if not badges.is_empty(): info.text+="    /    "+", ".join(badges)
 	column.add_child(info)
+	var active: Button
 	for rating in CareerSession.Profile.RATINGS:
-		var athlete := CareerSession.profile()
+		var athlete := CareerSession.Profile.clean(CareerSession.profile())
 		var value := int(athlete[rating])
 		var upgrade := add_button("%s   %d" % [rating,value],func():
+			if value>=100 or points<=0: return
 			athlete[rating] = value+1
 			CareerSession.data.set_value("athletes",id,athlete)
 			CareerSession.data.set_value("points",id,points-1)
 			CareerSession.persist()
-			development())
-		upgrade.disabled = points<=0 or value>=100
-	var back := add_button("Back",show_home)
-	back.grab_focus()
-	for child in column.get_children():
-		if child is Button and not child.disabled:
-			child.grab_focus()
-			break
+			development(rating))
+		MenuPresentation.rating_bar(column,null,value)
+		if rating==selected or active==null: active=upgrade
+		MenuPresentation.stat_help(upgrade,upgrade,rating,CareerSession.Profile.RATING_HELP[rating])
+	add_button("Back",show_home)
+	if active: active.grab_focus()
 
 func choose_athlete() -> void:
 	clear_menu("ATHLETES")
-	for id in CareerSession.data.get_section_keys("athletes"):
-		add_button(CareerSession.data.get_value("athletes",id).name,func():
+	for id in CareerSession.data.get_section_keys("athletes") if CareerSession.data.has_section("athletes") else []:
+		var athlete: Dictionary=CareerSession.data.get_value("athletes",id)
+		var entry := add_button("%s    /    %s" % [athlete.name,athlete.hometown],func():
 			CareerSession.select(id)
 			resume())
+		entry.tooltip_text="Age %d   /   %s" % [athlete.age,CareerSession.data.get_value("indoor_setter_6v6_"+id,"stage","origin")]
+		add_button("Delete "+str(athlete.name),confirm_delete.bind(id,athlete.name))
 	add_button("Back",show_home)
 	for child in column.get_children():
 		if child is Button:
 			child.grab_focus()
 			break
+
+func confirm_delete(id: String,athlete_name: String) -> void:
+	var dialog := ConfirmationDialog.new()
+	dialog.title="Delete athlete"
+	dialog.dialog_text="Delete %s and their career progress?" % athlete_name
+	dialog.ok_button_text="Delete"
+	add_child(dialog)
+	dialog.confirmed.connect(func():
+		if CareerSession.delete_athlete(id): show_home()
+		dialog.queue_free())
+	dialog.canceled.connect(dialog.queue_free)
+	dialog.popup_centered()
+	dialog.get_cancel_button().grab_focus()
 
 func resume() -> void:
 	match CareerSession.stage():
@@ -90,6 +135,9 @@ func after_tryout() -> void:
 		MenuPresentation.load_scene(CareerSession.CHAPTER)
 		return
 	clear_menu("AFTER TRYOUTS")
+	if not CareerSession.data.get_value("signed",CareerSession.athlete_id,false):
+		add_button("Accept club exhibition offer    %d VP" % CareerSession.offer_value(),func():
+			if CareerSession.accept_offer(): after_tryout())
 	var place := clampi(CareerSession.data.get_value(CareerSession.key(),"tryout_place",2),0,2)
 	var coach := Label.new()
 	coach.text=["Coach Ellis: You earned the starting spot. See you at practice.","Coach Ellis: You're our backup setter. Stay ready.","Coach Ellis: You didn't make this roster. You can try out again."][place]
@@ -100,8 +148,29 @@ func after_tryout() -> void:
 		if CareerSession.checkpoint("tutorial",0): MenuPresentation.load_scene(CareerSession.CHAPTER))
 	add_button("My Career",show_home)
 
+func defense_tryout() -> void:
+	MenuPresentation.load_scene("res://scenes/defense_tryout.tscn")
+
+func defense_score() -> void:
+	clear_menu("DEFENSE EVALUATION")
+	var score := int(CareerSession.data.get_value(CareerSession.key(),"defense_last",0))
+	var result := Label.new()
+	result.text="%d / 5 attacks dug" % score
+	result.add_theme_font_size_override("font_size",28)
+	column.add_child(result)
+	var coach := Label.new()
+	coach.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+	coach.text="Coach Ellis: That's a playable first touch. Take that into the next scrimmage." if score>=3 else "Coach Ellis: Get behind the swing and hold your platform through contact."
+	column.add_child(coach)
+	add_button("My Career",show_home).grab_focus()
+	add_button("Run it again",defense_tryout)
+
 func origin() -> void:
-	clear_menu("CHOOSE YOUR ORIGIN")
+	clear_menu("TRYOUT WEEK")
+	var opening := Label.new()
+	opening.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+	opening.text="Monday, 6:40 a.m. Your name is on the Falcons tryout sheet. The starting setter graduated in June. Coach Ellis rolls a cart to the net and points to the basket at the pin. “Show me a ball your hitter can use.”"
+	column.add_child(opening)
 	add_button("Indoor",func():
 		if CareerSession.checkpoint("position",0): position_menu()).grab_focus()
 	add_button("Beach",func(): pass).disabled = true

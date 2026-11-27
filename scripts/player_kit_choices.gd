@@ -34,7 +34,7 @@ static func apply(actor: Node3D) -> void:
 		var shirt := pick(actor,"Underlayer")
 		actor.get_meta("underlayer_material").set_shader_parameter("sleeve_end",[0.,.42,.66,0.,0.][v%5] if shirt==0 else [0.,.42,.66][shirt-1])
 	var scalp: Node3D=actor.get_meta("kit_scalp")
-	var style: String=actor.attributes.Headwear+"/"+actor.attributes.Sunglasses
+	var style: String=actor.attributes.Headwear+"/"+actor.attributes.Sunglasses+"/"+actor.attributes.Eyebrows
 	if scalp.get_meta("accessory_style","")==style: return
 	scalp.set_meta("accessory_style",style)
 	var pieces := scalp.get_node_or_null("Accessories")
@@ -50,6 +50,9 @@ static func apply(actor: Node3D) -> void:
 		band.top_radius=.096
 		band.bottom_radius=.094
 		part(pieces,band,Vector3(0,.13,.003),Vector3(1,1,1.06),Color("f3f0e8"))
+	if actor.attributes.Eyebrows!="Natural":
+		for sign_ in [-1.,1.]:
+			part(pieces,SphereMesh.new(),Vector3(sign_*.038,.118,.086),Vector3(.045,.010 if actor.attributes.Eyebrows=="Full" else .005,.010),Color("45352e"))
 	if actor.attributes.Headwear=="Cap":
 		part(pieces,SphereMesh.new(),Vector3(0,.165,-.003),Vector3(.20,.13,.215),Color("283c49"))
 		part(pieces,SphereMesh.new(),Vector3(0,.152,.096),Vector3(.16,.014,.14),Color("283c49"))

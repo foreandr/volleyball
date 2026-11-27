@@ -16,7 +16,7 @@ var history: Array[Dictionary] = []
 var live := {}
 var camera := Camera3D.new()
 var slider := HSlider.new()
-var panel := VBoxContainer.new()
+var panel := PanelContainer.new()
 var elapsed := 0.0
 var sample_interval := SAMPLE_INTERVAL
 var sample_limit := MAX_SAMPLES
@@ -47,18 +47,22 @@ func _ready() -> void:
 	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	panel.offset_bottom = -18
+	panel.add_theme_stylebox_override("panel",MenuPresentation.box(Color("0c1b28ed"),Color("70dfc2"),3))
+	var layout := VBoxContainer.new()
+	layout.add_theme_constant_override("separation",3)
+	panel.add_child(layout)
 	for entries in [[["LS","Move"],["RS","Look"],["LB","Lower"],["RB","Raise"],["X","Zoom in"],["B","Zoom out"]],[["LT","Rewind"],["RT","Advance"],["D-pad Left/Right","Frame"],["A","Play / pause"],["View","Exit"]]]:
 		var row := HBoxContainer.new()
 		row.alignment=BoxContainer.ALIGNMENT_CENTER
-		panel.add_child(row)
+		layout.add_child(row)
 		Xbox.prompts(row,entries)
 	if Xbox.keyboard_prompts():
 		var legend := Label.new()
 		legend.text="Space play/pause    Drag to rewind    WASD move    Q/E down/up    Middle-drag look    Scroll zoom    Esc return"
-		panel.add_child(legend)
+		layout.add_child(legend)
 	var tools := HBoxContainer.new()
 	tools.alignment=BoxContainer.ALIGNMENT_CENTER
-	panel.add_child(tools)
+	layout.add_child(tools)
 	for direction: int in [-1,1]:
 		var arrow := Button.new()
 		arrow.text="<" if direction<0 else ">"
@@ -81,7 +85,7 @@ func _ready() -> void:
 		toggle_boxes.text="Block hitboxes"
 		toggle_boxes.toggled.connect(func(on): show_boxes=on; display_frame(slider.value))
 		tools.add_child(toggle_boxes)
-	panel.add_child(slider)
+	layout.add_child(slider)
 	slider.step = 1
 	slider.value_changed.connect(func(value): if active: display_frame(value))
 	panel.hide()
