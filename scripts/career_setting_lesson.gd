@@ -3,6 +3,7 @@ extends "res://scripts/indoor_practice.gd"
 const LANES := ["Left side (4)","Middle","Right side (2)"]
 const METHODS := ["Standing hand set","Jump hand set"]
 var credit:=0
+var completed_slots:=0
 var performed:=-1
 var watching:=true
 var join_hold:=0.
@@ -17,6 +18,15 @@ func start_drill() -> void:
 		if not CareerSession.data.get_value(CareerSession.key(),"twelve_set_lesson",false):
 			credit=4*(credit/6)+mini(credit%6,4)
 	credit=clampi(credit,0,12)
+	if credit>0:
+		if CareerSession.data.has_section_key(CareerSession.key(),"setting_slots"):
+			completed_slots=CareerSession.data.get_value(CareerSession.key(),"setting_slots",0)
+		else:
+			for old_slot in credit:
+				var lane:=old_slot/4
+				var technique:=(old_slot%4)/2
+				completed_slots|=1<<(technique*6+lane*2+old_slot%2)
+	CareerSession.data.set_value(CareerSession.key(),"setting_slots",completed_slots)
 	CareerSession.data.set_value(CareerSession.key(),"twelve_set_lesson",true)
 	if credit==12:
 		enter_hitting()
@@ -34,11 +44,16 @@ func start_drill() -> void:
 	human.position=BASE+Vector3(1.7,0,-1.4)
 	say(coach,"Good passing. Now you set. Watch the release, then take a turn.",4.)
 
+func next_slot() -> int:
+	for slot in 12:
+		if (completed_slots & (1<<slot))==0: return slot
+	return 12
+
 func called() -> int:
-	return clampi(credit/4,0,2)
+	return (next_slot()%6)/2
 
 func method() -> int:
-	return (credit%4)/2
+	return mini(1,next_slot()/6)
 
 func choose_camp_toss() -> Vector3:
 	return Vector3(setter.position.x,BASE.y,setter.position.z) if not watching else BASE
@@ -55,7 +70,7 @@ func middle_available() -> bool:
 	return true
 
 func camp_title() -> String:
-	return "%s   /   %s   /   %d / 2 correct"%[LANES[called()],METHODS[method()],credit%2]
+	return "%s   /   %s   /   %d / 2 correct"%[LANES[called()],METHODS[method()],next_slot()%2]
 
 func jump_rep() -> bool:
 	if watching: return method()==1
@@ -71,15 +86,20 @@ func enter_hitting() -> void:
 		MenuPresentation.load_scene("res://scenes/career_hitting_lesson.tscn")
 
 func finish_set() -> void:
+	if not watching and success and (performed!=method() or target!=called()):
+		success=false
+		feedback="Try again: %s to %s"%[METHODS[method()],LANES[called()]]
 	super.finish_set()
-	if watching or not success: return
-	if performed!=method():
-		message.text="Target hit. Use the called technique."
-		return
+	if watching or not success or closing: return
+	completed_slots|=1<<next_slot()
 	credit+=1
+	CareerSession.data.set_value(CareerSession.key(),"setting_slots",completed_slots)
 	CareerSession.checkpoint("setting_lesson",credit)
 	title.text=camp_title() if credit<12 else "Setting complete   /   12 of 12"
 	if credit==12: enter_hitting()
+	else:
+		update_prompts(phase)
+		for i in targets.size(): targets[i].beacon.visible=i==called()
 
 func reset_feed() -> void:
 	performed=-1

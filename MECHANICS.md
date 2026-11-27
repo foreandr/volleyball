@@ -255,6 +255,6 @@ CPU reception targets the setter with a 6.5 m apex. At skill ratings 0 to 100 th
 During moving-reception follow-through the focused passer briefly tracks the departing ball, then eases back toward the coach before the next feed.
 Moving reception reads the human left stick independently of the active receiver and cart state. Walk into zone five and focus to request a feed. Start opens Resume, Restart and Save and leave during opening drills.
 
-Career setting follows moving reception. Hold X, Y or B for left, middle or right and release at hand contact. Add LB for a jump set. Hold LT to square up. Each target requires two standing and two jump sets. Good timed releases sweep for close balls passing the hand pocket. Hitting requires landing the spike in zones 1, 6 and 5 from all three positions.
+Career setting follows moving reception. Hold X, Y or B for left, middle or right and release at hand contact. Add LB for a jump set. Hold LT to square up. Complete two standing sets each to left, middle and right, then two jump sets each to left, middle and right. Good timed releases sweep for close balls passing the hand pocket. Hitting requires landing the spike in zones 1, 6 and 5 from all three positions.
 
 Human reception, dig, attack, set and serve release feedback is shared across career drills, training and matches. Fade the result in and out at the top center with the signed millisecond offset and timing grade. Use the action-specific green and playable windows. Identify estimates and never invent a release time when no button was released.
