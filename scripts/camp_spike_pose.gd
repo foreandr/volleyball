@@ -43,19 +43,21 @@ func apply(hitter: Node3D,attack_jump: Jump,phase: String,swing_time: float,cont
 	var airborne := smoothstep(0.,.12,attack_jump.elapsed-attack_jump.load_duration()) if attack_jump.active else 0.
 	var air_age := attack_jump.elapsed-attack_jump.load_duration()
 	var apex_offset := air_age-attack_jump.flight_duration(height,true)*.48
-	var load_weight := airborne*(1.-smoothstep(-.14,.14,apex_offset))
+	var drive := 0.0 if tip_shot or roll_shot else smoothstep(12.,32.,speed)
+	var turn_phase := apex_offset*lerpf(1.,1.65,drive)+.035*drive
+	var load_weight := airborne*(1.-smoothstep(-.14,.14,turn_phase))
 	var toward_feed := (source-hitter.global_position).slide(Vector3.UP).normalized()
 	var feed_local := hitter.global_basis.inverse()*toward_feed
 	# A right-handed hitter draws the striking shoulder back on either pin.
-	var opening := -deg_to_rad(lerpf(78.,34.,smoothstep(-.8,.8,feed_local.x)))*load_weight
+	var opening := -deg_to_rad(lerpf(78.,34.,smoothstep(-.8,.8,feed_local.x)))*load_weight*lerpf(1.,1.12,drive)
 	var hip_turn := opening*.28
 	var twist := opening-hip_turn
 	var shot_origin := strike_point if phase=="spike" else endpoint
 	var shot_local := hitter.global_basis.inverse()*shot_origin.direction_to(landing)
 	var heading := clampf(atan2(shot_local.x,shot_local.z),-1.35,1.35)
 	var hip_share := lerpf(.46,.72,smoothstep(.15,.95,absf(heading)))
-	hip_turn+=heading*hip_share*smoothstep(-.20,.055,apex_offset)
-	twist+=heading*(1.-hip_share)*smoothstep(-.15,.085,apex_offset)
+	hip_turn+=heading*hip_share*smoothstep(-.20,.055,turn_phase)
+	twist+=heading*(1.-hip_share)*smoothstep(-.15,.085,turn_phase)
 	if phase=="spike":
 		var carry := smoothstep(PALM_CONTACT,.27,swing_time-contact_swing_time)
 		if tip_shot: carry*=.18
@@ -66,7 +68,7 @@ func apply(hitter: Node3D,attack_jump: Jump,phase: String,swing_time: float,cont
 	var draw_load := smoothstep(.055,attack_jump.flight_duration(height,true)*.48-.11,air_age)
 	draw_load *= 1.-smoothstep(-.11,.045,apex_offset)
 	var arch := (deg_to_rad(9.)*load_weight+deg_to_rad(11.)*draw_load)*spike_pike_scale
-	twist-=deg_to_rad(18.)*draw_load
+	twist-=deg_to_rad(lerpf(18.,25.,drive))*draw_load
 	author.rotate_world(pose,"spine_01",Vector3.RIGHT,-arch*.45)
 	author.rotate_world(pose,"spine_02",Vector3.RIGHT,-arch*.55)
 	author.rotate_world(pose,"spine_01",Vector3.UP,twist*.45)
@@ -220,14 +222,14 @@ func apply(hitter: Node3D,attack_jump: Jump,phase: String,swing_time: float,cont
 			# Near full extension the elbow solver can choose opposite shoulder twists on adjacent frames.
 			if phase=="spike" and since_hit>PALM_CONTACT and last_shoulder_time>=0.:
 				var gap := last_shoulder.angle_to(rotation)
-				var budget := deg_to_rad(660.)*clampf(speed_factor,1.,2.55)*maxf(0.,swing_time-last_shoulder_time)
+				var budget := deg_to_rad(660.)*clampf(speed_factor,1.,3.50)*maxf(0.,swing_time-last_shoulder_time)
 				if gap>budget: rotation=last_shoulder.slerp(rotation,budget/gap)
 			last_shoulder=rotation
 			last_shoulder_time=swing_time
 		if joint=="lowerarm_r":
 			if phase=="spike" and since_hit>PALM_CONTACT:
 				var gap := last_elbow.angle_to(rotation)
-				var budget := deg_to_rad(840.)*clampf(speed_factor,1.,2.55)*arm_dt
+				var budget := deg_to_rad(840.)*clampf(speed_factor,1.,3.50)*arm_dt
 				if gap>budget: rotation=last_elbow.slerp(rotation,budget/gap)
 			last_elbow=rotation
 		rig.set_bone_pose_rotation(id,rotation)
