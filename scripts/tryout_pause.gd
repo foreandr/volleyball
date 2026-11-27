@@ -12,6 +12,7 @@ var options_button: Button
 var practice := false
 var section := "Camera"
 var panel_was_visible := false
+var tab_triggers := {}
 
 func configure(host: Node, layer: Node = null) -> void:
 	game = host
@@ -52,6 +53,10 @@ func configure(host: Node, layer: Node = null) -> void:
 				play.grab_focus())
 		if game.has_method("frame_editor_blocker") or not game.has_method("frame_editor_attacker"):
 			bar(home,"Edit blocker frames" if game.has_method("frame_editor_blocker") else "Edit set frames",open_frame_editor)
+	if not practice and game.has_method("toggle_match_replay"):
+		bar(home,"Replay",func():
+			hide()
+			game.toggle_match_replay())
 	if practice and game.has_method("toggle_practice_replay"):
 		bar(home,"Replay",func():
 			hide()
@@ -253,6 +258,20 @@ func quit_gameplay() -> void:
 	MenuPresentation.load_scene("res://scenes/main.tscn")
 
 func _input(event: InputEvent) -> void:
+	if event is InputEventJoypadMotion and event.axis in [Xbox.trigger(true),Xbox.trigger(false)]:
+		var trigger_key:=Vector2i(event.device,event.axis)
+		if event.axis_value<.3: tab_triggers.erase(trigger_key)
+		elif visible and options.visible and event.axis_value>.65 and not tab_triggers.has(trigger_key):
+			tab_triggers[trigger_key]=true
+			var tabs:=categories.get_children()
+			var index:=0
+			for i in tabs.size():
+				if tabs[i].text==section: index=i
+			var next:Button=tabs[posmod(index+(1 if event.axis==Xbox.trigger(false) else -1),tabs.size())]
+			show_section(next.text)
+			next.grab_focus()
+			get_viewport().set_input_as_handled()
+			return
 	if event is InputEventKey and event.echo: return
 	var menu: bool = event is InputEventJoypadButton and event.button_index == Xbox.physical(JOY_BUTTON_START) and event.pressed
 	var escape: bool = event is InputEventKey and event.keycode == KEY_ESCAPE and event.pressed

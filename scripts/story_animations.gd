@@ -246,8 +246,8 @@ func show_categories() -> void:
 func start_passing_drill() -> void:
 	start_demo_match(2,false,true,true,true)
 
-func start_demo_match(team_size := 2, learn_from_demo := true, cpu_only := true, mirror_blue_right := true, passing := false) -> void:
-	match_config = [team_size,learn_from_demo,cpu_only,mirror_blue_right,passing]
+func start_demo_match(team_size := 2, learn_from_demo := true, cpu_only := true, mirror_blue_right := true, passing := false, away_size := 0) -> void:
+	match_config = [team_size,learn_from_demo,cpu_only,mirror_blue_right,passing,away_size]
 	MenuPresentation.set_music(false)
 	stop_blocking_practice()
 	stop_serving_session()
@@ -259,7 +259,7 @@ func start_demo_match(team_size := 2, learn_from_demo := true, cpu_only := true,
 	right_panel.hide()
 	angle_control.hide()
 	clear_content()
-	set_title(("PLAY %dv%d" % [team_size,team_size]) if not cpu_only else ("PASS TO TARGET" if passing else "SIMULATE"))
+	set_title(("PLAY %dv%d" % [team_size,away_size if away_size > 0 else team_size]) if not cpu_only else ("PASS TO TARGET" if passing else "SIMULATE"))
 	selected_category = "Demo Match"
 	var board := label("",26)
 	content.add_child(board)
@@ -273,14 +273,14 @@ func start_demo_match(team_size := 2, learn_from_demo := true, cpu_only := true,
 	if not cpu_only:
 		var prompts := HFlowContainer.new()
 		content.add_child(prompts)
-		PromptControls.prompts(prompts,[["Move","Move"],[JOY_BUTTON_RIGHT_SHOULDER,"Sprint"],["Aim","Aim"],[JOY_BUTTON_X,"Forearm"],[JOY_BUTTON_Y,"Hands"],[JOY_BUTTON_A,"Serve / jump"],[JOY_BUTTON_B,"Back"]])
+		PromptControls.prompts(prompts,[["Move","Move"],["RT","Sprint"],["Aim","Aim"],[JOY_BUTTON_X,"Forearm"],[JOY_BUTTON_Y,"Hands"],[JOY_BUTTON_A,"Serve / jump"],[JOY_BUTTON_B,"Back"]])
 	if match_from_home and cpu_only:
 		demo_match.cpu_serve_override = demo_match.TOPSPIN_SERVE
 	if match_from_home or learn_from_demo:
 		demo_match.win_score = 21
 		demo_match.auto_rematch = not match_from_home
 	preview_player.get_parent().add_child(demo_match)
-	demo_match.configure(preview_player,board,status,build_label,team_size,learn_from_demo,mirror_blue_right)
+	demo_match.configure(preview_player,board,status,build_label,team_size,learn_from_demo,mirror_blue_right,away_size)
 	demo_match.review_flagged.connect(show_marker_popup)
 	demo_match.set_ball_sound(true)
 	if passing: passing_drill = preload("res://scripts/passing_drill.gd").new(demo_match)
@@ -417,7 +417,7 @@ func open_lab_replay() -> void:
 	if not frames is Array or frames.size() < 2: return
 	match_from_lab_replay = true
 	var mirrored := bool(frames[0].actors[1].get("mirrored",false))
-	start_demo_match(int(record.get("team_size",2)),false,true,mirrored)
+	start_demo_match(int(record.get("team_size",2)),false,true,mirrored,false,int(record.get("away_size",0)))
 	demo_match.replay.previous.assign(frames)
 	toggle_match_replay()
 	var evidence: Dictionary = record.get("evidence",{})

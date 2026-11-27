@@ -1,7 +1,7 @@
 extends Node
 
 const BACKDROP = preload("res://assets/menu/court_identity.gdshader")
-const PARENTS := {"Play":"Home","Offline":"Play","Match setup":"Offline","Settings":"Home","Career":"Home","Load career":"Career","Create player":"Home","Training camp":"Home","Iteration Lab":"Settings"}
+const PARENTS := {"Play":"Home","Offline":"Play","Match setup":"Play","Settings":"Home","Career":"Home","Load career":"Career","Create player":"Home","Training camp":"Home","Iteration Lab":"Settings"}
 var return_page := "Home"
 var music := AudioStreamPlayer.new()
 var navigation := AudioStreamPlayer.new()
@@ -9,6 +9,7 @@ var current_help: PanelContainer
 var reel_view := SubViewport.new()
 var reel := VideoStreamPlayer.new()
 var reel_surfaces := 0
+var highlights := preload("res://scripts/menu_highlights.gd").new()
 var last_click := -100
 var music_enabled := true
 var active_tweens := {}
@@ -27,10 +28,12 @@ func _ready() -> void:
 	reel_view.render_target_update_mode=SubViewport.UPDATE_DISABLED
 	add_child(reel_view)
 	reel.expand=true
-	reel.loop=true
+	reel.loop=false
 	reel.volume_db=-80.
 	reel.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	reel_view.add_child(reel)
+	add_child(highlights)
+	highlights.configure(reel)
 	reel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	get_tree().root.theme=skin
 	overlay.layer = 20
@@ -43,10 +46,11 @@ func _ready() -> void:
 	music.stream.loop = true
 	add_child(navigation)
 	navigation.stream=preload("res://assets/menu/navigation.wav")
-	navigation.volume_db=-9
+	navigation.max_polyphony = 3
+	set_navigation_level(StorySession.game_options.get_value("audio","menu_clicks",85))
 	get_viewport().gui_focus_changed.connect(menu_click)
 	get_tree().node_added.connect(watch_control)
-	music.volume_db = -14
+	set_music_level(StorySession.game_options.get_value("audio","music_level",65))
 	music_enabled = StorySession.game_options.get_value("audio","menu_music",true)
 	get_tree().scene_changed.connect(scene_entered)
 
@@ -55,7 +59,7 @@ func watch_control(node: Node) -> void:
 		node.theme=skin
 	if node is BaseButton:
 		node.mouse_entered.connect(menu_click.bind(node))
-		node.pressed.connect(menu_click.bind(node))
+		node.button_down.connect(menu_click.bind(node))
 
 func menu_click(control: Control) -> void:
 	if not control or not control.is_visible_in_tree(): return
@@ -63,6 +67,12 @@ func menu_click(control: Control) -> void:
 	if now-last_click<45: return
 	last_click=now
 	navigation.play()
+
+func set_navigation_level(percent: float) -> void:
+	navigation.volume_db = linear_to_db(percent/100.)
+
+func set_music_level(percent: float) -> void:
+	music.volume_db = -10.0 + linear_to_db(percent/100.)
 
 func stat_help(control: Control,heading_control: Control,title: String,description: String) -> void:
 	var card := PanelContainer.new()
@@ -147,7 +157,7 @@ func audio_options(host: Container) -> void:
 		music_enabled=enabled
 		StorySession.game_options.set_value("audio","menu_music",enabled)
 		StorySession.save_options()
-		if not enabled or get_tree().current_scene.scene_file_path=="res://scenes/main.tscn": set_music(true))
+		if not enabled or reel_surfaces>0: set_music(true))
 	host.add_child(soundtrack)
 	var caption := Label.new()
 	caption.text="Output device"
@@ -174,15 +184,13 @@ func attach_highlights(parent: Control) -> void:
 	reel_surfaces+=1
 	if reel_surfaces==1:
 		reel_view.render_target_update_mode=SubViewport.UPDATE_WHEN_VISIBLE
-		if not reel.stream:
-			reel.stream = preload("res://assets/menu/falcons_highlights.ogv")
-		reel.play()
+		highlights.activate(true)
 	film.tree_exiting.connect(release_highlights, CONNECT_ONE_SHOT)
 
 func release_highlights() -> void:
 	reel_surfaces -= 1
 	if reel_surfaces == 0:
-		reel.stop()
+		highlights.activate(false)
 		reel_view.render_target_update_mode = SubViewport.UPDATE_DISABLED
 
 func backdrop(parent: Control, hero: bool) -> void:
@@ -271,8 +279,8 @@ func heading(column: VBoxContainer, route: String, title: String) -> void:
 		parent = PARENTS.get(parent,"")
 	if column.has_meta("dock"):
 		var dock: Control=column.get_meta("dock")
-		var wide := route=="Match setup"
-		dock.set_meta("max_width",1050 if wide else 510)
+		var wide := route in ["Match setup","Settings"]
+		dock.set_meta("max_width",1180 if wide else 510)
 		dock.anchor_right=.96 if wide else .56
 		var scroll: ScrollContainer=column.get_meta("scroll")
 		scroll.set_deferred("scroll_vertical",0)
@@ -546,8 +554,8 @@ func fade_loading(alpha: float, seconds: float) -> void:
 	fade.tween_property(loading_screen,"modulate:a",alpha,seconds).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	await fade.finished
 
-func close_loading() -> void:
-	while not dismiss_fact and Time.get_ticks_msec() - fact_started_ms < 2600:
+func close_loading(read_fact := true) -> void:
+	while read_fact and not dismiss_fact and Time.get_ticks_msec() - fact_started_ms < 2600:
 		await get_tree().process_frame
 	await fade_loading(0.,.38)
 	loading_screen.hide()
@@ -566,7 +574,7 @@ func load_stage(destination: String, build: Callable) -> void:
 func load_scene(path: String) -> void:
 	if is_instance_valid(loading_screen): return
 	var key := path.get_file().get_basename()
-	var names := {"main":"Main menu","story":"My Career","drills":"Training camp","create":"Create player","setter_tryout":"Setter tryout","story_animations":"Court session"}
+	var names := {"offline_match":"Match court","main":"Main menu","story":"My Career","drills":"Training camp","create":"Create player","setter_tryout":"Setter tryout","story_animations":"Court session"}
 	show_loading(names.get(key,key.capitalize()))
 	await fade_loading(1.,.18)
 	await painted()
@@ -592,4 +600,4 @@ func load_scene(path: String) -> void:
 		push_error("Could not open "+path+": "+error_string(error))
 		loading_detail.text = "Could not open this destination"
 		await get_tree().create_timer(1.5).timeout
-	close_loading()
+	close_loading(key != "offline_match")

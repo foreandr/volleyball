@@ -122,6 +122,8 @@ var preview_path := "user://preview_setup.cfg"
 var lab_replay_path := ""
 var open_home_simulation := false
 var offline_size := 2
+var offline_away_size := 2
+var offline_controller := 0 # -1 watches, 0 controls home, 1 controls away.
 var offline_roster: Array[Dictionary] = []
 var kit_colors := [Color("287fda"),Color("d9874e")]
 var pad_bindings := [JOY_BUTTON_A,JOY_BUTTON_X,JOY_BUTTON_Y,JOY_BUTTON_B]
@@ -171,6 +173,7 @@ func _ready() -> void:
 		set_master_volume(game_options.get_value("audio","master_percent",previous))
 	if DisplayServer.get_name() != "headless":
 		Engine.max_fps = 60
+		apply_video_options()
 	match_preferences.load(MATCH_SETTINGS_PATH)
 	var device: String=game_options.get_value("audio","device","Default")
 	if device in AudioServer.get_output_device_list(): AudioServer.output_device=device
@@ -179,6 +182,12 @@ func _ready() -> void:
 	if config.load(preview_path)==OK:
 		for field in PREVIEW_FIELDS:
 			if config.has_section_key("preview",field): set(field,config.get_value("preview",field))
+
+func apply_video_options() -> void:
+	if game_options.has_section_key("video","fullscreen"):
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if game_options.get_value("video","fullscreen") else DisplayServer.WINDOW_MODE_MAXIMIZED)
+	if game_options.has_section_key("video","vsync"):
+		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED if game_options.get_value("video","vsync") else DisplayServer.VSYNC_DISABLED)
 
 func ensure_background_training() -> void:
 	if DisplayServer.get_name() != "headless" and not iteration_run.status().running:
@@ -210,7 +219,7 @@ func save_preview_setup() -> void:
 
 func _input(event: InputEvent) -> void:
 	if not event is InputEventKey or not event.pressed or event.echo: return
-	if event.physical_keycode != KEY_M or event.ctrl_pressed or event.alt_pressed or event.meta_pressed: return
+	if event.physical_keycode != KEY_M or not event.ctrl_pressed or event.shift_pressed or event.alt_pressed or event.meta_pressed: return
 	var page := get_tree().current_scene
 	if page and page.has_method("toggle_match_replay") and is_instance_valid(page.get("demo_match")): return
 	var focus := get_viewport().gui_get_focus_owner()

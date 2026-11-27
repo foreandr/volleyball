@@ -31,7 +31,7 @@ func observe_dig(game: Node3D) -> void:
 	var side: int = game.receiving_team
 	var ball: Vector3 = game.ball.global_position
 	if game.frames[side].to_local(ball).z > game.Net.NET_Z+0.07: return
-	for index in range(side*game.team_size,(side+1)*game.team_size):
+	for index in game.slots_for(side):
 		if index == game.last_player: continue
 		var platform: Node3D = game.platforms[index]
 		var check: Dictionary = platform.contact_check
@@ -155,7 +155,7 @@ func write_replay(game: Node3D, evidence: Dictionary, frames: Array, directory: 
 	var path := directory.path_join("%d-%d.vreplay" % [int(Time.get_unix_time_from_system()*1000000),OS.get_process_id()])
 	var file := FileAccess.open(path+".tmp",FileAccess.WRITE)
 	if file == null: return ""
-	var record := {"schema":1,"team_size":game.team_size,"point":evidence.get("point",game.rallies),"evidence":evidence,"frames":frames,
+	var record := {"schema":1,"team_size":game.team_size,"away_size":game.away_size,"point":evidence.get("point",game.rallies),"evidence":evidence,"frames":frames,
 		"match_id":"%s:%d" % [game.trace.path,game.trace.feed-game.rallies],"score":game.score.duplicate()}
 	var written := file.store_var(record)
 	file.close()

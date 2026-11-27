@@ -223,3 +223,9 @@ Receive CPU Serves resets the human receiver and digger to their neutral zone-si
 Serve reception blends from the current movement pose and position into the assigned pass. Practice and match replay samples record held controller buttons. Practice replay also records the predicted landing point.
 In Receive CPU Serves the controlled receiver can steer while preparing. The pass targets a timed point on the incoming 3D flight. An early playable release carries through to physical contact. A platform hit while A is still held produces a less accurate pass and records Held at contact.
 Receive CPU Serves lets the player switch between reception and zone-six defense with Xbox Y or the role button. Switching starts a new rep. Both roles use the assigned contact zone, stick steering, A preparation, physical contact, graded release, and the same live and replay timing arc. Attack velocity and defensive skill affect dig accuracy.
+
+## Offline exhibitions and menu controls
+
+LT and RT switch sections in Settings and Offline setup. Y randomizes the current selection. The side selector accepts left and right, with the middle position assigning both squads to the CPU. Play begins at the whistle. A serves or jumps, X plays the forearms, Y plays the hands, LT focuses, and RT sprints. View opens the rally replay. Esc or Menu pauses the match. Keyboard prompts and remapped controller glyphs follow the player’s settings.
+
+Sound settings separate navigation and music levels. Ctrl+M toggles global mute. Match and drill ball-sound switches affect their own contacts. Clips accepts Ogg Theora video directly and imports other video formats when FFmpeg is available.

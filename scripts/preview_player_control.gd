@@ -45,6 +45,7 @@ var save_clock := 0.0
 var footwork: RefCounted
 var stamina: RefCounted
 var sprinting := false
+var match_movement := false
 const GroundControls = preload("res://scripts/player_ground_controls.gd")
 var focus_requested := false
 var sprint_requested := false
@@ -56,8 +57,9 @@ var shuffle_heading := Vector3.ZERO
 var setter_travel := Vector3.ZERO
 var setter_step_rate := QUICK_STEP_RATE
 
-func _init(host: Control) -> void:
+func _init(host: Control, match_only := false) -> void:
 	page = host
+	match_movement = match_only
 	stamina=page.preview_player.stamina
 	footwork = preload("res://scripts/directional_footwork.gd").new(page.preview_player)
 	side_steps = preload("res://scripts/right_side_steps.gd").new(page.preview_player)
@@ -76,6 +78,9 @@ func _init(host: Control) -> void:
 	stamina_ring = preload("res://scripts/player_stamina_ring.gd").new()
 	page.preview_player.add_child(stamina_ring)
 	stamina_ring.hide()
+	if match_only:
+		indicator.hide()
+		return
 	var saved: Dictionary = page.get_node("/root/StorySession").preview_camera
 	if not saved.is_empty():
 		page.orbit_yaw = saved.yaw
@@ -209,8 +214,6 @@ func read_pace_input() -> void:
 	var axis := func(which): return Input.get_joy_axis(pads[0],which) if not pads.is_empty() else 0.
 	focus_requested=GroundControls.focus(axis)
 	sprint_requested=GroundControls.sprint(axis)
-	if not pads.is_empty():
-		sprint_requested=sprint_requested or Input.is_joy_button_pressed(pads[0],GroundControls.Xbox.physical(JOY_BUTTON_RIGHT_SHOULDER))
 
 func movement_input() -> Vector2:
 	var direction := Vector2.ZERO
@@ -523,13 +526,15 @@ func move_player(direction: Vector2, delta: float, track_ball := true, setting_t
 	var quick_pace: bool= sprint_requested and direction.length()>0.1 and stamina.can_sprint()
 	var toward_ball := (setting_target-actor.global_position).slide(Vector3.UP).normalized() if setting else Vector3.ZERO
 	var ball_sprint := run_after_pass and setting and travel.normalized().dot(toward_ball) > 0.76 and step_direction.normalized().y > 0.76
-	sprinting = not focus_requested and quick_pace and ((not setting and step_direction.y>0.3) or ball_sprint)
+	sprinting = not focus_requested and quick_pace and (match_movement or (not setting and step_direction.y>0.3) or ball_sprint)
 	var quick_step: bool= quick_pace if not run_after_pass else sprinting
 	var step_rate := QUICK_STEP_RATE if quick_step else 1.0
 	if setting:
 		setter_step_rate = move_toward(setter_step_rate,QUICK_STEP_RATE*step_rate,delta*7.0)
 		step_rate = setter_step_rate
 	var speed := RUN_SPEED if sprinting else SHUFFLE_SPEED*step_rate
+	if match_movement and not focus_requested:
+		speed=GroundControls.speed(false,sprinting)
 	if focus_requested:
 		quick_step=quick_pace
 		speed=GroundControls.speed(true,quick_pace)

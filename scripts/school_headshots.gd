@@ -7,9 +7,9 @@ var textures := {}
 var jobs: Array[Dictionary] = []
 var busy := false
 
-func request(values: Dictionary, variant := 0, color := Color("e97937")) -> Texture2D:
+func request(values: Dictionary, variant := 0, color := Color("e97937"), full_length := false) -> Texture2D:
 	var profile := Profile.clean(values)
-	var key := (JSON.stringify(profile) + str(variant) + color.to_html() + ("-captain" if variant==Kit.SCHOOL_CAPTAIN_VARIANT else "")).sha256_text()
+	var key := (JSON.stringify(profile) + str(variant) + color.to_html() + ("-lineup-v1" if full_length else "") + ("-captain" if variant==Kit.SCHOOL_CAPTAIN_VARIANT else "")).sha256_text()
 	if textures.has(key): return textures[key]
 	var path := DIRECTORY.path_join(key + ".png")
 	var texture := ImageTexture.new()
@@ -20,7 +20,7 @@ func request(values: Dictionary, variant := 0, color := Color("e97937")) -> Text
 			texture.set_image(saved)
 			return texture
 	if DisplayServer.get_name() != "headless":
-		jobs.append({"profile":profile,"variant":variant,"color":color,"path":path,"texture":texture})
+		jobs.append({"full_length":full_length,"profile":profile,"variant":variant,"color":color,"path":path,"texture":texture})
 		if not busy:
 			busy = true
 			render_queue.call_deferred()
@@ -32,7 +32,8 @@ func render_queue() -> void:
 		var job: Dictionary = jobs.pop_front()
 		var studio := SubViewport.new()
 		studio.world_3d = World3D.new()
-		studio.size = Vector2i(256,256)
+		studio.size = Vector2i(160,224) if job.full_length else Vector2i(256,256)
+		studio.transparent_bg = job.full_length
 		add_child(studio)
 		var environment := Environment.new()
 		environment.background_mode = Environment.BG_COLOR
@@ -45,7 +46,11 @@ func render_queue() -> void:
 		actor.team_color = job.color
 		studio.add_child(actor)
 		actor.apply_profile(job.profile)
-		Kit.apply(actor,false,job.variant)
+		Kit.apply(actor,false,job.variant,not job.full_length)
+		if job.full_length:
+			actor.shirt_fabric.set_shader_parameter("fabric",job.color)
+			actor.refresh_kit()
+			actor.get_node("DirectionArrows").hide()
 		actor.play_action("base/Idle",0)
 		actor.animator.advance(0)
 		actor.animator.pause()
@@ -58,6 +63,11 @@ func render_queue() -> void:
 		camera.look_at(center)
 		camera.projection = Camera3D.PROJECTION_ORTHOGONAL
 		camera.size = 0.74 * actor.height_cm / 180.0
+		if job.full_length:
+			center = Vector3(0,actor.height_cm / 200.,0)
+			camera.position = center + Vector3(.27,.04,3.)
+			camera.look_at(center)
+			camera.size = actor.height_cm / 100. + .27
 		var light := DirectionalLight3D.new()
 		studio.add_child(light)
 		light.rotation_degrees = Vector3(-22,18,0)

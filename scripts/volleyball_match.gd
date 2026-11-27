@@ -92,6 +92,7 @@ var match_clock := 0.0
 var last_input_at := -INF
 var last_input_technique := -1
 var serve: Node3D
+var ball_sound_enabled := true
 var touch_audio: AudioStreamPlayer
 var set_audio: AudioStreamPlayer
 var spike_audio: AudioStreamPlayer
@@ -193,7 +194,10 @@ var touched_tape := false
 var stroke := ""
 var receive_prepared := false
 var roster_active := false
-var team_size := 2
+var team_size := 2 # Home count retained for legacy replay files.
+var away_size := 2
+var side_names := ["Blue", "Orange"]
+var exhibition := false
 var win_score := WIN_SCORE
 var auto_rematch := false
 var review := Review.new()
@@ -204,13 +208,14 @@ var support_lanes := [0.0,0.0]
 
 var held_input := preload("res://scripts/held_input_hud.gd").new()
 
-func configure(actor: Node3D, board: Label, status: Label, build := "", players_per_team := 2, learn_from_demo := false, mirror_blue_right := true) -> void:
+func configure(actor: Node3D, board: Label, status: Label, build := "", players_per_team := 2, learn_from_demo := false, mirror_blue_right := true, away_count := 0) -> void:
 	if held_input.get_parent()==null: add_child(held_input)
 	team_size = clampi(players_per_team,2,6)
-	roster_active = not spectator and StorySession.offline_roster.size() == team_size*2
-	key_until.resize(team_size*2)
-	jump_set_started.resize(team_size*2)
-	animated.resize(team_size*2)
+	away_size = clampi(away_count,2,6) if away_count > 0 else team_size
+	roster_active = (exhibition or not spectator) and StorySession.offline_roster.size() == team_size + away_size
+	key_until.resize(team_size + away_size)
+	jump_set_started.resize(team_size + away_size)
+	animated.resize(team_size + away_size)
 	trace.open(build)
 	cpu_policy.demo_recording = learn_from_demo
 	if not learn_from_demo: cpu_policy.load_profile()
@@ -233,21 +238,23 @@ func configure(actor: Node3D, board: Label, status: Label, build := "", players_
 			frame.rotation.y = PI
 		add_child(frame)
 		frames.append(frame)
-		for slot in team_size:
+		for slot in count_for(side):
 			var avatar := actor if side == 0 and slot == 0 else Player.new()
 			if avatar != actor:
 				avatar.name = ("Teammate" if slot == 1 else "Teammate2") if side == 0 else "Opponent%d" % (slot+1)
 				avatar.team_color = Color("287fda") if side == 0 else Color("d9874e")
-				if side == 0 and slot == 1 and mirror_blue_right:
+				if side == 0 and slot == 1 and mirror_blue_right and not roster_active:
 					avatar.handedness = "Left"
 					avatar.mirror_animation = true
 				frame.add_child(avatar)
+			var setup_side := 1-side if exhibition and StorySession.offline_controller == 1 else side
 			if roster_active:
-				avatar.apply_profile(StorySession.offline_roster[side*team_size+slot])
-				avatar.team_color = StorySession.kit_colors[side]
+				var roster_index := (0 if setup_side == 0 else StorySession.offline_size)+slot if exhibition else first_on(side)+slot
+				avatar.apply_profile(StorySession.offline_roster[roster_index])
+				avatar.team_color = StorySession.kit_colors[setup_side]
 				if avatar.kit_material: avatar.kit_material.albedo_color = avatar.team_color
 			if not avatar.shirt_fabric:
-				preload("res://scripts/practice_kit.gd").apply(avatar,false,side*team_size+slot,false)
+				preload("res://scripts/practice_kit.gd").apply(avatar,false,setup_side*6+slot if exhibition else first_on(side)+slot,false)
 			avatar.shirt_fabric.set_shader_parameter("fabric",avatar.team_color)
 			if not avatar.skeleton.find_child("PracticeJointLimits",false,false):
 				var turn_steps := preload("res://scripts/ground_turn_steps.gd").new()
@@ -278,7 +285,7 @@ func configure(actor: Node3D, board: Label, status: Label, build := "", players_
 		var hidden_status := Label.new()
 		hidden_status.hide()
 		add_child(hidden_status)
-		driver.configure_for_match(players[side*team_size],hidden_status)
+		driver.configure_for_match(players[first_on(side)],hidden_status)
 		driver.struck.connect(on_spike)
 		driver.lift_lean_back_degrees = attack_lift_lean
 		attackers.append(driver)
@@ -353,12 +360,25 @@ func stop() -> void:
 	queue_free()
 
 func team(index: int) -> int:
-	return floori(float(index)/team_size)
+	return 0 if index < team_size else 1
+
+func count_for(side: int) -> int:
+	return team_size if side == 0 else away_size
+
+func first_on(side: int) -> int:
+	return 0 if side == 0 else team_size
+
+func slots_for(side: int) -> Array:
+	return range(first_on(side),first_on(side)+count_for(side))
+
+func partner_of(index: int) -> int:
+	var first := first_on(team(index))
+	return first + (1 if index == first else 0)
 
 func nearest_on_team(side: int, target: Vector3, exclude := -1, also_exclude := -1) -> int:
 	var best := -1
 	var best_cost := INF
-	for index in range(side*team_size,(side+1)*team_size):
+	for index in slots_for(side):
 		if index == exclude or index == also_exclude: continue
 		var cost := players[index].global_position.distance_squared_to(target)
 		if blocks.has(index) or recoveries.has(index): cost += 2.0
@@ -368,13 +388,13 @@ func nearest_on_team(side: int, target: Vector3, exclude := -1, also_exclude := 
 	return best
 
 func setter_for_pass(passer: int) -> int:
-	if team_size == 2: return passer^1
+	if count_for(team(passer)) == 2: return partner_of(passer)
 	if rally_setter >= 0 and team(rally_setter) == team(passer) and rally_setter != passer:
 		return rally_setter
 	return nearest_on_team(team(passer),path_point(arrival(1.92)),passer)
 
 func hitter_for_set(setter: int) -> int:
-	if team_size == 2: return setter^1
+	if count_for(team(setter)) == 2: return partner_of(setter)
 	if rally_hitter >= 0 and team(rally_hitter) == team(setter) and rally_hitter != setter:
 		return rally_hitter
 	var side := team(setter)
@@ -395,14 +415,15 @@ func set_spectator(value: bool) -> void:
 	reset_match()
 
 func show_key(index: int, caption: String) -> void:
+	if exhibition: return
 	key_labels[index].text = caption
 	key_until[index] = match_clock+0.64
 
 func server_index() -> int:
-	return service_team*team_size+server_slot[service_team]
+	return first_on(service_team)+server_slot[service_team]
 
 func starting_lane(index: int) -> float:
-	var lane: float = [-1.0,1.0,0.0,-1.0,1.0,0.0][index%team_size]
+	var lane: float = [-1.0,1.0,0.0,-1.0,1.0,0.0][(index-first_on(team(index)))]
 	return -lane if team(index) == 0 else lane
 
 func reset_match() -> void:
@@ -457,8 +478,8 @@ func begin_point() -> void:
 	last_set_apex = 0.0
 	for index in players.size():
 		var actor := players[index]
-		var slot := index%team_size
-		actor.position = Vector3(2.1*starting_lane(index),0.04,0.70 if slot >= 3 or (team_size == 3 and slot == 2) else -2.6)
+		var slot := (index-first_on(team(index)))
+		actor.position = Vector3(2.1*starting_lane(index),0.04,0.70 if slot >= 3 or (count_for(team(index)) == 3 and slot == 2) else -2.6)
 		if team(index)!=service_team and not is_human(index):
 			actor.position=serve_coverage[team(index)].position_for(actor.position)
 		actor.rotation.y = 0.0
@@ -491,7 +512,7 @@ func begin_point() -> void:
 		style = cpu_serve_override if cpu_serve_override >= 0 else cpu_policy.choose_serve(team(server))
 	prepare_serve(style)
 	update_score()
-	trace.begin_feed({"mode":"demo_match","score":score,"server":server_index(),"spectator":spectator,"team_size":team_size})
+	trace.begin_feed({"mode":"offline_match" if exhibition else "demo_match","score":score,"server":server_index(),"spectator":spectator,"team_size":team_size,"away_size":away_size})
 
 func prepare_serve(style: int) -> void:
 	serve_run_rotations.clear()
@@ -504,6 +525,7 @@ func prepare_serve(style: int) -> void:
 	frames[side].add_child(serve)
 	var x := 1.6*starting_lane(index)
 	serve.configure(players[index],Vector3(x,0.04,SERVICE_START[style]))
+	serve.ball.mesh = ball.mesh
 	if style == TOPSPIN_SERVE: serve.set_serve_speed(1.12)
 	if serve.has_method("set_jump_height"): serve.set_jump_height(serve_vertical*0.0254)
 	var aim := Vector3(0.0,Flight.FLOOR,10.7)
@@ -517,7 +539,7 @@ func prepare_serve(style: int) -> void:
 	serve.path_preview.visible = is_human(index)
 	serve.path_preview.visible = is_human(index)
 	serve_pending = false
-	info.text = ("Blue serving" if side == 0 else "Orange serving") if spectator else ["Your serve Ãƒâ€šÃ‚Â· Space","Teammate serving","Opponents serving"][0 if index == 0 else (1 if side == 0 else 2)]
+	info.text = "Your serve" if is_human(index) else str(side_names[side])+" serving"
 
 func set_attack_vertical(inches: float) -> void:
 	attack_vertical = inches
@@ -610,14 +632,14 @@ func start_serve() -> void:
 	if not is_human(server_index()):
 		cpu_policy.used(serving_side,"serve type")
 		cpu_policy.used(serving_side,"serve lane")
-	show_key(server_index(),"Space")
+	if not exhibition: show_key(server_index(),"Space")
 	serve.serve()
 
 func update_score() -> void:
-	score_label.text = ("BLUE  %d  ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“  %d  ORANGE" if spectator else "YOU  %d  ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“  %d  CPU") % [score[0],score[1]]
+	score_label.text = "%s   %d   -   %d   %s" % [str(side_names[0]).to_upper(),score[0],score[1],str(side_names[1]).to_upper()]
 	if not players.is_empty():
 		displayed_stamina=roundi(players[0].stamina.value)
-		score_label.text+="   |   Stamina %d/%d" % [displayed_stamina,roundi(players[0].stamina.capacity())]
+		if not exhibition: score_label.text+="   |   Stamina %d/%d" % [displayed_stamina,roundi(players[0].stamina.capacity())]
 
 func award(side: int, reason: String) -> void:
 	if phase != Phase.LIVE: return
@@ -625,7 +647,7 @@ func award(side: int, reason: String) -> void:
 	cpu_policy.finish_point(side)
 	if side != service_team:
 		service_team = side
-		if rallies > 0: server_slot[side] = (int(server_slot[side])+1)%team_size
+		if rallies > 0: server_slot[side] = (int(server_slot[side])+1)%count_for(side)
 	rallies += 1
 	dead_age = 0.0
 	if bounce_end <= 0.0 and elapsed < flight_end(): dead_flight_from = elapsed
@@ -645,12 +667,12 @@ func award(side: int, reason: String) -> void:
 			var error: Error = cpu_policy.save_demo(team_size,spectator,carried_shot_reads)
 			trace.write("demo_learning_saved",match_clock,{"error":error},true)
 			if error != OK: push_warning("Could not save Demo Match learning: "+error_string(error))
-		var winner := ("Blue wins" if side == 0 else "Orange wins") if spectator else ("You win!" if side == 0 else "CPU wins")
-		info.text = winner+("\nRematch starting soon" if auto_rematch and spectator else "\nUse Reset Match to play again")
+		var winner := str(side_names[side])+" wins"
+		info.text = winner if exhibition else winner+("\nRematch starting soon" if auto_rematch and spectator else "\nUse Reset Match to play again")
 	else:
 		phase = Phase.DEAD
-		var winner := ("Blue point" if side == 0 else "Orange point") if spectator else ("Your point" if side == 0 else "CPU point")
-		info.text = winner+" Ãƒâ€šÃ‚Â· "+reason
+		var winner := str(side_names[side])+" point"
+		info.text = winner+"  |  "+reason
 
 func reset_receives() -> void:
 	receive_animation_labels.clear()
@@ -710,7 +732,7 @@ func launch(point: Vector3, motion: Vector3, kind: String, from: int, spin_rate 
 	if kind in ["spike","free","dump"]: receiving_team = 1-team(from)
 	if last_was_block and kind in ["block","free"]:
 		receiving_team = 0 if path_point(flight_end()).z < Net.NET_Z else 1
-	if team_size >= 3 and kind == "pass" and touches == 1 and possession_team == receiving_team:
+	if count_for(receiving_team) >= 3 and kind == "pass" and touches == 1 and possession_team == receiving_team:
 		called_this_pass=false
 		rally_setter = nearest_on_team(receiving_team,path_point(arrival(1.92)),from)
 		rally_hitter = -1
@@ -761,7 +783,7 @@ func choose_shot(index: int, contact := Vector3.INF, block_at := Vector3.INF, pr
 	var frame := frames[side]
 	var defending := 1-side
 	var blocker: int = defender_assignment[defending]
-	var defender := (blocker^1) if team_size == 2 and blocker >= 0 else defending*team_size
+	var defender := partner_of(blocker) if count_for(defending) == 2 and blocker >= 0 else first_on(defending)
 	if defender == blocker: defender += 1
 	var backcourt := frame.to_local(players[defender].global_position)
 	if not contact.is_finite():
@@ -778,8 +800,8 @@ func choose_shot(index: int, contact := Vector3.INF, block_at := Vector3.INF, pr
 			var crossing := lane_at_depth(contact,target,Net.NET_Z)
 			if absf(crossing) > Net.NET_HALF_WIDTH-Net.RADIUS-0.12: continue
 			var defender_gap := (target-backcourt).slide(Vector3.UP).length()
-			if team_size >= 3:
-				for index_ in range(defending*team_size,(defending+1)*team_size):
+			if count_for(defending) >= 3:
+				for index_ in slots_for(defending):
 					if index_ == blocker: continue
 					var cover := frame.to_local(players[index_].global_position)
 					defender_gap = minf(defender_gap,(target-cover).slide(Vector3.UP).length())
@@ -929,7 +951,7 @@ func choose_contact_attack(index: int, contact: Vector3, preferred: Vector3, mot
 	var defense := 1-side
 	var defenders: Array[Vector3] = []
 	var walls: Array[Vector3] = []
-	for opponent in range(defense*team_size,(defense+1)*team_size):
+	for opponent in slots_for(defense):
 		var position := frame.to_local(players[opponent].global_position)
 		if blocks.has(opponent) and not blocks[opponent].overpass_swing and blocks[opponent].hands.size() == 2:
 			var block = blocks[opponent]
@@ -948,7 +970,7 @@ func shot_read_zone(local_x: float) -> int:
 
 func observe_opponent_shot(side: int, point: Vector3, motion: Vector3, spin_rate: float, attacker_index: int) -> void:
 	var frame := frames[side]
-	for i in range(side*team_size,(side+1)*team_size): players[i].block_read(players[attacker_index]).record_velocity(frame.global_basis.inverse()*motion)
+	for i in slots_for(side): players[i].block_read(players[attacker_index]).record_velocity(frame.global_basis.inverse()*motion)
 	var time := Flight.landing_time(point,motion,Flight.spike_gravity(spin_rate))
 	var landing := frame.to_local(point+motion*time)
 	if absf(landing.x) > 4.53 or landing.z < -5.03 or landing.z > Net.NET_Z: return
@@ -1005,15 +1027,12 @@ func make_ball_audio(stream: AudioStream, gain: float) -> AudioStreamPlayer:
 	return player
 
 func set_ball_sound(enabled: bool) -> void:
-	StorySession.attack_ball_audio_muted = not enabled
-	AudioServer.set_bus_mute(AudioServer.get_bus_index("Master"),not enabled)
-	if enabled:
-		play_touch(true)
-	else:
+	ball_sound_enabled = enabled
+	if not enabled:
 		for player in [touch_audio,set_audio,spike_audio,floor_audio,net_audio]: player.stop()
 
 func play_touch(strong := false) -> void:
-	if StorySession.attack_ball_audio_muted: return
+	if not ball_sound_enabled: return
 	var player := spike_audio if strong else touch_audio
 	player.play()
 
@@ -1091,7 +1110,7 @@ func queue_receive(index: int, technique: int) -> void:
 	show_key(index,["Q","E","F"][technique])
 
 func pass_support_receiver(index: int) -> int:
-	if team_size == 2: return index^1
+	if count_for(team(index)) == 2: return partner_of(index)
 	var side := team(index)
 	var target := Vector3(players[index].position.x*0.5,PLAYER_GROUND_Y,2.0)
 	return nearest_on_team(side,frames[side].to_global(target),index)
@@ -1180,7 +1199,7 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 		recoveries[index]["elbow_bend"] = bend
 		if bump.knee_bend_depth > 0.001:
 			recoveries[index]["hold"] = FAST_DIG_ELBOW_DURATION
-	if not StorySession.attack_ball_audio_muted:
+	if ball_sound_enabled:
 		if technique != 0 and not transition: set_audio.play()
 		else: play_touch()
 	var cpu_dump_attempt := touches == 2 and cpu_dump and index == cpu_choice and not is_human(index)
@@ -1499,12 +1518,12 @@ func arrival(height: float) -> float:
 func select_receiver() -> void:
 	var side := receiving_team
 	var point := path_point(arrival(1.10))
-	var first := side*team_size
+	var first := first_on(side)
 	if side == possession_team and touches > 0 and not last_was_block:
-		cpu_choice = setter_for_pass(last_player) if touches == 1 else (last_player^1 if team_size == 2 else nearest_on_team(side,point,last_player))
+		cpu_choice = setter_for_pass(last_player) if touches == 1 else (partner_of(last_player) if count_for(side) == 2 else nearest_on_team(side,point,last_player))
 	elif defensive_ball():
 		var best_cost := INF
-		for index in range(first,first+team_size):
+		for index in slots_for(side):
 			var at := dig_intercept(index)
 			var contact := path_point(at)
 			var distance := (contact-players[index].global_position).slide(Vector3.UP).length()
@@ -1515,7 +1534,7 @@ func select_receiver() -> void:
 			if cost < best_cost:
 				cpu_choice = index
 				best_cost = cost
-	elif team_size >= 3:
+	elif count_for(side) >= 3:
 		cpu_choice = nearest_on_team(side,point)
 	elif point.distance_squared_to(players[first].global_position) <= point.distance_squared_to(players[first+1].global_position):
 		cpu_choice = first
@@ -1974,7 +1993,7 @@ func try_foot_save(previous: float) -> void:
 	var lookahead := path_point(minf(end,elapsed+0.060))
 	if minf(last.y,lookahead.y) > 0.42 or maxf(first.y,last.y) < Flight.FLOOR: return
 	var side := receiving_team
-	for index in range(side*team_size,(side+1)*team_size):
+	for index in slots_for(side):
 		if is_human(index) and match_clock > kick_pressed_until: continue
 		if index == last_player and not last_was_block: continue
 		if not can_play_forearms(index) or owns_action(index) or recoveries.has(index): continue
@@ -2049,7 +2068,7 @@ func deflect_defender_body(previous: float) -> void:
 	var surface := Vector3.ZERO
 	var first_fraction := INF
 	var body_part := ""
-	for index in range(receiving_team*team_size,(receiving_team+1)*team_size):
+	for index in slots_for(receiving_team):
 		if index == last_player: continue
 		var actor := players[index]
 		if actor.global_position.slide(Vector3.UP).distance_to(last.slide(Vector3.UP)) > 1.1+travel.length(): continue
@@ -2145,7 +2164,7 @@ func tick_blocks(delta: float, previous: float) -> void:
 	for index in blocks.keys():
 		var block = blocks[index]
 		if not is_human(index):
-			block.read_air_lane(ball.global_position,players.slice(team(index)*team_size,(team(index)+1)*team_size))
+			block.read_air_lane(ball.global_position,players.slice(first_on(team(index)),first_on(team(index))+count_for(team(index))))
 		if not block.step(delta,ball.global_position):
 			blocks.erase(index)
 			continue
@@ -2462,19 +2481,19 @@ func position_defense(delta: float) -> void:
 				hitter_x = move_toward(hitter_x,set_pin_for(setter).x,0.65)
 			threat = attack_frame.to_global(Vector3(hitter_x,0.04,3.20))
 	var x := frame.to_local(threat).x
-	var first := defense_side*team_size
+	var first := first_on(defense_side)
 	var near: int = defender_assignment[defense_side]
 	if defense_side == 0 and not spectator:
 		near = 0 if player_blocks else 1
 	elif near < 0:
 		near = first if absf(players[first].position.x-x) < absf(players[first+1].position.x-x) else first+1
-		if team_size >= 3:
+		if count_for(defense_side) >= 3:
 			near = nearest_on_team(defense_side,frame.to_global(Vector3(x,0.04,3.42)))
 	defender_assignment[defense_side] = near
 	var depth := -2.15
 	var cover := -x*0.48
-	var deep := near^1
-	if team_size >= 3:
+	var deep := partner_of(near)
+	if count_for(defense_side) >= 3:
 		deep = deep_defenders[defense_side]
 		if deep < 0 or deep == near:
 			deep = nearest_on_team(defense_side,frame.to_global(Vector3(cover,0.04,depth)),near)
@@ -2555,7 +2574,7 @@ func position_defense(delta: float) -> void:
 			start_block(near,timing,dump_ready)
 	if not is_human(deep) and not blocks.has(deep) and not set_jumps[deep].active:
 		move_cpu(deep,frame.to_global(Vector3(clampf(cover,-4.05,4.05),0.04,depth)),delta)
-	if team_size >= 3:
+	if count_for(defense_side) >= 3:
 		var support := nearest_on_team(defense_side,frame.to_global(Vector3.ZERO),near,deep)
 		if not is_human(support) and not blocks.has(support) and not set_jumps[support].active:
 			var opposite := lerpf(cover,support_lanes[defense_side],0.78)
@@ -2629,7 +2648,7 @@ func begin_ball_bounce() -> void:
 	bounce_end = Flight.landing_time(bounce_origin,bounce_velocity)
 
 func play_floor_impact(speed: float, rebound := false) -> void:
-	if rebound or speed<preload("res://scripts/gym_physics.gd").HARD_SPIKE_SPEED or StorySession.attack_ball_audio_muted: return
+	if rebound or speed<preload("res://scripts/gym_physics.gd").HARD_SPIKE_SPEED or not ball_sound_enabled: return
 	var strength := smoothstep(2.0,11.0,speed)
 	floor_audio.volume_db = lerpf(-10.0,1.5,strength)-(6.0 if rebound else 0.0)
 	floor_audio.pitch_scale = 1.0
@@ -2683,7 +2702,7 @@ func pose_serve_receive_wait(delta: float) -> void:
 		else: actor.animator.advance(delta)
 		if weight <= 0.001: continue
 		var bump := platforms[index]
-		bump.knee_bend_depth = (0.055 if index%team_size == 2 else 0.14)*weight
+		bump.knee_bend_depth = (0.055 if (index-first_on(team(index))) == 2 else 0.14)*weight
 		bump.apply_knee_bend()
 		bump.knee_bend_depth = 0.0
 		actor.pose_hands_on_knees(weight)
@@ -2695,6 +2714,7 @@ func tick_match(delta: float, controls: RefCounted) -> void:
 	delta *= live_speed
 	var previous_rallies := rallies
 	step_match(delta,controls)
+	if exhibition and phase == Phase.READY and not serve_pending and not replay.current.is_empty(): return
 	if (phase != Phase.FINISHED or dead_age <= 2.0) and match_clock+0.0005 >= next_replay_sample:
 		replay.record(self)
 		next_replay_sample = match_clock+1.0/60.0
@@ -2784,7 +2804,7 @@ func step_match(delta: float, controls: RefCounted) -> void:
 		var ripple_offset := match_clock-elapsed
 		net_ripple.time+=ripple_offset
 		net_ripple.release_time+=ripple_offset
-		if not StorySession.attack_ball_audio_muted: net_audio.play()
+		if ball_sound_enabled: net_audio.play()
 		var release: Vector3 = net_hit.release_point
 		var side_after_tape := 0 if release.z < Net.NET_Z else 1
 		if side_after_tape == receiving_team:
@@ -2838,12 +2858,12 @@ func step_match(delta: float, controls: RefCounted) -> void:
 	check_floor(previous)
 	if phase == Phase.LIVE:
 		if spectator:
-			info.text = "%s | %s court" % [stroke,"Blue" if receiving_team == 0 else "Orange"]
+			info.text = "%s | %s court" % [stroke,side_names[receiving_team]]
 			return
 		var cue := "Opponent's ball"
 		if receiving_team == 0:
 			cue = PromptControls.hint("Hold the attack button","Hold Space to attack") if expected_hitter == 0 else ("Set to your teammate" if possession_team == 0 and touches == 1 and human_can_set() else "Receive or cover")
-		elif flight_kind == "set": cue = "Move up to block | Space" if player_blocks else "Teammate blocking | Cover the court"
+		elif flight_kind == "set": cue = PromptControls.hint("Move up to block","Move up to block | Space") if player_blocks else "Teammate blocking | Cover the court"
 		info.text = "%s | %s" % [stroke,cue]
 
 func trace_snapshot() -> Dictionary:

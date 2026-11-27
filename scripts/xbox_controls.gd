@@ -19,7 +19,7 @@ const GLYPHS := {
 const FACE := [JOY_BUTTON_A,JOY_BUTTON_X,JOY_BUTTON_Y,JOY_BUTTON_B]
 const AUX := [JOY_BUTTON_LEFT_SHOULDER,JOY_BUTTON_RIGHT_SHOULDER,JOY_BUTTON_RIGHT_STICK,JOY_BUTTON_START,JOY_BUTTON_LEFT_STICK]
 const NAMES := {JOY_BUTTON_A:"A",JOY_BUTTON_B:"B",JOY_BUTTON_X:"X",JOY_BUTTON_Y:"Y",JOY_BUTTON_LEFT_SHOULDER:"LB",JOY_BUTTON_RIGHT_SHOULDER:"RB",JOY_BUTTON_RIGHT_STICK:"RS",JOY_BUTTON_START:"Menu",JOY_BUTTON_LEFT_STICK:"LS"}
-const CONTROLS := ["Serve / jump / pipe","Forearm receive / left set","Hand receive / middle set","Back / right set","Next toss","Match sprint","Jump set","Pause","Show / hide set arc"]
+const CONTROLS := ["Serve / jump / pipe","Forearm receive / left set","Hand receive / middle set","Back / right set","Next toss","Right bumper","Jump set","Pause","Show / hide set arc"]
 
 static func keyboard_prompts() -> bool:
 	return StorySession.game_options.get_value("controls","keyboard_prompts",false)
@@ -96,11 +96,12 @@ static func settings(parent: Container,refresh: Callable) -> void:
 	keyboard.button_pressed = keyboard_prompts()
 	keyboard.toggled.connect(func(enabled):
 		StorySession.game_options.set_value("controls","keyboard_prompts",enabled)
-		StorySession.save_options())
+		StorySession.save_options()
+		refresh.call_deferred())
 	parent.add_child(keyboard)
 	for i in CONTROLS.size():
 		# Keep the legacy auxiliary slot in saved maps for remapping other controls.
-		if i==FACE.size()+AUX.find(JOY_BUTTON_RIGHT_STICK): continue
+		if i in [FACE.size()+AUX.find(JOY_BUTTON_RIGHT_STICK),FACE.size()+AUX.find(JOY_BUTTON_RIGHT_SHOULDER)]: continue
 		var choices: Array = FACE if i<4 else AUX
 		var slot := i if i<4 else i-4
 		var option := OptionButton.new()
@@ -122,10 +123,14 @@ static func settings(parent: Container,refresh: Callable) -> void:
 			refresh.call()
 			var current := parent.get_node_or_null("Binding%d" % i) as Control
 			if current: current.grab_focus())
+	var legend := HBoxContainer.new()
+	parent.add_child(legend)
+	prompts(legend,[["LT","Focus / shuffle"],["RT","Sprint"]])
 	var triggers := CheckButton.new()
 	triggers.text = "Swap focus and sprint triggers"
 	triggers.button_pressed = StorySession.game_options.get_value("xbox","swap_triggers",false)
 	triggers.toggled.connect(func(on):
 		StorySession.game_options.set_value("xbox","swap_triggers",on)
-		StorySession.save_options())
+		StorySession.save_options()
+		refresh.call_deferred())
 	parent.add_child(triggers)
