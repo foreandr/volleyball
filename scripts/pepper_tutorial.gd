@@ -326,8 +326,11 @@ func walk_rotation(actor:Node3D,destination:Vector3,dt:float) -> bool:
 	var toward:=destination-actor.position
 	if toward.length()<.015:
 		actor.play_action("idle",.18)
+		actor.animator.advance(dt)
 		return true
-	var velocity:=toward.normalized()*3.5
+	# Brake before the mark so the last stride can plant.
+	var speed:=minf(3.5,sqrt(2.*5.5*toward.length()))
+	var velocity:=toward.normalized()*speed
 	Ground.face(actor,toward,dt)
 	actor.play_travel_gait(velocity)
 	actor.animator.advance(dt)
@@ -365,11 +368,15 @@ func tick(delta:float) -> void:
 				base=ready_spot
 				pair.home=pair.receiver.global_transform
 				pair.erase("reset_to_five")
-			if cart_service.busy(delta): continue
+			if cart_service.busy(delta):
+				pair.receiver.animator.advance(delta)
+				continue
 			if not pair.flying and not cart.issued:
 				pair.ball.hide()
 				cart.prepare_next_ball(delta)
-				if not cart.take_ball(): continue
+				if not cart.take_ball():
+					pair.receiver.animator.advance(delta)
+					continue
 			var facing:=move_passer(pair,delta)
 			if not demonstrating and not pair.flying and not focus_cued:
 				game.moving_prompt(true)
