@@ -1,7 +1,7 @@
 extends Control
 const DEVELOPMENT_TABS:=["Offense","Defense","Physical"]
 const DEFENSE_RATINGS:=["Forearm reception","Hand reception","Forearm defense","Hand defense","Blocking","Reflexes"]
-const PHYSICAL_RATINGS:=["vertical_in","Attack jump","Block jump","Serve jump","Athleticism","Strength","Speed","Stamina","Endurance","Willpower"]
+const PHYSICAL_RATINGS:=["vertical_in","Attack jump","Block jump","Serve jump","Athleticism","Strength","Speed","Stamina","Endurance","Willpower","Charisma","Confidence"]
 var development_tab:=0
 var trigger_down:=false
 var screen := ""
