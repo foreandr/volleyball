@@ -48,3 +48,4 @@ Read the relevant parts of [GAME_DESIGN.md](GAME_DESIGN.md) and [MECHANICS.md](M
 - **Proof and handoff.** Run the applicable regression check, launch the playable scene and review a fresh recording. For a shared behavior, exercise another caller. Record exactly what passed, what remains unverified and the pushed commit. Leave the game open at the changed drill.
 
 When the user says “always,” “usually,” or “whenever,” update the matching design rule with its scope and exceptions. Add a regression check when the same behavior has broken across modes. Keep future-feature notes separate from shipped behavior.
+For timed contacts, verify the fading result on early and late misses as well as on Perfect, Good and Bad contacts. A miss that bypasses the hitbox still needs visible feedback. See Universal contact timing feedback in GAME_DESIGN.md.
