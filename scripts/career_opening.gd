@@ -177,21 +177,20 @@ func begin_run() -> void:
 func run_prompt() -> void:
 	var segment:=leg%4
 	marker.position=ROUTE[(segment+1)%4]
-	workout_label.add_theme_font_size_override("font_size",30)
-	var heading:="Watch the runner" if phase=="footwork_demo" else "Lap %d of 2"%[1+floori(leg/4.)]
-	var cue:String=["Run here","Shuffle right along the net","Run backwards to the baseline","Shuffle left to the start"][segment]
-	workout_label.text=heading+"   /   "+cue
-	var hints:Array=[]
-	var keys:=""
-	if segment%2==1 and phase=="footwork":
-		hints.append(["LT","Hold to shuffle"])
-		keys="Hold Ctrl to shuffle"
 	if phase=="footwork_demo":
-		if queued: workout_label.text+="   /   You're next"
-		else:
-			hints.append([JOY_BUTTON_A,"Go next"])
-			keys+="   Enter to go next"
-	training_prompt(hints,keys)
+		show_demo_prompt()
+		return
+	workout_label.show()
+	prompt.show()
+	workout_label.add_theme_font_size_override("font_size",30)
+	var cue:String=["Run here","Shuffle right along the net","Run backwards to the baseline","Shuffle left to the start"][segment]
+	workout_label.text="Lap %d of 2   /   %s"%[1+floori(leg/4.),cue]
+	training_prompt([["LT","Hold to shuffle"]] if segment%2==1 else [],"Hold Ctrl to shuffle" if segment%2==1 else "")
+
+func show_demo_prompt() -> void:
+	workout_label.hide()
+	prompt.visible=not queued
+	if not queued: training_prompt([[JOY_BUTTON_A,"Go next"]],"Enter to go next")
 
 func move_in_line(actor:Node3D,goal:Vector3,dt:float) -> bool:
 	var previous:=actor.position
@@ -339,9 +338,7 @@ func pair_up() -> void:
 	if pepper.demonstrating:
 		phase="demo"
 		queued=false
-		prompt.show()
-		workout_label.text="Reception demo"
-		training_prompt([[JOY_BUTTON_A,"Go next"]],"Enter to go next")
+		show_demo_prompt()
 
 func finish_pepper() -> void:
 	phase="pepper_complete"
@@ -368,6 +365,7 @@ func _process(delta:float) -> void:
 		if phase=="demo" and queued and pepper.pairs[0].age>=2.95:
 			pepper.start_human_turn()
 			phase="pepper"
+			workout_label.show()
 			prompt.show()
 			coach_motion.whistle_cue.signal_drill(coach)
 			workout_label.text="%d / 5 passes"%pepper.score
@@ -383,10 +381,7 @@ func _process(delta:float) -> void:
 func _input(event:InputEvent) -> void:
 	if phase in ["footwork_demo","demo"] and event.is_action_pressed("ui_accept"):
 		queued=true
-		if phase=="footwork_demo": run_prompt()
-		else:
-			workout_label.text="Reception   /   You're next"
-			prompt.hide()
+		show_demo_prompt()
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("ui_accept") and phase=="ready":
 		get_viewport().set_input_as_handled()
