@@ -319,7 +319,7 @@ func register_student(actor: Node3D, variant: int) -> void:
 	var values := {"name":names[index],"age":15 + index % 4,"hometown":["Hamilton","Burlington","Toronto","Oshawa","Kingston"][index % 5],"handedness":"Left" if index % 4 == 1 else "Right"}
 	if variant >= 20: values.height_cm = 172 + ((variant - 20) * 7) % 29
 	if variant == 1:
-		values.merge({"Spike placement":85,"Arm swing":85,"Strength":85})
+		values.merge({"vertical_in":42,"Spike placement":85,"Arm swing":85,"Strength":85})
 	actor.apply_profile(values)
 	actor.set_meta("school_photo",SchoolHeadshots.request(actor.attributes,variant,actor.team_color))
 
