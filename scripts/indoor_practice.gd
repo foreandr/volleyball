@@ -84,6 +84,7 @@ var measured_release := false
 var spectator_progress := ProgressBar.new()
 var skip_time := 0.0
 var camera_lead := Vector3.ZERO
+var rings := preload("res://scripts/tryout_player_ring.gd").new()
 var replay_inspector := preload("res://scripts/practice_replay.gd").new()
 
 func toggle_practice_replay() -> void:
@@ -286,7 +287,6 @@ func _ready() -> void:
 	rotation_drill.configure(self)
 	add_child(replay_inspector)
 	for a in rotation_drill.roster: energy[a]=a.stamina
-	var rings := preload("res://scripts/tryout_player_ring.gd").new()
 	rings.game=self
 	add_child(rings)
 	squat.configure(world)

@@ -101,8 +101,8 @@ func capture(rendered := false) -> Dictionary:
 	if "receiving_team" in game:
 		for actor in game.receiving_team:
 			if actor.get_parent()!=game.world: candidates.append(actor)
-	if "defense_anchor" in game and game.hitter.get_parent()==game.defense_anchor:
-		candidates.append(game.hitter)
+	if "defense_map" in game and game.defense_map.player!=null:
+		candidates.append(game.defense_map.player)
 	for obj in candidates:
 		if obj is not Node3D: continue
 		if "skeleton" in obj and obj.skeleton is Skeleton3D:
@@ -140,9 +140,10 @@ func capture(rendered := false) -> Dictionary:
 					var key: int = -1-slot*2-side
 					arms[key]=jump.body_chains[side]
 					armed[key]=true
-	return {"boundary":game.get_meta("serve_boundary",0),"impact":game.get_meta("block_impact_segment",Vector2i(-999,-1)),"rally":game.get("replay_rally"),"armed":armed,"arms":arms,"floor_count":game.floor_sound_count,"floor_db":game.floor_impact.volume_db,"spike_count":game.spike_sound_count if "spike_sound_count" in game else 0,"block_sound_count":game.block_sound_count if "block_sound_count" in game else 0,"objects":objects,"poses":poses,"whistle_count":game.coach_motion.whistle_cue.play_count,"floor_stream":game.floor_impact.stream,"whistle_height":game.coach_motion.whistle_cue.raised}
+	return {"timing":game.rings.displayed_timing.duplicate(),"boundary":game.get_meta("serve_boundary",0),"impact":game.get_meta("block_impact_segment",Vector2i(-999,-1)),"rally":game.get("replay_rally"),"armed":armed,"arms":arms,"floor_count":game.floor_sound_count,"floor_db":game.floor_impact.volume_db,"spike_count":game.spike_sound_count if "spike_sound_count" in game else 0,"block_sound_count":game.block_sound_count if "block_sound_count" in game else 0,"objects":objects,"poses":poses,"whistle_count":game.coach_motion.whistle_cue.play_count,"floor_stream":game.floor_impact.stream,"whistle_height":game.coach_motion.whistle_cue.raised}
 
 func apply(sample: Dictionary) -> void:
+	game.rings.replay_timing(sample.timing)
 	if game.has_method("display_boundary"): game.display_boundary(sample.get("boundary",0))
 	game.coach_motion.whistle_cue.raised = sample.whistle_height
 	for obj in live.objects:

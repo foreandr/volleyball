@@ -197,3 +197,5 @@ Reception Test accepts dig releases within 125 ms either side of contact and off
 Receive CPU Serves leaves the libero mobile until A is held. It maps the remaining flight from the current stance and accepts releases 210 ms early or 150 ms late. A floor ring forecasts the airborne ball's landing and updates when a new touch changes its flight.
 
 Receive CPU Serves continues a pass through the setter and left-side attacker to a zone-six digger. Control digger switches the player to defense and gives reception to the CPU. Manual serve reception grades release against the same contact time shown on the ground ring, with green within 85 ms.
+
+Practice replay records the displayed ground timing arc, its cursor, timing bands and release highlight for each sampled frame.

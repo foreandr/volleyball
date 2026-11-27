@@ -6,6 +6,7 @@ var participants: Array = []
 var extra_jumps := {}
 var setting_cues := true
 var floor_rings := {}
+var displayed_timing := {}
 var ring_mesh := ImmediateMesh.new()
 
 func make_ring_mesh() -> void:
@@ -54,6 +55,8 @@ func _process(delta: float) -> void:
 
 
 func _draw() -> void:
+	if game!=null and "replay_inspector" in game and game.replay_inspector.active: return
+	displayed_timing.clear()
 	for ring in floor_rings.values():
 		if is_instance_valid(ring): ring.hide()
 	if game==null:
@@ -185,6 +188,21 @@ func draw_player(actor: Node3D,human: bool) -> void:
 	draw_string(ThemeDB.fallback_font,origin,label,HORIZONTAL_ALIGNMENT_CENTER,160,14,Color("ffce75") if is_setter else Color.WHITE)
 
 func timing_arc(actor: Node3D,value: float,low: float,high: float,contact := Vector2(0,1),miss_color := Color("778088"),highlight_release := false) -> void:
+	displayed_timing[actor]={"position":floor_rings[actor].global_position,"value":value,"perfect":Vector2(low,high),"contact":contact,"miss":miss_color,"highlight":highlight_release,"stamina":actor.stamina.fraction()}
+	paint_arc(actor,value,low,high,contact,miss_color,highlight_release)
+
+func replay_timing(sample: Dictionary) -> void:
+	for ring in floor_rings.values(): ring.hide()
+	for actor in sample:
+		if not is_instance_valid(actor): continue
+		var state: Dictionary=sample[actor]
+		position_floor_ring(actor)
+		var ring: MeshInstance3D=floor_rings[actor]
+		ring.global_position=state.position
+		ring.get_surface_override_material(1).set_shader_parameter("remaining",state.stamina)
+		paint_arc(actor,state.value,state.perfect.x,state.perfect.y,state.contact,state.miss,state.highlight)
+
+func paint_arc(actor: Node3D,value: float,low: float,high: float,contact: Vector2,miss_color: Color,highlight_release: bool) -> void:
 	var ring: MeshInstance3D=floor_rings[actor]
 	var band: MeshInstance3D
 	if ring.get_child_count()==0:
