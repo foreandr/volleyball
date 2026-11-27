@@ -134,7 +134,7 @@ func _process(_dt: float) -> void:
 	var now := Time.get_ticks_msec()
 	if now<next_frame: return
 	var tenth := int(Time.get_unix_time_from_system()*10.)%10
-	clock_label.text="%s.%d"%[Time.get_time_string_from_system(),tenth]
+	clock_label.text="%s.%d   %d FPS"%[Time.get_time_string_from_system(),tenth,Engine.get_frames_per_second()]
 	if now>=cleanup_at:
 		prune()
 		cleanup_at=now+30000
