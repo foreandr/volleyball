@@ -1,6 +1,7 @@
 extends Node3D
 
 const Regions = preload("res://scripts/reception_regions.gd")
+const REGION_14 := Vector3i(1,1,1)
 const REGION_20 := Vector3i(1,0,2)
 const REGION_22 := Vector3i(0,1,2)
 const REGION_24 := Vector3i(2,1,2)
@@ -654,8 +655,9 @@ func draw_pose() -> void:
 					c.audition=true
 					motion_legs=saved
 			break
-	if active and Regions.movement(c) and address.y==0 and address.z==1 and address.x!=1:
-		# Meet this low side ball earlier along its incoming flight.
+	var low_side := address.y==0 and address.z==1 and address.x!=1
+	if active and Regions.movement(c) and (low_side or address==REGION_14):
+		# Set the platform on the incoming flight before the ball crowds the receiver.
 		feed_fraction=maxf(0.,feed_fraction-.55/maxf(.55,launch.slide(Vector3.UP).distance_to(aim.slide(Vector3.UP))))
 		target=launch.lerp(aim,feed_fraction)+Vector3.UP*feed_curve*feed_fraction*(1.-feed_fraction)
 		set_intercept=target
@@ -664,6 +666,11 @@ func draw_pose() -> void:
 		touch_frame=duration*60.
 		c=c.duplicate()
 		c.platform_front_m=.60
+		if address==REGION_14 and region.w%4<2:
+			c.backward_hop=true
+			c.entry_plant_m=.24
+			c.entry_time=.18
+			c.entry_speed=1.8
 	if c.id==21 and address.y==0 and address.z==2:
 		c=c.duplicate()
 		c.side*=1.20
@@ -1064,6 +1071,7 @@ func sample_receiver_base(c: Dictionary,f: float,active: bool,motion_legs: int) 
 	if max_shift>0.:
 		var goal: Vector3=defenders[receiving].to_local(set_intercept).slide(Vector3.UP)
 		var gap := goal-Vector3.BACK*.48
+		if c.get("backward_hop",false): gap=Vector3(clampf(goal.x,-.18,.18),0.,-.60)
 		var available := minf(float(c.contact)/60.,incoming_lead_seconds)
 		var window := clampf(available-.20,0.,float(c.get("entry_time",approach_plant.APPROACH_LOAD_TIME)))
 		var distance := minf(max_shift,minf(maxf(0.,gap.length()-.30),window*float(c.get("entry_speed",1.35))))
@@ -1078,6 +1086,9 @@ func sample_receiver_base(c: Dictionary,f: float,active: bool,motion_legs: int) 
 		player.position+=shift*smoothstep(0.,1.,progress)
 		if progress>0. and progress<1.:
 			sample_approach_plant(shift,(progress-1.)*approach_plant.APPROACH_LOAD_TIME)
+	if c.get("backward_hop",false):
+		var age := (f-float(c.contact))/60.
+		player.position.y+=maxf(0.,.12-4.905*age*age)
 	var contact := float(FOREARM.get_meta("contact_time"))
 	var time := remap(f,0.,c.contact,0.,contact) if f<=c.contact else remap(f,c.contact,c.get("source_end",c.frames),contact,FOREARM.length)
 	var key := roundi(time*60.)
@@ -1604,6 +1615,7 @@ func assigned_action(address: Vector3i,part: int) -> int:
 	if is_subdivided(address):
 		if StorySession.game_options.has_section_key("studio_three_rows",child_key):
 			return int(StorySession.game_options.get_value("studio_three_rows",child_key))
+		if address==REGION_14: return 4
 		if address==REGION_20: return 21
 		if address==REGION_22:
 			if part in [2,7]: return 72

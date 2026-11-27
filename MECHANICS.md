@@ -179,3 +179,4 @@ In zones 19 and 21, Legs 21 uses a wider, deeper lunge, extra torso lean toward 
 Zone 20 uses the low Legs 21 reception on both full-depth halves. The left half defaults to a right-foot lead and the right half to a left-foot lead.
 Zones 10 and 12 use mirrored Legs 21 forearm passes. The receiver reads an earlier point on the incoming flight and reaches the joined platform in front of the shoulders.
 Both upper-right sections of the combined 22-23 zone use Legs 04 for forearm reception.
+Zone 14 uses Legs 04 with the early forearm intercept on both depth halves. Upper quadrants 14.1 and 14.2 add a quick backward two-step and short hop. Lower quadrants 14.3 and 14.4 meet the ball from the ground.
