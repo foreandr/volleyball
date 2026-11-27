@@ -178,3 +178,4 @@ Reception Studio zones 19 and 21 use opposite orientations of Legs 21 with a for
 In zones 19 and 21, Legs 21 uses a wider, deeper lunge, extra torso lean toward contact, and a two-step entry of up to 60 cm in 0.23 seconds when time and distance allow. Low contact corrections deepen the squat over the planted foot.
 Zone 20 uses the low Legs 21 reception on both full-depth halves. The left half defaults to a right-foot lead and the right half to a left-foot lead.
 Zones 10 and 12 use mirrored Legs 21 forearm passes. The receiver reads an earlier point on the incoming flight and reaches the joined platform in front of the shoulders.
+Both upper-right sections of the combined 22-23 zone use Legs 04 for forearm reception.

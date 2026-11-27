@@ -1608,6 +1608,7 @@ func assigned_action(address: Vector3i,part: int) -> int:
 		if address==REGION_22:
 			if part in [2,7]: return 72
 			if part==4: return 14
+			if part in [5,6]: return 4
 			if part in [0,3]: return 21
 			var parent_suffix := ".top" if part in [0,4,5,6] else (".bottom.left" if part in [1,3] else ".bottom.right")
 			return int(StorySession.game_options.get_value("studio_three_rows",Regions.key(address)+parent_suffix,72 if part==1 else 0))
