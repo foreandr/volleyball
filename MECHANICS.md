@@ -176,3 +176,4 @@ Reception Studio leg movement 33 can use the spike approach right plant and clos
 Reception Studio zones 13 and 15 use opposite orientations of Legs 21 for lateral forearm passes.
 Reception Studio zones 19 and 21 use opposite orientations of Legs 21 with a forearm platform. Unassigned low and middle zones preview leg choices with the forearm platform.
 In zones 19 and 21, Legs 21 uses a wider, deeper lunge, extra torso lean toward contact, and a two-step entry of up to 60 cm in 0.23 seconds when time and distance allow. Low contact corrections deepen the squat over the planted foot.
+Zone 20 uses the low Legs 21 reception on both full-depth halves. The left half defaults to a right-foot lead and the right half to a left-foot lead.

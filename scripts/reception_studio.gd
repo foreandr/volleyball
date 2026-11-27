@@ -1,6 +1,7 @@
 extends Node3D
 
 const Regions = preload("res://scripts/reception_regions.gd")
+const REGION_20 := Vector3i(1,0,2)
 const REGION_22 := Vector3i(0,1,2)
 const REGION_24 := Vector3i(2,1,2)
 const REGION_23 := Vector3i(1,1,2)
@@ -653,7 +654,7 @@ func draw_pose() -> void:
 					c.audition=true
 					motion_legs=saved
 			break
-	if c.id==21 and address.y==0 and address.z==2 and address.x!=1:
+	if c.id==21 and address.y==0 and address.z==2:
 		c=c.duplicate()
 		c.side*=1.20
 		c.forward*=1.12
@@ -664,7 +665,7 @@ func draw_pose() -> void:
 		c.entry_plant_m=.60
 		c.contact_lean_deg=19.
 	if active and not selected and assigned>0:
-		var routed_mirror := address.x!=1 and ((address.x<1)!=(float(c.side)<0.))
+		var routed_mirror := default_mirror(address,region.w,c)
 		var orientation := Basis(Vector3.UP,atan2(serve_from.x-defenders[receiving].position.x,serve_from.z-defenders[receiving].position.z))
 		if StorySession.game_options.get_value("studio_mirror",assignment_key(address,region.w),routed_mirror): orientation.x=-orientation.x
 		defenders[receiving].basis=orientation
@@ -1510,7 +1511,7 @@ func region_parts(address: Vector3i) -> int:
 	if address==REGION_24: return 4
 	if address==REGION_22: return 8
 	if address==REGION_23: return 0
-	if halves_only(address): return 2
+	if address==REGION_20 or halves_only(address): return 2
 	if depth_split(address): return 8
 	return 4 if is_subdivided(address) else 1
 
@@ -1529,7 +1530,7 @@ func cell_action() -> int:
 	return assigned_action(cell,quadrant)
 
 func is_subdivided(address: Vector3i) -> bool:
-	return address==REGION_24 or address==REGION_22 or address==REGION_23 or (address.y==2 and address.z>=1) or depth_split(address)
+	return address==REGION_20 or address==REGION_24 or address==REGION_22 or address==REGION_23 or (address.y==2 and address.z>=1) or depth_split(address)
 
 func halves_only(address: Vector3i) -> bool:
 	return address.y==2 and address.z==2 and address.x!=1
@@ -1538,6 +1539,7 @@ func depth_split(address: Vector3i) -> bool:
 	return address==Vector3i(1,1,1) or address==Vector3i(1,2,2)
 
 func region_suffix(address: Vector3i,part: int) -> String:
+	if address==REGION_20: return ".left" if part==0 else ".right"
 	if address==REGION_24: return [".top.near",".bottom.near",".bottom.far",".top.far"][part]
 	if address==REGION_22: return [".top.left.far",".bottom.left.near",".bottom.right.left",".bottom.left.far",".top.left.near",".top.right.left",".top.right.right",".bottom.right.right"][part]
 	if address==REGION_23: return [".back.top",".front.top",".back.bottom",".front.bottom"][part]
@@ -1550,6 +1552,7 @@ func region_number(address: Vector3i,part: int) -> String:
 	return str(1+address.x+3*address.y+9*address.z)+region_suffix(address,part)
 
 func region_size(address: Vector3i,part: int) -> Vector3:
+	if address==REGION_20: return CELL_SIZE*Vector3(.5,1.,1.)
 	if address==REGION_22: return CELL_SIZE*Vector3(.5,.5,1.)
 	if address==REGION_24: return CELL_SIZE*Vector3(.5,.5,1.)
 	if address==REGION_23: return CELL_SIZE*Vector3(1.,.5,.5)
@@ -1564,6 +1567,8 @@ func region_center(address: Vector3i,part: int,subdivide := true) -> Vector3:
 		if subdivide:
 			center.y+=(.25 if part in [0,4,5,6] else -.25)*CELL_SIZE.y
 			center.x+=[-.75,-.25,.25,-.75,-.25,.25,.75,.75][part]*CELL_SIZE.x
+	elif address==REGION_20 and subdivide:
+		center.x+=(-.25 if part==0 else .25)*CELL_SIZE.x
 	elif address==REGION_24 and subdivide:
 		center.y+=(.25 if part in [0,3] else -.25)*CELL_SIZE.y
 		center.x+=(-.25 if part in [0,1] else .25)*CELL_SIZE.x
@@ -1584,6 +1589,7 @@ func assigned_action(address: Vector3i,part: int) -> int:
 	if is_subdivided(address):
 		if StorySession.game_options.has_section_key("studio_three_rows",child_key):
 			return int(StorySession.game_options.get_value("studio_three_rows",child_key))
+		if address==REGION_20: return 21
 		if address==REGION_22:
 			if part in [2,7]: return 72
 			if part==4: return 14
@@ -1660,14 +1666,20 @@ func preview_cell() -> void:
 	playing=true
 	draw_pose()
 
+func default_mirror(address: Vector3i,part: int,clip: Dictionary) -> bool:
+	if clip.is_empty(): return false
+	if address==REGION_20: return (part==0)!=(float(clip.side)<0.)
+	return address.x!=1 and ((address.x<1)!=(float(clip.side)<0.))
+
 func apply_cell_mirror(clip: Dictionary) -> void:
-	var automatic := cell.x!=1 and not clip.is_empty() and ((cell.x<1)!=(float(clip.side)<0.))
+	var automatic := default_mirror(cell,quadrant,clip)
 	var on: bool=StorySession.game_options.get_value("studio_mirror",assignment_key(cell,quadrant),automatic)
 	mirror.set_pressed_no_signal(on)
 	defenders[receiving].scale.x=-1. if on else 1.
 
 func lead_foot(address: Vector3i,part: int) -> String:
 	var default_foot := "Auto"
+	if address==REGION_20: default_foot="Right" if part==0 else "Left"
 	if address==REGION_22 and part==2: default_foot="Right"
 	if address==REGION_22 and part==7: default_foot="Left"
 	return StorySession.game_options.get_value("studio_lead_foot",assignment_key(address,part),default_foot)
