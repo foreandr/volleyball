@@ -654,6 +654,16 @@ func draw_pose() -> void:
 					c.audition=true
 					motion_legs=saved
 			break
+	if active and Regions.movement(c) and address.y==0 and address.z==1 and address.x!=1:
+		# Meet this low side ball earlier along its incoming flight.
+		feed_fraction=maxf(0.,feed_fraction-.55/maxf(.55,launch.slide(Vector3.UP).distance_to(aim.slide(Vector3.UP))))
+		target=launch.lerp(aim,feed_fraction)+Vector3.UP*feed_curve*feed_fraction*(1.-feed_fraction)
+		set_intercept=target
+		duration=full_duration*feed_fraction
+		incoming_lead_seconds=duration
+		touch_frame=duration*60.
+		c=c.duplicate()
+		c.platform_front_m=.60
 	if c.id==21 and address.y==0 and address.z==2:
 		c=c.duplicate()
 		c.side*=1.20
@@ -991,11 +1001,16 @@ func pose_receiver(c: Dictionary,f: float,active: bool,motion_legs: int) -> void
 		var hinge := (b-a).normalized()
 		var wrists := (rig.get_bone_global_pose(rig.find_bone("hand_l")).origin+rig.get_bone_global_pose(rig.find_bone("hand_r")).origin)*.5
 		var current := (wrists-(a+b)*.5).slide(hinge)
-		var desired := (goal-(a+b)*.5).slide(hinge)
+		var platform_goal := goal
+		if c.has("platform_front_m"):
+			var forward := (rig.global_basis.inverse()*defenders[receiving].global_basis.z).normalized()
+			var margin := float(c.platform_front_m)-(platform_goal-(a+b)*.5).dot(forward)
+			platform_goal+=forward*maxf(0.,margin)
+		var desired := (platform_goal-(a+b)*.5).slide(hinge)
 		if current.length_squared()>.000001 and desired.length_squared()>.000001:
 			var swing := clampf(current.signed_angle_to(desired,hinge),-PI/3.,PI/3.)*blend
 			var wrist_height := rig.to_global(wrists).y
-			swing*=1.-.45*smoothstep(0.,.35,set_intercept.y-wrist_height)
+			if not c.has("platform_front_m"): swing*=1.-.45*smoothstep(0.,.35,set_intercept.y-wrist_height)
 			for shoulder in [left,right]:
 				var axis := (rig.get_bone_global_pose(shoulder).basis.inverse()*hinge).normalized()
 				rig.set_bone_pose_rotation(shoulder,rig.get_bone_pose_rotation(shoulder)*Quaternion(axis,swing))
@@ -1615,6 +1630,7 @@ func assigned_action(address: Vector3i,part: int) -> int:
 	var key := Regions.key(address)
 	if StorySession.game_options.has_section_key("studio_three_rows",key):
 		return int(StorySession.game_options.get_value("studio_three_rows",key))
+	if address.y==0 and address.z==1 and address.x!=1: return 21
 	if address.y==2 and address.z==0: return 78
 	if address.x!=1 and ((address.y==1 and address.z==1) or (address.y==0 and address.z==2)): return 21
 	if address.y==1: return 0
