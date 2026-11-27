@@ -95,7 +95,7 @@ func float_approach(time: float, plant_time: float, land_time: float, jump_heigh
 	var left_plant := smoothstep(0.72,0.96,phase)
 	var flight := clampf((time-plant_time)/(land_time-plant_time),0.0,1.0) if jump_height > 0.0 else 0.0
 	var load := smoothstep(0.65,0.90,phase)*(1.0-smoothstep(0.90,1.04,phase))
-	var lift := 4.0*jump_height*flight*(1.0-flight)
+	var lift := 4.0*jump_height*preload("res://scripts/setter_jump.gd").COURT_VERTICAL_SCALE*flight*(1.0-flight)
 	var jumping := jump_height > 0.0
 	var drift := (0.78 if jumping else 0.58)*flight
 	var contact_space := SERVE_CONTACT_LEAD*smoothstep(toss_release_time(),contact_time(),time)

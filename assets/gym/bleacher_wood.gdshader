@@ -16,8 +16,8 @@ void fragment(){
 	float groove=smoothstep(.477,.498,seam);
 	float joint=smoothstep(.495,.499,abs(fract((pos.z+seed)/3.75)-.5));
 	float worn=smoothstep(.27,.325,abs(local.x))*noise2(pos.xz*34.);
-	vec3 oak=mix(vec3(.23,.102,.043),vec3(.42,.226,.092),.25*seed+.75*grain);
-	ALBEDO=mix(oak,vec3(.49,.34,.19),worn*.57)*(1.-.38*max(groove,joint));
+	vec3 oak=mix(vec3(.010,.011,.013),vec3(.034,.035,.039),.25*seed+.75*grain);
+	ALBEDO=mix(oak,vec3(.065,.063,.061),worn*.57)*(1.-.38*max(groove,joint));
 	vec2 hole=vec2(abs(local.x)-.246,mod(pos.z+1.,2.)-1.);
 	float bolt=1.-smoothstep(.009,.016,length(hole));
 	ALBEDO=mix(ALBEDO,vec3(.18,.19,.175),bolt);

@@ -46,6 +46,7 @@ func switch_attacker(active:Node3D,waiting:Node3D) -> void:
 	rings.extra_jumps.erase(waiting)
 	rings.extra_jumps[active]=attack_jump
 	hitter=active
+	jump_height=float(active.attributes.vertical_in)*.0254
 	sideline_actor=waiting
 	waiting.position=SIDELINE
 	waiting.look_at(Vector3(0,SIDELINE.y,3),Vector3.UP,true)

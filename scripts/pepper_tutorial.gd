@@ -148,8 +148,8 @@ func plan_return(pair:Dictionary,timing:float) -> void:
 	var miss:=Accuracy.sample_offset(spread)
 	pair.return_end=target+miss.slide(Vector3.UP)
 	if moving:
-		pair.return_end.y+=.50
-		target.y+=.50
+		pair.return_end.y+=.50*preload("res://scripts/setter_jump.gd").COURT_VERTICAL_SCALE
+		target.y+=.50*preload("res://scripts/setter_jump.gd").COURT_VERTICAL_SCALE
 		pair.catch_stance=pass_target.position+miss.slide(Vector3.UP)
 	var peak:=maxf(maxf(pair.contact_point.y,target.y)+.15,Accuracy.IDEAL_APEX+miss.y)
 	var duration:=sqrt(2.*(peak-pair.contact_point.y)/9.81)+sqrt(2.*(peak-target.y)/9.81)
@@ -572,7 +572,7 @@ func tick(delta:float) -> void:
 						var dt_set:float=t-pair.contact_age-sqrt(8.*float(pair.rise)/9.81)
 						var pin:Vector3=hands(pin_collector)
 						Ground.face(pass_target,pin-pass_target.position,delta)
-						if dt_set>=-.39 and dt_set<0. and not pair.has("jumped"):
+						if dt_set>=-(.10+support_jump.flight_duration(.50,true)*.5) and dt_set<0. and not pair.has("jumped"):
 							pair.jumped=true
 							support_jump.begin_set_jump(pass_target,.10,.50)
 							support_jump.release()

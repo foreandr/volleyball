@@ -226,7 +226,7 @@ func queue_block() -> void:
 	block_tracking = 0.0
 	kong_pressed_at = [INF,INF]
 	kong_tracking = [Vector2(0.83,0.43),Vector2(0.83,0.43)]
-	active_block_height = BLOCK_HEIGHT+vertical_inches*0.0254
+	active_block_height = (BLOCK_HEIGHT+vertical_inches*0.0254)*preload("res://scripts/setter_jump.gd").COURT_VERTICAL_SCALE
 	hand_normals = [Vector3.BACK,Vector3.BACK]
 	block_hands = [{},{}]
 	blocker.animator.speed_scale = 1.0
@@ -250,7 +250,7 @@ func tick_block(delta: float) -> void:
 		if is_finite(swing_drive_started):
 			contact_at = maxf(clock,swing_drive_started+swing_drive_duration*0.92)
 		var remaining := contact_at+0.055-clock
-		var rise_time := BLOCK_LOAD+0.49*BLOCK_AIR*sqrt((BLOCK_HEIGHT+vertical_inches*0.0254)/BLOCK_HEIGHT)
+		var rise_time := BLOCK_LOAD+0.49*BLOCK_AIR*sqrt(((BLOCK_HEIGHT+vertical_inches*0.0254)*preload("res://scripts/setter_jump.gd").COURT_VERTICAL_SCALE)/BLOCK_HEIGHT)
 		if remaining <= rise_time/1.15:
 			cpu_block_queued = true
 			queue_block()

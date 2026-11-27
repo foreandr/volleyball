@@ -588,9 +588,9 @@ func fade_loading(alpha: float, seconds: float) -> void:
 	await fade.finished
 
 func close_loading(read_fact := true) -> void:
-	while read_fact and not dismiss_fact and Time.get_ticks_msec() - fact_started_ms < 2600:
+	while read_fact and not dismiss_fact and Time.get_ticks_msec() - fact_started_ms < 300:
 		await get_tree().process_frame
-	await fade_loading(0.,.38)
+	await fade_loading(0.,.20)
 	loading_screen.hide()
 	loading_screen.queue_free()
 	loading_screen = null
@@ -609,9 +609,9 @@ func load_scene(path: String) -> void:
 	var key := path.get_file().get_basename()
 	var names := {"offline_match":"Match court","main":"Main menu","story":"My Career","drills":"Training camp","create":"Create player","setter_tryout":"Setter tryout","story_animations":"Court session"}
 	show_loading(names.get(key,key.capitalize()))
+	var error := ResourceLoader.load_threaded_request(path,"PackedScene")
 	await fade_loading(1.,.18)
 	await painted()
-	var error := ResourceLoader.load_threaded_request(path,"PackedScene")
 	if error == OK:
 		var progress := []
 		var status := ResourceLoader.load_threaded_get_status(path,progress)

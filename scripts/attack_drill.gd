@@ -820,7 +820,7 @@ func called_set_target() -> Vector3:
 	return approach_set_target if approach_practice else rally_set_target
 
 func cpu_jump_set_lift() -> float:
-	return 0.44
+	return 0.44*preload("res://scripts/setter_jump.gd").COURT_VERTICAL_SCALE
 
 func cpu_jump_set_rise(lead: float) -> float:
 	return cpu_jump_set_lift()*(1.0-smoothstep(0.0,0.24,lead))

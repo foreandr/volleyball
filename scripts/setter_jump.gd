@@ -23,6 +23,8 @@ var back_limit := Court.RUNOFF_NEAR_BASELINE
 var elapsed := 0.0
 var held := false
 var hold_time := 0.0
+const COURT_VERTICAL_SCALE := 4.0/3.0
+
 var max_height := FULL_HEIGHT
 var height := FULL_HEIGHT
 var air_time := FULL_AIR_TIME
@@ -240,7 +242,7 @@ static func approach_recovery(actor: Node3D, distance: float) -> float:
 	return smoothstep(1.85,3.35,distance)*lerpf(.20,1.,speed)
 
 func flight_duration(jump_height: float, assisted: bool) -> float:
-	return FULL_AIR_TIME*sqrt(jump_height/FULL_HEIGHT)*(1.09 if assisted else 1.0)
+	return FULL_AIR_TIME*sqrt(jump_height*COURT_VERTICAL_SCALE/FULL_HEIGHT)*(1.09 if assisted else 1.0)
 
 func step(actor: Node3D, delta: float, input: Vector2) -> void:
 	var load_time := load_duration()
@@ -289,7 +291,7 @@ func step(actor: Node3D, delta: float, input: Vector2) -> void:
 		var plant_distance := stride*smoothstep(0.0,1.0,progress)
 		plant_distance += incoming_plant_speed*load_time*progress*(1.0-progress)**2
 		distance = plant_distance+stride*AIR_TRAVEL_FRACTION*flight
-	var base := start+heading*distance+Vector3.UP*(4.0*height*flight*(1.0-flight)+transfer_hop)
+	var base := start+heading*distance+Vector3.UP*(4.0*height*COURT_VERTICAL_SCALE*flight*(1.0-flight)+transfer_hop)
 	if lead_time>0.:
 		base += (lead_heading-heading)*lead_distance*lead_progress*(1.-smoothstep(lead_time,load_time,elapsed))
 	var lunge := approach_lunge*smoothstep(0.0,air_glide_duration,elapsed-load_time)

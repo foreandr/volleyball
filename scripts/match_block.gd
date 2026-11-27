@@ -151,7 +151,7 @@ func step(delta: float, world_ball: Vector3) -> bool:
 	if is_finite(net_heading): actor.rotation.y=rotate_toward(actor.rotation.y,net_heading,delta*9.)
 	age += delta*tempo
 	var phase := clampf((age-START)/AIR,0.0,1.0)
-	var lift := 4.0*jump_height*phase*(1.0-phase)
+	var lift := 4.0*jump_height*preload("res://scripts/setter_jump.gd").COURT_VERTICAL_SCALE*phase*(1.0-phase)
 	var load := sin(PI*clampf(age/START,0.0,1.0))
 	var since_landing := age-START-AIR
 	var absorb := smoothstep(0.0,0.055,since_landing)*(1.0-smoothstep(0.055,0.145,since_landing))

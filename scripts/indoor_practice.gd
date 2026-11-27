@@ -318,6 +318,8 @@ func register_student(actor: Node3D, variant: int) -> void:
 	var index := variant - 1 if variant < 20 else variant - 12
 	var values := {"name":names[index],"age":15 + index % 4,"hometown":["Hamilton","Burlington","Toronto","Oshawa","Kingston"][index % 5],"handedness":"Left" if index % 4 == 1 else "Right"}
 	if variant >= 20: values.height_cm = 172 + ((variant - 20) * 7) % 29
+	if variant == 1:
+		values.merge({"Spike placement":85,"Arm swing":85,"Strength":85})
 	actor.apply_profile(values)
 	actor.set_meta("school_photo",SchoolHeadshots.request(actor.attributes,variant,actor.team_color))
 
@@ -552,7 +554,7 @@ func reset_feed() -> void:
 	if not solo_setting or automatic_setter() or Vector3(ground_velocity.get(setter,Vector3.ZERO)).length()<.075:
 		setter.rotation.y = atan2(coach.position.x-BASE.x,coach.position.z-BASE.z)
 		setter.play_action("idle")
-	catch_point = BASE + Vector3.UP*(1.93*setter.height_cm/180.0 + ((camp_jump_height if solo_setting else .52)*setter.stamina.effectiveness() if jump_rep() else 0.0))
+	catch_point = BASE + Vector3.UP*(1.93*setter.height_cm/180.0 + (preload("res://scripts/setter_jump.gd").COURT_VERTICAL_SCALE*(camp_jump_height if solo_setting else .52)*setter.stamina.effectiveness() if jump_rep() else 0.0))
 	coach.show()
 	coach.rotation.y = atan2(catch_point.x-coach.position.x,catch_point.z-coach.position.z)
 	ball.visible = demonstration or rotation_drill.issued!=null
@@ -1269,7 +1271,7 @@ func step_practice(delta: float) -> void:
 			if solo_setting:
 				forehead_target.x=camp_receive_spot.x
 				forehead_target.z=camp_receive_spot.z
-			catch_point=forehead_target+Vector3.UP*(.09+((camp_jump_height if solo_setting else .52)*setter.stamina.effectiveness() if jump_rep() else 0.))
+			catch_point=forehead_target+Vector3.UP*(.09+(preload("res://scripts/setter_jump.gd").COURT_VERTICAL_SCALE*(camp_jump_height if solo_setting else .52)*setter.stamina.effectiveness() if jump_rep() else 0.))
 			if elapsed>=.30 and clock>=next_release and rotation_drill.floor_clear():
 				if solo_setting: last_camp_toss=camp_receive_spot
 				last_toss = clock
@@ -1305,7 +1307,7 @@ func step_practice(delta: float) -> void:
 			var takeoff_lead := cpu_jump_lead
 			if not automatic_setter():
 				var rise: float=height*setter.stamina.effectiveness() if jump_rep() else 0.
-				catch_point.y=forehead_target.y+.09+rise
+				catch_point.y=forehead_target.y+.09+rise*preload("res://scripts/setter_jump.gd").COURT_VERTICAL_SCALE
 				var velocity := (forehead_target.y-source.y)/forehead_arrival+4.905*forehead_arrival
 				contact_time=(velocity+sqrt(maxf(0.,velocity*velocity-19.62*(catch_point.y-source.y))))/9.81
 				takeoff_lead=.07+jump.flight_duration(rise,true)*.5

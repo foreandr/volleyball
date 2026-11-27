@@ -109,11 +109,11 @@ func attack_meter_error() -> float:
 
 func attack_contact_height() -> float:
 	# Match the open palm in the authored spike pose at jump apex.
-	return START.y+hitter.height_cm*.0118+effective_attack_height()
+	return START.y+hitter.height_cm*.0118+effective_attack_height()*preload("res://scripts/setter_jump.gd").COURT_VERTICAL_SCALE
 
 func planned_attack_contact_height() -> float:
 	# A setter who underreads fatigue can leave a tired hitter reaching slightly high.
-	var lost_reach := maxf(0.,jump_height-effective_attack_height())
+	var lost_reach := maxf(0.,(jump_height-effective_attack_height())*preload("res://scripts/setter_jump.gd").COURT_VERTICAL_SCALE)
 	var read := clampf(setter.effective_rating("Hand setting")/100.,0.,1.)
 	return attack_contact_height()+minf(lost_reach,.30)*(1.-read)
 
@@ -1007,10 +1007,10 @@ func predicted_attack_origin() -> Vector3:
 	for i in 25:
 		var t := lerpf(contact_age,flight_time,i/24.)
 		var air := clampf((attack_jump.elapsed+t-elapsed-attack_jump.load_duration())/maxf(.001,attack_jump.flight_duration(effective_attack_height(),true)),0.,1.)
-		var top := START.y+reach+4.*effective_attack_height()*air*(1.-air)+Contact.BALL_RADIUS
+		var top := START.y+reach+4.*effective_attack_height()*preload("res://scripts/setter_jump.gd").COURT_VERTICAL_SCALE*air*(1.-air)+Contact.BALL_RADIUS
 		var point := arc(source,endpoint,t/flight_time,set_arc_height)
 		if point.y<=top: return point
-	return Vector3(endpoint.x,minf(endpoint.y,START.y+reach+effective_attack_height()),endpoint.z)
+	return Vector3(endpoint.x,minf(endpoint.y,START.y+reach+effective_attack_height()*preload("res://scripts/setter_jump.gd").COURT_VERTICAL_SCALE),endpoint.z)
 
 func predicted_net_hit(origin: Vector3, landing: Vector3) -> Dictionary:
 	var flight := attack_flight_time(origin,landing)

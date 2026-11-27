@@ -49,10 +49,11 @@ func _ready() -> void:
 		box("Side masonry",Vector3(0.25,9,36+rear_extension),Vector3(side*16.3,4.4,2-rear_extension*.5),block)
 		for row in 4:
 			var x: float = side*(FRONT_BENCH_X+row*0.69)
-			box("Bleacher bench",Vector3(0.65,0.15,27),Vector3(x,0.48+row*0.37,3),wood)
 			var height := .48+row*.37
-			box("Seat front lip",Vector3(.037,.036,26.98),Vector3(x-side*.312,height+.048,3),wood)
-			box("Seat underframe",Vector3(.06,.085,26.96),Vector3(x,height-.115,3),steel)
+			for center in [-6.,3.,12.]:
+				box("Bleacher bench",Vector3(.65,.15,8.),Vector3(x,height,center),wood)
+				box("Seat front lip",Vector3(.037,.036,7.98),Vector3(x-side*.312,height+.048,center),wood)
+				box("Seat underframe",Vector3(.06,.085,7.96),Vector3(x,height-.115,center),steel)
 			for z in [-9,-5,-1,3,7,11,15]:
 				box("Bleacher foot plate",Vector3(.30,.028,.22),Vector3(x,.018,z),steel)
 				brace(Vector3(x,.10,z),Vector3(x,height-.1,z+.75),.045,steel)
@@ -123,7 +124,7 @@ func _ready() -> void:
 
 func seat_teammates(create_player: Callable, profile: Callable = Callable()) -> Array:
 	var occupied := []
-	var seats := [[-1,1,-3.0],[1,0,-1.1],[-1,1,0.9],[1,0,1.4],[-1,2,3.3],[1,1,4.2],[-1,0,5.5],[1,2,6.0],[-1,2,7.8],[1,1,8.0]]
+	var seats := [[-1,1,-3.0],[1,0,-.6],[-1,1,0.9],[1,0,1.4],[-1,2,3.3],[1,1,4.2],[-1,0,5.5],[1,2,6.0],[-1,2,8.6],[1,1,8.8]]
 	for i in seats.size():
 		var seat: Array = seats[i]
 		var side := int(seat[0])
@@ -135,9 +136,10 @@ func seat_teammates(create_player: Callable, profile: Callable = Callable()) -> 
 		athlete_.rotation.y = -side*PI/2
 		athlete_.play_action("base/Sitting_Talking",0)
 		athlete_.animator.seek(i*.31,true)
-		var idx := (4 if side==1 else 0)+row
+		var section := clampi(roundi((float(seat[2])+6.)/9.),0,2)
+		var idx := ((4 if side==1 else 0)+row)*3+section
 		var constraint := preload("res://scripts/bleacher_seat.gd").new()
-		constraint.configure(athlete_,benches[idx],benches[idx-1] if row>0 else null,side,float(seat[2]))
+		constraint.configure(athlete_,benches[idx],benches[idx-3] if row>0 else null,side,float(seat[2]))
 		occupied.append(constraint)
 	return occupied
 

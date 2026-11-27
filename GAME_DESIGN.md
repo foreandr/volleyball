@@ -337,3 +337,5 @@ Drill entry shows a clockwise progress ring around the bound button. The target 
 Career hitting opens with a teammate attacking preset 2 sets while the career athlete waits at the sideline. Holding the entry button brings the career athlete in. Future feature: increasing Hand setting skill unlocks progressively faster set tempos.
 
 Falcons team branding uses crimson and dark red with cream and gold crest details on the uniforms and home court.
+
+Displayed vertical stays in profile inches. On-court jump displacement uses four thirds of the rated height before fatigue and jump loading.
