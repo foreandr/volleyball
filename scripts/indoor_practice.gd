@@ -1862,17 +1862,16 @@ var speaker: Node3D
 var speech_left := 0.0
 var intro_line := -1
 
-var coach_comment_delay:=0.
+
 var gesture_age:=-1.
 var gesture_keys:Dictionary={}
 
 func coach_react(event:String) -> void:
-	if coach_comment_delay>0. or speech_left>0.: return
-	if randf()>(.27 if event=="praise" else .58): return
+	if speech_left>0. and speaker!=coach: return
+	if randf()>.75: return
 	var quip:=preload("res://scripts/coach_reactions.gd").line(event)
 	say(coach,quip,clampf(.7+quip.length()*.047,3.,6.))
-	coach_comment_delay=speech_left+randf_range(3.,7.)
-	if phase in ["footwork_demo","footwork","pepper","demo"] and randf()<.55 and coach_motion.whistle_cue.signal_time<0.:
+	if quip.length()>10 and phase in ["footwork_demo","footwork","pepper","demo"] and randf()<.55 and coach_motion.whistle_cue.signal_time<0.:
 		begin_coach_gesture(event=="praise")
 
 func begin_coach_gesture(praise:bool) -> void:
@@ -1910,12 +1909,12 @@ func step_coach_gesture(delta:float) -> void:
 func say(actor: Node3D, speech: String, seconds: float) -> void:
 	speaker = actor
 	words.text = speech
+	words.custom_minimum_size.x=clampf(words.get_theme_font("font").get_string_size(speech,HORIZONTAL_ALIGNMENT_LEFT,-1,words.get_theme_font_size("font_size")).x+6.,28.,260.)
 	speech_left = seconds
 	bubble.reset_size()
 	update_speech(0)
 
 func update_speech(delta: float) -> void:
-	coach_comment_delay=maxf(0.,coach_comment_delay-delta)
 	step_coach_gesture(delta)
 	speech_left = maxf(0, speech_left - delta)
 	bubble.visible = speech_left > 0 and not settings.visible
