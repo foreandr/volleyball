@@ -66,6 +66,7 @@ func route_point(slot: int) -> Vector3:
 		return Vector3(-1.25 if middle_31 else .85,3.05,5.0)
 	return ATTACK_POINTS[slot]
 
+var shuffle_angles := PackedFloat32Array([0.,0.,0.,0.])
 var attack_options: Array[Node3D]=[]
 var set_duration := 1.35
 const MIDDLE_HOME := Vector3(0,.04,4.72)
@@ -368,6 +369,7 @@ func _exit_tree() -> void:
 	super()
 
 func next_serve() -> void:
+	for i in shuffle_angles.size(): shuffle_angles[i]=randf_range(-PI,PI)
 	first_pass_dropping=false
 	off_blocker=-1
 	server_dig_held=false
@@ -958,6 +960,16 @@ func stage_attacker(actor: Node3D,slot: int,delta: float) -> void:
 	if slot in [0,2] and phase=="serve_pass":
 		pin_load=smoothstep(0.,.52,.57-(set_at-pass_clock))
 		if slot!=attack_slot and pass_in_system and pin_flight_time(slot)<=ONE_FLIGHT: point.z-=.45*pin_load
+	# Trace a curved runway while reading the pass. Narrow it as the set approaches.
+	shuffle_angles[slot]+=delta*1.65
+	var angle := shuffle_angles[slot]
+	var width := .80 if slot==1 else 1.35
+	var remaining := maxf(0.,set_at-pass_clock) if phase=="serve_pass" else 2.
+	var spread := lerpf(.45,1.,smoothstep(0.,.85,remaining))
+	point.x+=width*sin(angle)*spread
+	point.z+=.48*cos(angle)*spread
+	if phase=="serve_pass" and slot in [0,2]:
+		point.z-=.52*(1.-smoothstep(0.,1.2,remaining))
 	if slot==1 and phase in ["serve_toss","serve_flight","serve_pass"]:
 		var start := second_contact_player().global_position.slide(Vector3.UP)
 		var finish := (pass_end if phase=="serve_pass" else SETTER_BASE).slide(Vector3.UP)
@@ -972,7 +984,9 @@ func stage_attacker(actor: Node3D,slot: int,delta: float) -> void:
 				point.z=maxf(point.z,retreat_depth)
 	var parent := actor.get_parent_node_3d()
 	var facing := parent.to_local(route_point(slot) if pin_load>0. else ball.global_position)-actor.position
+	var before := actor.global_position
 	move_receiver(actor,parent.to_local(point),delta,facing,GroundControls.speed(true,false),true)
+	actor.set_meta("approach_velocity",(actor.global_position-before)/maxf(.001,delta))
 	if pin_load>0. and slot!=attack_slot: actor.pose_pin_draw(pin_load)
 
 func clear_ground_step(actor: Node3D,step: Vector3) -> Vector3:

@@ -66,8 +66,11 @@ func configure_for_match(actor: Node3D, readout: Label) -> void:
 	region.hide()
 	set_ball_audio_muted(true)
 
+var entry_velocity := Vector3.ZERO
+
 func start_set(actor: Node3D, origin: Vector3, velocity: Vector3, target: Vector3, shot: Vector3, age: float, held: bool) -> void:
 	setter = actor
+	entry_velocity=actor.get_parent_node_3d().global_basis.inverse()*Vector3(actor.get_meta("approach_velocity",Vector3.ZERO))
 	rally_shot="spike"
 	feed_origin=origin
 	jump.attack_arm_lift=chase_late_sets
@@ -156,13 +159,13 @@ func chase_committed_set(delta: float) -> void:
 	var lead := jump.LEAD_STEP_TIME if full_approach else 0.
 	var runway := 1.7 if full_approach else 1.35
 	if remaining>rise+lead+.18:
-		if gap.length()>runway:
-			var step := gap.limit_length(minf(gap.length()-runway,4.8*delta))
-			setter.position+=step
-			setter.rotation.y=rotate_toward(setter.rotation.y,atan2(gap.x,gap.z),8.*delta)
-			setter.play_travel_gait(step/maxf(delta,.001))
-		else:
-			setter.play_ground_gait(0.)
+		var lead_time := maxf(delta,remaining-rise-lead-.18)
+		var pace := clampf((gap.length()-runway)/lead_time,.55,4.8)
+		entry_velocity=entry_velocity.move_toward(gap.normalized()*pace,11.*delta)
+		var step := (entry_velocity*delta).limit_length(gap.length())
+		setter.position+=step
+		setter.rotation.y=rotate_toward(setter.rotation.y,atan2(gap.x,gap.z),8.*delta)
+		setter.play_travel_gait(step/maxf(delta,.001))
 		setter.animator.advance(delta)
 		return
 	if gap.length()>2.1:

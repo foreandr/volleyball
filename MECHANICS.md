@@ -187,3 +187,4 @@ Reception Test flashes the receiving court perimeter green for an ace or red for
 Before a serve in Serving Camp and Reception Test, LB and RB rotate the held ball in opposite directions. A tap turns five degrees; a hold turns continuously. The chosen panel orientation starts each toss and persists between serves and launches.
 
 In Reception Test the left pin walks into the approach during the pass and attacks deep zone six. The server can move into defense, hold A and release near platform contact to dig.
+During serve receive, available hitters shuffle through curved approach lanes. The set chase carries the incoming ground velocity toward the plant.

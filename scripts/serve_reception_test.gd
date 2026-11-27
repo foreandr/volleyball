@@ -59,15 +59,7 @@ func next_serve() -> void:
 	receiving_setter.position=Vector3(map.pass_goal.x,.04,maxf(map.pass_goal.z,BallNet.NET_Z+.25))
 
 func stage_attacker(actor: Node3D,slot: int,delta: float) -> void:
-	if actor!=pin_hitter: return
-	if phase!="serve_pass":
-		super.stage_attacker(actor,slot,delta)
-		return
-	var entry := route_point(slot)+Vector3(signf(transition_base(slot).x)*.60,0.,2.)
-	var local := actor.get_parent_node_3d().to_local(entry)
-	var heading := (local-actor.position).slide(Vector3.UP)
-	var pace := clampf(heading.length()/maxf(delta,set_at-pass_clock),.30,3.8)
-	move_receiver(actor,local,delta,heading,pace)
+	if actor==pin_hitter: super.stage_attacker(actor,slot,delta)
 
 func step_serve_wall(_delta: float) -> void:
 	pass
