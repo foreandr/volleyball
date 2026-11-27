@@ -239,7 +239,7 @@ func step_serve_reception(_shot,previous: Vector3,_delta: float) -> void:
 	if not accept_reception(previous): return
 	receive_read.covered()
 	pass_start=ball.position
-	pass_end=map.pass_goal
+	pass_end=reception_pass_target()
 	pass_end.y=receiving_setter.height_cm*.0118
 	pass_duration=sqrt(2.*map.pass_rise/9.81)+sqrt(2.*maxf(.05,pass_start.y+map.pass_rise-pass_end.y)/9.81)
 	pass_clock=0.
@@ -249,6 +249,9 @@ func step_serve_reception(_shot,previous: Vector3,_delta: float) -> void:
 	phase="serve_pass"
 	if recipe.kind!="overhead": dig_sound.play()
 	message.text="Pass"
+
+func reception_pass_target() -> Vector3:
+	return map.pass_goal
 
 func accept_reception(previous: Vector3) -> bool:
 	return mapped_touch(map,recipe,previous)

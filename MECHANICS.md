@@ -196,8 +196,10 @@ The shared practice floor ring shows remaining stamina as a white arc over black
 Reception Test accepts dig releases within 125 ms either side of contact and offers a saved 0-25 cm body reach assist (12 cm by default). Passing / Receive CPU Serves feeds the controlled libero standing floats, uses the assigned reception motion and scores the A release against physical contact.
 Receive CPU Serves leaves the libero mobile until A is held. It maps the remaining flight from the current stance and accepts releases 210 ms early or 150 ms late. A floor ring forecasts the airborne ball's landing and updates when a new touch changes its flight.
 
-Receive CPU Serves continues a pass through the setter and left-side attacker to a zone-six digger. Control digger switches the player to defense and gives reception to the CPU. Manual serve reception grades release against the same contact time shown on the ground ring, with green within 85 ms.
+Receive CPU Serves continues a pass through the setter and left-side attacker to a zone-six digger. Control digger switches the player to defense and gives reception to the CPU. Manual serve reception grades release against the same contact time shown on the ground ring, with green at the posed platform.
 
 Practice replay records the displayed ground timing arc, its cursor, timing bands and release highlight for each sampled frame.
 
 Receive CPU Serves freezes the signed pass-release grade in the replay at release and reports the contact outcome separately.
+
+Manual serve reception buffers early releases until a fresh swept platform contact. Early and late touches lose accuracy. The late band ends 20 cm behind the animated torso along the incoming horizontal flight direction.

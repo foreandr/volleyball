@@ -76,9 +76,8 @@ func _draw() -> void:
 		var passer: Node3D=game.passers[1]
 		draw_player(passer,true)
 		if not game.reception_release.is_empty() or (game.phase=="serve_flight" and not game.recipe.is_empty()):
-			var t: float=(game.released_at if is_finite(game.released_at) else game.flight_age)-game.receive_at
-			if not game.reception_release.is_empty(): t=game.reception_release.offset
-			timing_arc(passer,clampf(.5+t/.5,0.,1.),.5-game.RECEIVE_PERFECT/.5,.5+game.RECEIVE_PERFECT/.5,Vector2(.5-game.RECEIVE_EARLY/.5,.5+game.RECEIVE_LATE/.5),Color("14191d"),is_finite(game.released_at))
+			var meter: Dictionary=game.pass_meter()
+			timing_arc(passer,meter.value,.33,.67,Vector2(.08,.90),Color("14191d"),not game.reception_release.is_empty())
 		return
 	var human: Node3D=game.rotation_drill.roster[0]
 	if "automatic_block" in game:

@@ -27,9 +27,53 @@ var touched_at := INF
 var receive_committed := false
 var reception_release := {}
 var reception_result := ""
-const RECEIVE_PERFECT := .085
+const BODY_CUSHION := .20
+var incoming_axis := Vector3.FORWARD
+var incoming_speed := 1.
+var platform_depth := 0.
+var pass_timing_ready := false
+
+func bind_contact_motion(mapper: Map,root: Node3D,actor: Node3D,home: Vector3,source: Vector3,best: Dictionary) -> Dictionary:
+	var motion := super.bind_contact_motion(mapper,root,actor,home,source,best)
+	if mapper!=map or control_digger: return motion
+	mapper.sample_receiver(motion,motion.contact,true,mapper.legs)
+	var shot=serves[flight_style()]
+	var velocity: Vector3=(shot.flight_point(receive_at+.005)-shot.flight_point(receive_at))/.005
+	var horizontal := velocity.slide(Vector3.UP)
+	incoming_speed=maxf(.1,horizontal.length())
+	incoming_axis=horizontal.normalized()
+	var platform: Vector3=mapper.HandPass.contact_center(actor) if motion.kind=="overhead" else (Contact.joint(actor,"hand_l")+Contact.joint(actor,"hand_r"))*.5
+	if motion.kind!="overhead":
+		platform=platform.lerp((Contact.joint(actor,"lowerarm_l")+Contact.joint(actor,"lowerarm_r"))*.5,.3)
+	var body_depth := Contact.joint(actor,"spine_02").dot(incoming_axis)
+	platform_depth=minf(platform.dot(incoming_axis),body_depth)
+	receive_at=clampf(receive_at+(platform_depth-mapper.set_intercept.dot(incoming_axis))/incoming_speed,0.,shot.planned_duration)
+	pass_timing_ready=true
+	return motion
+
+func pass_meter(point := Vector3.INF) -> Dictionary:
+	if not reception_release.is_empty(): return reception_release
+	if not point.is_finite(): point=ball.global_position
+	var depth := point.dot(incoming_axis)
+	var behind := depth-Contact.joint(passers[1],"spine_02").dot(incoming_axis)
+	var distance := depth-platform_depth
+	var offset := distance/incoming_speed
+	var green := .12
+	var late_distance := maxf(.001,BODY_CUSHION-behind+distance)
+	var green_end := minf(green,late_distance*.5)
+	var cursor: float
+	if distance< -green:
+		cursor=remap(offset,-RECEIVE_EARLY,-green/incoming_speed,.08,.33)
+	elif distance<=green_end:
+		cursor=remap(distance,-green,green_end,.33,.67)
+	else:
+		cursor=remap(distance,green_end,late_distance,.67,.90)
+	var expired := behind>BODY_CUSHION
+	if expired: cursor=1.
+	var grade := "Past receiver" if expired else ("Early" if distance< -green else ("Perfect" if distance<=green_end else "Late"))
+	return {"value":clampf(cursor,0.,1.),"offset":offset,"grade":grade,"playable":not expired and offset>=-RECEIVE_EARLY}
+
 const RECEIVE_EARLY := .21
-const RECEIVE_LATE := .15
 
 func receiver_candidates() -> Array:
 	return [1]
@@ -52,6 +96,7 @@ func next_serve() -> void:
 	receive_committed=false
 	cpu_wait=1.25
 	receive_held=false
+	pass_timing_ready=false
 	reception_release={}
 	reception_result=""
 	released_at=INF
@@ -145,13 +190,15 @@ func step_serve_reception(shot,previous: Vector3,delta: float) -> void:
 	super.step_serve_reception(shot,previous,delta)
 
 func record_receive_release() -> void:
-	if not reception_release.is_empty() or not is_finite(released_at) or (recipe.is_empty() and chase_box.is_empty()): return
-	var offset := released_at-receive_at
-	var grade := "Perfect" if absf(offset)<=RECEIVE_PERFECT else ("Early" if offset<0. else "Late")
+	if not reception_release.is_empty() or not is_finite(released_at) or not pass_timing_ready: return
+	reception_release=pass_meter(serves[flight_style()].flight_point(released_at))
+	var offset: float=reception_release.offset
+	var grade: String=reception_release.grade
 	var ms := roundi(offset*1000.)
 	var label := "Pass release  /  %s  (%+d ms)" % [grade,ms]
-	reception_release={"label":label,"offset":offset,"playable":offset>=-RECEIVE_EARLY and offset<=RECEIVE_LATE}
-	show_release_feedback(offset,true,RECEIVE_PERFECT)
+	reception_release.label=label
+	show_release_feedback(offset,true)
+	dig_feedback.add_theme_color_override("font_color",Color("78e1ad") if grade=="Perfect" else (Color("ffd36b") if grade=="Early" else Color("ff9086")))
 	dig_feedback.text=label
 	trace("pass_release",{"zone":routed_zone,"release_s":released_at,"target_s":receive_at,"offset_ms":ms,"grade":grade})
 
@@ -160,6 +207,8 @@ func show_service_ace() -> void:
 	if control_digger: return
 	if reception_release.is_empty():
 		reception_result="No timed release"
+	elif reception_release.grade=="Past receiver":
+		reception_result="Ball past receiver"
 	elif not reception_release.playable:
 		reception_result="Outside timing window"
 	else:
@@ -168,10 +217,20 @@ func show_service_ace() -> void:
 
 func accept_reception(previous: Vector3) -> bool:
 	if control_digger: return super.accept_reception(previous)
-	if mapped_touch(map,recipe,previous) and not is_finite(touched_at): touched_at=flight_age
+	if not pass_timing_ready: return false
+	var body := Contact.joint(passers[1],"spine_02")
+	if (ball.position-body).dot(incoming_axis)>BODY_CUSHION: return false
+	if not mapped_touch(map,recipe,previous): return false
+	touched_at=flight_age
 	if not is_finite(touched_at) or not is_finite(released_at): return false
 	record_receive_release()
 	if reception_release.get("playable",false):
 		reception_result="Pass"
 		return true
 	return false
+
+func reception_pass_target() -> Vector3:
+	var target := super.reception_pass_target()
+	if control_digger or reception_release.get("grade","Perfect")=="Perfect": return target
+	var error := clampf(absf(float(reception_release.offset))/RECEIVE_EARLY,.12,1.)
+	return target+Vector3(randf_range(-.8,.8),0.,randf_range(-.65,.65))*error
