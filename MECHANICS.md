@@ -192,3 +192,4 @@ In Reception Test, attack speed scales the defender's preparation up to 1.8x. Th
 In Reception Test, a serve outside all stationary contact maps triggers a ball-facing sprint shuffle toward a reachable assigned motion, including forward and backward coverage.
 In Reception Test, recorded digs include the defender's mapped pose. Dig release timing also accepts actual platform contact, and successful digs rise 3.4 m above contact. The libero shifts in depth on uncovered serves across all three lanes.
 Reception Test displays dig release timing in milliseconds, using measured platform contact when available and labeling predicted timing as estimated.
+The shared practice floor ring shows remaining stamina as a white arc over black. Dig release feedback fades in and out at screen center.

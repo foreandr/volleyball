@@ -18,7 +18,9 @@ func make_ring_mesh() -> void:
 		ring_mesh.surface_set_color(band[2])
 		for i in 65:
 			var direction := Vector3(cos(TAU*i/64.),0.,sin(TAU*i/64.))
+			ring_mesh.surface_set_uv(Vector2(i/64.,0.))
 			ring_mesh.surface_add_vertex(direction*float(band[0]))
+			ring_mesh.surface_set_uv(Vector2(i/64.,1.))
 			ring_mesh.surface_add_vertex(direction*float(band[1]))
 		ring_mesh.surface_end()
 
@@ -26,11 +28,16 @@ func position_floor_ring(actor: Node3D) -> void:
 	if not floor_rings.has(actor):
 		var ring := MeshInstance3D.new()
 		ring.mesh=ring_mesh
+		var fill := ShaderMaterial.new()
+		fill.shader=preload("res://assets/gym/court_stamina.gdshader")
+		ring.set_surface_override_material(1,fill)
 		ring.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		actor.add_child(ring)
 		ring.top_level=true
 		floor_rings[actor]=ring
 	var ring: MeshInstance3D=floor_rings[actor]
+	var fill: ShaderMaterial=ring.get_surface_override_material(1)
+	fill.set_shader_parameter("remaining",clampf(actor.stamina.fraction(),0.,1.))
 	ring.global_transform=Transform3D(Basis.IDENTITY,Vector3(actor.global_position.x,.055,actor.global_position.z))
 	ring.show()
 	if ring.get_child_count()>0: ring.get_child(0).hide()
@@ -144,19 +151,8 @@ func draw_player(actor: Node3D,human: bool) -> void:
 	var is_setter: bool=game!=null and actor==game.setter
 	var radius := Vector2(clampf(at.distance_to(camera.unproject_position(foot+camera.global_basis.x*.67)),25,77),0)
 	radius.y=radius.x*.35
-	var ink := Color("10171d")
 	position_floor_ring(actor)
 	if (is_setter or human) and not (is_setter and game!=null and "automatic_block" in game):
-		var energy: RefCounted=actor.stamina
-		var origin := at+Vector2(-52,radius.y+25)
-		draw_rect(Rect2(origin-Vector2.ONE,Vector2(106,9)),Color.WHITE)
-		draw_rect(Rect2(origin,Vector2(104,7)),ink)
-		var available := float(energy.fraction())*104.
-		draw_rect(Rect2(origin,Vector2(available,7)),Color.WHITE)
-		var spent := minf(104.-available,energy.action_cost/energy.capacity()*104.)
-		if spent>0.: draw_rect(Rect2(origin+Vector2(available,0),Vector2(spent,7)),Color("51cbe9"))
-		if energy.value<0.:
-			draw_rect(Rect2(origin,Vector2(104.*absf(energy.value)/maxf(1.,energy.willpower),7)),Color("d7a6ff"))
 		if is_setter and game!=null and game.has_method("serve_meter_error") and (game.phase=="serve_toss" or (game.phase in ["serve_flight","serve_miss"] and game.flight_age<.4)):
 			var contact := Vector2(game.serve_meter_position(game.SERVE_EARLY),game.serve_meter_position(game.SERVE_LATE))
 			timing_arc(actor,game.serve_meter_position(game.serve_meter_error()),game.serve_meter_position(-game.SERVE_PERFECT),game.serve_meter_position(game.SERVE_PERFECT),contact,Color("14191d"),is_finite(game.release_time))

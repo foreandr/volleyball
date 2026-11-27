@@ -9,6 +9,8 @@ var defense_at := INF
 var defense_contact := -INF
 var first_dig_touch := -INF
 var dig_feedback := Label.new()
+var feedback_tween: Tween
+var feedback_rally := -1
 const DIG_WINDOW := .095
 const DIG_PERFECT := .045
 var stance_points: Array[Vector3]=[]
@@ -54,8 +56,14 @@ func start_drill() -> void:
 					boxes.append({"cell":cell,"part":part,"id":id,"bounds":AABB(map.region_center(cell,part)-size*.5,size)})
 	super.start_drill()
 	title.text="SERVING  /  RECEPTION TEST"
-	message.get_parent().add_child(dig_feedback)
-	message.get_parent().move_child(dig_feedback,message.get_index()+1)
+	add_child(dig_feedback)
+	dig_feedback.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dig_feedback.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+	dig_feedback.vertical_alignment=VERTICAL_ALIGNMENT_CENTER
+	dig_feedback.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	dig_feedback.add_theme_font_size_override("font_size",34)
+	dig_feedback.add_theme_constant_override("outline_size",7)
+	dig_feedback.add_theme_color_override("font_outline_color",Color("192029"))
 	dig_feedback.hide()
 	for actor in wall+[receiving_middle]: actor.hide()
 
@@ -313,12 +321,22 @@ func update_dig_feedback() -> void:
 	var measured := is_finite(first_dig_touch)
 	var reference := first_dig_touch if measured else defense_at
 	var ms := roundi((release-reference)*1000.)
-	var label := "Dig  %d ms" % absi(ms)
-	if ms!=0: label+=" early" if ms<0 else " late"
-	else: label+=" on time"
+	var direction := "Early" if ms<0 else ("Late" if ms>0 else "On time")
+	var label := "%s  %d ms" % [direction,absi(ms)]
 	if not measured: label+=" (estimated)"
 	dig_feedback.text=label
+	dig_feedback.add_theme_color_override("font_color",Color("ffd36b") if ms<0 else (Color("ff9086") if ms>0 else Color("78e1ad")))
+	if feedback_rally==replay_rally: return
+	feedback_rally=replay_rally
+	if feedback_tween: feedback_tween.kill()
+	dig_feedback.modulate.a=0.
 	dig_feedback.show()
+	feedback_tween=create_tween()
+	feedback_tween.tween_property(dig_feedback,"modulate:a",1.,.16)
+	feedback_tween.tween_interval(1.05)
+	feedback_tween.tween_property(dig_feedback,"modulate:a",0.,.38)
+	feedback_tween.tween_callback(dig_feedback.hide)
+
 
 func attack_surface_contact(point: Vector3,floor_hit: bool) -> void:
 	if phase=="serve_return" and attack_floor_pending and floor_hit:
