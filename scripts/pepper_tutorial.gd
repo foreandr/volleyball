@@ -98,11 +98,24 @@ func configure(host,readout:Label,completed:int) -> void:
 		if zones.is_empty(): zones=mapper.assigned_boxes()
 		var outcomes:=preload("res://scripts/demo_outcomes.gd").new(25)
 		pairs.append({"bands":[],"last_band":-1,"rise":randf_range(2.35,3.05),"outcomes":outcomes,"cpu_misses":outcomes.next_misses(),"receiver":receiver,"feeder":feeder,"ball":orb,"age":-i*.21,"caught":false,"platform":receiver.global_position+Vector3.UP,"home":receiver.global_transform,"mapper":mapper,"zone_step":i,"motion":{},"flying":false,"hit":false,"swing":false,"origin":hands(feeder)})
+		var prediction:=projected_landing.bind(pairs.back())
+		if i==0: host.landing_ring.location=prediction
+		else: preload("res://scripts/ball_landing_marker.gd").attach(orb,prediction)
 		choose_toss(pairs.back())
 		choose_return(pairs.back(),demonstrating or i!=0)
 	athletes[8].position=Vector3(-5.3,.04,2.)
 	feedback.text="%d / 5 passes"%score
 	if score==5: complete()
+
+func projected_landing(pair:Dictionary) -> Vector3:
+	if not pair.flying or pair.ball.position.y<=.15: return Vector3.INF
+	var marker=preload("res://scripts/ball_landing_marker.gd")
+	if not pair.caught or not pair.hit:
+		return marker.parabola(pair.origin,pair.platform,pair.flight_time,pair.toss_rise)
+	if not pair.has("return_end"): return Vector3.INF
+	var duration:=sqrt(8.*float(pair.rise)/9.81)
+	if pair.age>=pair.contact_age+duration: return Vector3.INF
+	return marker.parabola(pair.contact_point,pair.return_end,duration,pair.rise)
 
 func choose_return(pair:Dictionary,cpu:bool) -> void:
 	if not cpu: pair.rise=randf_range(2.35,3.05)
@@ -127,6 +140,7 @@ func choose_toss(pair:Dictionary) -> void:
 func plan_reception(pair:Dictionary) -> void:
 	var mapper:Map=pair.mapper
 	var receiver:Node3D=pair.receiver
+	var entry_root:=receiver.global_transform
 	receiver.global_transform=pair.home
 	# Work through center, side, low and high feeds in receiver-local space.
 	var lanes:=[Vector3(0,1.05,.55),Vector3(.08,2.17,.67),Vector3(-.65,.42,.75),Vector3(-.08,1.98,.68),Vector3(-.68,1.15,.45),Vector3(.68,.45,.7)]
@@ -172,6 +186,8 @@ func plan_reception(pair:Dictionary) -> void:
 		pair.platform.z=landing.z
 		mapper.set_intercept+=chase-base
 		receiver.global_transform=pair.home
+	receiver.global_transform=entry_root
+	for bone in mapper.entry_pose.size(): receiver.skeleton.set_bone_pose(bone,mapper.entry_pose[bone])
 	game.trace("pepper_grid",{"region":mapper.region_number(best.cell,best.part),"animation":pair.motion.id,"kind":pair.motion.kind,"receiver":receiver.display_name})
 
 func start_human_turn() -> void:
@@ -182,23 +198,36 @@ func start_human_turn() -> void:
 	choose_return(pair,false)
 	var demo:Node3D=pair.receiver
 	var human:Node3D=game.setter
-	human.global_position=pair.home.origin
-	human.rotation.y=atan2(pair.feeder.position.x-human.position.x,pair.feeder.position.z-human.position.z)
-	pair.home=human.global_transform
-	demo.global_basis=Basis(Vector3.UP,PI*.5)
-	demo.position=Vector3(-game.gym.FRONT_BENCH_X,.04,-2.9)
-	for modifier in demo.skeleton.get_children():
-		if modifier is SkeletonModifier3D: modifier.active=true
-	demo.play_action("base/Sitting_Talking",0.)
-	demo.animator.seek(.62,true)
-	var seat:=preload("res://scripts/bleacher_seat.gd").new()
-	seat.configure(demo,game.gym.benches[0],null,-1,-2.9)
-	game.seats_in_use.append(seat)
-	pair.receiver=human
 	if moving:
-		base=human.position
+		if pair.has("outgoing"):
+			# Finish the previous exchange before bringing the human onto court.
+			pair.deferred_entry=true
+			demonstrating=true
+			return
+		pair.outgoing=demo
+		pair.sideline=human.position
+		pair.exit_lane=Vector3(human.position.x+.8,human.position.y,demo.position.z-1.)
+		for modifier in demo.skeleton.get_children():
+			if modifier is SkeletonModifier3D: modifier.active=true
+		base=Vector3(FIVE_CENTER.x,.04,FIVE_CENTER.y)
 		steps=preload("res://scripts/directional_footwork.gd").new(human)
 		focus_cued=false
+	else:
+		human.global_position=pair.home.origin
+		human.rotation.y=atan2(pair.feeder.position.x-human.position.x,pair.feeder.position.z-human.position.z)
+		pair.home=human.global_transform
+		demo.global_basis=Basis(Vector3.UP,PI*.5)
+		demo.position=Vector3(-game.gym.FRONT_BENCH_X,.04,-2.9)
+		for modifier in demo.skeleton.get_children():
+			if modifier is SkeletonModifier3D: modifier.active=true
+		demo.play_action("base/Sitting_Talking",0.)
+		demo.animator.seek(.62,true)
+		var seat:=preload("res://scripts/bleacher_seat.gd").new()
+		seat.configure(demo,game.gym.benches[0],null,-1,-2.9)
+		game.seats_in_use.append(seat)
+	pair.receiver=human
+	pair.erase("reset_to_five")
+	pair.erase("release_pose")
 	pair.motion={}
 	pair.zone_step=0
 	human.play_action("idle",0.)
@@ -257,12 +286,74 @@ func move_passer(pair:Dictionary,dt:float) -> bool:
 	var toward:Vector3=(pair.feeder.position-base).slide(Vector3.UP).normalized()
 	return focused and actor.global_basis.z.normalized().dot(toward)>.93
 
+# Sample the idle underneath the captured procedural pose so unkeyed bones
+# and the player's placement both follow a continuous recovery.
+func recover_receiver(pair:Dictionary,dt:float) -> void:
+	var actor:Node3D=pair.receiver
+	var rig:Skeleton3D=actor.skeleton
+	if not pair.has("release_pose"):
+		var pose:Array[Transform3D]=[]
+		for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
+		pair.release_pose=pose
+		pair.recovery_age=0.
+		pair.release_root=actor.global_transform
+		if moving:
+			base=Vector3(actor.position.x,base.y,actor.position.z)
+			pair.home.origin=base
+		actor.play_action("idle",0.)
+	pair.recovery_age+=dt
+	var blend:=smoothstep(0.,.55,float(pair.recovery_age))
+	actor.animator.advance(dt)
+	# Interpolating opposite-handed bases drives all three scale axes through zero.
+	var start_root:Transform3D=pair.release_root
+	var end_root:Transform3D=pair.home
+	if start_root.basis.determinant()*end_root.basis.determinant()<0.:
+		end_root.basis.x=-end_root.basis.x
+	actor.global_transform=start_root.interpolate_with(end_root,blend)
+	if blend==1.: actor.global_transform=pair.home
+	if blend<1.:
+		for bone in rig.get_bone_count():
+			var start:Transform3D=pair.release_pose[bone]
+			rig.set_bone_pose(bone,start.interpolate_with(rig.get_bone_pose(bone),blend))
+
+func walk_rotation(actor:Node3D,destination:Vector3,dt:float) -> bool:
+	var toward:=destination-actor.position
+	if toward.length()<.015:
+		actor.play_action("idle",.18)
+		return true
+	var velocity:=toward.normalized()*3.5
+	Ground.face(actor,toward,dt)
+	actor.play_travel_gait(velocity)
+	actor.position=actor.position.move_toward(destination,velocity.length()*dt)
+	return false
+
 func tick(delta:float) -> void:
 	if finished: return
 	for i in pairs.size():
 		var pair:=pairs[i]
 		if moving:
 			var cart=game.rotation_drill
+			if pair.has("outgoing"):
+				var old:Node3D=pair.outgoing
+				var exit_goal:Vector3=pair.sideline
+				if pair.has("exit_lane"):
+					exit_goal=pair.exit_lane
+					if walk_rotation(old,exit_goal,delta): pair.erase("exit_lane")
+				var outgoing_done:=false
+				if not pair.has("exit_lane"): outgoing_done=walk_rotation(old,pair.sideline,delta)
+				var incoming_done:=walk_rotation(pair.receiver,base,delta)
+				if outgoing_done and incoming_done:
+					Ground.face(pair.receiver,pair.feeder.position-pair.receiver.position,delta)
+					pair.home=pair.receiver.global_transform
+					pair.erase("outgoing")
+					if pair.erase("deferred_entry"): start_human_turn()
+				continue
+			if pair.get("reset_to_five",false):
+				var ready_spot:=Vector3(FIVE_CENTER.x,.04,FIVE_CENTER.y)
+				if not walk_rotation(pair.receiver,ready_spot,delta): continue
+				base=ready_spot
+				pair.home=pair.receiver.global_transform
+				pair.erase("reset_to_five")
 			if cart_service.busy(delta): continue
 			if not pair.flying and not cart.issued:
 				pair.ball.hide()
@@ -309,12 +400,20 @@ func tick(delta:float) -> void:
 				orb.position=pair.origin.lerp(pair.platform,u)+Vector3.UP*4.*float(pair.toss_rise)*u*(1.-u)
 			var mapper:Map=pair.mapper
 			var frame:=clampf(pair.motion.contact+60.*(t-arrival),0.,pair.motion.frames)
-			if active: pair.swing=true
+			if active and not pair.swing:
+				# The human can begin preparing mid-flight. Blend from the pose
+				# actually on screen when they press, even on a late pickup.
+				mapper.entry_frame=frame
+				mapper.entry_duration=clampf(pair.motion.contact-frame,1.,9.)
+				mapper.entry_pose.clear()
+				for bone in receiver.skeleton.get_bone_count(): mapper.entry_pose.append(receiver.skeleton.get_bone_pose(bone))
+				mapper.entry_position=mapper.pose_origin.to_local(receiver.global_position)
+				var forward:Vector3=mapper.pose_origin.global_basis.inverse()*receiver.global_basis.z
+				mapper.entry_yaw=atan2(forward.x,forward.z)
+				pair.swing=true
 			if pair.swing and (not pair.caught or t<float(pair.contact_age)+.45): mapper.sample_receiver(pair.motion,frame,true,mapper.legs)
 			elif pair.swing:
-				receiver.global_transform=receiver.global_transform.interpolate_with(pair.home,1.-exp(-delta*12.))
-				receiver.play_action("idle",.18)
-				receiver.animator.advance(delta)
+				recover_receiver(pair,delta)
 			if active and not pair.caught and mapper.segment_touch(pair.motion,previous,orb.position): touched_at=t
 			var human_hit:=human and not released.is_empty() and bool(released.playable) and t-touched_at<=.095
 			var cpu_touch:=not human and moving and touched_at==t
@@ -341,6 +440,7 @@ func tick(delta:float) -> void:
 				var u:=clampf((t-float(pair.contact_age))/sqrt(8.*float(pair.rise)/9.81),0.,1.)
 				if pair.hit:
 					var catch_at:Vector3=game.coach_motion.toss(pass_target if moving else feeder,0.)
+					pair.return_end=catch_at
 					orb.position=game.arc(pair.contact_point,catch_at,u,pair.rise)
 				elif moving:
 					var fall:float=minf(pair.floor_u,(t-FEED)/pair.flight_time)
@@ -369,7 +469,9 @@ func tick(delta:float) -> void:
 					game.finish_pepper()
 				var next:Node3D=waiting.pop_front()
 				var sideline:=next.global_position
-				receiver.global_position=sideline
+				pair.outgoing=receiver
+				pair.sideline=sideline
+				pair.exit_lane=Vector3(sideline.x-.8,sideline.y,receiver.position.z-1.)
 				for modifier in receiver.skeleton.get_children():
 					if modifier is SkeletonModifier3D: modifier.active=true
 				receiver.play_action("idle",.16)
@@ -377,8 +479,6 @@ func tick(delta:float) -> void:
 				pair.receiver=next
 				receiver=next
 				base=Vector3(FIVE_CENTER.x,.04,FIVE_CENTER.y)
-				receiver.position=base
-				receiver.look_at(pair.feeder.position,Vector3.UP,true)
 				pair.home=receiver.global_transform
 				steps=preload("res://scripts/directional_footwork.gd").new(receiver)
 				demonstrating=true
@@ -394,7 +494,8 @@ func tick(delta:float) -> void:
 			pair.caught=false
 			pair.swing=false
 			pair.flying=false
-			receiver.global_transform=pair.home
+			pair.erase("release_pose")
+			if moving and demonstrating and not pair.has("outgoing"): pair.reset_to_five=true
 			receiver.play_action("idle",.16)
 			if i==0: needs_release=holding
 

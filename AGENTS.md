@@ -25,3 +25,5 @@
 
 Before every change, consult GAME_DESIGN.md and MECHANICS.md. Check every affected UI surface, including replay and pause overlays, for shared Xbox button glyphs and the keyboard-prompt preference.
 Persist player-adjustable drill settings in user data and restore them across launches and build iterations. Use new defaults only when a saved value is absent.
+
+For every new career, tournament, match, or drill scene, consult the shared court behavior in GAME_DESIGN.md. A change to a shared feature applies to every mode that uses it. Check those callers, including CPU demos and human play. Reuse the implementation and saved options. Document any intentional mode-specific exception.
