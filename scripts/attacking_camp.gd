@@ -817,13 +817,14 @@ func roll_reach_fraction() -> float:
 	var distance := (shot_landing(origin)-origin).slide(Vector3.UP).length()
 	return smoothstep(2.,10.,distance)
 
+var strike_launch_speed := 0.0
+
 func arm_speed_factor() -> float:
 	if tip_shot: return .90
-	if roll_shot:
-		return lerpf(.84,1.08,roll_reach_fraction())
-	var effort := float(review_setup.get("power",drill_hit_speed))
-	var pace := lerpf(1.,3.50,smoothstep(12.,32.,attack_speed()))
-	return pace*pow(effort/14.,.48)*lerpf(.70,1.20,preload("res://scripts/swing_speed.gd").arm(hitter))
+	if roll_shot: return lerpf(.84,1.08,roll_reach_fraction())
+	var speed := strike_launch_speed if phase=="spike" else attack_speed()*attack_jump.spike_power_factor()
+	# Anchor the full-speed stroke at 135 km/h and scale back for lighter contact.
+	return clampf(3.50*speed/(135./3.6),.65,4.5)
 
 func requested_set_arc() -> float:
 	return super.requested_set_arc()*rep_set_percent()*.01
@@ -909,6 +910,7 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 			var shot_time := attack_flight_time(ball.position,landing)
 			spin_acceleration=shot_spin_force(ball.position,landing,shot_time)
 			drop_velocity=launch_velocity(ball.position,landing,shot_time,spin_acceleration)
+			strike_launch_speed=drop_velocity.length()
 			roll_time=-1.
 			trace("spike",{"ball_contact":str(strike_point),"intended_contact":str(endpoint),"set_marker":str(active_set),"tip_shot":tip_shot,"roll_shot":roll_shot,"from":str(ball.position),"palm_gap":nearest.distance_to(palm),"contact_grade_ms":roundi(contact_grade*1000.) if is_finite(contact_grade) else null,"approach_delay_ms":roundi(approach_delay*1000.),"button_ms":roundi(release_grade*1000.) if is_finite(release_grade) else null})
 			spend_swing_stamina()
