@@ -499,7 +499,8 @@ func begin_point() -> void:
 	for index in players.size():
 		var actor := players[index]
 		var slot := (index-first_on(team(index)))
-		actor.position = Vector3(2.1*starting_lane(index),0.04,0.70 if slot >= 3 or (count_for(team(index)) == 3 and slot == 2) else -2.6)
+		var front_row:=slot>=3 or (count_for(team(index))==3 and slot==2)
+		actor.position=Vector3(2.1*starting_lane(index),.04,.70) if front_row else Vector3(GroundMovement.BACK_ROW_SPACING*starting_lane(index),.04,GroundMovement.BACK_ROW_DEPTH)
 		if team(index)!=service_team and not is_human(index):
 			actor.position=serve_coverage[team(index)].position_for(actor.position)
 		actor.rotation.y = 0.0

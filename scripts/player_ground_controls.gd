@@ -1,5 +1,12 @@
 extends RefCounted
 
+# Team-local defaults on a 9 m half court (net Z=4, baseline Z=-5).
+const BACK_ROW_DEPTH := -2.8
+const BACK_ROW_SPACING := 2.6
+const BACK_RIGHT := Vector3(-BACK_ROW_SPACING,.04,BACK_ROW_DEPTH)
+const BACK_MIDDLE := Vector3(0.,.04,BACK_ROW_DEPTH)
+const BACK_LEFT := Vector3(BACK_ROW_SPACING,.04,BACK_ROW_DEPTH)
+
 const Xbox = preload("res://scripts/xbox_controls.gd")
 
 # Both courts use team-local +Z toward the net.

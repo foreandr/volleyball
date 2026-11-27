@@ -1,7 +1,8 @@
 extends Node3D
 
 const HOME_KEYS := ["stance","defender_1","defender_2"]
-const DEFAULT_STANCES := [Vector3(-2.433,.052,-2.589),Vector3(.105,.052,-2.544),Vector3(2.69,.052,-2.537)]
+const Court=preload("res://scripts/player_ground_controls.gd")
+const DEFAULT_STANCES := [Court.BACK_RIGHT,Court.BACK_MIDDLE,Court.BACK_LEFT]
 const Regions = preload("res://scripts/reception_regions.gd")
 const REGION_14 := Vector3i(1,1,1)
 const REGION_20 := Vector3i(1,0,2)

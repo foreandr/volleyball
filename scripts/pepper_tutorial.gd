@@ -26,7 +26,7 @@ var moving:=false
 # From the near baseline, positive X is left. Five is the left backcourt.
 const FIVE_MIN:=Vector2(.65,-2.45)
 const FIVE_MAX:=Vector2(3.85,1.45)
-const FIVE_CENTER:=(FIVE_MIN+FIVE_MAX)*.5
+const FIVE_HOME:=preload("res://scripts/player_ground_controls.gd").BACK_LEFT
 var cart_service:=preload("res://scripts/reception_cart_service.gd").new()
 const SETTER_TWO_AND_HALF:=Vector3(-1.5,.04,2.85)
 var pass_target:Node3D
@@ -63,7 +63,7 @@ func configure(host,readout:Label,completed:int) -> void:
 		receiver.rotation.y=atan2(direction.x,direction.z)
 		feeder.rotation.y=receiver.rotation.y+PI
 		if moving:
-			receiver.position=Vector3(FIVE_CENTER.x,.04,FIVE_CENTER.y)
+			receiver.position=FIVE_HOME
 			feeder.position=Vector3(2.7,.04,10.8)
 			receiver.look_at(feeder.position,Vector3.UP,true)
 			feeder.look_at(receiver.position,Vector3.UP,true)
@@ -209,7 +209,7 @@ func start_human_turn() -> void:
 		pair.exit_lane=Vector3(human.position.x+.8,human.position.y,demo.position.z-1.)
 		for modifier in demo.skeleton.get_children():
 			if modifier is SkeletonModifier3D: modifier.active=true
-		base=Vector3(FIVE_CENTER.x,.04,FIVE_CENTER.y)
+		base=FIVE_HOME
 		steps=preload("res://scripts/directional_footwork.gd").new(human)
 		focus_cued=false
 	else:
@@ -362,7 +362,7 @@ func tick(delta:float) -> void:
 					if pair.erase("deferred_entry"): start_human_turn()
 				continue
 			if pair.get("reset_to_five",false):
-				var ready_spot:=Vector3(FIVE_CENTER.x,.04,FIVE_CENTER.y)
+				var ready_spot:=FIVE_HOME
 				if not walk_rotation(pair.receiver,ready_spot,delta): continue
 				if not square_up(pair.receiver,pair.feeder.position,delta): continue
 				base=ready_spot
@@ -500,7 +500,7 @@ func tick(delta:float) -> void:
 				waiting.append(receiver)
 				pair.receiver=next
 				receiver=next
-				base=Vector3(FIVE_CENTER.x,.04,FIVE_CENTER.y)
+				base=FIVE_HOME
 				pair.home=receiver.global_transform
 				steps=preload("res://scripts/directional_footwork.gd").new(receiver)
 				demonstrating=true
