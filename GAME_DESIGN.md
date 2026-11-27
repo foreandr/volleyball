@@ -304,3 +304,5 @@ Training Camp / Serving / Reception Test uses the controller serving drill and t
 
 Future feature: Create several fictional athletic brands with distinct, original logos for shoes, apparel and equipment.
 On incoming serves, check the flight segment up to the first gym surface for a reception before awarding the floor result.
+
+The playable exhibition and My Career scrimmage use the same rally controller. The receiver may move before service and while preparing with A. Selection of a physical reception animation, early and late grading, serve spin and power, and block contact geometry are shared with their respective drills. Career setting and defense evaluations keep their drill objectives. A scrimmage uses the career athlete and leaves evaluation progress intact.

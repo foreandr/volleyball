@@ -65,6 +65,7 @@ func persist() -> void:
 	StorySession.save_match_preference("ball_brand",brand)
 
 func launch() -> void:
+	StorySession.career_scrimmage=false
 	persist()
 	StorySession.offline_controller=controller
 	StorySession.offline_size=sizes[0]

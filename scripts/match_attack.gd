@@ -2,6 +2,8 @@ extends "res://scripts/attack_drill.gd"
 
 signal struck(actor: Node3D, point: Vector3, velocity: Vector3, spin: float)
 
+var timed_human := false
+var manual_release_valid := false
 var enabled := false
 var camp_swing := preload("res://scripts/camp_spike_pose.gd").new()
 var feed_origin := Vector3.ZERO
@@ -100,7 +102,7 @@ func start_set(actor: Node3D, origin: Vector3, velocity: Vector3, target: Vector
 	entry_velocity=actor.get_parent_node_3d().global_basis.inverse()*Vector3(actor.get_meta("approach_velocity",Vector3.ZERO))
 	rally_shot="spike"
 	feed_origin=origin
-	jump.attack_arm_lift=chase_late_sets
+	jump.attack_arm_lift=chase_late_sets or timed_human
 	jump.reserve_two_step_runway=chase_late_sets
 	camp_swing.last_shoulder_time=-1.
 	camp_swing.reach_assist=Vector3.ZERO
@@ -249,7 +251,7 @@ func keeps_strike_palm_presented() -> bool:
 	return true
 
 func can_drive_to(offset: Vector3,duration: float) -> bool:
-	if not chase_late_sets: return super.can_drive_to(offset,duration)
+	if not (chase_late_sets or timed_human): return super.can_drive_to(offset,duration)
 	var reach: float=SWING_CONTACT_HEIGHT*setter.height_cm/180.
 	var available_rise := maxf(0.,jump.start.y+jump.height-setter.position.y)
 	return offset.slide(Vector3.UP).length()<=SWING_REACH and offset.y<=reach+minf(.60,available_rise)+.18
@@ -261,7 +263,7 @@ func spike_assist_radius() -> float:
 	return PALM_RADIUS if chase_late_sets else .19
 
 func sync_approach_arm_lift() -> bool:
-	return not chase_late_sets
+	return not (chase_late_sets or timed_human)
 
 func attack_arm_turn_rate() -> float:
 	if stage == Stage.SET and clock-swing_started <= 0.26: return deg_to_rad(3200.0)
@@ -271,7 +273,7 @@ func spike_speed_multiplier() -> float:
 	return spike_strength
 
 func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0., follow := 0., draw_progress := 1., arm_lift := 1., frame: Node3D = null) -> void:
-	if not chase_late_sets:
+	if not (chase_late_sets or timed_human):
 		super.pose_bow_draw(delta,weight,contact,extension,follow,draw_progress,arm_lift,frame)
 		return
 	var speed := drill_speed_mps if drill_speed_mps>0. else 25.
@@ -292,7 +294,8 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 		to_global(swing_aim),contact_offset,height,factor,speed,1.,0,-1.,rally_shot=="roll",rally_shot=="tip",.35,true)
 
 func hit_spike(charge: float, point: Vector3, palm_gap := 0.0) -> void:
-	if chase_late_sets:
+	if timed_human and not manual_release_valid: return
+	if chase_late_sets or timed_human:
 		contact_phase=live_swing_phase
 		if not decoy_swing:
 			for modifier in setter.skeleton.get_children():

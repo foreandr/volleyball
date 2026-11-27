@@ -255,6 +255,9 @@ func restart() -> void:
 
 func quit_gameplay() -> void:
 	hide()
+	if game.has_method("leave_match"):
+		game.leave_match()
+		return
 	MenuPresentation.load_scene("res://scenes/main.tscn")
 
 func _input(event: InputEvent) -> void:

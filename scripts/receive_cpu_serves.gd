@@ -89,7 +89,6 @@ func bind_contact_motion(mapper: Map,root: Node3D,actor: Node3D,home: Vector3,so
 	var motion := super.bind_contact_motion(mapper,root,actor,home,source,best)
 	var digging := control_digger and mapper==defense_map
 	if not digging and (mapper!=map or control_digger or actor!=passers[1]): return motion
-	mapper.sample_receiver(motion,motion.contact,true,mapper.legs)
 	var shot=serves[flight_style()]
 	var route_time := defense_at if digging else receive_at
 	var path: Callable=shot.flight_point
@@ -102,28 +101,8 @@ func bind_contact_motion(mapper: Map,root: Node3D,actor: Node3D,home: Vector3,so
 			var dt := t-now
 			return origin+velocity*dt+Vector3.DOWN*4.905*dt*dt
 		floor_time=now+preload("res://scripts/pass_flight.gd").landing_time(origin,velocity)
-	var contact_time := route_time
-	var bind_time := maxf(0.,route_time-mapper.incoming_lead_seconds)
-	var platform := contact_platform(mapper,motion,actor)
-	# Find the point of closest approach on the descending flight in three dimensions.
-	var first := maxf(bind_time,route_time-.25)
-	var last := minf(floor_time,route_time+.25)
-	var best_gap := INF
-	var start: Vector3=path.call(first)
-	for segment in range(1,25):
-		var end: Vector3=path.call(lerpf(first,last,segment/24.))
-		var step := end-start
-		var fraction := clampf((platform-start).dot(step)/maxf(.000001,step.length_squared()),0.,1.)
-		var point := start+step*fraction
-		var gap := point.distance_squared_to(platform)
-		if gap<best_gap:
-			best_gap=gap
-			contact_time=lerpf(first,last,(segment-1.+fraction)/24.)
-			mapper.set_intercept=point
-		start=end
-	mapper.sample_receiver(motion,motion.contact,true,mapper.legs)
-	var correction := mapper.set_intercept-contact_platform(mapper,motion,actor)
-	mapper.intercept_shift+=correction.slide(Vector3.UP).limit_length(.32)
+	var bind_time:=maxf(0.,route_time-mapper.incoming_lead_seconds)
+	var contact_time:=mapper.align_contact(motion,path,route_time,bind_time,floor_time)
 	if digging: defense_at=contact_time
 	else: receive_at=contact_time
 	var velocity_at_contact: Vector3=(path.call(contact_time+.005)-path.call(contact_time))/.005
@@ -143,12 +122,6 @@ func bind_contact_motion(mapper: Map,root: Node3D,actor: Node3D,home: Vector3,so
 var initial_reach_shift := Vector3.ZERO
 var steering_shift := Vector3.ZERO
 var pass_entry_time := 0.
-
-func contact_platform(mapper: Map,motion: Dictionary,actor: Node3D) -> Vector3:
-	if motion.kind=="overhead": return mapper.HandPass.contact_center(actor)
-	var wrists := (Contact.joint(actor,"hand_l")+Contact.joint(actor,"hand_r"))*.5
-	var elbows := (Contact.joint(actor,"lowerarm_l")+Contact.joint(actor,"lowerarm_r"))*.5
-	return wrists.lerp(elbows,.3)
 
 func reception_frame() -> float:
 	if not control_digger and receiver==1 and pass_timing_ready and flight_age<receive_at:
@@ -173,24 +146,8 @@ func pass_meter(point := Vector3.INF) -> Dictionary:
 	if not point.is_finite(): point=ball.global_position
 	var depth := point.dot(incoming_axis)
 	var face_depth := Contact.joint(controlled_passer(),"Head").dot(incoming_axis)-.09
-	var behind := depth-face_depth
-	var platform_gap := depth-minf(platform_depth,face_depth-.13)
-	var distance := platform_gap+incoming_speed*PASS_RELEASE_LEAD
-	var offset := distance/incoming_speed
-	var green := .12
-	var late_distance := maxf(.001,BODY_CUSHION-behind+distance)
-	var green_end := minf(green,late_distance*.5)
-	var cursor: float
-	if distance< -green:
-		cursor=remap(offset,-RECEIVE_EARLY,-green/incoming_speed,.08,.33)
-	elif distance<=green_end:
-		cursor=remap(distance,-green,green_end,.33,.67)
-	else:
-		cursor=remap(distance,green_end,late_distance,.67,.90)
-	var expired := behind>BODY_CUSHION or (platform_gap>.12 and not is_finite(touched_at) and not mapped_touch(defense_map if control_digger else map,defense_recipe if control_digger else recipe,point-incoming_axis*.001))
-	if expired: cursor=1.
-	var grade := ("Past receiver" if behind>BODY_CUSHION else "Out of reach") if expired else ("Early" if distance< -green else ("Perfect" if distance<=green_end else "Late"))
-	return {"value":clampf(cursor,0.,1.),"offset":offset,"grade":grade,"playable":not expired and offset>=-RECEIVE_EARLY}
+	var touching := is_finite(touched_at) or mapped_touch(defense_map if control_digger else map,defense_recipe if control_digger else recipe,point-incoming_axis*.001)
+	return Map.release_grade(depth,face_depth,platform_depth,incoming_speed,touching)
 
 const RECEIVE_EARLY := .21
 

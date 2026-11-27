@@ -121,6 +121,7 @@ var preview_hash := 0
 var preview_path := "user://preview_setup.cfg"
 var lab_replay_path := ""
 var open_home_simulation := false
+var career_scrimmage := false
 var offline_size := 2
 var offline_away_size := 2
 var offline_controller := 0 # -1 watches, 0 controls home, 1 controls away.

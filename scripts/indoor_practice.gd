@@ -1032,6 +1032,17 @@ func aim_bump(stick: Vector2) -> void:
 	bump_armed=false
 	message.text="Bump set"
 
+static func bump_overlap(actor:Node3D,previous:Vector3,point:Vector3) -> Dictionary:
+	var elbows := [Contact.joint(actor,"lowerarm_l"),Contact.joint(actor,"lowerarm_r")]
+	var wrists := [Contact.joint(actor,"hand_l"),Contact.joint(actor,"hand_r")]
+	var platform: Vector3=preload("res://scripts/forearm_contact.gd").surface(elbows,wrists,.055).ball
+	var near := Geometry3D.get_closest_point_to_segment(platform,previous,point)
+	var gap := platform.distance_to(near)
+	for side in 2:
+		var pair := Geometry3D.get_closest_points_between_segments(previous,point,elbows[side],wrists[side])
+		gap=minf(gap,pair[0].distance_to(pair[1]))
+	return {"gap":gap,"point":platform}
+
 func play_bump(previous: Vector3, incoming: Vector3, dt: float) -> void:
 	var intercept_time := bump_arrival
 	if bump_released and bump_offset<0. and not reception_pose.low_save.active:
@@ -1111,14 +1122,9 @@ func play_bump(previous: Vector3, incoming: Vector3, dt: float) -> void:
 				bump_assist_travel+=before.distance_to(setter.position)
 		var low := smoothstep(.05,.52,platform_height-tracking.y)
 		sampler.reach_platform(tracking-sampler.platform_center(),1.-smoothstep(.055,.38,remaining),.77,true,false,low)
-	var elbows := [Contact.joint(setter,"lowerarm_l"),Contact.joint(setter,"lowerarm_r")]
-	var wrists := [Contact.joint(setter,"hand_l"),Contact.joint(setter,"hand_r")]
-	var platform: Vector3=preload("res://scripts/forearm_contact.gd").surface(elbows,wrists,.055).ball
-	var near := Geometry3D.get_closest_point_to_segment(platform,previous,ball.position)
-	var gap := platform.distance_to(near)
-	for side in 2:
-		var pair := Geometry3D.get_closest_points_between_segments(previous,ball.position,elbows[side],wrists[side])
-		gap=minf(gap,pair[0].distance_to(pair[1]))
+	var hit:=bump_overlap(setter,previous,ball.position)
+	var gap:float=hit.gap
+	var platform:Vector3=hit.point
 	if incoming.y<0. and gap<=.27:
 		bump_overlap_time=elapsed
 		bump_overlap_point=platform
@@ -1710,8 +1716,10 @@ func update_timing_note() -> void:
 	timing_note.modulate.a=lerpf(.90,1.,smoothstep(0.,.045,TIMING_LABEL_SECONDS-remaining))*smoothstep(0.,.40,remaining)
 
 func timing_window() -> float:
-	if not bump_aim.is_zero_approx(): return .085+.135*setter.effective_rating("Forearm setting")/100.
-	return .085+.135*clampf(float(setter.effective_rating("Hand setting"))/100.,0,1)
+	return set_window(setter,not bump_aim.is_zero_approx())
+
+static func set_window(actor:Node3D,forearms:bool) -> float:
+	return .085+.135*clampf(actor.effective_rating("Forearm setting" if forearms else "Hand setting")/100.,0.,1.)
 
 # Predict arrival in flight, then anchor the cue to the hands cushioning the ball.
 func release_offset() -> float:

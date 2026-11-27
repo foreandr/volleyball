@@ -226,6 +226,15 @@ Receive CPU Serves lets the player switch between reception and zone-six defense
 
 ## Offline exhibitions and menu controls
 
-LT and RT switch sections in Settings and Offline setup. Y randomizes the current selection. The side selector accepts left and right, with the middle position assigning both squads to the CPU. Play begins at the whistle. A serves or jumps, X plays the forearms, Y plays the hands, LT focuses, and RT sprints. View opens the rally replay. Esc or Menu pauses the match. Keyboard prompts and remapped controller glyphs follow the player’s settings.
+LT and RT switch sections in Settings and Offline setup. Y randomizes the current selection. The side selector accepts left and right, with the middle position assigning both squads to the CPU. Play begins at the whistle. Offline Play and My Career scrimmages use the live controls below. View opens the rally replay. Esc or Menu pauses the match. Keyboard prompts and remapped controller glyphs follow the player’s settings.
 
 Sound settings separate navigation and music levels. Ctrl+M toggles global mute. Match and drill ball-sound switches affect their own contacts. Clips accepts Ogg Theora video directly and imports other video formats when FFmpeg is available.
+
+### Live court controls
+
+- Move with LS before the toss and during the rally. LT shuffles facing the play, RT sprints, and both together fast-shuffle.
+- On serve, tap A/B/X/Y to preview a spin toss, jump float toss, standing toss or underhand toss. Hold the same button to start and release for contact. D-pad up/left/right/down selects topspin, left spin, right spin or float independently of the toss. Aim with RS before the toss and LS during it. Click the aiming stick while adjusting height. LB/RB turn the held ball.
+- For serve receive and digs, hold A while moving. The incoming trajectory picks the assigned reception zone and its overhead or forearm motion. Release at contact. The live and recorded timing meters use the same grade and the same physical cutoff behind the receiver.
+- On second contact, hold and release X/Y/B to set left, middle or back. LB with the target jump sets, RB changes height, and L3 toggles the arc. Aim a bump set with RS and release the stick at contact.
+- On attack, hold X/Y/B for left, middle or right court, then release to time the swing. LS adjusts airborne aim. LB selects a roll and RB a tip.
+- At the net on defense, hold A to load and release to jump. The left stick steers the lean. LT and RT extend the left and right arms. Both triggers spread the block. Block contacts use the same animated arm and body shapes as blocking practice.

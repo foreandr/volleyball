@@ -19,7 +19,6 @@ var authorized := false
 var replay_notice := ""
 var replay_notice_until := 0
 var signaled_rally := -1
-var serve_types := ["Underhand","Standing float","Jump float","Spin serve"]
 var last_prompt := ""
 var banner := Label.new()
 var rally_end_menu := HBoxContainer.new()
@@ -133,7 +132,7 @@ func build_hud() -> void:
 	rally_end_menu.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	rally_end_menu.grow_horizontal=Control.GROW_DIRECTION_BOTH
 	rally_end_menu.hide()
-	for title in ["Rematch","Match setup"]:
+	for title in ["Rematch","My Career" if StorySession.career_scrimmage else "Match setup"]:
 		var b:=Button.new()
 		b.text=title
 		rally_end_menu.add_child(b)
@@ -144,6 +143,10 @@ func restart_activity() -> void:
 	MenuPresentation.load_scene(scene_file_path)
 
 func leave_match() -> void:
+	if StorySession.career_scrimmage:
+		StorySession.career_scrimmage=false
+		MenuPresentation.load_scene("res://scenes/story.tscn")
+		return
 	MenuPresentation.return_page="Match setup"
 	MenuPresentation.load_scene("res://scenes/main.tscn")
 
@@ -156,13 +159,31 @@ func refresh_prompts() -> void:
 	elif game.spectator:
 		entries=[["View","Replay"],[JOY_BUTTON_START,"Pause"]]
 		keys="R  Replay      Esc  Pause"
-	elif game.phase==game.Phase.READY and game.is_human(game.server_index()) and not game.serve_pending and authorized:
-		entries=[[JOY_BUTTON_A,"Serve"],["D-pad Left/Right",serve_types[game.serve_style]],["Aim","Aim"],[JOY_BUTTON_START,"Pause"]]
-		keys="Space  Serve      ← / →  "+str(serve_types[game.serve_style])+"      Mouse  Aim      Esc  Pause"
 	else:
-		entries=[["Move","Move"],["LT","Shuffle"],["RT","Sprint"],[JOY_BUTTON_A,"Jump"],[JOY_BUTTON_X,"Forearm"],[JOY_BUTTON_Y,"Hands"],["View","Replay"],[JOY_BUTTON_START,"Pause"]]
-		keys="WASD  Move      Ctrl  Shuffle      Shift  Sprint      Space  Jump      Q / E  Receive      R  Replay      Esc  Pause"
-	var token:=keys+str(Xbox.keyboard_prompts())
+		match game.manual.context():
+			"serve":
+				if game.serve_pending:
+					entries=[["Move","Aim"],[game.manual.service.Camp.FACE[3-game.serve_style],"Release to serve"]]
+					keys="Mouse  Aim     Release toss button to serve"
+				else:
+					entries=[["Move","Walk"],[JOY_BUTTON_A,"Spin"],[JOY_BUTTON_B,"Jump float"],[JOY_BUTTON_X,"Standing float"],[JOY_BUTTON_Y,"Underhand"],["Aim","Aim"],["D-pad Left/Right","Spin"]]
+					keys="WASD  Walk     Space  Spin     L  Jump float     J  Standing float     I  Underhand     Mouse  Aim     Arrows  Spin"
+			"set":
+				entries=[[JOY_BUTTON_X,"Left"],[JOY_BUTTON_Y,"Middle"],[JOY_BUTTON_B,"Back"],[JOY_BUTTON_LEFT_SHOULDER,"Jump set"],[JOY_BUTTON_RIGHT_SHOULDER,"Height"],["Aim","Bump set"],[JOY_BUTTON_LEFT_STICK,"Arc"]]
+				keys="Hold J / I / L  Set left / middle / back     Z  Jump set     C  Height     V  Arc"
+			"attack":
+				entries=[[JOY_BUTTON_X,"Left"],[JOY_BUTTON_Y,"Middle"],[JOY_BUTTON_B,"Right"],["Move","Aim"],[JOY_BUTTON_LEFT_SHOULDER,"Roll"],[JOY_BUTTON_RIGHT_SHOULDER,"Tip"]]
+				keys="Hold Space / Y / B  Attack left / middle / right     Release to time     Z  Roll     C  Tip"
+			"block":
+				entries=[[JOY_BUTTON_A,"Load / release to jump"],["Move","Move / air lean"],["LT","Left reach"],["RT","Right reach"]]
+				keys="Space  Load / release to block     WASD  Move"
+			"receive":
+				entries=[["Move","Move"],["LT","Shuffle"],["RT","Sprint"],[JOY_BUTTON_A,"Hold / release to pass or dig"],["View","Replay"]]
+				keys="WASD  Move     Ctrl  Shuffle     Shift  Sprint     Hold Space / release at contact     R  Replay"
+			_:
+				entries=[["View","Replay"],[JOY_BUTTON_START,"Pause"]]
+				keys="R  Replay     Esc  Pause"
+	var token:=keys+str(game.serve_style)+str(Xbox.keyboard_prompts())
 	if token==last_prompt: return
 	last_prompt=token
 	Xbox.prompts(footer,[] if Xbox.keyboard_prompts() else entries)
@@ -184,14 +205,23 @@ func _process(delta:float) -> void:
 		if not authorized and whistle.signal_time>=.74:
 			authorized=true
 			banner.text="Your serve" if game.is_human(game.server_index()) else str(game.side_names[game.service_team])+" to serve"
+	if not authorized and game.manual and game.phase==game.Phase.READY and not game.replay.active:
+		game.manual_ready_movement(delta,ground,false)
 	if authorized or game.replay.active:
-		if not game.spectator and not game.replay.active: aim_stick(delta)
+		if not game.spectator and not game.replay.active and game.manual.context()=="receive": aim_stick(delta)
 		game.tick_match(delta,ground)
 	if game.replay.active:
 		banner.text=replay_notice if Time.get_ticks_msec()<replay_notice_until else "Replay   ·   "+str(game.replay.speed)+"x"
+		if Time.get_ticks_msec()>=replay_notice_until and game.replay_meter.has("label"):
+			banner.text=game.replay_meter.label
+		banner.show()
+	elif game.manual and game.match_clock<game.manual.feedback_until:
+		banner.text=game.manual.feedback_text
 		banner.show()
 	elif game.phase!=game.Phase.READY or game.serve_pending: banner.hide()
-	status.visible=game.replay.active or game.phase!=game.Phase.READY or game.serve_pending
+	if game.manual and authorized and game.phase==game.Phase.READY and not game.serve_pending and game.is_human(game.server_index()) and not game.replay.active:
+		status.text="%s  /  %s"%[game.manual.service.Camp.LABELS[3-game.serve_style],game.manual.service.Camp.SPIN_LABELS[game.manual.service.spin]]
+	status.visible=authorized or game.replay.active
 	if game.phase==game.Phase.FINISHED and not game.replay.active and not rally_end_menu.visible:
 		rally_end_menu.show()
 		rally_end_menu.get_child(0).grab_focus()
@@ -205,9 +235,19 @@ func aim_stick(delta:float) -> void:
 	var target:Vector3=game.aim_point if game.aim_point.is_finite() else Vector3(0,.055,8)
 	game.set_aim(Vector3(clampf(target.x-dir.x*9.*delta,-6.,6.),.055,clampf(target.z+dir.y*12.*delta,-4.,14.5)))
 
+func _notification(what:int) -> void:
+	if what in [NOTIFICATION_APPLICATION_FOCUS_OUT,NOTIFICATION_PAUSED] and is_instance_valid(game) and game.manual:
+		game.manual.clear_input()
+
 func toggle_match_replay() -> void:
+	if game.replay.active and game.manual: game.manual.clear_input()
 	game.toggle_replay()
 	refresh_prompts()
+
+func _input(event:InputEvent) -> void:
+	if game.manual==null or game.replay.active or get_tree().paused or is_instance_valid(MenuPresentation.loading_screen): return
+	if game.phase in [game.Phase.READY,game.Phase.LIVE] and game.manual.handle(event):
+		get_viewport().set_input_as_handled()
 
 func _unhandled_input(event:InputEvent) -> void:
 	if not is_instance_valid(ground) or is_instance_valid(MenuPresentation.loading_screen): return
@@ -245,11 +285,5 @@ func _unhandled_input(event:InputEvent) -> void:
 			var speeds:=[.25,.125,.0625,1.,.5]
 			game.replay.speed=speeds[(speeds.find(game.replay.speed)+1)%speeds.size()]
 		if down and action in ["previous","next"]: game.replay.step_frame(game,-1 if action=="previous" else 1)
-	elif authorized and not game.spectator:
-		if action=="jump": game.input_space(down)
-		if action in ["forearm","hands"]:
-			game.receive_prepared=down
-			if not down: game.input_receive(0 if action=="forearm" else 1)
-		if down and action in ["previous","next"] and game.phase==game.Phase.READY:
-			game.set_serve_style(posmod(game.serve_style+(-1 if action=="previous" else 1),4))
+	else: return
 	get_viewport().set_input_as_handled()

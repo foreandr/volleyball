@@ -132,6 +132,8 @@ func preview_lane_offset(_lane: int, _progress: float, _launch: Vector3) -> Vect
 	return Vector3.ZERO
 
 func update_path_preview() -> void:
+	var count := PREVIEW_DOTS*preview_lane_count()
+	if path_preview.multimesh.instance_count!=count: path_preview.multimesh.instance_count=count
 	var launch := aimed_velocity(preview_origin)
 	var duration := Flight.landing_time(preview_origin,launch)
 	for lane in preview_lane_count():

@@ -49,15 +49,7 @@ func start_drill() -> void:
 	map.pass_goal=SETTER_BASE
 	for i in 3:
 		stance_points.append(across(StorySession.game_options.get_value("reception_studio",Map.HOME_KEYS[i],Map.DEFAULT_STANCES[i])))
-	for x in 3:
-		for y in 3:
-			for z in 3:
-				var cell := Vector3i(x,y,z)
-				for part in map.region_parts(cell):
-					var id := map.assigned_action(cell,part)
-					if id<=0: continue
-					var size := map.region_size(cell,part)
-					boxes.append({"cell":cell,"part":part,"id":id,"bounds":AABB(map.region_center(cell,part)-size*.5,size)})
+	boxes=map.assigned_boxes()
 	super.start_drill()
 	title.text="SERVING  /  RECEPTION TEST"
 	add_child(dig_feedback)
@@ -230,47 +222,7 @@ func plan_remaining_reception(shot,from_time: float) -> void:
 
 
 func bind_contact_motion(mapper: Map,root: Node3D,actor: Node3D,home: Vector3,source: Vector3,best: Dictionary) -> Dictionary:
-	mapper.index=int(best.id)-1
-	mapper.legs=mapper.index
-	var recipe := mapper.reception_recipe(mapper.clips[mapper.index],best.cell,best.part)
-	var key := mapper.assignment_key(best.cell,best.part)
-	if recipe.kind=="overhead":
-		var audition: int=StorySession.game_options.get_value("studio_hand_legs",key,-2)
-		if audition>=-1 and audition<mapper.clips.size():
-			recipe=recipe.duplicate()
-			mapper.legs=audition
-			recipe.step_legs=0 if audition<0 else mapper.clips[audition].id
-			recipe.audition=true
-	mapper.posed_lead_foot=mapper.lead_foot(best.cell,best.part)
-	root.position=home
-	root.basis=Basis(Vector3.UP,atan2(source.x-root.position.x,source.z-root.position.z))
-	var flipped: bool=StorySession.game_options.get_value("studio_mirror",key,mapper.default_mirror(best.cell,best.part,recipe))
-	root.scale=Vector3(-1. if flipped else 1.,1.,1.)
-	if flipped and mapper.posed_lead_foot!="Auto": mapper.posed_lead_foot="Left" if mapper.posed_lead_foot=="Right" else "Right"
-	var before := actor.global_position
-	mapper.entry_pose.clear()
-	for bone in actor.skeleton.get_bone_count(): mapper.entry_pose.append(actor.skeleton.get_bone_pose(bone))
-	var entry_forward := root.global_basis.inverse()*actor.global_basis.z
-	mapper.entry_yaw=atan2(entry_forward.x,entry_forward.z)
-	mapper.entry_position=root.to_local(before)
-	mapper.entry_frame=maxf(0.,recipe.contact-mapper.incoming_lead_seconds*60.)
-	mapper.entry_duration=clampf(recipe.contact-mapper.entry_frame,0.01,15.)
-	mapper.player=actor
-	mapper.player.reparent(root,false)
-	mapper.player.transform=Transform3D.IDENTITY
-	mapper.player.animator.pause()
-	for modifier in mapper.player.skeleton.get_children():
-		if modifier is SkeletonModifier3D: modifier.active=false
-	mapper.bind_receiver(mapper.player)
-	mapper.intercept_shift=Vector3.ZERO
-	mapper.shift_frame=recipe.contact
-	mapper.sample_receiver(recipe,recipe.contact,true,mapper.legs)
-	var center: Vector3=mapper.HandPass.contact_center(mapper.player) if recipe.kind=="overhead" else mapper.player.skeleton.to_global(mapper.player.skeleton.get_bone_global_pose(mapper.player.skeleton.find_bone("hand_l")).origin)
-	var offset := mapper.set_intercept-center
-	mapper.intercept_shift=offset.slide(Vector3.UP).limit_length(.75)
-	if mapper==defense_map: mapper.intercept_shift+=(offset-mapper.intercept_shift).limit_length(dig_reach)
-	mapper.sample_receiver(recipe,mapper.entry_frame,true,mapper.legs)
-	return recipe
+	return mapper.begin_mapped_motion(root,actor,home,source,best,dig_reach if mapper==defense_map else 0.)
 
 func step_serve_reception(_shot,previous: Vector3,_delta: float) -> void:
 	if not chase_box.is_empty():
@@ -322,22 +274,7 @@ func mapped_touch(mapper: Map,motion: Dictionary,previous: Vector3) -> bool:
 	return mapped_segment_touch(mapper,motion,previous,ball.position)
 
 func mapped_segment_touch(mapper: Map,motion: Dictionary,previous: Vector3,end: Vector3) -> bool:
-	var touched := false
-	if motion.kind=="overhead":
-		var hands := mapper.HandPass.contact_center(mapper.player)
-		if hands.distance_to(Geometry3D.get_closest_point_to_segment(hands,previous,end))<=mapper.HAND_RADIUS+mapper.BALL_RADIUS: return true
-		for side in ["l","r"]:
-			var center := Contact.palm(mapper.player,side)
-			if center.distance_to(Geometry3D.get_closest_point_to_segment(center,previous,end))<=.09+mapper.BALL_RADIUS:
-				return true
-	else:
-		for shape in mapper.RECEPTION_CAPSULES:
-			var seg := mapper.reception_segment(mapper.player.skeleton,shape)
-			var points := Geometry3D.get_closest_points_between_segments(previous,end,seg[0],seg[1])
-			if points[0].distance_to(points[1])<=mapper.BALL_RADIUS+float(shape[2])+mapper.FOREARM_CONTACT_GRACE:
-				touched=true
-				break
-	return touched
+	return mapper.segment_touch(motion,previous,end)
 
 func sample_attack_dig() -> void:
 	var offset := dig_clock-defense_at

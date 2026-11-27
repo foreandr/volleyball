@@ -27,7 +27,7 @@ func capture(match_: Node3D) -> Dictionary:
 		var key: Label3D = match_.key_labels[i]
 		var animation_label: Label3D = match_.animation_labels[i]
 		keys.append([key.text,key.visible,animation_label.text,animation_label.visible])
-	return {"held_buttons":match_.held_input.read_buttons(),"time":match_.match_clock,"actors":actors,"ball":shown.global_transform,"visible":shown.visible,
+	return {"meter":match_.manual.timing() if match_.manual else {},"held_buttons":match_.held_input.read_buttons(),"time":match_.match_clock,"actors":actors,"ball":shown.global_transform,"visible":shown.visible,
 		"match_ball":match_.ball.global_transform,"match_visible":match_.ball.visible,"serve_visible":match_.serve.ball.visible,
 		"score":match_.score_label.text,"info":match_.info.text,"keys":keys,"aim":match_.aim_ring.visible,"guide":match_.trajectory_node.visible}
 
@@ -104,6 +104,7 @@ func step(match_: Node3D, delta: float) -> void:
 		if clock >= duration(): playing = false
 
 func apply(match_: Node3D, first: Dictionary, second: Dictionary, blend: float) -> void:
+	match_.replay_meter=first.get("meter",{})
 	match_.held_input.reviewing=active
 	match_.held_input.display(first.get("held_buttons",-1))
 	for i in match_.players.size():

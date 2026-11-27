@@ -311,10 +311,26 @@ func apply_camera() -> void:
 
 func configure_flight(shot,origin: Vector3) -> void:
 	var maximum := serve_test_kmh if serve_test_kmh>0. else AUTO_SERVE_MAX_KMH
-	shot.test_speed_mps=maximum*pow(TOSS_POWER_STEP,toss_style)/3.6
-	if spin_selection!=3: shot.sidespin=[0.,.30,-.30][spin_selection]
-	if flight_style() in [1,2]: shot.tape_clearance=float_clearance
-	shot.apex=maxf(origin.y+.03,(4.3 if flight_style()==0 else 4.9)+serve_arc_offset)
+	configure_serve_curve(shot,origin,maximum,toss_style,spin_selection,float_clearance,serve_arc_offset)
+
+static func configure_serve_curve(shot,origin:Vector3,maximum:float,toss:int,spin_mode:int,clearance:float,arc_offset:float) -> void:
+	shot.test_speed_mps=maximum*pow(TOSS_POWER_STEP,toss)/3.6
+	if spin_mode==3: shot.tape_clearance=clearance
+	else: shot.sidespin=[0.,.30,-.30][spin_mode]
+	shot.apex=maxf(origin.y+.03,(4.9 if spin_mode==3 else 4.3)+arc_offset)
+
+static func strike_serve(shot,origin:Vector3,destination:Vector3,error:float,spin_toss:bool,resolve_full_curve:=false) -> void:
+	shot.origin=origin
+	shot.target=destination+Vector3(0,0,-error*8.)
+	var quality:=1.-clampf(absf(error)/(absf(SERVE_EARLY) if error<0. else SERVE_LATE),0.,1.)
+	if spin_toss:
+		var scatter:=Vector2.from_angle(randf()*TAU)*sqrt(randf())*lerpf(.12,.38,1.-quality)
+		shot.target+=Vector3(scatter.x,0.,scatter.y)
+	shot.velocity=shot.aimed_velocity(origin,lerpf(.84,1.,quality))
+	shot.planned_duration=preload("res://scripts/pass_flight.gd").landing_time(origin,shot.velocity)
+	shot.begin_serve_curve()
+	if resolve_full_curve: shot.advance_serve_curve(shot.planned_duration)
+	shot.net_hit=BallNet.first_hit(shot.flight_point,0.,shot.planned_duration)
 
 func projected_landing() -> Vector3:
 	if replay_inspector.active or ball.position.y<=.15: return Vector3.INF
@@ -748,15 +764,7 @@ func _process(delta: float) -> void:
 				var shot=serves[flight_style()]
 				shot.origin=Contact.palm(setter,"r") if toss_style<2 else ball.position
 				configure_flight(shot,shot.origin)
-				shot.target=destination+Vector3(0,0,-error*8.)
-				var quality := 1.-clampf(absf(error)/(absf(SERVE_EARLY) if error<0. else SERVE_LATE),0.,1.)
-				if toss_style==0:
-					var scatter := Vector2.from_angle(randf()*TAU)*sqrt(randf())*lerpf(.12,.38,1.-quality)
-					shot.target+=Vector3(scatter.x,0.,scatter.y)
-				shot.velocity=shot.aimed_velocity(shot.origin,lerpf(.84,1.,quality))
-				shot.planned_duration=preload("res://scripts/pass_flight.gd").landing_time(shot.origin,shot.velocity)
-				shot.begin_serve_curve()
-				shot.net_hit=BallNet.first_hit(shot.flight_point,0.,shot.planned_duration)
+				strike_serve(shot,shot.origin,destination,error,toss_style==0)
 				plan_serve_reception(shot)
 				shot.ball.basis=ball.basis
 				flight_age=0.

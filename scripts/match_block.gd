@@ -80,6 +80,33 @@ func use_displayed_geometry() -> void:
 	if not rig.skeleton_updated.is_connected(capture_displayed_chains):
 		rig.skeleton_updated.connect(capture_displayed_chains,CONNECT_ONE_SHOT)
 
+func first_block_touch(start:Vector3,finish:Vector3,ball_radius:float) -> Dictionary:
+	var best:Dictionary={}
+	for c in hands.size()+body_chains.size():
+		var arm:=c<hands.size()
+		var side:=c if arm else c-hands.size()
+		var chain:Array=[shoulders[c],elbows[c],wrists[c],hands[c]] if arm else body_chains[side]
+		for part in chain.size()-1:
+			var radius:float=ARM_RADII[part] if arm else BODY_RADII[part]
+			var hit:=first_capsule_touch(start,finish,chain[part],chain[part+1],ball_radius+radius)
+			if hit.is_empty() or (not best.is_empty() and hit.fraction>=best.fraction): continue
+			best=hit
+			best.merge({"arm":arm,"side":side,"segment":part,"part":["upper arm","forearm","hand"][part] if arm else BODY_PARTS[part]})
+	return best
+
+func block_rebound(hit:Dictionary,incoming:Vector3,attack_direction:float) -> Dictionary:
+	var normal:Vector3=hit.normal
+	if normal.is_zero_approx(): normal=-incoming.normalized()
+	var reflection:=incoming.bounce(normal)
+	var distal:bool=hit.arm and (hit.segment==2 or hit.segment==1 and hit.surface.distance_to(wrists[hit.side])<.14)
+	var net:=preload("res://scripts/net_collision.gd")
+	var stuff:bool=distal and -incoming.normalized().dot(normal)>.55 and hit.surface.y>net.NET_TOP+.10 and (hit.surface.z-net.NET_Z)*attack_direction<-.04
+	var outgoing:=Vector3(reflection.x*.42,maxf(2.5,absf(reflection.y)*.48+1.),reflection.z*.42)
+	if stuff:
+		var down:=Vector3(reflection.x,-maxf(absf(reflection.y),incoming.length()*.65),-attack_direction*maxf(absf(reflection.z),2.))
+		outgoing=down.normalized()*incoming.length()*STUFF_SPEED_RETENTION
+	return {"stuff":stuff,"velocity":outgoing}
+
 static func first_capsule_touch(start: Vector3,finish: Vector3,a: Vector3,b: Vector3,radius: float) -> Dictionary:
 	var pair := Geometry3D.get_closest_points_between_segments(start,finish,a,b)
 	if pair[0].distance_squared_to(pair[1])>radius*radius: return {}

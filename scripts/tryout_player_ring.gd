@@ -7,6 +7,7 @@ var extra_jumps := {}
 var setting_cues := true
 var floor_rings := {}
 var displayed_timing := {}
+var match_meter:Callable
 var ring_mesh := ImmediateMesh.new()
 
 func make_ring_mesh() -> void:
@@ -148,6 +149,10 @@ func draw_player(actor: Node3D,human: bool) -> void:
 	var radius := Vector2(clampf(at.distance_to(camera.unproject_position(foot+camera.global_basis.x*.67)),25,77),0)
 	radius.y=radius.x*.35
 	position_floor_ring(actor)
+	if match_meter.is_valid() and actor==participants[0]:
+		var state:Dictionary=match_meter.call()
+		if not state.is_empty():
+			timing_arc(actor,state.value,state.perfect.x,state.perfect.y,state.contact,Color("14191d"),state.released,state.released)
 	if (is_setter or human) and not (is_setter and game!=null and "automatic_block" in game):
 		if is_setter and game!=null and game.has_method("serve_meter_error") and (game.phase=="serve_toss" or (game.phase in ["serve_flight","serve_miss"] and game.flight_age<.4)):
 			var contact := Vector2(game.serve_meter_position(game.SERVE_EARLY),game.serve_meter_position(game.SERVE_LATE))

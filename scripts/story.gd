@@ -55,6 +55,7 @@ func show_home() -> void:
 		nameplate.add_theme_font_size_override("font_size",25)
 		facts.add_child(nameplate)
 		add_button("Continue career",resume).grab_focus()
+		add_button("Play scrimmage",scrimmage)
 		add_button("Defense evaluation",defense_tryout)
 		add_button("Player development",development)
 		add_button("Wardrobe",func():
@@ -67,6 +68,15 @@ func show_home() -> void:
 	if CareerSession.data.has_section("athletes"): add_button("Load athlete",choose_athlete)
 	if not StorySession.saved_stories().is_empty(): add_button("Legacy careers",show_load)
 	add_button("Back",open_menu)
+
+func scrimmage() -> void:
+	StorySession.career_scrimmage=true
+	StorySession.offline_controller=0
+	StorySession.offline_size=3
+	StorySession.offline_away_size=3
+	StorySession.offline_roster.assign([CareerSession.profile()])
+	for i in 5: StorySession.offline_roster.append(CareerSession.Profile.generate())
+	MenuPresentation.load_scene("res://scenes/offline_match.tscn")
 
 func development(selected := "") -> void:
 	clear_menu("PLAYER DEVELOPMENT")

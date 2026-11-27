@@ -19,7 +19,7 @@ const GLYPHS := {
 const FACE := [JOY_BUTTON_A,JOY_BUTTON_X,JOY_BUTTON_Y,JOY_BUTTON_B]
 const AUX := [JOY_BUTTON_LEFT_SHOULDER,JOY_BUTTON_RIGHT_SHOULDER,JOY_BUTTON_RIGHT_STICK,JOY_BUTTON_START,JOY_BUTTON_LEFT_STICK]
 const NAMES := {JOY_BUTTON_A:"A",JOY_BUTTON_B:"B",JOY_BUTTON_X:"X",JOY_BUTTON_Y:"Y",JOY_BUTTON_LEFT_SHOULDER:"LB",JOY_BUTTON_RIGHT_SHOULDER:"RB",JOY_BUTTON_RIGHT_STICK:"RS",JOY_BUTTON_START:"Menu",JOY_BUTTON_LEFT_STICK:"LS"}
-const CONTROLS := ["Serve / jump / pipe","Forearm receive / left set","Hand receive / middle set","Back / right set","Next toss","Right bumper","Jump set","Pause","Show / hide set arc"]
+const CONTROLS := ["Spin toss / receive / block","Standing float / left set or hit","Underhand / middle set or hit","Jump float / right set or hit","Jump set / roll","Set height / tip","Serve aim height","Pause","Show / hide set arc"]
 
 static func keyboard_prompts() -> bool:
 	return StorySession.game_options.get_value("controls","keyboard_prompts",false)

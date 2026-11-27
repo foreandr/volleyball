@@ -54,6 +54,23 @@ var pass_goal := Vector3.ZERO
 var pass_rise := 1.5
 var feed_kmh := 100.
 
+# Match players stay in their team frame. Studio players are children of the pose anchor.
+var pose_origin: Node3D
+var pose_position: Vector3:
+	get:
+		return pose_origin.to_local(player.global_position) if pose_origin else player.position
+	set(value):
+		if pose_origin: player.global_position=pose_origin.to_global(value)
+		else: player.position=value
+var pose_yaw: float:
+	get:
+		if not pose_origin: return player.rotation.y
+		var axis:Vector3=pose_origin.global_basis.inverse()*player.global_basis.z
+		return atan2(axis.x,axis.z)
+	set(value):
+		if pose_origin: player.global_basis=pose_origin.global_basis*Basis(Vector3.UP,value)
+		else: player.rotation.y=value
+
 func reception_recipe(c: Dictionary,address: Vector3i,part: int) -> Dictionary:
 	if Regions.movement(c) and early_platform(address):
 		c=c.duplicate()
@@ -107,8 +124,8 @@ func sample_receiver(c: Dictionary,f: float,active := true,motion_legs := -2) ->
 		var blend := smoothstep(entry_frame,entry_frame+entry_duration,f)
 		for bone in entry_pose.size():
 			rig.set_bone_pose(bone,entry_pose[bone].interpolate_with(rig.get_bone_pose(bone),blend))
-		player.position=entry_position.lerp(player.position,blend)
-		player.rotation.y=lerp_angle(entry_yaw,player.rotation.y,blend)
+		pose_position=entry_position.lerp(pose_position,blend)
+		pose_yaw=lerp_angle(entry_yaw,pose_yaw,blend)
 	var lift := 0.
 	for joint in ["foot_l","foot_r","ball_l","ball_r","calf_l","calf_r","pelvis","hand_l","hand_r","Head"]:
 		var bone := rig.find_bone(joint)
@@ -276,7 +293,7 @@ func sample_receiver_base(c: Dictionary,f: float,active: bool,motion_legs: int) 
 			if f<c.contact: leg_frame=float(c.contact)*clampf(inverse_lerp(plant,c.contact,f),0.,1.)
 	sample_layer(motion_legs,c,leg_frame)
 	if not shift.is_zero_approx():
-		player.position+=shift*smoothstep(0.,1.,progress)
+		pose_position+=shift*smoothstep(0.,1.,progress)
 		if progress>0. and progress<1.:
 			sample_approach_plant(shift,(progress-1.)*approach_plant.APPROACH_LOAD_TIME)
 	var contact := float(FOREARM.get_meta("contact_time"))
@@ -329,8 +346,8 @@ func jump_to_set(goal: Vector3, follow: float, approach_step := false) -> void:
 	var ground_step := (travel*.60).limit_length(.62) if approach_step else Vector3.ZERO
 	var step_progress := smoothstep(-approach_plant.APPROACH_LOAD_TIME,0.,t)
 	var offset := ground_step*step_progress+(travel-ground_step).limit_length(5.5*lead)*fraction
-	player.position=offset
-	player.position.y=maxf(0.,apex-4.905*(t-half_air)*(t-half_air))
+	pose_position=offset
+	pose_position.y=maxf(0.,apex-4.905*(t-half_air)*(t-half_air))
 	var load := smoothstep(-.32,-.085,t)*(1.-smoothstep(-.085,.07,t))
 	var compression := clampf(contact_rise-gap.y,0.,.38)*smoothstep(-.16,0.,t)*(1.-recover)
 	var cushion := smoothstep(landing,landing+.06,follow)*(1.-smoothstep(landing+.06,landing+.20,follow))
@@ -343,7 +360,7 @@ func jump_to_set(goal: Vector3, follow: float, approach_step := false) -> void:
 	if elapsed<=0. or distance<.001: return
 	var duration := maxf(.38,distance/1.15)
 	var progress := clampf(elapsed/duration,0.,1.)
-	player.position=offset*(1.-smoothstep(0.,1.,progress))
+	pose_position=offset*(1.-smoothstep(0.,1.,progress))
 	if progress>=1.: return
 	sample_shuffle(-offset.normalized(),progress*maxi(1,roundi(duration*1.65)),smoothstep(0.,.16,progress)*(1.-smoothstep(.80,1.,progress)))
 
@@ -363,7 +380,7 @@ func sample_approach_plant(stride: Vector3, takeoff_time: float) -> void:
 	approach_plant.left_plant=stride
 	for side in ["r","l"]:
 		var foot: Transform3D=author.feet[side]
-		var displacement: Vector3=approach_plant.attack_plant_foot(side)-player.position
+		var displacement: Vector3=approach_plant.attack_plant_foot(side)-pose_position
 		var target: Vector3=foot.origin+rig.global_basis.inverse()*(player.global_basis*displacement)
 		var pole := Vector3(.15 if side=="l" else -.15,.08,1.)
 		author.limb(pose,"thigh_"+side,"calf_"+side,"foot_"+side,target,pole,1.,162.,true)
@@ -389,7 +406,7 @@ func grounded_wide_set(goal: Vector3, forehead: float, follow: float, plant: boo
 		var travel: Vector3=player.to_local(goal).slide(Vector3.UP)-Vector3.BACK*.23
 		stride=(travel*.72).limit_length(.92)
 		var phase := follow-settle
-		player.position=stride*smoothstep(-approach_plant.APPROACH_LOAD_TIME,0.,phase)
+		pose_position=stride*smoothstep(-approach_plant.APPROACH_LOAD_TIME,0.,phase)
 		if phase<0.:
 			if phase>=-approach_plant.APPROACH_LOAD_TIME:
 				bend_for_hand_pass(.12*sin(PI*smoothstep(-approach_plant.APPROACH_LOAD_TIME,0.,phase)))
@@ -412,7 +429,7 @@ func grounded_wide_set(goal: Vector3, forehead: float, follow: float, plant: boo
 	if plant and follow>.4:
 		var duration := maxf(.38,stride.length()/1.15)
 		var progress := clampf((follow-.4)/duration,0.,1.)
-		player.position=stride*(1.-smoothstep(0.,1.,progress))
+		pose_position=stride*(1.-smoothstep(0.,1.,progress))
 		if progress<1.:
 			sample_shuffle(-stride.normalized(),progress*maxi(1,roundi(duration*1.65)),sin(PI*progress))
 
@@ -423,8 +440,8 @@ func pose_hand_pass_legs(goal: Vector3, standing_height: float, follow: float, s
 		var half_flight := sqrt(2.*height/9.81)
 		var rise := maxf(0.,height-4.905*follow*follow)
 		var drift: Vector3=player.to_local(goal).slide(Vector3.UP)-Vector3(0,0,.20)
-		player.position+=drift.limit_length(.32)*(rise/height)
-		player.position.y=rise
+		pose_position+=drift.limit_length(.32)*(rise/height)
+		pose_position.y=rise
 		var before := smoothstep(-half_flight-.19,-half_flight-.09,follow)*(1.-smoothstep(-half_flight-.09,-half_flight,follow))
 		var after := smoothstep(half_flight,half_flight+.08,follow)*(1.-smoothstep(half_flight+.08,half_flight+.22,follow))
 		bend_for_hand_pass(.10*(before+after))
@@ -461,7 +478,7 @@ func audition_hand_legs(goal: Vector3, follow: float, motion_legs: int) -> void:
 	var weight := smoothstep(-float(clip.contact)/60.,0.,follow)*(1.-smoothstep(.10,float(clip.frames-clip.contact)/60.,follow))
 	var pose := ready_pose.duplicate()
 	Regions.legs(player,pose,recipe,weight)
-	player.position.y=float(clip.get("jump",0.))*weight
+	pose_position.y=float(clip.get("jump",0.))*weight
 	for joint in ["pelvis","thigh_l","calf_l","foot_l","thigh_r","calf_r","foot_r"]:
 		var bone: int=player.skeleton.find_bone(joint)
 		player.skeleton.set_bone_pose(bone,pose[bone])
@@ -492,8 +509,8 @@ func bend_for_hand_pass(depth: float) -> void:
 
 func sample_layer(which: int, timeline: Dictionary, f: float) -> void:
 	if which<0:
-		player.position=Vector3.ZERO
-		player.rotation.y=0.
+		pose_position=Vector3.ZERO
+		pose_yaw=0.
 		for bone in ready_pose.size(): player.skeleton.set_bone_pose(bone,ready_pose[bone])
 		return
 	var c: Dictionary=timeline if timeline.id==clips[which].id else clips[which]
@@ -503,21 +520,21 @@ func sample_layer(which: int, timeline: Dictionary, f: float) -> void:
 	var source_end: float=minf(c.get("source_end",c.frames),c.frames)
 	var weight := smoothstep(5.,c.contact,f)*(1.-smoothstep(c.contact+6.,source_end-8.,f))
 	if weight<=0.:
-		player.position=Vector3.ZERO
-		player.rotation.y=0.
+		pose_position=Vector3.ZERO
+		pose_yaw=0.
 		for bone in ready_pose.size(): player.skeleton.set_bone_pose(bone,ready_pose[bone])
 		return
 	var author=player.get_pose_author()
 	var rig: Skeleton3D=player.skeleton
-	player.position=Vector3.ZERO
-	player.rotation.y=0.
+	pose_position=Vector3.ZERO
+	pose_yaw=0.
 	if c.kind in ["dive","wide_dive","pancake"] and weight>.0001:
 		var dir := Vector3(c.side,0,c.forward).normalized()
 		var t: float = Dive.WINDUP*clampf((f-5.)/(c.contact-5.),0.,1.)+maxf(0.,f-c.contact)/(c.frames-c.contact-8.)*(Dive.DURATION-Dive.WINDUP)
 		player.pose_reception_dive(ready_pose,clasp,Vector3.ZERO,dir,t,dir*(c.forward+.55)+Vector3.UP*.30,Dive.WINDUP+.05,c.kind=="pancake",c.forward+.25,true,"r" if c.kind=="wide_dive" else "")
 		var recovery := smoothstep(c.frames-32.,c.frames-8.,f)
-		player.position*=1.-recovery
-		player.rotation.y*=1.-recovery
+		pose_position*=1.-recovery
+		pose_yaw*=1.-recovery
 		for bone in ready_pose.size():
 			rig.set_bone_pose(bone,rig.get_bone_pose(bone).interpolate_with(ready_pose[bone],maxf(recovery,1.-smoothstep(5.,15.,f))))
 		return
@@ -534,7 +551,7 @@ func sample_layer(which: int, timeline: Dictionary, f: float) -> void:
 	author.rotate_world(pose,"spine_03",Vector3.RIGHT,deg_to_rad(c.lean)*weight*.35)
 	author.rotate_world(pose,"spine_02",Vector3.BACK,-c.side*.36*weight)
 	var chest: Vector3=author.point(pose,"spine_03")
-	player.position.y=float(c.get("jump",0.))*weight
+	pose_position.y=float(c.get("jump",0.))*weight
 	for bone in pose.size(): rig.set_bone_pose(bone,pose[bone])
 
 func region_parts(address: Vector3i) -> int:
@@ -667,3 +684,134 @@ func bind_receiver(actor: Node3D) -> void:
 			upper_bones.append(bone)
 	var clip=preload("res://assets/animations/straight_pass_02.res")
 	clasp=Save.sample_clip(player.skeleton,clip,clip.get_meta("contact_time"))
+
+func assigned_boxes() -> Array[Dictionary]:
+	var result:Array[Dictionary]=[]
+	for x in 3:
+		for y in 3:
+			for z in 3:
+				var cell := Vector3i(x,y,z)
+				for part in region_parts(cell):
+					var id := assigned_action(cell,part)
+					if id<=0: continue
+					var size := region_size(cell,part)
+					result.append({"cell":cell,"part":part,"id":id,"bounds":AABB(region_center(cell,part)-size*.5,size)})
+	return result
+
+func begin_mapped_motion(root:Node3D,actor:Node3D,home:Vector3,source:Vector3,best:Dictionary,reach_assist:float) -> Dictionary:
+	index=int(best.id)-1
+	legs=index
+	var recipe := reception_recipe(clips[index],best.cell,best.part)
+	var key := assignment_key(best.cell,best.part)
+	if recipe.kind=="overhead":
+		var audition: int=StorySession.game_options.get_value("studio_hand_legs",key,-2)
+		if audition>=-1 and audition<clips.size():
+			recipe=recipe.duplicate()
+			legs=audition
+			recipe.step_legs=0 if audition<0 else clips[audition].id
+			recipe.audition=true
+	posed_lead_foot=lead_foot(best.cell,best.part)
+	root.global_position=home
+	root.global_basis=Basis(Vector3.UP,atan2(source.x-home.x,source.z-home.z))
+	var flipped: bool=StorySession.game_options.get_value("studio_mirror",key,default_mirror(best.cell,best.part,recipe))
+	root.scale=Vector3(-1. if flipped else 1.,1.,1.)
+	if flipped and posed_lead_foot!="Auto": posed_lead_foot="Left" if posed_lead_foot=="Right" else "Right"
+	var before := actor.global_position
+	entry_pose.clear()
+	for bone in actor.skeleton.get_bone_count(): entry_pose.append(actor.skeleton.get_bone_pose(bone))
+	var entry_forward := root.global_basis.inverse()*actor.global_basis.z
+	entry_yaw=atan2(entry_forward.x,entry_forward.z)
+	entry_position=root.to_local(before)
+	entry_frame=maxf(0.,recipe.contact-incoming_lead_seconds*60.)
+	entry_duration=clampf(recipe.contact-entry_frame,0.01,15.)
+	player=actor
+	if pose_origin==null:
+		player.reparent(root,false)
+		player.transform=Transform3D.IDENTITY
+	else:
+		pose_position=Vector3.ZERO
+		pose_yaw=0.
+	player.animator.pause()
+	for modifier in player.skeleton.get_children():
+		if modifier is SkeletonModifier3D: modifier.active=false
+	bind_receiver(player)
+	intercept_shift=Vector3.ZERO
+	shift_frame=recipe.contact
+	sample_receiver(recipe,recipe.contact,true,legs)
+	var center: Vector3=HandPass.contact_center(player) if recipe.kind=="overhead" else player.skeleton.to_global(player.skeleton.get_bone_global_pose(player.skeleton.find_bone("hand_l")).origin)
+	var offset := set_intercept-center
+	intercept_shift=offset.slide(Vector3.UP).limit_length(.75)
+	if reach_assist>0.: intercept_shift+=(offset-intercept_shift).limit_length(reach_assist)
+	sample_receiver(recipe,entry_frame,true,legs)
+	return recipe
+
+const Contact=preload("res://scripts/gym_physics.gd")
+
+func platform_center(motion: Dictionary) -> Vector3:
+	if motion.kind=="overhead": return HandPass.contact_center(player)
+	var wrists := (Contact.joint(player,"hand_l")+Contact.joint(player,"hand_r"))*.5
+	var elbows := (Contact.joint(player,"lowerarm_l")+Contact.joint(player,"lowerarm_r"))*.5
+	return wrists.lerp(elbows,.3)
+
+func align_contact(motion:Dictionary,path:Callable,route_time:float,bind_time:float,floor_time:float) -> float:
+	sample_receiver(motion,motion.contact,true,legs)
+	var contact_time := route_time
+	var platform := platform_center(motion)
+	# Find the point of closest approach on the descending flight in three dimensions.
+	var first := maxf(bind_time,route_time-.25)
+	var last := minf(floor_time,route_time+.25)
+	var best_gap := INF
+	var start: Vector3=path.call(first)
+	for segment in range(1,25):
+		var end: Vector3=path.call(lerpf(first,last,segment/24.))
+		var step := end-start
+		var fraction := clampf((platform-start).dot(step)/maxf(.000001,step.length_squared()),0.,1.)
+		var point := start+step*fraction
+		var gap := point.distance_squared_to(platform)
+		if gap<best_gap:
+			best_gap=gap
+			contact_time=lerpf(first,last,(segment-1.+fraction)/24.)
+			set_intercept=point
+		start=end
+	sample_receiver(motion,motion.contact,true,legs)
+	var correction := set_intercept-platform_center(motion)
+	intercept_shift+=correction.slide(Vector3.UP).limit_length(.32)
+	return contact_time
+
+func segment_touch(motion:Dictionary,previous:Vector3,end:Vector3) -> bool:
+	var touched := false
+	if motion.kind=="overhead":
+		var hands := HandPass.contact_center(player)
+		if hands.distance_to(Geometry3D.get_closest_point_to_segment(hands,previous,end))<=HAND_RADIUS+BALL_RADIUS: return true
+		for side in ["l","r"]:
+			var center := preload("res://scripts/gym_physics.gd").palm(player,side)
+			if center.distance_to(Geometry3D.get_closest_point_to_segment(center,previous,end))<=.09+BALL_RADIUS:
+				return true
+	else:
+		for shape in RECEPTION_CAPSULES:
+			var seg := reception_segment(player.skeleton,shape)
+			var points := Geometry3D.get_closest_points_between_segments(previous,end,seg[0],seg[1])
+			if points[0].distance_to(points[1])<=BALL_RADIUS+float(shape[2])+FOREARM_CONTACT_GRACE:
+				touched=true
+				break
+	return touched
+
+static func release_grade(depth:float,face_depth:float,platform_depth:float,incoming_speed:float,touching:bool) -> Dictionary:
+	var behind := depth-face_depth
+	var platform_gap := depth-minf(platform_depth,face_depth-.13)
+	var distance := platform_gap+incoming_speed*.050
+	var offset := distance/incoming_speed
+	var green := .12
+	var late_distance := maxf(.001,.20-behind+distance)
+	var green_end := minf(green,late_distance*.5)
+	var cursor: float
+	if distance< -green:
+		cursor=remap(offset,-.21,-green/incoming_speed,.08,.33)
+	elif distance<=green_end:
+		cursor=remap(distance,-green,green_end,.33,.67)
+	else:
+		cursor=remap(distance,green_end,late_distance,.67,.90)
+	var expired := behind>.20 or (platform_gap>.12 and not touching)
+	if expired: cursor=1.
+	var grade := ("Past receiver" if behind>.20 else "Out of reach") if expired else ("Early" if distance< -green else ("Perfect" if distance<=green_end else "Late"))
+	return {"value":clampf(cursor,0.,1.),"offset":offset,"grade":grade,"playable":not expired and offset>=-.21}

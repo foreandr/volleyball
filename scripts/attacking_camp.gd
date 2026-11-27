@@ -819,17 +819,18 @@ func attack_speed() -> float:
 	var effort := float(review_setup.get("power",drill_hit_speed))
 	return sqrt(14.*effort)*arm_speed_factor()*(1.+(strength-65.)*.005)
 
+static func soft_shot_duration(origin: Vector3, landing: Vector3, tip_shot: bool) -> float:
+	var horizontal := (landing-origin).slide(Vector3.UP).length()
+	var flight := clampf(horizontal/(5.4 if tip_shot else 7.),.65,1.65)
+	var fraction := (BallNet.NET_Z-origin.z)/maxf(.01,landing.z-origin.z)
+	if fraction>0. and fraction<1.:
+		var lift := BallNet.NET_TOP+Contact.BALL_RADIUS+.18-lerpf(origin.y,landing.y,fraction)
+		flight=maxf(flight,sqrt(2.*maxf(0.,lift)/((9.81 if tip_shot else 11.81)*fraction*(1.-fraction))))
+	return flight
+
 func attack_flight_time(origin: Vector3, landing: Vector3) -> float:
-	var distance := origin.distance_to(landing)
-	if roll_shot or tip_shot:
-		var horizontal := (landing-origin).slide(Vector3.UP).length()
-		var flight := clampf(horizontal/(5.4 if tip_shot else 7.),.65,1.65)
-		var fraction := (BallNet.NET_Z-origin.z)/maxf(.01,landing.z-origin.z)
-		if fraction>0. and fraction<1.:
-			var lift := BallNet.NET_TOP+Contact.BALL_RADIUS+.18-lerpf(origin.y,landing.y,fraction)
-			flight=maxf(flight,sqrt(2.*maxf(0.,lift)/((9.81 if tip_shot else 11.81)*fraction*(1.-fraction))))
-		return flight
-	return maxf(.05,distance/(attack_speed()*attack_jump.spike_power_factor()))
+	if roll_shot or tip_shot: return soft_shot_duration(origin,landing,tip_shot)
+	return maxf(.05,origin.distance_to(landing)/(attack_speed()*attack_jump.spike_power_factor()))
 
 func swing_can_contact() -> bool:
 	return swing_time>=.055 and swing_time<=.30
@@ -1158,43 +1159,23 @@ func resolve_block_contact(previous: Vector3,block_jumps: Array, attack_directio
 	if attack_decided: return false
 	var best := {}
 	var slot := -1
-	var side_index := -1
-	var segment := -1
-	var arm := false
-	var key := 0
 	for n in block_jumps.size():
-		var candidate: RefCounted=block_jumps[n]
+		var candidate:RefCounted=block_jumps[n]
 		if candidate==null: continue
-		for c in candidate.hands.size()+candidate.body_chains.size():
-			var is_arm: bool=c<candidate.hands.size()
-			var side: int=c if is_arm else c-candidate.hands.size()
-			var chain: Array=[candidate.shoulders[c],candidate.elbows[c],candidate.wrists[c],candidate.hands[c]] if is_arm else candidate.body_chains[side]
-			for j in chain.size()-1:
-				var radius: float=PracticeBlock.ARM_RADII[j] if is_arm else PracticeBlock.BODY_RADII[j]
-				var hit := PracticeBlock.first_capsule_touch(previous,ball.global_position,chain[j],chain[j+1],Contact.BALL_RADIUS+radius)
-				if hit.is_empty() or (not best.is_empty() and hit.fraction>=best.fraction): continue
-				best=hit
-				slot=n
-				arm=is_arm
-				segment=j
-				side_index=side if arm or j==0 else -1
-				key=n*2+side if arm else -1-n*2-side
+		var hit:Dictionary=candidate.first_block_touch(previous,ball.global_position,Contact.BALL_RADIUS)
+		if hit.is_empty() or (not best.is_empty() and hit.fraction>=best.fraction): continue
+		best=hit
+		slot=n
 	if best.is_empty(): return false
-	var block: RefCounted=block_jumps[slot]
-	var body_part: String=["upper arm","forearm","hand"][segment] if arm else PracticeBlock.BODY_PARTS[segment]
-	var hit_position: Vector3=best.point
-	var normal: Vector3=best.normal
-	if normal.is_zero_approx(): normal=-drop_velocity.normalized()
-	var incidence := -drop_velocity.normalized().dot(normal)
-	var reflected := drop_velocity.bounce(normal)
-	var distal: bool=arm and (segment==2 or segment==1 and best.surface.distance_to(block.wrists[side_index])<.14)
-	var stuff: bool=distal and incidence>.55 and best.surface.y>BallNet.NET_TOP+.10 and (best.surface.z-BallNet.NET_Z)*attack_direction<-.04
-	ball.global_position=hit_position
-	if stuff:
-		var down := Vector3(reflected.x,-maxf(absf(reflected.y),drop_velocity.length()*.65),-attack_direction*maxf(absf(reflected.z),2.))
-		drop_velocity=down.normalized()*drop_velocity.length()*PracticeBlock.STUFF_SPEED_RETENTION
-	else:
-		drop_velocity=Vector3(reflected.x*.42,maxf(2.5,absf(reflected.y)*.48+1.),reflected.z*.42)
+	var block:RefCounted=block_jumps[slot]
+	var segment:int=best.segment
+	var key:int=slot*2+best.side if best.arm else -1-slot*2-best.side
+	var side_index:int=best.side if best.arm or segment==0 else -1
+	var body_part:String=best.part
+	var result:Dictionary=block.block_rebound(best,drop_velocity,attack_direction)
+	var stuff:bool=result.stuff
+	ball.global_position=best.point
+	drop_velocity=result.velocity
 	set_meta("block_impact_segment",Vector2i(key,segment))
 	spin_acceleration = Vector3.ZERO
 	set_meta("blocked_attack",true)
