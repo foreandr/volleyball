@@ -657,8 +657,11 @@ func draw_pose() -> void:
 		c=c.duplicate()
 		c.side*=1.20
 		c.forward*=1.12
-		c.drop+=.045
-		c.entry_plant_m=.40
+		c.drop+=.16
+		c.stack_knee=true
+		c.entry_time=.23
+		c.entry_speed=2.65
+		c.entry_plant_m=.60
 		c.contact_lean_deg=19.
 	if active and not selected and assigned>0:
 		var routed_mirror := address.x!=1 and ((address.x<1)!=(float(c.side)<0.))
@@ -1046,8 +1049,8 @@ func sample_receiver_base(c: Dictionary,f: float,active: bool,motion_legs: int) 
 		var goal: Vector3=defenders[receiving].to_local(set_intercept).slide(Vector3.UP)
 		var gap := goal-Vector3.BACK*.48
 		var available := minf(float(c.contact)/60.,incoming_lead_seconds)
-		var window := clampf(available-.20,0.,approach_plant.APPROACH_LOAD_TIME)
-		var distance := minf(max_shift,minf(maxf(0.,gap.length()-.30),window*1.35))
+		var window := clampf(available-.20,0.,float(c.get("entry_time",approach_plant.APPROACH_LOAD_TIME)))
+		var distance := minf(max_shift,minf(maxf(0.,gap.length()-.30),window*float(c.get("entry_speed",1.35))))
 		if distance>.025:
 			var start := float(c.contact)-available*60.
 			var plant := start+window*60.
