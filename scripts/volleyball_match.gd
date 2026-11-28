@@ -486,10 +486,10 @@ func choose_at_set_contact(setter:int,point:Vector3) -> void:
 		rally_hitter=middle
 	elif pipe_ready and (rally_hitter<0 or rally_hitter==pipe or randf()<.25):
 		rally_hitter=pipe
-	elif rally_hitter==pipe or (not in_system and rally_hitter==front_middle(side)):
+	elif rally_hitter==pipe or (rally_hitter==middle and not quick_ready) or rally_hitter<0:
 		setter_can_run_middle[side]=in_system
 		rally_hitter=-1
-		rally_hitter=hitter_for_set(setter)
+		rally_hitter=hitter_for_set(setter,quick_ready)
 
 func pipe_runner_ready(index:int) -> bool:
 	if interrupted_hitters.has(index) or yielding.has(index) or recoveries.has(index): return false
@@ -518,7 +518,7 @@ func read_pipe(side:int) -> void:
 			pipe_gap[side]=gap
 	pipe_open[side]=best>=1.05
 
-func hitter_for_set(setter: int) -> int:
+func hitter_for_set(setter: int, allow_quick: bool = true) -> int:
 	if count_for(team(setter)) == 2: return partner_of(setter)
 	if manual and is_human(setter) and manual.lane>=0: return manual_target_hitter(setter)
 	if rally_hitter >= 0 and not interrupted_hitters.has(rally_hitter) and team(rally_hitter) == team(setter) and rally_hitter != setter and not back_row_setter(rally_hitter):
@@ -529,9 +529,9 @@ func hitter_for_set(setter: int) -> int:
 		for i in slots_for(side):
 			if interrupted_hitters.has(i) or i==setter or not attack_lane_for(i).is_finite(): continue
 			var role:=lineup_role(i)
-			if role in [2,5] and not setter_can_run_middle[side]: continue
+			if role in [2,5] and (not allow_quick or not setter_can_run_middle[side]): continue
 			if role in [1,4] and Formation.zone(role,setter_zones[side]) in [1,5,6]:
-				if setter_can_run_middle[side] and middle_showing_quick(side) and pipe_open[side] and pipe_runner_ready(i): return i
+				if allow_quick and setter_can_run_middle[side] and middle_showing_quick(side) and pipe_open[side] and pipe_runner_ready(i): return i
 				continue
 			hitters.append(i)
 		if not hitters.is_empty(): return hitters[posmod(flight_number+rallies,hitters.size())]

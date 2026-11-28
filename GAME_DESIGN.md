@@ -392,7 +392,7 @@ On an attacking first pass in 6v6, the mapped A button calls the eligible contro
 An accepted attack call supersedes a CPU setter’s planned dump or fake on that pass. Once the setter has committed to a second-ball swing, the call window closes.
 
 A CPU hitter can shorten the approach on a low set. Evaluate descending contact heights in flight order and allow the shortest reachable plant before falling back to a save.
-Airborne middle sets preserve the selected tempo. Zero aims near the jump apex. One allows up to 75 ms more flight while the middle is still within striking reach. The release trace records the tempo and jump handoff.
+At release the CPU setter checks whether the middle has actually jumped. If the planned quick is unavailable, the setter looks to a pin. An explicit player call still takes priority. Airborne middle sets preserve the selected tempo. Zero aims near the jump apex. One allows up to 75 ms more flight while the middle is still within striking reach. The release trace records the tempo and jump handoff.
 
 In six-on-six auto defense the CPU front middle tracks the opposing quick runner’s visible approach across the net after the defender’s reaction delay. If the setter delivers the quick, that defender can block immediately. A decoy by itself does not trigger a jump.
 
