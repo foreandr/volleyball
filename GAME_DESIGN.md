@@ -393,3 +393,5 @@ An accepted attack call supersedes a CPU setter’s planned dump or fake on that
 
 A CPU hitter can shorten the approach on a low set. Evaluate descending contact heights in flight order and allow the shortest reachable plant before falling back to a save.
 Airborne middle sets preserve the selected tempo. Zero aims near the jump apex. One allows up to 75 ms more flight while the middle is still within striking reach. The release trace records the tempo and jump handoff.
+
+In six-on-six auto defense the CPU front middle tracks the opposing quick runner’s visible approach across the net after the defender’s reaction delay. If the setter delivers the quick, that defender can block immediately. A decoy by itself does not trigger a jump.

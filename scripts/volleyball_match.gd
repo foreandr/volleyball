@@ -581,6 +581,7 @@ const Formation=preload("res://scripts/six_rotations.gd")
 var middle_31:Array[bool]=[false,false]
 var pipe_gap:Array[float]=[0.,0.]
 var quick_actor:Array[int]=[-1,-1]
+var quick_read_flight:Array[int]=[-1,-1]
 var quick_swing: Array=[preload("res://scripts/camp_spike_pose.gd").new(),preload("res://scripts/camp_spike_pose.gd").new()]
 var quick_flight:Array[int]=[-1,-1]
 var pipe_open:Array[bool]=[false,false]
@@ -748,6 +749,7 @@ func begin_point() -> void:
 		defense_marks.clear()
 		for side in 2:
 			quick_actor[side]=-1
+			quick_read_flight[side]=-1
 			quick_flight[side]=-1
 			middle_31[side]=randf()<.5
 			pipe_gap[side]=0.
@@ -3113,6 +3115,18 @@ func position_defense(delta: float) -> void:
 			if not is_human(setter):
 				hitter_x = move_toward(hitter_x,set_pin_for(setter).x,0.65)
 			threat = attack_frame.to_global(Vector3(hitter_x,0.04,3.20))
+	# A real approach cues the middle's feet before release, even if the setter
+	# eventually goes to a pin. Keep the jump decision tied to the actual set.
+	var shadow_middle:=-1
+	var shadow_x:=0.
+	if second_ball and six_on_six() and not ordered:
+		var runner:=front_middle(hitter_side)
+		var defender:=front_middle(defense_side)
+		var approach:=set_jumps[runner]
+		if not is_human(defender) and approach.active and quick_actor[hitter_side]==runner and approach.elapsed>=players[defender].reaction_seconds():
+			shadow_middle=defender
+			shadow_x=frame.to_local(players[runner].global_position).x
+			quick_read_flight[defense_side]=flight_number
 	var x := frame.to_local(threat).x
 	var first := first_on(defense_side)
 	var near: int = defender_assignment[defense_side]
@@ -3239,12 +3253,14 @@ func position_defense(delta: float) -> void:
 				start_block(near,maxf(.18,eta+.19))
 				if blocks.has(near): manual.committed_flight=flight_number
 	pocket_x[defense_side] = cover
-	if not is_human(near) and not blocks.has(near) and (not tracking_set or elapsed>=players[near].reaction_seconds()):
+	var read_quick:=six_on_six() and tracking_set and expected_hitter==front_middle(hitter_side) and quick_read_flight[defense_side]==flight_number-1 and not ordered
+	if not is_human(near) and not blocks.has(near) and (not tracking_set or read_quick or elapsed>=players[near].reaction_seconds()):
+		if near==shadow_middle: x=shadow_x
 		if six_on_six() and tracking_set and lineup_role(expected_hitter) in [2,5]: x=frame.to_local(threat).x
 		var target := frame.to_global(Vector3(clampf(x,-4.15,4.15),0.04,3.42))
 		move_cpu(near,target,delta,8.6 if tracking_set else 7.6,Vector3.INF,true)
 		var attack_ready := remaining >= -0.04 and remaining <= (.57 if commit and absf(frame.to_local(threat).x)<1.8 else .41)
-		var dump_ready := second_ball_eta >= -0.06 and second_ball_eta <= 0.30
+		var dump_ready := near!=shadow_middle and second_ball_eta >= -0.06 and second_ball_eta <= 0.30
 		if absf(players[near].position.x-clampf(x,-4.15,4.15)) < 0.62 and (attack_ready or dump_ready):
 			var timing := remaining if attack_ready else second_ball_eta+0.035
 			start_block(near,timing,dump_ready)
@@ -3252,6 +3268,7 @@ func position_defense(delta: float) -> void:
 		for i in range(first,first+6):
 			if i==near or is_human(i) or blocks.has(i) or set_jumps[i].active: continue
 			var home:=formation_home(i,true)
+			if i==shadow_middle: home.x=shadow_x
 			if i==deep and tracking_set:
 				home=home.move_toward(Vector3(cover,.04,depth),.9)
 			move_cpu(i,frame.to_global(home),delta,5.3,toward_incoming(i,players[i].global_position))

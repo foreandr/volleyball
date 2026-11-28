@@ -190,6 +190,14 @@ func run() -> void:
 			g.position_defense(.016)
 			assert(g.defender_assignment[1-side]==defender and g.blocks.has(defender))
 			g.blocks.clear()
+			g.elapsed=0.
+			g.quick_read_flight[1-side]=g.flight_number-2
+			g.position_defense(.016)
+			assert(not g.blocks.has(defender))
+			g.quick_read_flight[1-side]=g.flight_number-1
+			g.position_defense(.016)
+			assert(g.blocks.has(defender))
+			g.blocks.clear()
 		for wing:float in [-1.,1.]:
 			var defense:int=1-side
 			var middle:int=g.first_on(defense)+g.lineup_roles[defense].find(2)
