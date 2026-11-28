@@ -403,6 +403,7 @@ func run() -> void:
 		Input.flush_buffered_events()
 	match_scene.toggle_match_replay()
 	assert(not g.replay.active)
+	check_reversing_pin(g)
 	check_late_approach(g)
 	print("PASS both sides transition, middle tempo distribution, LT/RT seek and exit")
 	quit()
@@ -432,3 +433,34 @@ func check_late_approach(g) -> void:
 			took_off=took_off or (driver.jump.active and g.players[hitter].position.y>g.PLAYER_GROUND_Y+.10)
 			if driver.stage==driver.Stage.HIT: break
 		assert(took_off and driver.stage==driver.Stage.HIT)
+
+func check_reversing_pin(g) -> void:
+	for side in 2:
+		for wing:float in [-1.,1.]:
+			g.reset_match()
+			g.spectator=true
+			var pin:=-1
+			for i in g.slots_for(side):
+				if g.Formation.zone(g.lineup_role(i),g.setter_zones[side]) in [2,3,4] and g.lineup_role(i) not in [2,5]:
+					if pin<0 or wing*g.formation_home(i,true).x>wing*g.formation_home(pin,true).x: pin=i
+			var blocker=g.players[pin]
+			var attack=g.attackers[1-side]
+			g.serve.moved_after_contact=true
+			g.serve.contact_clock=0.
+			g.serve.swing_time=g.serve.recovery_end()+1.
+			blocker.position=Vector3(wing*3.027,g.PLAYER_GROUND_Y,3.42)
+			g.court_velocities[pin]=Vector3(-wing*1.78,0,0)
+			g.movement_times[pin]=g.match_clock
+			var excursion=0.
+			var takeoff=-1.
+			for tick in 54:
+				g.match_clock+=1./60.
+				var eta=.9-tick/60.
+				attack.approach_expected_hit_at=attack.clock+eta-.045
+				attack.swing_drive_started=-INF
+				g.defend_pin_set(side,wing*3.82,attack,1./60.)
+				excursion=maxf(excursion,3.027-wing*blocker.position.x)
+				if g.blocks.has(pin):
+					takeoff=eta
+					break
+			assert(excursion<=.20 and takeoff>=.18)

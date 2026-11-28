@@ -1878,6 +1878,9 @@ func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_f
 	var velocity: Vector3 = court_velocities.get(index,Vector3.ZERO)
 	if match_clock-float(movement_times.get(index,match_clock))>delta*2.: velocity=Vector3.ZERO
 	var acceleration:=GymPaths.WALK_ACCELERATION
+	# A planted shuffle brakes toward the new lane before accelerating back across.
+	if shuffle_pace>0. and velocity.dot(heading)<0.:
+		acceleration*=2.
 	if roster_active and exhibition: acceleration*=lerpf(.82,1.15,float(actor.attributes.Athleticism)/100.)
 	velocity=velocity.move_toward(heading*minf(pace,sqrt(2.*acceleration*distance)),acceleration*delta)
 	movement_times[index]=match_clock
