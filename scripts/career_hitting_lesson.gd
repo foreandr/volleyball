@@ -316,7 +316,9 @@ func _process(delta:float) -> void:
 
 func enter_hitting_turn() -> void:
 	cpu_hitter=false
-	attack_lane=mini(2,makes/3)
+	makes=0
+	feed_index=0
+	attack_lane=0
 	switch_attacker(career_hitter,hitter)
 	if rotation_drill.issued: rotation_drill.free_ball(Vector3.ZERO)
 	coach_motion.whistle_cue.signal_drill(coach)
