@@ -2185,7 +2185,7 @@ func tick_receive(delta: float, previous: float) -> void:
 				move_cpu(index,target,delta,speed,face,not square_receive and not backshuffle and not plant and (is_dig or free_ball or flight_kind == "serve"),(run_to_drop or turn_for_save or lateral_run) and not plant and not backshuffle,18.0 if lateral_run else 12.5)
 			bump.low_save_approach_velocity = (actor.position-before_move)/maxf(delta,0.001)
 			set_jump_plant_gap = (target-actor.global_position).slide(Vector3.UP).length()
-		if cpu_setting and technique!=0:
+		if cpu_setting and technique!=0 and (set_jump_plant_gap<=1. or set_jumps[index].active):
 			var sight := (frame.to_local(ball.global_position)-actor.position).slide(Vector3.UP)
 			var aim := (set_pin_for(index)-actor.position).slide(Vector3.UP)
 			var back := aim.x<0
@@ -2696,7 +2696,22 @@ func follow_run_into_plant(hitter: int, driver: Node3D, staging: Vector3, time_l
 		if driver.approach_jump_queued: show_key(hitter,"Space")
 	return true
 
+const SETTER_BASE := Vector3(-1.4,PLAYER_GROUND_Y,2.8)
+
+func release_setter_for_cover(side:int,first_contact:int,delta:float) -> void:
+	var setter:=first_on(side)+lineup_roles[side].find(0)
+	if setter==first_contact or is_human(setter) or owns_action(setter): return
+	if recoveries.has(setter):
+		var recovery:Dictionary=recoveries[setter]
+		if recovery.has("save") or match_clock-float(recovery.started)<.18: return
+		recoveries.erase(setter)
+	var goal:=frames[side].to_global(SETTER_BASE)
+	var run:bool=(goal-players[setter].global_position).slide(Vector3.UP).length()>1.
+	move_cpu(setter,goal,delta,GroundMovement.speed(not run,run),toward_incoming(setter,goal),run,run)
+
 func position_attack(delta: float) -> void:
+	if six_on_six() and flight_kind in ["set","spike"] and last_player>=0:
+		release_setter_for_cover(team(last_player),expected_hitter if flight_kind=="set" else last_player,delta)
 	if six_on_six() and flight_kind in ["serve","pass"]:
 		if cpu_choice<0: select_receiver()
 		var side:=receiving_team
@@ -2712,7 +2727,7 @@ func position_attack(delta: float) -> void:
 				target=GroundMovement.attack_staging(lane)
 				target.x=clampf(lane.x*1.14,-4.45,4.45)
 				if role in [2,5]: target.z=1.55
-			elif role==0: target=Vector3(-1.15,.04,2.95)
+			elif role==0: target=SETTER_BASE
 			peel_cpu_off_net(i,target,delta)
 
 	if defensive_ball() and flight_kind != "pass":
@@ -2720,10 +2735,13 @@ func position_attack(delta: float) -> void:
 		var frame := frames[side]
 		var ball_behind_block := frame.to_local(ball.global_position).z < 2.40
 		var own_block := last_was_block and last_player >= 0 and team(last_player) == side
+		if six_on_six() and last_was_block:
+			if cpu_choice<0: select_receiver()
+			release_setter_for_cover(side,cpu_choice,delta)
 		if ball_behind_block or own_block:
 			if cpu_choice < 0: select_receiver()
 			var blocker: int = last_player if own_block else defender_assignment[side]
-			if blocker >= 0 and cpu_choice >= 0 and cpu_choice != blocker and not is_human(blocker) and players[blocker].position.z > 1.20:
+			if blocker >= 0 and cpu_choice >= 0 and cpu_choice != blocker and not is_human(blocker) and not (six_on_six() and last_was_block and lineup_role(blocker)==0) and players[blocker].position.z > 1.20:
 				var stage_from := players[blocker].position
 				stage_from.z = 0.95
 				peel_cpu_off_net(blocker,stage_from,delta)

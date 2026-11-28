@@ -179,6 +179,36 @@ func run() -> void:
 		if g.flight_kind!="spike": break
 	print("Recorded cut: mapped=",mapped," last contact=",g.last_player," flight=",g.flight_kind)
 	assert(mapped and g.last_player==1 and g.flight_kind=="pass")
+	# Orange 508 landed deep after setting. Recreate his release and the cover pass.
+	var setter:int=g.first_on(1)+g.lineup_roles[1].find(0)
+	g.players[setter].global_position=Vector3(2.675,.04,8.858)
+	g.players[setter].rotation.y=.726
+	g.recoveries.clear()
+	g.court_velocities.clear()
+	g.possession_team=1
+	g.flight_kind="set"
+	g.last_player=setter
+	g.expected_hitter=11
+	var start:Vector3=g.players[setter].global_position
+	for tick in 64:
+		g.match_clock+=1./60.
+		g.position_attack(1./60.)
+	var release_distance:float=start.distance_to(g.players[setter].global_position)
+	assert(release_distance>1.)
+	g.touches=1
+	g.launch(Vector3(-.836,1.491,4.9),Vector3(1.375,8.167,.185),"pass",9)
+	assert(g.rally_setter==setter)
+	for tick in 120:
+		var previous:float=g.elapsed
+		g.elapsed+=1./60.
+		g.match_clock+=1./60.
+		g.ball.global_position=g.path_point(minf(g.elapsed,g.flight_end()))
+		g.advance_set_jumps(1./60.)
+		g.position_attack(1./60.)
+		g.tick_receive(1./60.,previous)
+		if g.flight_kind!="pass": break
+	print("Orange cover: setter released ",release_distance," m; next contact ",g.last_player," / ",g.flight_kind)
+	assert(g.last_player==setter and g.flight_kind=="set")
 	g.replay.record(g)
 	g.match_clock+=1.
 	g.replay.record(g)
