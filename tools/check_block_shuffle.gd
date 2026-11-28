@@ -23,6 +23,7 @@ func run() -> void:
 	middle=game.front_middle(0)
 	actor=game.players[middle]
 	assert(actor.get_meta("school_jersey_number")==506 and actor.attributes.Blocking==100)
+	game.phase=game.Phase.LIVE
 	game.flight_kind="set"
 	game.receiving_team=1
 	var distances:=[]
@@ -37,6 +38,20 @@ func run() -> void:
 	assert(distances[2]>distances[1] and distances[1]>distances[0])
 	assert(absf(distances[2]/distances[1]-1.30)<.005)
 	print("PASS blue #506: 0/61/100 Blocking lateral travel in 0.30 s (m): ",distances)
+	actor.rotation.y=.7
+	for tick in 30:
+		game.match_clock+=1./60.
+		game.move_cpu(middle,game.frames[0].to_global(Vector3(-2.8,.04,3.42)),1./60.,7.6,Vector3.RIGHT,true,true)
+		assert(actor.animator.current_animation!=actor.animation_slots["run"])
+	assert(absf(actor.rotation.y)<.001 and game.footwork[middle].weight>.5)
+	game.animated.fill(false)
+	game.advance_idle_players(1./60.)
+	assert(absf(actor.rotation.y)<.001)
+	for inches in [30.,40.,50.]:
+		for rating in [0,90,100]:
+			actor.attributes.Blocking=rating
+			assert(is_equal_approx(game.Block.bonus_height(actor,inches*.0254)/.0254,inches*rating*.001))
+	print("PASS net-facing shuffle, idle and percentage bonus for 30/40/50 inches at 0/90/100 Blocking")
 	var peaks:=[]
 	var reactions:=[]
 	for rating in [61,100]:
@@ -53,7 +68,7 @@ func run() -> void:
 		jump.age=game.Block.START+game.Block.AIR*.5
 		jump.step(0.,actor.global_position+Vector3(0,2.8,.5))
 		peaks.append(actor.position.y-jump.base.y)
-	assert(is_equal_approx(peaks[1]-peaks[0],8.*.39*.0254*4./3.))
+	assert(is_equal_approx(peaks[1]-peaks[0],.1*.39*4./3.))
 	assert(reactions[1].x>reactions[0].x and reactions[1].y>reactions[0].y)
 	print("PASS blue 506 at 100; same-athlete 61/100 apex (m) ",peaks,"; first-frame torso and hand response ",reactions)
 	quit()

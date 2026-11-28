@@ -1380,6 +1380,16 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 		var pitch_now := atan2(spine.z,spine.y)
 		var pitch_target := deg_to_rad(lerpf(-7.0,-23.0,smootherstep(0.035,0.21,rise_age)))
 		author.rotate_world(pose,"spine_01",Vector3.RIGHT,(pitch_target-pitch_now)*bridge)
+	var shot_direction := (rig.to_local(frame.to_global(shot_aim))-ball_target).normalized()
+	var hip_drive := smoothstep(.05,.78,extension)
+	var chest_drive := smoothstep(.22,.97,extension)
+	if stage == Stage.HIT:
+		hip_drive = 1.
+		chest_drive = 1.
+	var body_weight := airborne*weight
+	# Open the hitting side during the draw, even when the shot is straight ahead.
+	author.rotate_world(pose,"pelvis",Vector3.UP,-deg_to_rad(23.)*body_weight*draw_progress*(1.-hip_drive))
+	SpikeArm.turn_into_shot(pose,author,shot_direction,.88*hip_drive*body_weight,chest_drive*body_weight)
 	var neck: Vector3 = author.point(pose,"neck_01")
 	var gaze := ball_target-neck
 	var flat_gaze := gaze.slide(Vector3.UP)
@@ -1399,7 +1409,6 @@ func build_bow_draw_pose(frame: Node3D, pose: Array[Transform3D], delta: float, 
 	else:
 		# Smooth the roll through the near-vertical hand angle using game time.
 		var roll_step := deg_to_rad(2700.0)*delta
-		var shot_direction := (rig.to_local(frame.to_global(shot_aim))-ball_target).normalized()
 		var compact_finish := SpikeArm.compact_finish_weight(shot_aim,contact,line_weight < 0.5)
 		var arm_weight := 1.0 if uses_assisted_approach() and stage == Stage.SET else weight
 		swing_palm_roll = SpikeArm.apply(pose,author,ball_target,arm_weight,extension,follow,draw_progress,arm_lift,line_weight,elbow_clearance,swing_palm_roll,roll_step,shot_direction,compact_finish,backswing_reach*backswing_weight,uses_assisted_approach(),keeps_strike_palm_presented(),stage == Stage.HIT and keeps_strike_palm_presented())

@@ -9,10 +9,8 @@ static func lateral_scale(seconds: float) -> float:
 	var depth := clampf(seconds/preload("res://scripts/tryout_squat.gd").FULL_LOAD,0.,1.)
 	return lerpf(.78,.42,depth)
 
-const MAX_TECHNIQUE_INCHES := 8.0
-
-static func bonus_height(player:Node3D) -> float:
-	return MAX_TECHNIQUE_INCHES*.0254*clampf(player.effective_rating("Blocking")/100.,0.,1.)
+static func bonus_height(player: Node3D, base_vertical: float) -> float:
+	return base_vertical * 0.10 * clampf(player.effective_rating("Blocking") / 100.0, 0.0, 1.0)
 
 const START := 0.16
 const CPU_LEAD := .035
@@ -155,13 +153,14 @@ var takeoff_target:Array[Transform3D]=[]
 var drive_elapsed:=0.
 var drive_duration:=0.
 
-func begin(player: Node3D, held_depth:=0.) -> void:
+func begin(player: Node3D, held_depth := 0., base_vertical := -1.) -> void:
 	if held_depth>.05:
 		drive_duration=manual_push_time(held_depth)
 		for i in player.skeleton.get_bone_count():
 			takeoff_pose.append(player.skeleton.get_bone_pose(i))
 	actor = player
-	jump_height+=bonus_height(player)
+	if not overpass_swing:
+		jump_height += bonus_height(player, jump_height if base_vertical < 0.0 else base_vertical)
 	upper_body_rate=1.+.5*clampf(player.effective_rating("Blocking")/100.,0.,1.)
 	base = player.position
 	swing_load=float(player.get_meta("swing_block_load",0.))

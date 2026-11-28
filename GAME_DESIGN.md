@@ -16,7 +16,7 @@ For a two-arm forearm reception, dig, or bump set, establish one platform before
 
 In serve-and-defend rallies the server can move into defense after recovering from the serve. A pin blocker who cannot close in time peels into short defense, shuffling while facing the ball and attempting digs alongside the server.
 
-A committed spike carries its selected shot pace and timing through contact. Aiming changes direction, and the ball can hit the net or land out.
+A committed spike carries its selected shot pace and timing through contact. On every spike, the hitter opens the hitting shoulder in the draw, then turns the hips, legs and chest toward the outgoing shot through contact and follow-through. Aiming changes direction, and the ball can hit the net or land out.
 
 CPU hitters recover off the net with a forward-facing shuffle toward the three-metre line before their next approach.
 
@@ -356,7 +356,7 @@ In populated tryout gyms, seated teammates converse in pairs and two background 
 ### Universal contact timing feedback
 Every timed reception, dig, set, attack and serve shows a brief top-center result that fades in and out, in every drill, career lesson and match. Show the quality (Perfect, Good or Bad) and the signed timing error in milliseconds with Early or Late when applicable. A missed contact still gets feedback, including a release before the ball reaches the hitbox or after it leaves. If the player never attempts the contact, show Missed without inventing a release time. Check early misses, late misses and successful contacts through the playable input path whenever adding a mode.
 Future feature: expand the animation studio so community creators can author and share moves, including spikes. Let the team preview submissions on game athletes and select approved animations for actual gameplay.
-Holding the bound block button (Xbox A by default) trades lateral mobility for jump height in blocking camp and matches. A tap earns 60% of available vertical; a full crouch earns 100%.
+CPU athletes stay square to the net and shuffle while assigned to block, including the read, close and return to base. The same facing applies when a human blocker focuses. Attack and dig assignments use their own movement. Blocking adds up to 10% of the athlete's vertical on a block, scaling linearly with effective Blocking. Holding the bound block button (Xbox A by default) trades lateral mobility for jump height in blocking camp and matches. A tap earns 60% of available vertical; a full crouch earns 100%.
 
 Reception and dig contacts are silent, including overhead passes, CPU demonstrations and the career scrimmage. The defense lesson and digging camp sample the saved Reception Studio grid for the full body through contact and recovery.
 

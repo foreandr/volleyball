@@ -602,10 +602,7 @@ func step_blocker(slot: int,delta: float) -> void:
 		actor.play_ground_gait(velocity.length())
 	elif not cpu:
 		if not block_held: actor.play_action("idle",.20)
-		var facing := ball.position-actor.position
-		var square := 1. if block_held else 1.-smoothstep(.6,1.8,actor.position.z-BallNet.NET_Z)
-		var heading := lerp_angle(atan2(facing.x,facing.z),PI,square)
-		actor.rotation.y=rotate_toward(actor.rotation.y,heading,delta*6.)
+		actor.rotation.y=rotate_toward(actor.rotation.y,PI,delta*6.)
 	if sprinting and velocity.length()>.15: actor.stamina.spend(actor.stamina.SPRINT_DRAIN*delta,"Sprint")
 	if cpu or block_held:
 		shuffle_steps[actor].block_step(velocity,goal-previous if cpu else 0.,PI,read_set,block_held and not cpu,delta)

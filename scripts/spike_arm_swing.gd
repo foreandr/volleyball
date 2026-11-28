@@ -16,6 +16,21 @@ static func follow_heading(target: Vector3, origin: Vector3, facing := 0.0) -> f
 	var direction := target-origin
 	return clampf(angle_difference(facing,atan2(direction.x,direction.z)),-0.95,0.95)
 
+# Both landmarks and the outgoing direction are in skeleton space, including on a mirrored rig.
+static func turn_into_shot(pose: Array, author: RefCounted, direction: Vector3, hip_drive: float, chest_drive: float) -> void:
+	var target := direction.slide(Vector3.UP).normalized()
+	if target.is_zero_approx(): return
+	var hips: Vector3 = author.point(pose,"thigh_l") - author.point(pose,"thigh_r")
+	var hip_forward := hips.cross(Vector3.UP).normalized()
+	var hip_angle := clampf(hip_forward.signed_angle_to(target,Vector3.UP),-PI/3.,PI/3.)
+	author.rotate_world(pose,"pelvis",Vector3.UP,hip_angle*hip_drive)
+	# The hips have already carried both legs and the chest. Finish the remaining angle through the rib cage.
+	var shoulders: Vector3 = author.point(pose,"upperarm_l") - author.point(pose,"upperarm_r")
+	var chest_forward := shoulders.cross(Vector3.UP).normalized()
+	var chest_angle := clampf(chest_forward.signed_angle_to(target,Vector3.UP),-.65,.65)
+	author.rotate_world(pose,"spine_01",Vector3.UP,chest_angle*chest_drive*.45)
+	author.rotate_world(pose,"spine_02",Vector3.UP,chest_angle*chest_drive*.55)
+
 static func apply(pose: Array, author: RefCounted, ball: Vector3, weight: float, extension: float, follow: float, draw_progress: float, arm_lift: float, line_weight: float, elbow_clearance: float, previous_roll: float, roll_step: float, shot_direction: Vector3, compact_finish: float, backswing_reach: float, overhead_entry := false, contact_palm := false, preserve_finish_roll := false, release_roll := 1., draw_yaw := 0.) -> float:
 	var shoulder: Vector3 = author.point(pose,"upperarm_r")
 	var draw := Vector3(-0.04,0.40,0.08).lerp(Vector3(0.02,0.05,-0.12),draw_progress)

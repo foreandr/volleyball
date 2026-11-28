@@ -1809,13 +1809,23 @@ func advance_set_jumps(delta: float) -> void:
 						quick_swing[side].apply(players[index],jump,"spike" if t>=.11 else "set",t,.11,goal,frame.to_global(SETTER_BASE),goal,goal,frame.to_global(Vector3(0.,.14,10.)),strike_offset,jump.height,1.,24.,1.,0,-1.)
 			animated[index] = true
 
+# In team-local space +Z is straight across the net on either court.
+func guarding_net(index: int, target_depth: float) -> bool:
+	if target_depth < 2.25 or phase != Phase.LIVE: return false
+	var side := team(index)
+	if six_on_six():
+		if Formation.zone(lineup_role(index),setter_zones[side]) not in [2,3,4]: return false
+	elif defender_assignment[side] != index: return false
+	if flight_kind in ["spike","dump"]: return side == receiving_team and index != cpu_choice
+	return side != receiving_team and flight_kind in ["serve","pass","set","block","free"]
+
 func advance_idle_players(delta: float) -> void:
 	for index in players.size():
 		if animated[index] or owns_action(index): continue
 		var actor := players[index]
 		if phase == Phase.LIVE and not is_human(index):
 			var sight:=frames[team(index)].to_local(ball.global_position)-actor.position
-			var yaw:=atan2(sight.x,sight.z) if six_on_six() else 0.
+			var yaw:=atan2(sight.x,sight.z) if six_on_six() and not guarding_net(index,actor.position.z) else 0.
 			actor.rotation.y = rotate_toward(actor.rotation.y,yaw,delta*GymPaths.TURN_RATE)
 		actor.animator.speed_scale = 1.0
 		actor.play_action("idle")
@@ -1879,6 +1889,12 @@ func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_f
 					serve_run_rotations[bone] = rig.get_bone_pose_rotation(bone)
 		serve.moved_after_contact = true
 	var local := frames[team(index)].to_local(target)
+	var block_stance := guarding_net(index,local.z)
+	if block_stance:
+		receive_facing = Vector3.BACK
+		chase = false
+		turn_to_travel = false
+		paced_run = false
 	var limits:=block_lane_limits(index,local.z)
 	if outside_direction>0.: limits.x=maxf(limits.x,shoulder_x)
 	elif outside_direction<0.: limits.y=minf(limits.y,shoulder_x)
@@ -1887,7 +1903,7 @@ func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_f
 	var heading := offset.normalized()
 	var already_running: bool = actor.animator.current_animation == actor.animation_slots["run"]
 	var distance := offset.length()
-	if shuffle_pace<=0. and is_server and offset.z > 0.75 and offset.z > absf(offset.x):
+	if not block_stance and shuffle_pace<=0. and is_server and offset.z > 0.75 and offset.z > absf(offset.x):
 		chase = true
 		turn_to_travel = true
 		speed = maxf(speed,6.5)
@@ -1958,7 +1974,7 @@ func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_f
 	actor.animator.speed_scale = lerpf(1.60,1.92,smoothstep(5.85,8.4,pace)) if sprint else 1.0
 	if sprint and paced_run:
 		actor.animator.speed_scale = run_cadence if run_cadence > 0.0 else clampf(pace/3.7,0.22,2.05)
-	var reverse: bool=shuffle_pace<=0. and actor.backpedaling((actor.position-before)/maxf(delta,.001))
+	var reverse: bool=not block_stance and shuffle_pace<=0. and actor.backpedaling((actor.position-before)/maxf(delta,.001))
 	if reverse: actor.play_travel_gait((actor.position-before)/maxf(delta,.001))
 	else: actor.play_action("run" if sprint else "idle",0.10)
 	actor.animator.advance(delta)
@@ -1966,7 +1982,7 @@ func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_f
 	if sprint or reverse:
 		steps.weight = 0.0
 	else:
-		steps.step(movement.limit_length(delta*2.1)/maxf(delta*2.1,0.001),delta,clampf(pace/2.06,0.65,2.25),true)
+		steps.step(movement.limit_length(delta*2.1)/maxf(delta*2.1,0.001),delta,clampf(pace/2.06,0.65,2.25),true,block_stance)
 	if not previous_body_pose.is_empty():
 		var rig: Skeleton3D = actor.skeleton
 		var weight := 1.0-exp(-delta/0.066)
@@ -2645,11 +2661,15 @@ func start_block(index: int, remaining := INF, reads_second := false, overpass_s
 	if (not manual or not is_human(index)) and (actor.position.z < 2.25 or actor.position.z > 3.45): return
 	var block := Block.new()
 	block.jump_height = jump_inches(index,block_vertical,"Block jump")*0.0254
-	if manual and is_human(index): block.jump_height*=actor.stamina.effectiveness()
+	var base_vertical := jump_inches(index,block_vertical)*0.0254
+	if manual and is_human(index):
+		block.jump_height *= actor.stamina.effectiveness()
+		base_vertical *= actor.stamina.effectiveness()
+	if not overpass_swing: block.net_heading = 0.0
 	block.landing_recovery = 0.43 if reads_second else 0.13
 	block.overpass_swing = overpass_swing
 	block.aggressive_press = not is_human(index) and not overpass_swing
-	block.begin(actor,maxf(0.,manual.block_buffer) if manual and is_human(index) else (1. if partner_push else 0.))
+	block.begin(actor,maxf(0.,manual.block_buffer) if manual and is_human(index) else (1. if partner_push else 0.),base_vertical)
 	if is_finite(remaining): block.tempo = clampf((Block.START+Block.AIR*0.5)/maxf(remaining,0.18),1.13,1.80)
 	blocks[index] = block
 	if not is_human(index): cpu_policy.used(team(index),"block lane")
@@ -3758,9 +3778,11 @@ func step_match(delta: float, controls: RefCounted) -> void:
 			mobility *= lerpf(0.78,1.18,human.effective_rating("Speed") / 100.0)
 		animated[0] = true
 		var block_shuffle:=1.
+		var focus_target: Vector3 = ball.global_position
 		if manual and controls.focus_requested and manual.context()=="block" and (not six_on_six() or Formation.zone(lineup_role(0),setter_zones[0]) in [2,3,4]):
 			block_shuffle=GroundMovement.block_shuffle_scale(human)
-		controls.move_player(motion,delta,false,ball.global_position,mobility,0.15,true,3.42,0.0,0.0,true,false,block_shuffle)
+			focus_target = human.global_position + frames[0].global_basis.z
+		controls.move_player(motion,delta,false,focus_target,mobility,0.15,true,3.42,0.0,0.0,true,false,block_shuffle)
 	if manual:
 		if manual.load_block.charging:
 			var travel:Vector3=(human.position-human_before)/maxf(.0001,delta)

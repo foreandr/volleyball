@@ -18,14 +18,8 @@ func block_step(velocity: Vector3, gap: float, net_yaw: float, ready: bool, held
 	var speed := velocity.slide(Vector3.UP).length()
 	if absf(gap)>1.65 and absf(velocity.x)>1.2 and not held: swinging=true
 	if absf(gap)<.38 or speed<.3 or held: swinging=false
-	var angle := atan2(velocity.x,velocity.z) if swinging else net_yaw
-	actor.rotation.y=rotate_toward(actor.rotation.y,angle,delta*9.)
+	actor.rotation.y=rotate_toward(actor.rotation.y,net_yaw,delta*9.)
 	actor.set_meta("swing_block_load",move_toward(float(actor.get_meta("swing_block_load",0.)),1. if swinging else 0.,delta*(8. if swinging else 3.)))
-	if swinging:
-		actor.play_ground_gait(speed)
-		weight=0.
-		squat_depth=0.
-		return
 	if held and speed<=.10:
 		weight=0.
 		squat_depth=0.

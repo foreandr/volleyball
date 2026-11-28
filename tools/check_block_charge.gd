@@ -24,7 +24,7 @@ func check() -> void:
 		event.pressed=true
 		camp._input(event)
 		for frame in frames: camp.step_blocker(slot,1./60.)
-		var available:float=camp.block_vertical*.0254*actor.stamina.effectiveness()+camp.Block.bonus_height(actor)
+		var available:float=camp.block_vertical*.0254*actor.stamina.effectiveness()+camp.Block.bonus_height(actor,camp.block_vertical*.0254*actor.stamina.effectiveness())
 		event.pressed=false
 		camp._input(event)
 		heights.append(camp.jumps[slot].jump_height/available)
@@ -67,7 +67,7 @@ func check() -> void:
 	for depth in [0.,.5,1.]:
 		match_game.blocks.erase(0)
 		match_game.manual.block_buffer=depth
-		var available:float=match_game.jump_inches(0,match_game.block_vertical,"Block jump")*.0254*match_game.human.stamina.effectiveness()+match_game.Block.bonus_height(match_game.human)
+		var available:float=match_game.jump_inches(0,match_game.block_vertical,"Block jump")*.0254*match_game.human.stamina.effectiveness()+match_game.Block.bonus_height(match_game.human,match_game.jump_inches(0,match_game.block_vertical)*.0254*match_game.human.stamina.effectiveness())
 		match_game.manual.jump_if_ready()
 		matched=matched and match_game.blocks.has(0) and absf(match_game.blocks[0].jump_height/available-(.6+.4*depth))<.001
 	print("Match block release fractions 60/80/100 verified: ",matched)

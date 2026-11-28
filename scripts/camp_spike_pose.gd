@@ -53,7 +53,7 @@ func apply(hitter: Node3D,attack_jump: Jump,phase: String,swing_time: float,cont
 	var hip_turn := opening*.28
 	var twist := opening-hip_turn
 	var shot_origin := strike_point if phase=="spike" else endpoint
-	var shot_local := hitter.global_basis.inverse()*shot_origin.direction_to(landing)
+	var shot_local := rig.global_basis.inverse()*shot_origin.direction_to(landing)
 	var heading := clampf(atan2(shot_local.x,shot_local.z),-1.35,1.35)
 	var hip_share := lerpf(.46,.72,smoothstep(.15,.95,absf(heading)))
 	hip_turn+=heading*hip_share*smoothstep(-.20,.055,turn_phase)
@@ -147,7 +147,10 @@ func apply(hitter: Node3D,attack_jump: Jump,phase: String,swing_time: float,cont
 	var draw_end := attack_jump.flight_duration(height,true)*.48-.095
 	var draw := smoothstep(.035,draw_end,air_age) if attack_jump.active else 0.
 	var origin := strike_point if phase=="spike" else ball_world
-	var shot_axis := hitter.global_basis.inverse()*origin.direction_to(landing).slide(Vector3.UP).normalized()
+	var shot_axis := (rig.global_basis.inverse()*origin.direction_to(landing)).normalized()
+	var hip_drive := smoothstep(.06,.80,reach) if phase!="spike" else 1.
+	var chest_drive := smoothstep(.24,.96,reach) if phase!="spike" else 1.
+	Swing.turn_into_shot(pose,author,shot_axis,.88*hip_drive*airborne,chest_drive*airborne)
 	var arm_target := rig.to_local(ball_world)
 	if phase=="spike":
 		arm_target=author.point(pose,"upperarm_r")+strike_shoulder_offset
