@@ -1742,7 +1742,9 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 			apex = driver.apex_for_set_time(point.y,apex,time_to_hit)
 		if tempo>=2 and six_on_six() and absf(pin.x)>2.5:
 			var runway:float=(players[hitter].position-pin).slide(Vector3.UP).length()
-			apex=driver.apex_for_set_time(point.y,apex,clampf(.64+runway/6.8,.91,1.52))
+			var outlet_delay:=.10 if active_identities.get(index,-1)==6 else 0.
+			var approach_time:=.77 if pin.x>0. else .64
+			apex=driver.apex_for_set_time(point.y,apex,clampf(approach_time+outlet_delay+runway/6.8,(1.02 if pin.x>0. else .91)+outlet_delay,1.68))
 		if is_finite(drill_set_apex): apex = maxf(point.y+0.18,drill_set_apex)
 		var contact_height: float = driver.set_contact_height(apex)
 		last_set_apex = apex
@@ -1759,8 +1761,11 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 			var runner:=players[hitter]
 			var jump:=set_jumps[hitter]
 			var air_age:float=jump.elapsed-jump.load_duration()
-			duration=clampf(jump.air_time*.53-air_age,.12,.32)
-			if tempo==1: duration=minf(duration+.075,maxf(duration,jump.air_time*.65-air_age))
+			# Keep the contact on the middle's shoulder, slightly later in the arc.
+			# Spending more time in flight reduces the set's lateral speed.
+			var hit_phase:=.59 if tempo==0 else .66
+			var max_flight:=.40 if tempo==0 else .46
+			duration=clampf(jump.air_time*hit_phase-air_age,.13,max_flight)
 			var phase_at_hit:=clampf((air_age+duration)/jump.air_time,0.,1.)
 			var rig:Skeleton3D=runner.skeleton
 			var shoulder:=frame.to_local(rig.to_global(rig.get_bone_global_pose(rig.find_bone("upperarm_r")).origin))
@@ -1958,6 +1963,10 @@ func advance_set_jumps(delta: float) -> void:
 			if quick_actor[side]==index:
 				if not jump.active: quick_actor[side]=-1
 				else:
+					var runner:=players[index]
+					if jump.elapsed<=jump.load_duration():
+						var heading:=clampf(atan2(jump.heading.x,maxf(.35,jump.heading.z)),-.60,.60)
+						runner.rotation.y=rotate_toward(runner.rotation.y,heading,delta*GymPaths.TURN_RATE)
 					var age:float=jump.elapsed-jump.load_duration()
 					if age>0.:
 						var frame:=frames[side]
@@ -1986,6 +1995,8 @@ func advance_idle_players(delta: float) -> void:
 		if phase == Phase.LIVE and not is_human(index):
 			var sight:=frames[team(index)].to_local(ball.global_position)-actor.position
 			var yaw:=atan2(sight.x,sight.z) if six_on_six() and not guarding_net(index,actor.position.z) else 0.
+			if six_on_six() and index==front_middle(team(index)) and actor.position.z>1.6 and not guarding_net(index,actor.position.z):
+				yaw=atan2(sight.x,maxf(1.25,sight.z))
 			actor.rotation.y = rotate_toward(actor.rotation.y,yaw,delta*GymPaths.TURN_RATE)
 		actor.animator.speed_scale = 1.0
 		actor.play_action("idle")
@@ -2412,7 +2423,8 @@ func tick_receive(delta: float, previous: float) -> void:
 			if driver.jump.active: return
 			var remaining: float = driver.pin_arrival-(driver.clock-driver.stage_start)
 			var forecast: Vector3 = frames[team(hitter)].to_local(path_point(clampf(driver.pin_arrival,elapsed,flight_end())))
-			var safe_lane := cpu_spike_has_lane(forecast)
+			var pin_outlet:=six_on_six() and absf(driver.rally_set_target.x)>2.5 and forecast.y>Net.NET_TOP+.02 and forecast.z<Net.NET_Z-.15
+			var safe_lane := pin_outlet or cpu_spike_has_lane(forecast)
 			var approach_window := 0.28 if last_set_apex < 3.65 else 0.54
 			if safe_lane and driver.enabled and remaining > approach_window:
 				prepare_cpu_approach(hitter,driver,delta)
@@ -3080,6 +3092,12 @@ func prepare_cpu_approach(hitter: int, driver: Node3D, delta: float) -> void:
 	var time_left: float = driver.pin_arrival-(driver.clock-driver.stage_start)
 	var gap := (pin-actor.position).slide(Vector3.UP).length()
 	var staging := GroundMovement.attack_staging(pin)
+	if six_on_six() and pin.x>2.5:
+		# Start the run from the sideline, then plant on the line to the ball.
+		# Moving back to the generic inner staging spot wastes the outside runway.
+		var plant:Vector3=driver.spike_body_target(pin)
+		staging.x=plant.x+.42
+		staging.z=plant.z-1.48
 	if follow_run_into_plant(hitter,driver,staging,time_left,delta): return
 	var peeling := actor.position.z > pin.z-1.70 and time_left > 0.82
 	if peeling:
@@ -3091,7 +3109,8 @@ func prepare_cpu_approach(hitter: int, driver: Node3D, delta: float) -> void:
 		return
 	if not driver.approach_space_held:
 		var run_up_gap := (staging-actor.position).slide(Vector3.UP).length()
-		if (time_left <= 0.88 and gap <= 2.40 and run_up_gap <= 0.35) or time_left <= 0.68:
+		var commit_time:=.80 if six_on_six() and pin.x>2.5 else .68
+		if (time_left <= 0.88 and gap <= 2.40 and run_up_gap <= 0.35) or time_left <= commit_time:
 			# Use the same shortest feasible approach as the player input path.
 			driver.try_queue_approach(false)
 			if driver.approach_jump_queued:

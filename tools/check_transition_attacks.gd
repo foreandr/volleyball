@@ -55,6 +55,7 @@ func run() -> void:
 			var last_yaw:float=g.players[id].rotation.y
 			var turn:=0.
 			var started:=false
+			var contacted:=false
 			for tick in 580:
 				var flight:int=g.flight_number
 				g.tick_match(1./60.,page.ground)
@@ -62,9 +63,14 @@ func run() -> void:
 				if g.players[id].position.y>g.PLAYER_GROUND_Y+.10:
 					if started: turn+=absf(angle_difference(last_yaw,y))
 					started=true
-				elif not started: turn=0.
+				elif started:
+					worst_turn=maxf(worst_turn,rad_to_deg(turn))
+					if contacted: break
+					started=false
+					turn=0.
 				last_yaw=y
-				if flight!=g.flight_number and g.flight_kind=="spike" and g.last_player==id:
+				if not contacted and flight!=g.flight_number and g.flight_kind=="spike" and g.last_player==id:
+					contacted=true
 					var local:Vector3=g.frames[1].global_basis.inverse()*g.velocity
 					hits+=1
 					if local.z>0. and g.net_hit.is_empty(): clears+=1
@@ -84,11 +90,11 @@ func run() -> void:
 						g.attack_decision=live
 						g.replay.toggle(g,false)
 					print("SWING ",lane," ",rep," ",trace.attack_decision.replace("\n"," "), " yaw ",rad_to_deg(turn))
-					break
-				if g.phase==g.Phase.DEAD: break
+				if g.phase==g.Phase.DEAD and not started: break
 			worst_turn=maxf(worst_turn,rad_to_deg(turn))
 			await process_frame
 		print("RALLY CHECK ",lane," hits ",hits,"/8 clean crossings ",clears," hard ",hard," speeds ",speeds," max air turn ",snappedf(worst_turn,.1))
-		if hits<5 or clears<5 or hard<1 or worst_turn>165.: failures+=1
+		var minimum_crossings:=8 if lane=="left" else 5
+		if hits!=8 or clears<minimum_crossings or hard<1 or worst_turn>(90. if lane=="middle" else 165.): failures+=1
 	print("TRANSITION CHECK failures ",failures)
 	quit(1 if failures else 0)

@@ -51,7 +51,10 @@ func run() -> void:
 				var pin:Vector3=game.attack_lane_for(game.expected_hitter)
 				var facing:Vector3=game.Bump.HandPose.zone_four_facing(actor.position,game.ZONE_FOUR)
 				facing_error=rad_to_deg(actor.basis.z.angle_to(facing))
+				var hitter_arrival:float=game.attackers[side].pin_arrival
 				correct=facing_error<8. and absf(pin.x)>3. and game.stroke==("Jump set" if sample[2]==2 else "Forearm")
+				correct=correct and hitter_arrival>=(1.10 if pin.x>0. else 1.00)
+				print("Outlet approach time ",snappedf(hitter_arrival,.001)," s")
 				if sample[2]==2:
 					correct=correct and feet_clear and takeoff<game.Net.NET_Z-3.
 					if sample[1]>1.: correct=correct and frame.to_local(game.origin).z>1. and game.set_jumps[libero].carry_velocity.z>0.

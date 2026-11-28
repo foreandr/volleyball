@@ -234,13 +234,17 @@ func spike_body_target(ball_target: Vector3) -> Vector3:
 	return target
 
 func approach_heading_yaw() -> float:
-	if not chase_late_sets or absf(rally_set_target.x)<2.5:
+	if not timed_human and absf(rally_set_target.x)<2.5:
+		return clampf(wrapf(super.approach_heading_yaw(),-PI,PI),-.68,.68)
+	if not chase_late_sets:
 		return clampf(wrapf(super.approach_heading_yaw(),-PI,PI),-deg_to_rad(70.),deg_to_rad(70.))
 	# The pin can chase a wide ball with its feet while opening into the court.
 	var inward := -signf(rally_set_target.x)
 	return atan2(inward*clampf(jump.heading.x*inward,.20,.65),maxf(.65,jump.heading.z))
 
 func airborne_shot_yaw(target:float) -> float:
+	if not timed_human and absf(rally_set_target.x)<2.5:
+		return clampf(wrapf(target,-PI,PI),-.68,.68)
 	return takeoff_yaw+clampf(angle_difference(takeoff_yaw,target),-deg_to_rad(65.),deg_to_rad(65.))
 
 func approach_glide_distance() -> float:
