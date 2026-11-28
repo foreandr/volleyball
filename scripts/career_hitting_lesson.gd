@@ -20,6 +20,7 @@ var reception:=preload("res://scripts/mapped_reception.gd").new()
 var zones:Array[Dictionary]=[]
 var motion:Dictionary={}
 var receive_at:=0.
+var closest_receive_gap:=INF
 var touched_at:=-INF
 var modifier_states:Dictionary={}
 var feed_index:=0
@@ -147,6 +148,7 @@ func change_feed_phase(next:String) -> void:
 		receive_point=FEED_LANES[active_lane]+Vector3(offsets[feed_index%offsets.size()])
 		feed_index+=1
 		receive_at=RECEIVE_TIME
+		closest_receive_gap=INF
 		touched_at=-INF
 		platform_held=false
 		receive_release=INF
@@ -195,7 +197,9 @@ func step_attack(delta:float) -> void:
 		if not motion.is_empty():
 			var frame:=clampf(motion.contact+60.*(elapsed-receive_at),0.,motion.frames)
 			reception.sample_receiver(motion,frame,true,reception.legs)
-			if reception.segment_touch(motion,previous,ball.position): touched_at=elapsed
+		var gap:=reception.segment_gap(hitter,motion,previous,ball.position)
+		closest_receive_gap=minf(closest_receive_gap,gap)
+		if not motion.is_empty() and gap<=0.: touched_at=elapsed
 		var released:=cpu_hitter or absf(receive_release-receive_at)<=.21
 		if released and elapsed-touched_at<=.095:
 			if not cpu_hitter: ContactTiming.scored("Reception",receive_release-receive_at,absf(receive_release-receive_at)<.05,true)
@@ -212,10 +216,7 @@ func step_attack(delta:float) -> void:
 			drop_velocity=feed_velocity()+Vector3.DOWN*9.81*elapsed
 			message.text="Missed reception"
 			if not cpu_hitter:
-				if is_finite(receive_release):
-					var offset:=receive_release-receive_at
-					ContactTiming.display("Reception   Missed / %s %d ms"%["Early" if offset<0. else "Late",roundi(absf(offset)*1000.)],Color("ff998a"))
-				else: ContactTiming.display("Reception   Missed",Color("ff998a"))
+				ContactTiming.missed_reception(receive_release-receive_at,closest_receive_gap)
 			begin("drop")
 	elif phase=="pass":
 		if not motion.is_empty():

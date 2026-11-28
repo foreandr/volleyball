@@ -7,6 +7,7 @@ const TOSS_BANDS := [Vector2(.8,1.15),Vector2(1.4,1.95),Vector2(2.3,3.1)]
 const Physics=preload("res://scripts/gym_physics.gd")
 const Map=preload("res://scripts/mapped_reception.gd")
 var released:Dictionary={}
+var closest_receive_gap:=INF
 var touched_at:=-INF
 var studio:Array=JSON.parse_string(FileAccess.get_file_as_string("res://assets/reception_studio.json"))
 var zones:Array[Dictionary]=[]
@@ -508,6 +509,8 @@ func tick(delta:float) -> void:
 		else:
 			if not pair.flying:
 				pair.flying=true
+				pair.touched_at=-INF
+				if human: closest_receive_gap=INF
 				if moving and human: game.moving_prompt(false)
 				pair.origin=game.coach_motion.toss(feeder,1.)
 				plan_reception(pair)
@@ -537,11 +540,15 @@ func tick(delta:float) -> void:
 			if pair.swing and (not pair.caught or t<float(pair.contact_age)+.45): mapper.sample_receiver(pair.motion,frame,true,mapper.legs)
 			elif pair.swing:
 				recover_receiver(pair,delta)
-			if active and not pair.caught and mapper.segment_touch(pair.motion,previous,orb.position): touched_at=t
+			if not pair.caught and (active or human):
+				var gap:=mapper.segment_gap(receiver,pair.motion,previous,orb.position)
+				if human: closest_receive_gap=minf(closest_receive_gap,gap)
+				if active and gap<=0.: pair.touched_at=t
+				if human and active and gap<=0.: touched_at=t
 			var human_hit:=human and not released.is_empty() and bool(released.playable) and t-touched_at<=.095
-			var cpu_touch:=not human and moving and touched_at==t
+			var cpu_touch:=not human and moving and pair.get("touched_at",-INF)==t
 			if not pair.caught and (human_hit or cpu_touch or t>=arrival+(.14 if human or moving else 0.)):
-				if human and released.is_empty(): ContactTiming.display("Reception   No release",Color("ff998a"))
+				if human and not human_hit: ContactTiming.missed_reception(released.get("offset",INF),closest_receive_gap)
 				if human: active=human_hit
 				elif moving: active=cpu_touch
 				pair.contact_age=t

@@ -7,6 +7,8 @@ var mapper:=Map.new()
 var anchor:=Node3D.new()
 var boxes:Array[Dictionary]
 var motion:={}
+var closest_receive_gap:=INF
+var miss_offset:=INF
 var held:=false
 var released:=INF
 var grade:={}
@@ -59,7 +61,9 @@ func button(down:bool,g) -> void:
 		next_check=0.
 	elif not down and held and g.phase==g.Phase.LIVE:
 		released=g.elapsed
-		if not motion.is_empty(): grade=meter(g,g.path_point(released))
+		if not motion.is_empty():
+			grade=meter(g,g.path_point(released))
+			miss_offset=grade.offset
 	held=down
 
 func eligible(g) -> bool:
@@ -127,6 +131,8 @@ func step(g,previous:float,delta:float,controls) -> bool:
 			platform_pose.apply_knee_bend()
 			platform_pose.knee_bend_depth=0.
 	if motion.is_empty():
+		if held or is_finite(released):
+			closest_receive_gap=minf(closest_receive_gap,mapper.segment_gap(g.human,{},g.path_point(previous),g.ball.global_position))
 		if not held or g.elapsed<next_check: return false
 		next_check=g.elapsed+.035
 		plan(g,previous)
@@ -153,7 +159,9 @@ func step(g,previous:float,delta:float,controls) -> bool:
 		return false
 	var advance:=(b-a).dot(axis)
 	if advance>.0001 and b.dot(axis)>cutoff: b=a.lerp(b,clampf((cutoff-a.dot(axis))/advance,0.,1.))
-	if not mapper.segment_touch(motion,a,b): return false
+	var gap:=mapper.segment_gap(g.human,motion,a,b)
+	closest_receive_gap=minf(closest_receive_gap,gap)
+	if gap>0.: return false
 	if not held and not grade.get("playable",false): return false
 	for i in 7:
 		var mid:=a.lerp(b,.5)

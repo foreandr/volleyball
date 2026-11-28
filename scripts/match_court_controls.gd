@@ -286,6 +286,8 @@ func release_feedback() -> void:
 		report("Dig" if g.defensive_ball() else "Pass",state.offset,state)
 
 func flight_changed(kind:String) -> void:
+	reception.closest_receive_gap=INF
+	reception.miss_offset=INF
 	reception.stop_pose()
 	set_met=INF
 	bump_touch=-INF

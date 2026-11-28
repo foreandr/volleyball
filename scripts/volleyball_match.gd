@@ -684,6 +684,8 @@ var career_contributed:=false
 
 func award(side: int, reason: String) -> void:
 	if phase != Phase.LIVE: return
+	if manual and side!=0 and manual.reception.eligible(self) and is_finite(manual.reception.closest_receive_gap):
+		ContactTiming.missed_reception(manual.reception.miss_offset,manual.reception.closest_receive_gap,"Dig" if defensive_ball() else "Reception")
 	if career_contributed: career_involvement+=1
 	if side!=0 and last_player==0: career_errors+=1
 	career_contributed=false

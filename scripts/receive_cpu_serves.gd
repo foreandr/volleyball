@@ -73,6 +73,7 @@ var cpu_style := -1
 var cpu_wait := 0.
 var receive_held := false
 var released_at := INF
+var closest_receive_gap:=INF
 var touched_at := INF
 var receive_committed := false
 var reception_release := {}
@@ -197,6 +198,7 @@ func next_serve() -> void:
 	reception_release={}
 	reception_result=""
 	released_at=INF
+	closest_receive_gap=INF
 	touched_at=INF
 	if serve_bag.is_empty():
 		serve_bag.assign(range(CPU_SERVES.size()))
@@ -365,6 +367,9 @@ func step_serve_reception(shot,previous: Vector3,delta: float) -> void:
 		next_route_check=flight_age+.06
 		if checking_human_lane or (receive_held and not control_digger) or chase_box.is_empty():
 			route_reception(shot,maxf(0.,flight_age-delta))
+	if not control_digger:
+		var human_motion:=recipe if map.player==controlled_passer() else other_motion if other_map.player==controlled_passer() else {}
+		closest_receive_gap=minf(closest_receive_gap,map.segment_gap(controlled_passer(),human_motion,previous,ball.position))
 	super.step_serve_reception(shot,previous,delta)
 	if other_map.player!=null:
 		if phase=="serve_flight" and absf(flight_age-other_time)<=.24 and mapped_touch(other_map,other_motion,previous):
@@ -397,6 +402,8 @@ func show_service_ace() -> void:
 		reception_result="Outside timing window"
 	else:
 		reception_result="No platform contact"
+	if receive_held or is_finite(released_at) or receiver==1:
+		ContactTiming.missed_reception(reception_release.get("offset",INF),closest_receive_gap)
 	trace("manual_pass_miss",{"result":reception_result,"release":reception_release,"platform_contact_s":str(touched_at)})
 
 func accept_reception(previous: Vector3) -> bool:

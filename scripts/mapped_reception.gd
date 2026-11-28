@@ -786,22 +786,27 @@ func align_contact(motion:Dictionary,path:Callable,route_time:float,bind_time:fl
 	return contact_time
 
 func segment_touch(motion:Dictionary,previous:Vector3,end:Vector3) -> bool:
-	var touched := false
-	if motion.kind=="overhead":
-		var hands := HandPass.contact_center(player)
-		if hands.distance_to(Geometry3D.get_closest_point_to_segment(hands,previous,end))<=HAND_RADIUS+BALL_RADIUS: return true
+	return segment_gap(player,motion,previous,end)<=0.
+
+# Clearance between the swept ball surface and the same shapes used for contact.
+func segment_gap(actor:Node3D,motion:Dictionary,previous:Vector3,end:Vector3) -> float:
+	var gap := INF
+	if motion.get("kind","")=="overhead":
+		var hands := HandPass.contact_center(actor)
+		gap=point_gap(hands,previous,end,HAND_RADIUS)
 		for side in ["l","r"]:
-			var center := preload("res://scripts/gym_physics.gd").palm(player,side)
-			if center.distance_to(Geometry3D.get_closest_point_to_segment(center,previous,end))<=.09+BALL_RADIUS:
-				return true
+			gap=minf(gap,point_gap(Contact.palm(actor,side),previous,end,.09))
 	else:
 		for shape in RECEPTION_CAPSULES:
-			var seg := reception_segment(player.skeleton,shape)
+			var seg := reception_segment(actor.skeleton,shape)
 			var points := Geometry3D.get_closest_points_between_segments(previous,end,seg[0],seg[1])
-			if points[0].distance_to(points[1])<=BALL_RADIUS+float(shape[2])+FOREARM_CONTACT_GRACE:
-				touched=true
-				break
-	return touched
+			gap=minf(gap,points[0].distance_to(points[1])-BALL_RADIUS-float(shape[2])-FOREARM_CONTACT_GRACE)
+			if gap<=0.: return 0.
+	return maxf(0.,gap)
+
+func point_gap(center:Vector3,start:Vector3,end:Vector3,radius:float) -> float:
+	var nearest := start if start==end else Geometry3D.get_closest_point_to_segment(center,start,end)
+	return center.distance_to(nearest)-radius-BALL_RADIUS
 
 static func release_grade(depth:float,face_depth:float,platform_depth:float,incoming_speed:float,touching:bool,skill:=65.) -> Dictionary:
 	var behind := depth-face_depth

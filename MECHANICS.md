@@ -277,3 +277,5 @@ The FPS counter uses quarter-second wall-clock samples. Above 55 is green, 50 th
 Holding the entry button starts a fresh career hitting attempt at position four, aiming at zone one with zero makes, regardless of the demo lane or earlier score.
 Attack and serve launch speed is shown in km/h at contact. Speed and its calculation both default on, with independent controls under Video on the main menu and Camera in a paused drill. Timing and speed can be shown independently and share a 0.12-second fade-in, one-second hold and 0.38-second fade-out.
 The speed headline shows only km/h. The attack lesson breakdown expresses drill power, momentum and release timing as signed terms in the same equation as ratings and final launch speed.
+
+Human reception misses show the nearest swept-ball clearance from the reception hitbox in metres alongside any measured release timing. Contact inside the hitbox only reports timing.

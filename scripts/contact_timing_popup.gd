@@ -49,6 +49,14 @@ func speed_options(host:Container) -> void:
 			speed_caption.hide())
 
 
+func missed_reception(offset:float, gap:float, action:="Reception") -> void:
+	var message:=action+"   Missed"
+	if is_finite(offset):
+		message+=" / On time" if is_zero_approx(offset) else " / %s %d ms"%["Early" if offset<0. else "Late",roundi(absf(offset)*1000.)]
+	if is_finite(gap) and gap>0.:
+		message+="  ·  <0.01 m out of reach" if gap<.01 else "  ·  %.2f m out of reach"%gap
+	display(message,Color("ff998a"))
+
 func scored(action:String,offset:float,green:bool,playable:bool,estimated:=false) -> void:
 	if not is_finite(offset): return
 	var ms:=roundi(offset*1000.)
