@@ -26,6 +26,17 @@ func run():
 	g.start_feed(3,1,1,true)
 	page.setup={"defense":3,"offense":1,"role":1,"in_system":true}
 	page.running=true
+	for tick in 20: g.tick_match(1./60.,page.ground)
+	var paused_ball:Vector3=g.ball.global_position
+	page.toggle_edit()
+	page.replay_button.pressed.emit()
+	assert(g.replay.active and not page.editing and not g.replay.playing)
+	assert(is_equal_approx(g.replay.clock,g.replay.duration()))
+	assert(g.replay.frames.back().trace.scenario_phase==g.phase_key())
+	page.timeline.max_value=g.replay.duration()
+	page.timeline.value=g.replay.duration()
+	page.timeline.value=0.02
+	assert(g.replay.clock<.03 and g.ball.global_position.distance_to(paused_ball)>.1)
 	page.toggle_edit()
 	var actor=g.players[0]
 	var initial:Vector3=actor.position
@@ -44,7 +55,9 @@ func run():
 	assert(rec.edited_slot==0 and rec.players.size()==12)
 	page.toggle_edit()
 	assert(actor.position.is_equal_approx(initial))
-	var section:String=g.phase_key()
+	var section:String=rec.scenario_phase
+	page.replay_button.pressed.emit()
+	assert(not g.replay.active and g.ball.global_position.is_equal_approx(paused_ball))
 	assert(g.instructions.has_section(section))
 	g.instructions.clear()
 	assert(g.instructions.load(g.rules_path)==OK)

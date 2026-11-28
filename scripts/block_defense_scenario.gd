@@ -7,6 +7,7 @@ var offense:=OptionButton.new()
 var hitter:=OptionButton.new()
 var tempo:=OptionButton.new()
 var quality:=OptionButton.new()
+var replay_button:=Button.new()
 var edit_button:=Button.new()
 var note:=Label.new()
 var running:=false
@@ -60,6 +61,10 @@ func _ready() -> void:
 	column.add_child(run)
 	run.pressed.connect(start_scenario)
 	run.grab_focus()
+	column.add_child(replay_button)
+	replay_button.text="Replay"
+	replay_button.disabled=true
+	replay_button.pressed.connect(toggle_match_replay)
 	column.add_child(edit_button)
 	edit_button.text="Pause & place · F2"
 	edit_button.disabled=true
@@ -90,6 +95,7 @@ func start_scenario() -> void:
 	game.start_feed(setup.defense,setup.offense,setup.role,setup.in_system,setup.tempo)
 	authorized=true
 	running=true
+	replay_button.disabled=false
 	edit_button.disabled=false
 	rally_end_menu.hide()
 	note.text=""
@@ -98,6 +104,7 @@ func start_scenario() -> void:
 func toggle_edit() -> void:
 	if not running: return
 	editing=not editing
+	timeline.editable=not editing
 	dragged=-1
 	if editing:
 		if game.replay.active: game.replay.playing=false
@@ -127,9 +134,16 @@ func _input(event:InputEvent) -> void:
 
 func toggle_match_replay() -> void:
 	if editing: toggle_edit()
+	if not running: return
 	super.toggle_match_replay()
+	replay_button.text="Return to rally" if game.replay.active else "Replay"
+	if get_viewport().gui_get_focus_owner(): get_viewport().gui_release_focus()
 
 func _unhandled_input(event:InputEvent) -> void:
+	if editing and ((event is InputEventKey and event.keycode==KEY_R and event.pressed and not event.echo) or (event is InputEventJoypadButton and event.button_index==JOY_BUTTON_BACK and event.pressed)):
+		toggle_match_replay()
+		get_viewport().set_input_as_handled()
+		return
 	if not editing:
 		if running: super._unhandled_input(event)
 		return

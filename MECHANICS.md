@@ -339,3 +339,5 @@ Play > Block defense scenario uses the shared 6v6 match outside career progressi
 The block defense lab always runs both teams under CPU control, including the created athlete. During the opening pass, set and attack, a placement also teaches the selected role an off-ball movement target for the matching rotations, hitter, pass quality and early/middle/late flight. Later edits replace that target. The lab uses normal court movement and prioritizes ball contacts. Scenario teaching data stays local to the lab.
 
 Block defense scenario defaults its opening set to tempo 2. Select 0-3 before running a feed. The lab remembers the selected tempo. Subsequent sets in the rally use match tempo decisions.
+
+During a block defense scenario, Replay opens the current rally at the paused moment, including from Pause & place. Rewind to inspect the rally, use F2 to teach a position on that frame, and return to the live rally at the original pause point.

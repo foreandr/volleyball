@@ -92,6 +92,7 @@ func freeze_here(match_:Node3D) -> void:
 	var recent:Array[Dictionary]=previous.duplicate()
 	recent.append_array(current)
 	var now:=capture(match_)
+	now["trace"]=match_.trace_snapshot()
 	if not recent.is_empty() and recent.back().time>=now.time:
 		recent.pop_back()
 	recent.append(now)

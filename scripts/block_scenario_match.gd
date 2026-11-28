@@ -122,3 +122,4 @@ func start_feed(defense:int,offense:int,role:int,in_system:bool,tempo:int=2) -> 
 	touches=1
 	feed_number=flight_number+1
 	launch(frames[1].to_global(start),frames[1].global_basis*motion,"pass",passer)
+	replay.record(self)
