@@ -35,13 +35,7 @@ func launch_speed(velocity:Vector3, details:String) -> void:
 	speed_caption.text="%.1f km/h"%(velocity.length()*3.6)
 	var explain:bool=StorySession.game_options.get_value("presentation","speed_details",true)
 	if explain and not details.is_empty(): speed_caption.text+="\n"+details
-	speed_caption.modulate.a=0.
-	speed_caption.show()
-	speed_fade=create_tween()
-	speed_fade.tween_property(speed_caption,"modulate:a",1.,.10)
-	speed_fade.tween_interval(3. if explain else 1.4)
-	speed_fade.tween_property(speed_caption,"modulate:a",0.,.35)
-	speed_fade.tween_callback(speed_caption.hide)
+	speed_fade=fade_feedback(speed_caption)
 
 func speed_options(host:Container) -> void:
 	for item in [["launch_speed","Show attack and serve speed"],["speed_details","Show speed calculation"]]:
@@ -73,12 +67,17 @@ func display(message:String,tint:Color) -> void:
 	owner_scene=get_tree().current_scene
 	caption.text=message
 	caption.modulate=Color(tint,0.)
-	caption.show()
-	fade=create_tween()
-	fade.tween_property(caption,"modulate:a",1.,.12)
-	fade.tween_interval(1.)
-	fade.tween_property(caption,"modulate:a",0.,.38)
-	fade.tween_callback(caption.hide)
+	fade=fade_feedback(caption)
+
+func fade_feedback(label:Label) -> Tween:
+	label.modulate.a=0.
+	label.show()
+	var tween:=create_tween()
+	tween.tween_property(label,"modulate:a",1.,.12)
+	tween.tween_interval(1.)
+	tween.tween_property(label,"modulate:a",0.,.38)
+	tween.tween_callback(label.hide)
+	return tween
 
 func _process(_delta:float) -> void:
 	if speed_caption.visible and speed_scene!=get_tree().current_scene: speed_caption.hide()
