@@ -279,3 +279,4 @@ Attack and serve launch speed is shown in km/h at contact. Speed and its calcula
 The speed headline shows only km/h. The attack lesson breakdown expresses drill power, momentum and release timing as signed terms in the same equation as ratings and final launch speed.
 
 Human reception misses show the nearest swept-ball clearance from the reception hitbox in metres alongside any measured release timing. Contact inside the hitbox only reports timing.
+After the ninth successful career attack, blocking practice repeatedly feeds position four. The player controls the opposing pin blocker and can finish practice from the pause menu.

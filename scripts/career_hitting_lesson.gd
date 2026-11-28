@@ -333,8 +333,7 @@ func attack_surface_contact(point:Vector3,floor_hit:bool) -> void:
 	makes+=1
 	if makes==9:
 		closing=true
-		CareerSession.checkpoint("hitting_lesson_complete",9)
-		MenuPresentation.load_scene("res://scenes/story.tscn")
+		if CareerSession.checkpoint("blocking_lesson",0): MenuPresentation.load_scene("res://scenes/career_blocking_lesson.tscn")
 	else:
 		CareerSession.checkpoint("hitting_lesson",makes)
 		title.text=camp_title()

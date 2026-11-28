@@ -232,7 +232,7 @@ func resume() -> void:
 		"origin","welcome","footwork","pepper","pepper_complete","moving_reception": origin()
 		"moving_reception_complete","setting_lesson": MenuPresentation.load_scene("res://scenes/career_setting_lesson.tscn")
 		"setting_lesson_complete","hitting_lesson": MenuPresentation.load_scene("res://scenes/career_hitting_lesson.tscn")
-		"hitting_lesson_complete": position_menu()
+		"hitting_lesson_complete","blocking_lesson": MenuPresentation.load_scene("res://scenes/career_blocking_lesson.tscn")
 		"position": position_menu()
 		"after_tryout": after_tryout()
 		_: MenuPresentation.load_scene(CareerSession.CHAPTER)

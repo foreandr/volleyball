@@ -198,6 +198,9 @@ func select_attack_touch() -> void:
 func allow_cpu_soft_attack() -> bool:
 	return false
 
+func next_attack_route() -> int:
+	return rotation_drill.random.randi_range(0,attackers.size()-1)
+
 func reset_feed() -> void:
 	ready_whistled=false
 	middle_read_attempted=false
@@ -205,7 +208,7 @@ func reset_feed() -> void:
 	quick_committed=false
 	ROUTES[1].x=.4 if rotation_drill.random.randf()<.5 else 1.8
 	var former := hitter
-	route=rotation_drill.random.randi_range(0,attackers.size()-1)
+	route=next_attack_route()
 	for lane in ROUTES.size():
 		var highest := 1 if lane in [1,2] else 2
 		route_tempos[lane]=rotation_drill.random.randi_range(0,highest) if random_heights else mini(attack_tempo,highest)
