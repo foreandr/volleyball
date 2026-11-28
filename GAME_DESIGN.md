@@ -395,3 +395,5 @@ A CPU hitter can shorten the approach on a low set. Evaluate descending contact 
 Airborne middle sets preserve the selected tempo. Zero aims near the jump apex. One allows up to 75 ms more flight while the middle is still within striking reach. The release trace records the tempo and jump handoff.
 
 In six-on-six auto defense the CPU front middle tracks the opposing quick runner’s visible approach across the net after the defender’s reaction delay. If the setter delivers the quick, that defender can block immediately. A decoy by itself does not trigger a jump.
+
+During a six-on-six set to a front-row pin, the CPU libero shifts from the saved defensive base toward cover behind and inside the hitter, staying clear of the approach. Human movement remains under player control.

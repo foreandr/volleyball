@@ -2831,8 +2831,23 @@ func release_setter_for_cover(side:int,first_contact:int,delta:float) -> void:
 	var run:bool=(goal-players[setter].global_position).slide(Vector3.UP).length()>1.
 	move_cpu(setter,goal,delta,GroundMovement.speed(not run,run),toward_incoming(setter,goal),run,run)
 
+func cover_pin_attack(hitter:int,delta:float) -> void:
+	var side:=team(hitter)
+	var target:Vector3=attackers[side].rally_set_target
+	if absf(target.x)<2.5 or Formation.zone(lineup_role(hitter),setter_zones[side]) not in [2,3,4]: return
+	var back_middle:=2 if Formation.back_row_libero(2,setter_zones[side]) else 5
+	var cover:=first_on(side)+lineup_roles[side].find(back_middle)
+	if is_human(cover) or cover==last_player or owns_action(cover): return
+	var home:=formation_home(cover,true)
+	# Cover a deflection behind and inside the hitter while leaving the approach clear.
+	var pocket:=Vector3(target.x-signf(target.x)*1.6,PLAYER_GROUND_Y,target.z-2.5)
+	var support:=home.move_toward(pocket,2.6)
+	var goal:=frames[side].to_global(support)
+	move_cpu(cover,goal,delta,4.1,toward_incoming(cover,players[cover].global_position))
+
 func position_attack(delta: float) -> void:
 	yielding.clear()
+	if six_on_six() and flight_kind=="set" and expected_hitter>=0: cover_pin_attack(expected_hitter,delta)
 	if six_on_six() and flight_kind=="pass": clear_setter_lane(receiving_team,delta)
 	if six_on_six() and flight_kind in ["set","spike"] and last_player>=0:
 		release_setter_for_cover(team(last_player),expected_hitter if flight_kind=="set" else last_player,delta)

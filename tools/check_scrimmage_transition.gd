@@ -214,6 +214,15 @@ func run() -> void:
 			g.serve.swing_time=g.serve.recovery_end()+1.
 			g.serve.moved_after_contact=true
 			g.court_velocities.clear()
+			var back_cover:int=g.first_on(side)+g.lineup_roles[side].find(5)
+			var cover_home:Vector3=g.formation_home(back_cover,true)
+			g.players[back_cover].position=cover_home
+			g.last_player=setter
+			var support_goal:Vector3=driver.rally_set_target
+			support_goal.x-=signf(support_goal.x)*1.6
+			support_goal.z-=2.5
+			for tick in 20: g.cover_pin_attack(g.expected_hitter,1./60.)
+			assert(g.players[back_cover].position.distance_to(support_goal)<cover_home.distance_to(support_goal)-.08)
 			var start:Vector3=g.players[line].position
 			for tick in 90:
 				g.match_clock+=1./60.
