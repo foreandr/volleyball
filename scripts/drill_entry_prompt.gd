@@ -25,7 +25,9 @@ func paint() -> void:
 	if Xbox.keyboard_prompts():
 		badge.draw_string(ThemeDB.fallback_font,Vector2(0,c.y+4),key_name,HORIZONTAL_ALIGNMENT_CENTER,badge.size.x,11)
 	else:
-		badge.draw_texture_rect(Xbox.glyph(JOY_BUTTON_A),Rect2(c-Vector2(14,14),Vector2(28,28)),false)
+		var icon := Xbox.glyph(JOY_BUTTON_A)
+		var size := icon.get_size()*(28./icon.get_height())
+		badge.draw_texture_rect(icon,Rect2(c-size*.5,size),false)
 
 static func mount(row:Container,key:String) -> Control:
 	for child in row.get_children():

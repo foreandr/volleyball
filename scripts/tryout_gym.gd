@@ -3,6 +3,8 @@ extends "res://scripts/preview_court.gd"
 const Contacts = preload("res://scripts/gym_physics.gd")
 const CEILING_HEIGHT := 12.0
 const FRONT_BENCH_X := 11.8
+# Group identical static pieces per side so the renderer can still cull a whole bank.
+var static_batches := {}
 var rear_extension := 0.0
 var brace_transforms: Array[Transform3D]=[]
 var digits: Array[Array] = []
@@ -16,6 +18,10 @@ func box(label_: String,size_: Vector3,center: Vector3,style: Material) -> MeshI
 		var shape := BoxShape3D.new()
 		shape.size = size_
 		Contacts.solid(part,shape,Contacts.GYM)
+	if label_ in ["Bleacher bench","Seat front lip","Seat underframe","Bleacher foot plate","Folding support","Fixture suspension"]:
+		var key := [label_,size_,signf(center.x),style.get_instance_id()]
+		if not static_batches.has(key): static_batches[key]=[]
+		static_batches[key].append(part)
 	if label_=="Bleacher bench": benches.append(part)
 	return part
 
@@ -98,6 +104,7 @@ func _ready() -> void:
 		box("Door rail",Vector3(1.8,0.06,0.12),Vector3(x,1.1,19.3),steel)
 		wall_text("EXIT",Vector3(x,2.67,19.32),0.003,Color.PALE_GREEN)
 	build_gallery(steel,paint)
+	batch_static_geometry()
 	var steel_web := MultiMesh.new()
 	steel_web.transform_format=MultiMesh.TRANSFORM_3D
 	steel_web.mesh=BoxMesh.new()
@@ -229,7 +236,7 @@ static func light_gym(world: Node3D) -> void:
 			lamp.omni_attenuation = 1.35
 			lamp.light_energy = 2.8
 			lamp.light_size=.22
-			lamp.shadow_enabled = z==4.0 and x==-5.0
+			# Ceiling fixtures fill the gym. Daylight and window projectors cast the shadows.
 			world.add_child(lamp)
 	var bounce := OmniLight3D.new()
 	bounce.position = Vector3(0,3.1,-4)
@@ -261,6 +268,23 @@ static func light_gym(world: Node3D) -> void:
 			sun.shadow_enabled = true
 			world.add_child(sun)
 			sun.look_at(Vector3(2.5,0.2,z+3.8))
+
+func batch_static_geometry() -> void:
+	for parts: Array in static_batches.values():
+		var first: MeshInstance3D=parts[0]
+		var copies := MultiMesh.new()
+		copies.transform_format=MultiMesh.TRANSFORM_3D
+		copies.mesh=first.mesh
+		copies.instance_count=parts.size()
+		for index in parts.size():
+			copies.set_instance_transform(index,parts[index].transform)
+			# Keep the original seat references and collision bodies.
+			parts[index].layers=0
+		var batch := MultiMeshInstance3D.new()
+		batch.multimesh=copies
+		batch.material_override=first.material_override
+		add_child(batch)
+	static_batches.clear()
 
 func wall_text(text: String,at: Vector3,scale_: float,color: Color) -> void:
 	var letters := Label3D.new()
