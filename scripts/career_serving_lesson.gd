@@ -1,6 +1,6 @@
 extends "res://scripts/serving_camp.gd"
 
-const ZONES:=[1,5,6]
+const ZONES:=CareerSession.SERVE_ZONES
 const TARGET_OFFSETS:=[Vector2(3.,7.5),Vector2(-3.,7.5),Vector2(0.,7.5)]
 const TARGET_HALF_SIZE:=1.5
 const PROGRESS_KEY:="serving_zones_156"
@@ -13,7 +13,7 @@ var start_match:Button
 var role_panel:HBoxContainer
 
 func call_team_in() -> void:
-	if gathering or not CareerSession.practice_stage.is_empty() or hits!=ZONES: return
+	if gathering or not CareerSession.practice_stage.is_empty() or not finished_serving(): return
 	gathering=true
 	watching=false
 	pending_serve=-1
@@ -84,21 +84,30 @@ func show_positions() -> void:
 
 var target_patch:=MeshInstance3D.new()
 
+func finished_serving() -> bool:
+	return CareerSession.completed_serve_zones(hits)==ZONES.size()
+
+func target_index() -> int:
+	if watching: return demo_target
+	for i in ZONES.size():
+		if hits.count(ZONES[i])<CareerSession.SERVES_PER_ZONE: return i
+	return ZONES.size()-1
+
 func target_center() -> Vector3:
-	var offset:Vector2=TARGET_OFFSETS[demo_target if watching else mini(serves_in,ZONES.size()-1)]
+	var offset:Vector2=TARGET_OFFSETS[target_index()]
 	return Vector3(offset.x,.052,BallNet.NET_Z+offset.y)
 
 func target_number() -> int:
-	return ZONES[demo_target if watching else mini(serves_in,ZONES.size()-1)]
+	return ZONES[target_index()]
 
 func refresh_target() -> void:
-	if not watching and serves_in==ZONES.size():
+	if not watching and finished_serving():
 		target_patch.hide()
 		title.text="Serving complete   /   3 of 3"
 		return
 	target_patch.show()
 	target_patch.position=target_center()
-	title.text="Serve to zone %d"%target_number() if watching else "Serve to zone %d   /   %d of %d"%[target_number(),serves_in,ZONES.size()]
+	title.text="Serve to zone %d"%target_number() if watching else "Zone %d: %d/%d serves   ·   %d/%d zones complete"%[target_number(),hits.count(target_number()),CareerSession.SERVES_PER_ZONE,CareerSession.completed_serve_zones(hits),ZONES.size()]
 
 func next_serve() -> void:
 	super.next_serve()
@@ -167,8 +176,7 @@ func start_drill() -> void:
 		var saved=CareerSession.data.get_value(CareerSession.key(),PROGRESS_KEY,[])
 		if saved is Array:
 			for zone in saved:
-				if hits.size()>=ZONES.size() or zone!=ZONES[hits.size()]: break
-				hits.append(zone)
+				if zone in ZONES and hits.count(zone)<CareerSession.SERVES_PER_ZONE: hits.append(zone)
 	super.start_drill()
 	register_student(hitter,1)
 	pin_attack.status.hide()
@@ -188,7 +196,7 @@ func start_drill() -> void:
 	target_patch.mesh=surface
 	world.add_child(target_patch)
 	refresh_target()
-	if hits==ZONES: call_team_in.call_deferred()
+	if finished_serving(): call_team_in.call_deferred()
 
 func update_serve_aim(delta:float) -> void:
 	if watching: destination=target_center()
@@ -201,7 +209,7 @@ func step_serve_reception(_shot,_previous:Vector3,_delta:float) -> void:
 	pass
 
 func show_service_ace() -> void:
-	if not watching and serves_in>=ZONES.size(): return
+	if not watching and finished_serving(): return
 	var gap:=ball.position-target_center()
 	if absf(gap.x)>TARGET_HALF_SIZE or absf(gap.z)>TARGET_HALF_SIZE:
 		message.text="In, outside zone %d"%target_number()
@@ -214,15 +222,15 @@ func show_service_ace() -> void:
 		return
 	hits.append(target_number())
 	CareerSession.data.set_value(CareerSession.key(),PROGRESS_KEY,hits.duplicate())
-	CareerSession.checkpoint("serving_complete" if serves_in==ZONES.size() else "serving_lesson",serves_in)
+	CareerSession.checkpoint("serving_complete" if finished_serving() else "serving_lesson",serves_in)
 	refresh_target()
-	if hits==ZONES: call_team_in.call_deferred()
+	if finished_serving(): call_team_in.call_deferred()
 
 func serve_out() -> void:
 	message.text="Serve out"
 
 func save_and_leave_drill() -> void:
-	if CareerSession.checkpoint("serving_complete" if serves_in==ZONES.size() else "serving_lesson",serves_in):
+	if CareerSession.checkpoint("serving_complete" if finished_serving() else "serving_lesson",serves_in):
 		MenuPresentation.load_scene("res://scenes/story.tscn")
 
 func reset_drill() -> void:

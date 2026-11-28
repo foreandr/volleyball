@@ -110,10 +110,11 @@ func run():
 	s.ball.position=Vector3(0.,.15,s.BallNet.NET_Z+4.5)
 	s.show_service_ace()
 	assert(s.serves_in==0)
-	for zone in [1,5,6]:
+	for zone in [1,1,5,5,6,6]:
 		assert(s.target_number()==zone)
 		var before:int=s.serves_in
 		s.next_serve()
+		assert(("%d/3 zones complete"%int(before/2)) in s.title.text)
 		s.destination=s.target_center()
 		s.handle_serve_button(s.SPIN_SERVE,true)
 		for tick in 480:
@@ -123,7 +124,7 @@ func run():
 			if s.serves_in>before: break
 		assert(s.serves_in==before+1,"Timed spin serve should land in called zone %d"%zone)
 	for tick in 150: await process_frame
-	assert(current_scene==s and c.stage()=="serving_complete" and s.hits==[1,5,6])
+	assert(current_scene==s and c.stage()=="serving_complete" and s.hits==[1,1,5,5,6,6])
 	s.save_and_leave_drill()
 	assert(await wait_loaded("res://scenes/story.tscn"))
 	current_scene.resume()
@@ -148,5 +149,5 @@ func run():
 		var designated:int=g.choose_setter(side,passer)
 		assert(root.get_node("StorySession").offline_roster[designated].position=="Setter")
 		assert(g.choose_setter(side,designated)!=designated)
-	print("PASS: B back, six lessons, save/leave/resume, isolated practice, five feeds, visible coach and bench, three called-zone serves, 6v6 with setters and backups")
+	print("PASS: B back, six lessons, save/leave/resume, isolated practice, five feeds, visible coach and bench, two serves per called zone, 6v6 with setters and backups")
 	quit()

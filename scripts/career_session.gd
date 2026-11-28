@@ -239,9 +239,18 @@ func exit_lesson_practice() -> void:
 
 const SCRIMMAGE_ROLES := ["Setter","P1","P2","Opposite","M1","M2","Libero"]
 
+const SERVE_ZONES := [1,5,6]
+const SERVES_PER_ZONE := 2
+
+func completed_serve_zones(hits:Array) -> int:
+	var complete:=0
+	for zone in SERVE_ZONES:
+		if hits.count(zone)>=SERVES_PER_ZONE: complete+=1
+	return complete
+
 func open_scrimmage(role:String,teammates:Array) -> void:
 	if role not in SCRIMMAGE_ROLES or teammates.size()!=11 or not practice_stage.is_empty(): return
-	if data.get_value(key(),"serving_zones_156",[])!=[1,5,6]: return
+	if completed_serve_zones(data.get_value(key(),"serving_zones_156",[]))!=SERVE_ZONES.size(): return
 	tournament=""
 	StorySession.career_scrimmage=true
 	StorySession.offline_controller=0

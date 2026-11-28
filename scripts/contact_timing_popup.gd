@@ -27,6 +27,13 @@ func _ready() -> void:
 	speed_caption.add_theme_constant_override("outline_size",5)
 	speed_caption.add_theme_color_override("font_outline_color",Color("152024"))
 	speed_caption.hide()
+	get_viewport().size_changed.connect(fit_speed_line)
+
+func fit_speed_line() -> void:
+	var font:=speed_caption.get_theme_font("font")
+	var width:=font.get_string_size(speed_caption.text,HORIZONTAL_ALIGNMENT_LEFT,-1,18).x
+	var available:=maxf(1.,get_viewport().get_visible_rect().size.x-32.)
+	speed_caption.add_theme_font_size_override("font_size",maxi(1,floori(18.*minf(1.,available/maxf(1.,width)))))
 
 func launch_speed(velocity:Vector3, details:String) -> void:
 	if not StorySession.game_options.get_value("presentation","launch_speed",true): return
@@ -34,7 +41,10 @@ func launch_speed(velocity:Vector3, details:String) -> void:
 	speed_scene=get_tree().current_scene
 	speed_caption.text="%.1f km/h"%(velocity.length()*3.6)
 	var explain:bool=StorySession.game_options.get_value("presentation","speed_details",true)
-	if explain and not details.is_empty(): speed_caption.text+="\n"+details
+	if explain and not details.is_empty():
+		var line:=details.replace("\n"," · ")
+		speed_caption.text=line if line.ends_with("= "+speed_caption.text) else speed_caption.text+"   ·   "+line
+	fit_speed_line()
 	speed_fade=fade_feedback(speed_caption)
 
 func speed_options(host:Container) -> void:

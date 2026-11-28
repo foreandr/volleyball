@@ -316,6 +316,16 @@ static func configure_serve_curve(shot,origin:Vector3,maximum:float,toss:int,spi
 	if spin_mode!=3: shot.sidespin=[0.,.30,-.30][spin_mode]
 	shot.apex=maxf(origin.y+.03,(4.9 if spin_mode==3 else 4.3)+arc_offset)
 
+static func serve_speed_line(actor:Node3D,toss:int,spin:int,shot,test_kmh:=0.) -> String:
+	var skill:String=["Spin serve","Jump float","Standing float","Underhand serve"][toss]
+	if toss==0 and spin==3: skill="Hybrid spin to float"
+	elif toss==1 and spin!=3: skill="Hybrid float to spin"
+	var rating:int=actor.attributes.get(skill,65)
+	var base: String="Test %.1f"%test_kmh if test_kmh>0. else SwingSpeed.rating_terms(actor)
+	var result:float=shot.velocity.length()*3.6
+	var path_factor:float=shot.velocity.length()/maxf(.001,shot.test_speed_mps)
+	return "%s rating %d  |  (%s) × %.3f %s × %.3f timing/flight = %.1f km/h"%[skill,rating,base,pow(TOSS_POWER_STEP,toss),LABELS[toss].to_lower(),path_factor,result]
+
 static func strike_serve(shot,origin:Vector3,destination:Vector3,error:float,spin_toss:bool,resolve_full_curve:=false) -> void:
 	shot.origin=origin
 	shot.target=destination+Vector3(0,0,-error*8.)
@@ -770,11 +780,7 @@ func _process(delta: float) -> void:
 				shot.origin=Contact.palm(setter,"r") if toss_style<2 else ball.position
 				configure_flight(shot,shot.origin)
 				strike_serve(shot,shot.origin,destination,error,toss_style==0)
-				var base_text := "Test speed %.1f km/h"%serve_test_kmh if serve_test_kmh>0. else SwingSpeed.ratings(shot.player)
-				var base_speed := serve_test_kmh if serve_test_kmh>0. else SwingSpeed.kmh(shot.player)
-				var style_factor := float(shot.test_speed_mps)*3.6/maxf(.001,base_speed)
-				var flight_factor := float(shot.velocity.length())/maxf(.001,shot.test_speed_mps)
-				ContactTiming.launch_speed(shot.velocity,base_text+"\nServe style ×%.2f  ·  Timing and flight ×%.2f"%[style_factor,flight_factor])
+				ContactTiming.launch_speed(shot.velocity,serve_speed_line(shot.player,toss_style,spin_selection,shot,serve_test_kmh))
 				trace("serve_launch",{"aim":str(destination),"origin":str(shot.origin),"speed_kmh":shot.velocity.length()*3.6,"tape_clearance":float_clearance,"predicted_landing":str(shot.flight_point(shot.planned_duration))})
 				plan_serve_reception(shot)
 				shot.ball.basis=ball.basis
