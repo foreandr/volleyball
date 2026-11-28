@@ -476,6 +476,8 @@ func prepare_middle_quick(side:int,delta:float) -> void:
 func choose_at_set_contact(setter:int,point:Vector3) -> void:
 	var side:=team(setter)
 	read_pipe(side)
+	if rally_hitter>=0 and (team(rally_hitter)!=side or rally_hitter==setter or interrupted_hitters.has(rally_hitter) or back_row_setter(rally_hitter)):
+		rally_hitter=-1
 	if side==0 and called_this_pass and rally_hitter==0 and not interrupted_hitters.has(0): return
 	var in_system:bool=setter_can_run_middle[side] and point.z>=Net.NET_Z-3.
 	var back_outside:=1 if Formation.zone(1,setter_zones[side]) in [1,5,6] else 4

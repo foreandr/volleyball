@@ -104,6 +104,11 @@ func run() -> void:
 		g.rally_hitter=middle_id
 		g.choose_at_set_contact(setter,Vector3(0,2,3))
 		assert(g.rally_hitter not in [middle_id,pipe_id,setter])
+		var relief_setter:int=g.first_on(side)+g.lineup_roles[side].find(1)
+		for stale_plan in [relief_setter,g.first_on(1-side)]:
+			g.rally_hitter=stale_plan
+			g.choose_at_set_contact(relief_setter,Vector3(0,2,3))
+			assert(g.team(g.rally_hitter)==side and g.rally_hitter not in [middle_id,pipe_id,relief_setter])
 		g.prepare_middle_quick(side,.016)
 		assert(g.set_jumps[middle_id].active and not g.middle_showing_quick(side))
 		assert(g.set_jumps[middle_id].lead_time>0.)
