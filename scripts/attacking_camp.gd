@@ -929,14 +929,11 @@ func show_strike_speed() -> void:
 		var approach := attack_jump.spike_power_factor()
 		var drill_power := base*effort
 		var approach_speed := drill_power*approach
-		var tuned_speed := attack_speed()*3.6*approach
 		var adjustments := PackedStringArray()
 		if not is_equal_approx(effort,1.):
 			adjustments.append("Drill power %+.1f"%(drill_power-base))
 		adjustments.append("Approach %+.1f"%(approach_speed-drill_power))
-		if not is_equal_approx(tuned_speed,approach_speed):
-			adjustments.append("CPU demo tuning %+.1f"%(tuned_speed-approach_speed))
-		adjustments.append("Aim and net clearance %+.1f"%(drop_velocity.length()*3.6-tuned_speed))
+		adjustments.append("Aim and net clearance %+.1f"%(drop_velocity.length()*3.6-approach_speed))
 		details=preload("res://scripts/swing_speed.gd").ratings(hitter)+"\n"+"  |  ".join(adjustments)+" km/h"
 	ContactTiming.launch_speed(drop_velocity,details)
 
