@@ -148,10 +148,6 @@ func aim_bump(stick:Vector2) -> void:
 func switch_camp_control() -> void:
 	if not watching: return
 	watching=false
-	credit=0
-	completed_slots=0
-	CareerSession.data.set_value(CareerSession.key(),"setting_slots",0)
-	CareerSession.checkpoint("setting_lesson",0)
 	target=called()
 	held=-1
 	rep=0
@@ -212,4 +208,4 @@ func reset_drill() -> void:
 	if CareerSession.checkpoint("setting_lesson",0): MenuPresentation.load_scene(scene_file_path)
 
 func save_and_leave_drill() -> void:
-	if CareerSession.checkpoint("setting_lesson",credit): MenuPresentation.load_scene("res://scenes/main.tscn")
+	if CareerSession.checkpoint("setting_lesson",credit): MenuPresentation.load_scene("res://scenes/story.tscn")

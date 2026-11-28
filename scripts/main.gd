@@ -86,7 +86,7 @@ func section_prompts(random:bool) -> void:
 		label.text="Enter   Select       Esc   Back       "+("       R   Random" if random else "")
 		prompts.add_child(label)
 	else:
-		var actions: Array=[[JOY_BUTTON_A,"Select"],[JOY_BUTTON_B,"Back"],["LT","Previous"],["RT","Next"]]
+		var actions: Array=[["A","Select"],["B","Back"],["LT","Previous"],["RT","Next"]]
 		if random: actions.append([JOY_BUTTON_Y,"Random"])
 		if route=="Match setup": actions=actions.filter(func(item): return item[0] not in ["LT","RT"])
 		Xbox.prompts(prompts,actions)

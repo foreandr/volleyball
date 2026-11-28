@@ -1,9 +1,6 @@
-extends "res://scripts/serving_camp.gd"
+extends "res://scripts/mapped_defense_camp.gd"
 
-const Regions = preload("res://scripts/reception_regions.gd")
-var movement_recipes := {}
 var dig_held := false
-var chosen_cell := Vector3i(-1,-1,-1)
 
 const FIVE := Vector3(2.65,.04,-2.2)
 var homes := [FIVE,Vector3(-1.6,.04,-2.2)]
@@ -11,7 +8,6 @@ var floor_target := Vector3(2.35,.145,-1.60)
 var target_marker := MeshInstance3D.new()
 var dragged := -1
 var orbit_offset := Vector2.ZERO
-var dig_contact_grip := Vector3.INF
 var release_window := 0.
 var set_tempo := 1
 var cpu_defense := true
@@ -20,8 +16,6 @@ var feed_age := 0.
 var attack_landing := Vector3.ZERO
 
 func start_drill() -> void:
-	for recipe in JSON.parse_string(FileAccess.get_file_as_string("res://assets/reception_studio.json")):
-		if Regions.movement(recipe): movement_recipes[int(recipe.id)]=recipe
 	cpu_defense=StorySession.career_lesson!="digging_camp"
 	for i in homes.size():
 		homes[i]=StorySession.game_options.get_value("digging","defender_home_"+str(i),homes[i])
@@ -89,16 +83,11 @@ func _input(event: InputEvent) -> void:
 		if event is InputEventJoypadButton and event.button_index==Xbox.physical(JOY_BUTTON_A):
 			active_pad=event.device
 			cpu_defense=false
-			if event.pressed and not dig_held:
-				chosen_cell=Vector3i(-1,-1,-1)
-				release_window=0.
+			if event.pressed: release_window=0.
 			if not event.pressed and dig_held and phase=="serve_return":
 				release_window=.18
-				var travel:=drop_velocity.slide(Vector3.UP)
-				if travel.length_squared()>.01:
-					var platform_goal:Vector3=hitter.to_global(Vector3(0,1.04,.62))
-					var offset:float=(ball.position-platform_goal).dot(travel)/travel.length_squared()
-					ContactTiming.window("Dig",offset,-.18,.18,-.055,.055,true)
+				dig_platforms[hitter].queue_bump(dig_clock)
+				update_dig_feedback()
 			dig_held=event.pressed
 			update_prompts("")
 			get_viewport().set_input_as_handled()
@@ -114,7 +103,6 @@ func _input(event: InputEvent) -> void:
 
 func next_serve() -> void:
 	super.next_serve()
-	chosen_cell=Vector3i(-1,-1,-1)
 	release_window=0.
 	hitter.position=homes[0]
 	wall[1].position=homes[1]
@@ -151,16 +139,8 @@ func _process(delta: float) -> void:
 		return
 	if phase=="serve_return":
 		release_window=maxf(0.,release_window-delta)
-		dig_platforms[hitter].queue_bump(dig_clock)
 		off_blocker=1
 	super._process(delta)
-	if phase=="server_dig" and last_digger!=null:
-		var platform: Reception=dig_platforms[last_digger]
-		var age := dig_clock-platform.touch_time
-		if age>0. and age<platform.Drive.FAST_DIG_ELBOW_DURATION:
-			var degrees: float=platform.Drive.forearm_bend_degrees(dig_incoming.length())
-			platform.Drive.absorb_with_joined_platform(last_digger,age,degrees,dig_contact_grip)
-
 func handle_drag(event: InputEvent) -> bool:
 	var camera := get_viewport().get_camera_3d()
 	if camera==null: return false
@@ -202,19 +182,27 @@ func handle_drag(event: InputEvent) -> bool:
 		return true
 	return false
 
-func walk_server(delta: float,_defending := false) -> void:
+func walk_server(delta: float,defending := false) -> void:
+	if defending and defense_map.player!=null:
+		sample_attack_dig()
+		return
+	if not cpu_defense:
+		# ServingCamp owns the same left-stick movement, LT focus and sprint as serve receive.
+		super.walk_server(delta,true)
 	for actor in [hitter,wall[1]]:
-		if phase=="server_dig" and actor==last_digger and dig_platforms[actor].low_save.active: continue
+		if actor==hitter and not cpu_defense: continue
 		actor.play_ground_gait(0.)
 		actor.animator.advance(delta)
 		GroundControls.face(actor,ball.global_position-actor.global_position,delta,8.)
-		dig_platforms[actor].Drive.request_platform(actor)
+
+func feed_height(offset:Vector3) -> float:
+	return lerpf(1.04,.46,smoothstep(.80,1.65,offset.slide(Vector3.UP).length()))
 
 func return_struck(actor: Node3D,point: Vector3,velocity: Vector3,spin: float) -> void:
 	var nearest: Node3D=hitter if hitter.position.distance_squared_to(floor_target)<=wall[1].position.distance_squared_to(floor_target) else wall[1]
 	var offset := floor_target-nearest.position
 	var contact := floor_target
-	contact.y=lerpf(1.04,.46,smoothstep(.80,1.65,offset.slide(Vector3.UP).length()))
+	contact.y=feed_height(offset)
 	var travel := maxf(.30,point.distance_to(contact)/maxf(1.,velocity.length()))
 	var launch := (contact-point)/travel+Vector3.UP*4.905*travel
 	var flight := preload("res://scripts/pass_flight.gd").landing_time(point,launch)
@@ -222,87 +210,21 @@ func return_struck(actor: Node3D,point: Vector3,velocity: Vector3,spin: float) -
 	pin_attack.swing_aim=pin_frame.to_local(landing)
 	super.return_struck(actor,point,launch,spin)
 
-func sample_defensive_contact(platform: Reception,start: float,dt: float,_until_floor: float,path: Callable) -> void:
-	var actor=platform.setter
-	var automatic: bool=actor!=hitter or cpu_defense
-	if automatic:
-		if not return_touched and reads_serve_out(path.call(start+dt+_until_floor),actor.effective_rating("Forearm reception"),return_line_error):
-			actor.pose_leave_ball(start)
-			return
-		var read_at: float=actor.reaction_seconds()
-		if start+dt<=read_at: return
-		if start<read_at:
-			dt-=read_at-start
-			start=read_at
-	if not automatic and not dig_held and release_window<=0.: return
-	var home: Vector3=homes[0 if actor==hitter else 1]
-	var now: Vector3=path.call(start)
-	var ahead := clampf((actor.to_global(Vector3(0,1.04,.62))-now).slide(Vector3.UP).dot(drop_velocity.slide(Vector3.UP))/maxf(.01,drop_velocity.slide(Vector3.UP).length_squared()),0.,_until_floor)
-	if ahead>.42: return
-	var intercept: Vector3=path.call(start+ahead)
-	var base: Vector3=home+actor.basis*Vector3(0,1.04,.62)
-	var offset := intercept-base
-	var save=platform.low_save
-	if automatic and platform.reach.is_empty() and not save.active and (offset.slide(Vector3.UP).length()>1.15 or intercept.y<.58):
-		if save.plan(actor,path,start,start+_until_floor,platform.clip,true,false):
-			save.travel_scale=0.
-			save.wide_arm=""
-			save.heading=(save.aim-save.start).slide(Vector3.UP).normalized()
-	if save.active:
-		save.sample(actor,start+dt,save.contact_time+.07)
-	else:
-		var progress := smoothstep(0.,.39,.42-ahead)
-		var close := 1.-smoothstep(.09,.20,ahead)
-		if not automatic: close*=smoothstep(0.,.035,.18-release_window+dt) if release_window>0. else 0.
-		platform.sample_pose(platform.clip,platform.tracks,platform.contact_frame*close,1.,true)
-		if not automatic:
-			if chosen_cell.x<0:
-				# Closest approach to the platform in 3D keeps both depth and height information.
-				var platform_center: Vector3=actor.to_global(Vector3(0,1.04,.40))
-				var impact_ahead := clampf((platform_center-now).dot(drop_velocity)/maxf(.01,drop_velocity.length_squared()),0.,_until_floor)
-				chosen_cell=Regions.region(actor.to_local(path.call(start+impact_ahead)))
-			var id := Regions.assignment(chosen_cell)
-			var recipe: Dictionary=movement_recipes.get(id,{})
-			if not recipe.is_empty():
-				var pose: Array=actor.get_pose_author().baseline.duplicate()
-				Regions.legs(actor,pose,recipe,progress,chosen_cell.x!=1 and ((chosen_cell.x==0)!=(recipe.side<0)))
-				var rig: Skeleton3D=actor.skeleton
-				for name_ in ["pelvis","thigh_l","thigh_r","calf_l","calf_r","foot_l","foot_r","ball_l","ball_r"]:
-					var bone := rig.find_bone(name_)
-					rig.set_bone_pose(bone,pose[bone])
-				actor.position=home+Vector3.UP*float(recipe.get("jump",0.))*progress
-		else:
-			var lateral: float=absf((actor.basis.inverse()*offset).x)
-			if platform.reach.is_empty() and lateral>.18 and offset.slide(Vector3.UP).length()<1.65:
-				platform.plan_reach(offset.normalized()*maxf(.36,offset.length()),true)
-			if not platform.reach.is_empty():
-				platform.reach_progress=progress
-				var step: Vector3=actor.basis.inverse()*platform.reach_step
-				var travel: Vector3=step*.68*progress
-				actor.position=home+actor.basis*travel
-				platform.reach.lead="l" if step.x>0. else "r"
-				platform.reach.tier=2 if lateral>.55 else 1
-				preload("res://scripts/forearm_reach_pose.gd").sample(actor.skeleton,actor.get_pose_author(),step,travel,progress,progress,platform.ready_pose,platform.reach,false,0,intercept,false)
-			platform.deep_squat=true
-			platform.knee_bend_depth=progress*lerpf(.07,.24,smoothstep(10.,25.,drop_velocity.length()))
-			platform.apply_knee_bend()
-		if close>.01: platform.reach_platform(intercept-platform.platform_center(),close,.72,true,true)
-	var grip_target := Vector3.INF
-	if not automatic or save.active or not platform.reach.is_empty(): grip_target=intercept+actor.basis.z*.10
-	platform.Drive.pose_joined_platform(actor,1.,174.,grip_target)
-	if not automatic and release_window<=0.: return
-	var contact := platform.dig_contact_segment(path.call(start),path.call(start+dt))
-	if contact[0].distance_to(contact[1])>platform.PLATFORM_RADIUS: return
-	platform.touch=contact[0]
-	platform.touch_time=start+dt
-	platform.outgoing=platform.aim_velocity(platform.touch)
-	platform.capture_bump_contact()
-	dig_contact_grip=Vector3.INF
-	if not save.active and not platform.reach.is_empty():
-		var rig: Skeleton3D=actor.skeleton
-		var left := rig.get_bone_global_pose(rig.find_bone("hand_l")).origin
-		var right := rig.get_bone_global_pose(rig.find_bone("hand_r")).origin
-		dig_contact_grip=rig.to_global((left+right)*.5)
+func block_on_flight_segment(previous:Vector3) -> bool:
+	if phase=="serve_return" and attack_floor_pending and not return_touched:
+		return_touched=resolve_block_contact(previous,wall_jumps,-1.)
+		if return_touched: return true
+	return super.block_on_flight_segment(previous)
+
+func dig_defender() -> Node3D:
+	if defense_map.player!=null: return defense_map.player
+	return hitter if hitter.global_position.distance_squared_to(floor_target)<=wall[1].global_position.distance_squared_to(floor_target) else wall[1]
+
+func cpu_dig() -> bool:
+	return cpu_defense or dig_defender()!=hitter
+
+func dig_armed() -> bool:
+	return cpu_dig() or dig_held or release_window>0.
 
 func scoring_target(_origin: Vector3) -> Vector3:
 	return attack_landing

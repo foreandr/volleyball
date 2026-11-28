@@ -203,6 +203,7 @@ func select(id: String) -> void:
 	persist()
 
 func persist() -> bool:
+	if saved_career_data!=null: return true
 	var temp := store_path+".tmp"
 	if data.save(temp) == OK and DirAccess.rename_absolute(temp,store_path) == OK: return true
 	OS.alert("Could not save My Career progress.")
@@ -214,15 +215,65 @@ func profile() -> Dictionary:
 func key() -> String:
 	return "indoor_setter_6v6_"+athlete_id
 
+const LESSON_SCENES:={"moving_reception":"career_opening","setting_lesson":"career_setting_lesson","hitting_lesson":"career_hitting_lesson","blocking_lesson":"career_blocking_lesson","defense_lesson":"defense_lesson","serving_lesson":"career_serving_lesson"}
+var saved_career_data:ConfigFile
+var practice_stage:=""
+var practice_progress:=0
+
+func practice_lesson(lesson:String) -> void:
+	if saved_career_data!=null: exit_lesson_practice()
+	saved_career_data=data
+	data=ConfigFile.new()
+	data.parse(saved_career_data.encode_to_text())
+	practice_stage=lesson
+	practice_progress=0
+	StorySession.career_lesson=lesson
+	MenuPresentation.load_scene("res://scenes/"+str(LESSON_SCENES[lesson])+".tscn")
+
+func exit_lesson_practice() -> void:
+	if saved_career_data!=null:
+		data=saved_career_data
+		saved_career_data=null
+	practice_stage=""
+	practice_progress=0
+
+func open_scrimmage() -> void:
+	if not practice_stage.is_empty():
+		MenuPresentation.load_scene("res://scenes/story.tscn")
+		return
+	tournament=""
+	StorySession.career_scrimmage=true
+	StorySession.offline_controller=0
+	StorySession.offline_size=6
+	StorySession.offline_away_size=6
+	var athlete:=profile().duplicate(true)
+	if athlete.get("position","Unassigned")=="Unassigned": athlete.position="P1"
+	StorySession.offline_roster.clear()
+	for side in 2:
+		var roles:=["Setter","P1","P2","M1","M2","Opposite"]
+		if side==0:
+			roles.erase(athlete.position if athlete.position in roles else "M2")
+			StorySession.offline_roster.append(athlete)
+		for role in roles:
+			var teammate:=Profile.generate()
+			teammate.position=role
+			StorySession.offline_roster.append(teammate)
+	MenuPresentation.load_scene("res://scenes/offline_match.tscn")
+
 func stage() -> String:
+	if not practice_stage.is_empty(): return practice_stage
 	return data.get_value(key(),"stage","origin")
 
 func progress() -> int:
+	if not practice_stage.is_empty(): return practice_progress
 	return data.get_value(key(),"rep",0)
 
 func checkpoint(at: String, rep: int) -> bool:
+	if not practice_stage.is_empty():
+		practice_progress=rep
+		return true
 	var completed:Array=data.get_value(key(),"completed_opening_drills",[])
-	var cleared_drill:={"blocking_lesson":"hitting_lesson","hitting_lesson":"setting_lesson","hitting_lesson_complete":"hitting_lesson","setting_lesson":"moving_reception","setting_lesson_complete":"setting_lesson","pepper":"footwork","pepper_complete":"pepper","moving_reception":"pepper","moving_reception_complete":"moving_reception"}
+	var cleared_drill:={"defense_lesson":"blocking_lesson","serving_lesson":"defense_lesson","scrimmage":"serving_lesson","blocking_lesson":"hitting_lesson","hitting_lesson":"setting_lesson","hitting_lesson_complete":"hitting_lesson","setting_lesson":"moving_reception","setting_lesson_complete":"setting_lesson","pepper":"footwork","pepper_complete":"pepper","moving_reception":"pepper","moving_reception_complete":"moving_reception"}
 	if at=="position" and stage() in ["blocking_lesson","hitting_lesson_complete"]:
 		cleared_drill[at]="blocking_lesson"
 	if at in cleared_drill and cleared_drill[at] not in completed:

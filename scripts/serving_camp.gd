@@ -153,7 +153,6 @@ var server_dig_buffer := 0.
 var platform_clips: Array[Animation]=[]
 var receiver := 0
 var hand_sound := AudioStreamPlayer.new()
-var dig_sound := AudioStreamPlayer.new()
 
 func _ready() -> void:
 	gym.rear_extension=1.5
@@ -178,8 +177,6 @@ func start_drill() -> void:
 	score_strip.hide()
 	hand_sound.stream=preload("res://assets/audio/hand_gym_01.wav")
 	add_child(hand_sound)
-	dig_sound.stream=preload("res://assets/audio/pass_contact.wav")
-	add_child(dig_sound)
 	for file in ResourceLoader.list_directory("res://assets/animations"):
 		if file.begins_with("straight_pass_") and file.get_extension() in ["res","tres"]:
 			platform_clips.append(load("res://assets/animations/"+file))
@@ -1340,7 +1337,6 @@ func block_on_flight_segment(previous: Vector3) -> bool:
 		if not is_finite(platform.pressed_at): continue
 		sample_defensive_contact(platform,start,dt,until_floor,path)
 		if not is_finite(platform.touch_time): continue
-		dig_sound.play()
 		defense_read.covered()
 		last_digger=defender
 		dig_incoming=drop_velocity

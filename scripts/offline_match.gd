@@ -28,7 +28,7 @@ func _ready() -> void:
 	var config:Dictionary=StorySession.match_preference("exhibition",{})
 	add_child(world)
 	var where:=clampi(config.get("venue",0),0,2)
-	if StorySession.career_scrimmage and CareerSession.EVENTS.has(CareerSession.tournament): where=CareerSession.EVENTS[CareerSession.tournament][1]
+	if StorySession.career_scrimmage: where=0
 	var court=Venue.build(world,where,clampi(config.get("crowd",16),0,96))
 	build_officials(court)
 	world.add_child(camera)
@@ -46,7 +46,7 @@ func _ready() -> void:
 	game.exhibition=true
 	game.spectator=StorySession.offline_controller==-1
 	game.side_names=["Away","Home"] if away else ["Home","Away"]
-	game.win_score=clampi(config.get("points",21),1,99)
+	game.win_score=5 if StorySession.career_scrimmage else clampi(config.get("points",21),1,99)
 	world.add_child(game)
 	build_hud()
 	game.configure(preview_player,board,status,"Offline",StorySession.offline_away_size if away else StorySession.offline_size,false,false,StorySession.offline_size if away else StorySession.offline_away_size)
@@ -127,7 +127,7 @@ func build_hud() -> void:
 	banner.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 	banner.add_theme_font_size_override("font_size",28)
 	banner.add_theme_constant_override("outline_size",6)
-	banner.text="Waiting for the whistle"
+	banner.text=("Your position / "+str(StorySession.offline_roster[0].position)) if StorySession.career_scrimmage else "Waiting for the whistle"
 	add_child(rally_end_menu)
 	rally_end_menu.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	rally_end_menu.grow_horizontal=Control.GROW_DIRECTION_BOTH
@@ -156,7 +156,6 @@ func leave_match() -> void:
 	if StorySession.career_scrimmage:
 		CareerSession.tournament=""
 		StorySession.career_scrimmage=false
-		StorySession.guided_scrimmage=false
 		MenuPresentation.load_scene("res://scenes/story.tscn")
 		return
 	MenuPresentation.return_page="Match setup"
@@ -198,18 +197,11 @@ func refresh_prompts() -> void:
 	if not game.replay.active and not game.spectator:
 		if game.manual.context()=="serve":
 			var spins:Array=[[JOY_BUTTON_DPAD_UP,"Topspin"],[JOY_BUTTON_DPAD_LEFT,"Left spin"],[JOY_BUTTON_DPAD_RIGHT,"Right spin"],[JOY_BUTTON_DPAD_DOWN,"Float"]]
-			if not StorySession.guided_scrimmage:
-				entries=spins
-				keys="↑  Topspin     ←  Left spin     →  Right spin     ↓  Float"
-			elif not game.serve_pending:
-				entries=[[JOY_BUTTON_A,"Spin toss"],[JOY_BUTTON_B,"Jump float"],[JOY_BUTTON_X,"Standing"],[JOY_BUTTON_Y,"Underhand"]]+spins
-				keys="Hold Space / L / J / I for toss  ·  Release at contact  ·  Arrows select spin"
-		elif not StorySession.guided_scrimmage:
+			entries=spins
+			keys="↑  Topspin     ←  Left spin     →  Right spin     ↓  Float"
+		else:
 			entries=[]
 			keys=""
-		elif game.manual.context()=="block":
-			entries.append_array([[JOY_BUTTON_DPAD_LEFT,"Left shoulder"],[JOY_BUTTON_DPAD_RIGHT,"Right shoulder"],[JOY_BUTTON_DPAD_UP,"Commit"],[JOY_BUTTON_DPAD_DOWN,"No block"]])
-			keys+="     Arrows  Left / right shoulder, commit / no block"
 	elif game.spectator and not game.replay.active:
 		entries=[]
 		keys=""
@@ -229,7 +221,7 @@ func _process(delta:float) -> void:
 		signaled_rally=game.rallies
 		authorized=false
 		whistle.signal_drill(ref)
-		banner.text="Waiting for the whistle"
+		banner.text=("Your position / "+str(StorySession.offline_roster[0].position)) if StorySession.career_scrimmage else "Waiting for the whistle"
 		banner.show()
 	if whistle.signal_time>=0 and not game.replay.active:
 		whistle.step_whistle(ref,delta)
@@ -255,10 +247,7 @@ func _process(delta:float) -> void:
 	elif game.phase!=game.Phase.READY or game.serve_pending: banner.hide()
 	if game.manual and authorized and game.phase==game.Phase.READY and not game.serve_pending and game.is_human(game.server_index()) and not game.replay.active:
 		status.text="%s  /  %s"%[game.manual.service.Camp.LABELS[3-game.serve_style],game.manual.service.Camp.SPIN_LABELS[game.manual.service.spin]]
-	if StorySession.guided_scrimmage and game.manual and not game.replay.active:
-		if game.manual.context()=="set": status.text="Move under the pass. Hold a target and release as the ball meets your hands."
-		elif game.manual.context()=="serve" and not game.serve_pending: status.text+="   /   Hold a toss button, then release at contact."
-	status.visible=game.replay.active or (authorized and (game.phase!=game.Phase.LIVE or StorySession.guided_scrimmage))
+	status.visible=game.replay.active or (authorized and (game.phase!=game.Phase.LIVE))
 	if game.phase==game.Phase.FINISHED and not game.replay.active and not rally_end_menu.visible:
 		rally_end_menu.show()
 		rally_end_menu.get_child(0).grab_focus()

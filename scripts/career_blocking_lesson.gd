@@ -87,18 +87,18 @@ func attack_surface_contact(point:Vector3,floor_hit:bool) -> void:
 	title.text=camp_title()
 	trace("tutorial_block_touch",{"touches":touches,"rep":rep})
 	if touches==REQUIRED_TOUCHES:
-		if CareerSession.checkpoint("position",0):
+		if CareerSession.checkpoint("defense_lesson",0):
 			get_tree().create_timer(1.,false).timeout.connect(finish_practice)
 	else:
 		CareerSession.checkpoint("blocking_lesson",touches)
 
 func finish_practice() -> void:
-	MenuPresentation.load_scene("res://scenes/story.tscn")
+	MenuPresentation.load_scene("res://scenes/defense_lesson.tscn")
 
 func reset_drill() -> void:
 	if CareerSession.checkpoint("blocking_lesson",0): super.reset_drill()
 
 func save_and_leave_drill() -> void:
-	if touches==REQUIRED_TOUCHES: finish_practice()
+	if touches==REQUIRED_TOUCHES: MenuPresentation.load_scene("res://scenes/story.tscn")
 	elif CareerSession.checkpoint("blocking_lesson",touches):
 		MenuPresentation.load_scene("res://scenes/story.tscn")

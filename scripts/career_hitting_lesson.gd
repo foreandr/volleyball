@@ -313,7 +313,6 @@ func _process(delta:float) -> void:
 
 func enter_hitting_turn() -> void:
 	cpu_hitter=false
-	makes=0
 	feed_index=0
 	attack_lane=0
 	switch_attacker(career_hitter,hitter)
@@ -341,6 +340,9 @@ func attack_surface_contact(point:Vector3,floor_hit:bool) -> void:
 
 func reset_drill() -> void:
 	if CareerSession.checkpoint("hitting_lesson",0): MenuPresentation.load_scene(scene_file_path)
+
+func save_and_leave_drill() -> void:
+	leave()
 
 func leave() -> void:
 	if CareerSession.checkpoint("hitting_lesson",makes): MenuPresentation.load_scene("res://scenes/story.tscn")

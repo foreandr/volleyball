@@ -598,13 +598,16 @@ Scroll to set pass height"),16)
 	animation_list.grab_focus()
 
 func open_blocking_mode(defense: bool) -> void:
+	if defense:
+		MenuPresentation.load_scene("res://scenes/digging_camp.tscn")
+		return
 	stop_blocking_practice()
 	clear_content()
-	set_title("DEFENSE" if defense else "BLOCKING")
-	start_blocking_practice(defense)
+	set_title("BLOCKING")
+	start_blocking_practice()
 
-func start_blocking_practice(defense := false) -> void:
-	defense_active = defense
+func start_blocking_practice() -> void:
+	defense_active = false
 	if player_controls.active: player_controls.set_active(false)
 	if is_instance_valid(ball_preview): ball_preview.stop()
 	right_panel.hide()
@@ -617,22 +620,11 @@ func start_blocking_practice(defense := false) -> void:
 	blocking_frame.position.z = 8.0
 	blocking_frame.rotation.y = PI
 	preview_player.get_parent().add_child(blocking_frame)
-	var drill_script := preload("res://scripts/defense_practice.gd") if defense else preload("res://scripts/blocking_practice.gd")
+	var drill_script := preload("res://scripts/blocking_practice.gd")
 	blocking_practice = drill_script.new()
 	blocking_frame.add_child(blocking_practice)
 	blocking_practice.configure_block(preview_player,drill_status,build_label)
 	blocking_practice.set_ball_audio_muted(StorySession.attack_ball_audio_muted)
-	if defense:
-		content.add_child(label(PromptControls.hint("Move to receive","WASD to move  |  Shift to sprint\nQ to dig  |  E for face-height saves\nMove mouse to aim your pass"),18))
-		add_skill_slider("Forearm reception","forearm_reception_skill")
-		add_skill_slider("Hand reception","hand_reception_skill")
-		content.add_child(button("Back to Blocking",open_blocking_mode.bind(false)))
-		preview_camera.position = Vector3(0.0,5.0,-8.8)
-		setting_camera_focus = Vector3(0.0,1.65,3.0)
-		preview_camera.look_at(setting_camera_focus)
-		player_controls.setter_travel = Vector3.ZERO
-		preview.grab_focus()
-		return
 	content.add_child(button("Defense Practice",open_blocking_mode.bind(true)))
 	var role := OptionButton.new()
 	role.add_item("Attack against CPU blocker")

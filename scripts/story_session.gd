@@ -122,7 +122,6 @@ var preview_path := "user://preview_setup.cfg"
 var lab_replay_path := ""
 var open_home_simulation := false
 var career_scrimmage := false
-var guided_scrimmage := false
 var career_lesson:=""
 var offline_size := 2
 var offline_away_size := 2

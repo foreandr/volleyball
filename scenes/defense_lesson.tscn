@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/indoor_practice.tscn" id="1"]
+[ext_resource type="Script" path="res://scripts/defense_lesson.gd" id="2"]
+
+[node name="DefenseLesson" instance=ExtResource("1")]
+script = ExtResource("2")
+solo_setting = true
+populated_practice = true

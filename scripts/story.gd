@@ -15,6 +15,7 @@ func _ready() -> void:
 		defense_score()
 	elif not StorySession.career_lesson.is_empty():
 		StorySession.career_lesson=""
+		CareerSession.exit_lesson_practice()
 		controls_tutorial()
 	elif CareerSession.enter_origin:
 		CareerSession.enter_origin = false
@@ -64,9 +65,6 @@ func show_home() -> void:
 		facts.add_child(nameplate)
 		add_button("Continue career",resume).grab_focus()
 		add_button("Controls tutorial",controls_tutorial)
-		add_button("Tournament circuit",circuit)
-		add_button("Play scrimmage",scrimmage)
-		add_button("Defense evaluation",defense_tryout)
 		add_button("Player development",development)
 		add_button("Wardrobe",func():
 			CareerSession.outfitting=true
@@ -81,40 +79,10 @@ func show_home() -> void:
 
 func controls_tutorial() -> void:
 	clear_menu("CONTROLS TUTORIAL")
-	var lessons:Dictionary={"Serving":"serving_camp","Serve receive":"receive_cpu_serves","Setting":"setting_camp","Attacking":"attacking_camp","Blocking":"blocking_camp","Digging":"digging_camp"}
-	for title in lessons:
-		var entry:=add_button(title,func():
-			StorySession.career_lesson=lessons[title]
-			MenuPresentation.load_scene("res://scenes/"+StorySession.career_lesson+".tscn"))
-		if title=="Setting": entry.grab_focus()
-	add_button("Guided scrimmage",scrimmage.bind(true))
-	add_button("My Career",show_home)
-
-func circuit() -> void:
-	clear_menu("TOURNAMENT CIRCUIT")
-	var record:=CareerSession.circuit_record()
-	for event in CareerSession.EVENTS:
-		var wins:=int(record.get(event,0))
-		var entry:=add_button("%s    /    %s    /    Round %d"%[event,CareerSession.LEAGUES[mini(2,wins/3)],wins%3+1],scrimmage.bind(false,event))
-		if event=="Grass doubles": entry.grab_focus()
-	add_button("Back",show_home)
-
-func scrimmage(guided:=false,event:="") -> void:
-	CareerSession.tournament=event
-	var count:=int(CareerSession.EVENTS.get(event,[3,0])[0])
-	StorySession.guided_scrimmage=guided
-	StorySession.career_scrimmage=true
-	StorySession.offline_controller=0
-	StorySession.offline_size=count
-	StorySession.offline_away_size=count
-	StorySession.offline_roster.assign([CareerSession.profile()])
-	for i in 2*count-1:
-		var profile:=CareerSession.Profile.generate()
-		if not event.is_empty():
-			var tier:=mini(2,int(CareerSession.circuit_record().get(event,0))/3)
-			for skill in CareerSession.Profile.RATINGS: profile[skill]=randi_range(48,67)+(14*tier if i>=count-1 else 6*tier)
-		StorySession.offline_roster.append(profile)
-	MenuPresentation.load_scene("res://scenes/offline_match.tscn")
+	var lessons:Dictionary={"Reception":"moving_reception","Setting":"setting_lesson","Attacking":"hitting_lesson","Blocking":"blocking_lesson","Defense":"defense_lesson","Serving":"serving_lesson"}
+	for caption in lessons:
+		var entry:=add_button(caption,CareerSession.practice_lesson.bind(lessons[caption]))
+		if caption=="Reception": entry.grab_focus()
 
 func development(selected := "") -> void:
 	clear_menu("PLAYER DEVELOPMENT")
@@ -179,6 +147,11 @@ func select_development_tab(index:int) -> void:
 	development()
 
 func _input(event:InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel") and not is_instance_valid(MenuPresentation.loading_screen):
+		get_viewport().set_input_as_handled()
+		if screen=="MY CAREER": open_menu()
+		else: show_home()
+		return
 	if event is InputEventJoypadMotion and event.axis==JOY_AXIS_TRIGGER_RIGHT:
 		if event.axis_value<.25: trigger_down=false
 		elif event.axis_value>.65 and not trigger_down:
@@ -233,7 +206,9 @@ func resume() -> void:
 		"moving_reception_complete","setting_lesson": MenuPresentation.load_scene("res://scenes/career_setting_lesson.tscn")
 		"setting_lesson_complete","hitting_lesson": MenuPresentation.load_scene("res://scenes/career_hitting_lesson.tscn")
 		"hitting_lesson_complete","blocking_lesson": MenuPresentation.load_scene("res://scenes/career_blocking_lesson.tscn")
-		"position": position_menu()
+		"position","defense_lesson": MenuPresentation.load_scene("res://scenes/defense_lesson.tscn")
+		"serving_lesson": MenuPresentation.load_scene("res://scenes/career_serving_lesson.tscn")
+		"scrimmage": CareerSession.open_scrimmage()
 		"after_tryout": after_tryout()
 		_: MenuPresentation.load_scene(CareerSession.CHAPTER)
 
@@ -275,14 +250,6 @@ func defense_score() -> void:
 func origin() -> void:
 	MenuPresentation.load_scene("res://scenes/career_opening.tscn")
 
-func position_menu() -> void:
-	clear_menu("INDOOR  /  POSITION")
-	add_button("Setter",func():
-		if CareerSession.checkpoint("intro",0): resume()).grab_focus()
-	for role in ["P1","P2","Right side","M1","M2","Libero"]:
-		add_button(role,func(): pass).disabled = true
-	add_button("Back",origin)
-
 func show_load() -> void:
 	clear_menu("LOAD CAREER")
 	var scroll := ScrollContainer.new()
@@ -308,10 +275,5 @@ func show_load() -> void:
 	if saves.get_child_count() > 0: saves.get_child(0).grab_focus()
 
 func open_menu() -> void:
+	MenuPresentation.return_page="Home"
 	MenuPresentation.load_scene("res://scenes/main.tscn")
-
-func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("ui_cancel"):
-		if screen == "MY CAREER": open_menu()
-		elif screen == "INDOOR  /  POSITION": origin()
-		else: show_home()

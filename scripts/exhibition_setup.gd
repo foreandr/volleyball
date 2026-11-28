@@ -69,7 +69,6 @@ func persist() -> void:
 
 func launch() -> void:
 	StorySession.career_scrimmage=false
-	StorySession.guided_scrimmage=false
 	persist()
 	StorySession.offline_controller=controller
 	StorySession.offline_size=sizes[0]

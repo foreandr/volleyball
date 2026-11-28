@@ -3,7 +3,7 @@ extends Node
 signal changed
 signal import_finished(message: String)
 
-const TITLES := {"spike":"Spike", "block":"Stuff block", "serve":"Jump spin serve", "dig":"Forearm dig"}
+const TITLES := {"spike":"Spike", "block":"Stuff block", "serve":"Jump spin serve", "dig":"Forearm dig","career_stuff":"Career - left-hand stuff","career_touch":"Career - right-hand touch"}
 const DIRECTORY := "user://menu_highlights"
 var entries := {}
 var rotation: Array = []

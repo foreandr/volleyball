@@ -7,7 +7,6 @@ const ZONE_FIVE_TARGETS := [Vector2(-4.2,10.4),Vector2(-3.7,10.9),Vector2(-4.35,
 var dig: MeshInstance3D
 var next_dig_lane := 0
 var dig_pressed_at := -INF
-var dig_sound_played := false
 var movement_pose: Array[Transform3D] = []
 
 func load_setup() -> void:
@@ -68,7 +67,6 @@ func reset_feed() -> void:
 	swing_target.show()
 	approach_rings.hide()
 	dig_pressed_at = -INF
-	dig_sound_played = false
 	if is_instance_valid(dig):
 		dig.reset()
 		dig.hand_setting = false
@@ -175,9 +173,6 @@ func play_spike(time: float, delta: float) -> void:
 		super.play_spike(time,delta)
 		if stage == Stage.HIT and time >= flight_end: status.text = "Spike down"
 		return
-	if not dig_sound_played:
-		dig_sound_played = true
-		if not ball_audio_muted: spike_audio.play()
 	if time < SWING_FOLLOW_TIME:
 		var follow := 1.0-pow(1.0-clampf(time/0.19,0.0,1.0),2.0)
 		pose_bow_draw(delta,1.0-smoothstep(0.19,SWING_FOLLOW_TIME,time),swing_contact,swing_contact_extension,follow)

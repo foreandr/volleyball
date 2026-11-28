@@ -1,6 +1,6 @@
 extends "res://scripts/indoor_practice.gd"
 
-const MOMENTS := [preload("res://assets/menu/highlights/serve.ogv"),preload("res://assets/menu/highlights/dig.ogv"),preload("res://assets/menu/highlights/spike.ogv"),preload("res://assets/menu/highlights/block.ogv")]
+const MOMENTS := [preload("res://assets/menu/highlights/career_stuff.ogv"),preload("res://assets/menu/highlights/career_touch.ogv"),preload("res://assets/menu/highlights/serve.ogv"),preload("res://assets/menu/highlights/dig.ogv"),preload("res://assets/menu/highlights/spike.ogv"),preload("res://assets/menu/highlights/block.ogv")]
 const WELCOME := "Welcome to tryouts. Around here, the first job is keeping the ball alive for somebody else. Start on the baseline. Watch the first runner. Run to the net, shuffle across, backpedal, then shuffle home. Twice. After that, grab a partner for pepper."
 var film:=VideoStreamPlayer.new()
 var shot:=0
@@ -467,7 +467,7 @@ func opening_checkpoint() -> String:
 func save_and_leave_drill() -> void:
 	var stage:=opening_checkpoint()
 	if CareerSession.checkpoint(stage,pepper.score if not pepper.pairs.is_empty() else 0):
-		MenuPresentation.load_scene("res://scenes/main.tscn")
+		MenuPresentation.load_scene("res://scenes/story.tscn")
 
 func reset_drill() -> void:
 	var stage:=opening_checkpoint().trim_suffix("_complete")

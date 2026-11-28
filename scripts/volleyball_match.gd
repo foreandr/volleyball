@@ -100,7 +100,6 @@ var indicators: Control
 var serve: Node3D
 var ball_sound_enabled := true
 var touch_audio: AudioStreamPlayer
-var set_audio: AudioStreamPlayer
 var spike_audio: AudioStreamPlayer
 var net_audio: AudioStreamPlayer
 var floor_audio: AudioStreamPlayer
@@ -352,7 +351,6 @@ func configure(actor: Node3D, board: Label, status: Label, build := "", players_
 	flight_guide.hide()
 	show_pass_trajectory=StorySession.game_options.get_value("match","pass_trajectory",true)
 	touch_audio = make_ball_audio(CONTACT_SOUND,3.0)
-	set_audio = make_ball_audio(preload("res://assets/audio/set_touch.wav"),3.5)
 	spike_audio = make_ball_audio(SPIKE_SOUND,2.0)
 	floor_audio = make_ball_audio(preload("res://assets/audio/floor_impacts.tres"),1.5)
 	net_audio = Net.contact_sound()
@@ -408,7 +406,14 @@ func setter_for_pass(passer: int) -> int:
 	if count_for(team(passer)) == 2: return partner_of(passer)
 	if rally_setter >= 0 and team(rally_setter) == team(passer) and rally_setter != passer:
 		return rally_setter
-	return nearest_on_team(team(passer),path_point(arrival(1.92)),passer)
+	return choose_setter(team(passer),passer)
+
+func choose_setter(side:int,passer:int) -> int:
+	if exhibition and StorySession.career_scrimmage and roster_active:
+		for slot in count_for(side):
+			var i:=first_on(side)+slot
+			if i!=passer and StorySession.offline_roster[i].get("position","")=="Setter": return i
+	return nearest_on_team(side,path_point(arrival(1.92)),passer)
 
 func hitter_for_set(setter: int) -> int:
 	if count_for(team(setter)) == 2: return partner_of(setter)
@@ -714,7 +719,7 @@ func award(side: int, reason: String) -> void:
 			trace.write("demo_learning_saved",match_clock,{"error":error},true)
 			if error != OK: push_warning("Could not save Demo Match learning: "+error_string(error))
 		var winner := str(side_names[side])+" wins"
-		if exhibition and StorySession.career_scrimmage and not spectator and not StorySession.guided_scrimmage:
+		if exhibition and StorySession.career_scrimmage and not spectator:
 			var grade:=clampf(.60+.40*float(career_involvement)/maxi(1,rallies)-.50*float(career_errors)/maxi(1,rallies),0.,1.)
 			var earned:=CareerSession.match_reward(side==0,rallies,match_clock,grade)
 			winner+="   |   Teammate %d/100   +%d VP"%[roundi(grade*100.),earned]
@@ -793,7 +798,7 @@ func launch(point: Vector3, motion: Vector3, kind: String, from: int, spin_rate 
 		receiving_team = 0 if path_point(flight_end()).z < Net.NET_Z else 1
 	if count_for(receiving_team) >= 3 and kind == "pass" and touches == 1 and possession_team == receiving_team:
 		called_this_pass=false
-		rally_setter = nearest_on_team(receiving_team,path_point(arrival(1.92)),from)
+		rally_setter = choose_setter(receiving_team,from)
 		rally_hitter = -1
 		rally_hitter = hitter_for_set(rally_setter)
 	if not manual and not spectator and kind == "pass" and human_can_set() and receiving_team == 0 and match_clock-last_input_at <= 0.35:
@@ -1074,7 +1079,7 @@ func make_ball_audio(stream: AudioStream, gain: float) -> AudioStreamPlayer:
 func set_ball_sound(enabled: bool) -> void:
 	ball_sound_enabled = enabled
 	if not enabled:
-		for player in [touch_audio,set_audio,spike_audio,floor_audio,net_audio]: player.stop()
+		for player in [touch_audio,spike_audio,floor_audio,net_audio]: player.stop()
 
 func play_touch(strong := false) -> void:
 	if not ball_sound_enabled: return
@@ -1237,9 +1242,6 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 		recoveries[index]["elbow_bend"] = bend
 		if bump.knee_bend_depth > 0.001:
 			recoveries[index]["hold"] = FAST_DIG_ELBOW_DURATION
-	if ball_sound_enabled:
-		if technique != 0 and not transition: set_audio.play()
-		else: play_touch()
 	var cpu_dump_attempt := touches == 2 and cpu_dump and index == cpu_choice and not is_human(index)
 	var unsafe_dump := cpu_dump_attempt and not dump_can_land_in_court(point,frame.global_basis.inverse()*world_motion)
 	if touches == 2 and (unsafe_dump or (not (cpu_dump and index == cpu_choice) and (bump.destination.y < 4.0 or (is_human(index) and technique != 0)))):
@@ -2098,7 +2100,6 @@ func try_foot_save(previous: float) -> void:
 		var rebound := heading*randf_range(1.8,6.0)+Vector3.UP*randf_range(3.2,6.0)
 		trace.write("foot_save",match_clock,{"player":index,"foot":foot_side,"point":contact,"rebound":rebound},true)
 		stroke = "Kick save"
-		play_touch()
 		launch(contact,rebound,"pass",index)
 		return
 
@@ -2166,7 +2167,6 @@ func deflect_defender_body(previous: float) -> void:
 		begin_recovery(player)
 	stroke = "Body deflection"
 	transition_possession[team(player)] = true
-	play_touch()
 	launch(contact,rebound,"pass",player)
 
 func pose_fake_dump(actor: Node3D, lead: float) -> void:
@@ -2720,11 +2720,11 @@ func lane_at_depth(from: Vector3, to: Vector3, depth: float) -> float:
 func update_action_labels() -> void:
 	for index in players.size():
 		key_labels[index].global_position = players[index].global_position+Vector3.UP*(2.43 if is_human(index) else 2.18)
-		key_labels[index].visible = (not exhibition or StorySession.guided_scrimmage) and (not spectator or drill_pass_target.is_finite()) and players[index].visible and match_clock < key_until[index]
+		key_labels[index].visible = (not exhibition) and (not spectator or drill_pass_target.is_finite()) and players[index].visible and match_clock < key_until[index]
 		animation_labels[index].global_position = key_labels[index].global_position+Vector3.UP*0.32
 		var animation: String = recoveries.get(index,{}).get("animation",receive_animation_labels.get(index,""))
 		animation_labels[index].text = animation
-		animation_labels[index].visible = (not exhibition or StorySession.guided_scrimmage) and (not spectator or drill_pass_target.is_finite()) and players[index].visible and not animation.is_empty()
+		animation_labels[index].visible = (not exhibition) and (not spectator or drill_pass_target.is_finite()) and players[index].visible and not animation.is_empty()
 
 func update_flight_guide() -> void:
 	flight_guide.visible=manual!=null and phase==Phase.LIVE and not replay.active and (flight_kind=="serve" or (flight_kind=="pass" and show_pass_trajectory))

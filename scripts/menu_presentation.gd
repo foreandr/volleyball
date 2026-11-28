@@ -116,11 +116,10 @@ func stat_help(control: Control,heading_control: Control,title: String,descripti
 		target.mouse_exited.connect(card.hide)
 
 func refresh_menu_buttons() -> void:
-	var xbox = preload("res://scripts/xbox_controls.gd")
 	for binding in [["ui_accept",JOY_BUTTON_A],["ui_cancel",JOY_BUTTON_B]]:
 		for previous in InputMap.action_get_events(binding[0]):
 			if previous is InputEventJoypadButton: InputMap.action_erase_event(binding[0],previous)
-		bind_menu_button(binding[0],xbox.physical(binding[1]))
+		bind_menu_button(binding[0],binding[1])
 
 func bind_menu_button(action: StringName, button: JoyButton) -> void:
 	var event := InputEventJoypadButton.new()
@@ -318,8 +317,8 @@ func heading(column: VBoxContainer, route: String, title: String) -> void:
 			keys.text="Enter   Select" if route=="Home" else "Enter   Select       Esc   Back"
 			prompts.add_child(keys)
 		else:
-			var actions := [[JOY_BUTTON_A,"Select"]]
-			if route!="Home": actions.append([JOY_BUTTON_B,"Back"])
+			var actions := [["A","Select"]]
+			if route!="Home": actions.append(["B","Back"])
 			xbox.prompts(prompts,actions)
 	var overline := Label.new()
 	overline.text = "ANDRE FOREMAN'S" if route=="Home" else "   /   ".join(trail) if not trail.is_empty() else route.to_upper()
@@ -597,6 +596,9 @@ func load_stage(destination: String, build: Callable) -> void:
 
 func load_scene(path: String) -> void:
 	if is_instance_valid(loading_screen): return
+	if not CareerSession.practice_stage.is_empty():
+		var lesson_path:="res://scenes/"+str(CareerSession.LESSON_SCENES[CareerSession.practice_stage])+".tscn"
+		if path!=lesson_path: path="res://scenes/story.tscn"
 	var key := path.get_file().get_basename()
 	var names := {"offline_match":"Match court","main":"Main menu","story":"My Career","drills":"Training camp","create":"Create player","setter_tryout":"Setter tryout","story_animations":"Court session"}
 	show_loading(names.get(key,key.capitalize()))

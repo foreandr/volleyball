@@ -31,9 +31,11 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.keycode==KEY_SPACE and not get_tree().paused and not replay_inspector.active:
 		if not event.echo:
 			if event.pressed:
-				chosen_cell=Vector3i(-1,-1,-1)
 				release_window=0.
-			elif dig_held and phase=="serve_return": release_window=.18
+			elif dig_held and phase=="serve_return":
+				release_window=.18
+				dig_platforms[hitter].queue_bump(dig_clock)
+				update_dig_feedback()
 			dig_held=event.pressed
 		get_viewport().set_input_as_handled()
 		return
@@ -54,6 +56,9 @@ func next_serve() -> void:
 			return
 	var reps := int(CareerSession.data.get_value(CareerSession.key(),"defense_reps",0))
 	var score := int(CareerSession.data.get_value(CareerSession.key(),"defense_score",0))
+	prepare_defense_feed(reps,score)
+
+func prepare_defense_feed(reps:int,score:int) -> void:
 	homes=[FIVE,Vector3(-1.6,.04,-2.2)]
 	floor_target=FIVE+Vector3([.1,-.66,.62,-.34,.39][reps],.105,.55)
 	super.next_serve()

@@ -160,10 +160,7 @@ func draw_player(actor: Node3D,human: bool) -> void:
 		if is_setter and game!=null and game.has_method("serve_meter_error") and (game.phase=="serve_toss" or (game.phase in ["serve_flight","serve_miss"] and game.flight_age<.4)):
 			var contact := Vector2(game.serve_meter_position(game.SERVE_EARLY),game.serve_meter_position(game.SERVE_LATE))
 			timing_arc(actor,game.serve_meter_position(game.serve_meter_error()),game.serve_meter_position(-game.SERVE_PERFECT),game.serve_meter_position(game.SERVE_PERFECT),contact,Color("14191d"),is_finite(game.release_time))
-		if is_setter and "defense_at" in game and game.phase in ["serve_pass","serve_attack","serve_return","server_dig"]:
-			var release: float=game.dig_platforms[actor].pressed_at
-			var elapsed: float=(release if is_finite(release) else game.dig_clock)-game.defense_at+game.PASS_RELEASE_LEAD
-			timing_arc(actor,clampf(.5+elapsed/.5,0.,1.),.5-game.DIG_PERFECT/.5,.5+game.DIG_PERFECT/.5,Vector2(.5-game.DIG_WINDOW/.5,.5+game.DIG_WINDOW/.5),Color("14191d"),is_finite(release))
+		draw_defense_timing(actor,is_setter)
 		if extra_jumps.has(actor) and not game.cpu_hitter and game.manual_shot>=0 and (game.phase in ["cart","feed","pass","set_contact","set"] or (game.phase=="spike" and game.elapsed<.45)):
 			var cursor: float=game.attack_meter_position(game.attack_meter_error())
 			var contact_window:=Vector2(game.attack_meter_position(game.EARLY_LIMIT),game.attack_meter_position(game.LATE_LIMIT))
@@ -185,6 +182,12 @@ func draw_player(actor: Node3D,human: bool) -> void:
 	var origin := at+Vector2(-80,radius.y+19)
 	draw_string_outline(ThemeDB.fallback_font,origin,label,HORIZONTAL_ALIGNMENT_CENTER,160,14,4,Color("10191f"))
 	draw_string(ThemeDB.fallback_font,origin,label,HORIZONTAL_ALIGNMENT_CENTER,160,14,Color("ffce75") if is_setter else Color.WHITE)
+
+func draw_defense_timing(actor:Node3D,is_setter:bool) -> void:
+	if is_setter and "defense_at" in game and game.phase in ["serve_return","server_dig"] and is_finite(game.defense_at) and (not "dig_held" in game or game.dig_held or is_finite(game.dig_platforms[actor].pressed_at)):
+		var release: float=game.dig_platforms[actor].pressed_at
+		var elapsed: float=(release if is_finite(release) else game.dig_clock)-game.defense_at+game.PASS_RELEASE_LEAD
+		timing_arc(actor,clampf(.5+elapsed/.5,0.,1.),.5-game.DIG_PERFECT/.5,.5+game.DIG_PERFECT/.5,Vector2(.5-game.DIG_WINDOW/.5,.5+game.DIG_WINDOW/.5),Color("14191d"),is_finite(release))
 
 func timing_arc(actor: Node3D,value: float,low: float,high: float,contact := Vector2(0,1),miss_color := Color("778088"),highlight_release := false,black_cursor := false) -> void:
 	displayed_timing[actor]={"position":floor_rings[actor].global_position,"value":value,"perfect":Vector2(low,high),"contact":contact,"miss":miss_color,"highlight":highlight_release,"black_cursor":black_cursor,"stamina":actor.stamina.fraction()}
