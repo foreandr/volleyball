@@ -847,7 +847,7 @@ func _process(delta: float) -> void:
 	if not coach_only_feeds and phase in ["pass","set","set_contact","result","drop"]:
 		var active:Node3D=setter
 		if "hitter" in self and get("hitter")!=null: active=get("hitter")
-		if "automatic_block" in self and get("blockers").size()>2: active=call("frame_editor_blocker")
+		if "automatic_block" in self and not get("blockers").is_empty(): active=call("frame_editor_blocker")
 		GroundControls.face(coach,active.position-coach.position,delta)
 	# Compose all AI, input and animation requests first. Enforce a single
 	# turn budget per actor even when several actions change in one frame.

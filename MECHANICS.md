@@ -280,3 +280,4 @@ The speed headline shows only km/h. The attack lesson breakdown expresses drill 
 
 Human reception misses show the nearest swept-ball clearance from the reception hitbox in metres alongside any measured release timing. Contact inside the hitbox only reports timing.
 After the ninth successful career attack, blocking practice repeatedly feeds position four. The player controls the opposing pin blocker and can finish practice from the pause menu.
+The career blocking tutorial has exactly four people: the created athlete blocks, the coach feeds, Bell sets and Reyes aims from four into the player's block. Their saved or roster ratings supply jump height and swing pace. The tutorial has no camp tuning sliders.

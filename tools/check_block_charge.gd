@@ -12,7 +12,7 @@ func check() -> void:
 	camp.phase="feed"
 	var heights:Array[float]=[]
 	var speeds:Array[float]=[]
-	var slot:int=camp.MANUAL_SLOT
+	var slot:int=camp.manual_slot
 	var actor:Node3D=camp.blockers[slot]
 	var start:=actor.position
 	for frames in [0,12,23,45]:

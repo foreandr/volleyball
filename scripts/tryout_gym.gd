@@ -141,17 +141,19 @@ func seat_teammates(create_player: Callable, profile: Callable = Callable(), lim
 		var seat: Array = seats[i]
 		var side := int(seat[0])
 		var row := int(seat[1])
-		var athlete_: Node3D = create_player.call(Vector3(side*(FRONT_BENCH_X+row*.69),0,float(seat[2])),["892b3b","a34d31","334357"][i%3])
+		var seat_world:=to_global(Vector3(side*(FRONT_BENCH_X+row*.69),0,float(seat[2])))
+		var athlete_: Node3D = create_player.call(get_parent_node_3d().to_local(seat_world),["892b3b","a34d31","334357"][i%3])
 		if profile.is_valid(): profile.call(athlete_,20+i)
 		athlete_.set_height_cm(172+(i*7)%29)
 		preload("res://scripts/practice_kit.gd").apply(athlete_,false,20+i)
-		athlete_.rotation.y = -side*PI/2
+		var inward:=global_basis*Vector3(-side,0,0)
+		athlete_.look_at(athlete_.global_position+inward,Vector3.UP,true)
 		athlete_.play_action("base/Sitting_Talking",0)
 		athlete_.animator.seek(i*.31,true)
 		var section := clampi(roundi((float(seat[2])+6.)/9.),0,2)
 		var idx := ((4 if side==1 else 0)+row)*3+section
 		var constraint := preload("res://scripts/bleacher_seat.gd").new()
-		constraint.configure(athlete_,benches[idx],benches[idx-3] if row>0 else null,side,float(seat[2]))
+		constraint.configure(athlete_,benches[idx],benches[idx-3] if row>0 else null,-signi(roundi(inward.x)),seat_world.z)
 		occupied.append(constraint)
 	return occupied
 

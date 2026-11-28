@@ -74,8 +74,8 @@ func _draw() -> void:
 		return
 	var human: Node3D=game.rotation_drill.roster[0]
 	if "automatic_block" in game:
-		if not game.automatic_block and game.blockers.size()>game.MANUAL_SLOT:
-			draw_player(game.blockers[game.MANUAL_SLOT],true)
+		if not game.automatic_block and game.blockers.size()>game.manual_slot:
+			draw_player(game.blockers[game.manual_slot],true)
 		return
 	for actor in extra_jumps: draw_player(actor,true)
 	draw_player(human,true)
@@ -179,8 +179,7 @@ func draw_player(actor: Node3D,human: bool) -> void:
 				var contact: Vector2=game.contact_band() if pressing else game.grade_contact
 				timing_arc(actor,timing_fill,band.x,band.y,contact)
 	var label: String=actor.display_name.strip_edges().get_slice(" ",actor.display_name.strip_edges().count(" ")).to_upper()
-	if game!=null and "automatic_block" in game and not game.automatic_block and actor==game.blockers[game.MANUAL_SLOT]:
-		label="509   YOU"
+	if game!=null and "automatic_block" in game and not game.automatic_block and actor==game.blockers[game.manual_slot]:
 		if game.block_held or game.clock<game.meter_until:
 			timing_arc(actor,game.block_meter(),.38,.62,Vector2(.10,.90),Color("14191d"),not game.block_held)
 	var origin := at+Vector2(-80,radius.y+19)
