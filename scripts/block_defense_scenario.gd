@@ -163,8 +163,12 @@ func _unhandled_input(event:InputEvent) -> void:
 				if gap<nearest:
 					nearest=gap
 					dragged=i
+			if dragged>=0:
+				var actor=game.players[dragged]
+				var role:String="Libero" if game.active_identities.get(dragged,-1)==6 else ScenarioMatch.Formation.ROLES[game.lineup_role(dragged)]
+				note.text="#%d %s · %s · Blocking %d"%[actor.get_meta("school_jersey_number",-1),actor.display_name,role,actor.attributes.Blocking]
 		elif dragged>=0:
-			save_placement(dragged)
+			if game.players[dragged].position.distance_to(originals[dragged])>.01: save_placement(dragged)
 			dragged=-1
 	elif dragged>=0 and event is InputEventMouseMotion:
 		var point=Plane(Vector3.UP,.04).intersects_ray(camera.project_ray_origin(event.position),camera.project_ray_normal(event.position))

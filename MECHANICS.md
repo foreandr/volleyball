@@ -341,3 +341,5 @@ The block defense lab always runs both teams under CPU control, including the cr
 Block defense scenario defaults its opening set to tempo 2. Select 0-3 before running a feed. The lab remembers the selected tempo. Subsequent sets in the rally use match tempo decisions.
 
 During a block defense scenario, Replay opens the current rally at the paused moment, including from Pause & place. Rewind to inspect the rally, use F2 to teach a position on that frame, and return to the live rally at the original pause point.
+
+Focused lateral block movement in six-on-six and blocking practice gains 0-50% speed from effective Blocking (including fatigue). CPU closes also gain lateral acceleration. The outside blocker sets the pin and the middle closes on their inside shoulder.

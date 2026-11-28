@@ -205,9 +205,10 @@ func refresh_kit() -> void:
 		beard_material.set_shader_parameter("beard_style",[0,1,3,4][Profile.KIT_CHOICES.Beard.find(attributes.Beard)])
 		beard_material.set_shader_parameter("stache",Profile.KIT_CHOICES.Moustache.find(attributes.Moustache))
 		beard_material.set_shader_parameter("beard_tone",Profile.HAIR_COLORS[attributes["Facial hair color"]])
-	if shirt_fabric and attributes.has("jersey_number") and attributes.jersey_number!=get_meta("school_jersey_number",-1):
-		set_meta("school_jersey_number",attributes.jersey_number)
-		var print_number := preload("res://scripts/practice_kit.gd").number_texture(attributes.jersey_number)
+	var number:=int(attributes.get("jersey_number",502+int(get_meta("kit_variant",0))))
+	if shirt_fabric and number!=get_meta("school_jersey_number",-1):
+		set_meta("school_jersey_number",number)
+		var print_number := preload("res://scripts/practice_kit.gd").number_texture(number)
 		shirt_fabric.set_shader_parameter("lettering",print_number)
 		if shorts_fabric: shorts_fabric.set_shader_parameter("leg_number",print_number)
 	if shirt_fabric:

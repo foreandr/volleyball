@@ -30,6 +30,12 @@ func teach(section:String,index:int,point:Vector3) -> Error:
 
 func step_match(delta:float,controls:RefCounted) -> void:
 	teaching_moves.clear()
+	if phase==Phase.LIVE and flight_kind=="serve" and flight_number+1==feed_number and cpu_choice>=0 and team(cpu_choice)==1:
+		var setter:=choose_setter(1,cpu_choice)
+		if setter!=cpu_choice:
+			var destination:=frames[1].to_global(pass_target-Vector3.BACK*.35)
+			move_cpu(setter,destination,delta,5.3,toward_incoming(setter,destination),true,true)
+			teaching_moves[setter]=true
 	var section:=phase_key()
 	if phase==Phase.LIVE and instructions.has_section(section):
 		applying_instructions=true
@@ -41,7 +47,7 @@ func step_match(delta:float,controls:RefCounted) -> void:
 			var local:=lineup_roles[side].find(parts[1].to_int())
 			if local<0: continue
 			var i:=first_on(side)+local
-			if is_human(i) or owns_action(i) or recoveries.has(i) or blocks.has(i): continue
+			if teaching_moves.has(i) or is_human(i) or owns_action(i) or recoveries.has(i) or blocks.has(i): continue
 			if i==cpu_choice or i==expected_hitter or (flight_kind=="pass" and i in [rally_setter,rally_hitter]): continue
 			var mark:Vector2=instructions.get_value(section,slot)
 			var target:=frames[side].to_global(Vector3(mark.x,PLAYER_GROUND_Y,mark.y))
@@ -114,12 +120,19 @@ func start_feed(defense:int,offense:int,role:int,in_system:bool,tempo:int=2) -> 
 			var target:=frames[0].to_local(players[i].global_position)
 			serve.aim(Vector3(clampf(target.x,-3.7,3.7),Flight.FLOOR,clampf(target.z+1.4,9.2,12.4)))
 			break
+	var roster:=[]
+	for i in players.size():
+		var actor:=players[i]
+		roster.append({"team":team(i),"slot":i,"jersey":actor.get_meta("school_jersey_number",-1),"role":lineup_role(i),"libero":active_identities.get(i,-1)==6,"blocking":actor.attributes.Blocking})
+	trace.write("scenario_roster",match_clock,{"players":roster},true)
 	start_serve()
 	replay.record(self)
 
 func receive_contact(index:int,point:Vector3,motion:Vector3,technique:int) -> void:
 	if flight_kind=="serve" and flight_number+1==feed_number and team(index)==1:
 		var target:=frames[1].to_global(pass_target+Vector3.UP*1.9)
-		var seconds:=1.65
+		var setter:=choose_setter(1,index)
+		var distance:=players[setter].global_position.slide(Vector3.UP).distance_to(target.slide(Vector3.UP))
+		var seconds:=clampf(.85+distance/3.,1.65,2.65)
 		motion=(target-point)/seconds+Vector3.UP*(.5*Flight.GRAVITY*seconds)
 	super.receive_contact(index,point,motion,technique)

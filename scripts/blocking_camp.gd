@@ -579,11 +579,14 @@ func step_blocker(slot: int,delta: float) -> void:
 	var sprinting: bool=not cpu and GroundControls.sprint(axis) and actor.stamina.can_sprint()
 	var fast_close: bool = cpu and read_set and phase=="set" and closing[slot] and absf(goal-previous)>.65
 	var pace := GroundControls.speed(focused,sprinting or fast_close)
-	var desired := clampf((goal-previous)*4.,-pace,pace) if cpu else axis(JOY_AXIS_LEFT_X)*camera.global_basis.x.x*pace
+	var block_scale:=GroundControls.block_shuffle_scale(actor) if focused and absf(actor.position.z-BallNet.NET_Z)<1.75 else 1.
+	var lateral_pace:=pace*block_scale
+	var desired := clampf((goal-previous)*4.,-lateral_pace,lateral_pace) if cpu else axis(JOY_AXIS_LEFT_X)*camera.global_basis.x.x*lateral_pace
 	if not cpu and block_held: desired*=Block.lateral_scale(block_load.seconds)
-	lateral_speed[slot]=move_toward(lateral_speed[slot],desired,(14. if fast_close else 8.)*delta)
+	lateral_speed[slot]=move_toward(lateral_speed[slot],desired,(14. if fast_close else 8.)*block_scale*delta)
 	var depth_speed := (depth_goal-actor.position.z)*4. if cpu else axis(JOY_AXIS_LEFT_Y)*camera.global_basis.z.z*pace
-	var motion := Vector2(lateral_speed[slot],depth_speed).limit_length(pace)*delta
+	var motion := Vector2(lateral_speed[slot]/block_scale,depth_speed).limit_length(pace)*delta
+	motion.x*=block_scale
 	actor.position.x=block_lane_x(slot,previous+motion.x)
 	if absf(actor.position.x-(previous+motion.x))>.00001: lateral_speed[slot]=0.
 	actor.position.z=clampf(actor.position.z+motion.y,BallNet.NET_Z+.28,BallNet.NET_Z+9.)

@@ -1913,11 +1913,15 @@ func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_f
 		pace = clampf(speed,0.65,CPU_SPRINT_SPEED) if paced_run else clampf(speed*1.24,5.85,CPU_SPRINT_SPEED)
 	if roster_active and exhibition:
 		pace*=lerpf(.78,1.18,float(actor.attributes.Speed)/100.)
+	var block_scale:=1.
+	if six_on_six() and not sprint and local.z>=2.9 and actor.position.z>=2.25 and flight_kind in ["pass","set"] and team(index)!=receiving_team and Formation.zone(lineup_role(index),setter_zones[team(index)]) in [2,3,4]:
+		block_scale=lerpf(1.,GroundMovement.block_shuffle_scale(actor),absf(heading.x))
+		pace*=block_scale
 	if sprint: actor.stamina.spend(delta*actor.stamina.SPRINT_DRAIN,"Sprint")
 	var before := actor.position
 	var velocity: Vector3 = court_velocities.get(index,Vector3.ZERO)
 	if match_clock-float(movement_times.get(index,match_clock))>delta*2.: velocity=Vector3.ZERO
-	var acceleration:=GymPaths.WALK_ACCELERATION
+	var acceleration:=GymPaths.WALK_ACCELERATION*block_scale
 	# A planted shuffle brakes toward the new lane before accelerating back across.
 	if shuffle_pace>0. and velocity.dot(heading)<0.:
 		acceleration*=2.
@@ -3752,7 +3756,10 @@ func step_match(delta: float, controls: RefCounted) -> void:
 		if roster_active:
 			mobility *= lerpf(0.78,1.18,human.effective_rating("Speed") / 100.0)
 		animated[0] = true
-		controls.move_player(motion,delta,false,ball.global_position,mobility,0.15,true,3.42,0.0,0.0,true,false)
+		var block_shuffle:=1.
+		if manual and controls.focus_requested and manual.context()=="block" and (not six_on_six() or Formation.zone(lineup_role(0),setter_zones[0]) in [2,3,4]):
+			block_shuffle=GroundMovement.block_shuffle_scale(human)
+		controls.move_player(motion,delta,false,ball.global_position,mobility,0.15,true,3.42,0.0,0.0,true,false,block_shuffle)
 	if manual:
 		if manual.load_block.charging:
 			var travel:Vector3=(human.position-human_before)/maxf(.0001,delta)
