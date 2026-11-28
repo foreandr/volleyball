@@ -109,7 +109,7 @@ func step_rep() -> void:
 	if is_finite(serve.contact_clock):
 		if not contact_frames.has("server"):
 			contact_frames["server"] = game.replay.current.size()
-			ContactTiming.launch_speed("Topspin serve",serve.velocity,"Horizontal %.1f  ·  Vertical %.1f km/h"%[serve.velocity.slide(Vector3.UP).length()*3.6,serve.velocity.y*3.6])
+			ContactTiming.launch_speed(serve.velocity,"Horizontal %.1f  ·  Vertical %.1f km/h"%[serve.velocity.slide(Vector3.UP).length()*3.6,serve.velocity.y*3.6])
 			set_status("Topspin serve")
 		var flight_age: float = serve.elapsed-serve.contact_clock
 		if serve.swing_time >= serve.recovery_end() and flight_age >= serve.landing_time+0.25:

@@ -276,3 +276,4 @@ Windows startup checks only the current game process for the known symmetric -72
 The FPS counter uses quarter-second wall-clock samples. Above 55 is green, 50 through 55 is yellow, and below 50 is red. Log band transitions immediately on detection, with one update per second during a continuing slowdown.
 Holding the entry button starts a fresh career hitting attempt at position four, aiming at zone one with zero makes, regardless of the demo lane or earlier score.
 Attack and serve launch speed is shown in km/h at contact. Speed and its calculation both default on, with independent controls under Video on the main menu and Camera in a paused drill. Keep timing feedback independent of the speed popup.
+The speed headline shows only km/h. The attack lesson breakdown expresses drill power, approach, CPU demonstration tuning and trajectory adjustments as signed changes in km/h.

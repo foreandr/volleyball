@@ -756,7 +756,7 @@ func launch(point: Vector3, motion: Vector3, kind: String, from: int, spin_rate 
 			var endurance:float=athlete.stamina.effectiveness()
 			var shot_scale := motion.length()*3.6/maxf(.001,base*endurance)
 			var details:=preload("res://scripts/swing_speed.gd").ratings(athlete)+"\nShot and trajectory ×%.2f  ·  Stamina ×%.2f"%[shot_scale,endurance]
-			ContactTiming.launch_speed(kind.capitalize(),motion,details)
+			ContactTiming.launch_speed(motion,details)
 		athlete.stamina.spend(5. if kind in ["serve","spike","block"] else 2.)
 	if manual: manual.flight_changed(kind)
 	flight_number += 1

@@ -28,11 +28,11 @@ func _ready() -> void:
 	speed_caption.add_theme_color_override("font_outline_color",Color("152024"))
 	speed_caption.hide()
 
-func launch_speed(action:String, velocity:Vector3, details:String) -> void:
+func launch_speed(velocity:Vector3, details:String) -> void:
 	if not StorySession.game_options.get_value("presentation","launch_speed",true): return
 	if speed_fade: speed_fade.kill()
 	speed_scene=get_tree().current_scene
-	speed_caption.text="%s   %.1f km/h"%[action,velocity.length()*3.6]
+	speed_caption.text="%.1f km/h"%(velocity.length()*3.6)
 	var explain:bool=StorySession.game_options.get_value("presentation","speed_details",true)
 	if explain and not details.is_empty(): speed_caption.text+="\n"+details
 	speed_caption.modulate.a=0.

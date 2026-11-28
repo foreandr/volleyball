@@ -927,13 +927,18 @@ func show_strike_speed() -> void:
 		var base := preload("res://scripts/swing_speed.gd").kmh(hitter)
 		var effort := float(review_setup.get("power",drill_hit_speed))/14.
 		var approach := attack_jump.spike_power_factor()
-		var bonus := attack_speed()*3.6/maxf(.001,base*effort)
-		details=preload("res://scripts/swing_speed.gd").ratings(hitter)
-		details+="\nEffort ×%.2f  ·  Approach ×%.2f"%[effort,approach]
-		if absf(bonus-1.)>.005: details+="  ·  Demo ×%.2f"%bonus
-		details+="  ·  Flight ×%.2f"%(strike_launch_speed/maxf(.001,attack_speed()*approach))
-	var action := "Tip" if tip_shot else ("Roll" if roll_shot else "Spike")
-	ContactTiming.launch_speed(hitter.display_name.get_slice(" ",hitter.display_name.count(" "))+"  ·  "+action,drop_velocity,details)
+		var drill_power := base*effort
+		var approach_speed := drill_power*approach
+		var tuned_speed := attack_speed()*3.6*approach
+		var adjustments := PackedStringArray()
+		if not is_equal_approx(effort,1.):
+			adjustments.append("Drill power %+.1f"%(drill_power-base))
+		adjustments.append("Approach %+.1f"%(approach_speed-drill_power))
+		if not is_equal_approx(tuned_speed,approach_speed):
+			adjustments.append("CPU demo tuning %+.1f"%(tuned_speed-approach_speed))
+		adjustments.append("Aim and net clearance %+.1f"%(drop_velocity.length()*3.6-tuned_speed))
+		details=preload("res://scripts/swing_speed.gd").ratings(hitter)+"\n"+"  |  ".join(adjustments)+" km/h"
+	ContactTiming.launch_speed(drop_velocity,details)
 
 func contact_deadline() -> float:
 	return flight_time
