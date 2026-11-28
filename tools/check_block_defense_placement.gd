@@ -54,6 +54,7 @@ func run():
 	Input.flush_buffered_events()
 	view.position=before
 	page.running=true
+	page.show_settings(false)
 	for tick in 480:
 		g.tick_match(1./60.,page.ground)
 		if g.scripted_pass(): break

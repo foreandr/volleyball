@@ -3,6 +3,16 @@ extends RefCounted
 # Role order is the starting lineup in zones 1 through 6.
 const ROLES := ["Setter","P1","M1","Opposite","P2","M2"]
 const SHORT := ["S","OH1","M1","RS","OH2","M2"]
+
+# The back-row opposite uses the right-side lane from behind the attack line.
+static func attack_route(role:int, rotation:int) -> String:
+	var front:=zone(role,rotation) in [2,3,4]
+	if role in [1,4]:
+		if not front: return "pipe"
+		return "right" if rotation==1 else "left"
+	if role==3: return "left" if rotation==1 else "right"
+	if front and role in [2,5]: return "middle"
+	return ""
 # Serve-receive marks from the supplied diagram, viewed looking toward the net.
 # Each pair is horizontal position and depth as tenths of the half court.
 const RECEIVE := [

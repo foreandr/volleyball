@@ -4,9 +4,17 @@ const ScenarioMatch=preload("res://scripts/block_scenario_match.gd")
 var notes_path:="user://block_defense_positions.jsonl"
 var defense:=OptionButton.new()
 var offense:=OptionButton.new()
-var hitter:=OptionButton.new()
-var tempo:=OptionButton.new()
 var quality:=OptionButton.new()
+var settings:=VBoxContainer.new()
+var actions:=HBoxContainer.new()
+var run_button:=Button.new()
+var options_button:=Button.new()
+var resume_button:=Button.new()
+var repeat_option:=CheckBox.new()
+var selected_tempos:Dictionary={}
+var result_label:=Label.new()
+var panel:=PanelContainer.new()
+var between_feeds:=0.
 var replay_button:=Button.new()
 var edit_button:=Button.new()
 var note:=Label.new()
@@ -35,65 +43,147 @@ func _ready() -> void:
 	game=ScenarioMatch.new()
 	super._ready()
 	game.instructions.load(game.rules_path)
-	var panel:=PanelContainer.new()
 	add_child(panel)
-	panel.position=Vector2(18,145)
+	panel.position=Vector2(18,112)
 	panel.add_theme_stylebox_override("panel",MenuPresentation.box(Color("101c29ee"),Color("61cfb6"),2))
 	var column:=VBoxContainer.new()
+	column.add_theme_constant_override("separation",6)
 	panel.add_child(column)
-	MenuPresentation.section_label(column,"Block defense")
+	var title:=Label.new()
+	title.text="Block defense"
+	title.add_theme_font_size_override("font_size",23)
+	column.add_child(title)
+	column.add_child(settings)
+	settings.add_theme_constant_override("separation",6)
 	for zone in range(1,7):
-		defense.add_item("Defense · setter in %d"%zone,zone)
-		offense.add_item("Offense · setter in %d"%zone,zone)
+		defense.add_item("Defense · S%d"%zone,zone)
+		offense.add_item("Offense · S%d"%zone,zone)
 	quality.add_item("In-system pass")
 	quality.add_item("Out-of-system pass")
-	for value in range(4): tempo.add_item("Set tempo · %d"%value,value)
-	for control in [defense,offense,quality,hitter,tempo]: column.add_child(control)
+	var rotations:=HBoxContainer.new()
+	settings.add_child(rotations)
+	for control:OptionButton in [defense,offense]:
+		control.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+		rotations.add_child(control)
+	settings.add_child(quality)
 	var saved:Dictionary=StorySession.game_options.get_value("block_defense","setup",{})
 	defense.select(clampi(saved.get("defense",3),1,6)-1)
 	offense.select(clampi(saved.get("offense",1),1,6)-1)
-	tempo.select(clampi(saved.get("tempo",2),0,3))
 	quality.select(0 if saved.get("in_system",true) else 1)
-	populate_hitters(saved.get("role",1))
-	offense.item_selected.connect(func(_i): populate_hitters(hitter.get_selected_id()))
-	var run:=Button.new()
-	run.text="Run scenario"
-	column.add_child(run)
-	run.pressed.connect(start_scenario)
-	run.grab_focus()
-	column.add_child(replay_button)
+	selected_tempos=restore_tempos(saved)
+	MenuPresentation.section_label(settings,"Attack tempo   /   X = Off")
+	var choices:=GridContainer.new()
+	choices.columns=6
+	choices.add_theme_constant_override("h_separation",5)
+	choices.add_theme_constant_override("v_separation",5)
+	settings.add_child(choices)
+	for route:String in ScenarioMatch.ROUTES:
+		var label:=Label.new()
+		label.text=route_label(route)
+		label.custom_minimum_size.x=87
+		choices.add_child(label)
+		var group:=ButtonGroup.new()
+		for value:int in [0,1,2,3,-1]:
+			var cell:=Button.new()
+			cell.name=route+("_off" if value<0 else "_"+str(value))
+			cell.text="X" if value<0 else str(value)
+			cell.tooltip_text=label.text+(" off" if value<0 else " · Tempo %d"%value)
+			cell.custom_minimum_size=Vector2(42,32)
+			cell.toggle_mode=true
+			cell.button_group=group
+			cell.button_pressed=selected_tempos[route]==value
+			var selected:=StyleBoxFlat.new()
+			selected.bg_color=Color("32685f") if value>=0 else Color("774741")
+			selected.set_corner_radius_all(4)
+			cell.add_theme_stylebox_override("pressed",selected)
+			cell.add_theme_stylebox_override("hover_pressed",selected)
+			cell.pressed.connect(select_tempo.bind(route,value))
+			choices.add_child(cell)
+	settings.add_child(repeat_option)
+	repeat_option.text="Repeat scenario"
+	repeat_option.button_pressed=saved.get("repeat",true)
+	settings.add_child(run_button)
+	run_button.text="Run scenario"
+	run_button.pressed.connect(start_scenario)
+	run_button.disabled=not has_enabled_route()
+	settings.add_child(resume_button)
+	resume_button.text="Back to rally"
+	resume_button.hide()
+	resume_button.pressed.connect(show_settings.bind(false))
+	run_button.grab_focus()
+	column.add_child(result_label)
+	result_label.hide()
+	column.add_child(actions)
+	actions.hide()
+	actions.add_child(options_button)
+	options_button.text="Attack options"
+	options_button.pressed.connect(show_settings.bind(true))
+	actions.add_child(replay_button)
 	replay_button.text="Replay"
 	replay_button.disabled=true
 	replay_button.pressed.connect(toggle_match_replay)
-	column.add_child(edit_button)
+	actions.add_child(edit_button)
 	edit_button.text="Pause & place · F2"
 	edit_button.disabled=true
 	edit_button.pressed.connect(toggle_edit)
 	column.add_child(note)
 	note.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
-	note.custom_minimum_size.x=190
+	note.custom_minimum_size.x=230
+	note.hide()
 	banner.hide()
 	board.hide()
 	status.hide()
 
-func populate_hitters(preferred:int) -> void:
-	hitter.clear()
-	for role in [1,2,3,4,5]:
-		var zone:=ScenarioMatch.Formation.zone(role,offense.get_selected_id())
-		var front:=zone in [2,3,4]
-		if role in [2,5] and not front: continue
-		var route:="Middle" if role in [2,5] else ("Pin" if front else ("Pipe" if role in [1,4] else "Back right"))
-		hitter.add_item("%s · %s"%[ScenarioMatch.Formation.ROLES[role],route],role)
-	hitter.select(maxi(0,hitter.get_item_index(preferred)))
+static func route_label(route:String) -> String:
+	return route.capitalize()+" side" if route in ["left","right"] else route.capitalize()
+
+static func restore_tempos(saved:Dictionary) -> Dictionary:
+	var choices:={"left":2,"middle":0,"pipe":1,"right":2}
+	if saved.get("attacks") is Dictionary:
+		for lane:String in choices:
+			choices[lane]=clampi(int(saved.attacks.get(lane,-1)),-1,3)
+	elif saved.has("role"):
+		var lane:=ScenarioMatch.Formation.attack_route(int(saved.role),clampi(int(saved.get("offense",1)),1,6))
+		if choices.has(lane): choices[lane]=clampi(int(saved.get("tempo",2)),0,3)
+	return choices
+
+func has_enabled_route() -> bool:
+	for value:int in selected_tempos.values():
+		if value>=0: return true
+	return false
+
+func select_tempo(route:String,value:int) -> void:
+	selected_tempos[route]=value
+	run_button.disabled=not has_enabled_route()
+	note.text="" if not run_button.disabled else "Choose at least one attack."
+
+func show_settings(open:bool) -> void:
+	settings.visible=open
+	actions.visible=not open
+	result_label.visible=not open
+	resume_button.visible=open and running
+	panel.reset_size.call_deferred()
+	if open: run_button.grab_focus()
+	else: options_button.grab_focus()
+
+func selected_setup() -> Dictionary:
+	return {"defense":defense.get_selected_id(),"offense":offense.get_selected_id(),"attacks":selected_tempos.duplicate(),"in_system":quality.selected==0,"repeat":repeat_option.button_pressed}
 
 func start_scenario() -> void:
+	if not has_enabled_route(): return
 	if editing: toggle_edit()
 	if game.replay.active: toggle_match_replay()
-	setup={"defense":defense.get_selected_id(),"offense":offense.get_selected_id(),"role":hitter.get_selected_id(),"in_system":quality.selected==0,"tempo":tempo.get_selected_id()}
+	setup=selected_setup()
 	StorySession.game_options.set_value("block_defense","setup",setup.duplicate())
 	StorySession.save_options()
+	show_settings(false)
+	run_feed(false)
+
+func run_feed(repeating:bool) -> void:
 	formation_spots.clear()
-	game.start_feed(setup.defense,setup.offense,setup.role,setup.in_system,setup.tempo)
+	game.start_attack_plan(setup.defense,setup.offense,setup.attacks,setup.in_system,repeating)
+	between_feeds=0.
+	result_label.text="Waiting for set"
 	greeting_rally=game.rallies
 	signaled_rally=game.rallies
 	authorized=true
@@ -102,7 +192,6 @@ func start_scenario() -> void:
 	edit_button.disabled=false
 	rally_end_menu.hide()
 	note.text=""
-	if get_viewport().gui_get_focus_owner(): get_viewport().gui_release_focus()
 
 func toggle_edit() -> void:
 	if not running: return
@@ -120,12 +209,25 @@ func toggle_edit() -> void:
 	edit_button.text="Finish placement · F2" if editing else "Pause & place · F2"
 
 func _process(delta:float) -> void:
+	if note.visible==note.text.is_empty():
+		note.visible=not note.text.is_empty()
+		panel.reset_size.call_deferred()
 	if editing or not game.replay.active: ReplayControls.move_camera(camera,-1,delta)
-	if not running or editing: return
+	if not running or editing or settings.visible: return
 	if not game.replay.active and game.phase in [game.Phase.DEAD,game.Phase.FINISHED]:
-		if note.text.is_empty(): note.text="Point complete · run again or review."
+		if setup.get("repeat",false):
+			between_feeds+=delta
+			if between_feeds>=3.: run_feed(true)
+		elif note.text.is_empty(): note.text="Point complete"
 		return
 	super._process(delta)
+	var route:String=game.released_route
+	var set_tempo:int=game.released_tempo
+	if game.replay.active:
+		var trace:Dictionary=game.replay.frames[game.replay.index].get("trace",{})
+		route=trace.get("lab_route","")
+		set_tempo=trace.get("lab_tempo",-1)
+	result_label.text="Waiting for set" if route.is_empty() else "%s  ·  Tempo %d"%[route_label(route),set_tempo]
 
 func _input(event:InputEvent) -> void:
 	if get_tree().paused: return
@@ -136,7 +238,7 @@ func _input(event:InputEvent) -> void:
 		toggle_edit()
 		get_viewport().set_input_as_handled()
 		return
-	if not running or editing: return
+	if not running or editing or settings.visible: return
 	super._input(event)
 
 func toggle_match_replay() -> void:
@@ -144,9 +246,11 @@ func toggle_match_replay() -> void:
 	if not running: return
 	super.toggle_match_replay()
 	replay_button.text="Return to rally" if game.replay.active else "Replay"
-	if get_viewport().gui_get_focus_owner(): get_viewport().gui_release_focus()
+	if game.replay.active: get_viewport().gui_release_focus()
+	elif not settings.visible: options_button.grab_focus()
 
 func _unhandled_input(event:InputEvent) -> void:
+	if settings.visible: return
 	if editing and ((event is InputEventKey and event.keycode==KEY_R and event.pressed and not event.echo) or (event is InputEventJoypadButton and event.button_index==JOY_BUTTON_BACK and event.pressed)):
 		toggle_match_replay()
 		get_viewport().set_input_as_handled()

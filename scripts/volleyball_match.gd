@@ -438,10 +438,12 @@ func attack_lane_for(index:int) -> Vector3:
 	var role:=lineup_role(index)
 	var rotation:=setter_zones[team(index)]
 	var front:=Formation.zone(role,rotation) in [2,3,4]
-	var outside_pin:float=-3.75 if rotation==1 else 3.75
-	if role in [1,4]: return Vector3(outside_pin,.065,3.20) if front else Vector3(pipe_gap[team(index)],.065,.85)
-	if role in [2,5] and front: return Vector3(1.30 if middle_31[team(index)] else 0.,.065,3.30)
-	if role==3 and front: return Vector3(-outside_pin,.065,3.20)
+	match Formation.attack_route(role,rotation):
+		"left": return Vector3(3.75,.065,3.20)
+		"right":
+			if front: return Vector3(-3.75,.065,3.20)
+		"pipe": return Vector3(pipe_gap[team(index)],.065,.85)
+		"middle": return Vector3(1.30 if middle_31[team(index)] else 0.,.065,3.30)
 	return Vector3.INF
 
 func front_middle(side:int) -> int:
@@ -1974,6 +1976,8 @@ func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_f
 	var grounded := Court.clamp_setter(step_target,CPU_COURT_FRONT_LIMIT)
 	if is_server and before.z < Court.RUNOFF_NEAR_BASELINE:
 		grounded.z = clampf(step_target.z,before.z,CPU_COURT_FRONT_LIMIT)
+	if step_target.z>grounded.z+.00001 and velocity.z>0.:
+		court_velocities[index].z=0.
 	grounded.y = move_toward(before.y,PLAYER_GROUND_Y,delta*1.25)
 	actor.position = grounded
 	var movement := actor.basis.inverse()*(actor.position-before).slide(Vector3.UP)
@@ -3350,6 +3354,10 @@ func position_defense(delta: float) -> void:
 		elif jump_setting and contact_depth >= 2.55 and contact_depth <= Net.NET_Z:
 			threat = contact
 			second_ball_eta = contact_time-elapsed
+		elif six_on_six():
+			# Before release the wall can see the pass, the setter and a quick approach.
+			# It cannot see the setter's chosen pin.
+			threat=frame.to_global(formation_home(front_middle(defense_side),true))
 		else:
 			var hitter_x := players[hitter_for_set(setter)].position.x
 			if not is_human(setter):
