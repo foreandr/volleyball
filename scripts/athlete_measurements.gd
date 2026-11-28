@@ -21,6 +21,12 @@ func configure(profile: Dictionary) -> void:
 		lengths[rig.find_bone("lowerarm_"+side)]=arm_length
 		lengths[rig.find_bone("hand_"+side)]=arm_length
 		shoulders.append(rig.find_bone("clavicle_"+side))
+	for index in scales.keys():
+		if is_equal_approx(scales[index],1.): scales.erase(index)
+	for index in lengths.keys():
+		if is_equal_approx(lengths[index],1.): lengths.erase(index)
+	if is_zero_approx(overhead_lift): shoulders.clear()
+	active=not (scales.is_empty() and lengths.is_empty() and shoulders.is_empty())
 
 func _process_modification() -> void:
 	var rig := get_skeleton()

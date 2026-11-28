@@ -39,7 +39,7 @@ var forehead_target := Vector3.ZERO
 var contact_time := 1.0
 const DURATION := [1.25,1.62]
 const APEX := [1.92,3.22]
-const LINES := ["Welcome to the team, %s. IÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢m Coach Ellis.","YouÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢re trying out at setter. Watch the three targets. IÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ll toss the first ones right to you.","Three calls from each coach station. Keep your spot. IÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ll toss above your forehead, including on the jump sets."]
+const LINES := ["Welcome to the team, %s. Iâ€™m Coach Ellis.","Youâ€™re trying out at setter. Watch the three targets. Iâ€™ll toss the first ones right to you.","Three calls from each coach station. Keep your spot. Iâ€™ll toss above your forehead, including on the jump sets."]
 var coach_only_feeds := false
 var coach_motion := preload("res://scripts/tryout_coach.gd").new()
 var last_toss := -10.0
@@ -624,6 +624,9 @@ func axis(which: JoyAxis) -> float:
 	return Input.get_joy_axis(id,which) if id >= 0 else 0.0
 
 func set_heading(actor: Node3D,choice: int) -> float:
+	if actor==setter and automatic_setter():
+		var direction:=Hands.zone_four_facing(actor.position,PINS[0])
+		return atan2(direction.x,direction.z)
 	var aim: Vector3=(PINS[choice]-actor.position).slide(Vector3.UP).normalized()
 	if choice==2: aim=(-aim+Vector3.BACK*.85).normalized()
 	return atan2(aim.x,aim.z)
@@ -639,7 +642,7 @@ func facing_scatter(actor: Node3D,choice: int) -> Vector3:
 
 func track_feed_or_target(dt: float) -> void:
 	if not automatic_setter() and axis(Xbox.trigger(true))<=.25 and not Input.is_key_pressed(KEY_CTRL): return
-	if held>=0:
+	if automatic_setter() or held>=0:
 		face_set(setter,held,dt)
 		return
 	var offset := (ball.position-setter.position).slide(Vector3.UP)
@@ -964,7 +967,7 @@ func move_to_camp_toss(delta: float) -> void:
 		setter.position=rotation_drill.move_actor(setter,(camp_velocity*delta).limit_length(offset.length()))
 		setter.play_ground_gait(camp_velocity.length())
 		if camp_velocity.length()>4.75: setter.stamina.spend(delta*setter.stamina.SPRINT_DRAIN,"Sprint")
-		focus_headings[setter]=target_yaw if remaining<.95 else atan2(offset.x,offset.z)
+		focus_headings[setter]=target_yaw
 		return
 	if plant_time<0. and offset.length()>.16:
 		var available := maxf(.15,contact_time-elapsed-PLANT_DURATION-(cpu_jump_lead if jump_rep() else .08))
@@ -974,7 +977,7 @@ func move_to_camp_toss(delta: float) -> void:
 		setter.position=rotation_drill.move_actor(setter,(camp_velocity*delta).limit_length(offset.length()))
 		setter.play_ground_gait(camp_velocity.length())
 		if camp_velocity.length()>4.75: setter.stamina.spend(delta*setter.stamina.SPRINT_DRAIN,"Sprint")
-		focus_headings[setter]=atan2(offset.x,offset.z)
+		focus_headings[setter]=target_yaw
 		return
 	if plant_time<0.:
 		plant_time=0.
@@ -1606,7 +1609,7 @@ func play_intro(delta: float) -> void:
 	camera.position = [Vector3(4.2,2.9,-3),Vector3(-0.3,1.85,3.8),Vector3(3.2,4.2,-4.5)][line]+Vector3.RIGHT*0.12*fmod(elapsed,4.2)
 	camera.look_at(coach.position+Vector3.UP*1.5 if line==1 else setter.position+Vector3.UP*1.4)
 	coach.rotation.y = atan2(setter.position.x-coach.position.x,setter.position.z-coach.position.z)
-	title.text = "INDOOR  /  DAY ONE     ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢     COACH ELLIS"
+	title.text = "INDOOR  /  DAY ONE     â€¢     COACH ELLIS"
 	message.text = ""
 	if line != intro_line:
 		intro_line = line

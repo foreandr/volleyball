@@ -104,6 +104,9 @@ var swing_charge_started := -INF
 var swing_released := -INF
 var swing_drive_started := -INF
 var swing_drive_duration := 0.15
+const StrikePalm = preload("res://scripts/spike_palm_contact.gd")
+var previous_hand_sample := {}
+var strike_sample := {}
 var previous_palm := Vector3.INF
 var swing_hand_speed := 0.0
 var swing_impact_speed := 0.0
@@ -288,6 +291,8 @@ func reset_feed() -> void:
 	swing_released = -INF
 	swing_drive_started = -INF
 	previous_palm = Vector3.INF
+	previous_hand_sample.clear()
+	strike_sample.clear()
 	swing_net_hit.clear()
 	show_attack_net({},0.0)
 	swing_finish_pose.clear()
@@ -479,6 +484,8 @@ func start_attack_swing() -> void:
 	swing_released = -INF
 	swing_drive_started = -INF
 	previous_palm = Vector3.INF
+	previous_hand_sample.clear()
+	strike_sample.clear()
 	status.text = "Swing queued"
 	trace.write("swing_start",clock,{"player":setter.position,"aim":swing_aim},true)
 
@@ -927,6 +934,9 @@ func play_cpu_set(time: float, delta: float) -> void:
 			cpu_set.begin_hand_contact(cpu_contact_point,time)
 		if uses_assisted_approach(): approach_set_touched_at = clock
 
+func airborne_shot_yaw(target:float) -> float:
+	return target
+
 func play_pin_ball(time: float, previous: float, delta: float) -> void:
 	if uses_assisted_approach() and not is_finite(approach_pressed_at):
 		status.text = PromptControls.hint("Charge the spike","Hold Space to charge the spike") if find_approach_intercept().is_finite() else unavailable_approach_status()
@@ -944,7 +954,7 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 			incoming_yaw = takeoff_yaw+glance
 		var turn_rate := 420.0 if uses_assisted_approach() else 720.0
 		if uses_assisted_approach():
-			setter.rotation.y = lerp_angle(takeoff_yaw,incoming_yaw,smoothstep(0.0,0.14,air_age))
+			setter.rotation.y = rotate_toward(setter.rotation.y,airborne_shot_yaw(incoming_yaw),deg_to_rad(turn_rate)*delta)
 		else:
 			setter.rotation.y = rotate_toward(setter.rotation.y,incoming_yaw,deg_to_rad(turn_rate)*delta)
 	if is_finite(swing_started) and in_air:
@@ -976,7 +986,7 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 		if airborne:
 			var expected_contact := flight_point(pass_origin,pass_motion,estimated_contact)
 			var shot := swing_aim-expected_contact
-			var target_yaw := atan2(shot.x,shot.z)
+			var target_yaw := airborne_shot_yaw(atan2(shot.x,shot.z))
 			var turn_weight := smoothstep(0.0,0.12,clock-swing_charge_started)
 			if not swing_practice: turn_weight *= smoothstep(0.10,0.22,air_age)
 			if uses_front_right_lift(): turn_weight *= smootherstep(0.08,0.28,clock-swing_started)
@@ -991,7 +1001,9 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 			var follow := smoothstep(swing_drive_duration+0.035,swing_drive_duration+0.16,drive)
 			var contact_target := approach_point.lerp(ball.position,smoothstep(0.0,0.50,extension))
 			pose_bow_draw(delta,load,contact_target,extension,follow,draw_progress,arm_lift)
-		var palm := right_palm()
+		var tracked := keeps_strike_palm_presented()
+		var hand := StrikePalm.sample(setter.skeleton,self) if tracked else {}
+		var palm:Vector3 = hand.points[StrikePalm.PALM] if tracked else right_palm()
 		if airborne and drive > 0.0 and drive <= swing_drive_duration+0.12 and previous_palm.is_finite():
 			swing_impact_speed = palm.distance_to(previous_palm)/maxf(delta,0.001)
 			swing_hand_speed = maxf(swing_hand_speed,swing_impact_speed)
@@ -1002,7 +1014,10 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 			var palm_gap := Geometry3D.get_closest_point_to_segment(Vector3.ZERO,before,after).length()
 			# Give the real palm a chance to meet the ball before accepting an assisted hit.
 			var leaving_reach := after.dot(after-before) >= 0.0 or drive+delta > swing_drive_duration+0.12
-			if uses_assisted_approach() and fraction < 0.0 and leaving_reach:
+			if tracked:
+				strike_sample=StrikePalm.sweep(previous_hand_sample,hand,previous_ball,ball.position,maxf(delta,.0001))
+				fraction=strike_sample.get("fraction",-1.)
+			elif uses_assisted_approach() and fraction < 0.0 and leaving_reach:
 				fraction = hand_contact_fraction(before,after,spike_assist_radius())
 			if fraction >= 0.0:
 				var contact_error:=lerpf(previous,time,fraction)-pin_arrival
@@ -1011,6 +1026,7 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 				var contact_charge := approach_hold_charge(clock-(time-previous)*(1.0-fraction)) if uses_assisted_approach() else charge
 				hit_spike(contact_charge,previous_ball.lerp(ball.position,fraction),palm_gap)
 				return
+		previous_hand_sample=hand
 		previous_palm = palm
 	if time >= flight_end:
 		var result := "Spike missed"

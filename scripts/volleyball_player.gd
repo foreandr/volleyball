@@ -19,6 +19,7 @@ var body_skin:StandardMaterial3D
 var height_cm: float = Profile.DEFAULTS.height_cm
 var handedness := "Right"
 var mirror_animation := false
+var reflection := Node3D.new()
 var model_rest_scale := Vector3.ONE
 var model: Node3D
 var skeleton: Skeleton3D
@@ -37,13 +38,10 @@ func _ready() -> void:
 	set_height_cm(height_cm)
 	add_child(preload("res://scripts/player_direction_arrows.gd").new())
 	model = preload("res://assets/characters/base/Superhero_Male_FullBody.gltf").instantiate()
-	if mirror_animation:
-		var reflection := Node3D.new()
-		reflection.name = "AnimationReflection"
-		reflection.basis = Basis.from_scale(Vector3(-1.0,1.0,1.0))
-		add_child(reflection)
-		reflection.add_child(model)
-	else: add_child(model)
+	reflection.name = "AnimationReflection"
+	add_child(reflection)
+	reflection.add_child(model)
+	set_animation_mirror(mirror_animation)
 	model_rest_scale=model.scale
 	skeleton = model.find_child("Skeleton3D",true,false)
 	apply_measurements()
@@ -182,16 +180,26 @@ func install_custom(resource: Resource, slot := "idle", save := true) -> bool:
 
 func apply_profile(profile: Dictionary) -> void:
 	var values := Profile.clean(profile)
+	apply_build(values)
+	refresh_kit()
+	display_name = values.name
+
+func apply_build(values: Dictionary) -> void:
 	attributes = values.duplicate()
 	var rules:=Profile.build_rules(values)
 	for stat in Profile.RATINGS: attributes[stat]=Profile.effective_skill(values,stat,rules)
 	if body_skin: body_skin.normal_scale=lerpf(.055,.85,smoothstep(30.,95.,float(values.Athleticism)))
 	stamina.set_ratings(values.Stamina,values.Endurance,values.Willpower)
-	refresh_kit()
-	display_name = values.name
 	set_height_cm(values.height_cm)
 	apply_measurements()
 	handedness = values.handedness
+	set_animation_mirror(handedness=="Left")
+
+func set_animation_mirror(left:bool) -> void:
+	mirror_animation=left
+	reflection.basis=Basis.from_scale(Vector3(-1. if left else 1.,1.,1.))
+	if shirt_fabric: shirt_fabric.set_shader_parameter("mirror_print",left)
+	if shorts_fabric: shorts_fabric.set_shader_parameter("mirror_print",left)
 
 func refresh_kit() -> void:
 	var tint:Color=Profile.SKIN_TONES[attributes.get("Skin tone","Light")]
@@ -225,7 +233,7 @@ func set_height_cm(value: float) -> void:
 func apply_measurements() -> void:
 	if skeleton==null: return
 	var shape := skeleton.get_node_or_null("Measurements")
-	if not attributes.has("jersey_number"):
+	if not attributes.has("jersey_number") and not has_meta("scenario_measurements"):
 		if shape: shape.active=false
 		model.scale=model_rest_scale
 		return

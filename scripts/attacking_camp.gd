@@ -80,6 +80,8 @@ var manual_shot := -1
 var release_at := INF
 var release_grade := INF
 var approach_delay := 0.
+const StrikePalm = preload("res://scripts/spike_palm_contact.gd")
+var previous_strike_hand := {}
 var first_palm_at := INF
 var aim_center := Vector2.INF
 var contact_grade := INF
@@ -164,6 +166,7 @@ func clear_attack_input() -> void:
 	release_at=INF
 	release_grade=INF
 	approach_delay=0.
+	previous_strike_hand.clear()
 	first_palm_at=INF
 	aim_center=Vector2.INF
 	contact_grade=INF
@@ -874,11 +877,20 @@ func resolve_swing_contact(previous:Vector3,delta:float,serve_toss:bool) -> bool
 		pose_swing()
 		var palm := Contact.joint(hitter,"middle_03_r") if tip_shot else Contact.palm(hitter,"r")
 		var nearest := Geometry3D.get_closest_point_to_segment(palm,previous,ball.position)
+		var driven:=not (serve_toss or tip_shot or roll_shot)
+		var contact:Dictionary={}
+		if driven:
+			var hand:=StrikePalm.sample(hitter.skeleton,ball.get_parent_node_3d())
+			if not previous_strike_hand.is_empty():
+				contact=StrikePalm.sweep(previous_strike_hand,hand,previous,ball.position,maxf(delta,.0001))
+			previous_strike_hand=hand
+			if not contact.is_empty(): nearest=previous.lerp(ball.position,contact.fraction)
 		var contact_open := swing_can_contact()
 		if contact_open:
 			closest_spike_gap=minf(closest_spike_gap,nearest.distance_to(palm))
 		var at_set_target := has_meta("sampling_attack") or (ball.position-endpoint).slide(Vector3.UP).length()<=.25
-		if at_set_target and contact_open and nearest.distance_to(palm)<=Contact.BALL_RADIUS+PALM_CONTACT_MARGIN:
+		var touched:=not contact.is_empty() if driven else nearest.distance_to(palm)<=Contact.BALL_RADIUS+PALM_CONTACT_MARGIN
+		if at_set_target and contact_open and touched:
 			if not is_finite(first_palm_at): first_palm_at=clock
 			var grade := release_grade+GRADE_ADVANCE
 			var valid_release := manual_shot>=0 and is_finite(release_at)
@@ -899,16 +911,14 @@ func resolve_swing_contact(previous:Vector3,delta:float,serve_toss:bool) -> bool
 			elif not has_meta("sampling_attack"):
 				if elapsed<contact_deadline(): return false
 				return miss_attack()
-			hard_spike_floor_pending=not tip_shot and not roll_shot and attack_speed()*attack_jump.spike_power_factor()>=Contact.HARD_SPIKE_SPEED
 			attack_floor_pending=true
 			contact_swing_time=swing_time
 			ball.position=nearest
 			strike_point=ball.position
-			if not has_meta("live_sampler") and not has_meta("sampling_attack"):
-				# The contact pose and its crack share the same physics tick.
-				var sound := preload("res://assets/audio/set_touch.wav") if tip_shot else StorySession.SPIKE_SOUND
-				StorySession.play_hand_contact(sound,0. if hard_spike_floor_pending else (-10. if roll_shot else -6.))
-				spike_sound_count+=1
+			if driven:
+				for modifier in hitter.skeleton.get_children():
+					if modifier.has_method("mark_spike_contact"):
+						modifier.mark_spike_contact(hitter.get_pose_author(),ball.global_position,ball.get_parent_node_3d().global_basis*Vector3(contact.outward),contact.part)
 			strike_shoulder_offset=hitter.skeleton.to_local(strike_point)-hitter.skeleton.get_bone_global_pose(hitter.skeleton.find_bone("upperarm_r")).origin
 			spikes+=1
 			success=true
@@ -921,7 +931,17 @@ func resolve_swing_contact(previous:Vector3,delta:float,serve_toss:bool) -> bool
 			var shot_time := attack_flight_time(ball.position,landing)
 			spin_acceleration=shot_spin_force(ball.position,landing,shot_time)
 			drop_velocity=launch_velocity(ball.position,landing,shot_time,spin_acceleration)
+			if driven:
+				var transfer:=StrikePalm.transfer(contact,drop_velocity)
+				spin_acceleration*=lerpf(.20,1.,transfer)
+				drop_velocity=StrikePalm.outgoing(contact,drop_velocity)
 			strike_launch_speed=drop_velocity.length()
+			hard_spike_floor_pending=driven and strike_launch_speed>=Contact.HARD_SPIKE_SPEED
+			if not has_meta("live_sampler") and not has_meta("sampling_attack"):
+				# The contact pose and its crack share the same physics tick.
+				var sound := preload("res://assets/audio/set_touch.wav") if tip_shot else StorySession.SPIKE_SOUND
+				StorySession.play_hand_contact(sound,0. if hard_spike_floor_pending else (-10. if roll_shot else -6.))
+				spike_sound_count+=1
 			if not has_meta("live_sampler") and not has_meta("sampling_attack"):
 				show_strike_speed()
 			roll_time=-1.
@@ -945,6 +965,8 @@ func show_strike_speed() -> void:
 		details+=speed_term(approach_speed-drill_power,"momentum")
 		if release_power_factor()<1.:
 			details+=speed_term(approach_speed*(release_power_factor()-1.),"release timing")
+		var contact_delta:float=drop_velocity.length()*3.6-approach_speed*release_power_factor()
+		if absf(contact_delta)>=.05: details+=speed_term(contact_delta,"hand contact")
 		details+=" = %.1f km/h"%(drop_velocity.length()*3.6)
 	ContactTiming.launch_speed(drop_velocity,details)
 

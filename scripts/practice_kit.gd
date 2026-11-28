@@ -201,7 +201,9 @@ static func apply(actor: Node3D,coach: bool,variant := 0,vary_build := true) -> 
 		style_hair(actor,scalp,variant)
 		preload("res://scripts/player_kit_choices.gd").apply(actor)
 
-	if not coach: actor.refresh_kit()
+	if not coach:
+		actor.refresh_kit()
+		actor.set_animation_mirror(actor.mirror_animation)
 	reshape_build(rig,coach,variant)
 	if outer_shirt: actor.dressed_surface.configure(outer_shirt,rig)
 
@@ -248,6 +250,7 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 	render_mode cull_disabled;
 	uniform int print_style; uniform vec3 inertia; uniform float motion; uniform float hem_y; uniform vec2 stride; uniform vec4 accent:source_color; varying float depth; uniform vec4 cloth:source_color; uniform sampler2D knit_surface:repeat_enable,filter_linear_mipmap_anisotropic; varying vec2 rest;
 	uniform sampler2D leg_number:source_color,filter_linear_mipmap_anisotropic;
+	uniform bool mirror_print = false;
 	float pleat_height(vec2 pattern,float hem,float ripple){
 		float raised=pattern.x>0.?stride.x:stride.y;
 		float pleat=sin(abs(pattern.x)*99.+pattern.y*31.);
@@ -310,6 +313,7 @@ static func shorts(rig: Skeleton3D,outfit: MeshInstance3D,variant: int,actor: No
 		ALBEDO*=.97+.06*yarn.b;
 		// A smaller transfer on the left leg matches the player's jersey number.
 		vec2 number_uv=vec2((rest.x-.105)/.072+.5,(hem_y+.085-rest.y)/.041);
+		if(mirror_print) number_uv.x=1.-number_uv.x;
 		if(FRONT_FACING && depth>.041 && all(greaterThanEqual(number_uv,vec2(0.))) && all(lessThanEqual(number_uv,vec2(1.)))){
 			float ink=texture(leg_number,number_uv).a;
 			ALBEDO=mix(ALBEDO,vec3(.86,.82,.72),ink*.94);

@@ -1127,7 +1127,8 @@ func step_reception_rally(delta: float) -> void:
 			if actor==first_contact_player() and (pass_clock<.32 or receptions[receiver].low_save.active): continue
 			if slot==1 and middle_decoy.enabled: continue
 			if actor!=pin_attack.setter or not pin_attack.enabled: stage_attacker(actor,slot,delta)
-		var facing := (Vector3(-4.5,0.,BallNet.NET_Z)-pass_end).slide(Vector3.UP).normalized()
+		var facing := SetHands.zone_four_facing(second_contact_player().position,Vector3(-4.5,0.,BallNet.NET_Z))
+		var before_set_yaw:=second_contact_player().rotation.y
 		var stance := Vector3(pass_end.x,.04,pass_end.z)-facing*.30
 		var lift: float=SET_VERTICAL*second_contact_player().stamina.effectiveness()
 		# Descending intersection of the existing pass arc with airborne hand height.
@@ -1145,7 +1146,7 @@ func step_reception_rally(delta: float) -> void:
 			chase_goal.z=maxf(chase_goal.z,BallNet.NET_Z+.22)
 			var travel := (chase_goal-second_contact_player().position).slide(Vector3.UP).length()
 			var pace := clampf(travel/maxf(.05,set_at-pass_clock-.1),4.8,6.05)
-			move_receiver(second_contact_player(),chase_goal,delta,facing,pace)
+			move_receiver(second_contact_player(),chase_goal,delta,facing,pace,true)
 			plant.z=maxf(plant.z,BallNet.NET_Z+.22)
 			var jump_range := 1.25 if crossing_net else .65
 			if pass_clock>=jump_at and pass_clock<pass_duration*u-.12 and second_contact_player().position.distance_to(plant)<jump_range and lift>.20:
@@ -1183,8 +1184,8 @@ func step_reception_rally(delta: float) -> void:
 			elif first_contact_player()!=passers[1]: first_contact_player().play_action("idle")
 		ball.position=arc(pass_start,pass_end,pass_clock/pass_duration,arc_term*.25)
 		preload("res://scripts/pass_flight.gd").rotate_reception_ball(ball,(pass_end-pass_start)/pass_duration,delta,received_spin_rps,receptions[receiver].hand_setting)
+		second_contact_player().rotation.y=rotate_toward(before_set_yaw,atan2(facing.x,facing.z),SetHands.CPU_SQUARE_RATE*delta)
 		if pass_clock>set_at-.33:
-			second_contact_player().rotation.y=atan2(facing.x,facing.z)
 			var load_weight := smoothstep(set_at-.33,set_at-.05,pass_clock)
 			SetHands.standing_set(second_contact_player(),ball.position,attack_point-ball.position,Vector3.ZERO,-1.,load_weight,facing)
 		if pass_clock>=set_at:

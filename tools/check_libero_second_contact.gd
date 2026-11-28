@@ -37,6 +37,7 @@ func run() -> void:
 			game.launch(frame.to_global(start),frame.global_basis*velocity,"pass",passer)
 			var takeoff:=INF
 			var correct:=false
+			var facing_error:=INF
 			var feet_clear:=true
 			for tick in 120:
 				var jump=game.set_jumps[libero]
@@ -48,13 +49,15 @@ func run() -> void:
 				if game.flight_kind!="pass" or game.phase!=game.Phase.LIVE: break
 			if game.flight_kind=="set" and game.last_player==libero and game.expected_hitter>=0:
 				var pin:Vector3=game.attack_lane_for(game.expected_hitter)
-				correct=absf(pin.x)>3. and game.stroke==("Jump set" if sample[2]==2 else "Forearm")
+				var facing:Vector3=game.Bump.HandPose.zone_four_facing(actor.position,game.ZONE_FOUR)
+				facing_error=rad_to_deg(actor.basis.z.angle_to(facing))
+				correct=facing_error<8. and absf(pin.x)>3. and game.stroke==("Jump set" if sample[2]==2 else "Forearm")
 				if sample[2]==2:
 					correct=correct and feet_clear and takeoff<game.Net.NET_Z-3.
 					if sample[1]>1.: correct=correct and frame.to_local(game.origin).z>1. and game.set_jumps[libero].carry_velocity.z>0.
 					pins[signf(pin.x)]=true
 				else: correct=correct and not is_finite(takeoff)
-			print("side ",side," ball z ",sample[1]," plant z ",takeoff," ",game.stroke," ",game.flight_kind," contact ",frame.to_local(game.origin)," ok ",correct)
+			print("side ",side," ball z ",sample[1]," plant z ",takeoff," ",game.stroke," ",game.flight_kind," contact ",frame.to_local(game.origin)," facing degrees ",facing_error," ok ",correct)
 			if not correct: failures+=1
 	print("pin directions ",pins.keys())
 	quit(1 if failures or pins.size()!=2 else 0)

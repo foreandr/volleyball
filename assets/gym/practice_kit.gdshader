@@ -4,6 +4,7 @@ uniform vec4 fabric : source_color;
 uniform vec4 trim : source_color;
 uniform bool captain = false;
 uniform sampler2D lettering : source_color,filter_linear_mipmap_anisotropic;
+uniform bool mirror_print = false;
 uniform sampler2D team_crest : source_color,filter_linear_mipmap_anisotropic;
 uniform vec3 hem_particles[12];
 uniform vec3 strap_offsets[4];
@@ -260,6 +261,7 @@ void fragment(){
 		}
 		float rear=1.-step(0.,rest.z);
 		vec2 uv=vec2(.5+mix(rest.x,-rest.x,rear)/mix(.205,.262,rear),(1.425-y)/mix(.115,.144,rear));
+		if(mirror_print) uv.x=1.-uv.x;
 		if(captain && abs(rest.z)>.035 && abs(uv.x-.5)<.39 && uv.y>1.03 && uv.y<1.10){
 			base=vec3(.95,.90,.77);
 			print_coverage=1.;

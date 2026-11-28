@@ -8,11 +8,16 @@ var quality:=OptionButton.new()
 var settings:=VBoxContainer.new()
 var actions:=HBoxContainer.new()
 var run_button:=Button.new()
+var reset_button:=Button.new()
+var player_panel:=preload("res://scripts/scenario_player_panel.gd").new()
+var roster_path:="user://block_defense_roster.cfg"
 var options_button:=Button.new()
 var resume_button:=Button.new()
 var repeat_option:=CheckBox.new()
 var selected_tempos:Dictionary={}
 var result_label:=Label.new()
+var decision_label:=Label.new()
+var decision_toggle:=CheckButton.new()
 var panel:=PanelContainer.new()
 var between_feeds:=0.
 var replay_button:=Button.new()
@@ -21,6 +26,8 @@ var note:=Label.new()
 var running:=false
 var editing:=false
 var dragged:=-1
+var drag_start:=Vector2.ZERO
+var moved_player:=false
 var originals:Array[Vector3]=[]
 var setup:Dictionary={}
 var session_before:Dictionary={}
@@ -32,15 +39,10 @@ func _ready() -> void:
 	StorySession.offline_size=6
 	StorySession.offline_away_size=6
 	StorySession.career_scrimmage=false
-	var roster:Array[Dictionary]=[]
-	for i in 12:
-		var member:Dictionary=CareerSession.profile().duplicate(true) if i==0 else {}
-		if member.is_empty(): member=preload("res://scripts/player_profile.gd").generate()
-		member.position=ScenarioMatch.Formation.ROLES[(i+1)%6]
-		roster.append(member)
-	StorySession.offline_roster=roster
 	game.free()
 	game=ScenarioMatch.new()
+	game.roster.path=roster_path
+	StorySession.offline_roster=game.roster.load_starters(CareerSession.profile())
 	super._ready()
 	game.instructions.load(game.rules_path)
 	add_child(panel)
@@ -49,10 +51,18 @@ func _ready() -> void:
 	var column:=VBoxContainer.new()
 	column.add_theme_constant_override("separation",6)
 	panel.add_child(column)
+	var header:=HBoxContainer.new()
+	column.add_child(header)
 	var title:=Label.new()
 	title.text="Block defense"
 	title.add_theme_font_size_override("font_size",23)
-	column.add_child(title)
+	title.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	header.add_child(title)
+	header.add_child(reset_button)
+	reset_button.text="Reset"
+	reset_button.tooltip_text="Restart this scenario from the serve"
+	reset_button.pressed.connect(reset_scenario)
+	reset_button.hide()
 	column.add_child(settings)
 	settings.add_theme_constant_override("separation",6)
 	for zone in range(1,7):
@@ -126,6 +136,17 @@ func _ready() -> void:
 	edit_button.text="Pause & place · F2"
 	edit_button.disabled=true
 	edit_button.pressed.connect(toggle_edit)
+	column.add_child(decision_toggle)
+	decision_toggle.text="Show decisions"
+	decision_toggle.button_pressed=StorySession.game_options.get_value("block_defense","show_decisions",true)
+	decision_toggle.toggled.connect(func(on:bool):
+		StorySession.game_options.set_value("block_defense","show_decisions",on)
+		StorySession.save_options()
+		decision_label.visible=on and running)
+	column.add_child(decision_label)
+	decision_label.custom_minimum_size.x=300
+	decision_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+	decision_label.hide()
 	column.add_child(note)
 	note.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	note.custom_minimum_size.x=230
@@ -133,6 +154,8 @@ func _ready() -> void:
 	banner.hide()
 	board.hide()
 	status.hide()
+	add_child(player_panel)
+	player_panel.changed.connect(change_player_stat)
 
 static func route_label(route:String) -> String:
 	return route.capitalize()+" side" if route in ["left","right"] else route.capitalize()
@@ -188,10 +211,51 @@ func run_feed(repeating:bool) -> void:
 	signaled_rally=game.rallies
 	authorized=true
 	running=true
+	reset_button.show()
 	replay_button.disabled=false
 	edit_button.disabled=false
 	rally_end_menu.hide()
 	note.text=""
+
+func reset_scenario() -> void:
+	if not running: return
+	if editing: toggle_edit()
+	if game.replay.active: toggle_match_replay()
+	if settings.visible: show_settings(false)
+	run_feed(false)
+
+func pick_player(mouse:Vector2) -> int:
+	var picked:=-1
+	var best:=INF
+	var front:=INF
+	for i in game.players.size():
+		var actor=game.players[i]
+		var feet:Vector3=actor.global_position
+		if camera.is_position_behind(feet): continue
+		var base:=camera.unproject_position(feet)
+		var head:=camera.unproject_position(feet+Vector3.UP*actor.height_cm*.01)
+		var radius:=clampf(head.distance_to(base)*.19,10.,36.)
+		var gap:=Geometry2D.get_closest_point_to_segment(mouse,base,head).distance_to(mouse)/radius
+		var depth:=camera.global_position.distance_to(feet)
+		if gap<=1. and (gap<best-.08 or (absf(gap-best)<=.08 and depth<front)):
+			picked=i
+			best=gap
+			front=depth
+	return picked
+
+func inspect_player(i:int) -> void:
+	var side:int=game.team(i)
+	var identity:int=game.player_identity(i)
+	player_panel.display(side,identity,game.players[i].get_meta("school_jersey_number"),game.roster.profile(side,identity))
+
+func change_player_stat(side:int,identity:int,field:String,value:Variant) -> void:
+	var result:Error=game.edit_player(side,identity,field,value)
+	var profile:Dictionary=game.roster.profile(side,identity)
+	var jersey:int=profile.get("jersey_number",502+side*6+posmod(identity-1,6))
+	player_panel.display(side,identity,jersey,profile)
+	if result!=OK:
+		player_panel.message.text="Could not save · "+error_string(result)
+		player_panel.message.show()
 
 func toggle_edit() -> void:
 	if not running: return
@@ -212,13 +276,15 @@ func _process(delta:float) -> void:
 	if note.visible==note.text.is_empty():
 		note.visible=not note.text.is_empty()
 		panel.reset_size.call_deferred()
-	if editing or not game.replay.active: ReplayControls.move_camera(camera,-1,delta)
+	if (editing or not game.replay.active) and not get_viewport().gui_get_focus_owner() is LineEdit:
+		ReplayControls.move_camera(camera,-1,delta)
 	if not running or editing or settings.visible: return
 	if not game.replay.active and game.phase in [game.Phase.DEAD,game.Phase.FINISHED]:
 		if setup.get("repeat",false):
 			between_feeds+=delta
 			if between_feeds>=3.: run_feed(true)
 		elif note.text.is_empty(): note.text="Point complete"
+		update_decision_label()
 		return
 	super._process(delta)
 	var route:String=game.released_route
@@ -227,10 +293,27 @@ func _process(delta:float) -> void:
 		var trace:Dictionary=game.replay.frames[game.replay.index].get("trace",{})
 		route=trace.get("lab_route","")
 		set_tempo=trace.get("lab_tempo",-1)
+	update_decision_label()
 	result_label.text="Waiting for set" if route.is_empty() else "%s  ·  Tempo %d"%[route_label(route),set_tempo]
+
+func update_decision_label() -> void:
+	decision_label.visible=running and decision_toggle.button_pressed
+	if not decision_label.visible:
+		result_label.visible=running and not settings.visible
+		return
+	var set_read:String=game.set_decision
+	var swing_read:String=game.attack_decision
+	if game.replay.active:
+		var sample:Dictionary=game.replay.frames[game.replay.index].get("trace",{})
+		set_read=sample.get("set_decision","")
+		swing_read=sample.get("attack_decision","")
+	decision_label.text="\n".join(PackedStringArray([set_read,swing_read])).strip_edges()
+	result_label.visible=not settings.visible and set_read.is_empty()
 
 func _input(event:InputEvent) -> void:
 	if get_tree().paused: return
+	if event is InputEventMouse and player_panel.visible and player_panel.get_global_rect().has_point(event.position): return
+	if event is InputEventKey and get_viewport().gui_get_focus_owner() is LineEdit: return
 	if (editing or not game.replay.active) and ReplayControls.mouse_camera(camera,event):
 		get_viewport().set_input_as_handled()
 		return
@@ -245,11 +328,19 @@ func toggle_match_replay() -> void:
 	if editing: toggle_edit()
 	if not running: return
 	super.toggle_match_replay()
+	if not game.replay.active: game.apply_replay_edits()
 	replay_button.text="Return to rally" if game.replay.active else "Replay"
 	if game.replay.active: get_viewport().gui_release_focus()
 	elif not settings.visible: options_button.grab_focus()
 
 func _unhandled_input(event:InputEvent) -> void:
+	if event is InputEventKey and get_viewport().gui_get_focus_owner() is LineEdit: return
+	if not editing and event is InputEventMouseButton and event.button_index==MOUSE_BUTTON_LEFT and event.pressed:
+		var i:=pick_player(event.position)
+		if i>=0:
+			inspect_player(i)
+			get_viewport().set_input_as_handled()
+			return
 	if settings.visible: return
 	if editing and ((event is InputEventKey and event.keycode==KEY_R and event.pressed and not event.echo) or (event is InputEventJoypadButton and event.button_index==JOY_BUTTON_BACK and event.pressed)):
 		toggle_match_replay()
@@ -260,23 +351,22 @@ func _unhandled_input(event:InputEvent) -> void:
 		return
 	if event is InputEventMouseButton and event.button_index==MOUSE_BUTTON_LEFT:
 		if event.pressed:
-			var nearest:=42.
-			for i in game.players.size():
-				var at:Vector3=game.players[i].global_position
-				var gap:=Geometry2D.get_closest_point_to_segment(event.position,camera.unproject_position(at),camera.unproject_position(at+Vector3.UP*1.6)).distance_to(event.position)
-				if gap<nearest:
-					nearest=gap
-					dragged=i
+			dragged=pick_player(event.position)
+			drag_start=event.position
+			moved_player=false
 			if dragged>=0:
 				var actor=game.players[dragged]
 				var role:String="Libero" if game.active_identities.get(dragged,-1)==6 else ScenarioMatch.Formation.ROLES[game.lineup_role(dragged)]
 				note.text="#%d %s · %s · Blocking %d"%[actor.get_meta("school_jersey_number",-1),actor.display_name,role,actor.attributes.Blocking]
 		elif dragged>=0:
-			if game.players[dragged].position.distance_to(originals[dragged])>.01: save_placement(dragged)
+			if moved_player: save_placement(dragged)
+			else: inspect_player(dragged)
 			dragged=-1
 	elif dragged>=0 and event is InputEventMouseMotion:
+		if not moved_player and event.position.distance_to(drag_start)<4.: return
 		var point=Plane(Vector3.UP,.04).intersects_ray(camera.project_ray_origin(event.position),camera.project_ray_normal(event.position))
 		if point!=null:
+			moved_player=true
 			var actor=game.players[dragged]
 			var local:Vector3=game.frames[game.team(dragged)].to_local(point)
 			actor.position=Vector3(clampf(local.x,-6.,6.),originals[dragged].y,clampf(local.z,-7.,3.9))

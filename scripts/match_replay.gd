@@ -16,11 +16,17 @@ var actor_offsets := {}
 var saved_evidence := {}
 var suspended_modifiers: Array[SkeletonModifier3D] = []
 
-func capture(match_: Node3D) -> Dictionary:
+func capture(match_: Node3D, rendered_swings := false) -> Dictionary:
 	var actors := []
 	for actor in match_.players:
 		var bones: Array[Transform3D] = []
 		for bone in actor.skeleton.get_bone_count(): bones.append(actor.skeleton.get_bone_pose(bone))
+		if rendered_swings:
+			for swing in match_.attackers:
+				if swing.enabled and swing.setter==actor:
+					for modifier in actor.skeleton.get_children():
+						if "replay_bones" in modifier and modifier.active: modifier.replay_bones=bones
+					break
 		actors.append({"root":actor.transform,"model":actor.model.transform,"bones":bones,"mirrored":actor.mirror_animation})
 	var shown: Node3D = match_.ball if match_.ball.visible else match_.serve.ball
 	var keys := []
@@ -33,7 +39,7 @@ func capture(match_: Node3D) -> Dictionary:
 		"score":match_.score_label.text,"info":match_.info.text,"keys":keys,"aim":match_.aim_ring.visible,"guide":match_.trajectory_node.visible}
 
 func record(match_: Node3D) -> void:
-	var sample := capture(match_)
+	var sample := capture(match_,true)
 	sample["trace"] = match_.trace_snapshot()
 	current.append(sample)
 
@@ -93,9 +99,7 @@ func freeze_here(match_:Node3D) -> void:
 	recent.append_array(current)
 	var now:=capture(match_)
 	now["trace"]=match_.trace_snapshot()
-	if not recent.is_empty() and recent.back().time>=now.time:
-		recent.pop_back()
-	recent.append(now)
+	if recent.is_empty() or recent.back().time<now.time: recent.append(now)
 	if recent.size()<2: return
 	toggle(match_,true,recent)
 	playing=false
@@ -138,6 +142,8 @@ func apply(match_: Node3D, first: Dictionary, second: Dictionary, blend: float) 
 		var actor: Node3D = match_.players[i]
 		var a: Dictionary = first.actors[i]
 		var b: Dictionary = second.actors[i]
+		var mirrored:bool=a.get("mirrored",actor.mirror_animation)
+		if actor.mirror_animation!=mirrored: actor.set_animation_mirror(mirrored)
 		actor.transform = a.root.interpolate_with(b.root,blend)
 		actor.global_position += Vector3(actor_offsets.get(i,Vector3.ZERO))
 		actor.model.transform = a.model.interpolate_with(b.model,blend)

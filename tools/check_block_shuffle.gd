@@ -4,9 +4,9 @@ func _initialize() -> void:
 	run.call_deferred()
 
 func run() -> void:
-	change_scene_to_file("res://scenes/block_defense_scenario.tscn")
-	await scene_changed
-	var page=current_scene
+	var page=load("res://scenes/block_defense_scenario.tscn").instantiate()
+	page.roster_path="user://block-shuffle-test-%d-%d.cfg"%[OS.get_process_id(),Time.get_ticks_usec()]
+	root.add_child(page)
 	page.set_process(false)
 	var game=page.game
 	game.start_feed(1,1,1,true)
@@ -105,4 +105,5 @@ func run() -> void:
 				assert((jump.hands[i]-ball_at).dot(ahead)>.07)
 				assert(jump.hands[i].y-jump.wrists[i].y<.025)
 			print("PASS side ",side," apex chest/tape ",chest.y-game.Net.NET_TOP," m, fingertips over tape ",(jump.hands[0]-ball_at).dot(ahead)," m")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(page.roster_path))
 	quit()

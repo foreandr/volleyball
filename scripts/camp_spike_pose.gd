@@ -206,14 +206,34 @@ func apply(hitter: Node3D,attack_jump: Jump,phase: String,swing_time: float,cont
 		var axis := lever.cross(target)
 		if axis.length_squared()>.00000001:
 			author.rotate_world(pose,bone,axis.normalized(),minf(lever.angle_to(target),deg_to_rad(5. if bone=="spine_02" else 8.)))
-	if track_contact and phase=="set" and reach>.25:
-		var wrist_at: Vector3=author.point(pose,"hand_r")
-		var palm_at: Vector3=wrist_at.lerp(author.point(pose,"middle_01_r"),.75)
-		var goal := rig.to_local(ball_world)-palm_at
-		var near_surface := maxf(0.,goal.length()-Contact.BALL_RADIUS/rig.global_basis.y.length())
-		var wrist_goal := wrist_at+goal.normalized()*minf(.22/rig.global_basis.y.length(),near_surface)
-		var pole: Vector3=author.point(pose,"lowerarm_r")-author.point(pose,"upperarm_r")
-		author.limb(pose,"upperarm_r","lowerarm_r","hand_r",wrist_goal,pole,smoothstep(.25,.86,reach),178.,true)
+	if track_contact and phase=="set" and reach>.10 and not tip_shot:
+		# Accelerate from behind the ball into its back face. A vertical reach from
+		# underneath can brush a ball, but cannot drive it toward the target.
+		var drive_axis:=ball_world.direction_to(landing)
+		var travel:=lerpf(.33,-.11,smoothstep(.083,.146,swing_time*speed_factor))
+		var desired:=rig.to_local(ball_world-drive_axis*(Contact.BALL_RADIUS+.023+travel))
+		var wrist_at:Vector3=author.point(pose,"hand_r")
+		var knuckle:Vector3=author.point(pose,"middle_01_r")
+		var pad:=wrist_at.lerp(knuckle,.64)
+		var pole:Vector3=author.point(pose,"lowerarm_r")-author.point(pose,"upperarm_r")
+		var weight:=smoothstep(.10,.72,reach)
+		author.limb(pose,"upperarm_r","lowerarm_r","hand_r",wrist_at+(desired-pad).limit_length(.27),pole,weight,178.,true)
+		var forearm:Vector3=author.point(pose,"lowerarm_r").direction_to(author.point(pose,"hand_r"))
+		var striking_fingers:Vector3=author.point(pose,"hand_r").direction_to(author.point(pose,"middle_01_r"))
+		var edge:Vector3=author.point(pose,"pinky_01_r")-author.point(pose,"index_01_r")
+		var normal:=striking_fingers.cross(edge).slide(forearm)
+		var toward:=(rig.global_basis.inverse()*drive_axis).slide(forearm)
+		if normal.length_squared()>.001 and toward.length_squared()>.001:
+			var roll:=clampf(normal.signed_angle_to(toward,forearm),-1.25,1.25)
+			author.rotate_world(pose,"lowerarm_r",forearm,roll*weight)
+		# Keep the wrist laid back through approach. Finger turnover follows impact.
+		var loaded_fingers:Vector3=author.point(pose,"hand_r").direction_to(author.point(pose,"middle_01_r"))
+		var hand_edge:Vector3=author.point(pose,"pinky_01_r")-author.point(pose,"index_01_r")
+		var palm_face:Vector3=loaded_fingers.cross(hand_edge).normalized()
+		var face_goal:Vector3=(rig.global_basis.inverse()*(drive_axis.slide(Vector3.UP).normalized()+Vector3.UP*.17)).normalized()
+		var tilt:=palm_face.cross(face_goal)
+		if tilt.length_squared()>.0001:
+			author.rotate_world(pose,"hand_r",tilt.normalized(),minf(.92,palm_face.angle_to(face_goal))*weight)
 	var arm_dt := maxf(0.,swing_time-last_shoulder_time)
 	for joint in ["pelvis","spine_01","spine_02","thigh_r","thigh_l","calf_r","calf_l","foot_r","foot_l","clavicle_r","upperarm_r","lowerarm_r","hand_r","clavicle_l","upperarm_l","lowerarm_l","hand_l"]:
 		var id := rig.find_bone(joint)

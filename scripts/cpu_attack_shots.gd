@@ -4,7 +4,7 @@ const Net = preload("res://scripts/net_collision.gd")
 const Flight = preload("res://scripts/pass_flight.gd")
 
 static func plan(contact: Vector3, preferred: Vector3, speed: float, spin: float,
-		defenders: Array[Vector3], walls: Array[Vector3]) -> Dictionary:
+		defenders: Array[Vector3], walls: Array[Vector3], committed_motion:=Vector3.ZERO) -> Dictionary:
 	if contact.z >= Net.NET_Z-0.04 or speed < 1.0:
 		return {}
 	var gravity := Flight.spike_gravity(spin)
@@ -22,6 +22,7 @@ static func plan(contact: Vector3, preferred: Vector3, speed: float, spin: float
 				if cut and (depth>7.35 or absf(x-contact.x)<2.): continue
 				var duration := Flight.strike_time(offset,Vector3.DOWN*gravity,speed*pace)
 				var motion := Flight.strike_velocity(offset,Vector3.DOWN*gravity,duration,speed*pace)
+				if not accepts_release(committed_motion,motion): continue
 				if path(contact,motion,gravity,duration).distance_to(target)>.05 or not clears_tape(contact,motion,gravity):
 					continue
 				var height_over_block := -INF
@@ -70,7 +71,7 @@ static func plan(contact: Vector3, preferred: Vector3, speed: float, spin: float
 		if time < 0.025 or time > 0.19 or offset.z <= 0.1:
 			continue
 		var motion := Flight.strike_velocity(offset,Vector3.DOWN*gravity,time,speed)
-		if not clears_tape(contact,motion,gravity):
+		if not accepts_release(committed_motion,motion) or not clears_tape(contact,motion,gravity):
 			continue
 		var score := 0.5+smoothstep(3.25,4.1,absf(wall.x))*0.75
 		if score > best_score:
@@ -84,7 +85,7 @@ static func plan(contact: Vector3, preferred: Vector3, speed: float, spin: float
 		var target:=Vector3(x,Flight.FLOOR,10.)
 		for duration:float in [.9,1.15,1.4,1.7,2.]:
 			var motion:=(target-contact)/duration+Vector3.UP*.5*gravity*duration
-			if not clears_tape(contact,motion,gravity): continue
+			if not accepts_release(committed_motion,motion) or not clears_tape(contact,motion,gravity): continue
 			var blocked:=false
 			for wall in walls:
 				var at_wall:=path(contact,motion,gravity,(wall.z-contact.z)/motion.z)
@@ -97,10 +98,31 @@ static func plan(contact: Vector3, preferred: Vector3, speed: float, spin: float
 				best={"type":"Roll shot","target":target,"motion":motion,"spin":roll_spin}
 	return best
 
+static func accepts_release(committed:Vector3,motion:Vector3) -> bool:
+	return committed.is_zero_approx() or (committed.angle_to(motion)<=deg_to_rad(20.) and motion.length()<=committed.length()+.02)
+
 static func path(contact: Vector3, motion: Vector3, gravity: float, time: float) -> Vector3:
 	return contact+motion*time+Vector3.DOWN*0.5*gravity*time*time
 
+# Preserve power and horizontal aim. A small change of elevation can rescue a clean
+# drive when actual contact is lower or farther off the net than the predicted hit.
+static func lift_over_tape(contact:Vector3,motion:Vector3,gravity:float) -> Vector3:
+	if motion.z<=0. or contact.z>=Net.NET_Z or clears_tape(contact,motion,gravity): return motion
+	var horizontal:=motion.slide(Vector3.UP)
+	var elevation:=atan2(motion.y,horizontal.length())
+	var axis:=horizontal.normalized()
+	for degrees in range(1,16):
+		var pitch:=elevation+deg_to_rad(float(degrees))
+		var lifted:=(axis*cos(pitch)+Vector3.UP*sin(pitch))*motion.length()
+		if not clears_tape(contact,lifted,gravity): continue
+		var time:=(lifted.y+sqrt(lifted.y*lifted.y+2.*gravity*(contact.y-Flight.FLOOR)))/gravity
+		var land:=contact+lifted*time
+		if absf(land.x)<=4.5 and land.z<=Net.NET_Z+9.: return lifted
+		break
+	return motion
+
 static func clears_tape(contact: Vector3, motion: Vector3, gravity: float) -> bool:
+	if motion.z<=.001: return false
 	for depth in [Net.NET_Z-0.12,Net.NET_Z,Net.NET_Z+0.12]:
 		var time: float = maxf(0.0,(depth-contact.z)/motion.z)
 		var point := path(contact,motion,gravity,time)

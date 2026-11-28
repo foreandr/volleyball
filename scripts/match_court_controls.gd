@@ -223,7 +223,10 @@ func aim_set() -> Vector3:
 	return Vector3(x,.065,3.2)
 
 func set_apex() -> float:
-	return 5.20 if high else 3.65
+	var apex:=5.20 if high else 3.65
+	if g.six_on_six() and absf(aim_set().x)>2.5:
+		apex=g.manual_pin_apex(0,Hands.contact_center(g.human),apex)
+	return apex
 
 func draw_set_arc() -> void:
 	var origin:=Hands.contact_center(g.human)

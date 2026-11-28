@@ -14,13 +14,39 @@ var rules_path := "user://block_defense_ai.cfg"
 var situation := ""
 var teaching_moves := {}
 var applying_instructions := false
+var roster := preload("res://scripts/block_scenario_roster.gd").new()
+var replay_edits:Dictionary={}
 
-func apply_receive_substitutions() -> void:
-	super.apply_receive_substitutions()
-	# This lab compares blue M2 at maximum Blocking. His libero keeps his own profile.
-	var middle:=first_on(0)+lineup_roles[0].find(5)
-	if active_identities.get(middle,-1)==5:
-		players[middle].attributes.Blocking=100
+func build_six_lineups() -> void:
+	super.build_six_lineups()
+	for side in 2:
+		for identity in [2,5,6]:
+			middle_profiles[side][identity]=roster.profile(side,identity)
+		for i in slots_for(side):
+			players[i].set_meta("scenario_measurements",true)
+			players[i].apply_measurements()
+
+func player_identity(index:int) -> int:
+	return active_identities.get(index,lineup_role(index))
+
+func edit_player(side:int,identity:int,field:String,value:Variant) -> Error:
+	var values:=roster.profile(side,identity).duplicate(true)
+	values[field]=value
+	values=Player.Profile.clean(values)
+	var result:=roster.save_player(side,identity,values)
+	if result!=OK: return result
+	if identity in [2,5,6]: middle_profiles[side][identity]=values
+	for i in slots_for(side):
+		if player_identity(i)==identity:
+			if replay.active: replay_edits[i]=true
+			else: players[i].apply_build(values)
+			break
+	return OK
+
+func apply_replay_edits() -> void:
+	for i:int in replay_edits:
+		players[i].apply_build(roster.profile(team(i),player_identity(i)))
+	replay_edits.clear()
 
 func phase_key() -> String:
 	if phase!=Phase.LIVE or situation.is_empty(): return ""
@@ -96,6 +122,13 @@ func prepare_middle_quick(side:int,delta:float) -> void:
 	super.prepare_middle_quick(side,delta)
 
 func hitter_for_set(setter:int,allow_quick:bool=true) -> int:
+	if active_identities.get(setter,-1)==6:
+		var outlet:=super.hitter_for_set(setter,allow_quick)
+		if team(setter)==1 and planned_pass():
+			var route:=Formation.attack_route(lineup_role(outlet),setter_zones[1])
+			feed_hitter=outlet
+			feed_tempo=attack_options.get(route,2)
+		return outlet
 	if team(setter)==1 and receiving_team==1 and flight_kind=="pass":
 		if scripted_pass(): return feed_hitter
 		if not attack_options.is_empty() and possession_team==1 and touches==1 and planned_flight!=flight_number:
@@ -107,6 +140,9 @@ func hitter_for_set(setter:int,allow_quick:bool=true) -> int:
 	return super.hitter_for_set(setter,allow_quick)
 
 func choose_at_set_contact(setter:int,point:Vector3) -> void:
+	if active_identities.get(setter,-1)==6:
+		super.choose_at_set_contact(setter,point)
+		return
 	if planned_pass() and team(setter)==1:
 		rally_hitter=feed_hitter
 		return
@@ -187,4 +223,5 @@ func receive_contact(index:int,point:Vector3,motion:Vector3,technique:int) -> vo
 	super.receive_contact(index,point,motion,technique)
 	if release and flight_kind=="set" and expected_hitter>=0:
 		released_route=Formation.attack_route(lineup_role(expected_hitter),setter_zones[1])
-		released_tempo=feed_tempo
+		released_tempo=actual_tempo
+		if actual_tempo==feed_tempo: set_decision+=" · lab selection"

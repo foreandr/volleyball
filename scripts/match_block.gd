@@ -57,6 +57,7 @@ var overpass_swing := false
 var net_heading := INF
 var swing_load := 0.
 var square_block := false
+var seal_angle := 0.
 var late_quick_x := INF
 var aggressive_press := false
 var track_near_ball := false
@@ -287,6 +288,12 @@ func step(delta: float, world_ball: Vector3) -> bool:
 		author.rotate_world(pose,"spine_01",Vector3.RIGHT,.19*apex_press)
 		author.rotate_world(pose,"spine_02",Vector3.RIGHT,.13*apex_press)
 	var air_weight := smoothstep(0.,.12,phase)*(1.-smoothstep(.82,1.,phase))
+	var seal:=seal_angle*apex_press
+	var inward:=actor.global_basis.z.normalized().rotated(Vector3.UP,seal)
+	if absf(seal)>.001:
+		var up_axis:Vector3=(rig.global_basis.inverse()*Vector3.UP).normalized()*signf(rig.global_basis.determinant())
+		author.rotate_world(pose,"spine_02",up_axis,seal*.34)
+		author.rotate_world(pose,"spine_03",up_axis,seal*.22)
 	lean=lerpf(lean,lean_input,1.-exp(-14.*delta*(upper_body_rate if phase>0. and phase<1. else 1.)))
 	reach=reach.lerp(reach_input,1.-exp(-16.*delta*(upper_body_rate if phase>0. and phase<1. else 1.)))
 	if absf(lean)*air_weight>.0001:
@@ -350,7 +357,7 @@ func step(delta: float, world_ball: Vector3) -> bool:
 			var elbow_at:Vector3=author.point(pose,"lowerarm_"+side)
 			var arm_length:=shoulder.distance_to(elbow_at)+elbow_at.distance_to(author.point(pose,"hand_"+side))
 			var vertical:Vector3=(rig.global_basis.inverse()*Vector3.UP).normalized()
-			var ahead:Vector3=(rig.global_basis.inverse()*actor.global_basis.z).normalized()
+			var ahead:Vector3=(rig.global_basis.inverse()*inward).normalized()
 			var angle:=deg_to_rad(lerpf(8.,65.,press))
 			var direction:=vertical*cos(angle)+ahead*sin(angle)
 			if is_finite(late_quick_x):
@@ -423,11 +430,18 @@ func step(delta: float, world_ball: Vector3) -> bool:
 			var fingertips := forearm.slide(palm_normal)
 			if fingertips.length_squared()>.0001: up=up.slerp(fingertips.normalized(),spread).normalized()
 		if press_weight>0.:
-			var forward_local:Vector3=(rig.global_basis.inverse()*actor.global_basis.z).normalized()
+			var forward_local:Vector3=(rig.global_basis.inverse()*inward).normalized()
 			var over_tape:Vector3=(forward_local+Vector3.DOWN*.12).normalized()
 			var pitch_weight:=press_weight*(1.-.35*spread)
 			up=up.slerp(over_tape,pitch_weight).normalized()
 			palm_normal=palm_normal.slerp((Vector3.DOWN-forward_local*.12).normalized(),pitch_weight).normalized()
+			if absf(seal)>.001:
+				var incoming:=world_ball.direction_to(rig.to_global(wrist.origin))
+				# The palm bisects the incoming trajectory and the desired in-court rebound.
+				if incoming.dot(actor.global_basis.z.normalized())<-.15:
+					var normal:=((inward+Vector3.DOWN*.8).normalized()-incoming).normalized()
+					palm_normal=palm_normal.slerp((rig.global_basis.inverse()*normal).normalized(),pitch_weight*.82).normalized()
+					up=up.slide(palm_normal).normalized()
 		var edge := up.cross(palm_normal)*-outward
 		var palm := HandPose.hand_basis(up,edge)*HandPose.hand_basis(finger_direction,across).inverse()*wrist.basis
 		author.set_world_basis(pose,hand_name,wrist.basis.orthonormalized().slerp(palm.orthonormalized(),weight))

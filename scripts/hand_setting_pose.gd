@@ -1,6 +1,11 @@
 extends RefCounted
 
 const CPU_SQUARE_RATE := 2.35
+# Both positions are in the setter's own half-court coordinates.
+static func zone_four_facing(stance:Vector3, left_pin:Vector3) -> Vector3:
+	var direction := (left_pin-stance).slide(Vector3.UP)
+	return direction.normalized() if direction.length_squared()>.01 else Vector3.RIGHT
+
 const CPU_PREP_LEAD := .34
 static func preparation_lead(gap: float, back_set: bool) -> float:
 	var lead := absf(gap)/CPU_SQUARE_RATE+.30

@@ -16,7 +16,7 @@ var game := preload("res://scripts/volleyball_match.gd").new()
 var ground: RefCounted
 var board := Label.new()
 var status := Label.new()
-var footer := HBoxContainer.new()
+var footer := HFlowContainer.new()
 var ref: Node3D
 var whistle := preload("res://scripts/official_whistle.gd").new()
 var authorized := false
@@ -117,8 +117,13 @@ func build_hud() -> void:
 	status.add_theme_font_size_override("font_size",15)
 	var rail:=PanelContainer.new()
 	add_child(rail)
-	rail.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
-	rail.grow_horizontal=Control.GROW_DIRECTION_BOTH
+	rail.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	var fit_rail:=func():
+		var inset:=maxf(12.,(size.x-980.)*.5)
+		rail.offset_left=inset
+		rail.offset_right=-inset
+	fit_rail.call()
+	resized.connect(fit_rail)
 	rail.grow_vertical=Control.GROW_DIRECTION_BEGIN
 	rail.offset_top=-55
 	rail.offset_bottom=-14
@@ -134,10 +139,12 @@ func build_hud() -> void:
 		if game.replay.active:
 			game.replay.playing=false
 			game.replay.seek(game,value))
-	footer.add_theme_constant_override("separation",13)
+	footer.alignment=FlowContainer.ALIGNMENT_CENTER
+	footer.add_theme_constant_override("h_separation",13)
 	add_child(banner)
-	banner.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
-	banner.grow_horizontal=Control.GROW_DIRECTION_BOTH
+	banner.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	banner.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	banner.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	banner.offset_top=65
 	banner.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 	banner.add_theme_font_size_override("font_size",28)
@@ -233,6 +240,10 @@ func refresh_prompts() -> void:
 	if Xbox.keyboard_prompts():
 		var label:=Label.new()
 		label.text=keys
+		label.custom_minimum_size.x=1.
+		label.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+		label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+		label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 		footer.add_child(label)
 
 var greeting_rally := -1
