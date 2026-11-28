@@ -160,7 +160,11 @@ func begin(player: Node3D, held_depth:=0.) -> void:
 	actor.play_action("idle",0.0)
 	actor.animator.seek(0.0,true)
 	for i in takeoff_pose.size():
-		takeoff_target.append(actor.skeleton.get_bone_pose(i))
+		var end_pose:Transform3D=actor.skeleton.get_bone_pose(i)
+		var bone_name:String=actor.skeleton.get_bone_name(i)
+		if bone_name.begins_with("upperarm_") or bone_name.begins_with("lowerarm_") or bone_name.begins_with("hand_"):
+			end_pose.basis=takeoff_pose[i].basis
+		takeoff_target.append(end_pose)
 		actor.skeleton.set_bone_pose(i,takeoff_pose[i])
 
 func read_air_lane(ball_at: Vector3,partners: Array) -> void:
@@ -381,6 +385,11 @@ func step(delta: float, world_ball: Vector3) -> bool:
 		var edge := up.cross(palm_normal)*-outward
 		var palm := HandPose.hand_basis(up,edge)*HandPose.hand_basis(finger_direction,across).inverse()*wrist.basis
 		author.set_world_basis(pose,hand_name,wrist.basis.orthonormalized().slerp(palm.orthonormalized(),weight))
+		if drive_duration>0. and phase<.18:
+			var lift_blend:=smoothstep(0.,.18,phase)
+			for joint:String in [arm,"lowerarm_"+side,hand_name]:
+				var index:=rig.find_bone(joint)
+				pose[index]=takeoff_target[index].interpolate_with(pose[index],lift_blend)
 		var hand: Vector3 = author.point(pose,"hand_"+side)
 		var tip: Vector3 = author.point(pose,"middle_03_"+side)
 		shoulders.append(rig.to_global(shoulder))

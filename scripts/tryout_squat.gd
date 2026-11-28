@@ -73,13 +73,19 @@ func update(actor: Node3D,delta: float,pose_depth := 1., beach_block := false) -
 			var upper:String="upperarm_"+side
 			var shoulder:Vector3=author.point(pose,upper)
 			var hand:String="hand_"+side
-			var low:=Vector3(-.035 if side=="l" else .035,-.47,.14)
 			var lower:String="lowerarm_"+side
 			var arm_id:=rig.find_bone(upper)
 			var elbow_id:=rig.find_bone(lower)
 			var start_arm:Transform3D=pose[arm_id]
 			var start_elbow:Transform3D=pose[elbow_id]
-			author.limb(pose,upper,lower,hand,shoulder+low,Vector3(.20 if side=="l" else -.20,0,-1),1.,147.)
+			var elbow_at:Vector3=author.point(pose,lower)
+			var upper_length:=shoulder.distance_to(elbow_at)
+			var forearm_length:=elbow_at.distance_to(author.point(pose,hand))
+			var outward:=1. if side=="l" else -1.
+			var upper_line:=Vector3(outward*.10,-1.,.04).normalized()
+			var forearm_line:=Vector3(-outward*.16,.35,1.).normalized()
+			var wrist_at:=shoulder+upper_line*upper_length+forearm_line*forearm_length
+			author.limb(pose,upper,lower,hand,wrist_at,upper_line,1.,150.)
 			pose[arm_id]=start_arm.interpolate_with(pose[arm_id],bend)
 			pose[elbow_id]=start_elbow.interpolate_with(pose[elbow_id],bend)
 		var foot: String = "foot_"+side
