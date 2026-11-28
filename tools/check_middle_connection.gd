@@ -27,6 +27,9 @@ func run() -> void:
 			if pending>=0 and game.flight_kind=="spike" and game.last_player==pending: hits+=1
 			pending=-1
 			if game.flight_kind=="set" and game.expected_hitter>=0 and game.expected_hitter==game.front_middle(game.receiving_team) and game.attackers[game.receiving_team].jump.active:
+				var driver=game.attackers[game.receiving_team]
+				assert(driver.inherited_quick_jump and driver.drive_lead_time(.16)<.23)
+				assert(not driver.can_drive_to(Vector3(0,10,0),.16))
 				pending=game.expected_hitter
 				attempts+=1
 				print("Quick ",attempts," completed ",hits," arrival ",game.attackers[game.receiving_team].pin_arrival)

@@ -1114,6 +1114,7 @@ func launch(point: Vector3, motion: Vector3, kind: String, from: int, spin_rate 
 			var unused=driver.jump
 			quick_actor[side]=-1
 			driver.jump=set_jumps[hitter]
+			driver.inherited_quick_jump=true
 			set_jumps[hitter]=unused
 			driver.takeoff_yaw=players[hitter].rotation.y
 			driver.approach_intercept=frame.to_local(set_pin)

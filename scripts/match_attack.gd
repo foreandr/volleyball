@@ -10,6 +10,7 @@ var feed_origin := Vector3.ZERO
 var contact_offset := Vector3.ZERO
 var contact_phase := 0.
 var live_swing_phase := 0.
+var inherited_quick_jump := false
 var chase_late_sets := false
 var decoy_swing := false
 var rally_shot := "spike"
@@ -96,6 +97,7 @@ func blend_ground_stride(delta: float) -> void:
 		rig.set_bone_pose(index,previous.interpolate_with(rig.get_bone_pose(index),weight))
 
 func start_set(actor: Node3D, origin: Vector3, velocity: Vector3, target: Vector3, shot: Vector3, age: float, held: bool) -> void:
+	inherited_quick_jump=false
 	setter = actor
 	stride_pose.clear()
 	if chase_late_sets and actor.has_meta("approach_velocity"): capture_ground_stride()
@@ -251,13 +253,18 @@ func keeps_strike_palm_presented() -> bool:
 	return true
 
 func can_drive_to(offset: Vector3,duration: float) -> bool:
+	if inherited_quick_jump:
+		var phase:=clampf((jump.elapsed-jump.load_duration()+duration)/jump.air_time,0.,1.)
+		var at_contact:float=jump.start.y+4.*jump.height*jump.COURT_VERTICAL_SCALE*phase*(1.-phase)
+		var vertical_reach:float=SWING_CONTACT_HEIGHT*setter.height_cm/180.+at_contact-setter.position.y
+		return offset.slide(Vector3.UP).length()<=SWING_REACH and offset.y<=vertical_reach
 	if not (chase_late_sets or timed_human): return super.can_drive_to(offset,duration)
 	var reach: float=SWING_CONTACT_HEIGHT*setter.height_cm/180.
 	var available_rise := maxf(0.,jump.start.y+jump.height-setter.position.y)
 	return offset.slide(Vector3.UP).length()<=SWING_REACH and offset.y<=reach+minf(.60,available_rise)+.18
 
 func drive_lead_time(duration: float) -> float:
-	return duration+.055 if chase_late_sets else super.drive_lead_time(duration)
+	return duration+.055 if chase_late_sets or inherited_quick_jump else super.drive_lead_time(duration)
 
 func spike_assist_radius() -> float:
 	return PALM_RADIUS if chase_late_sets else .19
