@@ -1030,6 +1030,22 @@ var career_involvement:=0
 var career_errors:=0
 var career_contributed:=false
 
+var net_alert_flight := -1
+var external_point_reset := false
+
+func report_net_attack(reason:String) -> void:
+	if flight_kind!="spike" or last_player<0 or net_alert_flight==flight_number: return
+	net_alert_flight=flight_number
+	var jersey:Variant=players[last_player].get_meta("school_jersey_number",last_player)
+	var details:Dictionary={"reason":reason,"ball":Trace.json_value(ball.global_position),"flight":flight_kind,
+		"net":net_hit.get("kind",""),"time":match_clock,"jersey":jersey,
+		"decision":attack_decision,"recorded_at":Time.get_datetime_string_from_system()}
+	var clip_path:=GameRecording.save_net_attack_alert(details)
+	details["clip"]=ProjectSettings.globalize_path(clip_path) if not clip_path.is_empty() else ""
+	GameRecording.show_net_attack_alert(jersey,reason)
+	trace.write("net_attack_alert",match_clock,details,true)
+	push_warning("Net attack alert · #%s · %s"%[jersey,reason])
+
 func award(side: int, reason: String) -> void:
 	if phase != Phase.LIVE: return
 	if attacking_31_side==side: scored_31[side]+=1
@@ -1054,17 +1070,7 @@ func award(side: int, reason: String) -> void:
 	last_point = {"reason":reason,"ball":Trace.json_value(ball.global_position),"flight":flight_kind,
 		"net":net_hit.get("kind",""),"winner":side,"time":match_clock}
 	trace.write("point",match_clock,last_point,true)
-	if flight_kind=="spike" and reason in ["Into the net","Under the net"]:
-		var jersey:Variant=players[last_player].get_meta("school_jersey_number",last_player)
-		var details:Dictionary=last_point.duplicate(true)
-		details["jersey"]=jersey
-		details["decision"]=attack_decision
-		details["recorded_at"]=Time.get_datetime_string_from_system()
-		var clip_path:=GameRecording.save_net_attack_alert(details)
-		details["clip"]=ProjectSettings.globalize_path(clip_path) if not clip_path.is_empty() else ""
-		GameRecording.show_net_attack_alert(jersey,reason)
-		trace.write("net_attack_alert",match_clock,details,true)
-		push_warning("Net attack alert · #%s · %s"%[jersey,reason])
+	if reason in ["Into the net","Under the net"]: report_net_attack(reason)
 	for driver in attackers:
 		if driver.enabled and driver.stage == driver.Stage.SET:
 			driver.stage = driver.Stage.MISS
@@ -2476,7 +2482,11 @@ func tick_receive(delta: float, previous: float) -> void:
 			var safe_lane := pin_outlet or cpu_spike_has_lane(forecast)
 			var approach_window := 0.28 if last_set_apex < 3.65 else 0.54
 			if safe_lane and driver.enabled and remaining > approach_window:
+				var runner:=players[hitter]
+				var before:=runner.position
 				prepare_cpu_approach(hitter,driver,delta)
+				if six_on_six() and absf(driver.rally_set_target.x)>2.5:
+					driver.apply_run_draw(remaining,(runner.position-before)/maxf(delta,.001),delta)
 				return
 			if six_on_six() and safe_lane and driver.enabled and not driver.approach_jump_queued and remaining>0. and not recoveries.has(hitter):
 				# Check every reachable approach before switching to a save.
@@ -3155,13 +3165,15 @@ func prepare_cpu_approach(hitter: int, driver: Node3D, delta: float) -> void:
 		var plant:Vector3=driver.spike_body_target(pin)
 		staging.x=plant.x+.42
 		staging.z=plant.z-1.48
-	if six_on_six() and pin.x>2.5 and last_set_apex>=4.95 and actor.position.x>4.45 and gap>1.55:
+	var outside_runway:=absf(actor.position.x)>4.45 and signf(actor.position.x)==signf(pin.x)
+	var early_lefty:bool=pin.x< -2.5 and actor.mirror_animation
+	if six_on_six() and outside_runway and gap>1.55 and ((pin.x>2.5 and last_set_apex>=4.95) or early_lefty):
 		# An outside hitter with a runway can start in as soon as the set is read.
 		# Continuing to stage outside spends the first half of the set moving away.
 		var plant:Vector3=driver.spike_body_target(pin)
 		var inward:Vector3=(plant-actor.position).slide(Vector3.UP).normalized()
 		var runway:float=(plant-actor.position).slide(Vector3.UP).length()
-		if time_left<=.98 and runway<=2.55:
+		if time_left<=(.86 if early_lefty else .98) and runway<=2.55:
 			var stride:Vector3=court_velocities.get(hitter,Vector3.ZERO)
 			if stride.dot(inward)>1.4: driver.queue_run_plant(stride)
 			if not driver.approach_jump_queued: driver.try_queue_approach(false)
@@ -3182,7 +3194,7 @@ func prepare_cpu_approach(hitter: int, driver: Node3D, delta: float) -> void:
 		return
 	if not driver.approach_space_held:
 		var run_up_gap := (staging-actor.position).slide(Vector3.UP).length()
-		var commit_time:=.80 if six_on_six() and pin.x>2.5 else .68
+		var commit_time:=.80 if six_on_six() and absf(pin.x)>2.5 else .68
 		if (time_left <= 0.88 and gap <= 2.40 and run_up_gap <= 0.35) or time_left <= commit_time:
 			# Use the same shortest feasible approach as the player input path.
 			driver.try_queue_approach(false)
@@ -4059,13 +4071,17 @@ func step_match(delta: float, controls: RefCounted) -> void:
 		if bounce_end > 0.0:
 			var time := minf(dead_age-bounce_start,bounce_end)
 			ball.global_position = bounce_origin+bounce_velocity*time+Vector3.DOWN*0.5*Flight.GRAVITY*time*time
+			if external_point_reset and time>=bounce_end:
+				var second_lift:=bounce_velocity.y*.44
+				var second_time:=clampf(dead_age-bounce_start-bounce_end,0.,2.*second_lift/Flight.GRAVITY)
+				ball.global_position+=bounce_velocity.slide(Vector3.UP)*.55*second_time+Vector3.UP*(second_lift*second_time-.5*Flight.GRAVITY*second_time*second_time)
 			if time >= bounce_end and dead_age-delta < bounce_start+bounce_end:
 				play_floor_impact(absf(bounce_velocity.y-Flight.GRAVITY*bounce_end),true)
-		if phase == Phase.DEAD and (not is_finite(dead_flight_from) or bounce_end > 0.0) and dead_age >= maxf(0.85,bounce_start+bounce_end+0.15):
+		if not external_point_reset and phase == Phase.DEAD and (not is_finite(dead_flight_from) or bounce_end > 0.0) and dead_age >= maxf(0.85,bounce_start+bounce_end+0.15):
 			var settling := false
 			for index in players.size(): settling = settling or owns_action(index)
 			if not settling or dead_age >= 1.55: begin_point()
-		elif phase == Phase.FINISHED and auto_rematch and spectator and dead_age >= maxf(3.0,bounce_start+bounce_end+0.35):
+		elif not external_point_reset and phase == Phase.FINISHED and auto_rematch and spectator and dead_age >= maxf(3.0,bounce_start+bounce_end+0.35):
 			reset_match()
 		return
 	if phase == Phase.READY:
@@ -4098,6 +4114,8 @@ func step_match(delta: float, controls: RefCounted) -> void:
 	ball.global_position = path_point(minf(elapsed,flight_end()))
 	if not touched_tape and not net_hit.is_empty() and elapsed >= float(net_hit.time):
 		touched_tape = true
+		if not net_hit.get("rollover",false):
+			report_net_attack("Under the net" if net_hit.kind=="under" else "Into the net")
 		if net_hit.kind == "under":
 			award(1-team(last_player),"Under the net")
 			return

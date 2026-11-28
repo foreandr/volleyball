@@ -52,7 +52,10 @@ func run() -> void:
 			page._process(4.)
 			assert(g.feed_number==before)
 			page.show_settings(false)
-			page._process(3.1)
+			# Let the bounce play before the lab starts a fresh serve.
+			for frame in 420:
+				page._process(1./60.)
+				if g.feed_number>before: break
 			assert(g.feed_number>before and not g.replay.previous.is_empty())
 	print("PASS 20 tempo cells, all-off guard, saved settings, right-side-only repeat and replay/placement preserves the rally")
 	var mix:={"left":1,"middle":0,"pipe":3,"right":-1}

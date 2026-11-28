@@ -19,7 +19,6 @@ var result_label:=Label.new()
 var decision_label:=Label.new()
 var decision_toggle:=CheckButton.new()
 var panel:=PanelContainer.new()
-var between_feeds:=0.
 var replay_button:=Button.new()
 var edit_button:=Button.new()
 var note:=Label.new()
@@ -41,6 +40,7 @@ func _ready() -> void:
 	StorySession.career_scrimmage=false
 	game.free()
 	game=ScenarioMatch.new()
+	game.external_point_reset=true
 	game.roster.path=roster_path
 	StorySession.offline_roster=game.roster.load_starters(CareerSession.profile())
 	super._ready()
@@ -205,7 +205,6 @@ func start_scenario() -> void:
 func run_feed(repeating:bool) -> void:
 	formation_spots.clear()
 	game.start_attack_plan(setup.defense,setup.offense,setup.attacks,setup.in_system,repeating)
-	between_feeds=0.
 	result_label.text="Waiting for set"
 	greeting_rally=game.rallies
 	signaled_rally=game.rallies
@@ -280,9 +279,10 @@ func _process(delta:float) -> void:
 		ReplayControls.move_camera(camera,-1,delta)
 	if not running or editing or settings.visible: return
 	if not game.replay.active and game.phase in [game.Phase.DEAD,game.Phase.FINISHED]:
-		if setup.get("repeat",false):
-			between_feeds+=delta
-			if between_feeds>=3.: run_feed(true)
+		# Keep the physical flight and bounce running before the next serve.
+		var holding:bool=(is_finite(game.dead_flight_from) and game.bounce_end<=0.) or game.dead_age<game.bounce_start+1.5
+		if holding: game.tick_match(delta,ground)
+		elif setup.get("repeat",false): run_feed(true)
 		elif note.text.is_empty(): note.text="Point complete"
 		update_decision_label()
 		return

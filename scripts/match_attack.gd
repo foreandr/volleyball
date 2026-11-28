@@ -25,12 +25,25 @@ var spike_strength := 1.0
 # Jog_Fwd is a loop. The leading ankle reaches support at 0.023 s and half a cycle later.
 const JOG_LEFT_PLANT_PHASE := 0.025
 var run_into_plant := false
+var run_draw_weight := 0.
 var run_entry_velocity := Vector3.ZERO
 
 func run_left_plant_distance() -> float:
 	var animator: AnimationPlayer = setter.animator
 	var length := animator.current_animation_length
 	return fposmod(JOG_LEFT_PLANT_PHASE*length-animator.current_animation_position,length)
+
+func apply_run_draw(time_left:float, velocity:Vector3, delta:float) -> void:
+	var weight:=.82*(1.-smoothstep(.77,1.30,time_left)) if velocity.z>.22 else 0.
+	run_draw_weight=move_toward(run_draw_weight,weight,delta*5.0)
+	if run_draw_weight<.001: return
+	var rig:Skeleton3D=setter.skeleton
+	var pose:Array[Transform3D]=[]
+	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
+	SetterJump.apply_attack_draw(setter,pose,run_draw_weight)
+	for joint:String in ["upperarm_l","lowerarm_l","upperarm_r","lowerarm_r"]:
+		var bone:=rig.find_bone(joint)
+		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
 
 func record_run_footfalls(before: float, after: float, length: float) -> bool:
 	var advance := fposmod(after-before,length)
@@ -60,6 +73,7 @@ func begin_attack_jump(direction: Vector2, plant_time := 0.36, jump_height := 0.
 	if chase_late_sets and setter.has_meta("approach_velocity"):
 		capture_ground_stride()
 	super.begin_attack_jump(direction,plant_time,jump_height,tempo)
+	jump.entry_backswing=run_draw_weight
 	if run_into_plant and jump.active:
 		setter.animator.speed_scale = 1.0
 		jump.carry_run_into_plant(run_entry_velocity)
@@ -122,6 +136,7 @@ func start_set(actor: Node3D, origin: Vector3, velocity: Vector3, target: Vector
 	camp_swing.reach_assist=Vector3.ZERO
 	bump.setter = actor
 	run_into_plant = false
+	run_draw_weight=0.
 	run_entry_velocity = Vector3.ZERO
 	var saved := actor.transform
 	super.reset_feed()

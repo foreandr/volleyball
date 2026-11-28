@@ -17,6 +17,7 @@ var load_bend_extra := 0.0
 var reserve_two_step_runway := false
 var attack_arm_lift := false
 var attack_backswing := false
+var entry_backswing := 0.
 var load_arm_extra := 0.0
 var plant_limit := INF
 var front_limit := 2.5
@@ -530,17 +531,11 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 			goal.x = lerpf(wrist.x,center.x,.32)
 			var elbow_axis: Vector3 = author.point(pose,"lowerarm_"+side)-author.point(pose,"upperarm_"+side)
 			author.limb(pose,"upperarm_"+side,"lowerarm_"+side,hand,goal,elbow_axis.normalized(),gather)
-	if attack_backswing and backswing_peak>.001:
+	var draw_weight:=maxf(backswing_peak,entry_backswing*(1.-smoothstep(0.,.34,elapsed/maxf(.001,load_duration()))))
+	if attack_backswing and approach_plant and not setting_jump and draw_weight>.001:
 		# Finish the ground draw after the lead-step clip so it survives the run-in handoff.
 		# This pose is solved before the whole rig mirrors a left-handed hitter.
-		for side in ["l","r"]:
-			var upper_arm: String = "upperarm_"+side
-			var shoulder:Vector3=author.point(pose,upper_arm)
-			var outward:=1. if side=="l" else -1.
-			var behind:=actor.global_basis.z.normalized()*-.53
-			var outside:=rig.global_basis.x.normalized()*(outward*.12)
-			var goal:=shoulder+rig.global_basis.inverse()*(behind+outside+Vector3.DOWN*.23)
-			author.limb(pose,upper_arm,"lowerarm_"+side,"hand_"+side,goal,Vector3(outward,-.28,-.30),backswing_peak,165.,true)
+		apply_attack_draw(actor,pose,draw_weight)
 	rig.set_bone_pose_position(pelvis,pose[pelvis].origin)
 	var entry := 1.0-smoothstep(0.0,0.085,elapsed)
 	for bone in rig.get_bone_count():
@@ -548,3 +543,16 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 		if entry > 0.0 and entry_leg_rotations.has(bone):
 			rotation = rotation.slerp(entry_leg_rotations[bone],entry)
 		rig.set_bone_pose_rotation(bone,rotation)
+
+
+static func apply_attack_draw(actor:Node3D,pose:Array,weight:float) -> void:
+	var rig:Skeleton3D=actor.skeleton
+	var author:RefCounted=actor.get_pose_author()
+	var behind:=actor.global_basis.z.normalized()*-.53
+	for side:String in ["l","r"]:
+		var upper_arm:="upperarm_"+side
+		var shoulder:Vector3=author.point(pose,upper_arm)
+		var outward:=1. if side=="l" else -1.
+		var outside:=rig.global_basis.x.normalized()*(outward*.12)
+		var goal:=shoulder+rig.global_basis.inverse()*(behind+outside+Vector3.DOWN*.23)
+		author.limb(pose,upper_arm,"lowerarm_"+side,"hand_"+side,goal,Vector3(outward,-.28,-.30),weight,165.,true)
