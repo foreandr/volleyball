@@ -237,26 +237,29 @@ func exit_lesson_practice() -> void:
 	practice_stage=""
 	practice_progress=0
 
-func open_scrimmage() -> void:
-	if not practice_stage.is_empty():
-		MenuPresentation.load_scene("res://scenes/story.tscn")
-		return
+const SCRIMMAGE_ROLES := ["Setter","P1","P2","Opposite","M1","M2","Libero"]
+
+func open_scrimmage(role:String,teammates:Array) -> void:
+	if role not in SCRIMMAGE_ROLES or teammates.size()!=11 or not practice_stage.is_empty(): return
+	if data.get_value(key(),"serving_zones_156",[])!=[1,5,6]: return
 	tournament=""
 	StorySession.career_scrimmage=true
 	StorySession.offline_controller=0
 	StorySession.offline_size=6
 	StorySession.offline_away_size=6
 	var athlete:=profile().duplicate(true)
-	if athlete.get("position","Unassigned")=="Unassigned": athlete.position="P1"
+	athlete.position=role
+	var member:=0
 	StorySession.offline_roster.clear()
 	for side in 2:
 		var roles:=["Setter","P1","P2","M1","M2","Opposite"]
 		if side==0:
 			roles.erase(athlete.position if athlete.position in roles else "M2")
 			StorySession.offline_roster.append(athlete)
-		for role in roles:
-			var teammate:=Profile.generate()
-			teammate.position=role
+		for assignment in roles:
+			var teammate:Dictionary=teammates[member].duplicate(true)
+			member+=1
+			teammate.position=assignment
 			StorySession.offline_roster.append(teammate)
 	MenuPresentation.load_scene("res://scenes/offline_match.tscn")
 
@@ -273,7 +276,7 @@ func checkpoint(at: String, rep: int) -> bool:
 		practice_progress=rep
 		return true
 	var completed:Array=data.get_value(key(),"completed_opening_drills",[])
-	var cleared_drill:={"defense_lesson":"blocking_lesson","serving_lesson":"defense_lesson","scrimmage":"serving_lesson","blocking_lesson":"hitting_lesson","hitting_lesson":"setting_lesson","hitting_lesson_complete":"hitting_lesson","setting_lesson":"moving_reception","setting_lesson_complete":"setting_lesson","pepper":"footwork","pepper_complete":"pepper","moving_reception":"pepper","moving_reception_complete":"moving_reception"}
+	var cleared_drill:={"defense_lesson":"blocking_lesson","serving_lesson":"defense_lesson","serving_complete":"serving_lesson","blocking_lesson":"hitting_lesson","hitting_lesson":"setting_lesson","hitting_lesson_complete":"hitting_lesson","setting_lesson":"moving_reception","setting_lesson_complete":"setting_lesson","pepper":"footwork","pepper_complete":"pepper","moving_reception":"pepper","moving_reception_complete":"moving_reception"}
 	if at=="position" and stage() in ["blocking_lesson","hitting_lesson_complete"]:
 		cleared_drill[at]="blocking_lesson"
 	if at in cleared_drill and cleared_drill[at] not in completed:

@@ -22,7 +22,8 @@ const SERVE_EARLY := -.26
 const SERVE_LATE := .075
 const SERVE_PERFECT := .055
 var toss_airborne := false
-var toss_style := 2
+const SPIN_SERVE := 0
+var toss_style := SPIN_SERVE
 var release_time := INF
 const SERVE_HOLD_SECONDS := .25
 var pending_serve := -1
@@ -466,7 +467,7 @@ func next_serve() -> void:
 	pending_serve=-1
 	serve_clock=0.
 	release_time=INF
-	var ready=serves[2]
+	var ready=serves[toss_style]
 	ready.serve_start=serve_station
 	ready.reset()
 	ball.position=ready.ball.position
@@ -832,12 +833,13 @@ func _process(delta: float) -> void:
 				drop_net_time=0.
 				roll_time=-1.
 				flight_age=0.
-				coach_react("miss")
 				phase="serve_miss"
 				if surface.normal.y>.8 and ball.position.y<.26 and on_receiving_court(ball.position):
 					receive_read.beaten(ball.position)
 					show_service_ace()
-				else: serve_out()
+				else:
+					coach_react("miss")
+					serve_out()
 				trace("serve_gym_contact",{"normal":str(surface.normal),"point":str(ball.position)})
 				return
 			if phase=="serve_flight" and flight_age>shot.planned_duration+.45: next_serve()

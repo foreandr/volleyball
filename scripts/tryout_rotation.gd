@@ -923,6 +923,8 @@ func move_actor(actor: Node3D,step: Vector3) -> Vector3:
 
 const HUDDLE_CENTER := Vector3(0,.04,.35)
 var circle: Array = []
+var huddle_radius := 1.02
+var huddle_speech := "Good work. Give your hitters time to approach. Bring it in."
 var debrief_started := false
 var settle_time := 0.
 var huddle_planted := false
@@ -1104,7 +1106,7 @@ func huddle(dt: float) -> void:
 		actor.animator.advance(dt)
 		var angle: float = huddle_slots[actor]
 		var radial := Vector3(sin(angle),0,cos(angle))
-		var spot := HUDDLE_CENTER + radial*1.28
+		var spot := HUDDLE_CENTER + radial*(huddle_radius+.26)
 		var outer := HUDDLE_CENTER + radial*1.95
 		if not approach_reached.has(actor):
 			if actor.position.distance_to(outer) > 0.35 and actor.position.distance_to(spot) > 0.55:
@@ -1120,7 +1122,7 @@ func huddle(dt: float) -> void:
 		# Keep the entrance wide until the last teammate has arrived.
 		# Then close the ring together, with each player staying in their slot.
 		if settled_positions.size() == circle.size():
-			var close_spot := HUDDLE_CENTER + radial*1.02
+			var close_spot := HUDDLE_CENTER + radial*huddle_radius
 			var step := (close_spot-actor.position).slide(Vector3.UP).limit_length(dt*0.52)
 			actor.position += step
 			if actor.position.distance_to(close_spot) > 0.06: facing_center = false
@@ -1271,7 +1273,7 @@ func huddle(dt: float) -> void:
 		settle_time=0.
 	if present==circle.size() and not debrief_started:
 		debrief_started=true
-		game.say(game.coach, "Good work. Give your hitters time to approach. Bring it in.", 5.0)
+		game.say(game.coach,huddle_speech,5.)
 
 func prepare_pointing_poses() -> void:
 	var rig: Skeleton3D=game.coach.skeleton

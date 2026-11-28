@@ -54,7 +54,10 @@ func next_serve() -> void:
 		if balls==5:
 			if CareerSession.checkpoint("serving_lesson",0):
 				leaving_court=true
-				MenuPresentation.load_scene.call_deferred("res://scenes/career_serving_lesson.tscn")
+				if StorySession.game_options.get_value("presentation","coach_feedback",true):
+					say(coach,"Good work. Baseline next. Serve to one.",1.65)
+				title.text="Defense complete"
+				get_tree().create_timer(1.7,false).timeout.connect(func(): MenuPresentation.load_scene("res://scenes/career_serving_lesson.tscn"))
 			return
 		CareerSession.checkpoint("defense_lesson",balls)
 	feed_slot=replay_rally%5 if watching else balls

@@ -100,12 +100,47 @@ func run():
 		if s.phase=="serve_flight":
 			served=true
 			break
-	assert(served and s.serves_in==0)
+	assert(served and s.serves_in==0 and s.toss_style==s.SPIN_SERVE and s.spin_selection==0)
 	s.enter_turn()
 	s.serve_out()
 	assert(s.serves_in==0)
-	for i in 5: s.show_service_ace()
+	assert(s.coach.is_visible_in_tree())
+	var crowds=s.get_children().filter(func(node):return node.get_script()==preload("res://scripts/practice_ambience.gd"))
+	assert(crowds.size()==1 and crowds[0].seats.size()>0)
+	s.ball.position=Vector3(0.,.15,s.BallNet.NET_Z+4.5)
+	s.show_service_ace()
+	assert(s.serves_in==0)
+	for zone in [1,5,6]:
+		assert(s.target_number()==zone)
+		var before:int=s.serves_in
+		s.next_serve()
+		s.destination=s.target_center()
+		s.handle_serve_button(s.SPIN_SERVE,true)
+		for tick in 480:
+			await process_frame
+			if s.phase=="serve_toss" and not is_finite(s.release_time) and s.serve_meter_error()>=-.01:
+				s.handle_serve_button(s.SPIN_SERVE,false)
+			if s.serves_in>before: break
+		assert(s.serves_in==before+1,"Timed spin serve should land in called zone %d"%zone)
+	for tick in 150: await process_frame
+	assert(current_scene==s and c.stage()=="serving_complete" and s.hits==[1,5,6])
+	s.save_and_leave_drill()
+	assert(await wait_loaded("res://scenes/story.tscn"))
+	current_scene.resume()
+	assert(await wait_loaded("res://scenes/career_serving_lesson.tscn"))
+	s=current_scene
+	for tick in 1500:
+		await process_frame
+		if is_instance_valid(s.role_panel): break
+	assert(s.rotation_drill.huddle_planted and s.rotation_drill.circle.size()==13)
+	assert(is_instance_valid(s.role_panel) and s.start_match.disabled)
+	assert(s.teammates.size()==11)
+	s.role_picker.select(7)
+	s.role_picker.item_selected.emit(7)
+	assert(not s.start_match.disabled)
+	s.start_match.pressed.emit()
 	assert(await wait_loaded("res://scenes/offline_match.tscn"))
+	assert(root.get_node("StorySession").offline_roster[0].position=="Libero")
 	var g=current_scene.game
 	assert(g.players.size()==12 and g.team_size==6 and g.away_size==6 and g.win_score==5)
 	for side in 2:
@@ -113,5 +148,5 @@ func run():
 		var designated:int=g.choose_setter(side,passer)
 		assert(root.get_node("StorySession").offline_roster[designated].position=="Setter")
 		assert(g.choose_setter(side,designated)!=designated)
-	print("PASS: B back, six lessons, save/leave/resume, isolated practice, five feeds, five serves, 6v6 with setters and backups")
+	print("PASS: B back, six lessons, save/leave/resume, isolated practice, five feeds, visible coach and bench, three called-zone serves, 6v6 with setters and backups")
 	quit()

@@ -489,7 +489,7 @@ var loading_progress: ProgressBar
 var fact_started_ms := 0
 var dismiss_fact := false
 
-func show_loading(destination: String) -> void:
+func show_loading(destination: String, court_fade:=false) -> void:
 	fact_started_ms = Time.get_ticks_msec()
 	dismiss_fact = false
 	loading_screen = ColorRect.new()
@@ -498,6 +498,9 @@ func show_loading(destination: String) -> void:
 	loading_screen.process_mode = Node.PROCESS_MODE_ALWAYS
 	overlay.add_child(loading_screen)
 	loading_screen.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	if court_fade:
+		loading_screen.color=Color.BLACK
+		return
 	backdrop(loading_screen,true)
 	var center := CenterContainer.new()
 	loading_screen.add_child(center)
@@ -601,7 +604,10 @@ func load_scene(path: String) -> void:
 		if path!=lesson_path: path="res://scenes/story.tscn"
 	var key := path.get_file().get_basename()
 	var names := {"offline_match":"Match court","main":"Main menu","story":"My Career","drills":"Training camp","create":"Create player","setter_tryout":"Setter tryout","story_animations":"Court session"}
-	show_loading(names.get(key,key.capitalize()))
+	var current:=get_tree().current_scene
+	var chapters:Array=CareerSession.LESSON_SCENES.values()
+	var court_fade:=current!=null and current.scene_file_path.get_file().get_basename() in chapters and (key in chapters or key=="offline_match")
+	show_loading(names.get(key,key.capitalize()),court_fade)
 	var error := ResourceLoader.load_threaded_request(path,"PackedScene")
 	await fade_loading(1.,.18)
 	await painted()
@@ -609,13 +615,13 @@ func load_scene(path: String) -> void:
 		var progress := []
 		var status := ResourceLoader.load_threaded_get_status(path,progress)
 		while status == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
-			if progress.size():
+			if progress.size() and not court_fade:
 				loading_progress.indeterminate=false
 				loading_progress.value=progress[0]*100.
 			await get_tree().process_frame
 			status = ResourceLoader.load_threaded_get_status(path,progress)
 		if status == ResourceLoader.THREAD_LOAD_LOADED:
-			loading_detail.text = "Preparing court…" if key in ["setter_tryout","story_animations","court"] else "Opening menu…"
+			if not court_fade: loading_detail.text = "Preparing court…" if key in ["setter_tryout","story_animations","court"] else "Opening menu…"
 			await painted()
 			error = get_tree().change_scene_to_packed(ResourceLoader.load_threaded_get(path))
 			if error == OK:
@@ -624,6 +630,6 @@ func load_scene(path: String) -> void:
 		else: error = ERR_CANT_OPEN
 	if error != OK:
 		push_error("Could not open "+path+": "+error_string(error))
-		loading_detail.text = "Could not open this destination"
+		if not court_fade: loading_detail.text = "Could not open this destination"
 		await get_tree().create_timer(1.5).timeout
-	close_loading(key not in ["offline_match","career_setting_lesson","career_hitting_lesson"])
+	close_loading(not court_fade and key not in ["offline_match","career_setting_lesson","career_hitting_lesson"])

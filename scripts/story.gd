@@ -207,8 +207,7 @@ func resume() -> void:
 		"setting_lesson_complete","hitting_lesson": MenuPresentation.load_scene("res://scenes/career_hitting_lesson.tscn")
 		"hitting_lesson_complete","blocking_lesson": MenuPresentation.load_scene("res://scenes/career_blocking_lesson.tscn")
 		"position","defense_lesson": MenuPresentation.load_scene("res://scenes/defense_lesson.tscn")
-		"serving_lesson": MenuPresentation.load_scene("res://scenes/career_serving_lesson.tscn")
-		"scrimmage": CareerSession.open_scrimmage()
+		"scrimmage","serving_complete","serving_lesson": MenuPresentation.load_scene("res://scenes/career_serving_lesson.tscn")
 		"after_tryout": after_tryout()
 		_: MenuPresentation.load_scene(CareerSession.CHAPTER)
 

@@ -445,8 +445,16 @@ func show_key(index: int, caption: String) -> void:
 func server_index() -> int:
 	return first_on(service_team)+server_slot[service_team]
 
+func formation_slot(index:int) -> int:
+	if exhibition and StorySession.career_scrimmage and roster_active:
+		var role:String=StorySession.offline_roster[index].get("position","")
+		var slot:=["Setter","P2","M2","Opposite","P1","M1"].find(role)
+		if role=="Libero": return 2
+		if slot>=0: return slot
+	return index-first_on(team(index))
+
 func starting_lane(index: int) -> float:
-	var lane: float = [-1.0,1.0,0.0,-1.0,1.0,0.0][(index-first_on(team(index)))]
+	var lane: float = [-1.0,1.0,0.0,-1.0,1.0,0.0][formation_slot(index)]
 	return -lane if team(index) == 0 else lane
 
 func reset_match() -> void:
@@ -476,6 +484,10 @@ func reset_match() -> void:
 	score = [0,0]
 	service_team = 0
 	server_slot = [0,0]
+	if exhibition and StorySession.career_scrimmage and roster_active:
+		for side in 2:
+			for index in range(first_on(side),first_on(side)+count_for(side)):
+				if formation_slot(index)==0: server_slot[side]=index-first_on(side)
 	rallies = 0
 	begin_point()
 
@@ -505,7 +517,7 @@ func begin_point() -> void:
 	last_set_apex = 0.0
 	for index in players.size():
 		var actor := players[index]
-		var slot := (index-first_on(team(index)))
+		var slot := formation_slot(index)
 		var front_row:=slot>=3 or (count_for(team(index))==3 and slot==2)
 		actor.position=Vector3(2.1*starting_lane(index),.04,.70) if front_row else Vector3(GroundMovement.BACK_ROW_SPACING*starting_lane(index),.04,GroundMovement.BACK_ROW_DEPTH)
 		if team(index)!=service_team and not is_human(index):

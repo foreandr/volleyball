@@ -6,3 +6,4 @@
 [node name="ServingLesson" instance=ExtResource("1")]
 script = ExtResource("2")
 solo_setting = true
+populated_practice = true
