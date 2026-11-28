@@ -1831,7 +1831,7 @@ func settle_point(delta: float) -> void:
 	advance_recoveries(delta)
 	advance_idle_players(delta)
 
-func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_facing := Vector3.INF, chase := false, turn_to_travel := false, turn_rate := 12.5, paced_run := false, run_cadence := 0.0, shuffle_pace := 0.) -> void:
+func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_facing := Vector3.INF, chase := false, turn_to_travel := false, turn_rate := 12.5, paced_run := false, run_cadence := 0.0, shuffle_pace := 0., outside_direction := 0., shoulder_x := 0.) -> void:
 	if recoveries.has(index) or owns_action(index,true): return
 	var actor := players[index]
 	var is_server: bool = not drill_set_pin.is_finite() and serve.player == actor
@@ -1886,6 +1886,10 @@ func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_f
 		acceleration*=2.
 	if roster_active and exhibition: acceleration*=lerpf(.82,1.15,float(actor.attributes.Athleticism)/100.)
 	velocity=velocity.move_toward(heading*minf(pace,sqrt(2.*acceleration*distance)),acceleration*delta)
+	if outside_direction!=0. and delta>0.:
+		# Momentum may carry the pin inward even after it starts shuffling outward.
+		var room:=maxf(0.,outside_direction*(actor.position.x-shoulder_x))
+		velocity.x=outside_direction*maxf(outside_direction*velocity.x,-room/delta)
 	movement_times[index]=match_clock
 	court_velocities[index]=velocity
 	var world_step := frames[team(index)].global_basis*(velocity*delta).limit_length(distance)
@@ -3333,13 +3337,25 @@ func position_defense(delta: float) -> void:
 			var timing := remaining if attack_ready else second_ball_eta+0.035
 			start_block(near,timing,dump_ready)
 	if six_on_six():
+		var middle:=front_middle(defense_side)
+		var quick_lane:=shadow_x if shadow_middle==middle else INF
+		if tracking_set and expected_hitter==front_middle(hitter_side):
+			quick_lane=frame.to_local(threat).x
 		for i in range(first,first+6):
 			if i==near or is_human(i) or blocks.has(i) or set_jumps[i].active: continue
 			var home:=formation_home(i,true)
 			if i==shadow_middle: home.x=shadow_x
 			if i==deep and tracking_set:
 				home=home.move_toward(Vector3(cover,.04,depth),.9)
-			move_cpu(i,frame.to_global(home),delta,5.3,toward_incoming(i,players[i].global_position))
+			var flank:=0.
+			var shoulder_x:=0.
+			if is_finite(quick_lane) and i!=middle and Formation.zone(lineup_role(i),setter_zones[defense_side]) in [2,3,4]:
+				# Stay on the outside shoulder as the middle tracks and lands from a quick.
+				flank=signf(formation_home(i,true).x-formation_home(middle,true).x)
+				if is_zero_approx(flank): flank=signf(players[i].position.x-quick_lane)
+				shoulder_x=flank*(maxf(flank*quick_lane,flank*players[middle].position.x)+.68)
+				if not is_zero_approx(flank): home.x=clampf(flank*maxf(flank*home.x,flank*shoulder_x),-4.15,4.15)
+			move_cpu(i,frame.to_global(home),delta,5.3,toward_incoming(i,players[i].global_position),false,false,12.5,false,0.,4.7 if flank!=0. else 0.,flank,shoulder_x)
 		return
 	if not is_human(deep) and not blocks.has(deep) and not set_jumps[deep].active:
 		move_cpu(deep,frame.to_global(Vector3(clampf(cover,-4.05,4.05),0.04,depth)),delta)

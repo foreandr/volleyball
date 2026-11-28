@@ -403,6 +403,7 @@ func run() -> void:
 		Input.flush_buffered_events()
 	match_scene.toggle_match_replay()
 	assert(not g.replay.active)
+	check_quick_block_spacing(g)
 	check_setter_cover_base(g)
 	check_reversing_pin(g)
 	check_late_approach(g)
@@ -476,3 +477,36 @@ func check_setter_cover_base(g) -> void:
 		g.players[middle].position=g.SETTER_BASE
 		var cover:Vector3=g.setter_cover_spot(setter)
 		assert(cover.distance_to(g.SETTER_BASE)>=.68 and cover.distance_to(g.SETTER_BASE)<1.)
+
+func check_quick_block_spacing(g) -> void:
+	for side in 2:
+		g.reset_match()
+		g.spectator=true
+		var defense=1-side
+		var middle=g.front_middle(defense)
+		var pin=-1
+		for j in g.slots_for(defense):
+			if j==middle or g.Formation.zone(g.lineup_role(j),g.setter_zones[defense]) not in [2,3,4]: continue
+			if pin<0 or g.formation_home(j,true).x<g.formation_home(pin,true).x: pin=j
+		g.defense_marks[defense][g.lineup_role(pin)]=Vector2(.5+1.44/9.,.064)
+		for j in g.slots_for(defense): g.players[j].position=g.formation_home(j,true)
+		g.players[middle].position=Vector3(-.60,.04,3.42)
+		g.serve.moved_after_contact=true
+		g.serve.contact_clock=0.
+		g.serve.swing_time=g.serve.recovery_end()+1.
+		g.receiving_team=side
+		g.last_player=-1
+		g.expected_hitter=g.front_middle(side)
+		g.flight_kind="set"
+		g.elapsed=.65
+		var d=g.attackers[side]
+		d.rally_set_target=Vector3(1.30,.065,3.2)
+		g.court_velocities[pin]=Vector3(1.7,0,0)
+		g.movement_times[pin]=g.match_clock
+		var closest=INF
+		for tick in 48:
+			g.match_clock+=1./60.
+			d.approach_expected_hit_at=d.clock+1.10-tick/60.
+			g.position_defense(1./60.)
+			closest=minf(closest,absf(g.players[middle].position.x-g.players[pin].position.x))
+		assert(closest>.62 and g.blocks.has(middle))
