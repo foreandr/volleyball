@@ -313,3 +313,5 @@ Pin double blocks synchronize the closing CPU middle to the outside blocker duri
 In 6v6 the setter and mapped cover pass share the same setting base. When the setter has to cover first contact, another eligible teammate takes the second ball. On a distant pass the CPU setter turns to run before squaring for the set.
 
 In 6v6 an in-system quick runner takes a spike approach and draws the hitting arm even as a decoy. Against a pipe the middle blocks centrally and front-row pins close from their own sides. Grounded CPU attackers clear the path to second contact. Shoulder contact disrupts the hitter for this set only.
+
+In 6v6, honor a called quick when the middle is up. A tempo-one pipe also requires the back-row outside to be lined up with the chosen seam and within a plant and jump of contact. If the outside cannot run that seam, use the available airborne middle.

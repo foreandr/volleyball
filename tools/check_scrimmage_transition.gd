@@ -54,6 +54,17 @@ func run() -> void:
 		for tick in 28: g.advance_set_jumps(1./60.)
 		assert(g.players[middle_id].position.z>approach_start.z+.3)
 		assert(g.middle_showing_quick(side))
+		g.read_pipe(side)
+		var pipe_lane:Vector3=g.attack_lane_for(pipe_id)
+		g.players[pipe_id].position=pipe_lane+Vector3(1.2,0.,-1.)
+		g.rally_hitter=pipe_id
+		g.choose_at_set_contact(setter,Vector3(0,2,3))
+		assert(g.rally_hitter==middle_id)
+		assert(g.set_pin_for(setter).is_equal_approx(g.attack_lane_for(middle_id)))
+		g.players[pipe_id].position.x=pipe_lane.x
+		g.choose_at_set_contact(setter,Vector3(0,2,3))
+		assert(g.rally_hitter==middle_id)
+		g.rally_hitter=-1
 		g.choose_at_set_contact(setter,Vector3(0,2,3))
 		assert(g.rally_hitter==pipe_id)
 		g.choose_at_set_contact(setter,Vector3(0,2,0))

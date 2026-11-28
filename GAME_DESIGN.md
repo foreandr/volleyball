@@ -382,3 +382,5 @@ In 6v6 the outside blocker leads a pin double block. A CPU middle closes inside 
 In 6v6 the CPU setter lands, releases toward the setting base at position 2.5 during the attack, and prepares for second contact if a teammate covers the block. The user keeps control of a human setter.
 
 In 6v6 an in-system quick runner takes a spike approach and draws the hitting arm even as a decoy. Against a pipe the middle blocks centrally and front-row pins close from their own sides. Grounded CPU attackers clear the path to second contact. Shoulder contact disrupts the hitter for this set only.
+
+In 6v6, honor a called quick when the middle is up. A tempo-one pipe also requires the back-row outside to be lined up with the chosen seam and within a plant and jump of contact. If the outside cannot run that seam, use the available airborne middle.

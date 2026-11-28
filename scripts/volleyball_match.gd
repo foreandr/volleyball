@@ -478,13 +478,24 @@ func choose_at_set_contact(setter:int,point:Vector3) -> void:
 	var in_system:bool=setter_can_run_middle[side] and point.z>=Net.NET_Z-3.
 	var back_outside:=1 if Formation.zone(1,setter_zones[side]) in [1,5,6] else 4
 	var pipe:=first_on(side)+lineup_roles[side].find(back_outside)
-	var available:=not interrupted_hitters.has(pipe) and pipe!=setter and players[pipe].position.z<1.35 and not recoveries.has(pipe)
-	if in_system and middle_showing_quick(side) and pipe_open[side] and available:
+	var middle:=front_middle(side)
+	var quick_ready:=in_system and middle_showing_quick(side) and middle!=setter and not interrupted_hitters.has(middle)
+	if quick_ready and (rally_hitter==middle or not pipe_runner_ready(pipe)):
+		rally_hitter=middle
+	elif quick_ready and pipe_open[side] and pipe!=setter:
 		rally_hitter=pipe
 	elif rally_hitter==pipe or (not in_system and rally_hitter==front_middle(side)):
 		setter_can_run_middle[side]=in_system
 		rally_hitter=-1
 		rally_hitter=hitter_for_set(setter)
+
+func pipe_runner_ready(index:int) -> bool:
+	if interrupted_hitters.has(index) or yielding.has(index) or recoveries.has(index): return false
+	var lane:=attack_lane_for(index)
+	var runner:=players[index].position
+	var runway:=lane.z-runner.z
+	# A tempo-one pipe gives the outside time to plant and rise, not to cross into a new seam.
+	return absf(runner.x-lane.x)<=.75 and runway>=.35 and runway<=2.1 and runner.z<=Net.NET_Z-3.
 
 func read_pipe(side:int) -> void:
 	var middle_x:=0.
@@ -518,7 +529,7 @@ func hitter_for_set(setter: int) -> int:
 			var role:=lineup_role(i)
 			if role in [2,5] and not setter_can_run_middle[side]: continue
 			if role in [1,4] and Formation.zone(role,setter_zones[side]) in [1,5,6]:
-				if setter_can_run_middle[side] and middle_showing_quick(side) and pipe_open[side] and players[i].position.z<1.35 and not recoveries.has(i): return i
+				if setter_can_run_middle[side] and middle_showing_quick(side) and pipe_open[side] and pipe_runner_ready(i): return i
 				continue
 			hitters.append(i)
 		if not hitters.is_empty(): return hitters[posmod(flight_number+rallies,hitters.size())]
@@ -1567,7 +1578,10 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 		var duration := (sqrt(2.*Flight.GRAVITY*maxf(0.,apex-point.y))+sqrt(2.*Flight.GRAVITY*maxf(0.,apex-contact_height)))/Flight.GRAVITY
 		pin=players[index].reachable_set(point,pin,airborne,carry,duration)
 		var motion: Vector3 = driver.set_toward_pin(point,pin,apex,contact_height)
-		launch(world_point,frame.global_basis*motion,"set",index,1.0,hitter_for_set(index),frame.to_global(pin))
+		var hitter:=hitter_for_set(index)
+		if six_on_six() and not is_human(index):
+			trace.write("cpu_set_release",match_clock,{"setter":index,"hitter":hitter,"role":lineup_role(hitter),"route":attack_lane_for(hitter),"runner":players[hitter].position,"target":pin,"apex":apex,"arrival_seconds":duration})
+		launch(world_point,frame.global_basis*motion,"set",index,1.0,hitter,frame.to_global(pin))
 		return
 	if drill_pass_target.is_finite():
 		world_motion = drill_pass_motion(world_point,world_motion)
