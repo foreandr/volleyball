@@ -297,3 +297,5 @@ Six-on-six scrimmages and games share Settings / Formations. Each setter zone ha
 In every 6v6 rotation the libero wears a contrasting jersey and takes the saved spot of whichever middle is in the back row, on either team. The front-row middle stays on court. Both serve receive and block defense label the back-row middle slot L.
 
 At serve receive, both rows keep left-middle-right order and each front player stays level with or ahead of the back player in the same lane and their opposite lineup partner. The libero inherits the replaced middle's slot. The editor shades the selected receiver's legal placement area. These limits end at serve contact and do not restrict block-defense marks.
+
+All six default block-defense rotations use the same player-authored shape. From left to right the blockers are outside, middle, and setter or opposite. The libero covers left back, the back-row outside plays deep center, and the remaining defender covers right back. Each rotation can still be edited independently.

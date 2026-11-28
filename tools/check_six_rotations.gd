@@ -19,6 +19,11 @@ func run() -> void:
 	await scene_changed
 	var editor=current_scene
 	for rotation in range(1,7):
+		var base:PackedVector2Array=formations.layout(ConfigFile.new(),rotation,true)
+		for role in 6:
+			var front:bool=formations.zone(role,rotation) in [2,3,4]
+			var expected_slot:int=[[3,0],[1,4],[2,5]][role%3][0 if front else 1]
+			assert(base[role]==formations.BLOCK_DEFENSE[expected_slot])
 		for defense in [false,true]:
 			editor.setter_zone=rotation
 			editor.defense=defense

@@ -14,6 +14,13 @@ const RECEIVE := [
 	[Vector2(6,2.5),Vector2(8,7),Vector2(8.7,3),Vector2(4.7,1.3),Vector2(2,7),Vector2(5.3,7)]
 ]
 
+# Saved setter-in-one defense. Each role uses its counterpart's spot when
+# the other member of the pair rotates to the same row.
+const BLOCK_DEFENSE := [
+	Vector2(.8412067,.46990514), Vector2(.2904119,.035), Vector2(.52932805,.035),
+	Vector2(.7567991,.035), Vector2(.48354766,.76305836), Vector2(.17309974,.46132505)
+]
+
 static func lineup(players:Array) -> PackedInt32Array:
 	var roles:=PackedInt32Array([-1,-1,-1,-1,-1,-1])
 	var remaining: Array = range(6)
@@ -51,8 +58,8 @@ static func layout(options:ConfigFile,setter_zone:int,defense:bool) -> PackedVec
 		var spot:Vector2=RECEIVE[setter_zone-1][role]/10.
 		if defense:
 			var front:=zone(role,setter_zone) in [2,3,4]
-			var lane:=.5 if role in [2,5] else (.16 if role in [1,4] else .84)
-			spot=Vector2(lane,.09 if front else .72)
+			var template_front:=zone(role,1) in [2,3,4]
+			spot=BLOCK_DEFENSE[role if front==template_front else (role+3)%6]
 		marks.append(spot)
 	return marks if defense else legal_receive(marks,setter_zone)
 
