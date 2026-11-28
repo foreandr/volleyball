@@ -7,7 +7,6 @@ var offense:=OptionButton.new()
 var hitter:=OptionButton.new()
 var tempo:=OptionButton.new()
 var quality:=OptionButton.new()
-var watch:=CheckButton.new()
 var edit_button:=Button.new()
 var note:=Label.new()
 var running:=false
@@ -20,7 +19,7 @@ var session_before:Dictionary={}
 func _ready() -> void:
 	for key in ["offline_controller","offline_size","offline_away_size","career_scrimmage","offline_roster"]:
 		session_before[key]=StorySession.get(key)
-	StorySession.offline_controller=0
+	StorySession.offline_controller=-1
 	StorySession.offline_size=6
 	StorySession.offline_away_size=6
 	StorySession.career_scrimmage=false
@@ -56,9 +55,6 @@ func _ready() -> void:
 	quality.select(0 if saved.get("in_system",true) else 1)
 	populate_hitters(saved.get("role",1))
 	offense.item_selected.connect(func(_i): populate_hitters(hitter.get_selected_id()))
-	watch.text="Watch both teams"
-	watch.button_pressed=saved.get("watch",true)
-	column.add_child(watch)
 	var run:=Button.new()
 	run.text="Run scenario"
 	column.add_child(run)
@@ -88,10 +84,9 @@ func populate_hitters(preferred:int) -> void:
 func start_scenario() -> void:
 	if editing: toggle_edit()
 	if game.replay.active: toggle_match_replay()
-	setup={"defense":defense.get_selected_id(),"offense":offense.get_selected_id(),"role":hitter.get_selected_id(),"in_system":quality.selected==0,"tempo":tempo.get_selected_id(),"watch":watch.button_pressed}
+	setup={"defense":defense.get_selected_id(),"offense":offense.get_selected_id(),"role":hitter.get_selected_id(),"in_system":quality.selected==0,"tempo":tempo.get_selected_id()}
 	StorySession.game_options.set_value("block_defense","setup",setup.duplicate())
 	StorySession.save_options()
-	game.set_spectator(watch.button_pressed)
 	game.start_feed(setup.defense,setup.offense,setup.role,setup.in_system,setup.tempo)
 	authorized=true
 	running=true
@@ -108,7 +103,6 @@ func toggle_edit() -> void:
 		if game.replay.active: game.replay.playing=false
 		originals.clear()
 		for actor in game.players: originals.append(actor.position)
-		game.manual.clear_input()
 		note.text="Drag a player to teach a position for this phase."
 	else:
 		for i in originals.size(): game.players[i].position=originals[i]

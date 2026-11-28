@@ -9,7 +9,8 @@ func run() -> void:
 	var page=current_scene
 	page.set_process(false)
 	var g=page.game
-	g.spectator=true
+	assert(g.spectator and g.manual==null and g.players.size()==12)
+	for i in 12: assert(not g.is_human(i))
 	g.instructions.clear()
 	var heights:=[]
 	var times:=[]

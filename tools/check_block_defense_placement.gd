@@ -21,7 +21,8 @@ func run():
 		var img=root.get_texture().get_image();img.resize(800,450);img.save_png("res://work/scenario-setup-qa.png")
 	g.rules_path="res://work/test-ai-target.cfg"
 	g.instructions.clear()
-	g.spectator=true
+	assert(g.spectator and g.manual==null and g.players.size()==12)
+	for i in 12: assert(not g.is_human(i))
 	g.start_feed(3,1,1,true)
 	page.setup={"defense":3,"offense":1,"role":1,"in_system":true}
 	page.running=true
