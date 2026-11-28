@@ -1,7 +1,16 @@
 extends RefCounted
 
 const HandPose = preload("res://scripts/hand_setting_pose.gd")
+const Net = preload("res://scripts/net_collision.gd")
+const Jump = preload("res://scripts/setter_jump.gd")
 const STUFF_SPEED_RETENTION := 0.60
+const MAX_CHEST_ABOVE_TAPE := .07
+
+static func maximum_block_lift(player: Node3D) -> float:
+	var rig:Skeleton3D=player.skeleton
+	var chest:=rig.to_global(rig.get_bone_global_rest(rig.find_bone("spine_03")).origin)
+	return maxf(0., Net.NET_TOP + MAX_CHEST_ABOVE_TAPE - chest.y)
+
 static func loaded_height(full_height: float, depth: float) -> float:
 	return full_height*lerpf(.60,1.,clampf(depth,0.,1.))
 
@@ -48,6 +57,7 @@ var overpass_swing := false
 var net_heading := INF
 var swing_load := 0.
 var square_block := false
+var late_quick_x := INF
 var aggressive_press := false
 var track_near_ball := false
 var kong_direction := 0.
@@ -161,6 +171,7 @@ func begin(player: Node3D, held_depth := 0., base_vertical := -1.) -> void:
 	actor = player
 	if not overpass_swing:
 		jump_height += bonus_height(player, jump_height if base_vertical < 0.0 else base_vertical)
+		jump_height = minf(jump_height, maximum_block_lift(player)/Jump.COURT_VERTICAL_SCALE)
 	upper_body_rate=1.+.5*clampf(player.effective_rating("Blocking")/100.,0.,1.)
 	base = player.position
 	swing_load=float(player.get_meta("swing_block_load",0.))
@@ -271,10 +282,10 @@ func step(delta: float, world_ball: Vector3) -> bool:
 			var knee: Vector3=author.point(pose,calf)
 			var shin: Vector3=(author.point(pose,foot)-knee).normalized()
 			author.aim_joint(pose,calf,foot,knee+shin.slerp(direction,pike*.96))
-	if not court_aim.is_finite() and square_block and not overpass_swing:
-		var press_lean:=smoothstep(.32,.32+.18/upper_body_rate,phase)*(1.-smoothstep(.56,.85,phase))
-		author.rotate_world(pose,"spine_01",Vector3.RIGHT,.12*press_lean)
-		author.rotate_world(pose,"spine_02",Vector3.RIGHT,.08*press_lean)
+	var apex_press:=smoothstep(.24,.24+.24/upper_body_rate,phase)*(1.-smoothstep(.59,.88,phase))
+	if not court_aim.is_finite() and not overpass_swing:
+		author.rotate_world(pose,"spine_01",Vector3.RIGHT,.19*apex_press)
+		author.rotate_world(pose,"spine_02",Vector3.RIGHT,.13*apex_press)
 	var air_weight := smoothstep(0.,.12,phase)*(1.-smoothstep(.82,1.,phase))
 	lean=lerpf(lean,lean_input,1.-exp(-14.*delta*(upper_body_rate if phase>0. and phase<1. else 1.)))
 	reach=reach.lerp(reach_input,1.-exp(-16.*delta*(upper_body_rate if phase>0. and phase<1. else 1.)))
@@ -297,10 +308,10 @@ func step(delta: float, world_ball: Vector3) -> bool:
 		var outward := 1.0 if side == "l" else -1.0
 		var press := smoothstep(0.32,0.70,lift) if aggressive_press else smoothstep(0.45,0.95,lift)
 		if not overpass_swing:
-			press*=smoothstep(.32,.32+.18/upper_body_rate,phase)
+			press=apex_press*smoothstep(Net.NET_TOP+.06,Net.NET_TOP+.34,rig.to_global(shoulder).y+.58)
 		var below_tape := 1.0-smoothstep(2.50,2.80,rig.to_global(shoulder).y+0.62)
 		var depth := lerpf(lerpf(0.20,0.55,press),0.17,below_tape)
-		var forward_press := press*(1.-below_tape) if aggressive_press and court_aim.is_finite() else 0.
+		var forward_press := press*(1.-below_tape) if not overpass_swing else 0.
 		depth+=.21*forward_press
 		var lateral_limit := 0.24 if aggressive_press else 0.18
 		var target := shoulder+Vector3(clampf(aim.x-shoulder.x,-lateral_limit,lateral_limit)-outward*0.06,0.62-.09*forward_press,depth)/scale_
@@ -334,6 +345,23 @@ func step(delta: float, world_ball: Vector3) -> bool:
 			var hand_goal := world_ball+world_ball.direction_to(rig.to_global(shoulder))*.09
 			hand_goal.x=clampf(hand_goal.x+shoulder_offset*.24,min_hand_x,max_hand_x)
 			target=target.lerp(rig.to_local(hand_goal),direct)
+		if square_block and not overpass_swing:
+			# Each hand stays in its own shoulder lane. Reach vertically, then press at apex.
+			var elbow_at:Vector3=author.point(pose,"lowerarm_"+side)
+			var arm_length:=shoulder.distance_to(elbow_at)+elbow_at.distance_to(author.point(pose,"hand_"+side))
+			var vertical:Vector3=(rig.global_basis.inverse()*Vector3.UP).normalized()
+			var ahead:Vector3=(rig.global_basis.inverse()*actor.global_basis.z).normalized()
+			var angle:=deg_to_rad(lerpf(8.,65.,press))
+			var direction:=vertical*cos(angle)+ahead*sin(angle)
+			if is_finite(late_quick_x):
+				var gap:=late_quick_x-actor.global_position.x
+				if signf(shoulder_offset)==signf(gap):
+					var sideways:Vector3=(rig.global_basis.inverse()*Vector3.RIGHT).normalized()
+					direction+=sideways*clampf(gap,-1.,1.)*.80
+				else:
+					arm_length*=.76
+			var upright:=shoulder+direction.normalized()*arm_length*.99
+			target=target.lerp(upright,air_weight)
 		var pole := Vector3(outward*0.38,-0.55,0.30)
 		if overpass_swing and side == "r":
 			var draw := smoothstep(0.11,0.30,age)*(1.0-smoothstep(0.30,0.47,age))
@@ -350,13 +378,12 @@ func step(delta: float, world_ball: Vector3) -> bool:
 			target=target.lerp(shoulder+Vector3(outward*.13,-.38,-.32)/scale_,sweep)
 			weight=maxf(weight,sweep)
 		var extension := 174.
-		var press_weight := 0.
+		var wrist_clearance := rig.to_global(target).y-Net.NET_TOP
+		var press_weight := press*smoothstep(.02,.20,wrist_clearance)*(1.-balance) if not overpass_swing else 0.
 		if court_aim.is_finite() and not overpass_swing:
-			var clearance := rig.to_global(target).y-preload("res://scripts/net_collision.gd").NET_TOP
-			press_weight=press*smoothstep(.02,.20,clearance)*(1.-balance)
 			var reach_weight:=smoothstep(.04,.04+.28/upper_body_rate,phase)*(1.-smoothstep(.76,.98,phase))
 			extension=lerpf(132.,177.,maxf(reach_weight,press_weight))
-			extension=lerpf(extension,178.,spread*smoothstep(.0,.14,clearance))
+			extension=lerpf(extension,178.,spread*smoothstep(.0,.14,wrist_clearance))
 			var elbow:Vector3=author.point(pose,"lowerarm_"+side)
 			var length:=shoulder.distance_to(elbow)+elbow.distance_to(author.point(pose,"hand_"+side))
 			target=target.lerp(shoulder+shoulder.direction_to(target)*length,maxf(reach_weight*(1.-balance)*.90,press_weight))
@@ -397,10 +424,10 @@ func step(delta: float, world_ball: Vector3) -> bool:
 			if fingertips.length_squared()>.0001: up=up.slerp(fingertips.normalized(),spread).normalized()
 		if press_weight>0.:
 			var forward_local:Vector3=(rig.global_basis.inverse()*actor.global_basis.z).normalized()
-			var over_tape:Vector3=(forward_local*.82+Vector3.UP*.58).normalized()
-			var pitch_weight:=press_weight*(1.-spread)
+			var over_tape:Vector3=(forward_local+Vector3.DOWN*.12).normalized()
+			var pitch_weight:=press_weight*(1.-.35*spread)
 			up=up.slerp(over_tape,pitch_weight).normalized()
-			palm_normal=palm_normal.slerp((forward_local*.58-Vector3.UP*.82).normalized(),pitch_weight).normalized()
+			palm_normal=palm_normal.slerp((Vector3.DOWN-forward_local*.12).normalized(),pitch_weight).normalized()
 		var edge := up.cross(palm_normal)*-outward
 		var palm := HandPose.hand_basis(up,edge)*HandPose.hand_basis(finger_direction,across).inverse()*wrist.basis
 		author.set_world_basis(pose,hand_name,wrist.basis.orthonormalized().slerp(palm.orthonormalized(),weight))
@@ -421,14 +448,16 @@ func step(delta: float, world_ball: Vector3) -> bool:
 		previous_wrists = wrists.duplicate()
 	for bone in rig.get_bone_count():
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.orthonormalized().get_rotation_quaternion())
-	if court_aim.is_finite():
-		var retreat := preload("res://scripts/net_collision.gd").pose_retreat(actor,1.)
+	if court_aim.is_finite() or not overpass_swing:
+		var own_side:=1. if actor.global_position.z>=Net.NET_Z else -1.
+		var retreat := Net.pose_retreat(actor,own_side)
 		if retreat>0.:
-			actor.position.z+=retreat
+			var shift:=retreat*own_side
+			actor.global_position.z+=shift
 			for points in [shoulders,elbows,wrists,hands]:
-				for i in points.size(): points[i].z+=retreat
+				for i in points.size(): points[i].z+=shift
 			for chain in body_chains:
-				for i in chain.size(): chain[i].z+=retreat
+				for i in chain.size(): chain[i].z+=shift
 	if age < START+AIR+0.02+landing_recovery:
 		use_displayed_geometry()
 		return true

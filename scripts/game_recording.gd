@@ -17,9 +17,15 @@ var last_jpeg := PackedByteArray()
 var cleanup_at := 0
 var fps_label: Label
 var clock_label: Label
+var capture_available := true
+var next_clock_update := 0
+
+static func local_clock() -> String:
+	var tenth:=int(Time.get_unix_time_from_system()*10.)%10
+	return "%s.%d"%[Time.get_time_string_from_system(),tenth]
 
 func _ready() -> void:
-	if DisplayServer.get_name()=="headless" or OS.get_cmdline_args().has("-s") or OS.get_cmdline_args().has("--script"):
+	if DisplayServer.get_name()=="headless":
 		set_process(false)
 		return
 	process_mode=Node.PROCESS_MODE_ALWAYS
@@ -31,13 +37,13 @@ func _ready() -> void:
 	overlay.add_child(plate_panel)
 	var row := HBoxContainer.new()
 	plate_panel.add_child(row)
+	row.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	row.add_child(clock_label)
 	fps_label=Label.new()
 	row.add_child(fps_label)
+	fps_label.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	fps_label.add_theme_font_size_override("font_size",19)
 	plate_panel.mouse_filter=Control.MOUSE_FILTER_IGNORE
-	get_tree().scene_changed.connect(update_clock_visibility)
-	update_clock_visibility.call_deferred()
 	plate_panel.position=Vector2(12,10)
 	clock_label.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	clock_label.add_theme_font_size_override("font_size",19)
@@ -51,10 +57,6 @@ func _ready() -> void:
 	plate_panel.add_theme_stylebox_override("panel",plate)
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(FOLDER))
 	prune()
-
-func update_clock_visibility() -> void:
-	var scene := get_tree().current_scene
-	clock_label.get_parent().get_parent().visible=scene!=null and scene.scene_file_path not in ["res://scenes/main.tscn","res://scenes/story.tscn","res://scenes/create.tscn"]
 
 func prune() -> void:
 	var now := int(Time.get_unix_time_from_system())
@@ -79,7 +81,7 @@ func begin_clip() -> void:
 	clip=FileAccess.open(FOLDER+"/tryout-capture-%s-%d-%d.avi"%[stamp,OS.get_process_id(),Time.get_ticks_msec()],FileAccess.WRITE)
 	if not clip:
 		push_error("Game recording folder is unwritable")
-		set_process(false)
+		capture_available=false
 		return
 	tag("RIFF")
 	clip.store_32(0)
@@ -182,12 +184,13 @@ var next_request := 0
 
 func _process(_dt: float) -> void:
 	var now := Time.get_ticks_msec()
-	if now>=next_request:
-		var tenth := int(Time.get_unix_time_from_system()*10.)%10
-		clock_label.text="%s.%d"%[Time.get_time_string_from_system(),tenth]
+	if now>=next_clock_update:
+		next_clock_update=now+50
+		clock_label.text=local_clock()
 		var fps := InteractionTrace.display_fps
 		fps_label.text="%d FPS"%fps
 		fps_label.modulate=Color("72dc8b") if fps>55 else (Color("ffda61") if fps>=50 else Color("ff6565"))
+	if not capture_available: return
 	while not jobs.is_empty():
 		var job := jobs[0]
 		if job.unsupported:

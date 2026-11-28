@@ -223,7 +223,8 @@ func set_vertical_inches(value: float) -> void:
 func block_apex_height() -> float:
 	var base_vertical := BLOCK_HEIGHT + vertical_inches * 0.0254
 	var bonus := preload("res://scripts/match_block.gd").bonus_height(blocker,base_vertical)
-	return (base_vertical + bonus) * preload("res://scripts/setter_jump.gd").COURT_VERTICAL_SCALE
+	var lift := (base_vertical + bonus) * preload("res://scripts/setter_jump.gd").COURT_VERTICAL_SCALE
+	return minf(lift,preload("res://scripts/match_block.gd").maximum_block_lift(blocker))
 
 func queue_block() -> void:
 	if block_elapsed >= 0.0: return

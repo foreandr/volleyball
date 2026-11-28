@@ -328,9 +328,10 @@ func _process(delta:float) -> void:
 	if game.replay.active:
 		timeline.max_value=game.replay.duration()
 		timeline.set_value_no_signal(game.replay.clock)
-		banner.text=replay_notice if Time.get_ticks_msec()<replay_notice_until else "Replay   ·   "+str(game.replay.speed)+"x"
-		if Time.get_ticks_msec()>=replay_notice_until and game.replay_meter.has("label"):
-			banner.text=game.replay_meter.label
+		var frame:Dictionary=game.replay.frames[game.replay.index]
+		var heading:String=replay_notice if Time.get_ticks_msec()<replay_notice_until else game.replay_meter.get("label","Replay")
+		banner.text="%s   ·   %sx   ·   Frame %d / %d"%[heading,game.replay.speed,game.replay.index+1,game.replay.frames.size()]
+		if frame.has("recorded_at"): banner.text+="   ·   "+str(frame.recorded_at)
 		banner.show()
 	elif game.manual and game.match_clock<game.manual.feedback_until:
 		banner.text=game.manual.feedback_text

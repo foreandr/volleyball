@@ -1107,7 +1107,7 @@ func launch(point: Vector3, motion: Vector3, kind: String, from: int, spin_rate 
 		if six_on_six():
 			read_pipe(receiving_team)
 			var meet:=frames[receiving_team].to_local(path_point(arrival(1.92)))
-			setter_can_run_middle[receiving_team]=meet.z>=Net.NET_Z-3.
+			setter_can_run_middle[receiving_team]=meet.z>=Net.NET_Z-3. and active_identities.get(rally_setter,-1)!=6
 		rally_hitter = -1
 		rally_hitter = hitter_for_set(rally_setter)
 	if not manual and not spectator and kind == "pass" and human_can_set() and receiving_team == 0 and match_clock-last_input_at <= 0.35:
@@ -1793,6 +1793,13 @@ func advance_set_jumps(delta: float) -> void:
 	for index in players.size():
 		var jump := set_jumps[index]
 		if jump.active:
+			if jump_set_started[index] and cpu_is_setting(index) and six_on_six() and not is_human(index) and active_identities.get(index,-1)==6:
+				var leaves_floor:bool=jump.elapsed<=jump.load_duration() and jump.elapsed+delta>jump.load_duration()
+				if leaves_floor and not libero_feet_behind_line(index):
+					jump.active=false
+					players[index].position.y=jump.start.y
+					cancel_cpu_jump_set(index)
+					continue
 			jump.step(players[index],delta,Vector2.ZERO)
 			var side:=team(index)
 			if quick_actor[side]==index:
@@ -2108,8 +2115,33 @@ func cpu_should_backshuffle(index: int, contact: Vector3, cue: float) -> bool:
 	var depth := frame.to_local(contact).z-players[index].position.z
 	return depth < -0.25 and approach.z < -0.05 and cpu_hand_receive_too_fast(cue)
 
+# Keep the whole takeoff footprint behind the attack line. The ball itself can be in front.
+const LIBERO_PLANT_Z := Net.NET_Z - 3.0 - 0.34
+
+func libero_plant(stance:Vector3) -> Vector3:
+	return Vector3(stance.x,PLAYER_GROUND_Y,minf(stance.z,LIBERO_PLANT_Z))
+
+func libero_launch_speed(index:int,offset:Vector3) -> float:
+	var approach:Vector3=court_velocities.get(index,Vector3.ZERO)
+	return clampf(1.5 + approach.dot(offset.normalized()),1.5,4.35)
+
+func libero_feet_behind_line(index:int) -> bool:
+	var rig:Skeleton3D=players[index].skeleton
+	for name_ in ["foot_l","foot_r","ball_l","ball_r"]:
+		var foot:=rig.to_global(rig.get_bone_global_pose(rig.find_bone(name_)).origin)
+		if frames[team(index)].to_local(foot).z+.07>=Net.NET_Z-3.: return false
+	return true
+
+func cancel_cpu_jump_set(index:int) -> void:
+	platforms[index].reset()
+	jump_set_started[index]=false
+	cpu_technique=1 if overhead_available(index,1) else 0
+	cpu_fake_dump=false
+	cpu_dump=cpu_dump and cpu_technique==1
+	next_touch_cue=INF
+	queue_receive(index,cpu_technique)
+
 func overhead_available(index: int, technique: int) -> bool:
-	if cpu_is_setting(index) and active_identities.get(index,-1)==6: return false
 	if not is_human(index) and flight_kind == "serve" and not drill_feed_acceleration.is_finite() and serve.get_script() == SERVES[TOPSPIN_SERVE]: return false
 	var first_contact := technique == 1 and (defensive_ball() or flight_kind == "serve")
 	var setting := cpu_is_setting(index)
@@ -2119,6 +2151,18 @@ func overhead_available(index: int, technique: int) -> bool:
 	var frame := frames[team(index)]
 	var point := frame.to_local(path_point(at))
 	var actor := players[index]
+	if setting and six_on_six() and active_identities.get(index,-1)==6:
+		if technique!=2 or actor.position.z>=Net.NET_Z-3.: return false
+		var stance:=point-toward_incoming(index,path_point(at))*hand_receive_reach(index)
+		var plant:=libero_plant(stance)
+		var runway:=(plant-actor.position).slide(Vector3.UP).length()
+		var drift:=(stance-plant).slide(Vector3.UP)
+		var max_height:=jump_inches(index,attack_vertical)*.0254
+		var lift:=clampf((point.y-PLAYER_GROUND_Y-1.72)*1.12,minf(.56,max_height),max_height)
+		var rise:float=set_jumps[index].flight_duration(lift,true)*.43
+		var speed:=minf(4.35,libero_launch_speed(index,drift)+sqrt(2.*GymPaths.WALK_ACCELERATION*runway))
+		if point.y>PLAYER_GROUND_Y+Bump.HandPose.CONTACT_HEIGHT+lift*set_jumps[index].COURT_VERTICAL_SCALE+.12: return false
+		if runway>.23+maxf(0.,at-elapsed-rise-.045)*4.35 or drift.length()>speed*rise+.14: return false
 	var offset := (point-actor.position).slide(Vector3.UP)
 	var range_ := (0.76 if technique == 2 else 0.92)+minf(0.88,maxf(0.0,at-elapsed-0.24)*2.4)
 	if first_contact or setting:
@@ -2301,6 +2345,8 @@ func tick_receive(delta: float, previous: float) -> void:
 	var max_set_jump := jump_inches(index,attack_vertical)*0.0254
 	var set_jump_height := clampf((catch_point.y-actor.global_position.y-1.72)*1.12,minf(0.56,max_set_jump),max_set_jump)
 	var set_jump_rise := 0.0
+	var libero_jump:bool=cpu_setting and six_on_six() and active_identities.get(index,-1)==6 and technique==2
+	var libero_stance:=Vector3.ZERO
 	var set_jump_plant_gap := INF
 	if technique == 2: set_jump_rise = set_jumps[index].flight_duration(set_jump_height,true)*0.43
 	bump.low_save_approach_velocity = Vector3.ZERO
@@ -2335,6 +2381,9 @@ func tick_receive(delta: float, previous: float) -> void:
 		if not recovering and not set_jumps[index].active and not bump.low_save.active and not bump.reach.get("deep_side",false):
 			var spacing := 0.88 if square_receive and cpu_dig and cue < 0.40 else offset
 			var target := catch_point-frame.global_basis*face*spacing
+			if libero_jump:
+				libero_stance=frame.to_local(target)
+				target=frame.to_global(libero_plant(libero_stance))
 			if backshuffle:
 				# Leave room to play the ball behind the hips after the backward steps.
 				target = catch_point+frame.global_basis.z*0.45
@@ -2386,19 +2435,22 @@ func tick_receive(delta: float, previous: float) -> void:
 	if touched_tape and not net_hit.is_empty() and elapsed < float(net_hit.release_time): return
 	if recovering: recoveries.erase(index)
 	if technique == 2 and not jump_set_started[index] and cue-elapsed <= set_jump_rise+0.13:
-		if not is_human(index) and set_jump_plant_gap > 0.38:
+		var carry:=Vector3.ZERO
+		var legal_takeoff:=true
+		if libero_jump:
+			var travel:=(libero_stance-actor.position).slide(Vector3.UP)
+			carry=(travel/maxf(.01,set_jump_rise)).limit_length(libero_launch_speed(index,travel))
+			legal_takeoff=libero_feet_behind_line(index) and travel.distance_to(carry*set_jump_rise)<=.14
+		if not is_human(index) and (set_jump_plant_gap > 0.38 or not legal_takeoff):
 			if cue-elapsed > set_jump_rise+0.045:
 				return
-			bump.reset()
-			cpu_technique = 1 if overhead_available(index,1) else 0
-			cpu_fake_dump = false
-			cpu_dump = cpu_dump and cpu_technique == 1
-			next_touch_cue = INF
-			queue_receive(index,cpu_technique)
+			cancel_cpu_jump_set(index)
 			return
 		jump_set_started[index] = true
 		set_jumps[index].front_limit = 3.35
 		set_jumps[index].begin_set_jump(actor,clampf(cue-elapsed-set_jump_rise,0.055,0.16),set_jump_height)
+		if libero_jump: set_jumps[index].carry_velocity=carry
+	if libero_jump and (not set_jumps[index].active or set_jumps[index].elapsed<=set_jumps[index].load_duration()): return
 	var end := flight_end()
 	var path := func(t: float) -> Vector3: return frame.to_local(path_point(t))
 	var motion := (path_point(minf(end,elapsed+0.003))-path_point(maxf(0.0,elapsed-0.003)))/0.006
@@ -3120,6 +3172,13 @@ func position_overpass(delta: float) -> bool:
 		var release: Vector3 = frame.to_local(net_hit.release_point)
 		if release.z >= Net.NET_Z or release.y < Net.NET_TOP: return false
 		crossing = float(net_hit.release_time)
+	# A set can project across the tape *after* its hitter has already played it.
+	# Keep the block assigned to the attack until a genuine overpass is available.
+	if flight_kind=="set" and expected_hitter>=0:
+		var driver:=attackers[team(expected_hitter)]
+		var contact_eta:float=driver.pin_arrival-(driver.clock-driver.stage_start)
+		if is_finite(driver.approach_expected_hit_at): contact_eta=driver.approach_expected_hit_at-driver.clock
+		if driver.enabled and contact_eta>=-.04 and elapsed+contact_eta<=crossing+.04: return false
 	if crossing-elapsed > 1.0: return false
 	var at := INF
 	var point := Vector3.ZERO
@@ -3265,11 +3324,12 @@ func position_defense(delta: float) -> void:
 		return
 	var driver := attackers[hitter_side]
 	var tracking_set := flight_kind == "set" and expected_hitter >= 0
+	var middle_set:=six_on_six() and tracking_set and expected_hitter==front_middle(hitter_side)
 	var threat := frames[hitter_side].to_global(driver.rally_set_target) if tracking_set else path_point(arrival(2.0))
 	if six_on_six() and tracking_set and lineup_role(expected_hitter) in [1,4] and Formation.zone(lineup_role(expected_hitter),setter_zones[hitter_side]) in [1,5,6]:
 		defend_pipe(defense_side,frame.to_local(threat).x,driver,delta)
 		return
-	if six_on_six() and tracking_set and absf(frame.to_local(threat).x)>=2.5:
+	if six_on_six() and tracking_set and not middle_set and absf(frame.to_local(threat).x)>=2.5:
 		defend_pin_set(defense_side,frame.to_local(threat).x,driver,delta)
 		return
 	var second_ball := flight_kind == "pass" and possession_team == hitter_side and touches == 1
@@ -3329,11 +3389,8 @@ func position_defense(delta: float) -> void:
 			if lane_gap<nearest_lane:
 				near=candidate
 				nearest_lane=lane_gap
-	if six_on_six() and tracking_set and lineup_role(expected_hitter) in [2,5] and not ordered:
-		for candidate in slots_for(defense_side):
-			if lineup_role(candidate) in [2,5] and Formation.zone(lineup_role(candidate),setter_zones[defense_side]) in [2,3,4]:
-				near=candidate
-				break
+	if middle_set:
+		near=front_middle(defense_side)
 	if six_on_six() and Formation.zone(lineup_role(near),setter_zones[defense_side]) not in [2,3,4]:
 		var best:=INF
 		for i in range(first,first+6):
@@ -3433,21 +3490,26 @@ func position_defense(delta: float) -> void:
 				start_block(near,maxf(.18,eta+.19))
 				if blocks.has(near): manual.committed_flight=flight_number
 	pocket_x[defense_side] = cover
-	var read_quick:=six_on_six() and tracking_set and expected_hitter==front_middle(hitter_side) and quick_read_flight[defense_side]==flight_number-1 and not ordered
+	var read_quick:=middle_set and (quick_read_flight[defense_side]==flight_number-1 or remaining<=.30)
 	if not is_human(near) and not blocks.has(near) and (not tracking_set or read_quick or elapsed>=players[near].reaction_seconds()):
 		if near==shadow_middle: x=shadow_x
-		if six_on_six() and tracking_set and lineup_role(expected_hitter) in [2,5]: x=frame.to_local(threat).x
+		if middle_set: x=frame.to_local(threat).x
 		var target := frame.to_global(Vector3(clampf(x,-4.15,4.15),0.04,3.42))
 		move_cpu(near,target,delta,8.6 if tracking_set else 7.6,Vector3.INF,true)
 		var attack_ready := remaining >= -0.04 and remaining <= (.57 if commit and absf(frame.to_local(threat).x)<1.8 else .41)
-		var dump_ready := near!=shadow_middle and second_ball_eta >= -0.06 and second_ball_eta <= 0.30
-		if absf(players[near].position.x-clampf(x,-4.15,4.15)) < 0.62 and (attack_ready or dump_ready):
+		var dump_ready := (shadow_middle<0 or cpu_second_spike) and near!=shadow_middle and second_ball_eta >= -0.06 and second_ball_eta <= 0.30
+		var lane_gap:=absf(players[near].position.x-clampf(x,-4.15,4.15))
+		var late_quick:=middle_set and remaining<=.30
+		if (lane_gap<.62 or late_quick) and (attack_ready or dump_ready):
 			var timing := remaining if attack_ready else second_ball_eta+0.035
 			start_block(near,timing,dump_ready)
+			if middle_set and blocks.has(near):
+				blocks[near].square_block=true
+				if late_quick and lane_gap>.70: blocks[near].late_quick_x=target.x
 	if six_on_six():
 		var middle:=front_middle(defense_side)
 		var quick_lane:=shadow_x if shadow_middle==middle else INF
-		if tracking_set and expected_hitter==front_middle(hitter_side):
+		if middle_set:
 			quick_lane=frame.to_local(threat).x
 		for i in range(first,first+6):
 			if i==near or is_human(i) or blocks.has(i) or set_jumps[i].active: continue
@@ -3463,7 +3525,17 @@ func position_defense(delta: float) -> void:
 				if is_zero_approx(flank): flank=signf(players[i].position.x-quick_lane)
 				shoulder_x=flank*(maxf(flank*quick_lane,flank*players[middle].position.x)+.68)
 				if not is_zero_approx(flank): home.x=clampf(flank*maxf(flank*home.x,flank*shoulder_x),-4.15,4.15)
+			var close_quick:=flank!=0. and tracking_set and flank*(quick_lane-formation_home(middle,true).x)>.50
+			if close_quick:
+				home.x=shoulder_x
+				home.z=3.42
 			move_cpu(i,frame.to_global(home),delta,5.3,toward_incoming(i,players[i].global_position),false,false,12.5,false,0.,4.7 if flank!=0. else 0.,flank,shoulder_x)
+			var seam_gap:=absf(players[i].position.x-(quick_lane+flank*.68))
+			if close_quick and remaining>=-.03 and remaining<=.39 and (seam_gap<.57 or remaining<=.29):
+				start_block(i,remaining)
+				if blocks.has(i):
+					blocks[i].square_block=true
+					if seam_gap>=.57 and absf(players[i].global_position.x-threat.x)>.75: blocks[i].late_quick_x=threat.x
 		return
 	if not is_human(deep) and not blocks.has(deep) and not set_jumps[deep].active:
 		move_cpu(deep,frame.to_global(Vector3(clampf(cover,-4.05,4.05),0.04,depth)),delta)
