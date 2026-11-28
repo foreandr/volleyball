@@ -428,6 +428,9 @@ func choose_setter(side:int,passer:int) -> int:
 func back_row_setter(index:int) -> bool:
 	return six_on_six() and lineup_role(index)==0 and setter_zones[team(index)] in [1,6,5]
 
+func excluded_from_attack(index:int) -> bool:
+	return back_row_setter(index) or (six_on_six() and active_identities.get(index,-1)==6)
+
 func attack_lane_for(index:int) -> Vector3:
 	var role:=lineup_role(index)
 	var rotation:=setter_zones[team(index)]
@@ -476,7 +479,7 @@ func prepare_middle_quick(side:int,delta:float) -> void:
 func choose_at_set_contact(setter:int,point:Vector3) -> void:
 	var side:=team(setter)
 	read_pipe(side)
-	if rally_hitter>=0 and (team(rally_hitter)!=side or rally_hitter==setter or interrupted_hitters.has(rally_hitter) or back_row_setter(rally_hitter)):
+	if rally_hitter>=0 and (team(rally_hitter)!=side or rally_hitter==setter or interrupted_hitters.has(rally_hitter) or excluded_from_attack(rally_hitter)):
 		rally_hitter=-1
 	if side==0 and called_this_pass and rally_hitter==0 and not interrupted_hitters.has(0): return
 	var in_system:bool=setter_can_run_middle[side] and point.z>=Net.NET_Z-3.
@@ -524,7 +527,7 @@ func read_pipe(side:int) -> void:
 func hitter_for_set(setter: int, allow_quick: bool = true) -> int:
 	if count_for(team(setter)) == 2: return partner_of(setter)
 	if manual and is_human(setter) and manual.lane>=0: return manual_target_hitter(setter)
-	if rally_hitter >= 0 and not interrupted_hitters.has(rally_hitter) and team(rally_hitter) == team(setter) and rally_hitter != setter and not back_row_setter(rally_hitter):
+	if rally_hitter >= 0 and not interrupted_hitters.has(rally_hitter) and team(rally_hitter) == team(setter) and rally_hitter != setter and not excluded_from_attack(rally_hitter):
 		return rally_hitter
 	var side := team(setter)
 	if six_on_six():
@@ -543,7 +546,7 @@ func hitter_for_set(setter: int, allow_quick: bool = true) -> int:
 				if last_set_to.get(candidate,-1)<last_set_to.get(chosen,-1): chosen=candidate
 			return chosen
 		for i in slots_for(side):
-			if i!=setter and not interrupted_hitters.has(i) and not back_row_setter(i): return i
+			if i!=setter and not interrupted_hitters.has(i) and not excluded_from_attack(i): return i
 	return nearest_on_team(side,frames[side].to_global(Vector3(0.0,0.04,1.45)),setter)
 
 func manual_target_hitter(setter:int) -> int:
@@ -898,7 +901,7 @@ var called_this_pass := false
 
 func call_for_set() -> void:
 	if spectator or phase!=Phase.LIVE or flight_kind!="pass" or possession_team!=0 or touches!=1 or team_size<3 or rally_setter<=0 or called_this_pass: return
-	if back_row_setter(0) or interrupted_hitters.has(0) or cpu_second_spike: return
+	if excluded_from_attack(0) or interrupted_hitters.has(0) or cpu_second_spike: return
 	if six_on_six() and not attack_lane_for(0).is_finite(): return
 	called_this_pass=true
 	cpu_dump=false
@@ -1979,7 +1982,7 @@ func select_receiver() -> void:
 		cpu_technique = 2
 	elif overhead_available(cpu_choice,1):
 		cpu_technique = 1
-	if second_ball and not (side==0 and called_this_pass) and not back_row_setter(cpu_choice):
+	if second_ball and not (side==0 and called_this_pass) and not excluded_from_attack(cpu_choice):
 		second_ball_options += 1
 		var hand_point := frames[side].to_local(path_point(arrival(2.35 if cpu_technique == 2 else 1.92)))
 		var tight := hand_point.z >= 2.65 and hand_point.z <= 3.70
@@ -2075,7 +2078,7 @@ func dig_intercept(index: int) -> float:
 	return best
 
 func start_second_ball_spike(index: int, require_open_lane := false) -> bool:
-	if back_row_setter(index): return false
+	if excluded_from_attack(index): return false
 	if team(index)==0 and called_this_pass and cpu_is_setting(index): return false
 	var side := team(index)
 	var driver := attackers[side]

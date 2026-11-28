@@ -73,6 +73,7 @@ func run() -> void:
 				for i in g.slots_for(side):
 					var slot:int=g.lineup_role(i)
 					if slot not in [2,5]: continue
+					assert(g.excluded_from_attack(i)==formations.back_row_libero(slot,g.setter_zones[side]))
 					if formations.zone(slot,g.setter_zones[side]) in [1,5,6]:
 						assert(g.players[i].attributes.position=="Libero")
 						liberos+=1
@@ -96,7 +97,11 @@ func run() -> void:
 				elif role in [2,5]: assert(g.players[i].attributes.position==formations.ROLES[role])
 				var expected=formations.layout(session.game_options,rot,false)[role]
 				assert(g.players[i].position.is_equal_approx(formations.on_court(expected)))
-				assert(g.formation_home(i,true).is_equal_approx(formations.on_court(formations.layout(session.game_options,rot,true)[role])))
+				var defense=formations.layout(session.game_options,rot,true)
+				var defensive_role=role
+				if rot==1 and defense[1].x<defense[3].x and role in [1,3]:
+					defensive_role=4-role
+				assert(g.formation_home(i,true).is_equal_approx(formations.on_court(defense[defensive_role])))
 			assert(formations.zone(g.lineup_role(g.server_index()),g.setter_zones[g.service_team])==1)
 			g.phase=g.Phase.LIVE
 			g.award(receiving,"Side out")
