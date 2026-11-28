@@ -771,6 +771,11 @@ func _process(delta: float) -> void:
 				shot.origin=Contact.palm(setter,"r") if toss_style<2 else ball.position
 				configure_flight(shot,shot.origin)
 				strike_serve(shot,shot.origin,destination,error,toss_style==0)
+				var base_text := "Test speed %.1f km/h"%serve_test_kmh if serve_test_kmh>0. else SwingSpeed.ratings(shot.player)
+				var base_speed := serve_test_kmh if serve_test_kmh>0. else SwingSpeed.kmh(shot.player)
+				var style_factor := float(shot.test_speed_mps)*3.6/maxf(.001,base_speed)
+				var flight_factor := float(shot.velocity.length())/maxf(.001,shot.test_speed_mps)
+				ContactTiming.launch_speed("Serve",shot.velocity,base_text+"\nServe style ×%.2f  ·  Timing and flight ×%.2f"%[style_factor,flight_factor])
 				plan_serve_reception(shot)
 				shot.ball.basis=ball.basis
 				flight_age=0.

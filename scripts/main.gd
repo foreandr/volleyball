@@ -123,6 +123,7 @@ func show_settings() -> void:
 			MenuPresentation.audio_options(sound_panel)
 			add_menu_button(sound_panel,"TestSound","Test navigation sound",func(): MenuPresentation.navigation.play())
 		1:
+			ContactTiming.speed_options(sound_panel)
 			var mode:=CheckButton.new()
 			mode.text="Fullscreen"
 			mode.button_pressed=DisplayServer.window_get_mode() in [DisplayServer.WINDOW_MODE_FULLSCREEN,DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN]

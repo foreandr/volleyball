@@ -347,6 +347,7 @@ func show_section(caption: String) -> void:
 				StorySession.save_options())
 		Xbox.settings(body,show_section.bind(caption))
 		return
+	if caption=="Camera": ContactTiming.speed_options(body)
 	if caption=="Audio": MenuPresentation.audio_options(body)
 	for field in fields():
 		if (field[0]=="Master volume") != (caption=="Audio"): continue

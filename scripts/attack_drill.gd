@@ -1082,6 +1082,8 @@ func hit_spike(charge: float, point: Vector3, palm_gap := 0.0) -> void:
 	var duration := target.slide(Vector3.UP).length()/(speed*spike_speed_multiplier()*jump.spike_power_factor())
 	pass_motion = target/duration+Vector3.UP*Flight.spike_gravity(spike_topspin_rps)*duration*0.5
 	if not ball_audio_muted and pass_motion.length()>=preload("res://scripts/gym_physics.gd").HARD_SPIKE_SPEED: spike_audio.play()
+	if not has_signal("struck"):
+		ContactTiming.launch_speed("Spike",pass_motion,"Contact %.1f km/h  ·  Power ×%.2f  ·  Approach ×%.2f"%[speed*3.6,spike_speed_multiplier(),jump.spike_power_factor()])
 	flight_end = duration
 	swing_net_hit = Net.first_hit(spike_flight_point,0.0,duration)
 	stage = Stage.HIT

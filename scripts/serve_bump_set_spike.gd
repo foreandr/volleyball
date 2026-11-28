@@ -347,6 +347,7 @@ func tick_demo(delta: float, controls: RefCounted) -> void:
 		if not is_finite(serve_demo.contact_clock): return
 		serve_origin = serve_demo.origin
 		serve_velocity = serve_demo.velocity
+		ContactTiming.launch_speed("Serve",serve_velocity,"Horizontal %.1f  ·  Vertical %.1f km/h"%[serve_velocity.slide(Vector3.UP).length()*3.6,serve_velocity.y*3.6])
 		serve_demo.ball.hide()
 		ball.show()
 	serve_demo.step(delta)

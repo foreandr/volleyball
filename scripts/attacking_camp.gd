@@ -911,6 +911,8 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 			spin_acceleration=shot_spin_force(ball.position,landing,shot_time)
 			drop_velocity=launch_velocity(ball.position,landing,shot_time,spin_acceleration)
 			strike_launch_speed=drop_velocity.length()
+			if not has_meta("live_sampler") and not has_meta("sampling_attack"):
+				show_strike_speed()
 			roll_time=-1.
 			trace("spike",{"ball_contact":str(strike_point),"intended_contact":str(endpoint),"set_marker":str(active_set),"tip_shot":tip_shot,"roll_shot":roll_shot,"from":str(ball.position),"palm_gap":nearest.distance_to(palm),"contact_grade_ms":roundi(contact_grade*1000.) if is_finite(contact_grade) else null,"approach_delay_ms":roundi(approach_delay*1000.),"button_ms":roundi(release_grade*1000.) if is_finite(release_grade) else null})
 			spend_swing_stamina()
@@ -918,6 +920,20 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 			return true
 	if elapsed>=contact_deadline(): return miss_attack()
 	return false
+
+func show_strike_speed() -> void:
+	var details := "Controlled placement arc" if tip_shot or roll_shot else ""
+	if details.is_empty():
+		var base := preload("res://scripts/swing_speed.gd").kmh(hitter)
+		var effort := float(review_setup.get("power",drill_hit_speed))/14.
+		var approach := attack_jump.spike_power_factor()
+		var bonus := attack_speed()*3.6/maxf(.001,base*effort)
+		details=preload("res://scripts/swing_speed.gd").ratings(hitter)
+		details+="\nEffort ×%.2f  ·  Approach ×%.2f"%[effort,approach]
+		if absf(bonus-1.)>.005: details+="  ·  Demo ×%.2f"%bonus
+		details+="  ·  Flight ×%.2f"%(strike_launch_speed/maxf(.001,attack_speed()*approach))
+	var action := "Tip" if tip_shot else ("Roll" if roll_shot else "Spike")
+	ContactTiming.launch_speed(hitter.display_name.get_slice(" ",hitter.display_name.count(" "))+"  ·  "+action,drop_velocity,details)
 
 func contact_deadline() -> float:
 	return flight_time

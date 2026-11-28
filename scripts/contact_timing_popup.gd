@@ -1,6 +1,9 @@
 extends CanvasLayer
 
 var caption := Label.new()
+var speed_caption := Label.new()
+var speed_fade: Tween
+var speed_scene: Node
 var fade: Tween
 var owner_scene: Node
 
@@ -15,6 +18,42 @@ func _ready() -> void:
 	caption.add_theme_constant_override("outline_size",6)
 	caption.add_theme_color_override("font_outline_color",Color("152024"))
 	caption.hide()
+	add_child(speed_caption)
+	speed_caption.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	speed_caption.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	speed_caption.offset_top=134
+	speed_caption.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+	speed_caption.add_theme_font_size_override("font_size",18)
+	speed_caption.add_theme_constant_override("outline_size",5)
+	speed_caption.add_theme_color_override("font_outline_color",Color("152024"))
+	speed_caption.hide()
+
+func launch_speed(action:String, velocity:Vector3, details:String) -> void:
+	if not StorySession.game_options.get_value("presentation","launch_speed",true): return
+	if speed_fade: speed_fade.kill()
+	speed_scene=get_tree().current_scene
+	speed_caption.text="%s   %.1f km/h"%[action,velocity.length()*3.6]
+	var explain:bool=StorySession.game_options.get_value("presentation","speed_details",true)
+	if explain and not details.is_empty(): speed_caption.text+="\n"+details
+	speed_caption.modulate.a=0.
+	speed_caption.show()
+	speed_fade=create_tween()
+	speed_fade.tween_property(speed_caption,"modulate:a",1.,.10)
+	speed_fade.tween_interval(3. if explain else 1.4)
+	speed_fade.tween_property(speed_caption,"modulate:a",0.,.35)
+	speed_fade.tween_callback(speed_caption.hide)
+
+func speed_options(host:Container) -> void:
+	for item in [["launch_speed","Show attack and serve speed"],["speed_details","Show speed calculation"]]:
+		var toggle:=CheckButton.new()
+		toggle.text=item[1]
+		toggle.button_pressed=StorySession.game_options.get_value("presentation",item[0],true)
+		host.add_child(toggle)
+		toggle.toggled.connect(func(on:bool):
+			StorySession.game_options.set_value("presentation",item[0],on)
+			StorySession.save_options()
+			speed_caption.hide())
+
 
 func scored(action:String,offset:float,green:bool,playable:bool,estimated:=false) -> void:
 	if not is_finite(offset): return
@@ -42,4 +81,5 @@ func display(message:String,tint:Color) -> void:
 	fade.tween_callback(caption.hide)
 
 func _process(_delta:float) -> void:
+	if speed_caption.visible and speed_scene!=get_tree().current_scene: speed_caption.hide()
 	if caption.visible and owner_scene!=get_tree().current_scene: caption.hide()
