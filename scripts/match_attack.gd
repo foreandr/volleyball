@@ -302,12 +302,12 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 
 func hit_spike(charge: float, point: Vector3, palm_gap := 0.0) -> void:
 	if timed_human and not manual_release_valid: return
+	if not decoy_swing:
+		for modifier in setter.skeleton.get_children():
+			if modifier.has_method("mark_spike_contact"):
+				modifier.mark_spike_contact(setter.get_pose_author(),to_global(point))
 	if chase_late_sets or timed_human:
 		contact_phase=live_swing_phase
-		if not decoy_swing:
-			for modifier in setter.skeleton.get_children():
-				if modifier.has_method("mark_spike_contact"):
-					modifier.mark_spike_contact(setter.get_pose_author(),to_global(point))
 		var rig: Skeleton3D=setter.skeleton
 		contact_offset=rig.to_local(to_global(point))-rig.get_bone_global_pose(rig.find_bone("upperarm_r")).origin
 	super.hit_spike(charge,point,palm_gap)
