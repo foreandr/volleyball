@@ -234,6 +234,7 @@ var original_msaa := Viewport.MSAA_DISABLED
 var floor_sound_count := 0
 var attack_floor_pending := false
 var hard_spike_floor_pending := false
+var wall_impact := AudioStreamPlayer.new()
 var floor_impact := AudioStreamPlayer.new()
 
 var court_boundary:=preload("res://scripts/court_boundary_flash.gd").new()
@@ -244,6 +245,9 @@ func _ready() -> void:
 	if held_input.get_parent()==null: add_child(held_input)
 	floor_impact.stream=preload("res://assets/audio/floor_impacts.tres")
 	add_child(floor_impact)
+	wall_impact.stream=preload("res://assets/audio/ball_floor.wav")
+	wall_impact.pitch_scale=.78
+	add_child(wall_impact)
 	original_render_scale=get_viewport().scaling_3d_scale
 	original_msaa=get_viewport().msaa_3d
 	MenuPresentation.set_music(false)
@@ -1675,6 +1679,12 @@ func advance_missed_ball(delta: float, rebound_floor := false) -> void:
 			ball.position.y=maxf(ball.position.y,Contact.BALL_RADIUS+.004)+.003
 			drop_velocity=drop_velocity.slide(Vector3.UP)*.72
 		elif not hit.is_empty():
+			var body := instance_from_id(int(hit.get("collider_id",0))) as StaticBody3D
+			var impact_speed := -drop_velocity.dot(hit.normal)
+			if body and body.get_parent().is_in_group("gym_wall") and impact_speed>1. and not has_meta("live_sampler") and not has_meta("sampling_attack"):
+				wall_impact.volume_db=linear_to_db(clampf(impact_speed/15.,.12,1.))
+				wall_impact.play()
+				trace("wall_impact",{"point":str(ball.position),"impact_mps":impact_speed,"surface":str(body.get_parent().name)})
 			attack_surface_contact(ball.position,false)
 			ball.position+=Vector3(hit.normal)*.004
 			drop_velocity=drop_velocity.bounce(hit.normal)*.45

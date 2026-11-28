@@ -738,7 +738,7 @@ func step_attack(delta: float) -> void:
 		swing_time+=delta
 		pose_swing()
 		advance_spike(delta)
-		if roll_time>=.5 or (rebound_age>=.85 and not (cpu_hitter and bounce_line)):
+		if roll_time>=1.0 or (rebound_age>=1.35 and not (cpu_hitter and bounce_line)):
 			rotation_drill.free_ball(drop_velocity)
 			begin("between")
 		return

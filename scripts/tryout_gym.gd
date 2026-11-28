@@ -10,7 +10,9 @@ var benches: Array[MeshInstance3D] = []
 
 func box(label_: String,size_: Vector3,center: Vector3,style: Material) -> MeshInstance3D:
 	var part := super.box(label_,size_,center,style)
-	if label_ in ["Runoff","North wall","South wall","Side masonry","Ceiling","Bleacher bench","Folding support","LeftPostPadding","RightPostPadding"]:
+	if label_ in ["North wall","South wall","Side masonry","Wall pad"]:
+		part.add_to_group("gym_wall")
+	if label_ in ["Wall pad","Runoff","North wall","South wall","Side masonry","Ceiling","Bleacher bench","Folding support","LeftPostPadding","RightPostPadding"]:
 		var shape := BoxShape3D.new()
 		shape.size = size_
 		Contacts.solid(part,shape,Contacts.GYM)
