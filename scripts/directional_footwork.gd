@@ -26,6 +26,10 @@ func block_step(velocity: Vector3, gap: float, net_yaw: float, ready: bool, held
 		weight=0.
 		squat_depth=0.
 		return
+	if held and speed<=.10:
+		weight=0.
+		squat_depth=0.
+		return
 	if not held: actor.play_action("idle",.14)
 	var depth := .23*(1.-smoothstep(.65,1.8,speed)) if ready and not held else 0.
 	squat_depth=move_toward(squat_depth,depth,delta*.70)
@@ -81,7 +85,10 @@ func step(direction: Vector3, delta: float, step_rate: float, continuous := fals
 			var lateral_stride := minf(float(recipe.stride),stance_width*(.95 if blocking_steps else .45))
 			target.x = ready_foot.origin.x+travel.x*stride*lateral_stride*weight
 		var pole: Vector3 = author.point(author.baseline,"calf_"+side)-author.point(author.baseline,"thigh_"+side)
-		if continuous:
+		if blocking_steps and grounded_shuffle:
+			var across:Vector3=(author.feet["l"].origin-author.feet["r"].origin).slide(Vector3.UP).normalized()
+			pole=Vector3.BACK.slide(across)+across*(.95 if side=="l" else -.95)
+		elif continuous:
 			pole = Vector3(0.12 if side == "l" else -0.12,0.16,1.0)
 		author.limb(pose,"thigh_"+side,"calf_"+side,"foot_"+side,target,pole)
 		# Roll through the swing and return to a flat shoe at contact.

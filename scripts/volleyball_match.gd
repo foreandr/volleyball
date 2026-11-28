@@ -94,6 +94,7 @@ var last_input_technique := -1
 var show_pass_trajectory:=true
 var displayed_flight:=-1
 var flight_guide:=MeshInstance3D.new()
+var cpu_reception:=preload("res://scripts/match_manual_reception.gd").new()
 var manual: Node3D
 var replay_meter:Dictionary={}
 var indicators: Control
@@ -215,6 +216,7 @@ var support_lanes := [0.0,0.0]
 var held_input := preload("res://scripts/held_input_hud.gd").new()
 
 func configure(actor: Node3D, board: Label, status: Label, build := "", players_per_team := 2, learn_from_demo := false, mirror_blue_right := true, away_count := 0) -> void:
+	if cpu_reception.get_parent()==null: add_child(cpu_reception)
 	if held_input.get_parent()==null: add_child(held_input)
 	team_size = clampi(players_per_team,2,6)
 	away_size = clampi(away_count,2,6) if away_count > 0 else team_size
@@ -919,6 +921,7 @@ var career_contributed:=false
 
 func award(side: int, reason: String) -> void:
 	if phase != Phase.LIVE: return
+	cpu_reception.stop_pose()
 	if manual and side!=0 and manual.reception.eligible(self) and is_finite(manual.reception.closest_receive_gap):
 		ContactTiming.missed_reception(manual.reception.miss_offset,manual.reception.closest_receive_gap,"Dig" if defensive_ball() else "Reception")
 	if career_contributed: career_involvement+=1
@@ -982,6 +985,7 @@ func reset_receives() -> void:
 	request_age = -INF
 
 func launch(point: Vector3, motion: Vector3, kind: String, from: int, spin_rate := 0.0, hitter := -1, set_pin := Vector3.ZERO, feed_acceleration := Vector3.INF, angular_spin := Vector3.INF, pace_includes_stamina := false) -> void:
+	cpu_reception.stop_pose()
 	# A deflection changes the ball's flight immediately, even during a player's slide.
 	for index in players.size():
 		var save: RefCounted = platforms[index].low_save
@@ -2061,6 +2065,8 @@ func tick_receive(delta: float, previous: float) -> void:
 	var frame := frames[team(index)]
 	var bump := platforms[index]
 	var technique := requested if is_human(index) else cpu_technique
+	if not is_human(index) and defensive_ball() and not recoveries.has(index) and not set_jumps[index].active and not bump.low_save.active:
+		if cpu_reception.cpu_dig(self,index,previous): return
 	var force_forearms := drill_force_forearm_serve_receive and flight_kind == "serve"
 	if not force_forearms and not is_human(index) and (defensive_ball() or flight_kind == "serve") and is_finite(bump.pressed_at) and not is_finite(bump.touch_time) and not bump.low_save.active and elapsed-dig_switch_at > 0.16:
 		var hands_at := arrival(hand_contact_height(1))
@@ -2460,7 +2466,7 @@ func pose_fake_dump(actor: Node3D, lead: float) -> void:
 		var bone := rig.find_bone(part)
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.orthonormalized().get_rotation_quaternion())
 
-func start_block(index: int, remaining := INF, reads_second := false, overpass_swing := false) -> void:
+func start_block(index: int, remaining := INF, reads_second := false, overpass_swing := false, partner_push := false) -> void:
 	if six_on_six() and Formation.zone(lineup_role(index),setter_zones[team(index)]) in [1,5,6]: return
 	if manual and team(index)==0 and not is_human(index) and manual.block_call==manual.BlockCall.OFF and not overpass_swing: return
 	if manual and index==0 and manual.reception.landing_actor!=null: return
@@ -2476,7 +2482,7 @@ func start_block(index: int, remaining := INF, reads_second := false, overpass_s
 	block.landing_recovery = 0.43 if reads_second else 0.13
 	block.overpass_swing = overpass_swing
 	block.aggressive_press = not is_human(index) and not overpass_swing
-	block.begin(actor,maxf(0.,manual.block_buffer) if manual and is_human(index) else 0.)
+	block.begin(actor,maxf(0.,manual.block_buffer) if manual and is_human(index) else (1. if partner_push else 0.))
 	if is_finite(remaining): block.tempo = clampf((Block.START+Block.AIR*0.5)/maxf(remaining,0.18),1.13,1.80)
 	blocks[index] = block
 	if not is_human(index): cpu_policy.used(team(index),"block lane")
@@ -2864,7 +2870,7 @@ func defend_pin_set(side:int,attack_x:float,driver:Node3D,delta:float) -> void:
 				var inside:=minf(outward*pin_x,outward*players[pin].position.x)-.68
 				target.x=clampf(outward*inside,-4.15,4.15)
 			move_cpu(i,frame.to_global(target),delta,7.6,sight,false,false,9.,false,0.,4.7)
-			if eta>=-.04 and eta<=.41 and absf(players[i].position.x-target.x)<.38:
+			if i==pin and eta>=-.04 and eta<=.41 and absf(players[i].position.x-target.x)<.38:
 				start_block(i,eta)
 				if blocks.has(i):
 					blocks[i].square_block=not trap
@@ -2874,6 +2880,23 @@ func defend_pin_set(side:int,attack_x:float,driver:Node3D,delta:float) -> void:
 				target.x=clampf(target.x+.48*outward,-4.25,4.25)
 				target.z=maxf(-4.70,target.z-.95)
 			move_cpu(i,frame.to_global(target),delta,4.8,sight)
+
+	# The outside blocker sets the time. Let the middle finish closing before joining.
+	if not blocks.has(pin) or blocks.has(middle) or is_human(middle): return
+	var leader:RefCounted=blocks[pin]
+	var seam:=outward*(players[pin].position.x-players[middle].position.x)
+	if seam<.32 or seam>1.08 or leader.age>Block.START+.08: return
+	var pushing:bool=leader.drive_elapsed<leader.drive_duration
+	start_block(middle,INF,false,false,pushing)
+	if not blocks.has(middle): return
+	var follower:RefCounted=blocks[middle]
+	follower.square_block=not trap
+	follower.net_heading=0.
+	follower.tempo=leader.tempo
+	follower.age=leader.age
+	if pushing:
+		follower.drive_duration=leader.drive_duration
+		follower.drive_elapsed=leader.drive_elapsed
 
 func position_defense(delta: float) -> void:
 	if position_overpass(delta): return
@@ -3263,6 +3286,7 @@ func manual_ready_movement(delta:float,controls:RefCounted,can_toss:bool) -> voi
 
 func step_match(delta: float, controls: RefCounted) -> void:
 	match_clock += delta
+	cpu_reception.land(delta)
 	if manual: manual.reception.land(delta)
 	if not net_ripple.is_empty():
 		var mesh := get_parent().get_node_or_null("VolleyballCourt/DynamicNet")

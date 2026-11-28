@@ -125,11 +125,60 @@ func run() -> void:
 			assert(pin!=middle and g.blocks.has(pin) and g.blocks.has(middle))
 			assert(wing*(g.players[pin].position.x-g.players[middle].position.x)>.45)
 			assert(g.blocks[pin].square_block and g.blocks[middle].square_block)
+			assert(is_equal_approx(g.blocks[pin].tempo,g.blocks[middle].tempo) and is_equal_approx(g.blocks[pin].age,g.blocks[middle].age))
 			for i in [pin,middle]:
 				g.blocks[i].read_air_lane(g.players[i].global_position+Vector3(1.,3.,1.),g.players)
 				assert(g.blocks[i].reach_input==Vector2.ZERO and g.blocks[i].lean_input==0.)
 			assert(g.players[line].position.z<start.z-.65 and wing*(g.players[line].position.x-start.x)>.2)
 			g.blocks.clear()
+			if defense==0 and wing>0:
+				var saved_roles=g.lineup_roles[0].duplicate()
+				var pin_position:Vector3=g.players[pin].position
+				g.lineup_roles[0][pin]=g.lineup_roles[0][0]
+				g.lineup_roles[0][0]=saved_roles[pin]
+				g.players[0].position=pin_position
+				g.spectator=false
+				driver.approach_expected_hit_at=driver.clock+.25
+				g.position_defense(1./60.)
+				assert(g.defender_assignment[0]==0 and not g.blocks.has(middle))
+				var leader=g.Block.new()
+				leader.begin(g.players[0],1.)
+				g.blocks[0]=leader
+				g.position_defense(1./60.)
+				assert(g.blocks.has(middle))
+				var follower=g.blocks[middle]
+				var lifts:=[-1,-1]
+				for tick in 24:
+					for pair in [[leader,0],[follower,1]]:
+						pair[0].step(1./60.,g.ball.global_position)
+						if lifts[pair[1]]<0 and pair[0].actor.position.y>pair[0].base.y+.01: lifts[pair[1]]=tick
+				assert(lifts[0]>=0 and lifts[0]==lifts[1])
+				print("Human pin / CPU middle first airborne frames: ",lifts)
+				g.blocks.clear()
+				g.spectator=true
+				g.lineup_roles[0]=saved_roles
+	# Recorded sharp cut toward 503. Both the mapped animation and real limb contact must fire.
+	g.blocks.clear()
+	g.recoveries.clear()
+	g.phase=g.Phase.LIVE
+	g.possession_team=1
+	g.touches=3
+	var defense_positions:=[Vector2(2.73,3.42),Vector2(-3.07,-.23),Vector2(.15,-2.87),Vector2(1.69,3.42),Vector2(3.42,-1.1),Vector2(-2.31,3.43)]
+	for i in 6:
+		g.players[i].position=Vector3(defense_positions[i].x,.04,defense_positions[i].y)
+	g.players[1].rotation.y=.91
+	g.players[7].global_position=Vector3(4.,.04,5.23)
+	g.launch(Vector3(4.,2.526,5.234),Vector3(-8.612,3.674,-4.885),"spike",7,6.596,-1,Vector3.ZERO,Vector3.INF,Vector3.INF,true)
+	var mapped:=false
+	for tick in 90:
+		var previous:float=g.elapsed
+		g.elapsed+=1./60.
+		g.ball.global_position=g.path_point(minf(g.elapsed,g.flight_end()))
+		g.tick_receive(1./60.,previous)
+		mapped=mapped or not g.cpu_reception.motion.is_empty()
+		if g.flight_kind!="spike": break
+	print("Recorded cut: mapped=",mapped," last contact=",g.last_player," flight=",g.flight_kind)
+	assert(mapped and g.last_player==1 and g.flight_kind=="pass")
 	g.replay.record(g)
 	g.match_clock+=1.
 	g.replay.record(g)

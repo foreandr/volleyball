@@ -63,7 +63,7 @@ func update(actor: Node3D,delta: float,pose_depth := 1., beach_block := false) -
 	if beach_block:
 		var left:Vector3=author.point(baseline,"foot_l")
 		var right:Vector3=author.point(baseline,"foot_r")
-		stance_axis=(left-right).slide(Vector3.UP).normalized()
+		stance_axis=(author.point(baseline,"thigh_l")-author.point(baseline,"thigh_r")).slide(Vector3.UP).normalized()
 		var hip_center:Vector3=(author.point(pose,"thigh_l")+author.point(pose,"thigh_r"))*.5
 		var shift:=stance_axis*((left+right)*.5-hip_center).dot(stance_axis)
 		pose[hips].origin+=parent.basis.inverse()*shift*bend
@@ -96,7 +96,9 @@ func update(actor: Node3D,delta: float,pose_depth := 1., beach_block := false) -
 			var ankle:Vector3=author.point(baseline,foot)
 			var knee:Vector3=author.point(baseline,"calf_"+side)
 			var initial_pole:=(knee-thigh).slide(thigh.direction_to(ankle)).normalized()
-			pole=initial_pole.lerp(forward+stance_axis*(.65 if side=="l" else -.65),bend)
+			var outward:=stance_axis*(1. if side=="l" else -1.)
+			var width:=maxf(0.,(ankle-thigh).dot(outward))
+			pole=initial_pole.lerp((forward+outward*(.9+width)).normalized(),bend)
 		author.limb(pose,"thigh_"+side,"calf_"+side,foot,author.point(baseline,foot),pole)
 		author.set_world_basis(pose,foot,author.world_pose(baseline,rig.find_bone(foot)).basis)
 	rig.set_bone_pose_position(hips,pose[hips].origin)

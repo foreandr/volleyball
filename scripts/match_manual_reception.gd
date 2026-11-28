@@ -74,11 +74,12 @@ func meter(g,point:Vector3) -> Dictionary:
 	var face:=Contact.joint(g.human,"Head").dot(axis)-.09
 	return Map.release_grade(point.dot(axis),face,mapper.set_intercept.dot(axis),speed,mapper.segment_touch(motion,point-axis*.001,point),mapper.player.effective_rating("Hand reception" if motion.get("kind","")=="overhead" else "Forearm reception"))
 
-func plan(g,previous:float) -> void:
-	var actor:Node3D=g.human
+func plan(g,previous:float,index:=0) -> void:
+	var actor:Node3D=g.players[index]
 	var home:=actor.global_position
 	home.y=.04
 	var source:Vector3=g.players[g.last_player].global_position
+	if g.last_player==index: source=g.path_point(previous)
 	var yaw:=atan2(source.x-home.x,source.z-home.z)
 	var finish:=minf(g.flight_end(),previous+.40)
 	var p:Vector3=g.path_point(previous)
@@ -105,7 +106,7 @@ func plan(g,previous:float) -> void:
 				mapper.set_intercept=g.path_point(contact_at)
 				mapper.incoming_lead_seconds=contact_at-previous
 				mapper.feed_kmh=velocity.length()*3.6
-				mapper.pass_goal=g.frames[0].to_global(Vector3(-1.4,.15,2.8))
+				mapper.pass_goal=g.frames[g.team(index)].to_global(Vector3(-1.4,.15,2.8))
 				mapper.pass_rise=3.4 if g.defensive_ball() else 3.05
 				landing_actor=null
 				motion=mapper.begin_mapped_motion(anchor,actor,home,source,best,.12 if g.defensive_ball() else 0.)
@@ -118,6 +119,44 @@ func plan(g,previous:float) -> void:
 				return
 		p=q
 		t=end
+
+# CPU first contacts use the same authored cells, playback and swept limb shapes.
+func cpu_dig(g,index:int,previous:float) -> bool:
+	var actor:Node3D=g.players[index]
+	if not motion.is_empty() and mapper.player!=actor: stop_pose()
+	if motion.is_empty():
+		if g.elapsed<next_check: return false
+		next_check=g.elapsed+.035
+		plan(g,previous,index)
+		if motion.is_empty(): return false
+		g.platforms[index].reset()
+		g.trace.write("mapped_dig",g.match_clock,{"player":index,"clip":motion.id})
+	var offset:float=g.elapsed-contact_at
+	var frame:float=motion.contact+offset*60.
+	mapper.sample_receiver(motion,clampf(frame,0.,motion.frames),true,mapper.legs)
+	g.animated[index]=true
+	var a:Vector3=g.path_point(previous)
+	var b:Vector3=g.ball.global_position
+	if mapper.segment_touch(motion,a,b):
+		for refinement in 7:
+			var mid:=a.lerp(b,.5)
+			if mapper.segment_touch(motion,a,mid): b=mid
+			else: a=mid
+		var hands:bool=motion.kind=="overhead"
+		var rating:float=actor.effective_rating("Hand defense" if hands else "Forearm defense")
+		var miss:=Accuracy.sample_offset(Accuracy.spread(absf(offset)/.25,mapper.feed_kmh/3.6,g.spin,rating,false))
+		var goal:Vector3=mapper.pass_goal+miss.slide(Vector3.UP)
+		var lift:=sqrt(19.62*mapper.pass_rise)
+		var duration:float=(lift+sqrt(19.62*maxf(.05,b.y+mapper.pass_rise-1.8)))/9.81
+		g.platforms[index].hand_setting=hands
+		g.platforms[index].touch_time=g.elapsed
+		g.receive_contact(index,b,(goal-b).slide(Vector3.UP)/duration+Vector3.UP*lift,int(hands))
+		return true
+	if offset>.12:
+		stop_pose()
+		next_check=g.flight_end()
+		return false
+	return true
 
 func step(g,previous:float,delta:float,controls) -> bool:
 	if not eligible(g):
