@@ -13,7 +13,7 @@ var reach_assist := Vector3.ZERO
 func apply(hitter: Node3D,attack_jump: Jump,phase: String,swing_time: float,contact_swing_time: float,
 		ball_world: Vector3,source: Vector3,endpoint: Vector3,strike_point: Vector3,landing: Vector3,
 		strike_shoulder_offset: Vector3,height: float,speed_factor: float,speed: float,
-		spike_pike_scale: float,spin_choice: int,net_clear_time: float,roll_shot := false,tip_shot := false,roll_reach := 0., track_contact := false) -> void:
+		spike_pike_scale: float,spin_choice: int,net_clear_time: float,roll_shot := false,tip_shot := false,roll_reach := 0., track_contact := false, shovel := false) -> void:
 	if swing_time>.65:
 		if last_shoulder_time>=0.:
 			var rig: Skeleton3D=hitter.skeleton
@@ -210,6 +210,7 @@ func apply(hitter: Node3D,attack_jump: Jump,phase: String,swing_time: float,cont
 		# Accelerate from behind the ball into its back face. A vertical reach from
 		# underneath can brush a ball, but cannot drive it toward the target.
 		var drive_axis:=ball_world.direction_to(landing)
+		if shovel: drive_axis=(drive_axis.slide(Vector3.UP).normalized()+Vector3.UP*.55).normalized()
 		var travel:=lerpf(.33,-.11,smoothstep(.083,.146,swing_time*speed_factor))
 		var desired:=rig.to_local(ball_world-drive_axis*(Contact.BALL_RADIUS+.023+travel))
 		var wrist_at:Vector3=author.point(pose,"hand_r")

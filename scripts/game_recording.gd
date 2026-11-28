@@ -6,6 +6,11 @@ const FPS := 20
 const SIZE := Vector2i(960,540)
 const SEGMENT := 30.0
 const RETENTION := 1800
+const NET_ALERT_FOLDER := "user://recordings/net-attack-alerts"
+const NET_ALERT_FRAMES := FPS*10
+var recent_frames: Array[PackedByteArray]=[]
+var next_recent_frame := 0
+var alert_jobs: Array[int]=[]
 var clip: FileAccess
 var index := PackedInt32Array()
 var started := 0
@@ -76,9 +81,10 @@ func patch(offset: int,value: int) -> void:
 	clip.store_32(value)
 	clip.seek(end)
 
-func begin_clip() -> void:
+func begin_clip(path := "") -> void:
 	var stamp := Time.get_datetime_string_from_system().replace(":","-")
-	clip=FileAccess.open(FOLDER+"/tryout-capture-%s-%d-%d.avi"%[stamp,OS.get_process_id(),Time.get_ticks_msec()],FileAccess.WRITE)
+	if path.is_empty(): path=FOLDER+"/tryout-capture-%s-%d-%d.avi"%[stamp,OS.get_process_id(),Time.get_ticks_msec()]
+	clip=FileAccess.open(path,FileAccess.WRITE)
 	if not clip:
 		push_error("Game recording folder is unwritable")
 		capture_available=false
@@ -191,6 +197,10 @@ func _process(_dt: float) -> void:
 		fps_label.text="%d FPS"%fps
 		fps_label.modulate=Color("72dc8b") if fps>55 else (Color("ffda61") if fps>=50 else Color("ff6565"))
 	if not capture_available: return
+	for i in range(alert_jobs.size()-1,-1,-1):
+		if WorkerThreadPool.is_task_completed(alert_jobs[i]):
+			WorkerThreadPool.wait_for_task_completion(alert_jobs[i])
+			alert_jobs.remove_at(i)
 	while not jobs.is_empty():
 		var job := jobs[0]
 		if job.unsupported:
@@ -224,13 +234,45 @@ func _process(_dt: float) -> void:
 
 func store_frame(jpeg: PackedByteArray,now:int) -> void:
 	while next_frame+1000/FPS<=now and not last_jpeg.is_empty():
-		append_frame(last_jpeg)
+		append_live_frame(last_jpeg)
 		next_frame+=1000/FPS
-	append_frame(jpeg)
+	append_live_frame(jpeg)
 	last_jpeg=jpeg
 	next_frame+=1000/FPS
 
+func append_live_frame(jpeg:PackedByteArray) -> void:
+	append_frame(jpeg)
+	if recent_frames.size()<NET_ALERT_FRAMES: recent_frames.append(jpeg)
+	else: recent_frames[next_recent_frame]=jpeg
+	next_recent_frame=(next_recent_frame+1)%NET_ALERT_FRAMES
+
+func save_net_attack_alert(details:Dictionary) -> String:
+	if recent_frames.size()<2: return ""
+	if DirAccess.make_dir_recursive_absolute(NET_ALERT_FOLDER)!=OK: return ""
+	var id:="%d-%d"%[int(Time.get_unix_time_from_system()*1000000),OS.get_process_id()]
+	var path:=NET_ALERT_FOLDER.path_join(id+".avi")
+	var frames:Array[PackedByteArray]=[]
+	for offset in recent_frames.size():
+		var source:=(next_recent_frame+offset)%NET_ALERT_FRAMES if recent_frames.size()==NET_ALERT_FRAMES else offset
+		frames.append(recent_frames[source])
+	alert_jobs.append(WorkerThreadPool.add_task(write_attack_alert.bind(get_script(),path,frames,details.duplicate(true))))
+	return path
+
+static func write_attack_alert(writer_script:Script,path:String,frames:Array[PackedByteArray],details:Dictionary) -> void:
+	var writer=writer_script.new()
+	writer.begin_clip(path+".tmp")
+	if writer.clip:
+		for jpeg in frames: writer.append_frame(jpeg)
+		writer.finish()
+		if DirAccess.rename_absolute(path+".tmp",path)==OK:
+			details["clip"]=ProjectSettings.globalize_path(path)
+			var entry:=FileAccess.open(path.get_basename()+".json",FileAccess.WRITE)
+			if entry: entry.store_string(JSON.stringify(details,"\t"))
+	writer.free()
+
 func _exit_tree() -> void:
+	for alert in alert_jobs:
+		WorkerThreadPool.wait_for_task_completion(alert)
 	for job in jobs:
 		if job.worker>=0:
 			WorkerThreadPool.wait_for_task_completion(job.worker)

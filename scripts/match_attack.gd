@@ -14,6 +14,8 @@ var contact_arm := {}
 var finish_speed := 0.
 var release_transfer := 0.
 var inherited_quick_jump := false
+var cpu_middle_attack := false
+var off_net_shovel := false
 var chase_late_sets := false
 var decoy_swing := false
 var rally_shot := "spike"
@@ -245,6 +247,16 @@ func approach_heading_yaw() -> float:
 	var inward := -signf(rally_set_target.x)
 	return atan2(inward*clampf(jump.heading.x*inward,.20,.65),maxf(.65,jump.heading.z))
 
+func accepts_swing_contact(contact:Dictionary) -> bool:
+	if not cpu_middle_attack or contact.is_empty(): return true
+	var point:Vector3=contact.point
+	var intended:=shovel_velocity(point) if off_net_shovel else (swing_aim-point).normalized()*22.
+	return StrikePalm.outgoing(contact,intended).z>.05
+
+func shovel_velocity(point:Vector3) -> Vector3:
+	var duration:=maxf(.72,(swing_aim-point).slide(Vector3.UP).length()/8.)
+	return (swing_aim-point)/duration+Vector3.UP*.5*Flight.spike_gravity(2.)*duration
+
 func airborne_shot_yaw(target:float) -> float:
 	if not timed_human and absf(rally_set_target.x)<2.5:
 		return clampf(wrapf(target,-PI,PI),-.68,.68)
@@ -328,7 +340,7 @@ func pose_bow_draw(delta: float, weight: float, contact: Vector3, extension := 0
 		intercept=to_global(flight_point(pass_origin,pass_motion,clock-stage_start+ahead))
 	camp_swing.apply(setter,jump,"spike" if hit else "set",swing_age,contact_phase,intercept,
 		to_global(feed_origin),to_global(rally_set_target),to_global(swing_contact) if hit else ball.global_position,
-		to_global(swing_aim),contact_offset,height,factor,finish_speed if hit else speed,1.,0,-1.,rally_shot=="roll",rally_shot=="tip",.35,true)
+		to_global(swing_aim),contact_offset,height,factor,finish_speed if hit else speed,1.,0,-1.,rally_shot=="roll",rally_shot=="tip",.35,true,off_net_shovel)
 
 	if hit and not contact_arm.is_empty():
 		var blend:=smoothstep(0.,.095,clock-stage_start)
@@ -359,6 +371,9 @@ func hit_spike(charge: float, point: Vector3, palm_gap := 0.0) -> void:
 		if discriminant>=0. and displacement.length_squared()>.01:
 			flight_end=sqrt(2.*displacement.length_squared()/(term+sqrt(discriminant)))
 			pass_motion=displacement/flight_end+Vector3.UP*.5*g*flight_end
+	if off_net_shovel:
+		pass_motion=shovel_velocity(point)
+		spike_topspin_rps=2.
 	if not strike_sample.is_empty():
 		release_transfer=StrikePalm.transfer(strike_sample,pass_motion)
 		pass_motion=StrikePalm.outgoing(strike_sample,pass_motion)

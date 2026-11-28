@@ -41,6 +41,13 @@ func run() -> void:
 		g.players[pin].position=g.attack_lane_for(pin)
 		if g.pin_tempo(setter,pin,g.SETTER_BASE,0)!=2: failures+=1
 		if absf(g.pin_staging(pin,g.attack_lane_for(pin)).x)<=4.5: failures+=1
+	var middle_lane:=Vector3(0.,.065,3.30)
+	for side_position:float in [-1.3,1.3]:
+		var setter_meet:=Vector3(.12,2.8,1.55)
+		var spaced:Vector3=g.space_middle_from_setter(middle_lane,setter_meet,side_position)
+		if not is_equal_approx(absf(spaced.x-setter_meet.x),1.5) or signf(spaced.x)!=signf(side_position): failures+=1
+		setter_meet.z=3.1
+		if g.space_middle_from_setter(middle_lane,setter_meet,side_position)!=middle_lane: failures+=1
 	print("CONTACT RULES failures ",failures)
 	for lane:String in ["left","middle","right"]:
 		var hits:=0
@@ -72,6 +79,7 @@ func run() -> void:
 				if not contacted and flight!=g.flight_number and g.flight_kind=="spike" and g.last_player==id:
 					contacted=true
 					var local:Vector3=g.frames[1].global_basis.inverse()*g.velocity
+					if lane=="middle" and local.z<=0.: failures+=1
 					hits+=1
 					if local.z>0. and g.net_hit.is_empty(): clears+=1
 					if local.length()*3.6>=60.: hard+=1

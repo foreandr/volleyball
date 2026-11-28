@@ -76,7 +76,7 @@ var practice_setup_path := "user://attack_practice.cfg"
 var torso_rotation_scale := 2.0
 var leg_kickback_scale := 2.0
 var leg_rotation_scale := 1.0
-var air_turn_speed := 270.0
+var air_turn_speed := 135.0
 var draw_delay := SpikeArm.DEFAULT_DRAW_DELAY
 var elbow_clearance := SpikeArm.DEFAULT_ELBOW_CLEARANCE
 var two_step_tilt := 40.0
@@ -937,6 +937,9 @@ func play_cpu_set(time: float, delta: float) -> void:
 			cpu_set.begin_hand_contact(cpu_contact_point,time)
 		if uses_assisted_approach(): approach_set_touched_at = clock
 
+func accepts_swing_contact(_contact:Dictionary) -> bool:
+	return true
+
 func airborne_shot_yaw(target:float) -> float:
 	return target
 
@@ -955,7 +958,7 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 		if uses_assisted_approach():
 			var glance := clampf(angle_difference(takeoff_yaw,incoming_yaw),-deg_to_rad(25.0),deg_to_rad(25.0))
 			incoming_yaw = takeoff_yaw+glance
-		var turn_rate := 420.0 if uses_assisted_approach() else 720.0
+		var turn_rate := 210.0 if uses_assisted_approach() else 360.0
 		if uses_assisted_approach():
 			setter.rotation.y = rotate_toward(setter.rotation.y,airborne_shot_yaw(incoming_yaw),deg_to_rad(turn_rate)*delta)
 		else:
@@ -1019,7 +1022,7 @@ func play_pin_ball(time: float, previous: float, delta: float) -> void:
 			var leaving_reach := after.dot(after-before) >= 0.0 or drive+delta > swing_drive_duration+0.12
 			if tracked:
 				strike_sample=StrikePalm.sweep(previous_hand_sample,hand,previous_ball,ball.position,maxf(delta,.0001))
-				fraction=strike_sample.get("fraction",-1.)
+				fraction=strike_sample.get("fraction",-1.) if accepts_swing_contact(strike_sample) else -1.
 			elif uses_assisted_approach() and fraction < 0.0 and leaving_reach:
 				fraction = hand_contact_fraction(before,after,spike_assist_radius())
 			if fraction >= 0.0:

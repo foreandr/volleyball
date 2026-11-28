@@ -46,7 +46,7 @@ static func sweep(before:Dictionary,after:Dictionary,ball_before:Vector3,ball_af
 	var outward:=a.lerp(b,first).direction_to(ball)
 	var normal:=Vector3(before.normal).lerp(after.normal,first).normalized()
 	var shoulder:=Vector3(before.shoulder).lerp(after.shoulder,first)
-	return {"reach":ball-shoulder,"fraction":first,"part":part,"outward":outward,"normal":normal,
+	return {"point":ball,"reach":ball-shoulder,"fraction":first,"part":part,"outward":outward,"normal":normal,
 		"hand_velocity":(b-a)/delta,"incoming":(ball_after-ball_before)/delta}
 
 static func transfer(contact:Dictionary,aim:Vector3) -> float:
