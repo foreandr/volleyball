@@ -44,6 +44,7 @@ func middle_for_call() -> int:
 var owners:={}
 var modifiers:Array[int]=[]
 var lane:=-1
+var requested_tempo:=2
 var attack_lane:=-1
 var spike_error:=INF
 var aim:=Vector3.ZERO
@@ -129,7 +130,9 @@ func handle(event:InputEvent) -> bool:
 	if down: owners[button]=mode
 	else: owners.erase(button)
 	if g.phase==g.Phase.LIVE and button in [JOY_BUTTON_DPAD_LEFT,JOY_BUTTON_DPAD_RIGHT,JOY_BUTTON_DPAD_UP,JOY_BUTTON_DPAD_DOWN]:
-		if down: call_block(button)
+		if mode=="attack" and button in [JOY_BUTTON_DPAD_UP,JOY_BUTTON_DPAD_DOWN]:
+			if down: requested_tempo=clampi(requested_tempo+(1 if button==JOY_BUTTON_DPAD_UP else -1),0,3)
+		elif down and mode=="block": call_block(button)
 		return true
 	if mode=="serve":
 		var face:=service.Camp.FACE.find(button)
@@ -316,14 +319,18 @@ func claim_held_target() -> void:
 			aim=Vector3([3.75,0.,-3.75][index],.065,8.5)
 
 func attack_step(dt:float) -> void:
-	if g.expected_hitter!=0 or attack_lane<0: return
 	var driver=g.attackers[0]
+	driver.swing_target.visible=g.expected_hitter==0 and g.flight_kind=="set"
+	if not driver.swing_target.visible: return
+	if attack_lane<0:
+		driver.swing_target.position=Vector3(driver.swing_aim.x,.065,driver.swing_aim.z)
+		return
 	var lane_x:float=[3.75,0.,-3.75][attack_lane]
 	if driver.jump.active:
 		var move:=Vector2(axis(JOY_AXIS_LEFT_X),axis(JOY_AXIS_LEFT_Y))
 		aim.x=clampf(aim.x-move.x*3.*dt,lane_x-2.5,lane_x+2.5)
 		aim.z=clampf(aim.z-move.y*10.*dt,4.65,16.)
-	driver.swing_aim=aim
+	driver.aim_swing(aim)
 	var last:int=-1 if modifiers.is_empty() else modifiers.back()
 	driver.rally_shot="roll" if last==JOY_BUTTON_LEFT_SHOULDER else ("tip" if last==JOY_BUTTON_RIGHT_SHOULDER else "spike")
 

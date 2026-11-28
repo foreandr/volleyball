@@ -412,6 +412,7 @@ func nearest_on_team(side: int, target: Vector3, exclude := -1, also_exclude := 
 	return best
 
 func setter_for_pass(passer: int) -> int:
+	if six_on_six() and lineup_role(passer)==0: return choose_setter(team(passer),passer)
 	if count_for(team(passer)) == 2: return partner_of(passer)
 	if rally_setter >= 0 and team(rally_setter) == team(passer) and rally_setter != passer:
 		return rally_setter
@@ -421,7 +422,9 @@ func choose_setter(side:int,passer:int) -> int:
 	if six_on_six() and lineup_roles.size()==2:
 		for slot in count_for(side):
 			var i:=first_on(side)+slot
-			if i!=passer and lineup_role(i)==0: return i
+			if lineup_role(passer)==0:
+				if active_identities.get(i,-1)==6: return i
+			elif lineup_role(i)==0: return i
 	return nearest_on_team(side,path_point(arrival(1.92)),passer)
 
 # Team-local +X is the left pin. A back-row outside starts the pipe behind the attack line.
@@ -990,6 +993,7 @@ func award(side: int, reason: String) -> void:
 		elif rallies > 0: server_slot[side] = (int(server_slot[side])+1)%count_for(side)
 	rallies += 1
 	dead_age = 0.0
+	if manual: attackers[0].swing_target.hide()
 	if bounce_end <= 0.0 and elapsed < flight_end(): dead_flight_from = elapsed
 	last_point = {"reason":reason,"ball":Trace.json_value(ball.global_position),"flight":flight_kind,
 		"net":net_hit.get("kind",""),"winner":side,"time":match_clock}
@@ -1403,8 +1407,8 @@ func set_ball_sound(enabled: bool) -> void:
 
 func play_touch(strong := false) -> void:
 	if not ball_sound_enabled: return
-	var player := spike_audio if strong else touch_audio
-	player.play()
+	if strong: StorySession.play_hand_contact(SPIKE_SOUND,2.)
+	else: touch_audio.play()
 
 func set_pin_for(index: int, setter_x := INF) -> Vector3:
 	if manual and is_human(index) and manual.lane>=0: return manual.aim_set()
@@ -1518,6 +1522,7 @@ func aim_receive(index: int) -> void:
 
 
 func six_set_tempo(hitter:int,point:Vector3) -> int:
+	if manual and is_human(hitter): return manual.requested_tempo
 	var role:=lineup_role(hitter)
 	if role in [2,5]: return 0 if randf()<.90 else 1
 	if role in [1,4] and Formation.zone(role,setter_zones[team(hitter)]) in [1,5,6]: return 1
@@ -1581,7 +1586,8 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 	var cpu_dump_attempt := touches == 2 and cpu_dump and index == cpu_choice and not is_human(index)
 	var unsafe_dump := cpu_dump_attempt and not dump_can_land_in_court(point,frame.global_basis.inverse()*world_motion)
 	var called_set:=side==0 and called_this_pass and rally_hitter==0 and index==rally_setter and flight_kind=="pass"
-	if touches == 2 and (called_set or unsafe_dump or (not (cpu_dump and index == cpu_choice) and (bump.destination.y < 4.0 or (is_human(index) and technique != 0)))):
+	var libero_set:bool = not is_human(index) and six_on_six() and active_identities.get(index,-1)==6 and index==rally_setter
+	if touches == 2 and (libero_set or called_set or unsafe_dump or (not (cpu_dump and index == cpu_choice) and (bump.destination.y < 4.0 or (is_human(index) and technique != 0)))):
 		var setter_x := players[index].position.x
 		if six_on_six() and not is_human(index):
 			choose_at_set_contact(index,point)
@@ -2078,6 +2084,7 @@ func cpu_should_backshuffle(index: int, contact: Vector3, cue: float) -> bool:
 	return depth < -0.25 and approach.z < -0.05 and cpu_hand_receive_too_fast(cue)
 
 func overhead_available(index: int, technique: int) -> bool:
+	if cpu_is_setting(index) and active_identities.get(index,-1)==6: return false
 	if not is_human(index) and flight_kind == "serve" and not drill_feed_acceleration.is_finite() and serve.get_script() == SERVES[TOPSPIN_SERVE]: return false
 	var first_contact := technique == 1 and (defensive_ball() or flight_kind == "serve")
 	var setting := cpu_is_setting(index)
@@ -3474,7 +3481,7 @@ func update_action_labels() -> void:
 		animation_labels[index].visible = (not exhibition) and (not spectator or drill_pass_target.is_finite()) and players[index].visible and not animation.is_empty()
 
 func update_flight_guide() -> void:
-	flight_guide.visible=manual!=null and phase==Phase.LIVE and not replay.active and (flight_kind=="serve" or (flight_kind=="pass" and show_pass_trajectory))
+	flight_guide.visible=manual!=null and phase==Phase.LIVE and not replay.active and (flight_kind=="serve" or (flight_kind=="set" and expected_hitter==0) or (flight_kind=="pass" and show_pass_trajectory))
 	if not flight_guide.visible or displayed_flight==flight_number: return
 	var mesh:=ImmediateMesh.new()
 	mesh.surface_begin(Mesh.PRIMITIVE_LINE_STRIP,trajectory_style)

@@ -302,6 +302,15 @@ func pose_pin_draw(weight: float) -> void:
 		var bone := rig.find_bone(arm)
 		rig.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
 
+func pose_high_five(world_point:Vector3,weight:float) -> void:
+	var author:=get_pose_author()
+	var pose:Array=[]
+	for i in skeleton.get_bone_count(): pose.append(skeleton.get_bone_pose(i))
+	author.limb(pose,"upperarm_r","lowerarm_r","hand_r",skeleton.to_local(world_point),Vector3(-.65,-.3,0.),weight)
+	for joint in ["upperarm_r","lowerarm_r","hand_r"]:
+		var bone:=skeleton.find_bone(joint)
+		skeleton.set_bone_pose_rotation(bone,pose[bone].basis.get_rotation_quaternion())
+
 func pose_hands_on_knees(weight: float) -> void:
 	var rig: Skeleton3D = skeleton
 	var author: RefCounted = get_pose_author()

@@ -79,6 +79,10 @@ func run() -> void:
 						liberos+=1
 					else: assert(g.players[i].attributes.position==formations.ROLES[slot])
 				assert(liberos==1)
+				var setter:int=g.first_on(side)+g.lineup_roles[side].find(0)
+				var backup:int=g.choose_setter(side,setter)
+				assert(g.active_identities[backup]==6)
+				assert(g.setter_for_pass(setter)==backup)
 			for i in g.slots_for(receiving):
 				var role:int=g.lineup_role(i)
 				if not career or receiving!=0: assert(role==(i+3)%6)

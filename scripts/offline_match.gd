@@ -214,6 +214,10 @@ func refresh_prompts() -> void:
 			var spins:Array=[[JOY_BUTTON_DPAD_UP,"Topspin"],[JOY_BUTTON_DPAD_LEFT,"Left spin"],[JOY_BUTTON_DPAD_RIGHT,"Right spin"],[JOY_BUTTON_DPAD_DOWN,"Float"]]
 			entries=spins
 			keys="↑  Topspin     ←  Left spin     →  Right spin     ↓  Float"
+		elif game.manual.context()=="attack":
+			var tempo_label:="Set tempo %d"%game.manual.requested_tempo
+			entries=[[JOY_BUTTON_DPAD_UP,"Higher"],[JOY_BUTTON_DPAD_DOWN,tempo_label+" · Lower"]]
+			keys="↑ / ↓   "+tempo_label
 		else:
 			entries=[]
 			keys=""
@@ -230,8 +234,69 @@ func refresh_prompts() -> void:
 		label.text=keys
 		footer.add_child(label)
 
+var greeting_rally := -1
+var greeting_age := 0.
+var skip_age := 0.
+var formation_spots: Array[Vector3] = []
+var point_end_spots: Array[Vector3] = []
+
+func greet_between_points(delta:float) -> bool:
+	if not game.six_on_six() or game.replay.active: return false
+	if game.phase not in [game.Phase.READY,game.Phase.FINISHED]: return false
+	if greeting_rally!=game.rallies:
+		greeting_rally=game.rallies
+		greeting_age=0.
+		skip_age=0.
+		formation_spots.clear()
+		for i in game.players.size():
+			formation_spots.append(game.players[i].position)
+			if game.phase==game.Phase.READY and point_end_spots.size()==game.players.size():
+				game.players[i].position=point_end_spots[i]
+	if formation_spots.is_empty(): return false
+	greeting_age+=delta
+	var pads:=Input.get_connected_joypads()
+	var held:=Input.is_key_pressed(KEY_SPACE) or (pads.size()>0 and Input.is_joy_button_pressed(pads[0],Xbox.physical(JOY_BUTTON_A)))
+	skip_age=skip_age+delta if held else 0.
+	var returning:=greeting_age>=3.6
+	var settled:=true
+	for i in game.players.size():
+		var actor=game.players[i]
+		var partner=game.players[i^1]
+		var angle:=TAU*floori((i%6)/2.)/3.
+		var radial:=Vector3(sin(angle),0.,cos(angle))
+		var spot:=Vector3(0,.04,-.9)+radial*1.05+Vector3(radial.z,0.,-radial.x)*(.42 if i%2==0 else -.42)
+		var destination:=formation_spots[i] if returning else spot
+		var travel:Vector3=destination-actor.position
+		var moving:=travel.length()>.035
+		settled=settled and not moving
+		var face:Vector3=travel if moving else (Vector3.BACK if returning else partner.position-actor.position)
+		if not face.slide(Vector3.UP).is_zero_approx():
+			actor.rotation.y=rotate_toward(actor.rotation.y,atan2(face.x,face.z),delta*5.)
+		var pace:=minf(4.1,sqrt(8.*travel.length())) if moving else 0.
+		var before:Vector3=actor.position
+		actor.position=actor.position.move_toward(destination,delta*pace)
+		actor.animator.speed_scale=1.
+		actor.play_ground_gait(actor.position.distance_to(before)/maxf(delta,.0001))
+		actor.animator.advance(delta)
+		if not moving and not returning and greeting_age>2.0 and actor.position.distance_to(partner.position)<1.1:
+			var weight:=smoothstep(2.,2.6,greeting_age)*(1.-smoothstep(3.,3.55,greeting_age))
+			var palm:Vector3=actor.global_position.lerp(partner.global_position,.5)
+			palm.y=minf(actor.height_cm,partner.height_cm)*.009
+			actor.pose_high_five(palm,weight)
+	if skip_age>=.55 or (returning and settled):
+		for i in game.players.size():
+			game.players[i].position=formation_spots[i]
+			game.players[i].rotation.y=0.
+		formation_spots.clear()
+		banner.hide()
+		return false
+	banner.text="Team huddle"
+	banner.show()
+	return true
+
 func _process(delta:float) -> void:
 	if not is_instance_valid(ground) or is_instance_valid(MenuPresentation.loading_screen): return
+	if greet_between_points(delta): return
 	if not game.replay.active and game.phase==game.Phase.READY and signaled_rally!=game.rallies:
 		signaled_rally=game.rallies
 		authorized=false
@@ -255,6 +320,9 @@ func _process(delta:float) -> void:
 			if scrub!=0.:
 				game.replay.playing=false
 				game.replay.seek(game,game.replay.clock+delta*scrub)
+		if game.phase==game.Phase.DEAD and game.six_on_six():
+			point_end_spots.resize(game.players.size())
+			for i in game.players.size(): point_end_spots[i]=game.players[i].position
 		game.tick_match(delta,ground)
 	if game.replay.active:
 		timeline.max_value=game.replay.duration()
@@ -303,6 +371,7 @@ func toggle_match_replay() -> void:
 	refresh_prompts()
 
 func _input(event:InputEvent) -> void:
+	if not formation_spots.is_empty() and not game.replay.active: return
 	if game.replay.active and ReplayControls.mouse_camera(camera,event):
 		get_viewport().set_input_as_handled()
 		return
@@ -336,6 +405,7 @@ func _unhandled_input(event:InputEvent) -> void:
 		down=event.pressed
 		action={KEY_SPACE:"jump",KEY_Q:"forearm",KEY_E:"hands",KEY_R:"replay",KEY_F5:"save",KEY_TAB:"speed",KEY_LEFT:"previous",KEY_RIGHT:"next"}.get(event.keycode,"")
 	if action.is_empty(): return
+	if not formation_spots.is_empty() and action!="replay": return
 	if action=="replay" and down: toggle_match_replay()
 	elif game.replay.active:
 		if down and action=="jump":
