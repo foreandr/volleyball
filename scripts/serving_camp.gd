@@ -312,8 +312,8 @@ func configure_flight(shot,origin: Vector3) -> void:
 
 static func configure_serve_curve(shot,origin:Vector3,maximum:float,toss:int,spin_mode:int,clearance:float,arc_offset:float) -> void:
 	shot.test_speed_mps=maximum*pow(TOSS_POWER_STEP,toss)/3.6
-	if spin_mode==3: shot.tape_clearance=clearance
-	else: shot.sidespin=[0.,.30,-.30][spin_mode]
+	shot.tape_clearance=clearance
+	if spin_mode!=3: shot.sidespin=[0.,.30,-.30][spin_mode]
 	shot.apex=maxf(origin.y+.03,(4.9 if spin_mode==3 else 4.3)+arc_offset)
 
 static func strike_serve(shot,origin:Vector3,destination:Vector3,error:float,spin_toss:bool,resolve_full_curve:=false) -> void:
@@ -583,10 +583,11 @@ func self_set_step(motion, previous_time: float,delta: float) -> bool:
 		release_at=release_time
 		var error := serve_meter_error()
 		release_grade=remap(error,SERVE_EARLY,SERVE_LATE,EARLY_LIMIT,LATE_LIMIT)-GRADE_ADVANCE
-	var finished := handle_attack_contact(previous,delta)
+	var finished := resolve_swing_contact(previous,delta,true)
 	var hit := phase=="spike"
 	phase="serve_toss"
 	if finished and not hit:
+		ContactTiming.display("Serve   Missed / "+("Out of reach" if is_finite(release_time) else "No release"),Color("ff998a"))
 		coach_react("miss")
 		phase="serve_miss"
 		roll_time=-1.
@@ -774,13 +775,18 @@ func _process(delta: float) -> void:
 				var style_factor := float(shot.test_speed_mps)*3.6/maxf(.001,base_speed)
 				var flight_factor := float(shot.velocity.length())/maxf(.001,shot.test_speed_mps)
 				ContactTiming.launch_speed(shot.velocity,base_text+"\nServe style ×%.2f  ·  Timing and flight ×%.2f"%[style_factor,flight_factor])
+				trace("serve_launch",{"aim":str(destination),"origin":str(shot.origin),"speed_kmh":shot.velocity.length()*3.6,"tape_clearance":float_clearance,"predicted_landing":str(shot.flight_point(shot.planned_duration))})
 				plan_serve_reception(shot)
 				shot.ball.basis=ball.basis
 				flight_age=0.
 				phase="serve_flight"
 				message.text=("Perfect" if absf(error)<=SERVE_PERFECT else ("Early" if error<0. else "Late"))+" / "+SPIN_LABELS[spin_selection]
 				if "receive_held" in self: message.text="CPU serve / "+SPIN_LABELS[spin_selection]
-				if toss_style>=2:
+				if toss_style<2:
+					StorySession.play_hand_contact(StorySession.SPIKE_SOUND,-6.)
+					hitter.stamina.spend(SPIKE_STAMINA_COST,"Serve")
+					spike_sound_count+=1
+				else:
 					hand_sound.play()
 					spike_sound_count+=1
 	elif phase in ["serve_flight","serve_pass","serve_attack","serve_miss"]:

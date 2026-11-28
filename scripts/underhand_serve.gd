@@ -33,6 +33,7 @@ var landing_time := 0.0
 var planned_duration := 0.0
 var target := TARGET
 var launch_target := TARGET
+var tape_clearance := -1.0
 var test_speed_mps := 0.0
 var apex := 5.6
 var foot_starts: Dictionary = {}
@@ -149,25 +150,32 @@ func update_path_preview() -> void:
 	if is_instance_valid(aim_ring): aim_ring.position=Vector3(preview_landing.x,.062,preview_landing.z)
 
 func aimed_velocity(start: Vector3, pace := 1.0) -> Vector3:
-	var duration := flight_duration(start)
-	if test_speed_mps>0.:
-		var displacement := Vector3(target.x-start.x,Flight.FLOOR-start.y,target.z-start.z)
-		var speed_term := test_speed_mps*test_speed_mps-Flight.GRAVITY*displacement.y
-		var discriminant := speed_term*speed_term-Flight.GRAVITY*Flight.GRAVITY*displacement.length_squared()
-		# Lower-angle ballistic solution, limited by the height needed to clear the tape.
-		if discriminant>=0. and speed_term>0.:
-			var fast_time := sqrt(2.*displacement.length_squared()/(speed_term+sqrt(discriminant)))
-			duration=maxf(fast_time,minimum_aim_duration(start))
-		else:
-			duration=sqrt(2.*displacement.length()/Flight.GRAVITY)
-	duration=maxf(.05,duration/pace)
-	var velocity_to_target := Vector3(target.x-start.x,Flight.FLOOR-start.y,target.z-start.z)/duration+Vector3.UP*.5*Flight.GRAVITY*duration
-	return velocity_to_target.limit_length(test_speed_mps) if test_speed_mps>0. else velocity_to_target
+	var displacement := Vector3(target.x-start.x,Flight.FLOOR-start.y,target.z-start.z)
+	if test_speed_mps<=0.:
+		var time:=maxf(.05,flight_duration(start)/pace)
+		return displacement/time+Vector3.UP*.5*Flight.GRAVITY*time
+	var speed:=maxf(.1,test_speed_mps*pace)
+	var fast_time:=Flight.strike_time(displacement,Vector3.DOWN*Flight.GRAVITY,speed)
+	# A near-net aim cannot demand unlimited loft just to land behind the tape.
+	var rise_budget:=maxf(.45,maxf(0.,tape_clearance)+.45)
+	var highest:=start.y+rise_budget
+	var arc_limit:=(sqrt(2.*rise_budget)+sqrt(2.*maxf(0.,highest-Flight.FLOOR)))/sqrt(Flight.GRAVITY)
+	var duration:=maxf(fast_time,minf(minimum_aim_duration(start),arc_limit))
+	var launch:=displacement/duration+Vector3.UP*.5*Flight.GRAVITY*duration
+	var flatten:=tape_clearance>=0. and tape_clearance<.20 and fast_time>arc_limit
+	if launch.length()>speed+.001 or flatten:
+		# Outside attainable range, keep the chosen low arc and land short.
+		var rise_speed:=minf(launch.y,sqrt(2.*Flight.GRAVITY*rise_budget))
+		if flatten and launch.length()<=speed+.001:
+			rise_speed=lerpf(rise_speed,launch.y,smoothstep(.03,.20,tape_clearance))
+		rise_speed=clampf(rise_speed,-speed,speed)
+		return displacement.slide(Vector3.UP).normalized()*sqrt(maxf(0.,speed*speed-rise_speed*rise_speed))+Vector3.UP*rise_speed
+	return launch.limit_length(speed)
 
 func minimum_aim_duration(start: Vector3) -> float:
 	if start.z>=Net.NET_Z or target.z<=Net.NET_Z: return 0.
 	var fraction := (Net.NET_Z-start.z)/(target.z-start.z)
-	var rise := Net.NET_TOP+Net.RADIUS+.12-lerpf(start.y,Flight.FLOOR,fraction)
+	var rise := Net.NET_TOP+Net.RADIUS+(tape_clearance if tape_clearance>=0. else .12)-lerpf(start.y,Flight.FLOOR,fraction)
 	return sqrt(2.*maxf(0.,rise)/(Flight.GRAVITY*fraction*(1.-fraction)))
 
 func flight_duration(start: Vector3) -> float:

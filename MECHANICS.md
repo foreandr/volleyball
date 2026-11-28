@@ -288,3 +288,5 @@ Career blocking leads to five defensive feeds, three called-zone serves and an i
 Career defense and digging camp share the serve-reception mapped dig controller. The crossed grid region selects the authored motion for a human or CPU defender. Reception itself emits no impact cue.
 
 Career serving calls receiving zones 1, 5 and 6 in order. Each first landing must be in the marked zone. A miss repeats the call. Only verified human target hits count. After the third hit, Ellis calls the twelve athletes into a huddle and thanks them. The player chooses a position and confirms Start 6v6. Resuming here returns to the huddle. Ellis observes beside the net and the teammates stay in the bleachers across the defense-to-serving fade.
+
+Career, serving camp and manual match serves use the low ballistic trajectory at the available pace. Stick-click height adjustment changes net clearance for spin and float. Unreachable aim points may miss. Topspin bend is bounded on slower serves.

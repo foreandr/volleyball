@@ -26,7 +26,6 @@ var forward_lean_degrees := DEFAULT_FORWARD_LEAN
 var active_forward_lean_degrees := 0.0
 var released_sidespin := 0.0
 const MAX_SPIN_ARC := .16
-const POWER_TOPSPIN_ACCEL := 16.
 var approach := SetterJump.new()
 var spike_pose_driver := MatchAttack.new()
 var approach_positions: PackedVector3Array = []
@@ -287,9 +286,6 @@ func preview_lane_count() -> int:
 func flight_duration(start: Vector3) -> float:
 	return super.flight_duration(start)*0.65/serve_speed
 
-func minimum_aim_duration(start: Vector3) -> float:
-	return super.minimum_aim_duration(start)*sqrt(Flight.GRAVITY/(Flight.GRAVITY+POWER_TOPSPIN_ACCEL))
-
 func clear_net_launch(start: Vector3,launch: Vector3) -> Vector3:
 	if absf(launch.z)<.01: return launch
 	var crossing := (Net.NET_Z-start.z)/launch.z
@@ -321,7 +317,7 @@ func serve_curve_offset(time: float, duration: float) -> Vector3:
 func spin_offset(progress: float, launch: Vector3, curve: float, duration: float) -> Vector3:
 	var side := Vector3.UP.cross(launch.slide(Vector3.UP).normalized())
 	var envelope := 4.0*progress*(1.0-progress)
-	var bend := POWER_TOPSPIN_ACCEL*duration*duration/8. if test_speed_mps>0. else minf(MAX_SPIN_ARC,.15*duration*duration)
+	var bend := minf(MAX_SPIN_ARC,.15*duration*duration)
 	return (-side*curve*1.15+Vector3.UP*bend)*envelope
 
 

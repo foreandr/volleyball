@@ -358,3 +358,5 @@ Holding the bound block button (Xbox A by default) trades lateral mobility for j
 Reception and dig contacts are silent, including overhead passes, CPU demonstrations and the career scrimmage. The defense lesson and digging camp sample the saved Reception Studio grid for the full body through contact and recovery.
 
 Career serving calls receiving zones 1, 5 and 6 in order. Each first landing must be in the marked zone. A miss repeats the call. Only verified human target hits count. After the third hit, Ellis calls the twelve athletes into a huddle and thanks them. The player chooses a position and confirms Start 6v6. Resuming here returns to the huddle. Ellis observes beside the net and the teammates stay in the bleachers across the defense-to-serving fade. The serving lesson opens on a topspin jump serve for both the demo and the player.
+
+Career, serving camp and manual match serves use the low ballistic trajectory at the available pace. Stick-click height adjustment changes net clearance for spin and float. Unreachable aim points may miss. Topspin bend is bounded on slower serves.

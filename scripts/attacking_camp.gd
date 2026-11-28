@@ -860,7 +860,10 @@ func swing_can_contact() -> bool:
 	return swing_time>=.055 and swing_time<=.30
 
 func handle_attack_contact(previous: Vector3,delta: float) -> bool:
-	message.text="Approach and spike"
+	return resolve_swing_contact(previous,delta,false)
+
+func resolve_swing_contact(previous:Vector3,delta:float,serve_toss:bool) -> bool:
+	if not serve_toss: message.text="Approach and spike"
 	var remaining := attack_reference_time()-elapsed
 	plan_attack_plant(flight_time-elapsed,endpoint,delta)
 	if approach_started and swing_time<0. and remaining<=.16/arm_speed_factor()+(.095 if not has_meta("sampling_attack") else 0.): swing_time=0.
@@ -879,6 +882,13 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 			if not is_finite(first_palm_at): first_palm_at=clock
 			var grade := release_grade+GRADE_ADVANCE
 			var valid_release := manual_shot>=0 and is_finite(release_at)
+			if serve_toss:
+				if not valid_release: return elapsed>=contact_deadline()
+				contact_swing_time=swing_time
+				strike_point=nearest
+				strike_shoulder_offset=hitter.skeleton.to_local(nearest)-hitter.skeleton.get_bone_global_pose(hitter.skeleton.find_bone("upperarm_r")).origin
+				phase="spike"
+				return true
 			if valid_release:
 				contact_grade=grade
 				ContactTiming.window("Attack",grade,EARLY_LIMIT,LATE_LIMIT,-CLEAN_EARLY,CLEAN_LATE)
@@ -919,7 +929,7 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 			spend_swing_stamina()
 			begin("spike")
 			return true
-	if elapsed>=contact_deadline(): return miss_attack()
+	if elapsed>=contact_deadline(): return true if serve_toss else miss_attack()
 	return false
 
 func show_strike_speed() -> void:
