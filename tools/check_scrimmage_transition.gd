@@ -269,6 +269,16 @@ func run() -> void:
 				assert(g.blocks[i].reach_input==Vector2.ZERO and g.blocks[i].lean_input==0.)
 			assert(g.players[line].position.z<start.z-.65 and wing*(g.players[line].position.x-start.x)>.2)
 			g.blocks.clear()
+			var closed_position:Vector3=g.players[pin].position
+			for trial in [[.33,.54,false],[.22,1.3,false],[.22,.54,true]]:
+				g.players[pin].position=Vector3(wing*(3.7-float(trial[1])),g.PLAYER_GROUND_Y,3.42)
+				driver.swing_drive_started=-INF
+				driver.approach_expected_hit_at=driver.clock+float(trial[0])-.045
+				g.match_clock+=1./60.
+				g.defend_pin_set(defense,wing*3.7,driver,1./60.)
+				assert(g.blocks.has(pin)==trial[2])
+				g.blocks.clear()
+			g.players[pin].position=closed_position
 			if defense==0 and wing>0:
 				var saved_roles=g.lineup_roles[0].duplicate()
 				var pin_position:Vector3=g.players[pin].position

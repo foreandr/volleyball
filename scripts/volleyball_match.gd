@@ -3049,7 +3049,9 @@ func defend_pin_set(side:int,attack_x:float,driver:Node3D,delta:float) -> void:
 				var inside:=minf(outward*pin_x,outward*players[pin].position.x)-.68
 				target.x=clampf(outward*inside,-4.15,4.15)
 			move_cpu(i,frame.to_global(target),delta,7.6,sight,false,false,9.,false,0.,4.7)
-			if i==pin and eta>=-.04 and eta<=.41 and absf(players[i].position.x-target.x)<.38:
+			# Keep closing early. At the last plant a square block can still cover part of the lane.
+			var block_width:=.68 if eta<=.24 else .38
+			if i==pin and eta>=-.04 and eta<=.41 and absf(players[i].position.x-target.x)<block_width:
 				start_block(i,eta)
 				if blocks.has(i):
 					blocks[i].square_block=not trap
