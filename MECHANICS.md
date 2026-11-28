@@ -60,7 +60,7 @@ In blocking practice, all four attackers run their own approach lanes as the pas
 
 The CPU middle can commit to a nearby quick runner accelerating toward Bell before release. This read uses the visible approach and can leave the middle airborne against a pipe or pin set. Each rep logs the released route and endpoint.
 
-The pipe covers deep in six, the far pin shades inward from its own lane, and nearby front-row hitters cover shorter. The middle runs a 50 or 30 at tempo zero every feed, including decoy jumps. The pipe uses tempo 0 or 1. Pins use 0, 1 and 2. Tempo 3 is reserved for out-of-system play.
+The pipe covers deep in six, the far pin shades inward from its own lane, and nearby front-row hitters cover shorter. The middle runs a 50 or 30 at tempo zero every feed, including decoy jumps. The pipe uses tempo 1. Pins use 0, 1 and 2. Tempo 3 is reserved for out-of-system play.
 
 Random-height blocking feeds assign a separate tempo to every route. Each runner times the approach to that call. Uncommitted blockers observe the released ball before estimating its lateral destination.
 
@@ -304,10 +304,12 @@ Indoor match spectators use the practice gym seats. Match replay uses practice L
 In playable matches and career scrimmages only the controlled athlete shows a surname and stamina/timing ring. Spectator mode hides all player rings.
 In setter-in-one offense the front-row opposite attacks left and the front-row outside attacks right. The pipe and the saved block-defense shape stay independent of this attacking assignment.
 
-The receiving setter signals a quick or 31 before serve contact. CPU setters read the opposing middle and pin blockers to locate a pipe seam; the back-row outside attacks it at tempo 1 or 2. From behind the attack line the CPU setter redirects a middle call to another available hitter. Opening match replay freezes at the current instant with recent rally history available to rewind.
+The receiving setter signals a quick or 31 before serve contact. CPU setters read the opposing middle and pin blockers to locate a pipe seam; the back-row outside attacks it at tempo 1. From behind the attack line the CPU setter redirects a middle call to another available hitter. Opening match replay freezes at the current instant with recent rally history available to rewind.
 A back-row setter in 6v6 passes, sets and jump sets, but never approaches to attack, dumps or blocks, even after moving to the net.
 On six-on-six pin and C-ball sets the pin establishes the block and the front middle closes inside it. CPU blockers press straight ahead unless a shoulder call or a strong repeated hitter read warrants reaching. The same-side back defender shuffles about one and a half steps deeper and toward the sideline, then holds ready.
 An available CPU middle approaches and takes off on the signaled quick before setter contact on an in-system pass, including as a decoy. The CPU setter can choose the pipe only with an airborne middle and an open seam at release. A middle set continues the same jump through contact.
 CPU attack selection uses the actual stamina-adjusted launch velocity and spin to check tape clearance. A low pipe without a playable driven lane gets a lifted roll into the opposing court.
 Pin double blocks synchronize the closing CPU middle to the outside blocker during the push and airborne phases. On defensive first contacts, match CPU defenders try the same mapped reception clips and swept limb contact used by the human receiver, with emergency saves still available beyond the grid.
 In 6v6 the setter and mapped cover pass share the same setting base. When the setter has to cover first contact, another eligible teammate takes the second ball. On a distant pass the CPU setter turns to run before squaring for the set.
+
+In 6v6 an in-system quick runner takes a spike approach and draws the hitting arm even as a decoy. Against a pipe the middle blocks centrally and front-row pins close from their own sides. Grounded CPU attackers clear the path to second contact. Shoulder contact disrupts the hitter for this set only.

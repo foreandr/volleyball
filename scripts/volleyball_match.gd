@@ -449,14 +449,14 @@ func middle_showing_quick(side:int) -> bool:
 func prepare_middle_quick(side:int,delta:float) -> void:
 	if not setter_can_run_middle[side] or quick_flight[side]==flight_number: return
 	var i:=front_middle(side)
-	if is_human(i) or i==rally_setter or owns_action(i) or recoveries.has(i): return
+	if yielding.has(i) or interrupted_hitters.has(i) or is_human(i) or i==rally_setter or owns_action(i) or recoveries.has(i): return
 	var actor:=players[i]
 	var lane:=attack_lane_for(i)
 	var cue:=next_touch_cue if is_finite(next_touch_cue) else arrival(hand_contact_height(2))
 	var remaining:=cue-elapsed
-	var plant:=lane-Vector3.BACK*.56
+	var plant:=lane-Vector3.BACK*1.65
 	var gap:=(plant-actor.position).slide(Vector3.UP).length()
-	if remaining>.32 or gap>1.05:
+	if remaining>.55 or gap>1.45:
 		move_cpu_to_approach(i,plant,delta,6.4)
 		return
 	if remaining<-.05: return
@@ -464,7 +464,12 @@ func prepare_middle_quick(side:int,delta:float) -> void:
 	jump.front_limit=3.45
 	jump.attack_arm_lift=true
 	var height:=jump_inches(i,attack_vertical,"Attack jump")*.0254
-	jump.begin(actor,Vector2.ZERO,lane,clampf(remaining-.10,.08,.20),height)
+	var heading:=(lane-actor.position).slide(Vector3.UP).normalized()
+	var steps:=3 if remaining>.34 else 2
+	var lead:=.19 if steps==3 else 0.
+	jump.begin(actor,Vector2(-heading.x,heading.z),lane,clampf(remaining-lead-.13,.08,.21),height,steps,false,.80,false,.38)
+	jump.release()
+	quick_actor[side]=i
 	quick_flight[side]=flight_number
 
 func choose_at_set_contact(setter:int,point:Vector3) -> void:
@@ -473,7 +478,7 @@ func choose_at_set_contact(setter:int,point:Vector3) -> void:
 	var in_system:bool=setter_can_run_middle[side] and point.z>=Net.NET_Z-3.
 	var back_outside:=1 if Formation.zone(1,setter_zones[side]) in [1,5,6] else 4
 	var pipe:=first_on(side)+lineup_roles[side].find(back_outside)
-	var available:=pipe!=setter and players[pipe].position.z<1.35 and not recoveries.has(pipe)
+	var available:=not interrupted_hitters.has(pipe) and pipe!=setter and players[pipe].position.z<1.35 and not recoveries.has(pipe)
 	if in_system and middle_showing_quick(side) and pipe_open[side] and available:
 		rally_hitter=pipe
 	elif rally_hitter==pipe or (not in_system and rally_hitter==front_middle(side)):
@@ -503,13 +508,13 @@ func read_pipe(side:int) -> void:
 func hitter_for_set(setter: int) -> int:
 	if count_for(team(setter)) == 2: return partner_of(setter)
 	if manual and is_human(setter) and manual.lane>=0: return manual_target_hitter(setter)
-	if rally_hitter >= 0 and team(rally_hitter) == team(setter) and rally_hitter != setter and not back_row_setter(rally_hitter):
+	if rally_hitter >= 0 and not interrupted_hitters.has(rally_hitter) and team(rally_hitter) == team(setter) and rally_hitter != setter and not back_row_setter(rally_hitter):
 		return rally_hitter
 	var side := team(setter)
 	if six_on_six():
 		var hitters:Array[int]=[]
 		for i in slots_for(side):
-			if i==setter or not attack_lane_for(i).is_finite(): continue
+			if interrupted_hitters.has(i) or i==setter or not attack_lane_for(i).is_finite(): continue
 			var role:=lineup_role(i)
 			if role in [2,5] and not setter_can_run_middle[side]: continue
 			if role in [1,4] and Formation.zone(role,setter_zones[side]) in [1,5,6]:
@@ -517,6 +522,8 @@ func hitter_for_set(setter: int) -> int:
 				continue
 			hitters.append(i)
 		if not hitters.is_empty(): return hitters[posmod(flight_number+rallies,hitters.size())]
+		for i in slots_for(side):
+			if i!=setter and not interrupted_hitters.has(i) and not back_row_setter(i): return i
 	return nearest_on_team(side,frames[side].to_global(Vector3(0.0,0.04,1.45)),setter)
 
 func manual_target_hitter(setter:int) -> int:
@@ -526,7 +533,7 @@ func manual_target_hitter(setter:int) -> int:
 		var best:=INF
 		for i in slots_for(0):
 			var lane:=attack_lane_for(i)
-			if i==setter or not lane.is_finite(): continue
+			if interrupted_hitters.has(i) or i==setter or not lane.is_finite(): continue
 			var gap:=lane.distance_squared_to(target)
 			if gap<best:
 				best=gap
@@ -560,6 +567,8 @@ func server_index() -> int:
 const Formation=preload("res://scripts/six_rotations.gd")
 var middle_31:Array[bool]=[false,false]
 var pipe_gap:Array[float]=[0.,0.]
+var quick_actor:Array[int]=[-1,-1]
+var quick_swing: Array=[preload("res://scripts/camp_spike_pose.gd").new(),preload("res://scripts/camp_spike_pose.gd").new()]
 var quick_flight:Array[int]=[-1,-1]
 var pipe_open:Array[bool]=[false,false]
 var setter_can_run_middle:Array[bool]=[true,true]
@@ -725,6 +734,7 @@ func begin_point() -> void:
 		receive_marks.clear()
 		defense_marks.clear()
 		for side in 2:
+			quick_actor[side]=-1
 			quick_flight[side]=-1
 			middle_31[side]=randf()<.5
 			pipe_gap[side]=0.
@@ -1012,6 +1022,7 @@ func launch(point: Vector3, motion: Vector3, kind: String, from: int, spin_rate 
 		var setting_side:=1-team(from)
 		var setter_index:=first_on(setting_side)+lineup_roles[setting_side].find(0)
 		players[setter_index].shirt_fabric.set_shader_parameter("signal_lift",0.)
+	interrupted_hitters.clear()
 	flight_number += 1
 	line_read_error=randf_range(-1.,1.)
 	origin = point
@@ -1069,6 +1080,7 @@ func launch(point: Vector3, motion: Vector3, kind: String, from: int, spin_rate 
 		if six_on_six() and hitter==front_middle(side) and quick_flight[side]==flight_number-1 and set_jumps[hitter].active:
 			var driver:=attackers[side]
 			var unused=driver.jump
+			quick_actor[side]=-1
 			driver.jump=set_jumps[hitter]
 			set_jumps[hitter]=unused
 			driver.takeoff_yaw=players[hitter].rotation.y
@@ -1466,7 +1478,7 @@ func cpu_set_apex(index: int, point: Vector3, pin: Vector3, pace: float) -> floa
 		var role:=lineup_role(hitter_for_set(index))
 		var tempo:int
 		if role in [2,5]: tempo=0 if randf()<.90 else 1
-		elif role in [1,4] and Formation.zone(role,setter_zones[team(index)]) in [1,5,6]: tempo=randi_range(1,2)
+		elif role in [1,4] and Formation.zone(role,setter_zones[team(index)]) in [1,5,6]: tempo=1
 		elif point.z<0. or absf(point.x)>4.4: tempo=3
 		else: tempo=randi_range(1,2)
 		var rise:float=[.18,.47,1.12,2.65][tempo]
@@ -1699,6 +1711,19 @@ func advance_set_jumps(delta: float) -> void:
 		var jump := set_jumps[index]
 		if jump.active:
 			jump.step(players[index],delta,Vector2.ZERO)
+			var side:=team(index)
+			if quick_actor[side]==index:
+				if not jump.active: quick_actor[side]=-1
+				else:
+					var age:float=jump.elapsed-jump.load_duration()
+					if age>0.:
+						var frame:=frames[side]
+						var goal:=frame.to_global(attack_lane_for(index)+Vector3.UP*2.9)
+						var swing_at:float=jump.air_time*.48
+						var t:=age-swing_at+.11
+						var rig:Skeleton3D=players[index].skeleton
+						var strike_offset:=rig.to_local(goal)-rig.get_bone_global_pose(rig.find_bone("upperarm_r")).origin
+						quick_swing[side].apply(players[index],jump,"spike" if t>=.11 else "set",t,.11,goal,frame.to_global(SETTER_BASE),goal,goal,frame.to_global(Vector3(0.,.14,10.)),strike_offset,jump.height,1.,24.,1.,0,-1.)
 			animated[index] = true
 
 func advance_idle_players(delta: float) -> void:
@@ -2696,6 +2721,42 @@ func follow_run_into_plant(hitter: int, driver: Node3D, staging: Vector3, time_l
 		if driver.approach_jump_queued: show_key(hitter,"Space")
 	return true
 
+var interrupted_hitters:Dictionary={}
+var yielding:Dictionary={}
+
+func clear_setter_lane(side:int,delta:float) -> void:
+	var setter:=rally_setter
+	if setter<0 or team(setter)!=side: return
+	var start:=players[setter].position.slide(Vector3.UP)
+	var end:=frames[side].to_local(path_point(arrival(hand_contact_height(1)))).slide(Vector3.UP)
+	var length:=start.distance_to(end)
+	var forward:=start.direction_to(end) if length>=.18 else Vector3.BACK
+	var lateral:=Vector3.UP.cross(forward)
+	for i in slots_for(side):
+		if i==setter or owns_action(i) or recoveries.has(i): continue
+		var here:=players[i].position.slide(Vector3.UP)
+		var along:=(here-start).dot(forward)
+		if along<-.12 or along>minf(2.6,length+.35): continue
+		var offset:=(here-start).dot(lateral)
+		var lane:=attack_lane_for(i)
+		var about_to_cross:=false
+		if lane.is_finite() and absf(offset)<=1.35:
+			var heading:=(lane-here).slide(Vector3.UP).limit_length(.65)
+			about_to_cross=absf(offset+heading.dot(lateral))<.80
+		if absf(offset)>.85 and not about_to_cross: continue
+		var shoulder:=start.distance_to(here)<.68
+		if is_human(i) and not shoulder: continue
+		var sign_:float=signf(offset) if absf(offset)>.04 else (1. if i%2==0 else -1.)
+		var clearance:=1.45 if about_to_cross else .98
+		var target:=here+lateral*(sign_*clearance-offset)
+		if absf(target.x)>4.35 or target.z>3.55:
+			target=here+lateral*(-sign_*clearance-offset)
+		if shoulder:
+			interrupted_hitters[i]=true
+			if rally_hitter==i: rally_hitter=-1
+		yielding[i]=true
+		move_cpu(i,frames[side].to_global(target),delta,5.,players[i].basis.z,false,false,9.,false,0.,4.4)
+
 const SETTER_BASE := Vector3(-1.4,PLAYER_GROUND_Y,2.8)
 
 func release_setter_for_cover(side:int,first_contact:int,delta:float) -> void:
@@ -2710,6 +2771,8 @@ func release_setter_for_cover(side:int,first_contact:int,delta:float) -> void:
 	move_cpu(setter,goal,delta,GroundMovement.speed(not run,run),toward_incoming(setter,goal),run,run)
 
 func position_attack(delta: float) -> void:
+	yielding.clear()
+	if six_on_six() and flight_kind=="pass": clear_setter_lane(receiving_team,delta)
 	if six_on_six() and flight_kind in ["set","spike"] and last_player>=0:
 		release_setter_for_cover(team(last_player),expected_hitter if flight_kind=="set" else last_player,delta)
 	if six_on_six() and flight_kind in ["serve","pass"]:
@@ -2719,7 +2782,7 @@ func position_attack(delta: float) -> void:
 		if quick: prepare_middle_quick(side,delta)
 		var designated:=hitter_for_set(rally_setter) if flight_kind=="pass" and rally_setter>=0 else -1
 		for i in slots_for(side):
-			if is_human(i) or i==cpu_choice or i==designated or owns_action(i) or (quick and i==front_middle(side)): continue
+			if yielding.has(i) or is_human(i) or i==cpu_choice or i==designated or owns_action(i) or (quick and i==front_middle(side)): continue
 			var lane:=attack_lane_for(i)
 			var role:=lineup_role(i)
 			var target:=formation_home(i,true)
@@ -2750,7 +2813,7 @@ func position_attack(delta: float) -> void:
 	var setter := setter_for_pass(last_player)
 	var hitter := hitter_for_set(setter)
 	if six_on_six() and setter_can_run_middle[receiving_team] and hitter==front_middle(receiving_team): return
-	if is_human(hitter) or blocks.has(hitter) or set_jumps[hitter].active: return
+	if yielding.has(hitter) or is_human(hitter) or blocks.has(hitter) or set_jumps[hitter].active: return
 	var receive_at := arrival(1.55)
 	var staging := GroundMovement.attack_staging(set_pin_for(setter))
 	var distance := (staging-players[hitter].position).slide(Vector3.UP).length()
@@ -2916,6 +2979,27 @@ func defend_pin_set(side:int,attack_x:float,driver:Node3D,delta:float) -> void:
 		follower.drive_duration=leader.drive_duration
 		follower.drive_elapsed=leader.drive_elapsed
 
+func defend_pipe(side:int,x:float,driver:Node3D,delta:float) -> void:
+	var middle:=front_middle(side)
+	defender_assignment[side]=middle
+	var eta:float=driver.pin_arrival-(driver.clock-driver.stage_start)
+	if is_finite(driver.approach_expected_hit_at): eta=driver.approach_expected_hit_at-driver.clock+.045
+	if is_finite(driver.swing_drive_started): eta=driver.swing_drive_started+driver.swing_drive_duration*.95-driver.clock+.045
+	for i in slots_for(side):
+		if is_human(i) or owns_action(i): continue
+		var home:=formation_home(i,true)
+		var front:=Formation.zone(lineup_role(i),setter_zones[side]) in [2,3,4]
+		if front:
+			var flank:=signf(home.x-formation_home(middle,true).x)
+			home=Vector3(x+(0. if i==middle else .70*flank),.04,3.42)
+			if i!=middle:
+				if flank>0.: home.x=maxf(home.x,players[middle].position.x+.64)
+				else: home.x=minf(home.x,players[middle].position.x-.64)
+		move_cpu(i,frames[side].to_global(home),delta,7.6,toward_incoming(i,players[i].global_position),false,false,9.,false,0.,4.8)
+		if front and eta>=-.04 and eta<=.41 and absf(players[i].position.x-home.x)<.48:
+			start_block(i,eta)
+			if blocks.has(i): blocks[i].square_block=true
+
 func position_defense(delta: float) -> void:
 	if position_overpass(delta): return
 	if flight_kind not in ["serve","pass","set","free"]: return
@@ -2941,6 +3025,9 @@ func position_defense(delta: float) -> void:
 	var driver := attackers[hitter_side]
 	var tracking_set := flight_kind == "set" and expected_hitter >= 0
 	var threat := frames[hitter_side].to_global(driver.rally_set_target) if tracking_set else path_point(arrival(2.0))
+	if six_on_six() and tracking_set and lineup_role(expected_hitter) in [1,4] and Formation.zone(lineup_role(expected_hitter),setter_zones[hitter_side]) in [1,5,6]:
+		defend_pipe(defense_side,frame.to_local(threat).x,driver,delta)
+		return
 	if six_on_six() and tracking_set and absf(frame.to_local(threat).x)>=2.5:
 		defend_pin_set(defense_side,frame.to_local(threat).x,driver,delta)
 		return
@@ -2980,6 +3067,15 @@ func position_defense(delta: float) -> void:
 		near = first if absf(players[first].position.x-x) < absf(players[first+1].position.x-x) else first+1
 		if count_for(defense_side) >= 3:
 			near = nearest_on_team(defense_side,frame.to_global(Vector3(x,0.04,3.42)))
+	if six_on_six() and second_ball and not ordered:
+		# Read from the assigned front-row lane until the setter actually releases.
+		var nearest_lane:=INF
+		for candidate in slots_for(defense_side):
+			if Formation.zone(lineup_role(candidate),setter_zones[defense_side]) not in [2,3,4]: continue
+			var lane_gap:=absf(formation_home(candidate,true).x-x)
+			if lane_gap<nearest_lane:
+				near=candidate
+				nearest_lane=lane_gap
 	if six_on_six() and tracking_set and lineup_role(expected_hitter) in [2,5] and not ordered:
 		for candidate in slots_for(defense_side):
 			if lineup_role(candidate) in [2,5] and Formation.zone(lineup_role(candidate),setter_zones[defense_side]) in [2,3,4]:

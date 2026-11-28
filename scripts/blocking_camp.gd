@@ -19,6 +19,7 @@ var read_lead := 1
 
 func height_preset() -> int:
 	if route==1: return 0
+	if route==2: return 1
 	return drawn_height if drawn_height>=0 else mini(attack_tempo,1 if route in [1,2] else 2)
 
 var quick_jump := preload("res://scripts/setter_jump.gd").new()
@@ -215,6 +216,7 @@ func reset_feed() -> void:
 		var highest := 1 if lane in [1,2] else 2
 		route_tempos[lane]=rotation_drill.random.randi_range(0,highest) if random_heights else mini(attack_tempo,highest)
 	route_tempos[1]=0
+	route_tempos[2]=1
 	drawn_height=route_tempos[route]
 	jump_height=(float(hitter.attributes.vertical_in) if tutorial_pin else attack_vertical)*.0254
 	read_delay=rotation_drill.random.randf_range(0.,.018)

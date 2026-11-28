@@ -40,16 +40,19 @@ func run() -> void:
 		var pipe_id:int=g.first_on(side)+g.lineup_roles[side].find(4)
 		for i in g.slots_for(1-side): g.players[i].position=g.formation_home(i,true)
 		g.players[pipe_id].position.z=-2.
-		g.players[middle_id].position=g.attack_lane_for(middle_id)-Vector3.BACK*.55
+		g.players[middle_id].position=g.attack_lane_for(middle_id)-Vector3.BACK*1.65
 		g.players[middle_id].position.y=g.PLAYER_GROUND_Y
 		g.rally_setter=setter
 		g.rally_hitter=pipe_id
-		g.next_touch_cue=g.elapsed+.28
+		g.next_touch_cue=g.elapsed+.48
 		g.choose_at_set_contact(setter,Vector3(0,2,3))
 		assert(g.rally_hitter!=pipe_id)
 		g.prepare_middle_quick(side,.016)
 		assert(g.set_jumps[middle_id].active and not g.middle_showing_quick(side))
-		for tick in 16: g.advance_set_jumps(1./60.)
+		assert(g.set_jumps[middle_id].lead_time>0.)
+		var approach_start:Vector3=g.players[middle_id].position
+		for tick in 28: g.advance_set_jumps(1./60.)
+		assert(g.players[middle_id].position.z>approach_start.z+.3)
 		assert(g.middle_showing_quick(side))
 		g.choose_at_set_contact(setter,Vector3(0,2,3))
 		assert(g.rally_hitter==pipe_id)
@@ -63,6 +66,26 @@ func run() -> void:
 		jump.active=false
 		g.players[middle_id].position.y=g.PLAYER_GROUND_Y
 		g.setter_can_run_middle[side]=true
+		g.serve.moved_after_contact=true
+		g.serve.contact_clock=0.
+		g.serve.swing_time=g.serve.recovery_end()+1.
+		var block_middle:int=g.front_middle(1-side)
+		for i in g.slots_for(1-side): g.players[i].position=g.formation_home(i,true)
+		var pipe_driver=g.attackers[side]
+		pipe_driver.rally_set_target=Vector3(.95,.065,.85)
+		g.expected_hitter=pipe_id
+		g.flight_kind="set"
+		g.receiving_team=side
+		g.last_player=-1
+		for tick in 90:
+			g.match_clock+=1./60.
+			pipe_driver.approach_expected_hit_at=pipe_driver.clock+maxf(.26,1.4-tick/60.)
+			g.position_defense(1./60.)
+		print("pipe defense ",side," ",g.blocks.keys()," middle ",block_middle," ",g.players[block_middle].position," assignment ",g.defender_assignment)
+		assert(g.blocks.has(block_middle) and g.blocks.size()>=2)
+		for i in g.blocks: assert(g.Formation.zone(g.lineup_role(i),g.setter_zones[1-side]) in [2,3,4])
+		g.blocks.clear()
+		for i in g.slots_for(1-side): g.players[i].position=g.formation_home(i,true)
 		var opposing_middle:int=g.first_on(1-side)+g.lineup_roles[1-side].find(2)
 		for x in [-1.4,1.4]:
 			g.players[opposing_middle].position.x=x
@@ -73,7 +96,7 @@ func run() -> void:
 			g.rally_hitter=i
 			for j in 12:
 				var rise:float=g.cpu_set_apex(setter,Vector3(0,2,-2),g.attack_lane_for(i),4.)-g.attackers[side].set_contact_height()
-				assert(is_equal_approx(rise,.47) or is_equal_approx(rise,1.12))
+				assert(is_equal_approx(rise,.47))
 		for i in g.slots_for(side):
 			if g.lineup_role(i) not in [2,5] or not g.attack_lane_for(i).is_finite(): continue
 			g.rally_hitter=i
@@ -209,6 +232,27 @@ func run() -> void:
 		if g.flight_kind!="pass": break
 	print("Orange cover: setter released ",release_distance," m; next contact ",g.last_player," / ",g.flight_kind)
 	assert(g.last_player==setter and g.flight_kind=="set")
+	# In the setter lane, a free approach yields early; a shoulder bump costs the current set.
+	g.recoveries.clear()
+	g.rally_setter=setter
+	g.receiving_team=1
+	g.flight_kind="pass"
+	g.players[setter].position=Vector3(-1.,.04,-1.)
+	g.origin=g.frames[1].to_global(Vector3(-1.,2.,2.))
+	g.velocity=Vector3.UP*4.
+	g.elapsed=0.
+	g.duration=1.
+	g.net_hit.clear()
+	var runner:int=g.first_on(1)+g.lineup_roles[1].find(1)
+	g.players[runner].position=Vector3(-.9,.04,.3)
+	g.rally_hitter=runner
+	g.clear_setter_lane(1,.05)
+	assert(g.yielding.has(runner) and not g.interrupted_hitters.has(runner))
+	g.players[runner].position=Vector3(-.9,.04,-.58)
+	var shoulder:Vector3=g.players[runner].position
+	g.clear_setter_lane(1,.05)
+	assert(g.interrupted_hitters.has(runner) and g.hitter_for_set(setter)!=runner and g.players[runner].position.x>shoulder.x)
+	print("Pipe tempo, approach, front-row closure and setter right of way verified")
 	g.replay.record(g)
 	g.match_clock+=1.
 	g.replay.record(g)
