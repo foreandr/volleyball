@@ -2,6 +2,7 @@ extends "res://scripts/volleyball_match.gd"
 
 var feed_number := -1
 var feed_hitter := -1
+var feed_tempo := 2
 var instructions := ConfigFile.new()
 var rules_path := "user://block_defense_ai.cfg"
 var situation := ""
@@ -55,6 +56,18 @@ func move_cpu(index:int,target:Vector3,delta:float,speed:=5.3,receive_facing:=Ve
 func scripted_pass() -> bool:
 	return flight_number==feed_number and flight_kind=="pass"
 
+func set_height_error(error:float) -> float:
+	if scripted_pass(): return clampf(error,-.04,.04)
+	return super.set_height_error(error)
+
+func six_set_tempo(hitter:int,point:Vector3) -> int:
+	if scripted_pass() and hitter==feed_hitter: return feed_tempo
+	return super.six_set_tempo(hitter,point)
+
+func prepare_middle_quick(side:int,delta:float) -> void:
+	if scripted_pass() and side==1 and feed_hitter==front_middle(side) and feed_tempo>=2: return
+	super.prepare_middle_quick(side,delta)
+
 func hitter_for_set(setter:int,allow_quick:bool=true) -> int:
 	if scripted_pass() and team(setter)==1: return feed_hitter
 	return super.hitter_for_set(setter,allow_quick)
@@ -81,7 +94,8 @@ func attack_lane_for(index:int) -> Vector3:
 		return Vector3(-3.65,.065,.82)
 	return lane
 
-func start_feed(defense:int,offense:int,role:int,in_system:bool) -> void:
+func start_feed(defense:int,offense:int,role:int,in_system:bool,tempo:int=2) -> void:
+	feed_tempo=clampi(tempo,0,3)
 	situation="%d/%d/%d/%d"%[defense,offense,role,int(in_system)]
 	feed_number=-1
 	reset_match()

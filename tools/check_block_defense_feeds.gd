@@ -11,6 +11,21 @@ func run() -> void:
 	var g=page.game
 	g.spectator=true
 	g.instructions.clear()
+	var heights:=[]
+	var times:=[]
+	for tempo in range(4):
+		seed(185)
+		g.start_feed(3,1,1,true,tempo)
+		for tick in 150:
+			g.step_match(1./60.,page.ground)
+			if g.flight_kind=="set": break
+		assert(g.flight_kind=="set")
+		heights.append(g.last_set_apex)
+		times.append(g.arrival(g.attackers[1].set_contact_height(g.last_set_apex)))
+		if tempo>0:
+			assert(heights[tempo]>heights[tempo-1])
+			assert(times[tempo]>times[tempo-1])
+	print("Opening pin set apex by tempo (m): ",heights,"; time to hitter (s): ",times)
 	var total:=0
 	var misses:=[]
 	for rotation in range(1,7):

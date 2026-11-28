@@ -1531,6 +1531,9 @@ func six_set_tempo(hitter:int,point:Vector3) -> int:
 	if point.z<0. or absf(point.x)>4.4: return 3
 	return randi_range(1,2)
 
+func set_height_error(error:float) -> float:
+	return error
+
 func cpu_set_apex(index: int, point: Vector3, pin: Vector3, pace: float, tempo:=-1) -> float:
 	var target:=hitter_for_set(index)
 	var hitter:=players[target]
@@ -1610,7 +1613,7 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 		pin += error.slide(Vector3.UP)
 		if not is_human(index) and absf(set_width) >= 1.0 and (pin.x-setter_x)*signf(set_width) < 1.0:
 			pin.x = setter_x+signf(set_width)
-		apex = maxf(maxf(2.74,point.y+0.18),apex+error.y)
+		apex = maxf(maxf(2.74,point.y+0.18),apex+set_height_error(error.y))
 		if not is_human(index) and not six_on_six():
 			var span := (pin-point).slide(Vector3.UP).length()
 			var time_to_hit := maxf(0.68,span/6.2)

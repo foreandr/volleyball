@@ -5,6 +5,7 @@ var notes_path:="user://block_defense_positions.jsonl"
 var defense:=OptionButton.new()
 var offense:=OptionButton.new()
 var hitter:=OptionButton.new()
+var tempo:=OptionButton.new()
 var quality:=OptionButton.new()
 var watch:=CheckButton.new()
 var edit_button:=Button.new()
@@ -46,10 +47,12 @@ func _ready() -> void:
 		offense.add_item("Offense · setter in %d"%zone,zone)
 	quality.add_item("In-system pass")
 	quality.add_item("Out-of-system pass")
-	for control in [defense,offense,quality,hitter]: column.add_child(control)
+	for value in range(4): tempo.add_item("Set tempo · %d"%value,value)
+	for control in [defense,offense,quality,hitter,tempo]: column.add_child(control)
 	var saved:Dictionary=StorySession.game_options.get_value("block_defense","setup",{})
 	defense.select(clampi(saved.get("defense",3),1,6)-1)
 	offense.select(clampi(saved.get("offense",1),1,6)-1)
+	tempo.select(clampi(saved.get("tempo",2),0,3))
 	quality.select(0 if saved.get("in_system",true) else 1)
 	populate_hitters(saved.get("role",1))
 	offense.item_selected.connect(func(_i): populate_hitters(hitter.get_selected_id()))
@@ -85,11 +88,11 @@ func populate_hitters(preferred:int) -> void:
 func start_scenario() -> void:
 	if editing: toggle_edit()
 	if game.replay.active: toggle_match_replay()
-	setup={"defense":defense.get_selected_id(),"offense":offense.get_selected_id(),"role":hitter.get_selected_id(),"in_system":quality.selected==0,"watch":watch.button_pressed}
+	setup={"defense":defense.get_selected_id(),"offense":offense.get_selected_id(),"role":hitter.get_selected_id(),"in_system":quality.selected==0,"tempo":tempo.get_selected_id(),"watch":watch.button_pressed}
 	StorySession.game_options.set_value("block_defense","setup",setup.duplicate())
 	StorySession.save_options()
 	game.set_spectator(watch.button_pressed)
-	game.start_feed(setup.defense,setup.offense,setup.role,setup.in_system)
+	game.start_feed(setup.defense,setup.offense,setup.role,setup.in_system,setup.tempo)
 	authorized=true
 	running=true
 	edit_button.disabled=false
