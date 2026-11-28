@@ -6,6 +6,7 @@ var setter_zone:=1
 var defense:=false
 var selected:=0
 var marks:=PackedVector2Array()
+var edges:Array[Vector3i]=[]
 var board:=Control.new()
 var dragging:=false
 var editing:=false
@@ -64,6 +65,7 @@ func _ready() -> void:
 	rotation.grab_focus()
 
 func refresh() -> void:
+	edges=Formation.receive_edges(setter_zone)
 	marks=Formation.layout(StorySession.game_options,setter_zone,defense)
 	for i in 6:
 		roles.set_item_text(i,"Libero (for %s)"%Formation.SHORT[i] if libero_mark(i) else Formation.SHORT[i])
@@ -84,6 +86,11 @@ func draw_board() -> void:
 	board.draw_line(r.position,r.position+Vector2.RIGHT*r.size.x,Color.WHITE,5.)
 	var line:=r.position+Vector2.DOWN*r.size.y/3.
 	board.draw_line(line,line+Vector2.RIGHT*r.size.x,Color("#ebc9ad"),2.)
+	if not defense:
+		var bounds:=Formation.receive_bounds(marks,selected,edges)
+		var area:=Rect2(r.position+bounds.position*r.size,bounds.size*r.size)
+		board.draw_rect(area,Color("#75e0bc33"))
+		board.draw_rect(area,Color("#85dbc4"),false,1.5)
 	var font:=get_theme_default_font()
 	board.draw_string(font,r.position+Vector2(0,-5),"NET",HORIZONTAL_ALIGNMENT_CENTER,r.size.x,14)
 	for i in 6:
@@ -92,7 +99,8 @@ func draw_board() -> void:
 		board.draw_string(font,at+Vector2(-21,6),"L" if libero_mark(i) else Formation.SHORT[i],HORIZONTAL_ALIGNMENT_CENTER,42.,16,Color.BLACK if selected==i else Color.WHITE)
 
 func move_mark(mark:Vector2) -> void:
-	marks[selected]=mark.clamp(Vector2.ONE*.035,Vector2.ONE*.965)
+	var bounds:=Rect2(Vector2.ONE*.035,Vector2.ONE*.93) if defense else Formation.receive_bounds(marks,selected,edges)
+	marks[selected]=mark.clamp(bounds.position,bounds.end)
 	dirty=true
 	board.queue_redraw()
 

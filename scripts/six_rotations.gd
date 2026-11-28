@@ -45,7 +45,7 @@ static func key(setter_zone:int,defense:bool) -> String:
 
 static func layout(options:ConfigFile,setter_zone:int,defense:bool) -> PackedVector2Array:
 	var saved=options.get_value("six_rotations",key(setter_zone,defense),[])
-	if saved is PackedVector2Array and saved.size()==6: return saved.duplicate()
+	if saved is PackedVector2Array and saved.size()==6: return saved.duplicate() if defense else legal_receive(saved,setter_zone)
 	var marks:=PackedVector2Array()
 	for role in 6:
 		var spot:Vector2=RECEIVE[setter_zone-1][role]/10.
@@ -54,7 +54,53 @@ static func layout(options:ConfigFile,setter_zone:int,defense:bool) -> PackedVec
 			var lane:=.5 if role in [2,5] else (.16 if role in [1,4] else .84)
 			spot=Vector2(lane,.09 if front else .72)
 		marks.append(spot)
-	return marks
+	return marks if defense else legal_receive(marks,setter_zone)
 
 static func on_court(mark:Vector2) -> Vector3:
 	return Vector3((.5-mark.x)*9.,.04,4.-9.*mark.y)
+
+# Each edge orders two rotational slots along x (sideline) or y (net depth).
+static func receive_edges(rotation:int) -> Array[Vector3i]:
+	var edges:Array[Vector3i]=[]
+	for pair in [Vector3i(4,3,0),Vector3i(3,2,0),Vector3i(5,6,0),Vector3i(6,1,0),
+			Vector3i(4,5,1),Vector3i(3,6,1),Vector3i(2,1,1),
+			Vector3i(4,1,1),Vector3i(2,5,1)]:
+		var edge:=Vector3i(posmod(pair.x-rotation,6),posmod(pair.y-rotation,6),pair.z)
+		edges.append(edge)
+	return edges
+
+static func legal_receive(source:PackedVector2Array,rotation:int) -> PackedVector2Array:
+	var marks:=source.duplicate()
+	for i in marks.size(): marks[i]=marks[i].clamp(Vector2.ONE*.035,Vector2.ONE*.965)
+	var edges:=receive_edges(rotation)
+	# Repair old formations locally, splitting each overlap between the two feet.
+	for iteration in 32:
+		var changed:=false
+		for e in edges:
+			var near:=marks[e.x]
+			var far:=marks[e.y]
+			if near[e.z]<=far[e.z]: continue
+			var midpoint:float=(near[e.z]+far[e.z])*.5
+			near[e.z]=midpoint
+			far[e.z]=midpoint
+			marks[e.x]=near
+			marks[e.y]=far
+			changed=true
+		if not changed: break
+	# Eliminate any remaining floating-point residual in topological order.
+	for e in edges:
+		var far:=marks[e.y]
+		far[e.z]=maxf(far[e.z],marks[e.x][e.z])
+		marks[e.y]=far
+	return marks
+
+static func receive_bounds(marks:PackedVector2Array,role:int,edges:Array[Vector3i]) -> Rect2:
+	var low:=Vector2.ONE*.035
+	var high:=Vector2.ONE*.965
+	for e in edges:
+		if role==e.x: high[e.z]=minf(high[e.z],marks[e.y][e.z])
+		elif role==e.y: low[e.z]=maxf(low[e.z],marks[e.x][e.z])
+	return Rect2(low,high-low)
+
+static func from_court(point:Vector3) -> Vector2:
+	return Vector2(.5-point.x/9.,(4.-point.z)/9.)

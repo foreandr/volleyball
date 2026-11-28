@@ -449,6 +449,7 @@ func server_index() -> int:
 const Formation=preload("res://scripts/six_rotations.gd")
 var setter_zones: Array[int]=[1,1]
 var lineup_roles: Array[PackedInt32Array]=[]
+var human_receive_bounds:=Rect2()
 var receive_marks: Array[PackedVector2Array]=[]
 var defense_marks: Array[PackedVector2Array]=[]
 
@@ -610,6 +611,8 @@ func begin_point() -> void:
 		for side in 2:
 			receive_marks.append(Formation.layout(StorySession.game_options,setter_zones[side],false))
 			defense_marks.append(Formation.layout(StorySession.game_options,setter_zones[side],true))
+		var rotation:=int(setter_zones[0])
+		human_receive_bounds=Formation.receive_bounds(receive_marks[0],lineup_role(0),Formation.receive_edges(rotation))
 	for index in players.size():
 		var actor := players[index]
 		var slot := formation_slot(index)
@@ -3009,6 +3012,11 @@ func manual_ready_movement(delta:float,controls:RefCounted,can_toss:bool) -> voi
 	controls.read_pace_input()
 	var stick:Vector2=controls.movement_input()
 	controls.move_player(stick,delta,false,players[server_index()].global_position,1.,.15,true,3.42)
+	if six_on_six() and service_team!=0:
+		var point:=Formation.from_court(human.position)
+		var legal:=Formation.on_court(point.clamp(human_receive_bounds.position,human_receive_bounds.end))
+		human.position.x=legal.x
+		human.position.z=legal.z
 	pose_serve_receive_wait(delta,stick.length()>.01)
 
 func step_match(delta: float, controls: RefCounted) -> void:

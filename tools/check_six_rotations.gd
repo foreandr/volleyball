@@ -3,6 +3,14 @@ extends SceneTree
 func _initialize() -> void:
 	run.call_deferred()
 
+func check_order(marks:PackedVector2Array,rotation:int) -> void:
+	var slots:=PackedVector2Array()
+	for z in range(1,7): slots.append(marks[posmod(z-rotation,6)])
+	assert(slots[3].x<=slots[2].x+.000001 and slots[2].x<=slots[1].x+.000001)
+	assert(slots[4].x<=slots[5].x+.000001 and slots[5].x<=slots[0].x+.000001)
+	for pair in [Vector2i(4,5),Vector2i(3,6),Vector2i(2,1),Vector2i(4,1),Vector2i(2,5)]:
+		assert(slots[pair.x-1].y<=slots[pair.y-1].y+.000001)
+
 func run() -> void:
 	var formations=load("res://scripts/six_rotations.gd")
 	var session=root.get_node("StorySession")
@@ -16,6 +24,17 @@ func run() -> void:
 			editor.defense=defense
 			editor.refresh()
 			assert(editor.marks.size()==6)
+			if not defense:
+				check_order(editor.marks,rotation)
+				for role in 6:
+					editor.selected=role
+					var original:PackedVector2Array=editor.marks.duplicate()
+					for corner in [Vector2.ZERO,Vector2.ONE,Vector2.RIGHT,Vector2.DOWN]:
+						editor.move_mark(corner)
+						check_order(editor.marks,rotation)
+						for other in 6:
+							if other!=role: assert(editor.marks[other]==original[other])
+					editor.marks=original
 			editor.selected=0
 			editor.move_mark(Vector2(.1+rotation*.08,.62 if defense else .25))
 			options.set_value("six_rotations",formations.key(rotation,defense),editor.marks.duplicate())
