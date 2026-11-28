@@ -386,3 +386,5 @@ In 6v6 an in-system quick runner takes a spike approach and draws the hitting ar
 In 6v6, honor a called quick when the middle is up. A tempo-one pipe also requires the back-row outside to be lined up with the chosen seam and within a plant and jump of contact. If the outside cannot run that seam, use the available airborne middle.
 
 In setter one, the outside and opposite keep their reversed pins when transitioning to block. A ready middle decoy and unavailable pipe leave a called pin set available.
+
+On an attacking first pass in 6v6, the mapped A button calls the eligible controlled hitter for the current set. A CPU quick to a middle already in flight targets the hitting shoulder and remaining jump time.

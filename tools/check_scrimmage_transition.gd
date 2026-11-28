@@ -22,6 +22,36 @@ func run() -> void:
 	await scene_changed
 	var match_scene=current_scene
 	var g=match_scene.game
+	# A first-contact call belongs to this pass and survives the CPU's release read.
+	var roles=g.lineup_roles[0].duplicate()
+	var pin_slot:int=g.lineup_roles[0].find(1)
+	g.lineup_roles[0][pin_slot]=roles[0]
+	g.lineup_roles[0][0]=1
+	g.manual=load("res://scripts/match_court_controls.gd").new()
+	g.add_child(g.manual)
+	g.manual.configure(g)
+	g.spectator=false
+	g.phase=g.Phase.LIVE
+	g.possession_team=0
+	g.flight_kind="pass"
+	g.touches=1
+	g.rally_setter=g.lineup_roles[0].find(0)
+	var call_button:=InputEventJoypadButton.new()
+	call_button.button_index=g.manual.Xbox.physical(JOY_BUTTON_A)
+	var pads:=Input.get_connected_joypads()
+	if pads.size(): call_button.device=pads[0]
+	call_button.pressed=true
+	g.manual.handle(call_button)
+	assert(g.called_this_pass and g.rally_hitter==0)
+	g.choose_at_set_contact(g.rally_setter,Vector3(0,2,3))
+	assert(g.rally_hitter==0)
+	call_button.pressed=false
+	g.manual.handle(call_button)
+	g.manual.queue_free()
+	g.manual=null
+	g.spectator=true
+	g.lineup_roles[0]=roles
+	g.begin_point()
 	for side in 2:
 		g.receiving_team=side
 		g.flight_kind="serve"

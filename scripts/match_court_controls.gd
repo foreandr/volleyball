@@ -153,7 +153,7 @@ func handle(event:InputEvent) -> bool:
 		elif mode=="receive":
 			reception.button(down,g)
 			if not down: release_feedback()
-		elif mode=="attack" and down and g.team_size>=3 and g.expected_hitter<0: g.input_space(true); g.space_held=false
+		elif mode=="attack" and down: g.call_for_set()
 		return true
 	if button in [JOY_BUTTON_LEFT_SHOULDER,JOY_BUTTON_RIGHT_SHOULDER]:
 		modifiers.erase(button)

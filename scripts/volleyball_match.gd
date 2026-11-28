@@ -475,6 +475,7 @@ func prepare_middle_quick(side:int,delta:float) -> void:
 func choose_at_set_contact(setter:int,point:Vector3) -> void:
 	var side:=team(setter)
 	read_pipe(side)
+	if side==0 and called_this_pass and rally_hitter==0 and not interrupted_hitters.has(0): return
 	var in_system:bool=setter_can_run_middle[side] and point.z>=Net.NET_Z-3.
 	var back_outside:=1 if Formation.zone(1,setter_zones[side]) in [1,5,6] else 4
 	var pipe:=first_on(side)+lineup_roles[side].find(back_outside)
@@ -885,6 +886,16 @@ func change_arc(amount: float) -> void:
 
 var called_this_pass := false
 
+func call_for_set() -> void:
+	if spectator or phase!=Phase.LIVE or flight_kind!="pass" or possession_team!=0 or touches!=1 or team_size<3 or rally_setter<=0 or called_this_pass: return
+	if back_row_setter(0) or interrupted_hitters.has(0): return
+	if six_on_six() and not attack_lane_for(0).is_finite(): return
+	called_this_pass=true
+	rally_hitter=0
+	if manual:
+		manual.call_notice="Called for set"
+		manual.call_until=match_clock+1.
+
 func input_space(pressed: bool) -> void:
 	if spectator: return
 	space_held = pressed
@@ -892,9 +903,7 @@ func input_space(pressed: bool) -> void:
 	if phase == Phase.READY and server_index() == 0 and pressed:
 		start_serve()
 		return
-	if pressed and phase==Phase.LIVE and flight_kind=="pass" and possession_team==0 and touches==1 and team_size>=3 and rally_setter>0 and not back_row_setter(0) and not called_this_pass:
-		called_this_pass=true
-		if randf()<lerpf(.22,.88,human.effective_rating("Charisma")/100.): rally_hitter=0
+	if pressed: call_for_set()
 	var driver := attackers[0]
 	if driver.enabled and driver.setter == human and driver.stage == driver.Stage.SET:
 		if pressed:
@@ -1104,7 +1113,7 @@ func launch(point: Vector3, motion: Vector3, kind: String, from: int, spin_rate 
 			set_jumps[hitter]=unused
 			driver.takeoff_yaw=players[hitter].rotation.y
 			driver.approach_intercept=frame.to_local(set_pin)
-			driver.approach_intercept.y=driver.set_contact_height(last_set_apex)
+			if driver.approach_intercept.y<=1.: driver.approach_intercept.y=driver.set_contact_height(last_set_apex)
 			driver.approach_expected_hit_at=driver.stage_start+driver.pin_arrival
 
 	ball.global_position = point
@@ -1587,9 +1596,27 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 		pin=players[index].reachable_set(point,pin,airborne,carry,duration)
 		var motion: Vector3 = driver.set_toward_pin(point,pin,apex,contact_height)
 		var hitter:=hitter_for_set(index)
+		var airborne_quick:=six_on_six() and not is_human(index) and not is_human(hitter) and hitter==front_middle(side) and middle_showing_quick(side)
+		if airborne_quick:
+			var runner:=players[hitter]
+			var jump:=set_jumps[hitter]
+			var air_age:float=jump.elapsed-jump.load_duration()
+			duration=clampf(jump.air_time*.53-air_age,.12,.32)
+			var phase_at_hit:=clampf((air_age+duration)/jump.air_time,0.,1.)
+			var rig:Skeleton3D=runner.skeleton
+			var shoulder:=frame.to_local(rig.to_global(rig.get_bone_global_pose(rig.find_bone("upperarm_r")).origin))
+			var root_y:float=jump.start.y+4.*jump.height*jump.COURT_VERTICAL_SCALE*phase_at_hit*(1.-phase_at_hit)
+			pin=shoulder+jump.horizontal_velocity().slide(Vector3.UP)*duration+Vector3.BACK*.23
+			pin.y+=root_y-runner.position.y+runner.height_cm*.0031
+			motion=(pin-point)/duration+Vector3.UP*(.5*Flight.GRAVITY*duration)
+			apex=point.y+maxf(0.,motion.y)**2/(2.*Flight.GRAVITY)
+			last_set_apex=apex
 		if six_on_six() and not is_human(index):
 			trace.write("cpu_set_release",match_clock,{"setter":index,"hitter":hitter,"role":lineup_role(hitter),"route":attack_lane_for(hitter),"runner":players[hitter].position,"target":pin,"apex":apex,"arrival_seconds":duration})
 		launch(world_point,frame.global_basis*motion,"set",index,1.0,hitter,frame.to_global(pin))
+		if airborne_quick:
+			driver.pin_arrival=duration
+			driver.approach_expected_hit_at=driver.stage_start+duration
 		return
 	if drill_pass_target.is_finite():
 		world_motion = drill_pass_motion(world_point,world_motion)

@@ -198,7 +198,8 @@ func refresh_prompts() -> void:
 				keys="Hold J / I / L  Set left / middle / back     Z  Jump set     C  Height     V  Arc"
 			"attack":
 				entries=[[JOY_BUTTON_X,"Left"],[JOY_BUTTON_Y,"Middle"],[JOY_BUTTON_B,"Right"],["Move","Aim"],[JOY_BUTTON_LEFT_SHOULDER,"Roll"],[JOY_BUTTON_RIGHT_SHOULDER,"Tip"]]
-				keys="Hold Space / Y / B  Attack left / middle / right     Release to time     Z  Roll     C  Tip"
+				if game.flight_kind=="pass": entries.push_front([JOY_BUTTON_A,"Call for set"])
+				keys="Q  Call for set     Hold Space / Y / B  Attack left / middle / right     Release to time     Z  Roll     C  Tip"
 			"block":
 				entries=[[JOY_BUTTON_A,"Load / release to jump"],["Move","Move / air lean"],["LT","Left reach"],["RT","Right reach"]]
 				keys="Space  Load / release to block     WASD  Move"
