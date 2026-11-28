@@ -46,7 +46,7 @@ var meter_until := -1.
 func block_meter() -> float:
 	if not block_held: return released_meter
 	if phase!="set": return 0.
-	var load_left := Block.START*(1.-clampf(block_load.seconds/block_load.FULL_LOAD,0.,1.))
+	var load_left := Block.manual_push_time(clampf(block_load.seconds/block_load.FULL_LOAD,0.,1.))
 	var error := elapsed-flight_time+load_left+Block.AIR*.5
 	return clampf(.5+error/.6,0.,1.)
 

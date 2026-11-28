@@ -73,14 +73,24 @@ func update(actor: Node3D,delta: float,pose_depth := 1., beach_block := false) -
 			var upper:String="upperarm_"+side
 			var shoulder:Vector3=author.point(pose,upper)
 			var hand:String="hand_"+side
-			var low:=Vector3(.12 if side=="l" else -.12,-.53,.02)
-			var target:Vector3=author.point(pose,hand).lerp(shoulder+low,bend)
-			author.limb(pose,upper,"lowerarm_"+side,hand,target,Vector3(.3 if side=="l" else -.3,0,-1),bend,162.)
+			var low:=Vector3(-.035 if side=="l" else .035,-.47,.14)
+			var lower:String="lowerarm_"+side
+			var arm_id:=rig.find_bone(upper)
+			var elbow_id:=rig.find_bone(lower)
+			var start_arm:Transform3D=pose[arm_id]
+			var start_elbow:Transform3D=pose[elbow_id]
+			author.limb(pose,upper,lower,hand,shoulder+low,Vector3(.20 if side=="l" else -.20,0,-1),1.,147.)
+			pose[arm_id]=start_arm.interpolate_with(pose[arm_id],bend)
+			pose[elbow_id]=start_elbow.interpolate_with(pose[elbow_id],bend)
 		var foot: String = "foot_"+side
 		var pole:=Vector3.BACK
 		if beach_block:
 			var forward:=Vector3.BACK.slide(stance_axis).normalized()
-			pole=forward+stance_axis*(.65 if side=="l" else -.65)
+			var thigh:Vector3=author.point(baseline,"thigh_"+side)
+			var ankle:Vector3=author.point(baseline,foot)
+			var knee:Vector3=author.point(baseline,"calf_"+side)
+			var initial_pole:=(knee-thigh).slide(thigh.direction_to(ankle)).normalized()
+			pole=initial_pole.lerp(forward+stance_axis*(.65 if side=="l" else -.65),bend)
 		author.limb(pose,"thigh_"+side,"calf_"+side,foot,author.point(baseline,foot),pole)
 		author.set_world_basis(pose,foot,author.world_pose(baseline,rig.find_bone(foot)).basis)
 	rig.set_bone_pose_position(hips,pose[hips].origin)

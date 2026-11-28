@@ -140,13 +140,17 @@ static func first_capsule_touch(start: Vector3,finish: Vector3,a: Vector3,b: Vec
 	var surface := Geometry3D.get_closest_point_to_segment(point,a,b)
 	return {"fraction":hi,"point":point,"normal":surface.direction_to(point),"surface":surface}
 
+static func manual_push_time(depth:float) -> float:
+	return START*(1.-depth) if depth<=.05 else lerpf(START,.20,depth)
+
 var takeoff_pose:Array[Transform3D]=[]
+var takeoff_target:Array[Transform3D]=[]
 var drive_elapsed:=0.
 var drive_duration:=0.
 
 func begin(player: Node3D, held_depth:=0.) -> void:
 	if held_depth>.05:
-		drive_duration=.12*held_depth
+		drive_duration=manual_push_time(held_depth)
 		for i in player.skeleton.get_bone_count():
 			takeoff_pose.append(player.skeleton.get_bone_pose(i))
 	actor = player
@@ -155,6 +159,9 @@ func begin(player: Node3D, held_depth:=0.) -> void:
 	player.set_meta("swing_block_load",0.)
 	actor.play_action("idle",0.0)
 	actor.animator.seek(0.0,true)
+	for i in takeoff_pose.size():
+		takeoff_target.append(actor.skeleton.get_bone_pose(i))
+		actor.skeleton.set_bone_pose(i,takeoff_pose[i])
 
 func read_air_lane(ball_at: Vector3,partners: Array) -> void:
 	if shoulders.size()!=2 or overpass_swing: return
@@ -178,12 +185,24 @@ func step(delta: float, world_ball: Vector3) -> bool:
 	if is_finite(net_heading): actor.rotation.y=rotate_toward(actor.rotation.y,net_heading,delta*9.)
 	if drive_elapsed<drive_duration:
 		drive_elapsed=minf(drive_duration,drive_elapsed+delta*tempo)
-		actor.animator.seek(0.,true)
 		var blend:=smoothstep(0.,drive_duration,drive_elapsed)
 		var skeleton:Skeleton3D=actor.skeleton
+		var drive_pose:Array[Transform3D]=[]
 		for i in takeoff_pose.size():
-			var neutral:=skeleton.get_bone_pose(i)
-			skeleton.set_bone_pose(i,takeoff_pose[i].interpolate_with(neutral,blend))
+			drive_pose.append(takeoff_pose[i].interpolate_with(takeoff_target[i],blend))
+		var drive_author:RefCounted=actor.get_pose_author()
+		for side in ["l","r"]:
+			var hip:String="thigh_"+side
+			var knee:String="calf_"+side
+			var foot:String="foot_"+side
+			var id:=skeleton.find_bone(foot)
+			var planted:Transform3D=drive_author.world_pose(takeoff_pose,id)
+			var push_end:Transform3D=drive_author.world_pose(takeoff_target,id)
+			var ankle:=planted.interpolate_with(push_end,blend)
+			var pole:Vector3=drive_author.point(drive_pose,knee)-drive_author.point(drive_pose,hip)
+			drive_author.limb(drive_pose,hip,knee,foot,ankle.origin,pole)
+			drive_author.set_world_basis(drive_pose,foot,ankle.basis)
+		for i in drive_pose.size(): skeleton.set_bone_pose(i,drive_pose[i])
 		if drive_elapsed>=drive_duration: age=START
 		return true
 	age += delta*tempo
