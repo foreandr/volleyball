@@ -29,6 +29,10 @@ func _process(_delta: float) -> void:
 		var fields := {"fps":display_fps,"worst_frame_ms":worst_us/1000.,
 			"time":Time.get_time_string_from_system(),"focused":get_window().has_focus(),
 			"draw_calls":Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)}
+		var viewport := get_viewport().get_viewport_rid()
+		fields["render_gpu_ms"]=RenderingServer.viewport_get_measured_render_time_gpu(viewport)
+		fields["render_cpu_ms"]=RenderingServer.viewport_get_measured_render_time_cpu(viewport)
+		fields["physics_ms"]=Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)*1000.
 		if scene and "phase" in scene: fields["phase"]=scene.get("phase")
 		record(["fps_recovered","fps_warning","fps_critical"][band],fields)
 		last_report_us=now
@@ -40,6 +44,7 @@ func _process(_delta: float) -> void:
 func _ready() -> void:
 	process_mode=Node.PROCESS_MODE_ALWAYS
 	set_process(DisplayServer.get_name()!="headless")
+	if is_processing(): RenderingServer.viewport_set_measure_render_time(get_viewport().get_viewport_rid(),true)
 	previous_frame_us=Time.get_ticks_usec()
 	var dir := "user://interaction_logs"
 	DirAccess.make_dir_recursive_absolute(dir)

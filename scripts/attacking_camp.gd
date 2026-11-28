@@ -929,14 +929,17 @@ func show_strike_speed() -> void:
 		var approach := attack_jump.spike_power_factor()
 		var drill_power := attack_speed()*3.6
 		var approach_speed := drill_power*approach
-		var adjustments := PackedStringArray()
+		details=preload("res://scripts/swing_speed.gd").rating_terms(hitter)
 		if not is_equal_approx(drill_power,base):
-			adjustments.append("Drill power %+.1f"%(drill_power-base))
-		adjustments.append("Approach %+.1f"%(approach_speed-drill_power))
+			details+=speed_term(drill_power-base,"drill power")
+		details+=speed_term(approach_speed-drill_power,"momentum")
 		if release_power_factor()<1.:
-			adjustments.append("Release timing %+.1f"%(approach_speed*(release_power_factor()-1.)))
-		details=preload("res://scripts/swing_speed.gd").ratings(hitter)+"\n"+"  |  ".join(adjustments)+" km/h"
+			details+=speed_term(approach_speed*(release_power_factor()-1.),"release timing")
+		details+=" = %.1f km/h"%(drop_velocity.length()*3.6)
 	ContactTiming.launch_speed(drop_velocity,details)
+
+func speed_term(amount:float, label:String) -> String:
+	return " %s %.1f %s"%["+" if amount>=0. else "-",absf(amount),label]
 
 func contact_deadline() -> float:
 	return flight_time

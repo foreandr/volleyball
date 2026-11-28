@@ -18,7 +18,7 @@ func box(label_: String,size_: Vector3,center: Vector3,style: Material) -> MeshI
 		var shape := BoxShape3D.new()
 		shape.size = size_
 		Contacts.solid(part,shape,Contacts.GYM)
-	if label_ in ["Bleacher bench","Seat front lip","Seat underframe","Bleacher foot plate","Folding support","Fixture suspension"]:
+	if label_ in ["Bleacher bench","Seat front lip","Seat underframe","Bleacher foot plate","Folding support","Fixture suspension","Daylight glazing","Clerestory frame","Roof steel","Truss lower chord","Truss chord","Wall pad","Fixture diffuser","Championship felt","Backboard square"]:
 		var key := [label_,size_,signf(center.x),style.get_instance_id()]
 		if not static_batches.has(key): static_batches[key]=[]
 		static_batches[key].append(part)
