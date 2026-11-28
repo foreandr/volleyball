@@ -62,6 +62,37 @@ func run() -> void:
 			g.position_defense(.016)
 			assert(g.defender_assignment[1-side]==defender and g.blocks.has(defender))
 			g.blocks.clear()
+		for wing:float in [-1.,1.]:
+			var defense:int=1-side
+			var middle:int=g.first_on(defense)+g.lineup_roles[defense].find(2)
+			var line:=-1
+			for i in g.slots_for(defense):
+				g.players[i].position=g.formation_home(i,true)
+				if g.Formation.zone(g.lineup_role(i),g.setter_zones[defense]) in [1,5,6]:
+					if line<0 or wing*g.players[i].position.x>wing*g.players[line].position.x: line=i
+			var driver=g.attackers[side]
+			driver.rally_set_target=Vector3(-wing*3.7,.065,3.2)
+			g.flight_kind="set"
+			g.expected_hitter=g.first_on(side)+g.lineup_roles[side].find(1)
+			g.serve.contact_clock=0.
+			g.serve.swing_time=g.serve.recovery_end()+1.
+			g.serve.moved_after_contact=true
+			g.court_velocities.clear()
+			var start:Vector3=g.players[line].position
+			for tick in 90:
+				g.match_clock+=1./60.
+				driver.approach_expected_hit_at=driver.clock+maxf(.24,1.55-tick/60.)
+				g.position_defense(1./60.)
+				if g.blocks.size()==2: break
+			var pin:int=g.defender_assignment[defense]
+			assert(pin!=middle and g.blocks.has(pin) and g.blocks.has(middle))
+			assert(wing*(g.players[pin].position.x-g.players[middle].position.x)>.45)
+			assert(g.blocks[pin].square_block and g.blocks[middle].square_block)
+			for i in [pin,middle]:
+				g.blocks[i].read_air_lane(g.players[i].global_position+Vector3(1.,3.,1.),g.players)
+				assert(g.blocks[i].reach_input==Vector2.ZERO and g.blocks[i].lean_input==0.)
+			assert(g.players[line].position.z<start.z-.65 and wing*(g.players[line].position.x-start.x)>.2)
+			g.blocks.clear()
 	g.replay.record(g)
 	g.match_clock+=1.
 	g.replay.record(g)

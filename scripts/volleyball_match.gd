@@ -2775,6 +2775,48 @@ func position_overpass(delta: float) -> bool:
 			start_block(blocker,eta+0.075)
 	return true
 
+# A set to either antenna gives the pin ownership of the outside shoulder.
+# Use the team's saved lanes so the same read works on both sides of the net.
+func defend_pin_set(side:int,attack_x:float,driver:Node3D,delta:float) -> void:
+	var outward:=signf(attack_x)
+	var pin:=-1
+	var middle:=-1
+	var line:=-1
+	for i in slots_for(side):
+		var front:=Formation.zone(lineup_role(i),setter_zones[side]) in [2,3,4]
+		if front and lineup_role(i) in [2,5]: middle=i
+		elif front:
+			if pin<0 or outward*formation_home(i,true).x>outward*formation_home(pin,true).x: pin=i
+		elif line<0 or outward*formation_home(i,true).x>outward*formation_home(line,true).x: line=i
+	if pin<0 or middle<0 or line<0: return
+	defender_assignment[side]=pin
+	var pin_x:=clampf(attack_x,-4.15,4.15)
+	var frame:=frames[side]
+	var eta:float=driver.pin_arrival-(driver.clock-driver.stage_start)
+	if is_finite(driver.approach_expected_hit_at): eta=driver.approach_expected_hit_at-driver.clock+.045
+	if is_finite(driver.swing_drive_started): eta=driver.swing_drive_started+driver.swing_drive_duration*.95-driver.clock+.045
+	var trap:bool=(manual and side==0 and manual.block_call in [manual.BlockCall.LEFT,manual.BlockCall.RIGHT]) or repeat_shot_read(side,attack_x).y>=.65
+	for i in slots_for(side):
+		if is_human(i) or blocks.has(i) or set_jumps[i].active: continue
+		var target:=formation_home(i,true)
+		var sight:=toward_incoming(i,players[i].global_position)
+		if i==pin or i==middle:
+			target=Vector3(pin_x,.04,3.42)
+			if i==middle:
+				var inside:=minf(outward*pin_x,outward*players[pin].position.x)-.68
+				target.x=clampf(outward*inside,-4.15,4.15)
+			move_cpu(i,frame.to_global(target),delta,7.6,sight,false,false,9.,false,0.,4.7)
+			if eta>=-.04 and eta<=.41 and absf(players[i].position.x-target.x)<.38:
+				start_block(i,eta)
+				if blocks.has(i):
+					blocks[i].square_block=not trap
+					blocks[i].net_heading=0.
+		else:
+			if i==line:
+				target.x=clampf(target.x+.48*outward,-4.25,4.25)
+				target.z=maxf(-4.70,target.z-.95)
+			move_cpu(i,frame.to_global(target),delta,4.8,sight)
+
 func position_defense(delta: float) -> void:
 	if position_overpass(delta): return
 	if flight_kind not in ["serve","pass","set","free"]: return
@@ -2800,6 +2842,9 @@ func position_defense(delta: float) -> void:
 	var driver := attackers[hitter_side]
 	var tracking_set := flight_kind == "set" and expected_hitter >= 0
 	var threat := frames[hitter_side].to_global(driver.rally_set_target) if tracking_set else path_point(arrival(2.0))
+	if six_on_six() and tracking_set and absf(frame.to_local(threat).x)>=2.5:
+		defend_pin_set(defense_side,frame.to_local(threat).x,driver,delta)
+		return
 	var second_ball := flight_kind == "pass" and possession_team == hitter_side and touches == 1
 	var second_ball_eta := INF
 	if second_ball:

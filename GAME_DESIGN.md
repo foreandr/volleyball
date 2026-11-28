@@ -376,3 +376,4 @@ In setter-in-one offense the front-row opposite attacks left and the front-row o
 
 The receiving setter signals a quick or 31 before serve contact. CPU setters read the opposing middle and pin blockers to locate a pipe seam; the back-row outside attacks it at tempo 1 or 2. From behind the attack line the CPU setter redirects a middle call to another available hitter. Opening match replay freezes at the current instant with recent rally history available to rewind.
 A back-row setter in 6v6 passes, sets and jump sets, but never approaches to attack, dumps or blocks, even after moving to the net.
+On six-on-six pin and C-ball sets the pin establishes the block and the front middle closes inside it. CPU blockers press straight ahead unless a shoulder call or a strong repeated hitter read warrants reaching. The same-side back defender shuffles about one and a half steps deeper and toward the sideline, then holds ready.

@@ -43,6 +43,7 @@ var landing_recovery := 0.13
 var overpass_swing := false
 var net_heading := INF
 var swing_load := 0.
+var square_block := false
 var aggressive_press := false
 var track_near_ball := false
 var kong_direction := 0.
@@ -180,6 +181,10 @@ func read_air_lane(ball_at: Vector3,partners: Array) -> void:
 		if offset.x<0.: min_hand_x=maxf(min_hand_x,seam+.06)
 		else: max_hand_x=minf(max_hand_x,seam-.06)
 	var open := not is_finite(min_hand_x) if gap<0. else not is_finite(max_hand_x)
+	if square_block:
+		reach_input=Vector2.ZERO
+		lean_input=0.
+		return
 	var amount := smoothstep(.20,.78,absf(gap)) if open else 0.
 	var left := (shoulders[0].x-shoulders[1].x)*gap>0.
 	reach_input=Vector2(amount,0.) if left else Vector2(0.,amount)
@@ -286,6 +291,7 @@ func step(delta: float, world_ball: Vector3) -> bool:
 		depth+=.21*forward_press
 		var lateral_limit := 0.24 if aggressive_press else 0.18
 		var target := shoulder+Vector3(clampf(aim.x-shoulder.x,-lateral_limit,lateral_limit)-outward*0.06,0.62-.09*forward_press,depth)/scale_
+		if square_block: target.x=shoulder.x
 		var spread := (reach.x if side=="l" else reach.y)*air_weight
 		var opposite := (reach.y if side=="l" else reach.x)*air_weight
 		var shoulder_offset := rig.to_global(shoulder).x-rig.to_global(author.point(pose,"spine_03")).x
