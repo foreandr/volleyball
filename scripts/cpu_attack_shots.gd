@@ -22,7 +22,7 @@ static func plan(contact: Vector3, preferred: Vector3, speed: float, spin: float
 				if cut and (depth>7.35 or absf(x-contact.x)<2.): continue
 				var duration := Flight.strike_time(offset,Vector3.DOWN*gravity,speed*pace)
 				var motion := Flight.strike_velocity(offset,Vector3.DOWN*gravity,duration,speed*pace)
-				if not clears_tape(contact,motion,gravity):
+				if path(contact,motion,gravity,duration).distance_to(target)>.05 or not clears_tape(contact,motion,gravity):
 					continue
 				var height_over_block := -INF
 				var near_block := false
@@ -76,6 +76,25 @@ static func plan(contact: Vector3, preferred: Vector3, speed: float, spin: float
 		if score > best_score:
 			best_score = score
 			best = {"type":"Wipe block","target":edge,"motion":motion}
+	if not best.is_empty(): return best
+	# A low pipe can leave no driven lane. Lift a controlled ball into open court.
+	var roll_spin:=2.
+	gravity=Flight.spike_gravity(roll_spin)
+	for x:float in [-3.,0.,3.]:
+		var target:=Vector3(x,Flight.FLOOR,10.)
+		for duration:float in [.9,1.15,1.4,1.7,2.]:
+			var motion:=(target-contact)/duration+Vector3.UP*.5*gravity*duration
+			if not clears_tape(contact,motion,gravity): continue
+			var blocked:=false
+			for wall in walls:
+				var at_wall:=path(contact,motion,gravity,(wall.z-contact.z)/motion.z)
+				if absf(at_wall.x-wall.x)<.83 and at_wall.y<wall.y+.23: blocked=true
+			var gap:=5.
+			for defender in defenders: gap=minf(gap,(target-defender).slide(Vector3.UP).length())
+			var score:=gap-duration-(20. if blocked else 0.)
+			if score>best_score:
+				best_score=score
+				best={"type":"Roll shot","target":target,"motion":motion,"spin":roll_spin}
 	return best
 
 static func path(contact: Vector3, motion: Vector3, gravity: float, time: float) -> Vector3:

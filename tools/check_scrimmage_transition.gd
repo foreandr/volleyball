@@ -4,6 +4,16 @@ func _initialize() -> void:
 	run.call_deferred()
 
 func run() -> void:
+	var shots=preload("res://scripts/cpu_attack_shots.gd")
+	var defenders:Array[Vector3]=[]
+	var walls:Array[Vector3]=[]
+	var low:=Vector3(0.,2.05,.2)
+	var roll:Dictionary=shots.plan(low,Vector3(0,.105,10),26.,9.,defenders,walls)
+	assert(roll.get("type","")=="Roll shot")
+	var gravity:float=shots.Flight.spike_gravity(roll.spin)
+	var duration:float=shots.Flight.landing_time(low,roll.motion,gravity)
+	assert(shots.Net.first_hit(func(t): return shots.path(low,roll.motion,gravity,t),0.,duration).is_empty())
+	assert(shots.path(low,roll.motion,gravity,duration).distance_to(roll.target)<.01)
 	var session=root.get_node("StorySession")
 	session.offline_size=6
 	session.offline_away_size=6
@@ -26,6 +36,33 @@ func run() -> void:
 			if before[i-g.first_on(side)].distance_to(g.players[i].position)>.0001: moving+=1
 		assert(moving>=3)
 		var setter:int=g.first_on(side)+g.lineup_roles[side].find(0)
+		var middle_id:int=g.front_middle(side)
+		var pipe_id:int=g.first_on(side)+g.lineup_roles[side].find(4)
+		for i in g.slots_for(1-side): g.players[i].position=g.formation_home(i,true)
+		g.players[pipe_id].position.z=-2.
+		g.players[middle_id].position=g.attack_lane_for(middle_id)-Vector3.BACK*.55
+		g.players[middle_id].position.y=g.PLAYER_GROUND_Y
+		g.rally_setter=setter
+		g.rally_hitter=pipe_id
+		g.next_touch_cue=g.elapsed+.28
+		g.choose_at_set_contact(setter,Vector3(0,2,3))
+		assert(g.rally_hitter!=pipe_id)
+		g.prepare_middle_quick(side,.016)
+		assert(g.set_jumps[middle_id].active and not g.middle_showing_quick(side))
+		for tick in 16: g.advance_set_jumps(1./60.)
+		assert(g.middle_showing_quick(side))
+		g.choose_at_set_contact(setter,Vector3(0,2,3))
+		assert(g.rally_hitter==pipe_id)
+		g.choose_at_set_contact(setter,Vector3(0,2,0))
+		assert(g.rally_hitter!=pipe_id)
+		var jump=g.set_jumps[middle_id]
+		var frame=g.frames[side]
+		var altitude:float=g.players[middle_id].position.y
+		g.launch(frame.to_global(Vector3(0,2,2)),frame.global_basis*Vector3(0,5,2),"set",setter,0.,middle_id,frame.to_global(g.attack_lane_for(middle_id)))
+		assert(g.attackers[side].jump==jump and jump.active and is_equal_approx(altitude,g.players[middle_id].position.y))
+		jump.active=false
+		g.players[middle_id].position.y=g.PLAYER_GROUND_Y
+		g.setter_can_run_middle[side]=true
 		var opposing_middle:int=g.first_on(1-side)+g.lineup_roles[1-side].find(2)
 		for x in [-1.4,1.4]:
 			g.players[opposing_middle].position.x=x

@@ -435,6 +435,50 @@ func attack_lane_for(index:int) -> Vector3:
 	if role==3 and front: return Vector3(-outside_pin,.065,3.20)
 	return Vector3.INF
 
+func front_middle(side:int) -> int:
+	var roles:=lineup_roles[side]
+	var middle:=2 if Formation.zone(2,setter_zones[side]) in [2,3,4] else 5
+	return first_on(side)+roles.find(middle)
+
+func middle_showing_quick(side:int) -> bool:
+	var i:=front_middle(side)
+	return players[i].position.y>PLAYER_GROUND_Y+.075 and (quick_flight[side]==flight_number or is_human(i))
+
+func prepare_middle_quick(side:int,delta:float) -> void:
+	if not setter_can_run_middle[side] or quick_flight[side]==flight_number: return
+	var i:=front_middle(side)
+	if is_human(i) or i==rally_setter or owns_action(i) or recoveries.has(i): return
+	var actor:=players[i]
+	var lane:=attack_lane_for(i)
+	var cue:=next_touch_cue if is_finite(next_touch_cue) else arrival(hand_contact_height(2))
+	var remaining:=cue-elapsed
+	var plant:=lane-Vector3.BACK*.56
+	var gap:=(plant-actor.position).slide(Vector3.UP).length()
+	if remaining>.32 or gap>1.05:
+		move_cpu_to_approach(i,plant,delta,6.4)
+		return
+	if remaining<-.05: return
+	var jump:=set_jumps[i]
+	jump.front_limit=3.45
+	jump.attack_arm_lift=true
+	var height:=jump_inches(i,attack_vertical,"Attack jump")*.0254
+	jump.begin(actor,Vector2.ZERO,lane,clampf(remaining-.10,.08,.20),height)
+	quick_flight[side]=flight_number
+
+func choose_at_set_contact(setter:int,point:Vector3) -> void:
+	var side:=team(setter)
+	read_pipe(side)
+	var in_system:bool=setter_can_run_middle[side] and point.z>=Net.NET_Z-3.
+	var back_outside:=1 if Formation.zone(1,setter_zones[side]) in [1,5,6] else 4
+	var pipe:=first_on(side)+lineup_roles[side].find(back_outside)
+	var available:=pipe!=setter and players[pipe].position.z<1.35 and not recoveries.has(pipe)
+	if in_system and middle_showing_quick(side) and pipe_open[side] and available:
+		rally_hitter=pipe
+	elif rally_hitter==pipe or (not in_system and rally_hitter==front_middle(side)):
+		setter_can_run_middle[side]=in_system
+		rally_hitter=-1
+		rally_hitter=hitter_for_set(setter)
+
 func read_pipe(side:int) -> void:
 	var middle_x:=0.
 	var pins:Array[float]=[]
@@ -467,7 +511,7 @@ func hitter_for_set(setter: int) -> int:
 			var role:=lineup_role(i)
 			if role in [2,5] and not setter_can_run_middle[side]: continue
 			if role in [1,4] and Formation.zone(role,setter_zones[side]) in [1,5,6]:
-				if pipe_open[side] and players[i].position.z<1.35 and not recoveries.has(i): return i
+				if setter_can_run_middle[side] and middle_showing_quick(side) and pipe_open[side] and players[i].position.z<1.35 and not recoveries.has(i): return i
 				continue
 			hitters.append(i)
 		if not hitters.is_empty(): return hitters[posmod(flight_number+rallies,hitters.size())]
@@ -514,6 +558,7 @@ func server_index() -> int:
 const Formation=preload("res://scripts/six_rotations.gd")
 var middle_31:Array[bool]=[false,false]
 var pipe_gap:Array[float]=[0.,0.]
+var quick_flight:Array[int]=[-1,-1]
 var pipe_open:Array[bool]=[false,false]
 var setter_can_run_middle:Array[bool]=[true,true]
 var setter_zones: Array[int]=[1,1]
@@ -678,6 +723,7 @@ func begin_point() -> void:
 		receive_marks.clear()
 		defense_marks.clear()
 		for side in 2:
+			quick_flight[side]=-1
 			middle_31[side]=randf()<.5
 			pipe_gap[side]=0.
 			pipe_open[side]=false
@@ -935,7 +981,7 @@ func reset_receives() -> void:
 	requested = -1
 	request_age = -INF
 
-func launch(point: Vector3, motion: Vector3, kind: String, from: int, spin_rate := 0.0, hitter := -1, set_pin := Vector3.ZERO, feed_acceleration := Vector3.INF, angular_spin := Vector3.INF) -> void:
+func launch(point: Vector3, motion: Vector3, kind: String, from: int, spin_rate := 0.0, hitter := -1, set_pin := Vector3.ZERO, feed_acceleration := Vector3.INF, angular_spin := Vector3.INF, pace_includes_stamina := false) -> void:
 	# A deflection changes the ball's flight immediately, even during a player's slide.
 	for index in players.size():
 		var save: RefCounted = platforms[index].low_save
@@ -943,7 +989,7 @@ func launch(point: Vector3, motion: Vector3, kind: String, from: int, spin_rate 
 	if from==0 and kind!="serve": career_contributed=true
 	if from>=0 and from<players.size():
 		var athlete := players[from]
-		if kind in ["serve","spike","dump","block"]:
+		if kind in ["serve","spike","dump","block"] and not pace_includes_stamina:
 			motion*=athlete.stamina.effectiveness()
 		if kind in ["serve","spike"]:
 			var base := preload("res://scripts/swing_speed.gd").kmh(athlete)
@@ -1016,6 +1062,16 @@ func launch(point: Vector3, motion: Vector3, kind: String, from: int, spin_rate 
 		if exhibition and roster_active: attackers[side].jump.max_height=jump_inches(hitter,attack_vertical,"Attack jump")*.0254
 		attackers[side].timed_human=manual!=null and is_human(hitter)
 		attackers[side].start_set(players[hitter],frame.to_local(origin),frame.global_basis.inverse()*velocity,frame.to_local(set_pin),shot,0.0,is_human(hitter) and (manual.attack_lane>=0 if manual else space_held))
+		if six_on_six() and hitter==front_middle(side) and quick_flight[side]==flight_number-1 and set_jumps[hitter].active:
+			var driver:=attackers[side]
+			var unused=driver.jump
+			driver.jump=set_jumps[hitter]
+			set_jumps[hitter]=unused
+			driver.takeoff_yaw=players[hitter].rotation.y
+			driver.approach_intercept=frame.to_local(set_pin)
+			driver.approach_intercept.y=driver.set_contact_height(last_set_apex)
+			driver.approach_expected_hit_at=driver.stage_start+driver.pin_arrival
+
 	ball.global_position = point
 	ball.show()
 	update_flight_guide()
@@ -1171,8 +1227,8 @@ func on_spike(actor: Node3D, point: Vector3, motion: Vector3, spin_rate: float) 
 		var flight:=preload("res://scripts/attacking_camp.gd").soft_shot_duration(point,target,tip)
 		spin_rate=0. if tip else 2./.52
 		motion=(target-point)/flight+Vector3.UP*.5*Flight.spike_gravity(spin_rate)*flight
-	play_touch(motion.length()>=preload("res://scripts/gym_physics.gd").HARD_SPIKE_SPEED)
 	if drill_spike_target.is_finite():
+		play_touch(motion.length()>=preload("res://scripts/gym_physics.gd").HARD_SPIKE_SPEED)
 		observe_opponent_shot(1-team(index),point,motion,spin_rate,index)
 		stroke = "Spike"
 		launch(point,motion,"spike",index,spin_rate)
@@ -1182,18 +1238,21 @@ func on_spike(actor: Node3D, point: Vector3, motion: Vector3, spin_rate: float) 
 	if not is_human(index):
 		var frame := frames[team(index)]
 		var start := frame.to_local(point)
-		var local_motion := frame.global_basis.inverse()*motion
+		var local_motion := frame.global_basis.inverse()*motion*float(actor.stamina.effectiveness())
 		var shot: Vector3 = attackers[team(index)].swing_aim
 		var tactic := choose_contact_attack(index,start,shot,local_motion,spin_rate)
 		if not tactic.is_empty():
 			local_motion = tactic.motion
+			spin_rate=tactic.get("spin",spin_rate)
+			if tactic.type=="Roll shot": stroke="Roll shot"
 			trace.write("cpu_attack_choice",match_clock,{"type":tactic.type,"contact":start,"target":tactic.target,"motion":local_motion})
 		motion = frame.global_basis*local_motion
 	if not is_human(index):
 		cpu_policy.used(team(index),"attack depth")
 		cpu_policy.used(team(index),"attack effort")
+	play_touch(motion.length()>=preload("res://scripts/gym_physics.gd").HARD_SPIKE_SPEED)
 	observe_opponent_shot(1-team(index),point,motion,spin_rate,index)
-	launch(point,motion,"spike",index,spin_rate)
+	launch(point,motion,"spike",index,spin_rate,-1,Vector3.ZERO,Vector3.INF,Vector3.INF,not is_human(index))
 
 func choose_contact_attack(index: int, contact: Vector3, preferred: Vector3, motion: Vector3, spin_rate: float) -> Dictionary:
 	var side := team(index)
@@ -1460,11 +1519,7 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 	if touches == 2 and (unsafe_dump or (not (cpu_dump and index == cpu_choice) and (bump.destination.y < 4.0 or (is_human(index) and technique != 0)))):
 		var setter_x := players[index].position.x
 		if six_on_six() and not is_human(index):
-			read_pipe(side)
-			if point.z<Net.NET_Z-3. and rally_hitter>=0 and lineup_role(rally_hitter) in [2,5]:
-				setter_can_run_middle[side]=false
-				rally_hitter=-1
-				rally_hitter=hitter_for_set(index)
+			choose_at_set_contact(index,point)
 		var pin := set_pin_for(index,setter_x)
 		last_called_set_x[side] = pin.x
 		var incoming := velocity+Vector3.DOWN*Flight.GRAVITY*elapsed
@@ -2639,9 +2694,11 @@ func position_attack(delta: float) -> void:
 	if six_on_six() and flight_kind in ["serve","pass"]:
 		if cpu_choice<0: select_receiver()
 		var side:=receiving_team
+		var quick:=flight_kind=="pass" and setter_can_run_middle[side] and rally_setter>=0 and rally_setter!=front_middle(side)
+		if quick: prepare_middle_quick(side,delta)
 		var designated:=hitter_for_set(rally_setter) if flight_kind=="pass" and rally_setter>=0 else -1
 		for i in slots_for(side):
-			if is_human(i) or i==cpu_choice or i==designated or owns_action(i): continue
+			if is_human(i) or i==cpu_choice or i==designated or owns_action(i) or (quick and i==front_middle(side)): continue
 			var lane:=attack_lane_for(i)
 			var role:=lineup_role(i)
 			var target:=formation_home(i,true)
@@ -2668,6 +2725,7 @@ func position_attack(delta: float) -> void:
 	if flight_kind != "pass" or possession_team != receiving_team or touches != 1: return
 	var setter := setter_for_pass(last_player)
 	var hitter := hitter_for_set(setter)
+	if six_on_six() and setter_can_run_middle[receiving_team] and hitter==front_middle(receiving_team): return
 	if is_human(hitter) or blocks.has(hitter) or set_jumps[hitter].active: return
 	var receive_at := arrival(1.55)
 	var staging := GroundMovement.attack_staging(set_pin_for(setter))
