@@ -393,5 +393,32 @@ func run() -> void:
 		Input.flush_buffered_events()
 	match_scene.toggle_match_replay()
 	assert(not g.replay.active)
+	check_late_approach(g)
 	print("PASS both sides transition, middle tempo distribution, LT/RT seek and exit")
 	quit()
+
+func check_late_approach(g) -> void:
+	for side in 2:
+		g.reset_match()
+		var setter:int=g.first_on(side)+g.lineup_roles[side].find(0)
+		var hitter:int=g.first_on(side)+g.lineup_roles[side].find(3)
+		var frame=g.frames[side]
+		var driver=g.attackers[side]
+		var pin:=Vector3(3.92,.065,1.86)
+		var origin:=Vector3(1.2,2.4,2.8)
+		var apex:=3.88
+		var motion:Vector3=driver.set_toward_pin(origin,pin,apex,driver.set_contact_height(apex))
+		g.last_set_apex=apex
+		g.players[hitter].position=Vector3(3.66,g.PLAYER_GROUND_Y,.60)
+		g.launch(frame.to_global(origin),frame.global_basis*motion,"set",setter,0.,hitter,frame.to_global(pin))
+		driver.clock=driver.stage_start+driver.pin_arrival-.53
+		g.elapsed=driver.clock-driver.stage_start
+		assert(driver.find_approach_intercept(true,0).is_finite())
+		g.tick_receive(1./60.,g.elapsed-1./60.)
+		assert(g.expected_hitter==hitter and driver.approach_jump_queued)
+		var took_off:=false
+		for tick in 65:
+			driver.tick_attack(1./60.)
+			took_off=took_off or (driver.jump.active and g.players[hitter].position.y>g.PLAYER_GROUND_Y+.10)
+			if driver.stage==driver.Stage.HIT: break
+		assert(took_off and driver.stage==driver.Stage.HIT)
