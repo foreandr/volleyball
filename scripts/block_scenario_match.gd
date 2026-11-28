@@ -3,6 +3,7 @@ extends "res://scripts/volleyball_match.gd"
 var feed_number := -1
 var feed_hitter := -1
 var feed_tempo := 2
+var pass_target := Vector3.ZERO
 var instructions := ConfigFile.new()
 var rules_path := "user://block_defense_ai.cfg"
 var situation := ""
@@ -10,9 +11,9 @@ var teaching_moves := {}
 var applying_instructions := false
 
 func phase_key() -> String:
-	if situation.is_empty(): return ""
+	if phase!=Phase.LIVE or situation.is_empty(): return ""
 	var offset:=flight_number-feed_number
-	if offset<0 or offset>2 or flight_kind!=["pass","set","spike"][offset]: return ""
+	if offset < -1 or offset>2 or flight_kind!=["serve","pass","set","spike"][offset+1]: return ""
 	var third:=clampi(floori(3.*elapsed/maxf(.001,flight_end())),0,2)
 	return "%s/%s/%d"%[situation,flight_kind,third]
 
@@ -98,28 +99,27 @@ func start_feed(defense:int,offense:int,role:int,in_system:bool,tempo:int=2) -> 
 	feed_tempo=clampi(tempo,0,3)
 	situation="%d/%d/%d/%d"%[defense,offense,role,int(in_system)]
 	feed_number=-1
+	cpu_serve_override=1
 	reset_match()
 	service_team=0
 	setter_zones.assign([defense,offense])
 	begin_point()
-	var setter:int=first_on(1)+lineup_roles[1].find(0)
 	feed_hitter=first_on(1)+lineup_roles[1].find(role)
-	var passer:=first_on(1)
+	pass_target=SETTER_BASE if in_system else Vector3(-.8,PLAYER_GROUND_Y,.25)
+	feed_number=flight_number+2
+	serve.test_speed_mps=0.
+	serve.tape_clearance=1.
 	for i in slots_for(1):
-		if active_identities.get(i,-1)==6: passer=i
-	for i in slots_for(0): players[i].position=formation_home(i,true)
-	var destination:=SETTER_BASE if in_system else Vector3(-.8,PLAYER_GROUND_Y,.25)
-	players[setter].position=destination-Vector3.BACK*.35
-	var lane:=attack_lane_for(feed_hitter)
-	players[feed_hitter].position=GroundMovement.attack_staging(lane)
-	var start:Vector3=players[passer].position+Vector3.UP*1.05
-	var finish:=destination+Vector3.UP*1.9
-	var duration:=1.4
-	var motion:=(finish-start)/duration+Vector3.UP*(.5*Flight.GRAVITY*duration)
-	phase=Phase.LIVE
-	serve.ball.hide()
-	possession_team=1
-	touches=1
-	feed_number=flight_number+1
-	launch(frames[1].to_global(start),frames[1].global_basis*motion,"pass",passer)
+		if active_identities.get(i,-1)==6:
+			var target:=frames[0].to_local(players[i].global_position)
+			serve.aim(Vector3(clampf(target.x,-3.7,3.7),Flight.FLOOR,clampf(target.z+1.4,9.2,12.4)))
+			break
+	start_serve()
 	replay.record(self)
+
+func receive_contact(index:int,point:Vector3,motion:Vector3,technique:int) -> void:
+	if flight_kind=="serve" and flight_number+1==feed_number and team(index)==1:
+		var target:=frames[1].to_global(pass_target+Vector3.UP*1.9)
+		var seconds:=1.65
+		motion=(target-point)/seconds+Vector3.UP*(.5*Flight.GRAVITY*seconds)
+	super.receive_contact(index,point,motion,technique)

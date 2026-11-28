@@ -113,7 +113,7 @@ static func apply(actor: Node3D, target: Vector3, blend: float, push := Vector3.
 	var back_arch := backset*lerpf(.35,1.,smoothstep(.8,9.,-set_depth_m))
 	if arch_progress > 0.0 and back_arch > 0.0:
 		var arch := deg_to_rad(37.0)*back_arch*arch_progress*blend
-		var travel_local := rig.global_basis.inverse()*set_offset
+		var travel_local := rig.global_basis.inverse()*set_offset if set_offset.is_finite() else local_push
 		var arch_axis := Vector3.UP.cross(travel_local.slide(Vector3.UP)).normalized()
 		author.rotate_world(pose,"spine_01",arch_axis,arch*.40)
 		author.rotate_world(pose,"spine_02",arch_axis,arch*.42)

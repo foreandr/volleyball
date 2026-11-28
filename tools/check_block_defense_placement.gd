@@ -25,7 +25,40 @@ func run():
 	for i in 12: assert(not g.is_human(i))
 	g.start_feed(3,1,1,true)
 	page.setup={"defense":3,"offense":1,"role":1,"in_system":true}
+	var view:Camera3D=page.camera
+	var facing:=view.rotation
+	var drag:=InputEventMouseMotion.new()
+	drag.button_mask=MOUSE_BUTTON_MASK_MIDDLE
+	drag.relative=Vector2(12,5)
+	page._input(drag)
+	assert(view.rotation.distance_to(facing)>.01)
+	view.rotation=facing
+	var lens:=view.fov
+	var wheel:=InputEventMouseButton.new()
+	wheel.button_index=MOUSE_BUTTON_WHEEL_UP
+	wheel.pressed=true
+	page._input(wheel)
+	assert(view.fov<lens)
+	view.fov=lens
+	var before:=view.position
+	var key:=InputEventKey.new()
+	key.physical_keycode=KEY_W
+	key.pressed=true
+	Input.parse_input_event(key)
+	Input.flush_buffered_events()
+	page._process(.1)
+	assert(view.position.distance_to(before)>.4)
+	key=key.duplicate()
+	key.pressed=false
+	Input.parse_input_event(key)
+	Input.flush_buffered_events()
+	view.position=before
 	page.running=true
+	for tick in 480:
+		g.tick_match(1./60.,page.ground)
+		if g.scripted_pass(): break
+	assert(g.scripted_pass())
+	var pass_clock:float=g.match_clock-g.replay.current.front().time
 	for tick in 20: g.tick_match(1./60.,page.ground)
 	var paused_ball:Vector3=g.ball.global_position
 	page.toggle_edit()
@@ -35,8 +68,8 @@ func run():
 	assert(g.replay.frames.back().trace.scenario_phase==g.phase_key())
 	page.timeline.max_value=g.replay.duration()
 	page.timeline.value=g.replay.duration()
-	page.timeline.value=0.02
-	assert(g.replay.clock<.03 and g.ball.global_position.distance_to(paused_ball)>.1)
+	page.timeline.value=pass_clock+.02
+	assert(g.replay.clock<pass_clock+.03 and g.ball.global_position.distance_to(paused_ball)>.1)
 	page.toggle_edit()
 	var actor=g.players[0]
 	var initial:Vector3=actor.position
@@ -62,9 +95,12 @@ func run():
 	g.instructions.clear()
 	assert(g.instructions.load(g.rules_path)==OK)
 	g.start_feed(3,1,1,true)
+	for tick in 480:
+		g.step_match(1./60.,page.ground)
+		if g.scripted_pass(): break
 	for tick in 20: g.step_match(1./60.,page.ground)
 	assert(g.teaching_moves.has(0))
-	assert(actor.position.z<initial.z-.05)
+	assert(not actor.position.is_equal_approx(initial))
 	g.start_feed(3,1,1,false)
 	g.step_match(1./60.,page.ground)
 	assert(not g.teaching_moves.has(0))

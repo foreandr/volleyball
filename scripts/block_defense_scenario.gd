@@ -92,7 +92,10 @@ func start_scenario() -> void:
 	setup={"defense":defense.get_selected_id(),"offense":offense.get_selected_id(),"role":hitter.get_selected_id(),"in_system":quality.selected==0,"tempo":tempo.get_selected_id()}
 	StorySession.game_options.set_value("block_defense","setup",setup.duplicate())
 	StorySession.save_options()
+	formation_spots.clear()
 	game.start_feed(setup.defense,setup.offense,setup.role,setup.in_system,setup.tempo)
+	greeting_rally=game.rallies
+	signaled_rally=game.rallies
 	authorized=true
 	running=true
 	replay_button.disabled=false
@@ -117,6 +120,7 @@ func toggle_edit() -> void:
 	edit_button.text="Finish placement · F2" if editing else "Pause & place · F2"
 
 func _process(delta:float) -> void:
+	if editing or not game.replay.active: ReplayControls.move_camera(camera,-1,delta)
 	if not running or editing: return
 	if not game.replay.active and game.phase in [game.Phase.DEAD,game.Phase.FINISHED]:
 		if note.text.is_empty(): note.text="Point complete · run again or review."
@@ -125,6 +129,9 @@ func _process(delta:float) -> void:
 
 func _input(event:InputEvent) -> void:
 	if get_tree().paused: return
+	if (editing or not game.replay.active) and ReplayControls.mouse_camera(camera,event):
+		get_viewport().set_input_as_handled()
+		return
 	if event is InputEventKey and event.keycode==KEY_F2 and event.pressed and not event.echo:
 		toggle_edit()
 		get_viewport().set_input_as_handled()
