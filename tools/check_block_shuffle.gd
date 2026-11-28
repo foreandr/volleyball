@@ -19,10 +19,14 @@ func run() -> void:
 	game.setter_zones[0]=1
 	game.begin_point()
 	assert(actor.get_meta("school_jersey_number")==number and number!=96)
+	game.start_feed(4,1,1,true)
+	middle=game.front_middle(0)
+	actor=game.players[middle]
+	assert(actor.get_meta("school_jersey_number")==506 and actor.attributes.Blocking==100)
 	game.flight_kind="set"
 	game.receiving_team=1
 	var distances:=[]
-	for rating in [0,50,100]:
+	for rating in [0,61,100]:
 		actor.attributes.Blocking=rating
 		actor.position=Vector3(0,.04,3.42)
 		game.court_velocities.erase(middle)
@@ -31,11 +35,8 @@ func run() -> void:
 			game.move_cpu(middle,game.frames[0].to_global(Vector3(2.8,.04,3.42)),1./60.,7.6,Vector3.BACK,false,false,9.,false,0.,4.7)
 		distances.append(absf(actor.position.x))
 	assert(distances[2]>distances[1] and distances[1]>distances[0])
-	print("PASS middle jersey ",number," restored after libero 96; 0/50/100 Blocking lateral travel in 0.30 s (m): ",distances)
-	game.start_feed(4,1,1,true)
-	middle=game.front_middle(0)
-	actor=game.players[middle]
-	assert(actor.get_meta("school_jersey_number")==506 and actor.attributes.Blocking==100)
+	assert(absf(distances[2]/distances[1]-1.30)<.005)
+	print("PASS blue #506: 0/61/100 Blocking lateral travel in 0.30 s (m): ",distances)
 	var peaks:=[]
 	var reactions:=[]
 	for rating in [61,100]:

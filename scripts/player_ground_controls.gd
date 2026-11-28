@@ -25,7 +25,8 @@ static func sprint(axis: Callable) -> bool:
 	return axis.call(Xbox.trigger(false))>.25 or Input.is_physical_key_pressed(KEY_SHIFT)
 
 static func block_shuffle_scale(actor:Node3D) -> float:
-	return 1.+.5*clampf(actor.effective_rating("Blocking")/100.,0.,1.)
+	var skill:=clampf(actor.effective_rating("Blocking")/100.,0.,1.)
+	return 1.+.20*skill+.50*skill*skill
 
 static func speed(focused: bool, sprinting: bool) -> float:
 	if focused: return 4.1 if sprinting else 2.35
