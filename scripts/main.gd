@@ -2,7 +2,7 @@ extends Control
 
 const Xbox = preload("res://scripts/xbox_controls.gd")
 const Setup = preload("res://scripts/exhibition_setup.gd")
-const SETTINGS := ["Sound","Video","Controls","Clips"]
+const SETTINGS := ["Sound","Video","Controls","Clips","Formations"]
 var column := VBoxContainer.new()
 var route := "Home"
 var tab_index := 0
@@ -140,6 +140,7 @@ func show_settings() -> void:
 				StorySession.apply_video_options())
 		2: Xbox.settings(sound_panel,show_settings)
 		3: clip_settings()
+		4: add_menu_button(sound_panel,"CourtEditor","Edit 6v6 formations",go.bind("formation_editor"))
 	add_menu_button(column,"Back","Back",show_home)
 
 func option(group:String,key:String,value:Variant) -> void:

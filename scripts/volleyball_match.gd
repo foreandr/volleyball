@@ -359,7 +359,8 @@ func configure(actor: Node3D, board: Label, status: Label, build := "", players_
 		manual=preload("res://scripts/match_court_controls.gd").new()
 		add_child(manual)
 		manual.configure(self)
-	if learn_from_demo: reset_match()
+	if six_on_six(): build_six_lineups()
+	if learn_from_demo or six_on_six(): reset_match()
 	else: begin_point()
 
 	indicators = preload("res://scripts/tryout_player_ring.gd").new()
@@ -409,10 +410,10 @@ func setter_for_pass(passer: int) -> int:
 	return choose_setter(team(passer),passer)
 
 func choose_setter(side:int,passer:int) -> int:
-	if exhibition and StorySession.career_scrimmage and roster_active:
+	if six_on_six() and lineup_roles.size()==2:
 		for slot in count_for(side):
 			var i:=first_on(side)+slot
-			if i!=passer and StorySession.offline_roster[i].get("position","")=="Setter": return i
+			if i!=passer and lineup_role(i)==0: return i
 	return nearest_on_team(side,path_point(arrival(1.92)),passer)
 
 func hitter_for_set(setter: int) -> int:
@@ -445,6 +446,90 @@ func show_key(index: int, caption: String) -> void:
 func server_index() -> int:
 	return first_on(service_team)+server_slot[service_team]
 
+const Formation=preload("res://scripts/six_rotations.gd")
+var setter_zones: Array[int]=[1,1]
+var lineup_roles: Array[PackedInt32Array]=[]
+var receive_marks: Array[PackedVector2Array]=[]
+var defense_marks: Array[PackedVector2Array]=[]
+
+# Keep the six animation controllers in place across substitutions. The on-court
+# identities and their stamina follow the athletes as the two middles rotate.
+var middle_profiles:Array[Dictionary]=[]
+var middle_stamina:Array[Dictionary]=[]
+var active_identities:Dictionary={}
+var lineup_template:Array[PackedInt32Array]=[]
+var human_libero:=false
+
+func build_six_lineups() -> void:
+	for side in 2:
+		var first:=first_on(side)
+		var roles:=Formation.lineup(players.slice(first,first+6))
+		lineup_template.append(roles)
+		lineup_roles.append(roles.duplicate())
+		var profiles:Dictionary={}
+		var energies:Dictionary={}
+		var roster_side:=1-side if exhibition and StorySession.offline_controller==1 else side
+		for j in 6:
+			var role:=roles[j]
+			if role not in [2,5]: continue
+			var actor:=players[first+j]
+			var profile:Dictionary=StorySession.offline_roster[roster_side*6+j].duplicate(true) if roster_active else actor.attributes.duplicate(true)
+			var identity:=6 if profile.get("position","")=="Libero" else role
+			if first+j==0 and identity==6 and not spectator: human_libero=true
+			profiles[identity]=profile
+			energies[identity]=actor.stamina
+			active_identities[first+j]=identity
+		for identity in [2,5,6]:
+			if profiles.has(identity): continue
+			var reserve:=preload("res://scripts/player_profile.gd").generate()
+			reserve.position="Libero" if identity==6 else Formation.ROLES[identity]
+			reserve.jersey_number=90+identity
+			profiles[identity]=reserve
+			energies[identity]=preload("res://scripts/player_stamina.gd").new()
+		middle_profiles.append(profiles)
+		middle_stamina.append(energies)
+
+func apply_receive_substitutions() -> void:
+	for side in 2:
+		var roles:=lineup_template[side].duplicate()
+		var back_role:=2 if Formation.receive_libero(2,setter_zones[side]) else 5
+		var controlled_libero:=side==0 and human_libero
+		if controlled_libero and roles[0]!=back_role:
+			var other:=roles.find(back_role)
+			roles[other]=roles[0]
+			roles[0]=back_role
+		lineup_roles[side]=roles
+		for j in 6:
+			var role:=roles[j]
+			if role not in [2,5]: continue
+			var id:=first_on(side)+j
+			var identity:=6 if role==back_role and (side!=service_team or controlled_libero) else role
+			var actor:=players[id]
+			if active_identities[id]!=identity:
+				active_identities[id]=identity
+				actor.stamina=middle_stamina[side][identity]
+				actor.apply_profile(middle_profiles[side][identity])
+			var color:Color=actor.team_color
+			if identity==6: color=Color("#f9f1cb") if color.get_luminance()<.52 else Color("#172c48")
+			actor.shirt_fabric.set_shader_parameter("fabric",color)
+		server_slot[side]=rotation_server(side)
+
+func six_on_six() -> bool:
+	return team_size==6 and away_size==6
+
+func lineup_role(index:int) -> int:
+	var side:=team(index)
+	return lineup_roles[side][index-first_on(side)]
+
+func rotation_server(side:int) -> int:
+	for i in 6:
+		if Formation.zone(lineup_roles[side][i],setter_zones[side])==1: return i
+	return 0
+
+func formation_home(index:int,defense:bool) -> Vector3:
+	var marks:=defense_marks if defense else receive_marks
+	return Formation.on_court(marks[team(index)][lineup_role(index)])
+
 func formation_slot(index:int) -> int:
 	if exhibition and StorySession.career_scrimmage and roster_active:
 		var role:String=StorySession.offline_roster[index].get("position","")
@@ -454,6 +539,9 @@ func formation_slot(index:int) -> int:
 	return index-first_on(team(index))
 
 func starting_lane(index: int) -> float:
+	if six_on_six():
+		var court_zone:=Formation.zone(lineup_role(index),setter_zones[team(index)])
+		return float([-1,-1,0,1,1,0][court_zone-1])
 	var lane: float = [-1.0,1.0,0.0,-1.0,1.0,0.0][formation_slot(index)]
 	return -lane if team(index) == 0 else lane
 
@@ -484,10 +572,10 @@ func reset_match() -> void:
 	score = [0,0]
 	service_team = 0
 	server_slot = [0,0]
-	if exhibition and StorySession.career_scrimmage and roster_active:
+	if six_on_six():
+		setter_zones.assign([1,1])
 		for side in 2:
-			for index in range(first_on(side),first_on(side)+count_for(side)):
-				if formation_slot(index)==0: server_slot[side]=index-first_on(side)
+			server_slot[side]=rotation_server(side)
 	rallies = 0
 	begin_point()
 
@@ -515,12 +603,20 @@ func begin_point() -> void:
 	defender_assignment = [-1,-1]
 	block_lane_flight = [-1,-1]
 	last_set_apex = 0.0
+	if six_on_six():
+		apply_receive_substitutions()
+		receive_marks.clear()
+		defense_marks.clear()
+		for side in 2:
+			receive_marks.append(Formation.layout(StorySession.game_options,setter_zones[side],false))
+			defense_marks.append(Formation.layout(StorySession.game_options,setter_zones[side],true))
 	for index in players.size():
 		var actor := players[index]
 		var slot := formation_slot(index)
 		var front_row:=slot>=3 or (count_for(team(index))==3 and slot==2)
 		actor.position=Vector3(2.1*starting_lane(index),.04,.70) if front_row else Vector3(GroundMovement.BACK_ROW_SPACING*starting_lane(index),.04,GroundMovement.BACK_ROW_DEPTH)
-		if team(index)!=service_team and not is_human(index):
+		if six_on_six(): actor.position=formation_home(index,team(index)==service_team)
+		elif team(index)!=service_team and not is_human(index):
 			actor.position=serve_coverage[team(index)].position_for(actor.position)
 		actor.rotation.y = 0.0
 		actor.model.rotation.y = 0.0
@@ -710,7 +806,10 @@ func award(side: int, reason: String) -> void:
 	cpu_policy.finish_point(side)
 	if side != service_team:
 		service_team = side
-		if rallies > 0: server_slot[side] = (int(server_slot[side])+1)%count_for(side)
+		if six_on_six():
+			setter_zones[side]=posmod(setter_zones[side]-2,6)+1
+			server_slot[side]=rotation_server(side)
+		elif rallies > 0: server_slot[side] = (int(server_slot[side])+1)%count_for(side)
 	rallies += 1
 	dead_age = 0.0
 	if bounce_end <= 0.0 and elapsed < flight_end(): dead_flight_from = elapsed
@@ -2552,6 +2651,13 @@ func position_defense(delta: float) -> void:
 	var defense_side := 1-hitter_side
 	var frame := frames[defense_side]
 	var ordered:bool=manual!=null and defense_side==0 and manual.block_call!=manual.BlockCall.AUTO
+	if six_on_six():
+		var read_attack:=flight_kind=="set" or (flight_kind=="pass" and possession_team==hitter_side and touches==1)
+		for i in range(first_on(defense_side),first_on(defense_side)+6):
+			if is_human(i) or blocks.has(i) or set_jumps[i].active: continue
+			if read_attack and not (ordered and manual.block_call==manual.BlockCall.OFF): continue
+			move_cpu(i,frame.to_global(formation_home(i,true)),delta)
+		if not read_attack or (ordered and manual.block_call==manual.BlockCall.OFF): return
 	if ordered and manual.block_call==manual.BlockCall.OFF:
 		defender_assignment[0]=-1
 		for i in range(1,team_size):
@@ -2599,6 +2705,14 @@ func position_defense(delta: float) -> void:
 		near = first if absf(players[first].position.x-x) < absf(players[first+1].position.x-x) else first+1
 		if count_for(defense_side) >= 3:
 			near = nearest_on_team(defense_side,frame.to_global(Vector3(x,0.04,3.42)))
+	if six_on_six() and Formation.zone(lineup_role(near),setter_zones[defense_side]) not in [2,3,4]:
+		var best:=INF
+		for i in range(first,first+6):
+			if Formation.zone(lineup_role(i),setter_zones[defense_side]) not in [2,3,4]: continue
+			var gap:=players[i].position.distance_to(Vector3(x,.04,3.42))
+			if gap<best:
+				best=gap
+				near=i
 	defender_assignment[defense_side] = near
 	var depth := -2.15
 	var cover := -x*0.48
@@ -2697,6 +2811,14 @@ func position_defense(delta: float) -> void:
 		if absf(players[near].position.x-clampf(x,-4.15,4.15)) < 0.62 and (attack_ready or dump_ready):
 			var timing := remaining if attack_ready else second_ball_eta+0.035
 			start_block(near,timing,dump_ready)
+	if six_on_six():
+		for i in range(first,first+6):
+			if i==near or is_human(i) or blocks.has(i) or set_jumps[i].active: continue
+			var home:=formation_home(i,true)
+			if i==deep and tracking_set:
+				home=home.move_toward(Vector3(cover,.04,depth),.9)
+			move_cpu(i,frame.to_global(home),delta)
+		return
 	if not is_human(deep) and not blocks.has(deep) and not set_jumps[deep].active:
 		move_cpu(deep,frame.to_global(Vector3(clampf(cover,-4.05,4.05),0.04,depth)),delta)
 	if count_for(defense_side) >= 3:

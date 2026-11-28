@@ -362,3 +362,6 @@ Career serving calls receiving zones 1, 5 and 6 in order. Each first landing mus
 Career, serving camp and manual match serves use the low ballistic trajectory at the available pace. Stick-click height adjustment changes net clearance for spin and float. Unreachable aim points may miss. Topspin bend is bounded on slower serves.
 
 Launch feedback fits the speed and its calculation on one line beneath contact timing. Career and manual match serves label the toss multiplier and show the technique rating separately from the speed equation.
+
+Six-on-six scrimmages and games share Settings / Formations. Each setter zone has independent serve-receive and block-defense placements, in team-local court coordinates. On side-out the winning team rotates clockwise, and the player rotating into zone one serves. Saved marks are starting positions for live reads.
+On serve receive the libero wears a contrasting jersey and occupies the saved back-row middle spot for the rally. The front-row middle stays on court. The editor labels that receive marker L.
