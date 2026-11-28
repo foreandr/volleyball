@@ -64,15 +64,21 @@ var previous_wrists: Array[Vector3] = []
 
 # Cache the final skinning pose, including the joint-limit modifier.
 var displayed_chains := []
+var palm_faces: Array[Vector3]=[]
 
 func capture_displayed_chains() -> void:
 	var rig: Skeleton3D=actor.skeleton
 	displayed_chains=[]
+	palm_faces.clear()
 	for side in ["l","r"]:
 		var chain := []
 		for bone in ["upperarm_","lowerarm_","hand_","middle_03_"]:
 			chain.append(rig.get_bone_global_pose(rig.find_bone(bone+side)).origin)
 		displayed_chains.append(chain)
+		var across:=rig.get_bone_global_pose(rig.find_bone("index_01_"+side)).origin-rig.get_bone_global_pose(rig.find_bone("pinky_01_"+side)).origin
+		var face:Vector3=(rig.global_basis*(chain[3]-chain[2]).cross(across)).normalized()
+		if face.dot(actor.global_basis.z)<0.: face=-face
+		palm_faces.append(face)
 	displayed_chains.append([rig.get_bone_global_pose(rig.find_bone("neck_01")).origin,rig.get_bone_global_pose(rig.find_bone("Head")).origin])
 
 func use_displayed_geometry() -> void:
@@ -104,6 +110,10 @@ func first_block_touch(start:Vector3,finish:Vector3,ball_radius:float) -> Dictio
 func block_rebound(hit:Dictionary,incoming:Vector3,attack_direction:float) -> Dictionary:
 	var normal:Vector3=hit.normal
 	if normal.is_zero_approx(): normal=-incoming.normalized()
+	var palm_contact:bool=hit.arm and hit.segment==2 and palm_faces.size()==2
+	if palm_contact:
+		var face:=palm_faces[int(hit.side)]
+		if face.dot(normal)>.45 and incoming.dot(face)<0.: normal=face
 	var reflection:=incoming.bounce(normal)
 	var distal:bool=hit.arm and (hit.segment==2 or hit.segment==1 and hit.surface.distance_to(wrists[hit.side])<.14)
 	var net:=preload("res://scripts/net_collision.gd")
@@ -112,6 +122,8 @@ func block_rebound(hit:Dictionary,incoming:Vector3,attack_direction:float) -> Di
 	if stuff:
 		var down:=Vector3(reflection.x,-maxf(absf(reflection.y),incoming.length()*.65),-attack_direction*maxf(absf(reflection.z),2.))
 		outgoing=down.normalized()*incoming.length()*STUFF_SPEED_RETENTION
+	elif palm_contact and normal.y<-.2 and reflection.y<0.:
+		outgoing=reflection*.42
 	return {"stuff":stuff,"velocity":outgoing}
 
 static func first_capsule_touch(start: Vector3,finish: Vector3,a: Vector3,b: Vector3,radius: float) -> Dictionary:
@@ -276,19 +288,15 @@ func step(delta: float, world_ball: Vector3) -> bool:
 			target=target.lerp(shoulder+Vector3(outward*.13,-.38,-.32)/scale_,sweep)
 			weight=maxf(weight,sweep)
 		var extension := 174.
-		if court_aim.is_finite():
-			# Probe with a bent elbow. Only a wrist clear of the tape can press straight.
-			var bent := pose.duplicate()
-			author.limb(bent,arm,"lowerarm_"+side,"hand_"+side,target,pole,weight,132.)
-			var wrist_world := rig.to_global(author.point(bent,"hand_"+side))
-			var across_net := preload("res://scripts/net_collision.gd").NET_Z-wrist_world.z
-			var above_tape := wrist_world.y-preload("res://scripts/net_collision.gd").NET_TOP
-			var tape_clear := smoothstep(0.,.14,above_tape)
-			var press_extension := smoothstep(0.,.12,across_net)*tape_clear
-			# A lateral Kong can reach full length above the tape even when
-			# the wrist is on our side. A forward press still crosses first.
-			extension=lerpf(132.,174.,press_extension)
-			extension=lerpf(extension,178.,spread*tape_clear)
+		var press_weight := 0.
+		if court_aim.is_finite() and not overpass_swing:
+			var clearance := rig.to_global(target).y-preload("res://scripts/net_collision.gd").NET_TOP
+			press_weight=press*smoothstep(.02,.20,clearance)*(1.-balance)
+			extension=lerpf(132.,177.,press_weight)
+			extension=lerpf(extension,178.,spread*smoothstep(.0,.14,clearance))
+			var elbow:Vector3=author.point(pose,"lowerarm_"+side)
+			var length:=shoulder.distance_to(elbow)+elbow.distance_to(author.point(pose,"hand_"+side))
+			target=target.lerp(shoulder+shoulder.direction_to(target)*length,press_weight)
 		author.limb(pose,arm,"lowerarm_"+side,"hand_"+side,target,pole,weight,extension)
 		if spread>.001:
 			var elbow: Vector3=author.point(pose,"lowerarm_"+side)
@@ -324,6 +332,12 @@ func step(delta: float, world_ball: Vector3) -> bool:
 			var forearm: Vector3=wrist.origin-author.point(pose,"lowerarm_"+side)
 			var fingertips := forearm.slide(palm_normal)
 			if fingertips.length_squared()>.0001: up=up.slerp(fingertips.normalized(),spread).normalized()
+		if press_weight>0.:
+			var forward_local:Vector3=(rig.global_basis.inverse()*actor.global_basis.z).normalized()
+			var over_tape:Vector3=(forward_local*.82+Vector3.UP*.58).normalized()
+			var pitch_weight:=press_weight*(1.-spread)
+			up=up.slerp(over_tape,pitch_weight).normalized()
+			palm_normal=palm_normal.slerp((forward_local*.58-Vector3.UP*.82).normalized(),pitch_weight).normalized()
 		var edge := up.cross(palm_normal)*-outward
 		var palm := HandPose.hand_basis(up,edge)*HandPose.hand_basis(finger_direction,across).inverse()*wrist.basis
 		author.set_world_basis(pose,hand_name,wrist.basis.orthonormalized().slerp(palm.orthonormalized(),weight))
