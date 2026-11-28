@@ -403,6 +403,7 @@ func run() -> void:
 		Input.flush_buffered_events()
 	match_scene.toggle_match_replay()
 	assert(not g.replay.active)
+	check_setter_cover_base(g)
 	check_reversing_pin(g)
 	check_late_approach(g)
 	print("PASS both sides transition, middle tempo distribution, LT/RT seek and exit")
@@ -464,3 +465,14 @@ func check_reversing_pin(g) -> void:
 					takeoff=eta
 					break
 			assert(excursion<=.20 and takeoff>=.18)
+
+func check_setter_cover_base(g) -> void:
+	g.reset_match()
+	for side in 2:
+		var setter:int=g.first_on(side)+g.lineup_roles[side].find(0)
+		for i in g.slots_for(side): g.players[i].position=Vector3(i%6-3.,.04,-2.)
+		assert(g.setter_cover_spot(setter).is_equal_approx(g.SETTER_BASE))
+		var middle:int=g.front_middle(side)
+		g.players[middle].position=g.SETTER_BASE
+		var cover:Vector3=g.setter_cover_spot(setter)
+		assert(cover.distance_to(g.SETTER_BASE)>=.68 and cover.distance_to(g.SETTER_BASE)<1.)

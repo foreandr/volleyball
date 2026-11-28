@@ -2842,6 +2842,30 @@ func clear_setter_lane(side:int,delta:float) -> void:
 
 const SETTER_BASE := Vector3(-1.4,PLAYER_GROUND_Y,2.8)
 
+func setter_cover_spot(setter:int) -> Vector3:
+	var teammates:=slots_for(team(setter))
+	var here:=players[setter].position.slide(Vector3.UP)
+	var closest:=INF
+	var best:=here
+	# Prefer the normal base, then the nearest free spot around it.
+	for slot in 9:
+		var spot:=SETTER_BASE
+		if slot>0:
+			spot+=Vector3.RIGHT.rotated(Vector3.UP,(slot-1)*TAU/8.)*.95
+			spot.z=minf(spot.z,CPU_COURT_FRONT_LIMIT)
+		var distance:=here.distance_squared_to(spot.slide(Vector3.UP))
+		if distance>=closest: continue
+		var occupied:=false
+		for i in teammates:
+			if i!=setter and (players[i].position-spot).slide(Vector3.UP).length_squared()<.68*.68:
+				occupied=true
+				break
+		if occupied: continue
+		if slot==0: return spot
+		closest=distance
+		best=spot
+	return Vector3(best.x,PLAYER_GROUND_Y,best.z)
+
 func release_setter_for_cover(side:int,first_contact:int,delta:float) -> void:
 	var setter:=first_on(side)+lineup_roles[side].find(0)
 	if setter==first_contact or is_human(setter) or owns_action(setter): return
@@ -2849,7 +2873,7 @@ func release_setter_for_cover(side:int,first_contact:int,delta:float) -> void:
 		var recovery:Dictionary=recoveries[setter]
 		if recovery.has("save") or match_clock-float(recovery.started)<.18: return
 		recoveries.erase(setter)
-	var goal:=frames[side].to_global(SETTER_BASE)
+	var goal:=frames[side].to_global(setter_cover_spot(setter))
 	var run:bool=(goal-players[setter].global_position).slide(Vector3.UP).length()>1.
 	move_cpu(setter,goal,delta,GroundMovement.speed(not run,run),toward_incoming(setter,goal),run,run)
 
@@ -2888,7 +2912,7 @@ func position_attack(delta: float) -> void:
 				target=GroundMovement.attack_staging(lane)
 				target.x=clampf(lane.x*1.14,-4.45,4.45)
 				if role in [2,5]: target.z=1.55
-			elif role==0: target=SETTER_BASE
+			elif role==0: target=setter_cover_spot(i)
 			peel_cpu_off_net(i,target,delta)
 
 	if defensive_ball() and flight_kind != "pass":
