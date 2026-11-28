@@ -10,6 +10,13 @@ var situation := ""
 var teaching_moves := {}
 var applying_instructions := false
 
+func apply_receive_substitutions() -> void:
+	super.apply_receive_substitutions()
+	# This lab compares blue M2 at maximum Blocking. His libero keeps his own profile.
+	var middle:=first_on(0)+lineup_roles[0].find(5)
+	if active_identities.get(middle,-1)==5:
+		players[middle].attributes.Blocking=100
+
 func phase_key() -> String:
 	if phase!=Phase.LIVE or situation.is_empty(): return ""
 	var offset:=flight_number-feed_number

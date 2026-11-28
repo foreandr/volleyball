@@ -386,7 +386,7 @@ func step_practice_blockers(delta: float) -> void:
 				until_hit=SET_RECEIVE_TIME+push_time-elapsed+attack_set_duration(tempo)
 			goal=clampf(active_set.x+middle_shade(until_hit),-4.4,4.4)
 		var old_x := actor.position.x
-		actor.position.x=move_toward(old_x,goal,GroundControls.speed(true,true)*delta)
+		actor.position.x=move_toward(old_x,goal,GroundControls.speed(true,true)*GroundControls.block_shuffle_scale(actor)*delta)
 		actor.animator.advance(delta)
 		practice_footwork[i].block_step(Vector3.RIGHT*(actor.position.x-old_x)/maxf(.0001,delta),goal-old_x,PI,phase=="set",false,delta)
 		var may_jump := phase=="set" or (commit and phase in ["pass","set_contact"])

@@ -363,12 +363,12 @@ func begin_block(slot: int,loaded := 0.,manual := false) -> void:
 				if gap>.85: return
 			else: jump.kong_direction=signf(offset)
 	jump.jump_height=block_vertical*.0254*stamina.effectiveness()
-	if manual: jump.jump_height=Block.loaded_height(maxf(.10,jump.jump_height),loaded)
-	stamina.spend(5,"Block jump")
-	trace("block_takeoff",{"slot":slot,"vertical_m":jump.jump_height,"stamina":stamina.value})
 	jump.net_heading=PI
 	jump.aggressive_press=true
 	jump.begin(blockers[slot],loaded if manual else 0.)
+	if manual: jump.jump_height=Block.loaded_height(maxf(.10,jump.jump_height),loaded)
+	stamina.spend(5,"Block jump")
+	trace("block_takeoff",{"slot":slot,"vertical_m":jump.jump_height,"stamina":stamina.value})
 	jump.age=Block.START*loaded
 	if not manual and slot!=1 and jump.kong_direction!=0.: jump.lean_input=jump.kong_direction*.75
 	jumps[slot]=jump
@@ -560,7 +560,7 @@ func step_blocker(slot: int,delta: float) -> void:
 		for i in blockers.size():
 			var seam := read_x+.61*(i-read_lead)
 			var travel := Vector2(seam-blockers[i].position.x,depth_goal-blockers[i].position.z).length()
-			closing[i]=maxf(0.,travel-.75)/GroundControls.speed(true,true)<=available or absi(i-read_lead)<=1
+			closing[i]=maxf(0.,travel-.75)/(GroundControls.speed(true,true)*GroundControls.block_shuffle_scale(blockers[i]))<=available or absi(i-read_lead)<=1
 		read_set=true
 		trace("block_set_read",{"set_route":ROUTE_NAMES[route],"route_tempos":route_tempos.duplicate(),"read_x":read_x,"set_height_percent":rep_set_percent(),"set_endpoint":str(endpoint),"far_closes":closing[0],"middle_closes":closing[1],"available_s":available})
 	var late_window := phase=="spike" and elapsed<.18 and ball.position.z<=BallNet.NET_Z+.12 and not deflected

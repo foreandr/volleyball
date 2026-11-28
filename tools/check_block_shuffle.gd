@@ -32,4 +32,27 @@ func run() -> void:
 		distances.append(absf(actor.position.x))
 	assert(distances[2]>distances[1] and distances[1]>distances[0])
 	print("PASS middle jersey ",number," restored after libero 96; 0/50/100 Blocking lateral travel in 0.30 s (m): ",distances)
+	game.start_feed(4,1,1,true)
+	middle=game.front_middle(0)
+	actor=game.players[middle]
+	assert(actor.get_meta("school_jersey_number")==506 and actor.attributes.Blocking==100)
+	var peaks:=[]
+	var reactions:=[]
+	for rating in [61,100]:
+		actor.attributes.Blocking=rating
+		actor.position=Vector3(0,.04,3.42)
+		var jump=game.Block.new()
+		jump.jump_height=1.
+		jump.begin(actor)
+		jump.lean_input=.5
+		jump.reach_input=Vector2(.8,0.)
+		jump.age=game.Block.START
+		jump.step(1./60.,actor.global_position+Vector3(0,2.8,.5))
+		reactions.append(Vector2(jump.lean,jump.reach.x))
+		jump.age=game.Block.START+game.Block.AIR*.5
+		jump.step(0.,actor.global_position+Vector3(0,2.8,.5))
+		peaks.append(actor.position.y-jump.base.y)
+	assert(is_equal_approx(peaks[1]-peaks[0],8.*.39*.0254*4./3.))
+	assert(reactions[1].x>reactions[0].x and reactions[1].y>reactions[0].y)
+	print("PASS blue 506 at 100; same-athlete 61/100 apex (m) ",peaks,"; first-frame torso and hand response ",reactions)
 	quit()

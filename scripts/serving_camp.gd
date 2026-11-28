@@ -1577,7 +1577,8 @@ func step_serve_wall(delta: float) -> void:
 			var lane_read: RefCounted=actor.block_read(attack_options[lane_slot])
 			goal+=clampf(lane_read.shade(route_point(lane_slot).z-BallNet.NET_Z)*lane_read.confidence,-.45,.45)
 		var gap := goal-actor.position.x
-		var step := clampf(gap,-3.6*delta,3.6*delta)
+		var travel:=3.6*GroundControls.block_shuffle_scale(actor)*delta
+		var step := clampf(gap,-travel,travel)
 		actor.position.x+=step
 		if not shuffle_steps.has(actor): shuffle_steps[actor]=preload("res://scripts/directional_footwork.gd").new(actor)
 		actor.animator.advance(delta)

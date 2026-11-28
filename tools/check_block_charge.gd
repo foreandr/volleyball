@@ -24,7 +24,7 @@ func check() -> void:
 		event.pressed=true
 		camp._input(event)
 		for frame in frames: camp.step_blocker(slot,1./60.)
-		var available:float=camp.block_vertical*.0254*actor.stamina.effectiveness()
+		var available:float=camp.block_vertical*.0254*actor.stamina.effectiveness()+camp.Block.bonus_height(actor)
 		event.pressed=false
 		camp._input(event)
 		heights.append(camp.jumps[slot].jump_height/available)
@@ -67,8 +67,8 @@ func check() -> void:
 	for depth in [0.,.5,1.]:
 		match_game.blocks.erase(0)
 		match_game.manual.block_buffer=depth
-		var available:float=match_game.jump_inches(0,match_game.block_vertical,"Block jump")*.0254*match_game.human.stamina.effectiveness()
+		var available:float=match_game.jump_inches(0,match_game.block_vertical,"Block jump")*.0254*match_game.human.stamina.effectiveness()+match_game.Block.bonus_height(match_game.human)
 		match_game.manual.jump_if_ready()
 		matched=matched and match_game.blocks.has(0) and absf(match_game.blocks[0].jump_height/available-(.6+.4*depth))<.001
 	print("Match block release fractions 60/80/100 verified: ",matched)
-	quit(0 if pinned and matched and absf(heights[0]-.6)<.001 and absf(heights[1]-.81)<.005 and absf(heights[2]-1.)<.001 and heights[2]==heights[3] and speeds[1]<speeds[0] else 1)
+	quit(0 if pinned and matched and absf(heights[0]-.6)<.001 and absf(heights[1]-.81)<.005 and absf(heights[2]-1.)<.001 and is_equal_approx(heights[2],heights[3]) and speeds[1]<speeds[0] else 1)

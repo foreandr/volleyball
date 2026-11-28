@@ -214,7 +214,7 @@ func jump_if_ready() -> void:
 		jump.net_heading=0.
 		jump.aggressive_press=true
 		jump.track_near_ball=false
-		jump.jump_height=g.Block.loaded_height(maxf(.1,jump.jump_height*g.human.stamina.effectiveness()),block_buffer)
+		jump.jump_height=g.Block.loaded_height(maxf(.1,jump.jump_height),block_buffer)
 		g.human.stamina.spend(5,"Block jump")
 		block_buffer=-1.
 

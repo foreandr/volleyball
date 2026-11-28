@@ -249,7 +249,7 @@ func step_serve_wall(delta: float) -> void:
 	var at_net := (actor.position.z-pass_end.z)/(six.z-pass_end.z)
 	var goal := actor.position
 	goal.x=lerpf(pass_end.x,six.x,at_net)-.48
-	move_receiver(actor,goal,delta,Vector3.BACK,GroundControls.speed(true,false),true)
+	move_receiver(actor,goal,delta,Vector3.BACK,GroundControls.speed(true,false)*GroundControls.block_shuffle_scale(actor),true)
 	if not wall_committed[0] and set_duration-pass_clock<=.46:
 		block=PracticeBlock.new()
 		block.aggressive_press=true

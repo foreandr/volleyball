@@ -2645,6 +2645,7 @@ func start_block(index: int, remaining := INF, reads_second := false, overpass_s
 	if (not manual or not is_human(index)) and (actor.position.z < 2.25 or actor.position.z > 3.45): return
 	var block := Block.new()
 	block.jump_height = jump_inches(index,block_vertical,"Block jump")*0.0254
+	if manual and is_human(index): block.jump_height*=actor.stamina.effectiveness()
 	block.landing_recovery = 0.43 if reads_second else 0.13
 	block.overpass_swing = overpass_swing
 	block.aggressive_press = not is_human(index) and not overpass_swing

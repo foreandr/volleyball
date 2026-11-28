@@ -9,6 +9,11 @@ static func lateral_scale(seconds: float) -> float:
 	var depth := clampf(seconds/preload("res://scripts/tryout_squat.gd").FULL_LOAD,0.,1.)
 	return lerpf(.78,.42,depth)
 
+const MAX_TECHNIQUE_INCHES := 8.0
+
+static func bonus_height(player:Node3D) -> float:
+	return MAX_TECHNIQUE_INCHES*.0254*clampf(player.effective_rating("Blocking")/100.,0.,1.)
+
 const START := 0.16
 const CPU_LEAD := .035
 const AIR := 0.74
@@ -38,6 +43,7 @@ const HEIGHT := 1.16
 var actor: Node3D
 var age := 0.0
 var tempo := 1.0
+var upper_body_rate := 1.0
 var jump_height := HEIGHT
 var landing_recovery := 0.13
 var overpass_swing := false
@@ -155,6 +161,8 @@ func begin(player: Node3D, held_depth:=0.) -> void:
 		for i in player.skeleton.get_bone_count():
 			takeoff_pose.append(player.skeleton.get_bone_pose(i))
 	actor = player
+	jump_height+=bonus_height(player)
+	upper_body_rate=1.+.5*clampf(player.effective_rating("Blocking")/100.,0.,1.)
 	base = player.position
 	swing_load=float(player.get_meta("swing_block_load",0.))
 	player.set_meta("swing_block_load",0.)
@@ -229,7 +237,7 @@ func step(delta: float, world_ball: Vector3) -> bool:
 	for bone in rig.get_bone_count(): pose.append(rig.get_bone_pose(bone))
 	var lower_start := 0.71 if overpass_swing else 0.79
 	var lower_end := 0.97 if overpass_swing else 1.02
-	var weight := smoothstep(0.04,0.30,age)*(1.0-smoothstep(lower_start,lower_end,age))
+	var weight := smoothstep(0.04,START+(0.30-START)/upper_body_rate,age)*(1.0-smoothstep(lower_start,lower_end,age))
 	var aim := rig.to_local(world_ball)
 	var scale_: float = rig.global_basis.y.length()
 	if squat > 0.00001:
@@ -243,11 +251,13 @@ func step(delta: float, world_ball: Vector3) -> bool:
 			author.limb(pose,thigh,knee,foot,ankle.origin+drop,bend)
 			author.set_world_basis(pose,foot,ankle.basis)
 	if court_aim.is_finite() and phase>0. and phase<1.:
-		var pike := smoothstep(.19,.50,phase)*(1.-smoothstep(.52,.85,phase))*smoothstep(.30,.80,lift)
+		var pike_weight := (1.-smoothstep(.52,.85,phase))*smoothstep(.30,.80,lift)
+		var pike := smoothstep(.19,.50,phase)*pike_weight
+		var torso_pike := smoothstep(.19,.19+.31/upper_body_rate,phase)*pike_weight
 		var forward := actor.global_basis.z.normalized()
 		actor.position-=forward*.19*pike
-		author.rotate_world(pose,"spine_01",Vector3.RIGHT,.24*pike)
-		author.rotate_world(pose,"spine_02",Vector3.RIGHT,.13*pike)
+		author.rotate_world(pose,"spine_01",Vector3.RIGHT,.24*torso_pike)
+		author.rotate_world(pose,"spine_02",Vector3.RIGHT,.13*torso_pike)
 		for side in ["l","r"]:
 			var thigh: String="thigh_"+side
 			var calf: String="calf_"+side
@@ -262,9 +272,13 @@ func step(delta: float, world_ball: Vector3) -> bool:
 			var knee: Vector3=author.point(pose,calf)
 			var shin: Vector3=(author.point(pose,foot)-knee).normalized()
 			author.aim_joint(pose,calf,foot,knee+shin.slerp(direction,pike*.96))
+	if not court_aim.is_finite() and square_block and not overpass_swing:
+		var press_lean:=smoothstep(.32,.32+.18/upper_body_rate,phase)*(1.-smoothstep(.56,.85,phase))
+		author.rotate_world(pose,"spine_01",Vector3.RIGHT,.12*press_lean)
+		author.rotate_world(pose,"spine_02",Vector3.RIGHT,.08*press_lean)
 	var air_weight := smoothstep(0.,.12,phase)*(1.-smoothstep(.82,1.,phase))
-	lean=lerpf(lean,lean_input,1.-exp(-14.*delta))
-	reach=reach.lerp(reach_input,1.-exp(-16.*delta))
+	lean=lerpf(lean,lean_input,1.-exp(-14.*delta*(upper_body_rate if phase>0. and phase<1. else 1.)))
+	reach=reach.lerp(reach_input,1.-exp(-16.*delta*(upper_body_rate if phase>0. and phase<1. else 1.)))
 	if absf(lean)*air_weight>.0001:
 		var axis_local := (rig.global_basis.inverse()*Vector3.BACK).normalized()
 		author.rotate_world(pose,"spine_01",axis_local,-lean*.20*air_weight)
@@ -283,8 +297,8 @@ func step(delta: float, world_ball: Vector3) -> bool:
 		var shoulder: Vector3 = author.point(pose,arm)
 		var outward := 1.0 if side == "l" else -1.0
 		var press := smoothstep(0.32,0.70,lift) if aggressive_press else smoothstep(0.45,0.95,lift)
-		if court_aim.is_finite() and not overpass_swing:
-			press*=smoothstep(.32,.50,phase)
+		if not overpass_swing:
+			press*=smoothstep(.32,.32+.18/upper_body_rate,phase)
 		var below_tape := 1.0-smoothstep(2.50,2.80,rig.to_global(shoulder).y+0.62)
 		var depth := lerpf(lerpf(0.20,0.55,press),0.17,below_tape)
 		var forward_press := press*(1.-below_tape) if aggressive_press and court_aim.is_finite() else 0.
@@ -341,7 +355,7 @@ func step(delta: float, world_ball: Vector3) -> bool:
 		if court_aim.is_finite() and not overpass_swing:
 			var clearance := rig.to_global(target).y-preload("res://scripts/net_collision.gd").NET_TOP
 			press_weight=press*smoothstep(.02,.20,clearance)*(1.-balance)
-			var reach_weight:=smoothstep(.04,.32,phase)*(1.-smoothstep(.76,.98,phase))
+			var reach_weight:=smoothstep(.04,.04+.28/upper_body_rate,phase)*(1.-smoothstep(.76,.98,phase))
 			extension=lerpf(132.,177.,maxf(reach_weight,press_weight))
 			extension=lerpf(extension,178.,spread*smoothstep(.0,.14,clearance))
 			var elbow:Vector3=author.point(pose,"lowerarm_"+side)

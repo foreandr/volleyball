@@ -80,7 +80,7 @@ const RATING_HELP := {
 	"Hand setting":"Place overhead sets and compensate for your movement during a jump set.",
 	"Hand reception":"Control a high serve with an overhead pass.",
 	"Hand defense":"Keep a high attack playable with an overhead dig.",
-	"Blocking":"Close laterally faster while blocking, challenge the attack above the tape and direct the touch back into court.",
+	"Blocking":"Close laterally faster, jump higher on blocks, and move your arms and torso faster in the air.",
 	"Spike placement":"Aim a swing into an open lane or attack the edges of a block.",
 	"Arm swing":"Generate hand speed through contact to add pace to an attack.",
 	"Athleticism":"Explosive movement for approaches, takeoffs and changes of direction.",
