@@ -103,7 +103,7 @@ func set_destination(origin:Vector3,aim:Vector3,height_index:int) -> Vector3:
 
 func shot_landing(origin:Vector3) -> Vector3:
 	if not cpu_hitter: return super.shot_landing(origin)
-	var target:=zone_center()+Vector3(demo_aim_error.x,0.,demo_aim_error.y)
+	var target:=zone_center()+Vector3(demo_aim_error.x,0.,demo_aim_error.y+depth_error)
 	target.y=Contact.BALL_RADIUS
 	return target
 

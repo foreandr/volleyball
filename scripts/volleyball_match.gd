@@ -755,7 +755,7 @@ func launch(point: Vector3, motion: Vector3, kind: String, from: int, spin_rate 
 			var base := preload("res://scripts/swing_speed.gd").kmh(athlete)
 			var endurance:float=athlete.stamina.effectiveness()
 			var shot_scale := motion.length()*3.6/maxf(.001,base*endurance)
-			var details:=preload("res://scripts/swing_speed.gd").ratings(athlete)+"\nShot and trajectory ×%.2f  ·  Stamina ×%.2f"%[shot_scale,endurance]
+			var details:=preload("res://scripts/swing_speed.gd").ratings(athlete)+"\nShot power ×%.2f  ·  Stamina ×%.2f"%[shot_scale,endurance]
 			ContactTiming.launch_speed(motion,details)
 		athlete.stamina.spend(5. if kind in ["serve","spike","block"] else 2.)
 	if manual: manual.flight_changed(kind)
@@ -949,23 +949,6 @@ func can_touch(index: int, block := false) -> bool:
 	last_was_block = block
 	return true
 
-func controlled_spike_motion(contact: Vector3, motion: Vector3, target: Vector3, spin_rate: float) -> Vector3:
-	var gravity := Flight.spike_gravity(spin_rate)
-	var limit := motion.slide(Vector3.UP).length()
-	if limit < 1.0: return motion
-	var flight_time := Flight.landing_time(contact,motion,gravity)
-	if Net.first_hit(func(t): return contact+motion*t+Vector3.DOWN*0.5*gravity*t*t,0.0,flight_time).is_empty(): return motion
-	for aim in [target,Vector3(clampf(target.x,-2.8,2.8),Flight.FLOOR,11.4),Vector3(0.0,Flight.FLOOR,10.1)]:
-		var offset: Vector3 = aim-contact
-		var time_to_net := (Net.NET_Z-contact.z)/maxf(0.01,offset.z)
-		if time_to_net <= 0.0 or time_to_net >= 1.0 or absf(contact.x+offset.x*time_to_net) > Net.NET_HALF_WIDTH-Net.RADIUS-0.12: continue
-		for power in [1.0,0.86,0.72,0.58]:
-			var time: float = offset.slide(Vector3.UP).length()/(limit*power)
-			var candidate := offset/time+Vector3.UP*0.5*gravity*time
-			if Net.first_hit(func(t): return contact+candidate*t+Vector3.DOWN*0.5*gravity*t*t,0.0,time).is_empty():
-				return candidate
-	return motion
-
 func set_cpu_swing_power(hitter: int) -> void:
 	var side := team(hitter)
 	var effort := cpu_policy.choose(side,"attack effort",[0,1,2],0) if not is_human(hitter) else 0
@@ -995,21 +978,10 @@ func on_spike(actor: Node3D, point: Vector3, motion: Vector3, spin_rate: float) 
 		var local_motion := frame.global_basis.inverse()*motion
 		var shot: Vector3 = attackers[team(index)].swing_aim
 		var tactic := choose_contact_attack(index,start,shot,local_motion,spin_rate)
-		if tactic.is_empty():
-			local_motion = controlled_spike_motion(start,local_motion,shot,spin_rate)
-		else:
+		if not tactic.is_empty():
 			local_motion = tactic.motion
 			trace.write("cpu_attack_choice",match_clock,{"type":tactic.type,"contact":start,"target":tactic.target,"motion":local_motion})
 		motion = frame.global_basis*local_motion
-		var cross := (Net.NET_Z-start.z)/maxf(0.01,local_motion.z)
-		var gravity := Flight.spike_gravity(spin_rate)
-		var at_net := start+local_motion*cross+Vector3.DOWN*0.5*gravity*cross*cross
-		if cross > 0.0 and (absf(at_net.x) > Net.NET_HALF_WIDTH-Net.RADIUS-0.12 or at_net.y < Net.NET_TOP+Net.RADIUS):
-			var safe := cpu_free_ball_motion(start,local_motion)
-			if not safe.is_equal_approx(local_motion):
-				stroke = "Free ball"
-				launch(point,frame.global_basis*safe,"free",index)
-				return
 	if not is_human(index):
 		cpu_policy.used(team(index),"attack depth")
 		cpu_policy.used(team(index),"attack effort")
@@ -1033,9 +1005,7 @@ func choose_contact_attack(index: int, contact: Vector3, preferred: Vector3, mot
 				walls.append(Vector3((left.x+right.x)*0.5,height,maxf(Net.NET_Z+0.12,(left.z+right.z)*0.5)))
 				continue
 		defenders.append(position)
-	var speed := motion.slide(Vector3.UP).length()
-	if int(last_point.get("winner",side))!=side:
-		speed*=lerpf(.84,1.,float(players[index].attributes.get("Confidence",65))/100.)
+	var speed := motion.length()
 	return CpuShots.plan(contact,preferred,speed,spin_rate,defenders,walls)
 
 func shot_read_zone(local_x: float) -> int:
@@ -2355,19 +2325,15 @@ func hit_overpass(index: int, point: Vector3) -> bool:
 		wall.z = Net.NET_Z+0.38
 	var shot := choose_shot(index,contact,wall)
 	var offset := shot-contact
-	var time := maxf(0.10,offset.slide(Vector3.UP).length()/maxf(9.0,26.0*spike_strength))
+	var speed := maxf(9.,26.*spike_strength)
 	var spin_rate := 6.0
-	var gravity := Flight.spike_gravity(spin_rate)
-	var motion := offset/time+Vector3.UP*0.5*gravity*time
+	var acceleration := Vector3.DOWN*Flight.spike_gravity(spin_rate)
+	var time := Flight.strike_time(offset,acceleration,speed)
+	var motion := Flight.strike_velocity(offset,acceleration,time,speed)
 	var tactic := choose_contact_attack(index,contact,shot,motion,spin_rate)
 	if not tactic.is_empty():
 		shot = tactic.target
 		motion = tactic.motion
-	else:
-		motion = controlled_spike_motion(contact,motion,shot,spin_rate)
-	if not Net.first_hit(func(t): return contact+motion*t+Vector3.DOWN*0.5*gravity*t*t,0.0,Flight.landing_time(contact,motion,gravity)).is_empty():
-		motion = cpu_free_ball_motion(contact,motion)
-		spin_rate = 0.0
 	if not can_touch(index): return false
 	stroke = "Overpass attack"
 	var world_motion := frame.global_basis*motion

@@ -1079,8 +1079,11 @@ func hit_spike(charge: float, point: Vector3, palm_gap := 0.0) -> void:
 	elif not swing_practice:
 		var completion := smoothstep(0.22,0.93,swing_contact_extension)
 		speed *= lerpf(0.56,1.0,charge)*lerpf(0.65,1.0,completion)
-	var duration := target.slide(Vector3.UP).length()/(speed*spike_speed_multiplier()*jump.spike_power_factor())
-	pass_motion = target/duration+Vector3.UP*Flight.spike_gravity(spike_topspin_rps)*duration*0.5
+	var pace := speed*spike_speed_multiplier()*jump.spike_power_factor()
+	var gravity := Flight.spike_gravity(spike_topspin_rps)
+	var duration := Flight.strike_time(target,Vector3.DOWN*gravity,pace)
+	pass_motion=Flight.strike_velocity(target,Vector3.DOWN*gravity,duration,pace)
+	duration=Flight.landing_time(pass_origin,pass_motion,gravity)
 	if not ball_audio_muted and pass_motion.length()>=preload("res://scripts/gym_physics.gd").HARD_SPIKE_SPEED: spike_audio.play()
 	if not has_signal("struck"):
 		ContactTiming.launch_speed(pass_motion,"Contact %.1f km/h  ·  Power ×%.2f  ·  Approach ×%.2f"%[speed*3.6,spike_speed_multiplier(),jump.spike_power_factor()])

@@ -2,6 +2,19 @@ extends RefCounted
 const GRAVITY := 9.81
 const FLOOR := 0.145
 
+# Shortest ballistic flight at a fixed launch speed. At the range limit the
+# direction below gives the best reachable shot with the available pace.
+static func strike_time(offset: Vector3, acceleration: Vector3, speed: float) -> float:
+	var budget := speed*speed+offset.dot(acceleration)
+	var distance_sq := offset.length_squared()
+	var discriminant := budget*budget-acceleration.length_squared()*distance_sq
+	if discriminant<0. or budget<=0.:
+		return sqrt(2.*offset.length()/maxf(.001,acceleration.length()))
+	return sqrt(2.*distance_sq/maxf(.001,budget+sqrt(discriminant)))
+
+static func strike_velocity(offset: Vector3, acceleration: Vector3, duration: float, speed: float) -> Vector3:
+	return (offset/maxf(.001,duration)-acceleration*.5*duration).normalized()*speed
+
 static func spin_axis(forward: Vector3, type: String) -> Vector3:
 	match type:
 		"Topspin": return Vector3.UP.cross(forward).normalized()

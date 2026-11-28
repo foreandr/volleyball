@@ -16,6 +16,8 @@ For a two-arm forearm reception, dig, or bump set, establish one platform before
 
 In serve-and-defend rallies the server can move into defense after recovering from the serve. A pin blocker who cannot close in time peels into short defense, shuffling while facing the ball and attempting digs alongside the server.
 
+A committed spike carries its selected shot pace and timing through contact. Aiming changes direction, and the ball can hit the net or land out.
+
 CPU hitters recover off the net with a forward-facing shuffle toward the three-metre line before their next approach.
 
 During live play, coaches and athletes track the active ball with bounded head yaw and pitch. Tracking eases off during fast chases and when the ball passes behind them.
@@ -301,6 +303,8 @@ Players level individual volleyball skills by using them. Simulated drills award
 Track the best level achieved manually for each drill. A player can simulate that drill at any level they have earned, including the highest level after a perfect manual run. The simulated result earns the XP for that level, with the extra manual-play bonus reserved for playing it again.
 Future feature: Players can get the crowd involved with chants such as Let's go, da da, let's go. Crowd involvement builds team momentum and boosts jump height, strength and willpower.
 Training Camp / Serving / Reception Test uses the controller serving drill and the three draggable Reception Studio stances. The receivers pass to position 2.5 for a jump set and a hard attack from the left pin.
+
+Future feature: Arcade volleyball with a mini-net.
 
 Future feature: Ball doesn’t lie.
 

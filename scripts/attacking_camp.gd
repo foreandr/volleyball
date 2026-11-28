@@ -799,11 +799,9 @@ func start_approach(steps := 3, cadence := 1.,destination := Vector3.INF) -> voi
 		var contact := destination
 		contact.y=minf(contact.y,attack_contact_height())
 		var landing := shot_landing(contact)
-		# The flight starts at ball center; destination already represents that height.
-		var net_hit := predicted_net_hit(contact,landing)
 		var stamina_left: float = hitter.stamina.fraction()
 		var conserve := stamina_left<=.30 or (bounce_line and stamina_left<=.50)
-		if conserve or not net_hit.is_empty():
+		if conserve:
 			tip_shot=not bounce_line and (landing-contact).slide(Vector3.UP).length()<4.
 			roll_shot=not tip_shot
 			trace("cpu_soft_attack",{"tip":tip_shot,"stamina":hitter.stamina.fraction(),"contact_height":contact.y})
@@ -844,16 +842,19 @@ static func soft_shot_duration(origin: Vector3, landing: Vector3, tip_shot: bool
 		flight=maxf(flight,sqrt(2.*maxf(0.,lift)/((9.81 if tip_shot else 11.81)*fraction*(1.-fraction))))
 	return flight
 
+func release_power_factor() -> float:
+	if not is_finite(contact_grade): return 1.
+	var limit := LATE_LIMIT if contact_grade>0. else -EARLY_LIMIT
+	var clean := CLEAN_LATE if contact_grade>0. else CLEAN_EARLY
+	return lerpf(1.,.90,smoothstep(clean,limit,absf(contact_grade)))
+
+func hard_contact_speed() -> float:
+	return attack_speed()*attack_jump.spike_power_factor()*release_power_factor()
+
 func attack_flight_time(origin: Vector3, landing: Vector3) -> float:
 	if roll_shot or tip_shot: return soft_shot_duration(origin,landing,tip_shot)
-	var flight := maxf(.05,origin.distance_to(landing)/(attack_speed()*attack_jump.spike_power_factor()))
-	if landing.z>BallNet.NET_Z and origin.z<BallNet.NET_Z:
-		var fraction := (BallNet.NET_Z-origin.z)/(landing.z-origin.z)
-		var rise := BallNet.NET_TOP+Contact.BALL_RADIUS+.04-lerpf(origin.y,landing.y,fraction)
-		if rise>0.:
-			var gravity := 9.81-shot_spin_force(origin,landing,flight).y
-			flight=maxf(flight,sqrt(2.*rise/(gravity*fraction*(1.-fraction))))
-	return flight
+	var acceleration := Vector3.DOWN*9.81+shot_spin_force(origin,landing,0.)
+	return preload("res://scripts/pass_flight.gd").strike_time(landing-origin,acceleration,hard_contact_speed())
 
 func swing_can_contact() -> bool:
 	return swing_time>=.055 and swing_time<=.30
@@ -877,14 +878,14 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 		if at_set_target and contact_open and nearest.distance_to(palm)<=Contact.BALL_RADIUS+PALM_CONTACT_MARGIN:
 			if not is_finite(first_palm_at): first_palm_at=clock
 			var grade := release_grade+GRADE_ADVANCE
-			var valid_release := manual_shot>=0 and is_finite(release_at) and grade>=EARLY_LIMIT and grade<=LATE_LIMIT
+			var valid_release := manual_shot>=0 and is_finite(release_at)
 			if valid_release:
 				contact_grade=grade
 				ContactTiming.window("Attack",grade,EARLY_LIMIT,LATE_LIMIT,-CLEAN_EARLY,CLEAN_LATE)
 				show_attack_timing(grade)
 				placement_offset=Vector2.from_angle(rotation_drill.random.randf()*TAU)*sqrt(rotation_drill.random.randf())*aim_radius()
 				var severity := smoothstep(CLEAN_LATE if grade>0. else CLEAN_EARLY,LATE_LIMIT if grade>0. else -EARLY_LIMIT,absf(grade))
-				depth_error=(-1. if grade>0. else 1.)*severity*rotation_drill.random.randf_range(0.,12. if grade>0. else 8.)
+				depth_error=(-1. if grade>0. else 1.)*severity*rotation_drill.random.randf_range(3.,12. if grade>0. else 8.)
 			elif not has_meta("sampling_attack"):
 				if elapsed<contact_deadline(): return false
 				return miss_attack()
@@ -925,15 +926,15 @@ func show_strike_speed() -> void:
 	var details := "Controlled placement arc" if tip_shot or roll_shot else ""
 	if details.is_empty():
 		var base := preload("res://scripts/swing_speed.gd").kmh(hitter)
-		var effort := float(review_setup.get("power",drill_hit_speed))/14.
 		var approach := attack_jump.spike_power_factor()
-		var drill_power := base*effort
+		var drill_power := attack_speed()*3.6
 		var approach_speed := drill_power*approach
 		var adjustments := PackedStringArray()
-		if not is_equal_approx(effort,1.):
+		if not is_equal_approx(drill_power,base):
 			adjustments.append("Drill power %+.1f"%(drill_power-base))
 		adjustments.append("Approach %+.1f"%(approach_speed-drill_power))
-		adjustments.append("Aim and net clearance %+.1f"%(drop_velocity.length()*3.6-approach_speed))
+		if release_power_factor()<1.:
+			adjustments.append("Release timing %+.1f"%(approach_speed*(release_power_factor()-1.)))
 		details=preload("res://scripts/swing_speed.gd").ratings(hitter)+"\n"+"  |  ".join(adjustments)+" km/h"
 	ContactTiming.launch_speed(drop_velocity,details)
 
@@ -1012,9 +1013,7 @@ func advance_spike(delta: float) -> void:
 	if not had_net_contact and not drop_net_hit.is_empty():
 		trace("spike_net_contact",{"point":str(drop_net_hit.point),"kind_of_hit":drop_net_hit.kind,"over":drop_net_hit.rollover})
 		if not cpu_hitter and not drop_net_hit.rollover:
-			var was_clean := contact_grade>=-CLEAN_EARLY and contact_grade<=CLEAN_LATE
-			if was_clean: contact_grade=CLEAN_LATE+.001
-			show_player_timing(hitter,"Late" if was_clean else "Net",Color("f25454"))
+			show_player_timing(hitter,"Net",Color("f25454"))
 	if not drop_net_hit.is_empty() or roll_time>=0. or (descent<0. and drop_velocity.y>0.): spin_acceleration=Vector3.ZERO
 	if in_flight and roll_time<0. and not forward.is_zero_approx():
 		var spin := int(review_setup.get("spin",0))
@@ -1026,16 +1025,18 @@ func advance_spike(delta: float) -> void:
 		if not cpu_hitter and drop_net_hit.is_empty() and contact_grade>=-CLEAN_EARLY and contact_grade<=CLEAN_LATE:
 			show_attack_timing(contact_grade,true)
 
-func shot_spin_force(origin: Vector3, landing: Vector3, flight: float) -> Vector3:
+func shot_spin_force(origin: Vector3, landing: Vector3, _flight: float) -> Vector3:
 	if tip_shot: return Vector3.ZERO
 	if roll_shot: return Vector3.DOWN*2.
 	var direction := origin.direction_to(landing).slide(Vector3.UP).normalized()
-	var speed := origin.distance_to(landing)/flight
+	var speed := hard_contact_speed()
 	var spin := int(review_setup.get("spin",0))
 	var axis: Vector3=[Vector3.DOWN,Vector3.DOWN*.8+direction.cross(Vector3.UP)*.6,Vector3.DOWN*.8+Vector3.UP.cross(direction)*.6,Vector3.ZERO,Vector3.UP][spin]
 	return axis*(minf(3.,speed*.20) if spin==4 else minf(22.,speed*.78))
 
 func launch_velocity(origin: Vector3, landing: Vector3, flight: float, spin: Vector3) -> Vector3:
+	if not tip_shot and not roll_shot:
+		return preload("res://scripts/pass_flight.gd").strike_velocity(landing-origin,Vector3.DOWN*9.81+spin,flight,hard_contact_speed())
 	return (landing-origin)/flight+(Vector3.UP*9.81-spin)*(.5*flight)
 
 func predicted_attack_origin() -> Vector3:
