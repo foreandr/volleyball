@@ -367,7 +367,7 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 	if (attack_arm_lift or attack_backswing) and approach_plant and not setting_jump:
 		# Load over the long right step, then unfold through the closing left plant.
 		var plant_phase := (elapsed-lead_time)/maxf(.001,load_duration()-lead_time)
-		backswing_peak = smoothstep(.035,.53,plant_phase)*(1.-smoothstep(.53,1.,plant_phase))
+		backswing_peak = smoothstep(.035,.44,plant_phase)*(1.-smoothstep(.62,.93,plant_phase))
 		if attack_arm_lift:
 			author.rotate_world(pose,"spine_01",Vector3.RIGHT,deg_to_rad(24.)*backswing_peak)
 			author.rotate_world(pose,"spine_02",Vector3.RIGHT,deg_to_rad(14.)*backswing_peak)
@@ -530,6 +530,17 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 			goal.x = lerpf(wrist.x,center.x,.32)
 			var elbow_axis: Vector3 = author.point(pose,"lowerarm_"+side)-author.point(pose,"upperarm_"+side)
 			author.limb(pose,"upperarm_"+side,"lowerarm_"+side,hand,goal,elbow_axis.normalized(),gather)
+	if attack_backswing and backswing_peak>.001:
+		# Finish the ground draw after the lead-step clip so it survives the run-in handoff.
+		# This pose is solved before the whole rig mirrors a left-handed hitter.
+		for side in ["l","r"]:
+			var upper_arm: String = "upperarm_"+side
+			var shoulder:Vector3=author.point(pose,upper_arm)
+			var outward:=1. if side=="l" else -1.
+			var behind:=actor.global_basis.z.normalized()*-.53
+			var outside:=rig.global_basis.x.normalized()*(outward*.12)
+			var goal:=shoulder+rig.global_basis.inverse()*(behind+outside+Vector3.DOWN*.23)
+			author.limb(pose,upper_arm,"lowerarm_"+side,"hand_"+side,goal,Vector3(outward,-.28,-.30),backswing_peak,165.,true)
 	rig.set_bone_pose_position(pelvis,pose[pelvis].origin)
 	var entry := 1.0-smoothstep(0.0,0.085,elapsed)
 	for bone in rig.get_bone_count():
