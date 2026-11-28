@@ -404,6 +404,7 @@ func run() -> void:
 	match_scene.toggle_match_replay()
 	assert(not g.replay.active)
 	check_quick_block_spacing(g)
+	check_passer_clearance(g)
 	check_setter_cover_base(g)
 	check_reversing_pin(g)
 	check_late_approach(g)
@@ -510,3 +511,24 @@ func check_quick_block_spacing(g) -> void:
 			g.position_defense(1./60.)
 			closest=minf(closest,absf(g.players[middle].position.x-g.players[pin].position.x))
 		assert(closest>.62 and g.blocks.has(middle))
+
+func check_passer_clearance(g) -> void:
+	for side in 2:
+		g.reset_match()
+		g.spectator=true
+		var passer=g.first_on(side)+5
+		var runner=g.first_on(side)+1
+		g.receiving_team=side
+		g.last_player=passer
+		g.flight_kind="pass"
+		g.rally_setter=g.first_on(side)
+		g.cpu_choice=g.rally_setter
+		g.players[passer].position=Vector3(0,.04,-1.2)
+		g.players[runner].position=Vector3(-1.3,.04,-1.25)
+		var end=Vector3(1.7,.04,-1.1)
+		var minimum=INF
+		for tick in 180:
+			g.match_clock+=1./60.
+			g.peel_cpu_off_net(runner,end,1./60.)
+			minimum=minf(minimum,g.players[runner].position.distance_to(g.players[passer].position))
+		assert(minimum>.62 and g.players[runner].position.distance_to(end)<.05)

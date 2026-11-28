@@ -1890,6 +1890,17 @@ func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_f
 		# Momentum may carry the pin inward even after it starts shuffling outward.
 		var room:=maxf(0.,outside_direction*(actor.position.x-shoulder_x))
 		velocity.x=outside_direction*maxf(outside_direction*velocity.x,-room/delta)
+	var passer:=priority_passer(index)
+	if passer>=0 and delta>0.:
+		var away:Vector3=(actor.position-players[passer].position).slide(Vector3.UP)
+		var gap:=away.length()
+		if gap>.001 and gap<1.15:
+			var normal:=away/gap
+			var passer_velocity:Vector3=court_velocities.get(passer,Vector3.ZERO)
+			if match_clock-float(movement_times.get(passer,-INF))>2.*delta: passer_velocity=Vector3.ZERO
+			var closing:float=(passer_velocity-velocity).dot(normal)
+			var allowed:=maxf(0.,gap-.62)/delta
+			if closing>allowed: velocity+=normal*(closing-allowed)
 	movement_times[index]=match_clock
 	court_velocities[index]=velocity
 	var world_step := frames[team(index)].global_basis*(velocity*delta).limit_length(distance)
@@ -2740,6 +2751,37 @@ func hit_overpass(index: int, point: Vector3) -> bool:
 	launch(point,world_motion,"spike",index,spin_rate)
 	return true
 
+func priority_passer(index:int) -> int:
+	if flight_kind not in ["serve","pass"] or not six_on_six() or is_human(index) or receiving_team!=team(index): return -1
+	var passer:=cpu_choice if flight_kind=="serve" else last_player
+	if passer<0 or index==passer or index==rally_setter or team(index)!=team(passer): return -1
+	return passer
+
+func route_around_passer(index:int, target:Vector3) -> Vector3:
+	var priority:=priority_passer(index)
+	if priority<0: return target
+	var here:=players[index].position.slide(Vector3.UP)
+	var passer:=players[priority].position.slide(Vector3.UP)
+	if here.distance_squared_to(passer)>2.4*2.4: return target
+	var destination:=target.slide(Vector3.UP)
+	var toward:=here.direction_to(destination)
+	var ahead:=(passer-here).dot(toward)
+	if ahead<=0.: return target
+	if here.distance_squared_to(destination)<.0001: return target
+	if Geometry3D.get_closest_point_to_segment(passer,here,destination).distance_to(passer)>=.72: return target
+	var exit_direction:=passer.direction_to(destination)
+	if passer.distance_to(destination)<.72:
+		var stop:=passer+passer.direction_to(here)*.76
+		return Vector3(stop.x,target.y,stop.z)
+	if (here-passer).dot(exit_direction)>=.70: return target
+	var lateral:=Vector3.UP.cross(exit_direction)
+	if (here-passer).dot(lateral)<0.: lateral=-lateral
+	var advance:=clampf((here-passer).dot(exit_direction)+.35,0.,passer.distance_to(destination))
+	var center:=passer+exit_direction*advance
+	var bypass:=center+lateral*1.05
+	if absf(bypass.x)>4.5 or bypass.z>CPU_COURT_FRONT_LIMIT: bypass=center-lateral*1.05
+	return Vector3(bypass.x,target.y,bypass.z)
+
 func peel_cpu_off_net(index: int, staging: Vector3, delta: float) -> void:
 	if recoveries.has(index):
 		var recovery: Dictionary = recoveries[index]
@@ -2747,9 +2789,10 @@ func peel_cpu_off_net(index: int, staging: Vector3, delta: float) -> void:
 		recoveries.erase(index)
 	var frame := frames[team(index)] as Node3D
 	var sight := GroundMovement.forward_sight(frame.to_local(ball.global_position)-players[index].position)
-	move_cpu(index,frame.to_global(staging),delta,4.1,sight,false,false,3.5)
+	move_cpu(index,frame.to_global(route_around_passer(index,staging)),delta,4.1,sight,false,false,3.5)
 
 func move_cpu_to_approach(hitter: int, staging: Vector3, delta: float, speed: float) -> void:
+	staging=route_around_passer(hitter,staging)
 	var offset := (staging-players[hitter].position).slide(Vector3.UP)
 	var running := offset.z > 0.12 and offset.length() > 0.18
 	move_cpu(hitter,frames[team(hitter)].to_global(staging),delta,speed,Vector3.INF,running,running,17.0,true)
