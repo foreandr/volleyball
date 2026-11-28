@@ -61,6 +61,12 @@ func run() -> void:
 		g.choose_at_set_contact(setter,Vector3(0,2,3))
 		assert(g.rally_hitter==middle_id)
 		assert(g.set_pin_for(setter).is_equal_approx(g.attack_lane_for(middle_id)))
+		var pin_id:int=g.first_on(side)+g.lineup_roles[side].find(1)
+		assert(signf(g.formation_home(pin_id,true).x)==signf(g.attack_lane_for(pin_id).x))
+		g.rally_hitter=pin_id
+		g.choose_at_set_contact(setter,Vector3(0,2,3))
+		assert(g.rally_hitter==pin_id)
+		g.rally_hitter=middle_id
 		g.players[pipe_id].position.x=pipe_lane.x
 		g.choose_at_set_contact(setter,Vector3(0,2,3))
 		assert(g.rally_hitter==middle_id)

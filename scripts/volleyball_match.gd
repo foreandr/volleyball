@@ -480,9 +480,10 @@ func choose_at_set_contact(setter:int,point:Vector3) -> void:
 	var pipe:=first_on(side)+lineup_roles[side].find(back_outside)
 	var middle:=front_middle(side)
 	var quick_ready:=in_system and middle_showing_quick(side) and middle!=setter and not interrupted_hitters.has(middle)
-	if quick_ready and (rally_hitter==middle or not pipe_runner_ready(pipe)):
+	var pipe_ready:=quick_ready and pipe_open[side] and pipe!=setter and pipe_runner_ready(pipe)
+	if quick_ready and (rally_hitter==middle or (rally_hitter==pipe and not pipe_ready)):
 		rally_hitter=middle
-	elif quick_ready and pipe_open[side] and pipe!=setter:
+	elif pipe_ready and (rally_hitter<0 or rally_hitter==pipe or randf()<.25):
 		rally_hitter=pipe
 	elif rally_hitter==pipe or (not in_system and rally_hitter==front_middle(side)):
 		setter_can_run_middle[side]=in_system
@@ -752,7 +753,14 @@ func begin_point() -> void:
 			pipe_open[side]=false
 			setter_can_run_middle[side]=true
 			receive_marks.append(Formation.layout(StorySession.game_options,setter_zones[side],false))
-			defense_marks.append(Formation.layout(StorySession.game_options,setter_zones[side],true))
+			var defense:=Formation.layout(StorySession.game_options,setter_zones[side],true)
+			# In setter one the two pin hitters stay reversed through the rally.
+			# Assign the existing blocking spots in the same order as their attack lanes.
+			if setter_zones[side]==1 and defense[1].x<defense[3].x:
+				var outside_spot:=defense[1]
+				defense[1]=defense[3]
+				defense[3]=outside_spot
+			defense_marks.append(defense)
 		var rotation:=int(setter_zones[0])
 		human_receive_bounds=Formation.receive_bounds(receive_marks[0],lineup_role(0),Formation.receive_edges(rotation))
 	for index in players.size():
