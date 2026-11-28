@@ -2140,12 +2140,11 @@ func tick_receive(delta: float, previous: float) -> void:
 				prepare_cpu_approach(hitter,driver,delta)
 				return
 			if six_on_six() and safe_lane and driver.enabled and not driver.approach_jump_queued and remaining>0. and not recoveries.has(hitter):
-				# The running plant can miss the footfall while a two-step approach is still playable.
-				if driver.find_approach_intercept(true,0).is_finite():
-					driver.try_queue_approach(false)
-					if driver.approach_jump_queued:
-						driver.approach_space_held=true
-						show_key(hitter,"Space")
+				# Check every reachable approach before switching to a save.
+				driver.try_queue_approach(false)
+				if driver.approach_jump_queued:
+					driver.approach_space_held=true
+					show_key(hitter,"Space")
 			if safe_lane and driver.approach_jump_queued: return
 			driver.approach_jump_queued = false
 			driver.enabled = false
