@@ -91,6 +91,7 @@ var depth_error := 0.
 const EARLY_LIMIT := -.18
 const LATE_LIMIT := .40
 const ATTACK_CONTACT_RADIUS := .46
+const PALM_CONTACT_MARGIN := .020
 var planned_contact := Vector3.ZERO
 var planned_lunge := Vector3.ZERO
 const GRADE_ADVANCE := .305
@@ -873,7 +874,7 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 		if contact_open:
 			closest_spike_gap=minf(closest_spike_gap,nearest.distance_to(palm))
 		var at_set_target := has_meta("sampling_attack") or (ball.position-endpoint).slide(Vector3.UP).length()<=.25
-		if at_set_target and contact_open and nearest.distance_to(palm)<=Contact.BALL_RADIUS+.006:
+		if at_set_target and contact_open and nearest.distance_to(palm)<=Contact.BALL_RADIUS+PALM_CONTACT_MARGIN:
 			if not is_finite(first_palm_at): first_palm_at=clock
 			var grade := release_grade+GRADE_ADVANCE
 			var valid_release := manual_shot>=0 and is_finite(release_at) and grade>=EARLY_LIMIT and grade<=LATE_LIMIT

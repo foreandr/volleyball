@@ -4,7 +4,43 @@ var file: FileAccess
 var axes := {}
 var sequence := 0
 
+const FPS_WINDOW_US := 250000
+var display_fps := 60
+var previous_frame_us := 0
+var window_us := 0
+var frames := 0
+var worst_us := 0
+var last_band := 0
+var last_report_us := 0
+
+func _process(_delta: float) -> void:
+	var now := Time.get_ticks_usec()
+	var elapsed := now-previous_frame_us
+	previous_frame_us=now
+	if elapsed<=0: return
+	frames+=1
+	window_us+=elapsed
+	worst_us=maxi(worst_us,elapsed)
+	if window_us<FPS_WINDOW_US: return
+	display_fps=roundi(1000000.*frames/window_us)
+	var band := 2 if display_fps<50 else (1 if display_fps<=55 else 0)
+	if (band!=last_band or (band>0 and now-last_report_us>=1000000)):
+		var scene := get_tree().current_scene
+		var fields := {"fps":display_fps,"worst_frame_ms":worst_us/1000.,
+			"time":Time.get_time_string_from_system(),"focused":get_window().has_focus(),
+			"draw_calls":Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)}
+		if scene and "phase" in scene: fields["phase"]=scene.get("phase")
+		record(["fps_recovered","fps_warning","fps_critical"][band],fields)
+		last_report_us=now
+	last_band=band
+	frames=0
+	window_us=0
+	worst_us=0
+
 func _ready() -> void:
+	process_mode=Node.PROCESS_MODE_ALWAYS
+	set_process(DisplayServer.get_name()!="headless")
+	previous_frame_us=Time.get_ticks_usec()
 	var dir := "user://interaction_logs"
 	DirAccess.make_dir_recursive_absolute(dir)
 	var path := dir.path_join("session_%s_%d.jsonl" % [Time.get_datetime_string_from_system().replace(":","-"),OS.get_process_id()])

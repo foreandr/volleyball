@@ -15,6 +15,7 @@ var stream_length_at := 0
 var next_frame := 0
 var last_jpeg := PackedByteArray()
 var cleanup_at := 0
+var fps_label: Label
 var clock_label: Label
 
 func _ready() -> void:
@@ -26,10 +27,18 @@ func _ready() -> void:
 	overlay.layer=100
 	add_child(overlay)
 	clock_label=Label.new()
-	overlay.add_child(clock_label)
+	var plate_panel := PanelContainer.new()
+	overlay.add_child(plate_panel)
+	var row := HBoxContainer.new()
+	plate_panel.add_child(row)
+	row.add_child(clock_label)
+	fps_label=Label.new()
+	row.add_child(fps_label)
+	fps_label.add_theme_font_size_override("font_size",19)
+	plate_panel.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	get_tree().scene_changed.connect(update_clock_visibility)
 	update_clock_visibility.call_deferred()
-	clock_label.position=Vector2(12,10)
+	plate_panel.position=Vector2(12,10)
 	clock_label.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	clock_label.add_theme_font_size_override("font_size",19)
 	var plate := StyleBoxFlat.new()
@@ -39,13 +48,13 @@ func _ready() -> void:
 	plate.content_margin_right=8
 	plate.content_margin_top=2
 	plate.content_margin_bottom=2
-	clock_label.add_theme_stylebox_override("normal",plate)
+	plate_panel.add_theme_stylebox_override("panel",plate)
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(FOLDER))
 	prune()
 
 func update_clock_visibility() -> void:
 	var scene := get_tree().current_scene
-	clock_label.visible=scene!=null and scene.scene_file_path not in ["res://scenes/main.tscn","res://scenes/story.tscn","res://scenes/create.tscn"]
+	clock_label.get_parent().get_parent().visible=scene!=null and scene.scene_file_path not in ["res://scenes/main.tscn","res://scenes/story.tscn","res://scenes/create.tscn"]
 
 func prune() -> void:
 	var now := int(Time.get_unix_time_from_system())
@@ -175,7 +184,10 @@ func _process(_dt: float) -> void:
 	var now := Time.get_ticks_msec()
 	if now>=next_request:
 		var tenth := int(Time.get_unix_time_from_system()*10.)%10
-		clock_label.text="%s.%d   %d FPS"%[Time.get_time_string_from_system(),tenth,Engine.get_frames_per_second()]
+		clock_label.text="%s.%d"%[Time.get_time_string_from_system(),tenth]
+		var fps := InteractionTrace.display_fps
+		fps_label.text="%d FPS"%fps
+		fps_label.modulate=Color("72dc8b") if fps>55 else (Color("ffda61") if fps>=50 else Color("ff6565"))
 	while not jobs.is_empty():
 		var job := jobs[0]
 		if job.unsupported:
