@@ -24,6 +24,8 @@ func run() -> void:
 			editor.defense=defense
 			editor.refresh()
 			assert(editor.marks.size()==6)
+			for role in 6:
+				assert(editor.libero_mark(role)==(role in [2,5] and formations.zone(role,rotation) in [1,5,6]))
 			if not defense:
 				check_order(editor.marks,rotation)
 				for role in 6:
@@ -60,10 +62,20 @@ func run() -> void:
 		for rally in 12:
 			var receiving:int=1-g.service_team
 			var rot:int=g.setter_zones[receiving]
+			for side in 2:
+				var liberos:=0
+				for i in g.slots_for(side):
+					var slot:int=g.lineup_role(i)
+					if slot not in [2,5]: continue
+					if formations.zone(slot,g.setter_zones[side]) in [1,5,6]:
+						assert(g.players[i].attributes.position=="Libero")
+						liberos+=1
+					else: assert(g.players[i].attributes.position==formations.ROLES[slot])
+				assert(liberos==1)
 			for i in g.slots_for(receiving):
 				var role:int=g.lineup_role(i)
 				if not career or receiving!=0: assert(role==(i+3)%6)
-				if formations.receive_libero(role,rot): assert(g.players[i].attributes.position=="Libero")
+				if formations.back_row_libero(role,rot): assert(g.players[i].attributes.position=="Libero")
 				elif role in [2,5]: assert(g.players[i].attributes.position==formations.ROLES[role])
 				var expected=formations.layout(session.game_options,rot,false)[role]
 				assert(g.players[i].position.is_equal_approx(formations.on_court(expected)))

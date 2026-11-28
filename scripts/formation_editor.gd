@@ -72,7 +72,7 @@ func refresh() -> void:
 	board.queue_redraw()
 
 func libero_mark(role:int) -> bool:
-	return not defense and Formation.receive_libero(role,setter_zone)
+	return Formation.back_row_libero(role,setter_zone)
 
 func court() -> Rect2:
 	var edge:=maxf(1.,minf(board.size.x-44.,board.size.y-44.))

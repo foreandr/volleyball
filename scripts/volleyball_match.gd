@@ -493,7 +493,7 @@ func build_six_lineups() -> void:
 func apply_receive_substitutions() -> void:
 	for side in 2:
 		var roles:=lineup_template[side].duplicate()
-		var back_role:=2 if Formation.receive_libero(2,setter_zones[side]) else 5
+		var back_role:=2 if Formation.back_row_libero(2,setter_zones[side]) else 5
 		var controlled_libero:=side==0 and human_libero
 		if controlled_libero and roles[0]!=back_role:
 			var other:=roles.find(back_role)
@@ -504,7 +504,7 @@ func apply_receive_substitutions() -> void:
 			var role:=roles[j]
 			if role not in [2,5]: continue
 			var id:=first_on(side)+j
-			var identity:=6 if role==back_role and (side!=service_team or controlled_libero) else role
+			var identity:=6 if role==back_role else role
 			var actor:=players[id]
 			if active_identities[id]!=identity:
 				active_identities[id]=identity

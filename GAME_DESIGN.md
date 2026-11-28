@@ -364,6 +364,6 @@ Career, serving camp and manual match serves use the low ballistic trajectory at
 Launch feedback fits the speed and its calculation on one line beneath contact timing. Career and manual match serves label the toss multiplier and show the technique rating separately from the speed equation.
 
 Six-on-six scrimmages and games share Settings / Formations. Each setter zone has independent serve-receive and block-defense placements, in team-local court coordinates. On side-out the winning team rotates clockwise, and the player rotating into zone one serves. Saved marks are starting positions for live reads.
-On serve receive the libero wears a contrasting jersey and occupies the saved back-row middle spot for the rally. The front-row middle stays on court. The editor labels that receive marker L.
+In every 6v6 rotation the libero wears a contrasting jersey and takes the saved spot of whichever middle is in the back row, on either team. The front-row middle stays on court. Both serve receive and block defense label the back-row middle slot L.
 
 At serve receive, both rows keep left-middle-right order and each front player stays level with or ahead of the back player in the same lane and their opposite lineup partner. The libero inherits the replaced middle's slot. The editor shades the selected receiver's legal placement area. These limits end at serve contact and do not restrict block-defense marks.

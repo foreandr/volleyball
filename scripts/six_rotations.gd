@@ -37,7 +37,7 @@ static func lineup(players:Array) -> PackedInt32Array:
 static func zone(role:int,setter_zone:int) -> int:
 	return posmod(role+setter_zone-1,6)+1
 
-static func receive_libero(role:int,setter_zone:int) -> bool:
+static func back_row_libero(role:int,setter_zone:int) -> bool:
 	return role in [2,5] and zone(role,setter_zone) in [1,6,5]
 
 static func key(setter_zone:int,defense:bool) -> String:
