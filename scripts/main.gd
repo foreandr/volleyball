@@ -66,6 +66,7 @@ func show_home() -> void:
 func show_play() -> void:
 	page("Play","Play")
 	add_menu_button(column,"Offline","Offline",show_roster).grab_focus()
+	add_menu_button(column,"BlockDefense","Block defense scenario",go.bind("block_defense_scenario"))
 	add_menu_button(column,"Online","Online",Callable()).disabled=true
 	add_menu_button(column,"Back","Back",show_home)
 
