@@ -406,6 +406,7 @@ func run() -> void:
 	check_quick_block_spacing(g)
 	check_passer_clearance(g)
 	check_setter_cover_base(g)
+	check_pin_attack_cover(g)
 	check_reversing_pin(g)
 	check_late_approach(g)
 	print("PASS both sides transition, middle tempo distribution, LT/RT seek and exit")
@@ -473,10 +474,10 @@ func check_setter_cover_base(g) -> void:
 	for side in 2:
 		var setter:int=g.first_on(side)+g.lineup_roles[side].find(0)
 		for i in g.slots_for(side): g.players[i].position=Vector3(i%6-3.,.04,-2.)
-		assert(g.setter_cover_spot(setter).is_equal_approx(g.SETTER_BASE))
+		assert(g.open_cover_spot(setter,g.SETTER_BASE).is_equal_approx(g.SETTER_BASE))
 		var middle:int=g.front_middle(side)
 		g.players[middle].position=g.SETTER_BASE
-		var cover:Vector3=g.setter_cover_spot(setter)
+		var cover:Vector3=g.open_cover_spot(setter,g.SETTER_BASE)
 		assert(cover.distance_to(g.SETTER_BASE)>=.68 and cover.distance_to(g.SETTER_BASE)<1.)
 
 func check_quick_block_spacing(g) -> void:
@@ -544,3 +545,29 @@ func check_passer_clearance(g) -> void:
 			g.peel_cpu_off_net(runner,end,1./60.)
 			minimum=minf(minimum,g.players[runner].position.distance_to(g.players[passer].position))
 		assert(minimum>.62 and g.players[runner].position.distance_to(end)<.05)
+
+func check_pin_attack_cover(g) -> void:
+	for side in 2:
+		g.reset_match()
+		g.spectator=true
+		var hitter=g.first_on(side)+g.lineup_roles[side].find(1)
+		var cover=g.first_on(side)+g.lineup_roles[side].find(5)
+		var teammate=g.first_on(side)+g.lineup_roles[side].find(4)
+		var lane=g.attack_lane_for(hitter)
+		g.attackers[side].rally_set_target=lane
+		g.last_player=g.first_on(side)
+		var pocket=Vector3(lane.x-signf(lane.x)*1.6,g.PLAYER_GROUND_Y,lane.z-2.5)
+		var base=g.formation_home(cover,true).move_toward(pocket,2.6)
+		g.players[teammate].position=base
+		g.players[cover].position=base+Vector3(.2,0,-1.3)
+		var closest=INF
+		for tick in 120:
+			g.match_clock+=1./60.
+			g.cover_pin_attack(hitter,1./60.)
+			closest=minf(closest,g.players[teammate].position.distance_to(g.players[cover].position))
+		assert(closest>=.68 and g.players[cover].position.distance_to(base)<1.)
+		g.players[teammate].position.z-=3.
+		for tick in 120:
+			g.match_clock+=1./60.
+			g.cover_pin_attack(hitter,1./60.)
+		assert(g.players[cover].position.distance_to(base)<.05)

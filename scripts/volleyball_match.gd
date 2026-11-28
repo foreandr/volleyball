@@ -2916,14 +2916,14 @@ func clear_setter_lane(side:int,delta:float) -> void:
 
 const SETTER_BASE := Vector3(-1.4,PLAYER_GROUND_Y,2.8)
 
-func setter_cover_spot(setter:int) -> Vector3:
-	var teammates:=slots_for(team(setter))
-	var here:=players[setter].position.slide(Vector3.UP)
+func open_cover_spot(index:int, base:Vector3) -> Vector3:
+	var teammates:=slots_for(team(index))
+	var here:=players[index].position.slide(Vector3.UP)
 	var closest:=INF
 	var best:=here
 	# Prefer the normal base, then the nearest free spot around it.
 	for slot in 9:
-		var spot:=SETTER_BASE
+		var spot:=base
 		if slot>0:
 			spot+=Vector3.RIGHT.rotated(Vector3.UP,(slot-1)*TAU/8.)*.95
 			spot.z=minf(spot.z,CPU_COURT_FRONT_LIMIT)
@@ -2931,7 +2931,7 @@ func setter_cover_spot(setter:int) -> Vector3:
 		if distance>=closest: continue
 		var occupied:=false
 		for i in teammates:
-			if i!=setter and (players[i].position-spot).slide(Vector3.UP).length_squared()<.68*.68:
+			if i!=index and (players[i].position-spot).slide(Vector3.UP).length_squared()<.68*.68:
 				occupied=true
 				break
 		if occupied: continue
@@ -2947,7 +2947,7 @@ func release_setter_for_cover(side:int,first_contact:int,delta:float) -> void:
 		var recovery:Dictionary=recoveries[setter]
 		if recovery.has("save") or match_clock-float(recovery.started)<.18: return
 		recoveries.erase(setter)
-	var goal:=frames[side].to_global(setter_cover_spot(setter))
+	var goal:=frames[side].to_global(open_cover_spot(setter,SETTER_BASE))
 	var run:bool=(goal-players[setter].global_position).slide(Vector3.UP).length()>1.
 	move_cpu(setter,goal,delta,GroundMovement.speed(not run,run),toward_incoming(setter,goal),run,run)
 
@@ -2962,7 +2962,7 @@ func cover_pin_attack(hitter:int,delta:float) -> void:
 	# Cover a deflection behind and inside the hitter while leaving the approach clear.
 	var pocket:=Vector3(target.x-signf(target.x)*1.6,PLAYER_GROUND_Y,target.z-2.5)
 	var support:=home.move_toward(pocket,2.6)
-	var goal:=frames[side].to_global(support)
+	var goal:=frames[side].to_global(open_cover_spot(cover,support))
 	move_cpu(cover,goal,delta,4.1,toward_incoming(cover,players[cover].global_position))
 
 func position_attack(delta: float) -> void:
@@ -2986,7 +2986,7 @@ func position_attack(delta: float) -> void:
 				target=GroundMovement.attack_staging(lane)
 				target.x=clampf(lane.x*1.14,-4.45,4.45)
 				if role in [2,5]: target.z=1.55
-			elif role==0: target=setter_cover_spot(i)
+			elif role==0: target=open_cover_spot(i,SETTER_BASE)
 			peel_cpu_off_net(i,target,delta)
 
 	if defensive_ball() and flight_kind != "pass":
