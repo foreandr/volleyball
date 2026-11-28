@@ -2198,7 +2198,7 @@ func start_block(index: int, remaining := INF, reads_second := false, overpass_s
 	block.landing_recovery = 0.43 if reads_second else 0.13
 	block.overpass_swing = overpass_swing
 	block.aggressive_press = not is_human(index) and not overpass_swing
-	block.begin(actor)
+	block.begin(actor,maxf(0.,manual.block_buffer) if manual and is_human(index) else 0.)
 	if is_finite(remaining): block.tempo = clampf((Block.START+Block.AIR*0.5)/maxf(remaining,0.18),1.13,1.80)
 	blocks[index] = block
 	if not is_human(index): cpu_policy.used(team(index),"block lane")
@@ -2986,7 +2986,7 @@ func step_match(delta: float, controls: RefCounted) -> void:
 	if manual:
 		if manual.load_block.charging:
 			var travel:Vector3=(human.position-human_before)/maxf(.0001,delta)
-			manual.load_block.update(human,delta,1.-.82*smoothstep(.85,2.35,travel.length()))
+			manual.load_block.update(human,delta,1.-.82*smoothstep(.85,2.35,travel.length()),true)
 			manual.load_block.ring.hide()
 			footwork[0].block_step(travel,0.,0.,true,true,delta)
 		manual.jump_if_ready()

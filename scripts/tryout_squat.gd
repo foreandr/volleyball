@@ -42,7 +42,7 @@ func begin(actor: Node3D) -> void:
 	for i in actor.skeleton.get_bone_count(): baseline.append(actor.skeleton.get_bone_pose(i))
 	ring.show()
 
-func update(actor: Node3D,delta: float,pose_depth := 1.) -> void:
+func update(actor: Node3D,delta: float,pose_depth := 1., beach_block := false) -> void:
 	ring.position = Vector3(actor.position.x,.085,actor.position.z)
 	if not charging:
 		feedback_time -= delta
@@ -57,9 +57,17 @@ func update(actor: Node3D,delta: float,pose_depth := 1.) -> void:
 	var hips := rig.find_bone("pelvis")
 	var parent: Transform3D = author.world_pose(pose,rig.get_bone_parent(hips))
 	var bend := smoothstep(0,1,depth)*pose_depth
-	pose[hips].origin += parent.basis.inverse()*Vector3(0,-.54*bend,-.09*bend)
+	var sink:=.48 if beach_block else .54
+	pose[hips].origin += parent.basis.inverse()*Vector3(0,-sink*bend,(-.17 if beach_block else -.09)*bend)
 	author.rotate_world(pose,"spine_01",Vector3.RIGHT,.40*bend)
 	for side in ["l","r"]:
+		if beach_block:
+			var upper:String="upperarm_"+side
+			var shoulder:Vector3=author.point(pose,upper)
+			var hand:String="hand_"+side
+			var low:=Vector3(.12 if side=="l" else -.12,-.53,.02)
+			var target:Vector3=author.point(pose,hand).lerp(shoulder+low,bend)
+			author.limb(pose,upper,"lowerarm_"+side,hand,target,Vector3(.3 if side=="l" else -.3,0,-1),bend,162.)
 		var foot: String = "foot_"+side
 		author.limb(pose,"thigh_"+side,"calf_"+side,foot,author.point(baseline,foot),Vector3(0,0,1))
 		author.set_world_basis(pose,foot,author.world_pose(baseline,rig.find_bone(foot)).basis)

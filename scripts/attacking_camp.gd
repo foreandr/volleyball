@@ -907,7 +907,7 @@ func handle_attack_contact(previous: Vector3,delta: float) -> bool:
 			gym.update_board(spikes)
 			contact_offset=striking_palm_offset()
 			net_clear_time=-1.
-			var landing := shot_landing(ball.position)
+			var landing := strike_landing(ball.position)
 			var shot_time := attack_flight_time(ball.position,landing)
 			spin_acceleration=shot_spin_force(ball.position,landing,shot_time)
 			drop_velocity=launch_velocity(ball.position,landing,shot_time,spin_acceleration)
@@ -1071,6 +1071,9 @@ func predicted_shot_color(origin: Vector3, landing: Vector3) -> Color:
 	if not hit.is_empty(): return Color("ffdc58") if hit.rollover else Color("f25454")
 	if absf(landing.x)>4.5 or landing.z>BallNet.NET_Z+9.: return Color("ff953d")
 	return Color("61ed88")
+
+func strike_landing(origin:Vector3) -> Vector3:
+	return shot_landing(origin)
 
 func shot_landing(origin: Vector3) -> Vector3:
 	if not cpu_hitter and manual_shot>=0:

@@ -140,7 +140,15 @@ static func first_capsule_touch(start: Vector3,finish: Vector3,a: Vector3,b: Vec
 	var surface := Geometry3D.get_closest_point_to_segment(point,a,b)
 	return {"fraction":hi,"point":point,"normal":surface.direction_to(point),"surface":surface}
 
-func begin(player: Node3D) -> void:
+var takeoff_pose:Array[Transform3D]=[]
+var drive_elapsed:=0.
+var drive_duration:=0.
+
+func begin(player: Node3D, held_depth:=0.) -> void:
+	if held_depth>.05:
+		drive_duration=.12*held_depth
+		for i in player.skeleton.get_bone_count():
+			takeoff_pose.append(player.skeleton.get_bone_pose(i))
 	actor = player
 	base = player.position
 	swing_load=float(player.get_meta("swing_block_load",0.))
@@ -168,6 +176,16 @@ func read_air_lane(ball_at: Vector3,partners: Array) -> void:
 
 func step(delta: float, world_ball: Vector3) -> bool:
 	if is_finite(net_heading): actor.rotation.y=rotate_toward(actor.rotation.y,net_heading,delta*9.)
+	if drive_elapsed<drive_duration:
+		drive_elapsed=minf(drive_duration,drive_elapsed+delta*tempo)
+		actor.animator.seek(0.,true)
+		var blend:=smoothstep(0.,drive_duration,drive_elapsed)
+		var skeleton:Skeleton3D=actor.skeleton
+		for i in takeoff_pose.size():
+			var neutral:=skeleton.get_bone_pose(i)
+			skeleton.set_bone_pose(i,takeoff_pose[i].interpolate_with(neutral,blend))
+		if drive_elapsed>=drive_duration: age=START
+		return true
 	age += delta*tempo
 	var phase := clampf((age-START)/AIR,0.0,1.0)
 	var lift := 4.0*jump_height*preload("res://scripts/setter_jump.gd").COURT_VERTICAL_SCALE*phase*(1.0-phase)
@@ -237,6 +255,8 @@ func step(delta: float, world_ball: Vector3) -> bool:
 		var shoulder: Vector3 = author.point(pose,arm)
 		var outward := 1.0 if side == "l" else -1.0
 		var press := smoothstep(0.32,0.70,lift) if aggressive_press else smoothstep(0.45,0.95,lift)
+		if court_aim.is_finite() and not overpass_swing:
+			press*=smoothstep(.32,.50,phase)
 		var below_tape := 1.0-smoothstep(2.50,2.80,rig.to_global(shoulder).y+0.62)
 		var depth := lerpf(lerpf(0.20,0.55,press),0.17,below_tape)
 		var forward_press := press*(1.-below_tape) if aggressive_press and court_aim.is_finite() else 0.
@@ -292,11 +312,12 @@ func step(delta: float, world_ball: Vector3) -> bool:
 		if court_aim.is_finite() and not overpass_swing:
 			var clearance := rig.to_global(target).y-preload("res://scripts/net_collision.gd").NET_TOP
 			press_weight=press*smoothstep(.02,.20,clearance)*(1.-balance)
-			extension=lerpf(132.,177.,press_weight)
+			var reach_weight:=smoothstep(.04,.32,phase)*(1.-smoothstep(.76,.98,phase))
+			extension=lerpf(132.,177.,maxf(reach_weight,press_weight))
 			extension=lerpf(extension,178.,spread*smoothstep(.0,.14,clearance))
 			var elbow:Vector3=author.point(pose,"lowerarm_"+side)
 			var length:=shoulder.distance_to(elbow)+elbow.distance_to(author.point(pose,"hand_"+side))
-			target=target.lerp(shoulder+shoulder.direction_to(target)*length,press_weight)
+			target=target.lerp(shoulder+shoulder.direction_to(target)*length,maxf(reach_weight*(1.-balance)*.90,press_weight))
 		author.limb(pose,arm,"lowerarm_"+side,"hand_"+side,target,pole,weight,extension)
 		if spread>.001:
 			var elbow: Vector3=author.point(pose,"lowerarm_"+side)

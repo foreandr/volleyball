@@ -366,7 +366,7 @@ func begin_block(slot: int,loaded := 0.,manual := false) -> void:
 	trace("block_takeoff",{"slot":slot,"vertical_m":jump.jump_height,"stamina":stamina.value})
 	jump.net_heading=PI
 	jump.aggressive_press=true
-	jump.begin(blockers[slot])
+	jump.begin(blockers[slot],loaded if manual else 0.)
 	jump.age=Block.START*loaded
 	if not manual and slot!=1 and jump.kong_direction!=0.: jump.lean_input=jump.kong_direction*.75
 	jumps[slot]=jump
@@ -589,7 +589,7 @@ func step_blocker(slot: int,delta: float) -> void:
 	if not shuffle_steps.has(actor):
 		shuffle_steps[actor]=preload("res://scripts/directional_footwork.gd").new(actor)
 	if slot==manual_slot and block_held:
-		block_load.update(actor,delta,1.-.82*smoothstep(.85,2.35,absf(lateral_speed[slot])))
+		block_load.update(actor,delta,1.-.82*smoothstep(.85,2.35,absf(lateral_speed[slot])),true)
 		block_load.ring.hide()
 	var velocity := Vector3((actor.position.x-previous)/maxf(delta,.0001),0.,motion.y/maxf(delta,.0001))
 	if not cpu and not focused:
