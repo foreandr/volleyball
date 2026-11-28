@@ -78,6 +78,9 @@ The four practice carts each have four rolling casters. Balls are stored in cart
 
 When a request begins with “game notes,” record the idea here for future consideration. Implementation waits for a separate request.
 
+- **Future scenario simulations.** Recreate individual rally situations with a specified rotation, controlled player, ball and starting positions. Start with P1 in setter-three receiving a libero pass, releasing from the net, and calling for the second ball.
+- **Adding a replay to the montage.** Preserve the source rally, then enter replay mode, frame the relevant action and capture a cinematic cut in the existing montage style. For a block-out, show the approach, hand contact, deflection and landing. Review the cut before adding it.
+
 - **Uneven matchups.** Let each side choose its own team size. Examples include 2v3, 2v4, and 1v6. One possible variation has one side playing one-contact volleys while the other plays regular volleyball.
 
 - **Licensed teams and athletes.** Explore partnerships with leagues, universities and schools for participating teams and athlete likenesses, rosters, statistics, ratings and rankings. Track which teams, athletes and seasons each agreement covers.
@@ -401,3 +404,5 @@ During a six-on-six set to a front-row pin, the CPU libero shifts from the saved
 On a six-on-six overpass, each team assigns its nearest front-row player to contest the ball at the net. This also applies when the controlled player or back-row setter is standing directly underneath it.
 
 In playable six-on-six, when the setter receives or digs first contact, the pass targets the active libero. The CPU libero bump sets the second ball. During attack preparation, D-pad up and down choose the tempo of incoming CPU sets to the controlled hitter. The spike aim marker follows the selected floor target. Both teams gather and exchange high fives between points before returning to formation. Hold A to skip the gathering.
+
+In 6v6, first-contact passes aim for the designated setter unless the setter passed. An attacker calling with A requests the subsequent set and cannot claim the second touch by holding reception input.

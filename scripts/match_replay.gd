@@ -14,6 +14,7 @@ var index := 0
 var ball_offset := Vector3.ZERO
 var actor_offsets := {}
 var saved_evidence := {}
+var suspended_modifiers: Array[SkeletonModifier3D] = []
 
 func capture(match_: Node3D) -> Dictionary:
 	var actors := []
@@ -55,6 +56,9 @@ func toggle(match_: Node3D, current_finished: bool, rep_frames: Array[Dictionary
 		actor_offsets.clear()
 		saved_evidence.clear()
 		apply(match_,restore,restore,0.0)
+		for modifier in suspended_modifiers:
+			if is_instance_valid(modifier): modifier.active=true
+		suspended_modifiers.clear()
 		match_.ball.global_transform = restore.match_ball
 		match_.ball.visible = restore.match_visible
 		match_.serve.ball.visible = restore.serve_visible
@@ -67,6 +71,11 @@ func toggle(match_: Node3D, current_finished: bool, rep_frames: Array[Dictionary
 	frames = rep_frames if not rep_frames.is_empty() else (current if (current_finished or previous.is_empty()) and not current.is_empty() else previous)
 	if frames.size() < 2: return
 	restore = capture(match_)
+	for actor in match_.players:
+		for modifier in actor.skeleton.get_children():
+			if modifier is SkeletonModifier3D and modifier.active:
+				suspended_modifiers.append(modifier)
+				modifier.active=false
 	index = 0
 	active = true
 	match_.flight_guide.hide()
@@ -133,8 +142,7 @@ func apply(match_: Node3D, first: Dictionary, second: Dictionary, blend: float) 
 		actor.model.transform = a.model.interpolate_with(b.model,blend)
 		for bone in actor.skeleton.get_bone_count():
 			var pose: Transform3D = a.bones[bone].interpolate_with(b.bones[bone],blend)
-			actor.skeleton.set_bone_pose_position(bone,pose.origin)
-			actor.skeleton.set_bone_pose_rotation(bone,pose.basis.orthonormalized().get_rotation_quaternion())
+			actor.skeleton.set_bone_pose(bone,pose)
 		var key: Label3D = match_.key_labels[i]
 		key.text = first.keys[i][0]
 		key.visible = first.keys[i][1]

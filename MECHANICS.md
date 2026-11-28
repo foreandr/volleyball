@@ -332,3 +332,5 @@ During a six-on-six set to a front-row pin, the CPU libero shifts from the saved
 On a six-on-six overpass, each team assigns its nearest front-row player to contest the ball at the net. This also applies when the controlled player or back-row setter is standing directly underneath it.
 
 In 6v6, a setter first contact targets the active libero, who bump sets the second ball under CPU control. A controlled hitter selects incoming CPU set tempo with D-pad up/down and sees the spike aim on the floor. Both teams gather and high-five between points before returning to formation. Hold A to skip.
+
+In 6v6, first-contact passes aim for the designated setter unless the setter passed. An attacker calling with A requests the subsequent set and cannot claim the second touch by holding reception input.

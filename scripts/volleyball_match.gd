@@ -412,7 +412,7 @@ func nearest_on_team(side: int, target: Vector3, exclude := -1, also_exclude := 
 	return best
 
 func setter_for_pass(passer: int) -> int:
-	if six_on_six() and lineup_role(passer)==0: return choose_setter(team(passer),passer)
+	if six_on_six(): return choose_setter(team(passer),passer)
 	if count_for(team(passer)) == 2: return partner_of(passer)
 	if rally_setter >= 0 and team(rally_setter) == team(passer) and rally_setter != passer:
 		return rally_setter
@@ -1512,7 +1512,9 @@ func aim_receive(index: int) -> void:
 		var technique := "Hand" if bump.hand_setting else "Forearm"
 		bump.passing_skill_override = skills[technique + (" defense" if bump.hard_dig else " reception")]
 		bump.setting_skill_override = skills[technique + " setting"]
-	if manual and is_human(index) and manual.lane>=0: destination=manual.aim_set()
+	var first_in_sixes:=six_on_six() and (possession_team!=side or touches==0 or last_was_block)
+	if first_in_sixes: destination=cpu_pass_target(index)
+	elif manual and is_human(index) and manual.lane>=0: destination=manual.aim_set()
 	elif is_human(index) and aim_point.is_finite(): destination = frame.to_local(aim_point)
 	elif side == possession_team and (touches >= 2 or (cpu_dump and index == cpu_choice)): destination = choose_shot(index)
 	bump.set_follow_target = set_pin_for(index) if cpu_is_setting(index) and not cpu_dump else Vector3.INF
@@ -2207,7 +2209,8 @@ func tick_receive(delta: float, previous: float) -> void:
 		elif driver.jump.active or not is_finite(platforms[0].pressed_at): return
 	if cpu_choice < 0: select_receiver()
 	var index := cpu_choice
-	if not spectator and receiving_team == 0 and is_finite(platforms[0].pressed_at) and not blocks.has(0): index = 0
+	var assigned_second:=six_on_six() and flight_kind=="pass" and touches==1 and receiving_team==possession_team
+	if not assigned_second and not spectator and receiving_team == 0 and is_finite(platforms[0].pressed_at) and not blocks.has(0): index = 0
 	if index < 0 or blocks.has(index): return
 	if not is_human(index) and last_player>=0 and team(last_player)!=team(index):
 		if Flight.reads_out(path_point(flight_end()),line_read_error,players[index].effective_rating("Forearm reception")):

@@ -28,6 +28,7 @@ var banner := Label.new()
 var rally_end_menu := HBoxContainer.new()
 
 func _ready() -> void:
+	add_to_group("gameplay_pause")
 	MenuPresentation.set_music(false)
 	var config:Dictionary=StorySession.match_preference("exhibition",{})
 	add_child(world)

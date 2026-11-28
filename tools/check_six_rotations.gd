@@ -83,6 +83,13 @@ func run() -> void:
 				var backup:int=g.choose_setter(side,setter)
 				assert(g.active_identities[backup]==6)
 				assert(g.setter_for_pass(setter)==backup)
+				var previous:int=g.rally_setter
+				g.rally_setter=backup
+				for passer in g.slots_for(side):
+					if passer!=setter:
+						assert(g.setter_for_pass(passer)==setter)
+						assert(g.cpu_pass_target(passer)==g.players[setter].position)
+				g.rally_setter=previous
 			for i in g.slots_for(receiving):
 				var role:int=g.lineup_role(i)
 				if not career or receiving!=0: assert(role==(i+3)%6)

@@ -107,7 +107,7 @@ func plan(g,previous:float,index:=0) -> void:
 				mapper.incoming_lead_seconds=contact_at-previous
 				mapper.feed_kmh=velocity.length()*3.6
 				mapper.pass_goal=g.frames[g.team(index)].to_global(g.SETTER_BASE)
-				if g.six_on_six() and g.lineup_role(index)==0:
+				if g.six_on_six():
 					mapper.pass_goal=g.players[g.choose_setter(g.team(index),index)].global_position
 				mapper.pass_rise=3.4 if g.defensive_ball() else 3.05
 				landing_actor=null
