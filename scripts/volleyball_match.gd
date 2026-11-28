@@ -1831,6 +1831,28 @@ func settle_point(delta: float) -> void:
 	advance_recoveries(delta)
 	advance_idle_players(delta)
 
+func block_lane_limits(index:int, target_depth:float) -> Vector2:
+	var limits:=Vector2(-INF,INF)
+	var side:=team(index)
+	if target_depth<2.7 or players[index].position.z<2.6 or side==receiving_team or flight_kind not in ["set","pass"] or not six_on_six(): return limits
+	var role:=lineup_role(index)
+	if Formation.zone(role,setter_zones[side]) not in [2,3,4]: return limits
+	var home_x:=formation_home(index,true).x
+	for i in slots_for(side):
+		if i==index: continue
+		var neighbor_role:=lineup_role(i)
+		if Formation.zone(neighbor_role,setter_zones[side]) not in [2,3,4]: continue
+		var depth_gap:=absf(players[index].position.z-players[i].position.z)
+		if depth_gap>=.62: continue
+		var spacing:=sqrt(.62*.62-depth_gap*depth_gap)
+		var neighbor_home:=formation_home(i,true).x
+		if neighbor_home<home_x: limits.x=maxf(limits.x,players[i].position.x+spacing)
+		elif neighbor_home>home_x: limits.y=minf(limits.y,players[i].position.x-spacing)
+	if limits.x>limits.y:
+		var center:=(limits.x+limits.y)*.5
+		return Vector2(center,center)
+	return limits
+
 func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_facing := Vector3.INF, chase := false, turn_to_travel := false, turn_rate := 12.5, paced_run := false, run_cadence := 0.0, shuffle_pace := 0., outside_direction := 0., shoulder_x := 0.) -> void:
 	if recoveries.has(index) or owns_action(index,true): return
 	var actor := players[index]
@@ -1846,6 +1868,10 @@ func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_f
 					serve_run_rotations[bone] = rig.get_bone_pose_rotation(bone)
 		serve.moved_after_contact = true
 	var local := frames[team(index)].to_local(target)
+	var limits:=block_lane_limits(index,local.z)
+	if outside_direction>0.: limits.x=maxf(limits.x,shoulder_x)
+	elif outside_direction<0.: limits.y=minf(limits.y,shoulder_x)
+	if limits.x<=limits.y: local.x=clampf(local.x,limits.x,limits.y)
 	var offset := (local-actor.position).slide(Vector3.UP)
 	var heading := offset.normalized()
 	var already_running: bool = actor.animator.current_animation == actor.animation_slots["run"]
@@ -1886,10 +1912,11 @@ func move_cpu(index: int, target: Vector3, delta: float, speed := 5.3, receive_f
 		acceleration*=2.
 	if roster_active and exhibition: acceleration*=lerpf(.82,1.15,float(actor.attributes.Athleticism)/100.)
 	velocity=velocity.move_toward(heading*minf(pace,sqrt(2.*acceleration*distance)),acceleration*delta)
-	if outside_direction!=0. and delta>0.:
-		# Momentum may carry the pin inward even after it starts shuffling outward.
-		var room:=maxf(0.,outside_direction*(actor.position.x-shoulder_x))
-		velocity.x=outside_direction*maxf(outside_direction*velocity.x,-room/delta)
+	if delta>0.:
+		# Brake at the shoulder even if the incoming shuffle still carries lateral speed.
+		var left_speed:=minf(0.,limits.x-actor.position.x)/delta
+		var right_speed:=maxf(0.,limits.y-actor.position.x)/delta
+		velocity.x=clampf(velocity.x,left_speed,right_speed)
 	var passer:=priority_passer(index)
 	if passer>=0 and delta>0.:
 		var away:Vector3=(actor.position-players[passer].position).slide(Vector3.UP)

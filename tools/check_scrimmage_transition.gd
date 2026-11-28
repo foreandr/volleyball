@@ -511,6 +511,18 @@ func check_quick_block_spacing(g) -> void:
 			g.position_defense(1./60.)
 			closest=minf(closest,absf(g.players[middle].position.x-g.players[pin].position.x))
 		assert(closest>.62 and g.blocks.has(middle))
+		# A grounded pin can hold their spot while the middle closes at speed.
+		g.blocks.clear()
+		g.players[pin].position=Vector3(-1.06,.04,3.43)
+		g.players[middle].position=Vector3(-.30,.04,3.43)
+		g.court_velocities[middle]=Vector3(-1.8,0.,0.)
+		g.flight_kind="pass"
+		for tick in 60:
+			g.match_clock+=1./60.
+			var lane=g.frames[defense].to_global(Vector3(-1.3,.04,3.43))
+			g.move_cpu(middle,lane,1./60.,7.6,Vector3.BACK,true)
+			assert(g.players[middle].position.x-g.players[pin].position.x>=.619)
+
 
 func check_passer_clearance(g) -> void:
 	for side in 2:
