@@ -557,8 +557,11 @@ func find_approach_intercept(respect_timing := true, tier := 2) -> Vector3:
 		velocity = cpu_set.outgoing
 	var apex := origin.y+velocity.y*velocity.y/(2.0*Flight.GRAVITY)
 	var reach_height := approach_reach_height()
-	var earliest := descending_time(origin,velocity,minf(apex-0.15,minf(3.59,reach_height)))
-	var latest := descending_time(origin,velocity,minf(apex-0.06,minf(3.10,reach_height-0.23)))
+	# On the descending branch the higher contact always comes first.
+	var upper := minf(apex-0.06,minf(3.59,reach_height))
+	var lower := minf(upper-0.09,minf(3.10,reach_height-0.23))
+	var earliest := descending_time(origin,velocity,upper)
+	var latest := descending_time(origin,velocity,lower)
 	if respect_timing and stage == Stage.SET:
 		var minimum_plant := 0.115 if adaptive_approach_timing() else APPROACH_MIN_PLANT_TIME
 		var minimum_step := jump.LEAD_STEP_TIME*(0.55 if adaptive_approach_timing() else 1.0)

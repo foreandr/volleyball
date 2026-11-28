@@ -1502,15 +1502,18 @@ func aim_receive(index: int) -> void:
 	bump.receive_target_y=players[setter_for_pass(index)].height_cm*.0118 if not is_human(index) and not cpu_is_setting(index) and destination==cpu_pass_target(index) else Flight.FLOOR
 
 
-func cpu_set_apex(index: int, point: Vector3, pin: Vector3, pace: float) -> float:
-	var hitter := players[hitter_for_set(index)]
+func six_set_tempo(hitter:int,point:Vector3) -> int:
+	var role:=lineup_role(hitter)
+	if role in [2,5]: return 0 if randf()<.90 else 1
+	if role in [1,4] and Formation.zone(role,setter_zones[team(hitter)]) in [1,5,6]: return 1
+	if point.z<0. or absf(point.x)>4.4: return 3
+	return randi_range(1,2)
+
+func cpu_set_apex(index: int, point: Vector3, pin: Vector3, pace: float, tempo:=-1) -> float:
+	var target:=hitter_for_set(index)
+	var hitter:=players[target]
 	if six_on_six():
-		var role:=lineup_role(hitter_for_set(index))
-		var tempo:int
-		if role in [2,5]: tempo=0 if randf()<.90 else 1
-		elif role in [1,4] and Formation.zone(role,setter_zones[team(index)]) in [1,5,6]: tempo=1
-		elif point.z<0. or absf(point.x)>4.4: tempo=3
-		else: tempo=randi_range(1,2)
+		if tempo<0: tempo=six_set_tempo(target,point)
 		var rise:float=[.18,.47,1.12,2.65][tempo]
 		return maxf(point.y,attackers[team(index)].set_contact_height())+rise
 	var tight := smoothstep(0.40,1.35,point.z)
@@ -1572,7 +1575,9 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 		var incoming := velocity+Vector3.DOWN*Flight.GRAVITY*elapsed
 		var driver := attackers[side]
 		var minimum := maxf((driver.set_contact_height()+0.22) if is_human(index) else 2.96,point.y+0.18)
-		var apex: float = bump.height if is_human(index) else cpu_set_apex(index,point,pin,incoming.length())
+		var hitter:=hitter_for_set(index)
+		var tempo:=six_set_tempo(hitter,point) if six_on_six() and not is_human(index) else -1
+		var apex: float = bump.height if is_human(index) else cpu_set_apex(index,point,pin,incoming.length(),tempo)
 		apex = maxf(minimum,apex)
 		var timing_error:=0.
 		if manual and is_human(index) and is_finite(manual.set_release):
@@ -1598,13 +1603,13 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 		var duration := (sqrt(2.*Flight.GRAVITY*maxf(0.,apex-point.y))+sqrt(2.*Flight.GRAVITY*maxf(0.,apex-contact_height)))/Flight.GRAVITY
 		pin=players[index].reachable_set(point,pin,airborne,carry,duration)
 		var motion: Vector3 = driver.set_toward_pin(point,pin,apex,contact_height)
-		var hitter:=hitter_for_set(index)
 		var airborne_quick:=six_on_six() and not is_human(index) and not is_human(hitter) and hitter==front_middle(side) and middle_showing_quick(side)
 		if airborne_quick:
 			var runner:=players[hitter]
 			var jump:=set_jumps[hitter]
 			var air_age:float=jump.elapsed-jump.load_duration()
 			duration=clampf(jump.air_time*.53-air_age,.12,.32)
+			if tempo==1: duration=minf(duration+.075,maxf(duration,jump.air_time*.65-air_age))
 			var phase_at_hit:=clampf((air_age+duration)/jump.air_time,0.,1.)
 			var rig:Skeleton3D=runner.skeleton
 			var shoulder:=frame.to_local(rig.to_global(rig.get_bone_global_pose(rig.find_bone("upperarm_r")).origin))
@@ -1615,7 +1620,7 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 			apex=point.y+maxf(0.,motion.y)**2/(2.*Flight.GRAVITY)
 			last_set_apex=apex
 		if six_on_six() and not is_human(index):
-			trace.write("cpu_set_release",match_clock,{"setter":index,"hitter":hitter,"role":lineup_role(hitter),"route":attack_lane_for(hitter),"runner":players[hitter].position,"target":pin,"apex":apex,"arrival_seconds":duration})
+			trace.write("cpu_set_release",match_clock,{"setter":index,"hitter":hitter,"role":lineup_role(hitter),"tempo":tempo,"airborne_quick":airborne_quick,"route":attack_lane_for(hitter),"runner":players[hitter].position,"target":pin,"apex":apex,"arrival_seconds":duration})
 		launch(world_point,frame.global_basis*motion,"set",index,1.0,hitter,frame.to_global(pin))
 		if airborne_quick:
 			driver.pin_arrival=duration
@@ -2738,11 +2743,12 @@ func prepare_cpu_approach(hitter: int, driver: Node3D, delta: float) -> void:
 		move_cpu_to_approach(hitter,staging,delta,2.8)
 		return
 	if not driver.approach_space_held:
-		var intercept: Vector3 = driver.find_approach_intercept(true)
 		var run_up_gap := (staging-actor.position).slide(Vector3.UP).length()
-		if intercept.is_finite() and ((time_left <= 0.88 and gap <= 2.40 and run_up_gap <= 0.35) or time_left <= 0.68):
-			driver.queue_jump(Vector2.ZERO)
+		if (time_left <= 0.88 and gap <= 2.40 and run_up_gap <= 0.35) or time_left <= 0.68:
+			# Use the same shortest feasible approach as the player input path.
+			driver.try_queue_approach(false)
 			if driver.approach_jump_queued:
+				driver.approach_space_held=true
 				show_key(hitter,"Space")
 				return
 	var distance := (staging-actor.position).slide(Vector3.UP).length()

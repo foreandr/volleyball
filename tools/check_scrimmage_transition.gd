@@ -126,6 +126,19 @@ func run() -> void:
 		g.serve.swing_time=g.serve.recovery_end()+1.
 		var block_middle:int=g.front_middle(1-side)
 		for i in g.slots_for(1-side): g.players[i].position=g.formation_home(i,true)
+		# A low set with room for two steps can arrive before four steps would fit.
+		var short_driver=g.attackers[side]
+		var pin_runner:int=g.first_on(side)+g.lineup_roles[side].find(1)
+		var pin_target:=Vector3(-3.75,.065,2.3)
+		var hand:=Vector3(-2.8,2.42,2.8)
+		var launch_velocity:Vector3=short_driver.set_toward_pin(hand,pin_target,2.74,2.52)
+		g.players[pin_runner].position=pin_target-Vector3.BACK*.70
+		short_driver.start_set(g.players[pin_runner],hand,launch_velocity,pin_target,Vector3(0,.15,10),.10,false)
+		assert(short_driver.find_approach_intercept(true,0).is_finite())
+		assert(not short_driver.find_approach_intercept(true,2).is_finite())
+		g.prepare_cpu_approach(pin_runner,short_driver,1./60.)
+		assert(short_driver.approach_jump_queued and short_driver.approach_steps==2)
+		short_driver.enabled=false
 		var pipe_driver=g.attackers[side]
 		pipe_driver.rally_set_target=Vector3(.95,.065,.85)
 		g.expected_hitter=pipe_id

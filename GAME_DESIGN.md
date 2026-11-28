@@ -390,3 +390,6 @@ In setter one, the outside and opposite keep their reversed pins when transition
 On an attacking first pass in 6v6, the mapped A button calls the eligible controlled hitter for the current set. A CPU quick to a middle already in flight targets the hitting shoulder and remaining jump time.
 
 An accepted attack call supersedes a CPU setter’s planned dump or fake on that pass. Once the setter has committed to a second-ball swing, the call window closes.
+
+A CPU hitter can shorten the approach on a low set. Evaluate descending contact heights in flight order and allow the shortest reachable plant before falling back to a save.
+Airborne middle sets preserve the selected tempo. Zero aims near the jump apex. One allows up to 75 ms more flight while the middle is still within striking reach. The release trace records the tempo and jump handoff.
