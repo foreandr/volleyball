@@ -369,3 +369,10 @@ In every 6v6 rotation the libero wears a contrasting jersey and takes the saved 
 At serve receive, both rows keep left-middle-right order and each front player stays level with or ahead of the back player in the same lane and their opposite lineup partner. The libero inherits the replaced middle's slot. The editor shades the selected receiver's legal placement area. These limits end at serve contact and do not restrict block-defense marks.
 
 All six default block-defense rotations use the same player-authored shape. From left to right the blockers are outside, middle, and setter or opposite. The libero covers left back, the back-row outside plays deep center, and the remaining defender covers right back. Each rotation can still be edited independently.
+
+Indoor match spectators use the practice gym seats. Match replay uses practice LT/RT scrubbing and free camera controls. In 6v6, off-ball CPU hitters transition at service contact, shuffling with eyes on the ball or running for a chase. The back-row outside prepares a pipe; the front middle prepares a quick and reads opposing middle attacks. CPU middle sets use tempos 0/1 (90% zero); pins use 1/2 in system and 3 for emergency sets.
+In playable matches and career scrimmages only the controlled athlete shows a surname and stamina/timing ring. Spectator mode hides all player rings.
+In setter-in-one offense the front-row opposite attacks left and the front-row outside attacks right. The pipe and the saved block-defense shape stay independent of this attacking assignment.
+
+The receiving setter signals a quick or 31 before serve contact. CPU setters read the opposing middle and pin blockers to locate a pipe seam; the back-row outside attacks it at tempo 1 or 2. From behind the attack line the CPU setter redirects a middle call to another available hitter. Opening match replay freezes at the current instant with recent rally history available to rewind.
+A back-row setter in 6v6 passes, sets and jump sets, but never approaches to attack, dumps or blocks, even after moving to the net.

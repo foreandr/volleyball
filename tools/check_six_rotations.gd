@@ -64,6 +64,7 @@ func run() -> void:
 		change_scene_to_file("res://scenes/offline_match.tscn")
 		await scene_changed
 		var g=current_scene.game
+		assert(g.indicators.participants==[g.human])
 		for rally in 12:
 			var receiving:int=1-g.service_team
 			var rot:int=g.setter_zones[receiving]
@@ -80,6 +81,17 @@ func run() -> void:
 			for i in g.slots_for(receiving):
 				var role:int=g.lineup_role(i)
 				if not career or receiving!=0: assert(role==(i+3)%6)
+				var front:bool=formations.zone(role,rot) in [2,3,4]
+				var lane:Vector3=g.attack_lane_for(i)
+				if role==0:
+					assert(g.back_row_setter(i)==(not front))
+					if not front:
+						assert(not g.start_second_ball_spike(i))
+						g.start_block(i,.27,false,true)
+						assert(not g.blocks.has(i))
+				if front and role in [1,4]: assert(lane.x<0 if rot==1 else lane.x>0)
+				if front and role==3: assert(lane.x>0 if rot==1 else lane.x<0)
+				if not front and role in [1,4]: assert(lane.x==0. and lane.z<1.)
 				if formations.back_row_libero(role,rot): assert(g.players[i].attributes.position=="Libero")
 				elif role in [2,5]: assert(g.players[i].attributes.position==formations.ROLES[role])
 				var expected=formations.layout(session.game_options,rot,false)[role]

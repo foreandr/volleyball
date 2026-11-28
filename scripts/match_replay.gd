@@ -76,6 +76,21 @@ func toggle(match_: Node3D, current_finished: bool, rep_frames: Array[Dictionary
 	match_.trajectory_node.hide()
 	seek(match_,0.0)
 
+func freeze_here(match_:Node3D) -> void:
+	if active:
+		toggle(match_,false)
+		return
+	var recent:Array[Dictionary]=previous.duplicate()
+	recent.append_array(current)
+	var now:=capture(match_)
+	if not recent.is_empty() and recent.back().time>=now.time:
+		recent.pop_back()
+	recent.append(now)
+	if recent.size()<2: return
+	toggle(match_,true,recent)
+	playing=false
+	seek(match_,duration())
+
 func seek(match_: Node3D, value: float) -> void:
 	if not active: return
 	clock = clampf(value,0.0,duration())

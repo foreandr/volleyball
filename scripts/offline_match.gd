@@ -1,5 +1,9 @@
 extends Control
 
+const ReplayControls=preload("res://scripts/replay_controls.gd")
+var live_camera:=Transform3D.IDENTITY
+var live_fov:=55.
+var timeline:=HSlider.new()
 const Xbox = preload("res://scripts/xbox_controls.gd")
 const Player = preload("res://scripts/volleyball_player.gd")
 const Venue = preload("res://scripts/match_venue.gd")
@@ -118,7 +122,17 @@ func build_hud() -> void:
 	rail.offset_top=-55
 	rail.offset_bottom=-14
 	rail.add_theme_stylebox_override("panel",MenuPresentation.box(Color("091927e8"),Color("61cfb6"),2))
-	rail.add_child(footer)
+	var replay_layout:=VBoxContainer.new()
+	rail.add_child(replay_layout)
+	replay_layout.add_child(footer)
+	replay_layout.add_child(timeline)
+	timeline.focus_mode=Control.FOCUS_NONE
+	timeline.step=.001
+	timeline.hide()
+	timeline.value_changed.connect(func(value:float):
+		if game.replay.active:
+			game.replay.playing=false
+			game.replay.seek(game,value))
 	footer.add_theme_constant_override("separation",13)
 	add_child(banner)
 	banner.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
@@ -165,7 +179,7 @@ func refresh_prompts() -> void:
 	var entries:Array
 	var keys:String
 	if game.replay.active:
-		entries=[[JOY_BUTTON_A,"Play / pause"],["D-pad Left/Right","Frame"],[JOY_BUTTON_X,"Save"],[JOY_BUTTON_RIGHT_STICK,"Speed"],["View","Return"]]
+		entries=[["LT","Rewind"],["RT","Advance"],[JOY_BUTTON_A,"Play / pause"],["D-pad Left/Right","Frame"],["LS","Move"],["RS","Look"],[JOY_BUTTON_LEFT_STICK,"Save"],[JOY_BUTTON_RIGHT_STICK,"Speed"],["View","Return"]]
 		keys="Space  Play / pause      ← / →  Frame      F5  Save      Tab  Speed      R  Return"
 	elif game.spectator:
 		entries=[["View","Replay"],[JOY_BUTTON_START,"Pause"]]
@@ -205,7 +219,7 @@ func refresh_prompts() -> void:
 	elif game.spectator and not game.replay.active:
 		entries=[]
 		keys=""
-	footer.get_parent().visible=not keys.is_empty()
+	footer.get_parent().get_parent().visible=not keys.is_empty()
 	var token:=keys+str(game.serve_style)+str(Xbox.keyboard_prompts())
 	if token==last_prompt: return
 	last_prompt=token
@@ -232,8 +246,18 @@ func _process(delta:float) -> void:
 		game.manual_ready_movement(delta,ground,false)
 	if authorized or game.replay.active:
 		if not game.spectator and not game.replay.active and game.manual.context()=="receive": aim_stick(delta)
+		if game.replay.active:
+			var pads:=Input.get_connected_joypads()
+			var pad:int=pads[0] if not pads.is_empty() else -1
+			ReplayControls.move_camera(camera,pad,delta)
+			var scrub:=ReplayControls.scrub(pad)
+			if scrub!=0.:
+				game.replay.playing=false
+				game.replay.seek(game,game.replay.clock+delta*scrub)
 		game.tick_match(delta,ground)
 	if game.replay.active:
+		timeline.max_value=game.replay.duration()
+		timeline.set_value_no_signal(game.replay.clock)
 		banner.text=replay_notice if Time.get_ticks_msec()<replay_notice_until else "Replay   ·   "+str(game.replay.speed)+"x"
 		if Time.get_ticks_msec()>=replay_notice_until and game.replay_meter.has("label"):
 			banner.text=game.replay_meter.label
@@ -266,11 +290,21 @@ func _notification(what:int) -> void:
 		game.manual.clear_input()
 
 func toggle_match_replay() -> void:
-	if game.replay.active and game.manual: game.manual.clear_input()
-	game.toggle_replay()
+	if game.replay.active:
+		camera.global_transform=live_camera
+		camera.fov=live_fov
+	else:
+		live_camera=camera.global_transform
+		live_fov=camera.fov
+	if game.manual: game.manual.clear_input()
+	game.replay.freeze_here(game)
+	timeline.visible=game.replay.active
 	refresh_prompts()
 
 func _input(event:InputEvent) -> void:
+	if game.replay.active and ReplayControls.mouse_camera(camera,event):
+		get_viewport().set_input_as_handled()
+		return
 	if game.manual==null or game.replay.active or get_tree().paused or is_instance_valid(MenuPresentation.loading_screen): return
 	if game.phase in [game.Phase.READY,game.Phase.LIVE] and game.manual.handle(event):
 		get_viewport().set_input_as_handled()
@@ -290,6 +324,7 @@ func _unhandled_input(event:InputEvent) -> void:
 		if devices.size() and event.device!=devices[0]: return
 		down=event.pressed
 		if event.button_index==JOY_BUTTON_BACK: action="replay"
+		elif game.replay.active and event.button_index==Xbox.physical(JOY_BUTTON_LEFT_STICK): action="save"
 		elif event.button_index==Xbox.physical(JOY_BUTTON_RIGHT_STICK): action="speed"
 		elif event.button_index==JOY_BUTTON_DPAD_LEFT: action="previous"
 		elif event.button_index==JOY_BUTTON_DPAD_RIGHT: action="next"
@@ -302,8 +337,10 @@ func _unhandled_input(event:InputEvent) -> void:
 	if action.is_empty(): return
 	if action=="replay" and down: toggle_match_replay()
 	elif game.replay.active:
-		if down and action=="jump": game.replay.playing=not game.replay.playing
-		if down and action in ["forearm","save"]:
+		if down and action=="jump":
+			if game.replay.clock>=game.replay.duration(): game.replay.seek(game,0.)
+			game.replay.playing=not game.replay.playing
+		if down and action=="save":
 			var path:String=game.save_reviewed_rep("Match",game.rallies,camera,Vector3(0,.9,.4))
 			replay_notice="Replay saved" if not path.is_empty() else "Could not save replay"
 			replay_notice_until=Time.get_ticks_msec()+1500

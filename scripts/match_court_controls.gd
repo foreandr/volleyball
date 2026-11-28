@@ -104,7 +104,7 @@ func context() -> String:
 	if g.phase==g.Phase.READY: return "serve" if g.is_human(g.server_index()) else "receive"
 	if g.phase!=g.Phase.LIVE: return ""
 	if g.flight_kind=="pass" and g.human_can_set() and g.touches==1: return "set"
-	if g.expected_hitter==0 or (g.flight_kind=="pass" and g.possession_team==0 and g.touches==1): return "attack"
+	if not g.back_row_setter(0) and (g.expected_hitter==0 or (g.flight_kind=="pass" and g.possession_team==0 and g.touches==1)): return "attack"
 	if g.human.position.z>=2.25 and (g.blocks.has(0) or g.possession_team==1 or g.expected_hitter>=g.team_size) and g.flight_kind!="serve": return "block"
 	return "receive"
 

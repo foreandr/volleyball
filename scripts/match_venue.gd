@@ -74,6 +74,24 @@ func build_enclosure() -> void:
 			add_child(crown)
 
 static func populate(court: Node3D, venue: int, count: int) -> void:
+	if venue==0:
+		var seats: Array=[]
+		for i in count:
+			var side: int=1 if i%2 else -1
+			var seat:int=i/2
+			var lane:int=seat*7%12
+			seats.append([side,seat/12,[-6.,3.,12.][lane/4]+(lane%4-1.5)*1.55])
+		var spawn:=func(at:Vector3,color:String) -> Node3D:
+			var actor:=preload("res://scripts/volleyball_player.gd").new()
+			actor.position=at
+			actor.team_color=Color(color)
+			court.get_parent().add_child(actor)
+			actor.animator.callback_mode_process=AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
+			actor.get_node("DirectionArrows").hide()
+			return actor
+		for seat in court.seat_teammates(spawn,Callable(),count,false,seats):
+			seat.actor.fabric_interval=.25
+		return
 	# One seated in-game fan is photographed in three shirt colors. Cards share textures.
 	var textures: Array = []
 	for n in 3: textures.append(load("res://assets/menu/match/fan%d.png" % n))
