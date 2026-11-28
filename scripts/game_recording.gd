@@ -21,6 +21,8 @@ var next_frame := 0
 var last_jpeg := PackedByteArray()
 var cleanup_at := 0
 var fps_label: Label
+var net_alert_label: Label
+var net_alert_fade: Tween
 var clock_label: Label
 var capture_available := true
 var next_clock_update := 0
@@ -40,6 +42,17 @@ func _ready() -> void:
 	clock_label=Label.new()
 	var plate_panel := PanelContainer.new()
 	overlay.add_child(plate_panel)
+	net_alert_label=Label.new()
+	overlay.add_child(net_alert_label)
+	net_alert_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+	net_alert_label.offset_top=105.
+	net_alert_label.grow_horizontal=Control.GROW_DIRECTION_BOTH
+	net_alert_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+	net_alert_label.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	net_alert_label.add_theme_font_size_override("font_size",24)
+	net_alert_label.add_theme_constant_override("outline_size",5)
+	net_alert_label.modulate=Color("ffd782")
+	net_alert_label.hide()
 	var row := HBoxContainer.new()
 	plate_panel.add_child(row)
 	row.mouse_filter=Control.MOUSE_FILTER_IGNORE
@@ -245,6 +258,18 @@ func append_live_frame(jpeg:PackedByteArray) -> void:
 	if recent_frames.size()<NET_ALERT_FRAMES: recent_frames.append(jpeg)
 	else: recent_frames[next_recent_frame]=jpeg
 	next_recent_frame=(next_recent_frame+1)%NET_ALERT_FRAMES
+
+func show_net_attack_alert(jersey:Variant,reason:String) -> void:
+	if not is_instance_valid(net_alert_label): return
+	if net_alert_fade: net_alert_fade.kill()
+	net_alert_label.text="Net attack alert · #%s · %s"%[jersey,reason]
+	net_alert_label.modulate.a=0.
+	net_alert_label.show()
+	net_alert_fade=create_tween()
+	net_alert_fade.tween_property(net_alert_label,"modulate:a",1.,.20)
+	net_alert_fade.tween_interval(2.75)
+	net_alert_fade.tween_property(net_alert_label,"modulate:a",0.,.65)
+	net_alert_fade.tween_callback(net_alert_label.hide)
 
 func save_net_attack_alert(details:Dictionary) -> String:
 	if recent_frames.size()<2: return ""

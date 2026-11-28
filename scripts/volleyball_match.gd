@@ -1062,7 +1062,7 @@ func award(side: int, reason: String) -> void:
 		details["recorded_at"]=Time.get_datetime_string_from_system()
 		var clip_path:=GameRecording.save_net_attack_alert(details)
 		details["clip"]=ProjectSettings.globalize_path(clip_path) if not clip_path.is_empty() else ""
-		last_point["net_attack_alert"]=details["clip"]
+		GameRecording.show_net_attack_alert(jersey,reason)
 		trace.write("net_attack_alert",match_clock,details,true)
 		push_warning("Net attack alert · #%s · %s"%[jersey,reason])
 	for driver in attackers:

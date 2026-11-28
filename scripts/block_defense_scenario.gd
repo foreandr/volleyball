@@ -280,7 +280,6 @@ func _process(delta:float) -> void:
 		ReplayControls.move_camera(camera,-1,delta)
 	if not running or editing or settings.visible: return
 	if not game.replay.active and game.phase in [game.Phase.DEAD,game.Phase.FINISHED]:
-		if not str(game.last_point.get("net_attack_alert","")).is_empty(): note.text="Net attack alert · recording queued"
 		if setup.get("repeat",false):
 			between_feeds+=delta
 			if between_feeds>=3.: run_feed(true)

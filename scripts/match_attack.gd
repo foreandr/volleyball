@@ -116,6 +116,7 @@ func start_set(actor: Node3D, origin: Vector3, velocity: Vector3, target: Vector
 	shot_plan="Drive"
 	feed_origin=origin
 	jump.attack_arm_lift=chase_late_sets or timed_human
+	jump.attack_backswing=true
 	jump.reserve_two_step_runway=chase_late_sets
 	camp_swing.last_shoulder_time=-1.
 	camp_swing.reach_assist=Vector3.ZERO

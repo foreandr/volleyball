@@ -16,6 +16,7 @@ var active := false
 var load_bend_extra := 0.0
 var reserve_two_step_runway := false
 var attack_arm_lift := false
+var attack_backswing := false
 var load_arm_extra := 0.0
 var plant_limit := INF
 var front_limit := 2.5
@@ -363,12 +364,13 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 	var scale_: float = rig.global_basis.y.length()
 	var lead_age := elapsed-entry_time
 	var backswing_peak := 0.
-	if attack_arm_lift and approach_plant and lead_time>0.:
+	if (attack_arm_lift or attack_backswing) and approach_plant and not setting_jump:
 		# Load over the long right step, then unfold through the closing left plant.
-		var plant_phase := (elapsed-lead_time)/(load_duration()-lead_time)
+		var plant_phase := (elapsed-lead_time)/maxf(.001,load_duration()-lead_time)
 		backswing_peak = smoothstep(.035,.53,plant_phase)*(1.-smoothstep(.53,1.,plant_phase))
-		author.rotate_world(pose,"spine_01",Vector3.RIGHT,deg_to_rad(24.)*backswing_peak)
-		author.rotate_world(pose,"spine_02",Vector3.RIGHT,deg_to_rad(14.)*backswing_peak)
+		if attack_arm_lift:
+			author.rotate_world(pose,"spine_01",Vector3.RIGHT,deg_to_rad(24.)*backswing_peak)
+			author.rotate_world(pose,"spine_02",Vector3.RIGHT,deg_to_rad(14.)*backswing_peak)
 	var lead_plant_load := 0.0
 	if lead_time > 0.0:
 		lead_plant_load = smoothstep(lead_step_duration*0.38,lead_step_duration*0.82,lead_age)*(1.0-smoothstep(0.0,0.135,pose_time))
@@ -456,12 +458,12 @@ func pose_jump(actor: Node3D, first: float, second: float, load: float, impact: 
 			var sweep_back := smoothstep(0.0,0.12,pose_time)
 			front_swing = 0.20*smoothstep(0.0,lead_step_duration*0.72,lead_age)*(1.0-sweep_back)
 			arm_load *= sweep_back
-			if attack_arm_lift and approach_plant:
-				# Start both hands back with the long right step, then drive
-				# them forward as the closing left foot accepts weight.
-				var plant_phase := (elapsed-lead_time)/(load_duration()-lead_time)
-				var sweep := smoothstep(lead_time*.44,lead_time+(load_duration()-lead_time)*.53,elapsed)
-				arm_load = sweep*(1.-smoothstep(.66,1.10,plant_phase))
+		if (attack_arm_lift or attack_backswing) and approach_plant:
+			# Compress the draw to fit the actual plant, including short two-step entries.
+			var plant_time:=maxf(.001,load_duration()-lead_time)
+			var plant_phase:=(elapsed-lead_time)/plant_time
+			var sweep:=smoothstep(lead_time*.44,lead_time+plant_time*.53,elapsed)
+			arm_load=sweep*(1.-smoothstep(.66,1.10,plant_phase))
 		var jump_drive := arm_drive if not approach_plant or attack_arm_lift else 0.0
 		author.rotate_world(pose,upper_arm,Vector3.RIGHT,(1.52+load_arm_extra)*arm_load-front_swing+deg_to_rad(15.)*backswing_peak)
 		author.rotate_world(pose,forearm,Vector3.RIGHT,-0.25*jump_drive)
