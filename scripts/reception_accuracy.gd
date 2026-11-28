@@ -25,6 +25,11 @@ static func spread(timing: float, speed: float, spin_rps: float, skill: float, s
 	var outside:=maxf(0.,timing-green_seconds(skill)/.21)
 	return Vector2(2.8,1.95)*minf(1.5,outside)*(1.+difficulty*.52)
 
+static func dig_spread(speed_mps:float,skill:float) -> Vector2:
+	var gap:=1.-clampf(skill/100.,0.,1.)
+	var pace_steps:=maxf(0.,(speed_mps*3.6-30.)/5.)
+	return Vector2(.34+.205*pace_steps, .25+.15*pace_steps)*(1.+gap*1.4)
+
 static func sample_offset(bounds: Vector2) -> Vector3:
 	var horizontal := Vector2.from_angle(randf()*TAU)*bounds.x*sqrt(randf_range(0.0001,1.0))
 	return Vector3(horizontal.x,bounds.y*(randf()-randf()),horizontal.y)

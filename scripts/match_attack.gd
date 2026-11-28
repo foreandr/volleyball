@@ -225,6 +225,9 @@ func chase_committed_set(delta: float) -> void:
 	begin_attack_jump(Vector2.ZERO,clampf(remaining-rise-lead,.115,.25),jump.max_height-.2032)
 	jump.release()
 
+func approach_takeoff_lead() -> float:
+	return .035 if not timed_human and rally_set_target.x< -2.5 else 0.
+
 func spike_body_target(ball_target: Vector3) -> Vector3:
 	var shot := (swing_aim-ball_target).slide(Vector3.UP).normalized()
 	var hitting_side := shot.cross(Vector3.UP)

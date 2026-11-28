@@ -1744,7 +1744,12 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 			var runway:float=(players[hitter].position-pin).slide(Vector3.UP).length()
 			var outlet_delay:=.10 if active_identities.get(index,-1)==6 else 0.
 			var approach_time:=.77 if pin.x>0. else .64
-			apex=driver.apex_for_set_time(point.y,apex,clampf(approach_time+outlet_delay+runway/6.8,(1.02 if pin.x>0. else .91)+outlet_delay,1.68))
+			var minimum_flight:=clampf(approach_time+outlet_delay+runway/6.8,(1.02 if pin.x>0. else .91)+outlet_delay,1.68)
+			if pin.x>2.5 and players[hitter].position.x>4.45:
+				var long_outlet:=smoothstep(4.1,5.2,pin.x-point.x)
+				pin=Vector3(minf(pin.x+.34*long_outlet,maxf(4.05,pin.x)),pin.y,pin.z-.56*long_outlet)
+				minimum_flight=maxf(minimum_flight,zone_four_flight_time(pin.x-point.x))
+			apex=driver.apex_for_set_time(point.y,apex,minimum_flight)
 		if is_finite(drill_set_apex): apex = maxf(point.y+0.18,drill_set_apex)
 		var contact_height: float = driver.set_contact_height(apex)
 		last_set_apex = apex
@@ -1782,6 +1787,17 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 			driver.pin_arrival=duration
 			driver.approach_expected_hit_at=driver.stage_start+duration
 		return
+	if six_on_six() and not is_human(index) and touches==1 and flight_kind in ["spike","dump"] and not drill_pass_target.is_finite():
+		var incoming_speed:=((path_point(sample_after)-path_point(sample_before))/(sample_after-sample_before)).length() if sample_after>sample_before else (velocity+Vector3.DOWN*flight_gravity()*elapsed).length()
+		var skill:float=players[index].effective_rating("Forearm defense" if technique==0 else "Hand defense")
+		var spread:=Bump.Accuracy.dig_spread(incoming_speed,skill)
+		var offset:=Bump.Accuracy.sample_offset(spread)
+		var pot:=Vector2(0.,Net.NET_Z-3.)
+		var aim:=pot+Vector2(offset.x,offset.z)
+		var apex:=maxf(point.y+.18,4.6+offset.y)
+		var motion:=Flight.target_velocity(point,{"position":aim,"fit":"height","height":apex,"end_y":minf(2.15,apex-.15)},0.)
+		world_motion=frame.global_basis*motion
+		trace.write("dig_outlet",match_clock,{"player":index,"speed_kmh":incoming_speed*3.6,"pot":pot,"target":aim,"apex":apex,"spread":spread})
 	if drill_pass_target.is_finite():
 		world_motion = drill_pass_motion(world_point,world_motion)
 	if not is_human(index) and touches == 3:
@@ -3078,6 +3094,9 @@ func move_cpu_to_approach(hitter: int, staging: Vector3, delta: float, speed: fl
 	var running := offset.z > 0.12 and offset.length() > 0.18
 	move_cpu(hitter,frames[team(hitter)].to_global(staging),delta,speed,Vector3.INF,running,running,17.0,true)
 
+static func zone_four_flight_time(span:float) -> float:
+	return clampf(span/3.45,0.,1.70)
+
 func pin_staging(index:int,lane:Vector3) -> Vector3:
 	var stage:=GroundMovement.attack_staging(lane)
 	if six_on_six() and absf(lane.x)>2.5 and Formation.zone(lineup_role(index),setter_zones[team(index)]) in [2,3,4]:
@@ -3098,6 +3117,22 @@ func prepare_cpu_approach(hitter: int, driver: Node3D, delta: float) -> void:
 		var plant:Vector3=driver.spike_body_target(pin)
 		staging.x=plant.x+.42
 		staging.z=plant.z-1.48
+	if six_on_six() and pin.x>2.5 and last_set_apex>=4.95 and actor.position.x>4.45 and gap>1.55:
+		# An outside hitter with a runway can start in as soon as the set is read.
+		# Continuing to stage outside spends the first half of the set moving away.
+		var plant:Vector3=driver.spike_body_target(pin)
+		var inward:Vector3=(plant-actor.position).slide(Vector3.UP).normalized()
+		var runway:float=(plant-actor.position).slide(Vector3.UP).length()
+		if time_left<=.98 and runway<=2.55:
+			var stride:Vector3=court_velocities.get(hitter,Vector3.ZERO)
+			if stride.dot(inward)>1.4: driver.queue_run_plant(stride)
+			if not driver.approach_jump_queued: driver.try_queue_approach(false)
+			if driver.approach_jump_queued:
+				driver.approach_space_held=true
+				show_key(hitter,"Space")
+				return
+		move_cpu_to_approach(hitter,plant-inward*.65,delta,6.2)
+		return
 	if follow_run_into_plant(hitter,driver,staging,time_left,delta): return
 	var peeling := actor.position.z > pin.z-1.70 and time_left > 0.82
 	if peeling:
@@ -3442,7 +3477,7 @@ func defend_pin_set(side:int,attack_x:float,driver:Node3D,delta:float) -> void:
 		else:
 			if i==line:
 				target.x=clampf(target.x+.48*outward,-4.25,4.25)
-				target.z=maxf(-4.70,target.z-.95)
+				target.z=maxf(-4.70,target.z-1.95)
 			move_cpu(i,frame.to_global(target),delta,4.8,sight)
 
 	if blocks.has(middle) or is_human(middle): return

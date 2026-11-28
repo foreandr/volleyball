@@ -615,7 +615,7 @@ func time_approach_plant(delta: float) -> void:
 		air_fraction = lerpf(0.54,0.43,rush)
 		contact_height = minf(ball_target.y,approach_hand_height()+jump_height*0.91)
 		contact_at = descending_time(pass_origin,pass_motion,contact_height)
-	var time_before_lift := contact_at-(clock-stage_start)-jump.flight_duration(jump_height,true)*air_fraction
+	var time_before_lift := contact_at-(clock-stage_start)-jump.flight_duration(jump_height,true)*air_fraction-approach_takeoff_lead()
 	if time_before_lift > plant_time+lead_time+delta: return
 	var lead_scale := 1.0
 	if adaptive_approach_timing():
@@ -626,6 +626,9 @@ func time_approach_plant(delta: float) -> void:
 	approach_intercept = flight_point(pass_origin,pass_motion,contact_at)
 	var direction := (approach_intercept-setter.position).slide(Vector3.UP).normalized()
 	begin_attack_jump(Vector2(-direction.x,direction.z),clampf(time_before_lift-lead_time,minimum_plant,plant_time),jump_height,lead_scale)
+
+func approach_takeoff_lead() -> float:
+	return 0.0
 
 func spike_body_target(ball_target: Vector3) -> Vector3:
 	var shot := (swing_aim-ball_target).slide(Vector3.UP).normalized()
