@@ -136,6 +136,12 @@ func run() -> void:
 		var frame=g.frames[side]
 		var altitude:float=g.players[middle_id].position.y
 		g.launch(frame.to_global(Vector3(0,2,2)),frame.global_basis*Vector3(0,5,2),"set",setter,0.,middle_id,frame.to_global(g.attack_lane_for(middle_id)))
+		assert(g.last_set_to[middle_id]==g.flight_number)
+		g.rally_hitter=-1
+		g.setter_can_run_middle[side]=true
+		g.pipe_open[side]=false
+		var next_option:int=g.hitter_for_set(setter)
+		assert(next_option!=middle_id and g.hitter_for_set(setter)==next_option)
 		assert(g.attackers[side].jump==jump and jump.active and is_equal_approx(altitude,g.players[middle_id].position.y))
 		jump.active=false
 		g.players[middle_id].position.y=g.PLAYER_GROUND_Y

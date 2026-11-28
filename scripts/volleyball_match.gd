@@ -209,6 +209,7 @@ var win_score := WIN_SCORE
 var auto_rematch := false
 var review := Review.new()
 var rally_setter := -1
+var last_set_to: Dictionary[int,int] = {}
 var rally_hitter := -1
 var deep_defenders := [-1,-1]
 var support_lanes := [0.0,0.0]
@@ -534,7 +535,11 @@ func hitter_for_set(setter: int, allow_quick: bool = true) -> int:
 				if allow_quick and setter_can_run_middle[side] and middle_showing_quick(side) and pipe_open[side] and pipe_runner_ready(i): return i
 				continue
 			hitters.append(i)
-		if not hitters.is_empty(): return hitters[posmod(flight_number+rallies,hitters.size())]
+		if not hitters.is_empty():
+			var chosen:=hitters[posmod(flight_number+rallies,hitters.size())]
+			for candidate in hitters:
+				if last_set_to.get(candidate,-1)<last_set_to.get(chosen,-1): chosen=candidate
+			return chosen
 		for i in slots_for(side):
 			if i!=setter and not interrupted_hitters.has(i) and not back_row_setter(i): return i
 	return nearest_on_team(side,frames[side].to_global(Vector3(0.0,0.04,1.45)),setter)
@@ -686,6 +691,7 @@ func starting_lane(index: int) -> float:
 	return -lane if team(index) == 0 else lane
 
 func reset_match() -> void:
+	last_set_to.clear()
 	career_involvement=0
 	career_errors=0
 	career_contributed=false
@@ -1056,6 +1062,7 @@ func launch(point: Vector3, motion: Vector3, kind: String, from: int, spin_rate 
 		players[setter_index].shirt_fabric.set_shader_parameter("signal_lift",0.)
 	interrupted_hitters.clear()
 	flight_number += 1
+	if six_on_six() and kind=="set" and hitter>=0: last_set_to[hitter]=flight_number
 	line_read_error=randf_range(-1.,1.)
 	origin = point
 	velocity = motion
