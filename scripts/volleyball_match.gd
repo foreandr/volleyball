@@ -2936,6 +2936,19 @@ func dig_cover_x(frame: Node3D, attacker: Vector3, blocker: Vector3, depth: floa
 	if absf(preferred) > 4.05: preferred = shadow-crosscourt*clearance
 	return clampf(preferred,-4.05,4.05)
 
+func overpass_front_player(side:int,point:Vector3) -> int:
+	if not six_on_six():
+		return (0 if player_blocks else 1) if side==0 and not spectator else nearest_on_team(side,point)
+	var closest:=-1
+	var distance:=INF
+	for i in slots_for(side):
+		if Formation.zone(lineup_role(i),setter_zones[side]) not in [2,3,4]: continue
+		var gap:=players[i].global_position.slide(Vector3.UP).distance_squared_to(point.slide(Vector3.UP))
+		if gap<distance:
+			distance=gap
+			closest=i
+	return closest
+
 func position_overpass(delta: float) -> bool:
 	if last_player < 0 or (flight_kind not in ["pass","set"] and overpass_flight != flight_number): return false
 	var side := 1-team(last_player)
@@ -2966,15 +2979,7 @@ func position_overpass(delta: float) -> bool:
 	var world_target := frame.to_global(target)
 	if overpass_plan_flight != flight_number:
 		overpass_plan_flight = flight_number
-		overpass_player = (0 if player_blocks else 1) if side == 0 and not spectator else nearest_on_team(side,world_target)
-		if six_on_six():
-			var best:=INF
-			for i in slots_for(side):
-				if Formation.zone(lineup_role(i),setter_zones[side]) not in [2,3,4]: continue
-				var gap:=players[i].global_position.distance_squared_to(world_target)
-				if gap<best:
-					best=gap
-					overpass_player=i
+		overpass_player=overpass_front_player(side,world_target)
 	var hitter := overpass_player
 	var eta := at-elapsed
 	defender_assignment[side] = hitter
@@ -2988,7 +2993,7 @@ func position_overpass(delta: float) -> bool:
 	var opposing_target := opposing_frame.to_local(world_target)
 	opposing_target.z = 3.42
 	var wall := opposing_frame.to_global(opposing_target)
-	var blocker := (0 if player_blocks else 1) if opposing == 0 and not spectator else nearest_on_team(opposing,wall)
+	var blocker:=overpass_front_player(opposing,wall)
 	defender_assignment[opposing] = blocker
 	if not is_human(blocker) and not (manual and opposing==0 and manual.block_call==manual.BlockCall.OFF):
 		move_cpu(blocker,wall,delta,6.8,Vector3.INF,true)

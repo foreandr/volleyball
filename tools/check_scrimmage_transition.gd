@@ -61,6 +61,22 @@ func run() -> void:
 	g.lineup_roles[0]=roles
 	g.begin_point()
 	for side in 2:
+		# A back-row setter can be directly at the net but cannot block the return.
+		var side_frame:Node3D=g.frames[side]
+		var back_setter:int=g.first_on(side)+g.lineup_roles[side].find(0)
+		g.players[back_setter].position=Vector3(2,.04,3.42)
+		g.phase=g.Phase.LIVE
+		g.possession_team=side
+		g.touches=1
+		g.launch(side_frame.to_global(Vector3(2,2.9,2.7)),side_frame.global_basis*Vector3(0,2,4),"pass",g.first_on(side)+5)
+		for cpu_only in [true,false]:
+			g.spectator=cpu_only
+			assert(g.position_overpass(1./60.))
+			var assigned:int=g.defender_assignment[side]
+			assert(assigned!=back_setter)
+			assert(g.Formation.zone(g.lineup_role(assigned),g.setter_zones[side]) in [2,3,4])
+		g.spectator=true
+		g.begin_point()
 		g.receiving_team=side
 		g.flight_kind="serve"
 		g.cpu_choice=g.first_on(side)
