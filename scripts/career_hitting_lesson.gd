@@ -86,6 +86,10 @@ func attack_speed() -> float:
 	var base := super.attack_speed()
 	return base*1.25 if cpu_hitter and not tip_shot and not roll_shot else base
 
+func planned_attack_contact_height() -> float:
+	# Leave the demonstrator a small reach reserve on descending sets.
+	return super.planned_attack_contact_height()-(.035 if cpu_hitter else 0.)
+
 func shot_slot() -> int:
 	var slot := demo_target if cpu_hitter else makes%3
 	return 2-slot if attack_lane==2 else slot

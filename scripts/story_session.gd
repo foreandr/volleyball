@@ -162,6 +162,12 @@ var iteration_run := preload("res://scripts/iteration_run.gd").new()
 const PREVIEW_FIELDS := ["pass_start","pass_distance","pass_output_angle","incoming_speed","incoming_angle","feed_spot","incoming_spin","spin_rate","float_strength","source_height","feed_fit","receive_direction","receive_distance_tier","ball_tab","pass_destination","pass_apex","destination_fit","preview_camera"]
 
 func _ready() -> void:
+	if OS.get_name()=="Windows" and DisplayServer.get_name()!="headless":
+		var helper := ProjectSettings.globalize_path("res://tools/WindowsGameAudio.exe")
+		if not FileAccess.file_exists(helper):
+			helper=OS.get_executable_path().get_base_dir().path_join("WindowsGameAudio.exe")
+		if FileAccess.file_exists(helper):
+			OS.create_process(helper,[str(OS.get_process_id())])
 	impact_player.process_mode=Node.PROCESS_MODE_ALWAYS
 	add_child(impact_player)
 	if game_options.load(OPTIONS) == OK:

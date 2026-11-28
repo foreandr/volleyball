@@ -51,3 +51,5 @@ When the user says “always,” “usually,” or “whenever,” update the ma
 For timed contacts, verify the fading result on early and late misses as well as on Perfect, Good and Bad contacts. A miss that bypasses the hitbox still needs visible feedback. See Universal contact timing feedback in GAME_DESIGN.md.
 
 Every user-facing gameplay handoff includes an evidence checklist. Record the build, scene, test and observed result for Windows game output, mapped animation playback, timing fade in/out, the controlled athlete's stamina ring and the reception hold meter. Mark any failed, untested or out-of-scope items explicitly. A saved volume value or playback event alone cannot verify audible output.
+
+Windows audio QA checks stereo channel gains on the active game session and measures the default output during live contact and the paused preview. Include WindowsGameAudio.exe alongside packaged Windows builds. Rebuild the checked-in helper after editing its C# source with csc /target:winexe /out:tools\WindowsGameAudio.exe tools\WindowsGameAudio.cs.

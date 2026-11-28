@@ -798,8 +798,7 @@ func start_approach(steps := 3, cadence := 1.,destination := Vector3.INF) -> voi
 		var contact := destination
 		contact.y=minf(contact.y,attack_contact_height())
 		var landing := shot_landing(contact)
-		# The launched ball follows the palm, which can be below the planned set.
-		contact.y-=ATTACK_CONTACT_RADIUS
+		# The flight starts at ball center; destination already represents that height.
 		var net_hit := predicted_net_hit(contact,landing)
 		var stamina_left: float = hitter.stamina.fraction()
 		var conserve := stamina_left<=.30 or (bounce_line and stamina_left<=.50)
