@@ -319,3 +319,5 @@ In 6v6, honor a called quick when the middle is up. A tempo-one pipe also requir
 In setter one, the outside and opposite keep their reversed pins when transitioning to block. A ready middle decoy and unavailable pipe leave a called pin set available.
 
 On an attacking first pass in 6v6, the mapped A button calls the eligible controlled hitter for the current set. A CPU quick to a middle already in flight targets the hitting shoulder and remaining jump time.
+
+An accepted attack call supersedes a CPU setter’s planned dump or fake on that pass. Once the setter has committed to a second-ball swing, the call window closes.

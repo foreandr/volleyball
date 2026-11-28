@@ -888,9 +888,11 @@ var called_this_pass := false
 
 func call_for_set() -> void:
 	if spectator or phase!=Phase.LIVE or flight_kind!="pass" or possession_team!=0 or touches!=1 or team_size<3 or rally_setter<=0 or called_this_pass: return
-	if back_row_setter(0) or interrupted_hitters.has(0): return
+	if back_row_setter(0) or interrupted_hitters.has(0) or cpu_second_spike: return
 	if six_on_six() and not attack_lane_for(0).is_finite(): return
 	called_this_pass=true
+	cpu_dump=false
+	cpu_fake_dump=false
 	rally_hitter=0
 	if manual:
 		manual.call_notice="Called for set"
@@ -1560,7 +1562,8 @@ func receive_contact(index: int, world_point: Vector3, world_motion: Vector3, te
 			recoveries[index]["hold"] = FAST_DIG_ELBOW_DURATION
 	var cpu_dump_attempt := touches == 2 and cpu_dump and index == cpu_choice and not is_human(index)
 	var unsafe_dump := cpu_dump_attempt and not dump_can_land_in_court(point,frame.global_basis.inverse()*world_motion)
-	if touches == 2 and (unsafe_dump or (not (cpu_dump and index == cpu_choice) and (bump.destination.y < 4.0 or (is_human(index) and technique != 0)))):
+	var called_set:=side==0 and called_this_pass and rally_hitter==0 and index==rally_setter and flight_kind=="pass"
+	if touches == 2 and (called_set or unsafe_dump or (not (cpu_dump and index == cpu_choice) and (bump.destination.y < 4.0 or (is_human(index) and technique != 0)))):
 		var setter_x := players[index].position.x
 		if six_on_six() and not is_human(index):
 			choose_at_set_contact(index,point)
@@ -1956,7 +1959,7 @@ func select_receiver() -> void:
 		cpu_technique = 2
 	elif overhead_available(cpu_choice,1):
 		cpu_technique = 1
-	if second_ball and not back_row_setter(cpu_choice):
+	if second_ball and not (side==0 and called_this_pass) and not back_row_setter(cpu_choice):
 		second_ball_options += 1
 		var hand_point := frames[side].to_local(path_point(arrival(2.35 if cpu_technique == 2 else 1.92)))
 		var tight := hand_point.z >= 2.65 and hand_point.z <= 3.70
@@ -2053,6 +2056,7 @@ func dig_intercept(index: int) -> float:
 
 func start_second_ball_spike(index: int, require_open_lane := false) -> bool:
 	if back_row_setter(index): return false
+	if team(index)==0 and called_this_pass and cpu_is_setting(index): return false
 	var side := team(index)
 	var driver := attackers[side]
 	if driver.enabled or not net_hit.is_empty() or recoveries.has(index): return false

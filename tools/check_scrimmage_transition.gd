@@ -40,13 +40,21 @@ func run() -> void:
 	call_button.button_index=g.manual.Xbox.physical(JOY_BUTTON_A)
 	var pads:=Input.get_connected_joypads()
 	if pads.size(): call_button.device=pads[0]
+	g.cpu_dump=true
+	g.cpu_fake_dump=true
 	call_button.pressed=true
 	g.manual.handle(call_button)
 	assert(g.called_this_pass and g.rally_hitter==0)
+	assert(not g.cpu_dump and not g.cpu_fake_dump)
+	assert(not g.start_second_ball_spike(g.rally_setter,true))
 	g.choose_at_set_contact(g.rally_setter,Vector3(0,2,3))
 	assert(g.rally_hitter==0)
 	call_button.pressed=false
 	g.manual.handle(call_button)
+	g.platforms[g.rally_setter].destination=Vector2(0,10)
+	g.last_player=0
+	g.receive_contact(g.rally_setter,g.frames[0].to_global(Vector3(0,2.4,2.8)),Vector3(0,2,5),1)
+	assert(g.flight_kind=="set" and g.expected_hitter==0)
 	g.manual.queue_free()
 	g.manual=null
 	g.spectator=true
